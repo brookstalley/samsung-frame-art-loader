@@ -1,0 +1,37 @@
+{
+    "schema_version": 1,
+    "name": "Modern and abstract",
+    "default_resize": "cropped",
+    "art": [
+        {
+            "url": "https://artsandculture.google.com/asset/homage-to-the-square-sonorous-josef-albers/YAHHW_KLcb2m2w",
+            "raw_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_0010.jpg",
+            "resize_option": "scaled"
+        },
+        {
+            "url": "https://artsandculture.google.com/asset/full-homage-to-the-square-josef-albers/uwFaRKFNNWjOSg",
+            "raw_file": "Albers, Josef; Full (Homage to the Square); 1962_0001.jpg",
+            "resize_option": "scaled"
+        },
+        {
+            "url": "https://artsandculture.google.com/asset/cat-litter-robert-gober/YQFZtnXTyaYTHg",
+            "raw_file": "Cat Litter - Robert Gober_0001.jpg",
+            "resize_option": "cropped"
+        },
+        {
+            "url": "https://artsandculture.google.com/asset/ph-129-clyfford-still/FwHVp26mrlpKfQ",
+            "raw_file": "Still, Clyfford; PH-129; 1949_0007.jpg",
+            "resize_option": "cropped"
+        },
+        {
+            "url": "https://artsy-media-uploads.s3.amazonaws.com/gnTGohfzA9zjfU5o81Z5nw/banksy-stall-venice-lead.jpg",
+            "raw_file": "banksy-stall-venice-lead.jpg",
+            "resize_option": "cropped"
+        },
+        {
+            "url": "https://artsandculture.google.com/asset/ion-11-victor-vasarely/zAGDIJRNphFaPw",
+            "raw_file": "Vasarely, Victor; ION 11; 1967_1969.jpg",
+            "resize_option": "scaled"
+        }
+    ]
+}

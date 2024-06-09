@@ -1,0 +1,12 @@
+{
+    "schema_version": 1,
+    "name": "Modern and abstract",
+    "default_resize": "cropped",
+    "art": [
+        {
+            "url": "https://artsandculture.google.com/asset/homage-to-the-square-sonorous-josef-albers/YAHHW_KLcb2m2w",
+            "raw_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_0010.jpg",
+            "resize_option": "scaled"
+        }
+    ]
+}
