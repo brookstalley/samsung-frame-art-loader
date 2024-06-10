@@ -155,7 +155,7 @@ class ArtFile:
         )
 
         if not os.path.exists(self.ready_fullpath) or always_generate:
-            resize_file(
+            description_box = resize_file(
                 self.raw_fullpath, self.ready_fullpath, 3840, 2160, self.resize_option
             )
 
@@ -241,8 +241,14 @@ def get_image(
 
 def get_average_color(image: Image):
     # skimage = io.imread(image)[:, :, :-1]
-    skimage = np.array(image)
 
+    # We don't need a giant image to get average color. If it is larger than 2048x2048, resize it. But do not overwrite the original image!
+    
+    skimage = np.array(image)
+    if skimage.shape[0] > 1024 or skimage.shape[1] > 1024:
+        logging.info("Resizing image to get average color")
+        skimage = cv2.resize(skimage, (1024, 1024), interpolation=cv2.INTER_AREA)
+    
     average = skimage.mean(axis=0).mean(axis=0)
     pixels = np.float32(skimage.reshape(-1, 3))
 
@@ -264,55 +270,39 @@ def resize_image(image: Image, resize_option, width, height) -> Image:
         # image is already the correct size
         return image
 
-    # Get the average color of the image's borders. Sample 2 pixels along each border and average the colors
-    # Be sure to combine the average coors from top, bottom, left, and right borders. Average red, green, and blue separately
-    border_average_red = (
-        sum(image.getpixel((i, 0))[0] for i in range(2))
-        + sum(image.getpixel((i, y - 1))[0] for i in range(2))
-        + sum(image.getpixel((0, i))[0] for i in range(2))
-        + sum(image.getpixel((x - 1, i))[0] for i in range(2))
-    ) // 8
-    border_average_green = (
-        sum(image.getpixel((i, 0))[1] for i in range(2))
-        + sum(image.getpixel((i, y - 1))[1] for i in range(2))
-        + sum(image.getpixel((0, i))[1] for i in range(2))
-        + sum(image.getpixel((x - 1, i))[1] for i in range(2))
-    ) // 8
-    border_average_blue = (
-        sum(image.getpixel((i, 0))[2] for i in range(2))
-        + sum(image.getpixel((i, y - 1))[2] for i in range(2))
-        + sum(image.getpixel((0, i))[2] for i in range(2))
-        + sum(image.getpixel((x - 1, i))[2] for i in range(2))
-    ) // 8
-    border_avg = (
-        int((border_average_red + 127.0) / 2.0),
-        int((border_average_green + 127.0) / 2.0),
-        int((border_average_blue + 127.0) / 2.0),
-    )
+    dominant_color = (0, 0, 0)
+    if resize_option == ResizeOptions.SCALE:
 
-    average, dominant = get_average_color(image)
+        average, dominant = get_average_color(image)
 
-    dominant_color = (
-        int((dominant[0] + 127) / 2),
-        int((dominant[1] + 127) / 2),
-        int((dominant[2] + 127) / 2),
-    )
-
+        dominant_color = (
+            int((dominant[0] + 127) / 2),
+            int((dominant[1] + 127) / 2),
+            int((dominant[2] + 127) / 2),
+        )
+    
     canvas = Image.new("RGB", (width, height), dominant_color)
+    description_box = None 
     if resize_option == ResizeOptions.SCALE:
         # determine whether to scale x or y to width x height
         if (x / width) > (y / height):
             x = width
             y = int(y * (width / x))
             image = image.resize((x, y), Image.Resampling.LANCZOS)
+            # Get the bottom area for descriptions
+            description_box = (0, y, width, height)
         else:
             x = int(x * (height / y))
             y = height
             image = image.resize((x, y), Image.Resampling.LANCZOS)
+            # Get the right area for descriptions
+            description_box = (x, 0, width, height)
 
         # paste image into center of canvas
         paste_box = (int((width - x) / 2), int((height - y) / 2))
         canvas.paste(image, paste_box)
+        # Get the coordinates of the added borders
+
     elif resize_option == ResizeOptions.CROP:
         # first resize so the smallest dimension is width or height
         if (x / width) > (y / height):
@@ -342,7 +332,7 @@ def resize_image(image: Image, resize_option, width, height) -> Image:
             image = image.crop(crop_box)
 
         canvas.paste(image, (0, 0))
-    return canvas
+    return canvas, description_box
 
 
 def resize_file(in_file: str, out_file: str, width, height, resize_option):
@@ -351,7 +341,7 @@ def resize_file(in_file: str, out_file: str, width, height, resize_option):
     Image.MAX_IMAGE_PIXELS = 933120000
 
     image = Image.open(in_file)
-    resized = resize_image(image, resize_option, width, height)
+    resized, description_box = resize_image(image, resize_option, width, height)
 
     # Save the resized image
     os.makedirs(os.path.dirname(out_file), exist_ok=True)
