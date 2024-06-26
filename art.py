@@ -155,7 +155,7 @@ class ArtFile:
         )
 
         if not os.path.exists(self.ready_fullpath) or always_generate:
-            description_box = resize_file(
+            description_box = resize_file_with_matte(
                 self.raw_fullpath, self.ready_fullpath, 3840, 2160, self.resize_option
             )
 
@@ -243,11 +243,16 @@ def get_average_color(image: Image):
     # skimage = io.imread(image)[:, :, :-1]
 
     # We don't need a giant image to get average color. If it is larger than 2048x2048, resize it. But do not overwrite the original image!
-    
+    max_size = 768
     skimage = np.array(image)
-    if skimage.shape[0] > 1024 or skimage.shape[1] > 1024:
+    if skimage.shape[0] > max_size or skimage.shape[1] > max_size:
+        # If X is larger than Y, use max_size/X, otherwise use max_size/Y
+        ratio = max_size / max(skimage.shape[0], skimage.shape[1])
+
         logging.info("Resizing image to get average color")
-        skimage = cv2.resize(skimage, (1024, 1024), interpolation=cv2.INTER_AREA)
+        skimage = skimage.resize(
+            (int(skimage.shape[1] * ratio), int(skimage.shape[0] * ratio))
+        )
     
     average = skimage.mean(axis=0).mean(axis=0)
     pixels = np.float32(skimage.reshape(-1, 3))
@@ -263,7 +268,7 @@ def get_average_color(image: Image):
     return average, dominant
 
 
-def resize_image(image: Image, resize_option, width, height) -> Image:
+def resize_image_with_matte(image: Image, resize_option, width, height) -> Image:
     # Get x and y dimensions
     x, y = image.size
     if (x == width) and (y == height):
@@ -335,13 +340,13 @@ def resize_image(image: Image, resize_option, width, height) -> Image:
     return canvas, description_box
 
 
-def resize_file(in_file: str, out_file: str, width, height, resize_option):
+def resize_file_with_matte(in_file: str, out_file: str, width, height, resize_option):
     # load image from file
     # set decompression limit high
     Image.MAX_IMAGE_PIXELS = 933120000
 
     image = Image.open(in_file)
-    resized, description_box = resize_image(image, resize_option, width, height)
+    resized, description_box = resize_image_with_matte(image, resize_option, width, height)
 
     # Save the resized image
     os.makedirs(os.path.dirname(out_file), exist_ok=True)
@@ -447,6 +452,10 @@ def get_uploaded_files():
         uploaded_files = []
 
     return uploaded_files
+
+def save_uploaded_files(uploaded_files):
+    with open(upload_list_path, "w") as f:
+        json.dump(uploaded_files, f, indent=4)
 
 
 # Increase debug level
