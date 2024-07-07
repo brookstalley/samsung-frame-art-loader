@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import logging
 import os
@@ -17,44 +18,56 @@ from skimage import io
 
 sys.path.append("../")
 
-from samsungtvws import SamsungTVWS
+from samsungtvws.async_art import SamsungTVAsyncArt
+from samsungtvws import exceptions
+from samsungtvws.remote import SendRemoteKey
+from samsungtvws.async_remote import SamsungTVWSAsyncRemote
+
 
 artsets = []
-tv_address = "10.23.17.139"
+tv_address = "10.23.17.77"
+tv_port = 8002
 
 # debug params: --always-generate --upload-all --resize-option cropped
 
-# Add command line argument parsing
-parser = argparse.ArgumentParser(description="Upload images to Samsung TV.")
 
-parser.add_argument(
-    "--debug", action="store_true", help="Enable debug mode to check if TV is reachable"
-)
-parser.add_argument(
-    "--show-uploaded", action="store_true", help="Show uploaded images from TV"
-)
-parser.add_argument(
-    "--ignore-uploaded",
-    action="store_true",
-    help="Ignore uploaded images and upload all",
-)
+def parse_args():
+    # Add command line argument parsing
+    parser = argparse.ArgumentParser(description="Upload images to Samsung TV.")
 
-parser.add_argument(
-    "--setfile",
-    type=str,
-    help="Load art set from file",
-)
-parser.add_argument(
-    "--always-generate", action="store_true", help="Always generate resized images"
-)
-parser.add_argument(
-    "--always-download", action="store_true", help="Always download images from URLs"
-)
-parser.add_argument(
-    "--delete-all", action="store_true", help="Delete all uploaded images"
-)
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode to check if TV is reachable",
+    )
+    parser.add_argument(
+        "--show-uploaded", action="store_true", help="Show uploaded images from TV"
+    )
+    parser.add_argument(
+        "--ignore-uploaded",
+        action="store_true",
+        help="Ignore uploaded images and upload all",
+    )
 
-args = parser.parse_args()
+    parser.add_argument(
+        "--setfile",
+        type=str,
+        help="Load art set from file",
+    )
+    parser.add_argument(
+        "--always-generate", action="store_true", help="Always generate resized images"
+    )
+    parser.add_argument(
+        "--always-download",
+        action="store_true",
+        help="Always download images from URLs",
+    )
+    parser.add_argument(
+        "--delete-all", action="store_true", help="Delete all uploaded images"
+    )
+
+    return parser.parse_args()
+
 
 # Set the path to the folder containing the images
 art_folder_raw = "/Users/brookstalley/art/raw"
@@ -363,7 +376,7 @@ def resize_file_with_matte(in_file: str, out_file: str, width, height, resize_op
     logging.info(f"Resized {in_file} to {out_file}")
 
 
-def debug():
+def debug(tv: SamsungTVAsyncArt):
     # Check if TV is reachable in debug mode
     try:
         logging.info("Checking if the TV can be reached.")
@@ -375,20 +388,20 @@ def debug():
         sys.exit()
 
 
-def get_available(tv, category=None):
+async def get_available(tv, category=None):
     # Retrieve available art
-    available_art = tv.art().available(category=category)
+    available_art = await tv.available(category=category)
     return available_art
 
 
-def show_available(tv, category=None):
+async def show_available(tv, category=None):
     available_art = get_available(tv, category)
     logging.info("Available art:")
     for art in available_art:
         logging.info(art)
 
 
-def delete_all_uploaded(tv):
+async def delete_all_uploaded(tv):
     available_art = get_available(tv, UPLOADED_CATEGORY)
     logging.info(f"Deleting {len(available_art)} uploaded images")
     tv.art().delete_list([art["content_id"] for art in available_art])
@@ -399,7 +412,7 @@ def delete_all_uploaded(tv):
         json.dump(uploaded_files, f)
 
 
-def get_google_file(url, destination_fullpath: str = None) -> tuple[bool, str]:
+async def get_google_file(url, destination_fullpath: str = None) -> tuple[bool, str]:
     # Run dezoomify-rs, passing dezoomify_params as arguments and starting in the art_folder_raw directory
     cmdline = f"{dezoomify_rs_path} {dezoomify_params} {url}"
     logging.info(f"Running: {cmdline}")
@@ -429,29 +442,34 @@ def get_google_file(url, destination_fullpath: str = None) -> tuple[bool, str]:
     return True, out_file
 
 
-def get_google_list(URLs):
+async def get_google_list(URLs):
     # Get images from Google arts and culture
     logging.info("Getting images from Google Arts and Culture")
     for url in URLs:
         out_file = get_google_file(url)
 
 
-def upload_files(tv, art_files: list[ArtFile]):
+async def upload_files(
+    tv,
+    art_files: list[ArtFile],
+    always_download: bool = False,
+    always_generate: bool = False,
+):
     for art_file in art_files:
-        if not os.path.exists(art_file.raw_file) or args.always_download:
+        if not os.path.exists(art_file.raw_file) or always_download:
             try:
                 art_file.download()
             except Exception as e:
                 logging.error("There was an error: " + str(e))
                 sys.exit()
 
-        if not os.path.exists(art_file.ready_file) or args.always_generate:
+        if not os.path.exists(art_file.ready_file) or always_generate:
             pass
 
 
-def get_uploaded_files():
+async def get_uploaded_files(ignore_uploaded: bool = False):
     # Load the list of uploaded filenames from the file
-    if os.path.isfile(upload_list_path) and not args.ignore_uploaded:
+    if os.path.isfile(upload_list_path) and not ignore_uploaded:
         with open(upload_list_path, "r") as f:
             uploaded_files = json.load(f)
     else:
@@ -460,20 +478,22 @@ def get_uploaded_files():
     return uploaded_files
 
 
-def save_uploaded_files(uploaded_files):
+async def save_uploaded_files(uploaded_files):
     with open(upload_list_path, "w") as f:
         json.dump(uploaded_files, f, indent=4)
 
 
-def process_set_file(set_file):
-    with open(args.setfile, "r") as f:
+async def process_set_file(
+    set_file, always_download: bool = False, always_generate: bool = False
+):
+    with open(set_file, "r") as f:
         set_json = json.load(f)
     set_schema_version = set_json["schema_version"]
     set_name = set_json["name"]
     set_resize = set_json["default_resize"]
     set_art = set_json["art"]
 
-    artset = ArtSet(args.setfile, set_name, set_resize, set_art)
+    artset = ArtSet(set_file, set_name, set_resize, set_art)
     artsets.append(artset)
 
     for art_item in set_art:
@@ -487,26 +507,26 @@ def process_set_file(set_file):
         else:
             af.resize_option = set_resize
 
-        af.process(args.always_download, args.always_generate)
+        af.process(always_download, always_generate)
         artset.add_art(af)
     f.close()
     # Now write the art set back to the file
     updated_json = artset.to_json()
-    with open(args.setfile, "w") as f:
+    with open(set_file, "w") as f:
         # write the updated JSON in human readable format
         json.dump(updated_json, f, indent=4)
 
     f.close()
 
 
-def upload_all():
+async def upload_all(tv: SamsungTVAsyncArt, always_upload: bool = False):
     # Build the list of all ready files that need to be uploaded
     files = []
     for artset in artsets:
         for art in artset.get_art():
             files.append(art.ready_fullpath)
 
-    uploaded_files = get_uploaded_files()
+    uploaded_files = await get_uploaded_files()
 
     # Remove the filenames of images that have already been uploaded
     files = list(set(files) - set([f["file"] for f in uploaded_files]))
@@ -530,7 +550,7 @@ def upload_all():
         if file in remote_files.keys():
             remote_filename = remote_files[file]
             logging.info("Image already uploaded.")
-            if not args.upload_all:
+            if not upload_all:
                 # Select the image using the remote file name only if not in 'upload-all' mode
                 logging.info("Setting existing image, skipping upload")
                 tv.art().select_image(remote_filename, show=True)
@@ -543,11 +563,11 @@ def upload_all():
 
             try:
                 if file.endswith(".jpg"):
-                    remote_filename = tv.art().upload(
+                    remote_filename = await tv.upload(
                         data, file_type="JPEG", matte="none"
                     )
                 elif file.endswith(".png"):
-                    remote_filename = tv.art().upload(
+                    remote_filename = await tv.upload(
                         data, file_type="PNG", matte="none"
                     )
                 # Add the filename to the list of uploaded filenames
@@ -565,48 +585,101 @@ def upload_all():
             json.dump(uploaded_files, f, indent=4)
 
 
-def set_correct_mode(tv: SamsungTVWS, mode: str):
+async def set_correct_mode(
+    tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyncRemote
+):
+    tv_on = await tv_art.on()
+
+    art_mode = True if await tv_art.get_artmode() == "on" else False
+    logging.info(f"Art mode: {art_mode}")
+
+    if art_mode:
+        info = await tv_art.get_artmode_settings()
+        logging.info("current artmode settings: {}".format(info))
+
     # if the current time is between 21:00 and 5:00, do nothing
     if 21 <= time.localtime().tm_hour or time.localtime().tm_hour < 5:
+        # if we're in art mode, turn the TV off
+        if art_mode:
+            logging.info("Turning off TV")
+            await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
         return
 
-    # if the TV is already in art mode,
+    # Otherwise, if the TV is off, turn it on and set to art mode
+    if not tv_on:
+        await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
 
 
-# Increase debug level
-logging.basicConfig(level=logging.INFO)
-logging.info("Starting art.py")
+async def image_callback(event, response):
+    logging.info("CALLBACK: image callback: {}, {}".format(event, response))
 
-# Set your TVs local IP address. Highly recommend using a static IP address for your TV.
 
-tv = SamsungTVWS(tv_address)
+async def main():
+    # Increase debug level
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    logging.info("Starting art.py")
 
-# Checks if the TV supports art mode
-art_mode = tv.art().supported()
-if not art_mode:
-    logging.warning("Your TV does not support art mode.")
-    sys.exit()
+    # Set your TVs local IP address. Highly recommend using a static IP address for your TV.
 
-logging.info("Art mode supported")
-art_mode_version = tv.art().get_api_version()
+    logging.info(f"Creating TV object for {tv_address}")
+    tv_art = SamsungTVAsyncArt(host=tv_address, port=tv_port, token_file="token_file")
+    logging.info(f"Starting art listening on {tv_address}:{tv_port}")
+    await tv_art.start_listening()
+    logging.info(f"Listening on {tv_address} started")
 
-logging.info(f"TV at {tv_address} supports art mode version {art_mode_version}")
+    tv_remote = SamsungTVWSAsyncRemote(
+        host=tv_address, port=tv_port, token_file="token_file"
+    )
+    logging.debug(f"Connecting to {tv_address}:{tv_port}")
+    await tv_remote.start_listening()
+    logging.debug("Connected")
 
-if args.debug:
-    debug()
+    # Checks if the TV supports art mode
+    art_mode = await tv_art.supported()
+    if not art_mode:
+        logging.warning("Your TV does not support art mode.")
+        sys.exit()
 
-if args.show_uploaded:
-    show_available(tv, UPLOADED_CATEGORY)
-    sys.exit()
+    logging.info("Art mode supported")
+    art_mode_version = await tv_art.get_api_version()
 
-if args.delete_all:
-    logging.info("Deleting all uploaded images")
-    delete_all_uploaded(tv)
+    logging.info(f"TV at {tv_address} supports art mode version {art_mode_version}")
 
-if args.setfile:
-    process_set_file(args.setfile)
+    # example callbacks
+    tv_art.set_callback("slideshow_image_changed", image_callback)  # new api
+    tv_art.set_callback("auto_rotation_image_changed", image_callback)  # old api
+    tv_art.set_callback("image_selected", image_callback)
 
-upload_all()
+    args = parse_args()
 
-info = tv.art().get_artmode()
-logging.info(f"get_artmode: \n{info}")
+    if args.debug:
+        await debug()
+
+    if args.show_uploaded:
+        await show_available(tv_art, UPLOADED_CATEGORY)
+        sys.exit()
+
+    if args.delete_all:
+        logging.info("Deleting all uploaded images")
+        await delete_all_uploaded(tv_art)
+
+    if args.setfile:
+        await process_set_file(
+            args.set_file, args.always_download, args.always_generate
+        )
+
+    # await upload_all(tv)
+
+    await set_correct_mode(tv_art, tv_remote)
+
+    logging.info("Closing connection")
+    await tv_art.close()
+    await tv_remote.close()
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        os._exit(1)
