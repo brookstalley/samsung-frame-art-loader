@@ -6,6 +6,7 @@ import json
 import argparse
 import subprocess
 import requests
+import time
 
 # import resizing from PIL
 from PIL import Image
@@ -17,6 +18,9 @@ from skimage import io
 sys.path.append("../")
 
 from samsungtvws import SamsungTVWS
+
+artsets = []
+tv_address = "10.23.17.139"
 
 # debug params: --always-generate --upload-all --resize-option cropped
 
@@ -253,7 +257,7 @@ def get_average_color(image: Image):
         skimage = skimage.resize(
             (int(skimage.shape[1] * ratio), int(skimage.shape[0] * ratio))
         )
-    
+
     average = skimage.mean(axis=0).mean(axis=0)
     pixels = np.float32(skimage.reshape(-1, 3))
 
@@ -285,9 +289,9 @@ def resize_image_with_matte(image: Image, resize_option, width, height) -> Image
             int((dominant[1] + 127) / 2),
             int((dominant[2] + 127) / 2),
         )
-    
+
     canvas = Image.new("RGB", (width, height), dominant_color)
-    description_box = None 
+    description_box = None
     if resize_option == ResizeOptions.SCALE:
         # determine whether to scale x or y to width x height
         if (x / width) > (y / height):
@@ -346,7 +350,9 @@ def resize_file_with_matte(in_file: str, out_file: str, width, height, resize_op
     Image.MAX_IMAGE_PIXELS = 933120000
 
     image = Image.open(in_file)
-    resized, description_box = resize_image_with_matte(image, resize_option, width, height)
+    resized, description_box = resize_image_with_matte(
+        image, resize_option, width, height
+    )
 
     # Save the resized image
     os.makedirs(os.path.dirname(out_file), exist_ok=True)
@@ -453,37 +459,13 @@ def get_uploaded_files():
 
     return uploaded_files
 
+
 def save_uploaded_files(uploaded_files):
     with open(upload_list_path, "w") as f:
         json.dump(uploaded_files, f, indent=4)
 
 
-# Increase debug level
-logging.basicConfig(level=logging.INFO)
-
-# Set your TVs local IP address. Highly recommend using a static IP address for your TV.
-tv = SamsungTVWS("10.23.17.139")
-
-# Checks if the TV supports art mode
-art_mode = tv.art().supported()
-if not art_mode:
-    logging.warning("Your TV does not support art mode.")
-    sys.exit()
-
-if args.debug:
-    debug()
-
-if args.show_uploaded:
-    show_available(tv, UPLOADED_CATEGORY)
-    sys.exit()
-
-if args.delete_all:
-    logging.info("Deleting all uploaded images")
-    delete_all_uploaded(tv)
-
-artsets = []
-
-if args.setfile:
+def process_set_file(set_file):
     with open(args.setfile, "r") as f:
         set_json = json.load(f)
     set_schema_version = set_json["schema_version"]
@@ -516,60 +498,115 @@ if args.setfile:
 
     f.close()
 
-# Build the list of all ready files that need to be uploaded
-files = []
-for artset in artsets:
-    for art in artset.get_art():
-        files.append(art.ready_fullpath)
 
-uploaded_files = get_uploaded_files()
+def upload_all():
+    # Build the list of all ready files that need to be uploaded
+    files = []
+    for artset in artsets:
+        for art in artset.get_art():
+            files.append(art.ready_fullpath)
 
-# Remove the filenames of images that have already been uploaded
-files = list(set(files) - set([f["file"] for f in uploaded_files]))
-files_to_upload = files
+    uploaded_files = get_uploaded_files()
 
-# make a dict of local file : remote filenames from the uploaded_files JSON
-remote_files = {f["file"]: f["remote_filename"] for f in uploaded_files}
+    # Remove the filenames of images that have already been uploaded
+    files = list(set(files) - set([f["file"] for f in uploaded_files]))
+    files_to_upload = files
 
-if not files_to_upload:
-    logging.info("No new images to upload.")
-    sys.exit()
+    # make a dict of local file : remote filenames from the uploaded_files JSON
+    remote_files = {f["file"]: f["remote_filename"] for f in uploaded_files}
 
-for file in files_to_upload:
-    if not os.path.exists(file):
-        logging.error(f"File {file} does not exist.")
-        continue
+    if not files_to_upload:
+        logging.info("No new images to upload.")
+        return
 
-    remote_filename = None
-    logging.debug(f"Processing {file}")
-    # if file is in the list of uploaded files, set the remote filename
-    if file in remote_files.keys():
-        remote_filename = remote_files[file]
-        logging.info("Image already uploaded.")
-        if not args.upload_all:
-            # Select the image using the remote file name only if not in 'upload-all' mode
-            logging.info("Setting existing image, skipping upload")
-            tv.art().select_image(remote_filename, show=True)
-    else:
-        with open(file, "rb") as f:
-            data = f.read()
+    for file in files_to_upload:
+        if not os.path.exists(file):
+            logging.error(f"File {file} does not exist.")
+            continue
 
-        # Upload the file to the TV and select it as the current art, or select it using the remote filename if it has already been uploaded
-        logging.info(f"Uploading new image: {file} ({len(data)} bytes)")
+        remote_filename = None
+        logging.debug(f"Processing {file}")
+        # if file is in the list of uploaded files, set the remote filename
+        if file in remote_files.keys():
+            remote_filename = remote_files[file]
+            logging.info("Image already uploaded.")
+            if not args.upload_all:
+                # Select the image using the remote file name only if not in 'upload-all' mode
+                logging.info("Setting existing image, skipping upload")
+                tv.art().select_image(remote_filename, show=True)
+        else:
+            with open(file, "rb") as f:
+                data = f.read()
 
-        try:
-            if file.endswith(".jpg"):
-                remote_filename = tv.art().upload(data, file_type="JPEG", matte="none")
-            elif file.endswith(".png"):
-                remote_filename = tv.art().upload(data, file_type="PNG", matte="none")
-            # Add the filename to the list of uploaded filenames
-            uploaded_files.append({"file": file, "remote_filename": remote_filename})
+            # Upload the file to the TV and select it as the current art, or select it using the remote filename if it has already been uploaded
+            logging.info(f"Uploading new image: {file} ({len(data)} bytes)")
 
-            tv.art().select_image(remote_filename, show=True)
-        except Exception as e:
-            logging.error("There was an error: " + str(e))
+            try:
+                if file.endswith(".jpg"):
+                    remote_filename = tv.art().upload(
+                        data, file_type="JPEG", matte="none"
+                    )
+                elif file.endswith(".png"):
+                    remote_filename = tv.art().upload(
+                        data, file_type="PNG", matte="none"
+                    )
+                # Add the filename to the list of uploaded filenames
+                uploaded_files.append(
+                    {"file": file, "remote_filename": remote_filename}
+                )
+
+                tv.art().select_image(remote_filename, show=True)
+            except Exception as e:
+                logging.error("There was an error: " + str(e))
 
         # Save the list of uploaded filenames to the file
         # Get JSON of the final artset after processing
-    with open(upload_list_path, "w") as f:
-        json.dump(uploaded_files, f, indent=4)
+        with open(upload_list_path, "w") as f:
+            json.dump(uploaded_files, f, indent=4)
+
+
+def set_correct_mode(tv: SamsungTVWS, mode: str):
+    # if the current time is between 21:00 and 5:00, do nothing
+    if 21 <= time.localtime().tm_hour or time.localtime().tm_hour < 5:
+        return
+
+    # if the TV is already in art mode,
+
+
+# Increase debug level
+logging.basicConfig(level=logging.INFO)
+logging.info("Starting art.py")
+
+# Set your TVs local IP address. Highly recommend using a static IP address for your TV.
+
+tv = SamsungTVWS(tv_address)
+
+# Checks if the TV supports art mode
+art_mode = tv.art().supported()
+if not art_mode:
+    logging.warning("Your TV does not support art mode.")
+    sys.exit()
+
+logging.info("Art mode supported")
+art_mode_version = tv.art().get_api_version()
+
+logging.info(f"TV at {tv_address} supports art mode version {art_mode_version}")
+
+if args.debug:
+    debug()
+
+if args.show_uploaded:
+    show_available(tv, UPLOADED_CATEGORY)
+    sys.exit()
+
+if args.delete_all:
+    logging.info("Deleting all uploaded images")
+    delete_all_uploaded(tv)
+
+if args.setfile:
+    process_set_file(args.setfile)
+
+upload_all()
+
+info = tv.art().get_artmode()
+logging.info(f"get_artmode: \n{info}")
