@@ -5,16 +5,12 @@ import os
 import random
 import json
 import argparse
-import subprocess
+
 import requests
 import time
 
-# import resizing from PIL
-from PIL import Image
-
-import cv2
-import numpy as np
-from skimage import io
+from image_utils import resize_file_with_matte, get_google_file
+from metadata import get_google_metadata
 
 sys.path.append("../")
 
@@ -40,9 +36,7 @@ def parse_args():
         action="store_true",
         help="Enable debug mode to check if TV is reachable",
     )
-    parser.add_argument(
-        "--show-uploaded", action="store_true", help="Show uploaded images from TV"
-    )
+    parser.add_argument("--show-uploaded", action="store_true", help="Show uploaded images from TV")
     parser.add_argument(
         "--ignore-uploaded",
         action="store_true",
@@ -54,17 +48,14 @@ def parse_args():
         type=str,
         help="Load art set from file",
     )
-    parser.add_argument(
-        "--always-generate", action="store_true", help="Always generate resized images"
-    )
+    parser.add_argument("--always-generate", action="store_true", help="Always generate resized images")
     parser.add_argument(
         "--always-download",
         action="store_true",
         help="Always download images from URLs",
     )
-    parser.add_argument(
-        "--delete-all", action="store_true", help="Delete all uploaded images"
-    )
+    parser.add_argument("--delete-all", action="store_true", help="Delete all uploaded images")
+    parser.add_argument("--no-tv", action="store_true", help="Do not connect to TV")
 
     return parser.parse_args()
 
@@ -72,9 +63,6 @@ def parse_args():
 # Set the path to the folder containing the images
 art_folder_raw = "/Users/brookstalley/art/raw"
 art_folder_ready = "/Users/brookstalley/art/ready"
-
-dezoomify_rs_path = "/Users/brookstalley/bin/dezoomify-rs"
-dezoomify_params = "--max-width 8192 --max-height 8192 --compression 0"
 
 
 UPLOADED_CATEGORY = "MY-C0002"
@@ -87,22 +75,13 @@ def get_ready_fullpath(raw_filename, ready_folder, resize_option):
     # Get the filename of the ready file
     ready_fullpath = os.path.join(
         ready_folder,
-        os.path.splitext(os.path.basename(raw_filename))[0]
-        + "_"
-        + resize_option
-        + ".jpg",
+        os.path.splitext(os.path.basename(raw_filename))[0] + "_" + resize_option + ".jpg",
     )
     return ready_fullpath
 
 
-# Enums for resizing options
-class ResizeOptions:
-    SCALE = "scaled"
-    CROP = "cropped"
-
-
 class ImageRetrievers:
-    DEZOZOM = "dezoomify"
+    DEZOOM = "dezoomify"
     HTTP = "http"
 
 
@@ -123,12 +102,13 @@ class ArtFile:
         ready_fullpath=None,
         resize_option=None,
         retriever=None,
+        metadata=None,
     ):
         self.url = url
         self.raw_file = raw_file
         self.resize_option = resize_option
 
-    def process(self, always_download=False, always_generate=False):
+    def process(self, always_download=False, always_generate=False, always_get_metadata=False):
         """Process the art file. Download the raw file if necessary, and generate the ready file."""
         """ TODO: Support files that are already downloaded and have no URL """
         raw_file_exists = False
@@ -137,7 +117,7 @@ class ArtFile:
             raise Exception("URL is required")
 
         logging.debug(f"Processing {self.url}")
-        self.retriever = image_retriever(self.url)
+        self.retriever = self.image_retriever(self.url)
 
         # URL is specified
         if self.raw_file:
@@ -145,7 +125,7 @@ class ArtFile:
             if os.path.exists(self.raw_fullpath) and not always_download:
                 raw_file_exists = True
             else:
-                result, fullpath = get_image(self.url, self.raw_fullpath)
+                result, fullpath = self.get_image(self.url, self.raw_fullpath)
                 if result:
                     # Only save the basename so the program is portable
                     self.raw_file = os.path.basename(fullpath)
@@ -156,9 +136,7 @@ class ArtFile:
 
         else:
             # Raw file is not specified. For now always download because we can't get the filename from the URL
-            result, fullpath = get_image(
-                self.url, destination_fullpath=None, destination_dir=art_folder_raw
-            )
+            result, fullpath = self.get_image(self.url, destination_fullpath=None, destination_dir=art_folder_raw)
             if result:
                 raw_file_exists = True
                 # Only save the basename so the program is portable
@@ -167,14 +145,19 @@ class ArtFile:
             else:
                 raise Exception("Error downloading image")
 
-        self.ready_fullpath = get_ready_fullpath(
-            self.raw_file, art_folder_ready, self.resize_option
-        )
+        self.ready_fullpath = get_ready_fullpath(self.raw_file, art_folder_ready, self.resize_option)
 
         if not os.path.exists(self.ready_fullpath) or always_generate:
-            description_box = resize_file_with_matte(
-                self.raw_fullpath, self.ready_fullpath, 3840, 2160, self.resize_option
-            )
+            description_box = resize_file_with_matte(self.raw_fullpath, self.ready_fullpath, 3840, 2160, self.resize_option)
+
+        if not self.metadata or always_get_metadata:
+            self.get_metadata()
+
+    def get_metadata(self):
+        if self.image_retriever(self.url) == ImageRetrievers.DEZOOM:
+            self.metadata = get_google_metadata(self.url)
+        else:
+            self.metadata = None
 
     def to_json(self):
         # return a JSON representation of the art file, but only the fields that are needed to recreate the object
@@ -183,6 +166,19 @@ class ArtFile:
             "raw_file": self.raw_file,
             "resize_option": self.resize_option,
         }
+
+    def image_retriever(self, url):
+        # If the URL is a Google Arts and Culture URL, use dezoomify-rs to download the image
+        if "artsandculture.google.com" in url:
+            return ImageRetrievers.DEZOOM
+        else:
+            return ImageRetrievers.HTTP
+
+    def get_image(self, url, destination_fullpath: str = None, destination_dir: str = None) -> tuple[bool, str]:
+        if self.image_retriever(url) == ImageRetrievers.DEZOOM:
+            return get_google_file(url, art_folder_raw, destination_fullpath)
+        else:
+            return get_http_image(url, destination_fullpath, destination_dir)
 
 
 class ArtSet:
@@ -216,9 +212,7 @@ class ArtSet:
         }
 
 
-def get_http_image(
-    url, destination_fullpath: str = None, destination_dir: str = None
-) -> tuple[bool, str]:
+def get_http_image(url, destination_fullpath: str = None, destination_dir: str = None) -> tuple[bool, str]:
     # Download the image from the URL
     logging.info(f"Downloading {url}")
     try:
@@ -237,143 +231,6 @@ def get_http_image(
         f.write(response.content)
 
     return True, filename
-
-
-def image_retriever(url):
-    # If the URL is a Google Arts and Culture URL, use dezoomify-rs to download the image
-    if "artsandculture.google.com" in url:
-        return ImageRetrievers.DEZOZOM
-    else:
-        return ImageRetrievers.HTTP
-
-
-def get_image(
-    url, destination_fullpath: str = None, destination_dir: str = None
-) -> tuple[bool, str]:
-    if image_retriever(url) == ImageRetrievers.DEZOZOM:
-        return get_google_file(url, destination_fullpath)
-    else:
-        return get_http_image(url, destination_fullpath, destination_dir)
-
-
-def get_average_color(image: Image):
-    # skimage = io.imread(image)[:, :, :-1]
-
-    # We don't need a giant image to get average color. If it is larger than 2048x2048, resize it. But do not overwrite the original image!
-    max_size = 768
-    skimage = np.array(image)
-    if skimage.shape[0] > max_size or skimage.shape[1] > max_size:
-        # If X is larger than Y, use max_size/X, otherwise use max_size/Y
-        ratio = max_size / max(skimage.shape[0], skimage.shape[1])
-
-        logging.info("Resizing image to get average color")
-        skimage = skimage.resize(
-            (int(skimage.shape[1] * ratio), int(skimage.shape[0] * ratio))
-        )
-
-    average = skimage.mean(axis=0).mean(axis=0)
-    pixels = np.float32(skimage.reshape(-1, 3))
-
-    n_colors = 5
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 200, 0.1)
-    flags = cv2.KMEANS_RANDOM_CENTERS
-
-    _, labels, palette = cv2.kmeans(pixels, n_colors, None, criteria, 10, flags)
-    _, counts = np.unique(labels, return_counts=True)
-    dominant = palette[np.argmax(counts)]
-
-    return average, dominant
-
-
-def resize_image_with_matte(image: Image, resize_option, width, height) -> Image:
-    # Get x and y dimensions
-    x, y = image.size
-    if (x == width) and (y == height):
-        # image is already the correct size
-        return image
-
-    dominant_color = (0, 0, 0)
-    if resize_option == ResizeOptions.SCALE:
-
-        average, dominant = get_average_color(image)
-
-        dominant_color = (
-            int((dominant[0] + 127) / 2),
-            int((dominant[1] + 127) / 2),
-            int((dominant[2] + 127) / 2),
-        )
-
-    canvas = Image.new("RGB", (width, height), dominant_color)
-    description_box = None
-    if resize_option == ResizeOptions.SCALE:
-        # determine whether to scale x or y to width x height
-        if (x / width) > (y / height):
-            x = width
-            y = int(y * (width / x))
-            image = image.resize((x, y), Image.Resampling.LANCZOS)
-            # Get the bottom area for descriptions
-            description_box = (0, y, width, height)
-        else:
-            x = int(x * (height / y))
-            y = height
-            image = image.resize((x, y), Image.Resampling.LANCZOS)
-            # Get the right area for descriptions
-            description_box = (x, 0, width, height)
-
-        # paste image into center of canvas
-        paste_box = (int((width - x) / 2), int((height - y) / 2))
-        canvas.paste(image, paste_box)
-        # Get the coordinates of the added borders
-
-    elif resize_option == ResizeOptions.CROP:
-        # first resize so the smallest dimension is width or height
-        if (x / width) > (y / height):
-            # The image's aspect ratio is wider than the target. Scale y to match target height and then crop x to match target width
-            scale = height / y
-            x = int(x * scale)
-            image = image.resize((x, height), Image.Resampling.LANCZOS)
-            crop_box = (
-                int((x - width) / 2),
-                0,
-                int((x + width) / 2),
-                height,
-            )
-            image = image.crop(crop_box)
-
-        else:
-            # The image's aspect ratio is taller than the target. Scale x to match target width and then crop y to match target height
-            scale = width / x
-            y = int(y * scale)
-            image = image.resize((width, y), Image.Resampling.LANCZOS)
-            crop_box = (
-                0,
-                int((y - height) / 2),
-                width,
-                int((y + height) / 2),
-            )
-            image = image.crop(crop_box)
-
-        canvas.paste(image, (0, 0))
-    return canvas, description_box
-
-
-def resize_file_with_matte(in_file: str, out_file: str, width, height, resize_option):
-    # load image from file
-    # set decompression limit high
-    Image.MAX_IMAGE_PIXELS = 933120000
-
-    image = Image.open(in_file)
-    resized, description_box = resize_image_with_matte(
-        image, resize_option, width, height
-    )
-
-    # Save the resized image
-    os.makedirs(os.path.dirname(out_file), exist_ok=True)
-    if in_file.endswith(".jpg"):
-        resized.save(out_file, "JPEG", quality=95)
-    elif in_file.endswith(".png"):
-        resized.save(out_file, "PNG")
-    logging.info(f"Resized {in_file} to {out_file}")
 
 
 def debug(tv: SamsungTVAsyncArt):
@@ -412,43 +269,6 @@ async def delete_all_uploaded(tv):
         json.dump(uploaded_files, f)
 
 
-async def get_google_file(url, destination_fullpath: str = None) -> tuple[bool, str]:
-    # Run dezoomify-rs, passing dezoomify_params as arguments and starting in the art_folder_raw directory
-    cmdline = f"{dezoomify_rs_path} {dezoomify_params} {url}"
-    logging.info(f"Running: {cmdline}")
-    p = subprocess.Popen(
-        f"{dezoomify_rs_path} {dezoomify_params} {url}",
-        shell=True,
-        cwd=art_folder_raw,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    p.wait()
-    out, err = p.communicate()
-    # get the output of the command
-    if p.returncode != 0:
-        logging.error(f"Error running dezoomify-rs: {p.returncode}")
-        logging.error(out)
-        logging.error(err)
-        return False, None
-
-    # Typical response is b"\x1b[38;5;10mImage successfully saved to '/Users/username/art/raw/Still, Clyfford; PH-129; 1949_0001.jpg' (current working directory: /Users/brookstalley/art/raw)\n"
-    # Get the filename from the output
-    out_file = out.decode("utf-8").split("'")[1]
-    logging.info(f"Downloaded {out_file}")
-    if destination_fullpath:
-        os.rename(out_file, destination_fullpath)
-        out_file = destination_fullpath
-    return True, out_file
-
-
-async def get_google_list(URLs):
-    # Get images from Google arts and culture
-    logging.info("Getting images from Google Arts and Culture")
-    for url in URLs:
-        out_file = get_google_file(url)
-
-
 async def upload_files(
     tv,
     art_files: list[ArtFile],
@@ -483,9 +303,7 @@ async def save_uploaded_files(uploaded_files):
         json.dump(uploaded_files, f, indent=4)
 
 
-async def process_set_file(
-    set_file, always_download: bool = False, always_generate: bool = False
-):
+async def process_set_file(set_file, always_download: bool = False, always_generate: bool = False):
     with open(set_file, "r") as f:
         set_json = json.load(f)
     set_schema_version = set_json["schema_version"]
@@ -506,6 +324,8 @@ async def process_set_file(
             af.resize_option = art_item["resize_option"]
         else:
             af.resize_option = set_resize
+        if "metadata" in art_item:
+            af.metadaat = art_item["metadata"]
 
         af.process(always_download, always_generate)
         artset.add_art(af)
@@ -532,12 +352,12 @@ async def upload_all(tv: SamsungTVAsyncArt, always_upload: bool = False):
     files = list(set(files) - set([f["file"] for f in uploaded_files]))
     files_to_upload = files
 
-    # make a dict of local file : remote filenames from the uploaded_files JSON
-    remote_files = {f["file"]: f["remote_filename"] for f in uploaded_files}
-
     if not files_to_upload:
         logging.info("No new images to upload.")
         return
+
+    # make a dict of local file : remote filenames from the uploaded_files JSON
+    remote_files = {f["file"]: f["remote_filename"] for f in uploaded_files}
 
     for file in files_to_upload:
         if not os.path.exists(file):
@@ -563,17 +383,11 @@ async def upload_all(tv: SamsungTVAsyncArt, always_upload: bool = False):
 
             try:
                 if file.endswith(".jpg"):
-                    remote_filename = await tv.upload(
-                        data, file_type="JPEG", matte="none"
-                    )
+                    remote_filename = await tv.upload(data, file_type="JPEG", matte="none")
                 elif file.endswith(".png"):
-                    remote_filename = await tv.upload(
-                        data, file_type="PNG", matte="none"
-                    )
+                    remote_filename = await tv.upload(data, file_type="PNG", matte="none")
                 # Add the filename to the list of uploaded filenames
-                uploaded_files.append(
-                    {"file": file, "remote_filename": remote_filename}
-                )
+                uploaded_files.append({"file": file, "remote_filename": remote_filename})
 
                 tv.art().select_image(remote_filename, show=True)
             except Exception as e:
@@ -585,27 +399,24 @@ async def upload_all(tv: SamsungTVAsyncArt, always_upload: bool = False):
             json.dump(uploaded_files, f, indent=4)
 
 
-async def set_correct_mode(
-    tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyncRemote
-):
+async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyncRemote):
+    # get current state
     tv_on = await tv_art.on()
-
     art_mode = True if await tv_art.get_artmode() == "on" else False
-    logging.info(f"Art mode: {art_mode}")
-
+    logging.info(f"TV on: {tv_on}, art mode: {art_mode}")
     if art_mode:
         info = await tv_art.get_artmode_settings()
         logging.info("current artmode settings: {}".format(info))
 
-    # if the current time is between 21:00 and 5:00, do nothing
+    # if the current time is between 21:00 and 5:00
     if 21 <= time.localtime().tm_hour or time.localtime().tm_hour < 5:
-        # if we're in art mode, turn the TV off
+        # if we're in art mode, turn the TV off. Otherwise, do nothing
         if art_mode:
             logging.info("Turning off TV")
-            await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
+            await tv_remote.send_command(SendRemoteKey.hold("KEY_POWER", 3))
         return
 
-    # Otherwise, if the TV is off, turn it on and set to art mode
+    # It is during waking hours. If the TV is off, turn it on and set to art mode
     if not tv_on:
         await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
 
@@ -616,66 +427,62 @@ async def image_callback(event, response):
 
 async def main():
     # Increase debug level
+    args = parse_args()
+
     logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
     logging.info("Starting art.py")
 
     # Set your TVs local IP address. Highly recommend using a static IP address for your TV.
+    if not args.no_tv:
+        logging.info(f"Creating TV object for {tv_address}")
+        tv_art = SamsungTVAsyncArt(host=tv_address, port=tv_port, token_file="token_file")
+        logging.info(f"Starting art listening on {tv_address}:{tv_port}")
+        await tv_art.start_listening()
+        logging.info(f"Listening on {tv_address} started")
 
-    logging.info(f"Creating TV object for {tv_address}")
-    tv_art = SamsungTVAsyncArt(host=tv_address, port=tv_port, token_file="token_file")
-    logging.info(f"Starting art listening on {tv_address}:{tv_port}")
-    await tv_art.start_listening()
-    logging.info(f"Listening on {tv_address} started")
+        tv_remote = SamsungTVWSAsyncRemote(host=tv_address, port=tv_port, token_file="token_file")
+        logging.debug(f"Connecting to {tv_address}:{tv_port}")
+        await tv_remote.start_listening()
+        logging.debug("Connected")
 
-    tv_remote = SamsungTVWSAsyncRemote(
-        host=tv_address, port=tv_port, token_file="token_file"
-    )
-    logging.debug(f"Connecting to {tv_address}:{tv_port}")
-    await tv_remote.start_listening()
-    logging.debug("Connected")
+        # Checks if the TV supports art mode
+        art_mode = await tv_art.supported()
+        if not art_mode:
+            logging.warning("Your TV does not support art mode.")
+            sys.exit()
 
-    # Checks if the TV supports art mode
-    art_mode = await tv_art.supported()
-    if not art_mode:
-        logging.warning("Your TV does not support art mode.")
-        sys.exit()
+        logging.info("Art mode supported")
+        art_mode_version = await tv_art.get_api_version()
 
-    logging.info("Art mode supported")
-    art_mode_version = await tv_art.get_api_version()
+        logging.info(f"TV at {tv_address} supports art mode version {art_mode_version}")
 
-    logging.info(f"TV at {tv_address} supports art mode version {art_mode_version}")
+        # example callbacks
+        tv_art.set_callback("slideshow_image_changed", image_callback)  # new api
+        tv_art.set_callback("auto_rotation_image_changed", image_callback)  # old api
+        tv_art.set_callback("image_selected", image_callback)
 
-    # example callbacks
-    tv_art.set_callback("slideshow_image_changed", image_callback)  # new api
-    tv_art.set_callback("auto_rotation_image_changed", image_callback)  # old api
-    tv_art.set_callback("image_selected", image_callback)
+        if args.debug:
+            await debug()
 
-    args = parse_args()
+        if args.show_uploaded:
+            await show_available(tv_art, UPLOADED_CATEGORY)
+            sys.exit()
 
-    if args.debug:
-        await debug()
-
-    if args.show_uploaded:
-        await show_available(tv_art, UPLOADED_CATEGORY)
-        sys.exit()
-
-    if args.delete_all:
-        logging.info("Deleting all uploaded images")
-        await delete_all_uploaded(tv_art)
+        if args.delete_all:
+            logging.info("Deleting all uploaded images")
+            await delete_all_uploaded(tv_art)
 
     if args.setfile:
-        await process_set_file(
-            args.set_file, args.always_download, args.always_generate
-        )
+        await process_set_file(args.set_file, args.always_download, args.always_generate)
 
-    # await upload_all(tv)
+    if not args.no_tv:
+        await upload_all(tv_art)
 
-    await set_correct_mode(tv_art, tv_remote)
+        await set_correct_mode(tv_art, tv_remote)
 
-    logging.info("Closing connection")
-    await tv_art.close()
-    await tv_remote.close()
+        logging.info("Closing connection")
+        await tv_art.close()
+        await tv_remote.close()
 
 
 if __name__ == "__main__":
