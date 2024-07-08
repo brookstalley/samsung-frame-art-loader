@@ -9,7 +9,7 @@ import argparse
 import requests
 import time
 
-from image_utils import resize_file_with_matte, get_google_file
+from image_utils import resize_file_with_matte, get_google_file, get_http_image_
 from metadata import get_google_metadata
 
 sys.path.append("../")
@@ -61,9 +61,9 @@ def parse_args():
 
 
 # Set the path to the folder containing the images
-art_folder_raw = "/Users/brookstalley/art/raw"
-art_folder_ready = "/Users/brookstalley/art/ready"
-
+base_folder = "/home/brooks/art"
+art_folder_raw = f"{base_folder}/raw"
+art_folder_ready = f"{base_folder}/ready"
 
 UPLOADED_CATEGORY = "MY-C0002"
 
@@ -107,8 +107,9 @@ class ArtFile:
         self.url = url
         self.raw_file = raw_file
         self.resize_option = resize_option
+        self.metadata = metadata
 
-    def process(self, always_download=False, always_generate=False, always_get_metadata=False):
+    async def process(self, always_download=False, always_generate=False, always_get_metadata=False):
         """Process the art file. Download the raw file if necessary, and generate the ready file."""
         """ TODO: Support files that are already downloaded and have no URL """
         raw_file_exists = False
@@ -125,7 +126,7 @@ class ArtFile:
             if os.path.exists(self.raw_fullpath) and not always_download:
                 raw_file_exists = True
             else:
-                result, fullpath = self.get_image(self.url, self.raw_fullpath)
+                result, fullpath = await self.get_image(self.url, self.raw_fullpath)
                 if result:
                     # Only save the basename so the program is portable
                     self.raw_file = os.path.basename(fullpath)
@@ -161,11 +162,13 @@ class ArtFile:
 
     def to_json(self):
         # return a JSON representation of the art file, but only the fields that are needed to recreate the object
-        return {
+        json = {
             "url": self.url,
             "raw_file": self.raw_file,
             "resize_option": self.resize_option,
         }
+        if self.metadata:
+            json["metadata"] = self.metadata
 
     def image_retriever(self, url):
         # If the URL is a Google Arts and Culture URL, use dezoomify-rs to download the image
@@ -174,11 +177,11 @@ class ArtFile:
         else:
             return ImageRetrievers.HTTP
 
-    def get_image(self, url, destination_fullpath: str = None, destination_dir: str = None) -> tuple[bool, str]:
+    async def get_image(self, url, destination_fullpath: str = None, destination_dir: str = None) -> tuple[bool, str]:
         if self.image_retriever(url) == ImageRetrievers.DEZOOM:
-            return get_google_file(url, art_folder_raw, destination_fullpath)
+            return await get_google_file(url, art_folder_raw, destination_fullpath)
         else:
-            return get_http_image(url, destination_fullpath, destination_dir)
+            return await get_http_image(url, destination_fullpath, destination_dir)
 
 
 class ArtSet:
@@ -210,27 +213,6 @@ class ArtSet:
             "default_resize": self.default_resize,
             "art": [art.to_json() for art in self.art_list],
         }
-
-
-def get_http_image(url, destination_fullpath: str = None, destination_dir: str = None) -> tuple[bool, str]:
-    # Download the image from the URL
-    logging.info(f"Downloading {url}")
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Error downloading {url}: {e}")
-        return False, None
-
-    if destination_fullpath:
-        filename = destination_fullpath
-    else:
-        filename = os.path.join(destination_dir, os.path.basename(url))
-
-    with open(filename, "wb") as f:
-        f.write(response.content)
-
-    return True, filename
 
 
 def debug(tv: SamsungTVAsyncArt):
@@ -327,7 +309,7 @@ async def process_set_file(set_file, always_download: bool = False, always_gener
         if "metadata" in art_item:
             af.metadaat = art_item["metadata"]
 
-        af.process(always_download, always_generate)
+        await af.process(always_download, always_generate)
         artset.add_art(af)
     f.close()
     # Now write the art set back to the file
@@ -470,10 +452,11 @@ async def main():
 
         if args.delete_all:
             logging.info("Deleting all uploaded images")
-            await delete_all_uploaded(tv_art)
+    else:
+        logging.info("Not connecting to TV")
 
     if args.setfile:
-        await process_set_file(args.set_file, args.always_download, args.always_generate)
+        await process_set_file(args.setfile, args.always_download, args.always_generate)
 
     if not args.no_tv:
         await upload_all(tv_art)

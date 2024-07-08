@@ -6,10 +6,11 @@ import logging
 import numpy as np
 import os
 import subprocess
+from skimage.transform import resize
 
 logging.basicConfig(level=logging.INFO)
 
-dezoomify_rs_path = "/Users/brookstalley/bin/dezoomify-rs"
+dezoomify_rs_path = "dezoomify-rs"
 dezoomify_params = "--max-width 8192 --max-height 8192 --compression 0"
 
 
@@ -24,16 +25,20 @@ def get_average_color(image: Image):
 
     # We don't need a giant image to get average color. If it is larger than 2048x2048, resize it. But do not overwrite the original image!
     max_size = 768
-    skimage = np.array(image)
-    if skimage.shape[0] > max_size or skimage.shape[1] > max_size:
-        # If X is larger than Y, use max_size/X, otherwise use max_size/Y
-        ratio = max_size / max(skimage.shape[0], skimage.shape[1])
+    np_image = np.array(image)
+    working_image = resize(np_image, (max_size, max_size), anti_aliasing=False)
+    # print(f"Image shape: {my_image.shape}")
+    # if my_image.shape[0] > max_size or my_image.shape[1] > max_size:
+    #     # If X is larger than Y, use max_size/X, otherwise use max_size/Y
+    #     ratio = max_size / max(my_image.shape[0], my_image.shape[1])
 
-        logging.info("Resizing image to get average color")
-        skimage = skimage.resize((int(skimage.shape[1] * ratio), int(skimage.shape[0] * ratio)))
+    #     logging.info(f"Resizing image with ratio {ratio} to get average color")
+    #     my_image = my_image.resize((int(my_image.shape[1] * ratio), int(my_image.shape[0] * ratio)))
+    #     print(f"Image shape: {my_image.shape}")
 
-    average = skimage.mean(axis=0).mean(axis=0)
-    pixels = np.float32(skimage.reshape(-1, 3))
+    my_image = np.array(working_image)
+    average = my_image.mean(axis=0).mean(axis=0)
+    pixels = np.float32(my_image.reshape(-1, 3))
 
     n_colors = 5
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 200, 0.1)
@@ -161,3 +166,24 @@ async def get_google_file(url, download_dir: str, destination_fullpath: str) -> 
         os.rename(out_file, destination_fullpath)
         out_file = destination_fullpath
     return True, out_file
+
+
+async def get_http_image(url, destination_fullpath: str = None, destination_dir: str = None) -> tuple[bool, str]:
+    # Download the image from the URL
+    logging.info(f"Downloading {url}")
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error downloading {url}: {e}")
+        return False, None
+
+    if destination_fullpath:
+        filename = destination_fullpath
+    else:
+        filename = os.path.join(destination_dir, os.path.basename(url))
+
+    with open(filename, "wb") as f:
+        f.write(response.content)
+
+    return True, filename
