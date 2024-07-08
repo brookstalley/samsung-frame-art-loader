@@ -10,7 +10,7 @@ import requests
 import time
 
 from image_utils import resize_file_with_matte, get_google_file, get_http_image
-from metadata import get_google_metadata
+from metadata import get_google_metadata, get_file_metadata
 
 sys.path.append("../")
 
@@ -49,6 +49,8 @@ def parse_args():
         help="Load art set from file",
     )
     parser.add_argument("--always-generate", action="store_true", help="Always generate resized images")
+    parser.add_argument("--always-metadata", action="store_true", help="Always retrieve metadata")
+
     parser.add_argument(
         "--always-download",
         action="store_true",
@@ -109,7 +111,7 @@ class ArtFile:
         self.resize_option = resize_option
         self.metadata = metadata
 
-    async def process(self, always_download=False, always_generate=False, always_get_metadata=False):
+    async def process(self, always_download=False, always_generate=False, always_metadata=False):
         """Process the art file. Download the raw file if necessary, and generate the ready file."""
         """ TODO: Support files that are already downloaded and have no URL """
         raw_file_exists = False
@@ -150,15 +152,18 @@ class ArtFile:
 
         if not os.path.exists(self.ready_fullpath) or always_generate:
             description_box = resize_file_with_matte(self.raw_fullpath, self.ready_fullpath, 3840, 2160, self.resize_option)
-
-        if not self.metadata or always_get_metadata:
+        # print(f"Processed {self.url}, metadata is {self.metadata}")
+        if (self.metadata is None) or always_metadata:
             self.get_metadata()
 
     def get_metadata(self):
         if self.image_retriever(self.url) == ImageRetrievers.DEZOOM:
             self.metadata = get_google_metadata(self.url)
         else:
-            self.metadata = None
+            if self.raw_file is not None:
+                self.metadata = get_file_metadata(self.raw_fullpath)
+            else:
+                self.metadata = None
 
     def to_json(self):
         # return a JSON representation of the art file, but only the fields that are needed to recreate the object
@@ -286,7 +291,7 @@ async def save_uploaded_files(uploaded_files):
         json.dump(uploaded_files, f, indent=4)
 
 
-async def process_set_file(set_file, always_download: bool = False, always_generate: bool = False):
+async def process_set_file(set_file, always_download: bool = False, always_generate: bool = False, always_metadata: bool = False):
     with open(set_file, "r") as f:
         set_json = json.load(f)
     set_schema_version = set_json["schema_version"]
@@ -308,9 +313,9 @@ async def process_set_file(set_file, always_download: bool = False, always_gener
         else:
             af.resize_option = set_resize
         if "metadata" in art_item:
-            af.metadaat = art_item["metadata"]
+            af.metadata = art_item["metadata"]
 
-        await af.process(always_download, always_generate)
+        await af.process(always_download, always_generate, always_metadata)
         artset.add_art(af)
     f.close()
     # Now write the art set back to the file
@@ -457,7 +462,7 @@ async def main():
         logging.info("Not connecting to TV")
 
     if args.setfile:
-        await process_set_file(args.setfile, args.always_download, args.always_generate)
+        await process_set_file(args.setfile, args.always_download, args.always_generate, args.always_metadata)
 
     if not args.no_tv:
         await upload_all(tv_art)

@@ -1,6 +1,8 @@
 import requests
 import re
 from bs4 import BeautifulSoup
+from libxmp import XMPFiles, consts, XMPMeta
+from libxmp.utils import file_to_dict
 
 metadata_map = {
     "creator": ["creator", "artist", "created by", "by"],
@@ -54,5 +56,26 @@ def get_google_metadata(url: str):
                     value = li.text.replace(span.text, "").strip()
                     raw_metadata[key] = value
     cleaned_metadata = process_key_value_pairs(raw_metadata, metadata_map)
+    print(cleaned_metadata)
+    return cleaned_metadata
+
+
+def get_xmp_metadata(image_path):
+    # Open the file and get the XMP data
+    xmp_dict = file_to_dict(image_path)
+    for schema, props in xmp_dict.items():
+        print(f"Schema: {schema}")
+        print(f"Properties: {props}\n\n\n")
+    # dublin_core = xmp_dict[consts.XMP_NS_DC]
+    # print(f"{dublin_core}")
+
+
+def get_file_metadata(file_path: str):
+    metadata = {}
+
+    xmp_data = get_xmp_metadata(file_path)
+
+    print(f"Metadata: {xmp_data}")
+    cleaned_metadata = process_key_value_pairs(metadata, metadata_map)
     print(cleaned_metadata)
     return cleaned_metadata
