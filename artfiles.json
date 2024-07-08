@@ -6,22 +6,48 @@
         {
             "url": "https://artsandculture.google.com/asset/homage-to-the-square-sonorous-josef-albers/YAHHW_KLcb2m2w",
             "raw_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_0010.jpg",
-            "resize_option": "scaled"
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Homage to the Square, Sonorous",
+                "creator": "Josef Albers",
+                "date_created": "1958",
+                "medium": "Oil on hardboard"
+            }
         },
         {
             "url": "https://artsandculture.google.com/asset/full-homage-to-the-square-josef-albers/uwFaRKFNNWjOSg",
             "raw_file": "Albers, Josef; Full (Homage to the Square); 1962_0001.jpg",
-            "resize_option": "scaled"
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Full (Homage to the Square)",
+                "creator": "Josef Albers",
+                "date_created": "1962",
+                "medium": "Screenprint"
+            }
         },
         {
             "url": "https://artsandculture.google.com/asset/cat-litter-robert-gober/YQFZtnXTyaYTHg",
             "raw_file": "Cat Litter - Robert Gober_0001.jpg",
-            "resize_option": "cropped"
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Cat Litter",
+                "creator": "Robert Gober",
+                "creator_nationality": "American",
+                "date_created": "1989",
+                "medium": "Plaster, ink, and latex paint"
+            }
         },
         {
             "url": "https://artsandculture.google.com/asset/ph-129-clyfford-still/FwHVp26mrlpKfQ",
             "raw_file": "Still, Clyfford; PH-129; 1949_0007.jpg",
-            "resize_option": "cropped"
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "PH-129",
+                "creator": "Clyfford Still",
+                "creator_nationality": "American",
+                "date_created": "1949",
+                "medium": "Oil on canvas"
+            }
         },
         {
             "url": "https://artsy-media-uploads.s3.amazonaws.com/gnTGohfzA9zjfU5o81Z5nw/banksy-stall-venice-lead.jpg",
@@ -31,7 +57,13 @@
         {
             "url": "https://artsandculture.google.com/asset/ion-11-victor-vasarely/zAGDIJRNphFaPw",
             "raw_file": "Vasarely, Victor; ION 11; 1967_1969.jpg",
-            "resize_option": "scaled"
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "ION 11",
+                "creator": "Victor Vasarely",
+                "date_created": "1967/1969",
+                "medium": "serigraphy"
+            }
         },
         {
             "url": "https://images.adsttc.com/media/images/5671/77e9/e58e/cee9/c000/039a/slideshow/MAD_Harbin_Opera_House_021_\u00a9Adam_Mork.jpg",
@@ -41,12 +73,22 @@
         {
             "url": "https://artsandculture.google.com/asset/natureza-morta-com-bromlia-amarela/SQElSKW2Ur1OBg",
             "raw_file": "Natureza-morta com brom\u00e9lia amarela - Ana Elisa Egreja.jpg",
-            "resize_option": "scaled"
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Natureza-morta com brom\u00e9lia amarela",
+                "creator": "Ana Elisa Egreja",
+                "date_created": "2015"
+            }
         },
         {
             "url": "https://artsandculture.google.com/asset/portrait-of-pablo-picasso-juan-gris-spanish-1887\u20131927/RgGPipJ4FxSBiw",
             "raw_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912.jpg",
-            "resize_option": "scaled"
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Portrait of Pablo Picasso",
+                "creator": "Juan Gris (Spanish, 1887\u20131927)",
+                "date_created": "January-February 1912"
+            }
         }
     ]
 }

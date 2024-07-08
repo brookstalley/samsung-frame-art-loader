@@ -6,8 +6,10 @@ metadata_map = {
     "creator": ["creator", "artist", "created by", "by"],
     "date_created": ["date created", "date"],
     "title": ["title", "name"],
-    "medium": ["medium"],
+    "medium": ["medium", "media"],
     "creator_nationality": ["creator nationality"],
+    "dimensions": ["dimensions", "size", "physical dimensions"],
+    "creator_lived": ["creator lifespan"],
     # Add other desired keys and their synonyms here
 }
 
@@ -51,8 +53,6 @@ def get_google_metadata(url: str):
                     key = span.text.replace(":", "").strip().lower()
                     value = li.text.replace(span.text, "").strip()
                     raw_metadata[key] = value
-                    print(f"{key}: {value}")
-    print(raw_metadata)
     cleaned_metadata = process_key_value_pairs(raw_metadata, metadata_map)
     print(cleaned_metadata)
     return cleaned_metadata

@@ -9,7 +9,7 @@ import argparse
 import requests
 import time
 
-from image_utils import resize_file_with_matte, get_google_file, get_http_image_
+from image_utils import resize_file_with_matte, get_google_file, get_http_image
 from metadata import get_google_metadata
 
 sys.path.append("../")
@@ -169,6 +169,7 @@ class ArtFile:
         }
         if self.metadata:
             json["metadata"] = self.metadata
+        return json
 
     def image_retriever(self, url):
         # If the URL is a Google Arts and Culture URL, use dezoomify-rs to download the image
