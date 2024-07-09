@@ -278,6 +278,7 @@ async def process_set_file(set_file, always_download: bool = False, always_gener
     try:
         with open(set_file, "r") as f:
             set_json = json.load(f)
+        f.close()
     except Exception as e:
         logging.error(f"Error loading set file: {e}")
         sys.exit()
@@ -307,14 +308,12 @@ async def process_set_file(set_file, always_download: bool = False, always_gener
 
         await af.process(always_download, always_generate, always_metadata)
         artset.add_art(af)
-    f.close()
-    # Now write the art set back to the file
-    updated_json = artset.to_json()
-    with open(set_file, "w") as f:
-        # write the updated JSON in human readable format
-        json.dump(updated_json, f, indent=4)
+        updated_json = artset.to_json()
+        with open(set_file, "w") as o:
+            # write the updated JSON in human readable format
+            json.dump(updated_json, o, indent=4)
 
-    f.close()
+        o.close()
 
 
 async def upload_one(local_file: str, tv_art: SamsungTVAsyncArt) -> str:
