@@ -14,7 +14,7 @@ from source_utils import artic_metadata_for_url
 logging.basicConfig(level=logging.INFO)
 
 dezoomify_rs_path = "dezoomify-rs"
-dezoomify_params = "--max-width 8192 --max-height 8192 --compression 0"
+dezoomify_params = "--max-width 8192 --max-height 8192 --compression 0 --parallelism 8 --min-interval 500"
 
 
 # Enums for resizing options
