@@ -16,7 +16,7 @@ metadata_map = {
     "creator_lived": ["creator lifespan"],
     "rights": ["rights", "usage rights", "dc:rights", "dc:rights[1]"],
     "description": ["description", "caption", "dc:description"],
-    # Add other desired keys and their synonyms here
+    "artist_details": ["artist details", "artist_display"],
 }
 
 
@@ -68,7 +68,7 @@ async def get_artic_metadata(url: str):
     api_response = await artic_metadata_for_url(url)
     metadata = api_response["data"]
     cleaned_metadata = process_key_value_pairs(metadata, metadata_map)
-    print(f"Got metadata for {url}: {cleaned_metadata}")
+    # print(f"Got metadata for {url}: {cleaned_metadata}")
     return cleaned_metadata
 
 

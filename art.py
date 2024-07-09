@@ -117,22 +117,13 @@ class ArtFile:
         logging.debug(f"Processing {self.url}")
 
         # URL is specified
+        raw_file_exists = False
         if self.raw_file:
             self.raw_fullpath = art_folder_raw + "/" + self.raw_file
             if os.path.exists(self.raw_fullpath) and not always_download:
                 raw_file_exists = True
-            else:
-                result, fullpath = await get_image(self.url, self.raw_fullpath)
-                if result:
-                    # Only save the basename so the program is portable
-                    self.raw_file = os.path.basename(fullpath)
-                    self.raw_fullpath = fullpath
-                    raw_file_exists = True
-                else:
-                    raise Exception("Error downloading image")
-
-        else:
-            # Raw file is not specified. For now always download because we can't get the filename from the URL
+        if not raw_file_exists:
+            # Raw file is not specified or does not exist. For now always download because we can't get the filename from the URL
             result, fullpath = await get_image(self.url, destination_fullpath=None, destination_dir=art_folder_raw)
             if result:
                 raw_file_exists = True

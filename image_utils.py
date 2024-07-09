@@ -235,8 +235,12 @@ async def get_artic_image(url, destination_fullpath: str = None, destination_dir
         # Make the filename
         artist = metadata["data"]["artist_title"]
         title = metadata["data"]["title"]
+        # strip out bad filename characters
         filename = f"{artist} - {title}.jpg"
-        success, out_file = await get_dezoomify_file(info_url, destination_dir, destination_fullpath, filename)
+        keepcharacters = (" ", ".", "_")
+        clean_filename = "".join(c for c in filename if c.isalnum() or c in keepcharacters).rstrip()
+
+        success, out_file = await get_dezoomify_file(info_url, destination_dir, destination_fullpath, clean_filename)
         return success, out_file
 
     except requests.exceptions.RequestException as e:
