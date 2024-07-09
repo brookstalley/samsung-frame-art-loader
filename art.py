@@ -9,8 +9,9 @@ import argparse
 import requests
 import time
 
-from image_utils import resize_file_with_matte, get_google_file, get_http_image
-from metadata import get_google_metadata, get_file_metadata
+from image_utils import ResizeOptions, ImageSources
+from image_utils import resize_file_with_matte, image_source, get_image
+from metadata import get_google_metadata, get_file_metadata, get_artic_metadata
 
 sys.path.append("../")
 
@@ -82,11 +83,6 @@ def get_ready_fullpath(raw_filename, ready_folder, resize_option):
     return ready_fullpath
 
 
-class ImageRetrievers:
-    DEZOOM = "dezoomify"
-    HTTP = "http"
-
-
 class ArtFile:
     url: str = None
     resize_option: str = None
@@ -103,7 +99,6 @@ class ArtFile:
         ready_file=None,
         ready_fullpath=None,
         resize_option=None,
-        retriever=None,
         metadata=None,
     ):
         self.url = url
@@ -120,7 +115,6 @@ class ArtFile:
             raise Exception("URL is required")
 
         logging.debug(f"Processing {self.url}")
-        self.retriever = self.image_retriever(self.url)
 
         # URL is specified
         if self.raw_file:
@@ -128,7 +122,7 @@ class ArtFile:
             if os.path.exists(self.raw_fullpath) and not always_download:
                 raw_file_exists = True
             else:
-                result, fullpath = await self.get_image(self.url, self.raw_fullpath)
+                result, fullpath = await get_image(self.url, self.raw_fullpath)
                 if result:
                     # Only save the basename so the program is portable
                     self.raw_file = os.path.basename(fullpath)
@@ -139,7 +133,7 @@ class ArtFile:
 
         else:
             # Raw file is not specified. For now always download because we can't get the filename from the URL
-            result, fullpath = self.get_image(self.url, destination_fullpath=None, destination_dir=art_folder_raw)
+            result, fullpath = await get_image(self.url, destination_fullpath=None, destination_dir=art_folder_raw)
             if result:
                 raw_file_exists = True
                 # Only save the basename so the program is portable
@@ -154,16 +148,27 @@ class ArtFile:
             description_box = resize_file_with_matte(self.raw_fullpath, self.ready_fullpath, 3840, 2160, self.resize_option)
         # print(f"Processed {self.url}, metadata is {self.metadata}")
         if (self.metadata is None) or always_metadata:
-            self.get_metadata()
+            await self.get_metadata()
 
-    def get_metadata(self):
-        if self.image_retriever(self.url) == ImageRetrievers.DEZOOM:
-            self.metadata = get_google_metadata(self.url)
-        else:
-            if self.raw_file is not None:
-                self.metadata = get_file_metadata(self.raw_fullpath)
-            else:
-                self.metadata = None
+    async def get_metadata(self):
+        match image_source(self.url):
+            case ImageSources.GOOGLE_ARTSANDCULTURE:
+                new_metadata = get_google_metadata(self.url)
+                if new_metadata:
+                    self.metadata = new_metadata | (self.metadata if self.metadata else {})
+            case ImageSources.ARTIC:
+                new_metadata = await get_artic_metadata(self.url)
+                if new_metadata:
+                    self.metadata = new_metadata | (self.metadata if self.metadata else {})
+            case ImageSources.HTTP:
+                if self.raw_file is not None:
+                    new_metadata = get_file_metadata(self.raw_fullpath)
+                    if new_metadata:
+                        self.metadata = new_metadata | (self.metadata if self.metadata else {})
+                else:
+                    self.metadata = None
+            case _:
+                raise Exception("Unknown image source")
 
     def to_json(self):
         # return a JSON representation of the art file, but only the fields that are needed to recreate the object
@@ -175,19 +180,6 @@ class ArtFile:
         if self.metadata:
             json["metadata"] = self.metadata
         return json
-
-    def image_retriever(self, url):
-        # If the URL is a Google Arts and Culture URL, use dezoomify-rs to download the image
-        if "artsandculture.google.com" in url:
-            return ImageRetrievers.DEZOOM
-        else:
-            return ImageRetrievers.HTTP
-
-    async def get_image(self, url, destination_fullpath: str = None, destination_dir: str = None) -> tuple[bool, str]:
-        if self.image_retriever(url) == ImageRetrievers.DEZOOM:
-            return await get_google_file(url, art_folder_raw, destination_fullpath)
-        else:
-            return await get_http_image(url, destination_fullpath, destination_dir)
 
 
 class ArtSet:
@@ -292,8 +284,14 @@ async def save_uploaded_files(uploaded_files):
 
 
 async def process_set_file(set_file, always_download: bool = False, always_generate: bool = False, always_metadata: bool = False):
-    with open(set_file, "r") as f:
-        set_json = json.load(f)
+    logging.debug(f"Processing set file {set_file}")
+    try:
+        with open(set_file, "r") as f:
+            set_json = json.load(f)
+    except Exception as e:
+        logging.error(f"Error loading set file: {e}")
+        sys.exit()
+
     set_schema_version = set_json["schema_version"]
     set_name = set_json["name"]
     set_resize = set_json["default_resize"]
@@ -305,6 +303,8 @@ async def process_set_file(set_file, always_download: bool = False, always_gener
     for art_item in set_art:
         af = ArtFile()
         if "url" in art_item:
+            url = art_item["url"]
+            # print(f"Processing {url}")
             af.url = art_item["url"]
         if "raw_file" in art_item:
             af.raw_file = art_item["raw_file"]
@@ -417,8 +417,9 @@ async def main():
     # Increase debug level
     args = parse_args()
 
-    logging.basicConfig(level=logging.INFO)
-    logging.info("Starting art.py")
+    logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
+    logging.info("Starting art.py!")
+    logging.debug("Logging in debug mode")
 
     # Set your TVs local IP address. Highly recommend using a static IP address for your TV.
     if not args.no_tv:

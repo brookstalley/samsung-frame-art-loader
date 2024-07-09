@@ -68,7 +68,10 @@
         {
             "url": "https://images.adsttc.com/media/images/5671/77e9/e58e/cee9/c000/039a/slideshow/MAD_Harbin_Opera_House_021_\u00a9Adam_Mork.jpg",
             "raw_file": "MAD_Harbin_Opera_House_021_\u00a9Adam_Mork.jpg",
-            "resize_option": "cropped"
+            "resize_option": "cropped",
+            "metadata": {
+                "rights": "Adam M\u00f8rk"
+            }
         },
         {
             "url": "https://artsandculture.google.com/asset/natureza-morta-com-bromlia-amarela/SQElSKW2Ur1OBg",

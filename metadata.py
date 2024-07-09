@@ -3,15 +3,19 @@ import re
 from bs4 import BeautifulSoup
 from libxmp import XMPFiles, consts, XMPMeta
 from libxmp.utils import file_to_dict
+from PIL import Image, ExifTags
+from source_utils import artic_metadata_for_url
 
 metadata_map = {
     "creator": ["creator", "artist", "created by", "by"],
-    "date_created": ["date created", "date"],
+    "date_created": ["date created", "date", "date_display"],
     "title": ["title", "name"],
-    "medium": ["medium", "media"],
+    "medium": ["medium", "media", "medium_display"],
     "creator_nationality": ["creator nationality"],
     "dimensions": ["dimensions", "size", "physical dimensions"],
     "creator_lived": ["creator lifespan"],
+    "rights": ["rights", "usage rights", "dc:rights", "dc:rights[1]"],
+    "description": ["description", "caption", "dc:description"],
     # Add other desired keys and their synonyms here
 }
 
@@ -56,26 +60,55 @@ def get_google_metadata(url: str):
                     value = li.text.replace(span.text, "").strip()
                     raw_metadata[key] = value
     cleaned_metadata = process_key_value_pairs(raw_metadata, metadata_map)
-    print(cleaned_metadata)
+    # print(cleaned_metadata)
+    return cleaned_metadata
+
+
+async def get_artic_metadata(url: str):
+    api_response = await artic_metadata_for_url(url)
+    metadata = api_response["data"]
+    cleaned_metadata = process_key_value_pairs(metadata, metadata_map)
+    print(f"Got metadata for {url}: {cleaned_metadata}")
     return cleaned_metadata
 
 
 def get_xmp_metadata(image_path):
     # Open the file and get the XMP data
     xmp_dict = file_to_dict(image_path)
-    for schema, props in xmp_dict.items():
-        print(f"Schema: {schema}")
-        print(f"Properties: {props}\n\n\n")
-    # dublin_core = xmp_dict[consts.XMP_NS_DC]
-    # print(f"{dublin_core}")
+    try:
+        dublin_core = xmp_dict[consts.XMP_NS_DC]
+        # print(f"{image_path} Dublin Core: {dublin_core}")
+        metadata = {}
+        for item in dublin_core:
+            tag = item[0]
+            value = item[1]
+            attributes = item[2]
+            metadata[tag] = value
+        print(f"Got XMP Dublin core for {image_path}: {metadata}")
+        return metadata
+    except KeyError:
+        print(f"{image_path} has no Dublin Core metadata")
+        return None
+
+
+def get_exif_metadata(file_path: str):
+    try:
+        image = Image.open(file_path)
+        exif = {ExifTags.TAGS[k]: v for k, v in image._getexif().items() if k in ExifTags.TAGS}
+        print(f"Got EXIF metadata for {file_path}: {exif}")
+    except Exception as e:
+        print(f"Error getting EXIF metadata: {e}")
+    return {}
 
 
 def get_file_metadata(file_path: str):
     metadata = {}
 
     xmp_data = get_xmp_metadata(file_path)
+    if xmp_data is not None:
+        cleaned_metadata = process_key_value_pairs(xmp_data, metadata_map)
+        metadata = metadata | cleaned_metadata
 
-    print(f"Metadata: {xmp_data}")
-    cleaned_metadata = process_key_value_pairs(metadata, metadata_map)
-    print(cleaned_metadata)
-    return cleaned_metadata
+    exif_data = get_exif_metadata(file_path)
+
+    return metadata

@@ -1,0 +1,17 @@
+{
+    "schema_version": 1,
+    "name": "Art Institute of Chicago",
+    "default_resize": "cropped",
+    "art": [
+        {
+            "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
+            "raw_file": "Mark Rothko - Untitled (Purple, White, and Red).jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Untitled (Purple, White, and Red)",
+                "description": "<p><em>Untitled (Purple, White, and Red)</em> follows the characteristic format of Mark Rothko\u2019s mature work, in which stacked rectangles of color appear to float within the boundaries of the canvas. By directly staining the canvas with many thin washes of pigment and paying particular attention to the edges where the fields interact, he achieved the effect of light radiating from the image itself. This technique suited Rothko\u2019s metaphysical aims: to offer painting as a doorway into purely spiritual realms, making it as immaterial and evocative as music, and to directly communicate the most essential, raw forms of human emotion.</p>\n",
+                "dimensions": "Unframed: 197.5 \u00d7 207.7 cm (77 13/16 \u00d7 81 13/16 in.); 197.5 \u00d7 207.7 cm (77 3/4 \u00d7 81 3/4 in.)"
+            }
+        }
+    ]
+}

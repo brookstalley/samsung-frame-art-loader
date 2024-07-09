@@ -7,6 +7,9 @@ import numpy as np
 import os
 import subprocess
 from skimage.transform import resize
+import requests
+import re
+from source_utils import artic_metadata_for_url
 
 logging.basicConfig(level=logging.INFO)
 
@@ -18,6 +21,22 @@ dezoomify_params = "--max-width 8192 --max-height 8192 --compression 0"
 class ResizeOptions:
     SCALE = "scaled"
     CROP = "cropped"
+
+
+class ImageSources:
+    GOOGLE_ARTSANDCULTURE = "google"
+    HTTP = "http"
+    ARTIC = "artic"
+
+
+def image_source(url):
+    # If the URL is a Google Arts and Culture URL, use dezoomify-rs to download the image
+    if "artsandculture.google.com" in url:
+        return ImageSources.GOOGLE_ARTSANDCULTURE
+    elif "www.artic.edu/artworks" in url:
+        return ImageSources.ARTIC
+    else:
+        return ImageSources.HTTP
 
 
 def get_average_color(image: Image):
@@ -123,6 +142,7 @@ def resize_image_with_matte(image: Image, resize_option, width, height) -> Image
 def resize_file_with_matte(in_file: str, out_file: str, width, height, resize_option):
     # load image from file
     # set decompression limit high
+    logging.info(f"Resizing {in_file} to {out_file} at {width}x{height}")
     Image.MAX_IMAGE_PIXELS = 933120000
 
     image = Image.open(in_file)
@@ -137,13 +157,19 @@ def resize_file_with_matte(in_file: str, out_file: str, width, height, resize_op
     logging.info(f"Resized {in_file} to {out_file}")
 
 
-async def get_google_file(url, download_dir: str, destination_fullpath: str) -> tuple[bool, str]:
+async def get_dezoomify_file(url, download_dir: str, destination_fullpath: str, out_file: str = "") -> tuple[bool, str]:
     # Run dezoomify-rs, passing dezoomify_params as arguments and starting in the art_folder_raw directory
     # See https://github.com/lovasoa/dezoomify-rs for info
-    cmdline = f"{dezoomify_rs_path} {dezoomify_params} {url}"
+    if out_file is not None:
+        out_file = os.path.join(download_dir, out_file)
+        # Dezoomify will error out if the file already exists. If out_file is specified, delete it if it does exist
+        if os.path.exists(out_file):
+            os.remove(out_file)
+
+    cmdline = f'{dezoomify_rs_path} {dezoomify_params} "{url}" "{out_file}"'.strip()
     logging.info(f"Running: {cmdline}")
     p = subprocess.Popen(
-        f"{dezoomify_rs_path} {dezoomify_params} {url}",
+        cmdline,
         shell=True,
         cwd=download_dir,
         stdout=subprocess.PIPE,
@@ -157,15 +183,21 @@ async def get_google_file(url, download_dir: str, destination_fullpath: str) -> 
         logging.error(out)
         logging.error(err)
         return False, None
-
     # Typical response is b"\x1b[38;5;10mImage successfully saved to '/Users/username/art/raw/Still, Clyfford; PH-129; 1949_0001.jpg' (current working directory: /Users/brookstalley/art/raw)\n"
     # Get the filename from the output
+    # outdata = out.decode("utf-8")
+    # print(f"out: {outdata}")
     out_file = out.decode("utf-8").split("'")[1]
     logging.info(f"Downloaded {out_file}")
     if destination_fullpath:
         os.rename(out_file, destination_fullpath)
         out_file = destination_fullpath
     return True, out_file
+
+
+async def get_google_image(url, download_dir: str, destination_fullpath: str) -> tuple[bool, str]:
+    success, out_file = await get_dezoomify_file(url, download_dir, destination_fullpath)
+    return success, out_file
 
 
 async def get_http_image(url, destination_fullpath: str = None, destination_dir: str = None) -> tuple[bool, str]:
@@ -187,3 +219,44 @@ async def get_http_image(url, destination_fullpath: str = None, destination_dir:
         f.write(response.content)
 
     return True, filename
+
+
+async def get_artic_image(url, destination_fullpath: str = None, destination_dir: str = None) -> tuple[bool, str]:
+    # Download the image from the URL
+    logging.info(f"Downloading {url}")
+    metadata = await artic_metadata_for_url(url)
+
+    try:
+        # load json from the API url
+
+        image_id = metadata["data"]["image_id"]
+        iiif_url = metadata["config"]["iiif_url"]
+        info_url = f"{iiif_url}/{image_id}/info.json"
+        # Make the filename
+        artist = metadata["data"]["artist_title"]
+        title = metadata["data"]["title"]
+        filename = f"{artist} - {title}.jpg"
+        success, out_file = await get_dezoomify_file(info_url, destination_dir, destination_fullpath, filename)
+        return success, out_file
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Error downloading {url}: {e}")
+        return False, None
+    except Exception as e:
+        logging.error(f"Error downloading {url}: {e}")
+        return False, None
+
+
+async def get_image(url, destination_fullpath: str = None, destination_dir: str = None) -> tuple[bool, str]:
+    logging.info(f"Getting image from {url}")
+    match image_source(url):
+        case ImageSources.GOOGLE_ARTSANDCULTURE:
+            # Dezoomify can get a good filename for Google even if destination_fullpath is None
+            return await get_google_image(url, destination_fullpath, destination_dir)
+        case ImageSources.ARTIC:
+            # Dezoomify cannot determine a filename for artic if destination_fullpath is None
+            return await get_artic_image(url, destination_fullpath, destination_dir)
+        case ImageSources.HTTP:
+            return await get_http_image(url, destination_fullpath, destination_dir)
+        case _:
+            raise Exception("Unknown image source")
