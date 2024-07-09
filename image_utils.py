@@ -183,10 +183,6 @@ async def get_dezoomify_file(url, download_dir: str, destination_fullpath: str, 
         logging.error(out)
         logging.error(err)
         return False, None
-    # Typical response is b"\x1b[38;5;10mImage successfully saved to '/Users/username/art/raw/Still, Clyfford; PH-129; 1949_0001.jpg' (current working directory: /Users/brookstalley/art/raw)\n"
-    # Get the filename from the output
-    # outdata = out.decode("utf-8")
-    # print(f"out: {outdata}")
     out_file = out.decode("utf-8").split("'")[1]
     logging.info(f"Downloaded {out_file}")
     if destination_fullpath:

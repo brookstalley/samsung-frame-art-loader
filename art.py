@@ -259,12 +259,11 @@ async def upload_files(
 
 
 async def get_uploaded_files(ignore_uploaded: bool = False):
+    uploaded_files = []
     # Load the list of uploaded filenames from the file
     if os.path.isfile(upload_list_path) and not ignore_uploaded:
         with open(upload_list_path, "r") as f:
             uploaded_files = json.load(f)
-    else:
-        uploaded_files = []
 
     return uploaded_files
 
@@ -318,6 +317,26 @@ async def process_set_file(set_file, always_download: bool = False, always_gener
     f.close()
 
 
+async def upload_one(local_file: str, tv_art: SamsungTVAsyncArt) -> str:
+    logging.debug(f"Processing {local_file}")
+    if not os.path.exists(local_file):
+        logging.error(f"File {local_file} does not exist.")
+        raise FileNotFoundError(f"File {local_file} does not exist.")
+    remote_file = None
+    with open(local_file, "rb") as f:
+        data = f.read()
+    try:
+        if local_file.endswith(".jpg"):
+            remote_filename = await tv_art.upload(data, file_type="JPEG", matte="none")
+        elif local_file.endswith(".png"):
+            remote_filename = await tv_art.upload(data, file_type="PNG", matte="none")
+    except Exception as e:
+        logging.error("There was an error: " + str(e))
+    finally:
+        f.close()
+    return remote_filename
+
+
 async def upload_all(tv: SamsungTVAsyncArt, always_upload: bool = False):
     # Build the list of all ready files that need to be uploaded
     files = []
@@ -328,8 +347,7 @@ async def upload_all(tv: SamsungTVAsyncArt, always_upload: bool = False):
     uploaded_files = await get_uploaded_files()
 
     # Remove the filenames of images that have already been uploaded
-    files = list(set(files) - set([f["file"] for f in uploaded_files]))
-    files_to_upload = files
+    files_to_upload = list(set(files) - set([f["file"] for f in uploaded_files]))
 
     if not files_to_upload:
         logging.info("No new images to upload.")
@@ -338,42 +356,20 @@ async def upload_all(tv: SamsungTVAsyncArt, always_upload: bool = False):
     # make a dict of local file : remote filenames from the uploaded_files JSON
     remote_files = {f["file"]: f["remote_filename"] for f in uploaded_files}
 
-    for file in files_to_upload:
-        if not os.path.exists(file):
-            logging.error(f"File {file} does not exist.")
-            continue
-
+    for file_to_upload in files_to_upload:
         remote_filename = None
-        logging.debug(f"Processing {file}")
+
         # if file is in the list of uploaded files, set the remote filename
-        if file in remote_files.keys():
-            remote_filename = remote_files[file]
+        if file_to_upload in remote_files.keys():
+            remote_filename = remote_files[file_to_upload]
             logging.info("Image already uploaded.")
-            if not upload_all:
-                # Select the image using the remote file name only if not in 'upload-all' mode
-                logging.info("Setting existing image, skipping upload")
-                tv.art().select_image(remote_filename, show=True)
         else:
-            with open(file, "rb") as f:
-                data = f.read()
-
-            # Upload the file to the TV and select it as the current art, or select it using the remote filename if it has already been uploaded
-            logging.info(f"Uploading new image: {file} ({len(data)} bytes)")
-
-            try:
-                if file.endswith(".jpg"):
-                    remote_filename = await tv.upload(data, file_type="JPEG", matte="none")
-                elif file.endswith(".png"):
-                    remote_filename = await tv.upload(data, file_type="PNG", matte="none")
-                # Add the filename to the list of uploaded filenames
-                uploaded_files.append({"file": file, "remote_filename": remote_filename})
-
-                tv.art().select_image(remote_filename, show=True)
-            except Exception as e:
-                logging.error("There was an error: " + str(e))
+            remote_filename = await upload_one(file_to_upload, tv)
+            # Add the filename to the list of uploaded filenames
+            uploaded_files.append({"file": file_to_upload, "remote_filename": remote_filename})
+            tv.art().select_image(remote_filename, show=True)
 
         # Save the list of uploaded filenames to the file
-        # Get JSON of the final artset after processing
         with open(upload_list_path, "w") as f:
             json.dump(uploaded_files, f, indent=4)
 
