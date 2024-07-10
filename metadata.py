@@ -1,8 +1,9 @@
 import requests
 import re
 from bs4 import BeautifulSoup
-from libxmp import XMPFiles, consts, XMPMeta
-from libxmp.utils import file_to_dict
+
+# from libxmp import XMPFiles, consts, XMPMeta
+# from libxmp.utils import file_to_dict
 from PIL import Image, ExifTags
 from source_utils import artic_metadata_for_url
 
@@ -104,10 +105,10 @@ def get_exif_metadata(file_path: str):
 def get_file_metadata(file_path: str):
     metadata = {}
 
-    xmp_data = get_xmp_metadata(file_path)
-    if xmp_data is not None:
-        cleaned_metadata = process_key_value_pairs(xmp_data, metadata_map)
-        metadata = metadata | cleaned_metadata
+    # xmp_data = get_xmp_metadata(file_path)
+    # if xmp_data is not None:
+    #    cleaned_metadata = process_key_value_pairs(xmp_data, metadata_map)
+    #    metadata = metadata | cleaned_metadata
 
     exif_data = get_exif_metadata(file_path)
 

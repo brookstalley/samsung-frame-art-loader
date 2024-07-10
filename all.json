@@ -1,0 +1,70 @@
+{
+    "schema_version": 1,
+    "name": "placeholder",
+    "default_resize": "cropped",
+    "art": [
+        {
+            "url": "https://www.artic.edu/artworks/64276/and-the-home-of-the-brave"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/111654/the-policeman"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/61428/cow-s-skull-with-calico-roses"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/100858/sky-above-clouds-iv"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/91194/golden-bird"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/105203/triptych-window-from-the-coonley-playhouse-riverside-illinois"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/100089/chicago"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/229351/target"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/157156/red-yellow-blue-white-and-black-ii"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/61608/sunset"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/65868/silver-sun"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/159710/la-peche-fishing"
+        },
+        {
+            "url": "https://artsandculture.google.com/asset/homage-to-the-square-sonorous-josef-albers/YAHHW_KLcb2m2w"
+        },
+        {
+            "url": "https://artsandculture.google.com/asset/full-homage-to-the-square-josef-albers/uwFaRKFNNWjOSg"
+        },
+        {
+            "url": "https://artsandculture.google.com/asset/cat-litter-robert-gober/YQFZtnXTyaYTHg"
+        },
+        {
+            "url": "https://artsandculture.google.com/asset/ph-129-clyfford-still/FwHVp26mrlpKfQ"
+        },
+        {
+            "url": "https://artsandculture.google.com/asset/ion-11-victor-vasarely/zAGDIJRNphFaPw"
+        },
+        {
+            "url": "https://artsandculture.google.com/asset/natureza-morta-com-bromlia-amarela/SQElSKW2Ur1OBg"
+        },
+        {
+            "url": "https://artsandculture.google.com/asset/portrait-of-pablo-picasso-juan-gris-spanish-1887\\u20131927/RgGPipJ4FxSBiw\""
+        }
+    ]
+}
