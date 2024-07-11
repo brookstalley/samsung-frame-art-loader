@@ -109,8 +109,9 @@ class ArtFile:
         logging.info(f"ArtFile: from_dict ")
         url = data.get("url")
         raw_file = data.get("raw_file", None)
-
-        return cls(url=data["url"], raw_file=data["raw_file"], resize_option=data["resize_option"], metadata=data["metadata"])
+        resize_option = data.get("resize_option", None)
+        metadata = data.get("metadata", None)
+        return cls(url=url, raw_file=raw_file, resize_option=resize_option, metadata=metadata)
 
     async def process(self, always_download=False, always_generate=False, always_metadata=False):
         """Process the art file. Download the raw file if necessary, and generate the ready file."""
@@ -201,8 +202,14 @@ class ArtSet:
     @classmethod
     def from_dict(cls, data: dict):
         print(f"from_dict: {data}")
-        art_list = [ArtFile.from_dict(art_file_data) for art_file_data in data["art_list"]]
-        return cls(name=data["name"], default_resize=data["default_resize"], source_file=data["source_file"], art=art_list)
+        name = data.get("name", None)
+        default_resize = data.get("default_resize", None)
+        art_json = data.get("art", None)
+        source_file = data.get("source_file", None)
+        art = None
+        if art_json:
+            art = [ArtFile.from_dict(art_json_data) for art_json_data in data["art"]]
+        return cls(name=name, default_resize=default_resize, source_file=source_file, art=art)
 
     @classmethod
     def load(cls, source_file: str):
@@ -216,7 +223,6 @@ class ArtSet:
         except Exception as e:
             logging.error(f"Error loading file {source_file}: {e}")
             raise e
-
         data["source_file"] = source_file
         return cls.from_dict(data)
 
