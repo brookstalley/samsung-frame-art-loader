@@ -206,9 +206,11 @@ class ArtSet:
         default_resize = data.get("default_resize", None)
         art_json = data.get("art", None)
         source_file = data.get("source_file", None)
-        art = None
+        art: list[ArtFile] = []
         if art_json:
-            art = [ArtFile.from_dict(art_json_data) for art_json_data in data["art"]]
+            for art_json_data in data["art"]:
+                art_file = ArtFile.from_dict(art_json_data)
+                art.append(art_file)
         return cls(name=name, default_resize=default_resize, source_file=source_file, art=art)
 
     @classmethod
@@ -330,8 +332,9 @@ async def process_set_file(set_file, always_download: bool = False, always_gener
         logging.error(f"Error loading set file: {e}")
         sys.exit()
 
-    for art_item in artset.art:
-        await art_item.process(always_download, always_generate, always_metadata)
+    for art_file in artset.art:
+        logging.info(f"Processing {art_file.url}")
+        await art_file.process(always_download, always_generate, always_metadata)
         artset.save()
 
 
