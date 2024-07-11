@@ -164,12 +164,13 @@ def resize_file_with_matte(in_file: str, out_file: str, width, height, resize_op
 
 
 async def get_dezoomify_file(
-    url, download_dir: str, destination_fullpath: str, out_file: str = "", http_referer: str = None
+    url, destination_dir: str, destination_fullpath: str, out_file: str = "", http_referer: str = None
 ) -> tuple[bool, str]:
     # Run dezoomify-rs, passing dezoomify_params as arguments and starting in the art_folder_raw directory
     # See https://github.com/lovasoa/dezoomify-rs for info
-    if out_file is not None:
-        out_file = os.path.join(download_dir, out_file)
+    if out_file is not None and out_file != "":
+        print(f'*** out_file is "{out_file}", download_dir is "{destination_dir}"')
+        out_file = os.path.join(destination_dir, out_file)
         # Dezoomify will error out if the file already exists. If out_file is specified, delete it if it does exist
         if os.path.exists(out_file):
             os.remove(out_file)
@@ -177,12 +178,15 @@ async def get_dezoomify_file(
     my_params = dezoomify_params
     if http_referer is not None:
         my_params = f"{my_params} --header 'Referer: {http_referer}'"
-    cmdline = f'{dezoomify_rs_path} {my_params} "{url}" "{out_file}"'.strip()
-    logging.info(f"Running: {cmdline}")
+    cmdline = f'{dezoomify_rs_path} {my_params} "{url}"'
+    if out_file is not None and out_file != "":
+        cmdline = f"{cmdline} {out_file}"
+    cmdline = cmdline.strip()
+    logging.debug(f"Running: {cmdline}")
     p = subprocess.Popen(
         cmdline,
         shell=True,
-        cwd=download_dir,
+        cwd=destination_dir,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
@@ -190,9 +194,21 @@ async def get_dezoomify_file(
     out, err = p.communicate()
     # get the output of the command
     if p.returncode != 0:
-        logging.error(f"Error running dezoomify-rs: {p.returncode}")
-        logging.error(out)
-        logging.error(err)
+        if p.returncode == 1:
+            # We got some tiles but not all of them
+            # the out message will look like b"\x1b[38;5;11mOnly 332 tiles out of 441 could be downloaded. The resulting image was still created in '/home/brooks/art/raw/Jasper Johns - Target.jpg'.\n
+            # Parse the X of Y part and present it nicely
+            match = re.search(r"Only (\d+) tiles out of (\d+) could be downloaded", out.decode("utf-8"))
+            if match:
+                logging.info(f"Only {match.group(1)} out of {match.group(2)} tiles could be downloaded.")
+            else:
+                logging.error(f"Error running dezoomify-rs: {p.returncode}")
+                logging.info(out)
+                logging.error(err)
+        # Dezoomify likes creating images with missing tiles. If one was created, delete it.
+        # Any successfully cached tiles will be used later
+        if os.path.exists(out_file):
+            os.remove(out_file)
         return False, None
     out_file = out.decode("utf-8").split("'")[1]
     logging.info(f"Downloaded {out_file}")
@@ -202,8 +218,10 @@ async def get_dezoomify_file(
     return True, out_file
 
 
-async def get_google_image(url, download_dir: str, destination_fullpath: str) -> tuple[bool, str]:
-    success, out_file = await get_dezoomify_file(url, download_dir, destination_fullpath)
+async def get_google_image(url, destination_fullpath: str, destination_dir: str) -> tuple[bool, str]:
+    success, out_file = await get_dezoomify_file(
+        url=url, destination_dir=destination_dir, destination_fullpath=destination_fullpath
+    )
     return success, out_file
 
 
@@ -286,10 +304,10 @@ async def get_image(url, destination_fullpath: str = None, destination_dir: str 
     match image_source(url):
         case ImageSources.GOOGLE_ARTSANDCULTURE:
             # Dezoomify can get a good filename for Google even if destination_fullpath is None
-            return await get_google_image(url, destination_fullpath, destination_dir)
+            return await get_google_image(url, destination_fullpath=destination_fullpath, destination_dir=destination_dir)
         case ImageSources.ARTIC:
             # Dezoomify cannot determine a filename for artic if destination_fullpath is None
-            return await get_artic_image(url, destination_fullpath, destination_dir)
+            return await get_artic_image(url, destination_fullpath=destination_fullpath, destination_dir=destination_dir)
         case ImageSources.HTTP:
             return await get_http_image(url, destination_fullpath, destination_dir)
         case _:

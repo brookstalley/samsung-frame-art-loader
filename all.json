@@ -1,70 +1,281 @@
 {
-    "schema_version": 1,
     "name": "placeholder",
     "default_resize": "cropped",
     "art": [
         {
-            "url": "https://www.artic.edu/artworks/64276/and-the-home-of-the-brave"
+            "url": "https://www.artic.edu/artworks/64276/and-the-home-of-the-brave",
+            "raw_file": "Charles Demuth - ...And the Home of the Brave.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "...And the Home of the Brave",
+                "date_created": "1931",
+                "artist_details": "Charles Demuth\nAmerican, 1883\u20131935",
+                "description": "<p>Charles Demuth here portrayed a cigar factory using a sharply linear, planar style inspired by streamlined machinery. The building was part of the industrial landscape in his hometown of Lancaster, Pennsylvania, which Demuth began depicting with increasing monumentality in the last years of his life. Although he presented the factory with no reference to the potentially detrimental effects of industrialization, the painting expresses some irony or ambivalence. Demuth drew the title from the last line of \u201cThe Star-Spangled Banner,\u201d which was adopted as the United States national anthem the year he painted this work, thus implying that for many workers, the factory was the new \u201chome of the brave.\u201d</p>\n",
+                "dimensions": "74.8 \u00d7 59.7 cm (29 1/2 \u00d7 23 1/2 in.)",
+                "medium": "Oil and graphite on fiber board"
+            }
         },
         {
-            "url": "https://www.artic.edu/artworks/111654/the-policeman"
+            "url": "https://www.artic.edu/artworks/111654/the-policeman",
+            "raw_file": "Joan Mir\u00f3 - The Policeman.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "The Policeman",
+                "date_created": "1925",
+                "artist_details": "Joan Mir\u00f3\nSpanish, 1893\u20131983",
+                "description": "<p>Soon after Joan Mir\u00f3 moved to Paris from his native Barcelona in 1920, he met a group of avant-garde painters and writers who advocated merging the everyday rational world with that of dreams and the unconscious in order to produce an absolute reality, or surreality. To release images of this higher realm, the Surrealists embraced automatism, a spontaneous working method much like free association. Mir\u00f3 experimented with automatism: \u201cEven a few casual wipes in cleaning my brush,\u201d he said, \u201cmay suggest the beginning of a picture.\u201d Between 1925 and 1927, his experiments unleashed a revolutionary series of works called the \u201cdream paintings,\u201d which straddle abstraction and representation in freely moving, calligraphic compositions. In <em>The Policeman</em>, a large canvas from this group, two biomorphic shapes spring to life as a policeman and a horse, their forms defined by thinly applied white paint against a neutral ocher ground. The form on the left has sprouted five buds that act as fingers, and both forms extrude curves that suggest torsos or mouths. With sketch-like dots and squiggles added to their heads to make eyes and a mustache, Mir\u00f3\u2019s shapes come to life in a liquid space as animated equivalents of a policeman and his horse.</p>\n",
+                "dimensions": "248 \u00d7 194.9 cm (97 5/8 \u00d7 76 3/4 in.)",
+                "medium": "Oil on canvas"
+            }
         },
         {
-            "url": "https://www.artic.edu/artworks/61428/cow-s-skull-with-calico-roses"
+            "url": "https://www.artic.edu/artworks/61428/cow-s-skull-with-calico-roses",
+            "raw_file": "Georgia OKeeffe - Cows Skull with Calico Roses.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Cow's Skull with Calico Roses",
+                "date_created": "1931",
+                "artist_details": "Georgia O'Keeffe (American, 1887\u20131986)",
+                "description": "<p>Georgia O\u2019Keeffe collected this cow\u2019s skull in New Mexico during the summer of 1930, when a drought had devastated the Southwest, and many animal skeletons could be found in the desert. She was captivated by the stark elegance of the bones and shipped some back to New York so she could paint them the following year. She noted, \u201cTo me they are as beautiful as anything I know. . . . The bones seem to cut sharply to the center of something that is keenly alive on the desert.\u201d O\u2019Keeffe\u2019s inclusion of the calico fabric roses\u2014which were used to decorate graves in New Mexico\u2014further evokes questions of life, death, and mortality.</p>\n",
+                "dimensions": "91.4 \u00d7 61 cm (36 \u00d7 24 in.)",
+                "medium": "Oil on canvas"
+            }
         },
         {
-            "url": "https://www.artic.edu/artworks/100858/sky-above-clouds-iv"
+            "url": "https://www.artic.edu/artworks/100858/sky-above-clouds-iv",
+            "raw_file": "Georgia OKeeffe - Sky above Clouds IV.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Sky above Clouds IV",
+                "date_created": "1965",
+                "artist_details": "Georgia O'Keeffe (American, 1887\u20131986)",
+                "description": "<p>Painted in the summer of 1965, when Georgia O\u2019Keeffe was 77 years old, this monumental work culminates a series inspired by the artist\u2019s experiences as an airplane passenger during the 1950s. Working in Abiquiu, New Mexico, O\u2019Keeffe began around 1963 to capture the endless expanses of clouds she had observed from airplane windows during trips all over the world. Beginning with a relatively realistic depiction of small white clouds on a three-by-four-foot canvas, she progressed to more stylized images of the motif on larger surfaces. O\u2019Keeffe wrote:</p>\n<p>&quot;I painted a painting eight feet high and twenty-four feet wide\u2014it kept me working every minute from six a.m. till eight or nine at night as I had to be finished before it was cold\u2014I worked in the garage and it had no heat\u2014Such a size is of course ridiculous but I had it in my head as something I wanted to do for a couple of years.&quot;</p>\n<p>In 1970 <em>Sky above Clouds IV</em> was scheduled to be included in a retrospective of O\u2019Keeffe\u2019s work at the Whitney Museum of American Art, New York, the Art Institute of Chicago, and the San Francisco Museum of Art. After being shown in New York and Chicago, the painting was determined to be too large to enter the doors of the museum in San Francisco. It thus remained on loan to the Art Institute for more than a decade, while the artist and public-minded collectors of her art arranged for it to join the museum\u2019s permanent collection.</p>\n<p>The special relationship between O\u2019Keeffe and the Art Institute began in 1905, when she enrolled as a student at the School of the Art Institute. Her first museum retrospective was organized here in 1943. Later, as the executor for the estate of her husband, the pioneering American photographer and art dealer Alfred Stieglitz, O\u2019Keeffe presented the Art Institute with an important group of modernist works, including a number of her own, many of which are on view in the galleries of American art. She continued to make significant additions to this bequest until her death, at age 98, in 1986.</p>\n",
+                "dimensions": "243.8 \u00d7 731.5 cm (96 \u00d7 288 in.)",
+                "medium": "Oil on canvas"
+            }
         },
         {
-            "url": "https://www.artic.edu/artworks/91194/golden-bird"
+            "url": "https://www.artic.edu/artworks/91194/golden-bird",
+            "raw_file": "Constantin Brancusi - Golden Bird.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Golden Bird",
+                "date_created": "1919/20 (base c. 1922)",
+                "artist_details": "Constantin Brancusi\nFrench, born Romania, 1876\u20131957",
+                "description": "<p>Trained in both folk and academic traditions, Constantin Brancusi sought his own path for sculpture around 1907. Breaking with the currents of the time, he adopted direct carving, combined different materials for single works, and simplified form in his search for his subjects\u2019 essential characters. His works have profoundly influenced the development of twentieth-century abstraction.</p>\n<p>More than any other theme, Brancusi\u2019s series <em>Bird</em> summarizes his quest for a self-sufficient form. \u201cAll my life, I have sought to render the essence of flight,\u201d the artist once said. He began the first of twenty-seven <em>Bird</em> sculptures around 1910 and completed the last in the 1940s. He called the earliest variations <em>Maiastra</em>, referring to a bird in Romanian folklore that leads a prince to his princess. In the Art Institute\u2019s <em>Golden Bird</em>, details such as feet, a tail, and an upturned crowing beak are only suggested in an elegant, streamlined silhouette. Br\u00e2ncusi perched this refined shape on a rough-hewn, geometric base, contrasting the disembodied, light-reflective surface with an earthbound mass. The central polyhedron was cut from the middle of a tree trunk, and its circles (indicating the tree\u2019s age) rotate like a sun, as if radiating light over the bird.</p>\n",
+                "dimensions": "217.8 \u00d7 29.9 \u00d7 29.9 cm (86 \u00d7 11 3/4 \u00d7 11 3/4 in.)",
+                "medium": "Bronze, stone, and wood"
+            }
         },
         {
-            "url": "https://www.artic.edu/artworks/105203/triptych-window-from-the-coonley-playhouse-riverside-illinois"
+            "url": "https://www.artic.edu/artworks/105203/triptych-window-from-the-coonley-playhouse-riverside-illinois",
+            "raw_file": "Frank Lloyd Wright - Triptych Window from the Coonley Playhouse Riverside Illinois.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Triptych Window from the Coonley Playhouse, Riverside, Illinois",
+                "date_created": "1912 (removed 1967)",
+                "artist_details": "Frank Lloyd Wright\nAmerican, 1867-1959",
+                "description": "<p>This colorful, whimsical triptych window is from the Avery Coonley Playhouse, a small structure that Frank Lloyd Wright designed as an addition to the Coonleys\u2019 suburban Chicago estate, which he had previously completed in 1908. Louis Sullivan\u2019s foremost student, Wright continued his teacher\u2019s search for an indigenous American architecture. Like Sullivan, Wright drew inspiration from nature and natural forms, and both men were pioneers of the Prairie School of architecture, characterized by low-slung, horizontal lines and rambling, open spaces that reflect the gently rolling landscape of the Midwest. Odes to the middle-class American family at the turn of the century, Wright\u2019s residences are organic, designed not only to adapt to a family\u2019s changing structure but also to contain the sense of a unified and harmonious whole. Every detail of the Coonley complex, like all of Wright\u2019s projects, bore his personal imprint, down to the creation and placement of the furniture and the design of this window. Referencing such Americana as the flag and colored balloons, Wright explored the use of glass both as a transparent screen uniting exterior and interior and as a decorative element, the colors and design of which anticipate the later abstractions of Piet Mondrian.</p>\n",
+                "dimensions": "Center panel: 35 1/4 \u00d7 43 in. (89.5 \u00d7 109.2 cm)\nTwo side panels: 36 \u00d7 7 3/4 in. (91.4 \u00d7 19.7 cm) (each)",
+                "medium": "Clear and colored leaded glass in oak frames"
+            }
         },
         {
-            "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red"
+            "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
+            "raw_file": "Mark Rothko - Untitled Purple White and Red.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Untitled (Purple, White, and Red)",
+                "date_created": "1953",
+                "artist_details": "Mark Rothko (Marcus Rothkowitz)\nAmerican, born Russia (Latvia), 1903\u20131970",
+                "description": "<p><em>Untitled (Purple, White, and Red)</em> follows the characteristic format of Mark Rothko\u2019s mature work, in which stacked rectangles of color appear to float within the boundaries of the canvas. By directly staining the canvas with many thin washes of pigment and paying particular attention to the edges where the fields interact, he achieved the effect of light radiating from the image itself. This technique suited Rothko\u2019s metaphysical aims: to offer painting as a doorway into purely spiritual realms, making it as immaterial and evocative as music, and to directly communicate the most essential, raw forms of human emotion.</p>\n",
+                "dimensions": "Unframed: 197.5 \u00d7 207.7 cm (77 13/16 \u00d7 81 13/16 in.); 197.5 \u00d7 207.7 cm (77 3/4 \u00d7 81 3/4 in.)",
+                "medium": "Oil on canvas"
+            }
         },
         {
-            "url": "https://www.artic.edu/artworks/100089/chicago"
+            "url": "https://www.artic.edu/artworks/100089/chicago",
+            "raw_file": "Harry Callahan - Chicago.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Chicago",
+                "date_created": "1950",
+                "artist_details": "Harry Callahan\nAmerican, 1912\u20131999",
+                "description": "<p>One of the most important figures in modern American photography, Harry Callahan was a humble and intuitive artist. He was largely self-taught, and as a teacher at Chicago\u2019s Institute of Design (1946\u201361), he continued to learn by assigning photographic problems to students and then solving them himself. Influenced by both the classicism of Ansel Adams and the experimentalism of L\u00e1szl\u00f3 Moholy-Nagy, Callahan fused formal precision and exploration with personal subjectivity. He photographed a wide range of subjects\u2014female pedestrians lost in thought on Chicago\u2019s streets; architectural facades; his wife, Eleanor; and weeds and grasses in snow. <em>Chicago</em>, one of his best-known pictures, shows trees covered in snow along Chicago\u2019s Lake Shore Drive. Although Callahan captured all of the detail available in the bark and snow in his negative, he purposely printed this image in high contrast to emphasize the black-and-white forms of the trees against the stark backdrop. With a graphic sensibility typical of the Institute of Design, Callahan reminds the viewer that a photograph is first and foremost an arrangement of tones and shapes on a piece of paper.</p>\n",
+                "dimensions": "Image/paper: 19.2 \u00d7 24.2 cm (7 9/16 \u00d7 9 9/16 in.); Mount: 20.2 \u00d7 25.3 cm (8 \u00d7 10 in.)",
+                "medium": "Gelatin silver print"
+            }
         },
         {
-            "url": "https://www.artic.edu/artworks/229351/target"
+            "url": "https://www.artic.edu/artworks/229351/target",
+            "raw_file": "Jasper Johns - Target.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Target",
+                "date_created": "1961",
+                "artist_details": "Jasper Johns\nAmerican, born 1930",
+                "description": "<p>In the mid-1950s Jasper Johns was searching for a way to move beyond Abstract Expressionism. He took the radical step of destroying his previous work and began painting a set of motifs that included numbers, the American flag, and the alphabet. These instantly recognizable images allowed him to reintroduce subject matter into his work, freeing him to explore other painterly concerns. One of the found images that Johns employed was the target, and from 1955 to 1961 the artist produced several dozen paintings and drawings that explored this device.</p>\n<p>Initially, Johns chose a palette of primary colors, a preexisting schema as found as the image itself. The artist\u2019s use of oil and encaustic (pigment mixed with hot wax) created a quick-drying medium that recorded each drag and drip of the brush in almost sculptural terms. Indeed, these gestural nods to his Abstract predecessors allowed him to investigate the subtle nuances between form and material. There also exists a tension between the idea of the representational (a target) and the notion of the abstract (the geometry of concentric circles).</p>\n",
+                "dimensions": "167.6 \u00d7 167.6 cm (66 \u00d7 66 in.)",
+                "medium": "Encaustic and newspaper on canvas"
+            }
         },
         {
-            "url": "https://www.artic.edu/artworks/157156/red-yellow-blue-white-and-black-ii"
+            "url": "https://www.artic.edu/artworks/157156/red-yellow-blue-white-and-black-ii",
+            "raw_file": "Ellsworth Kelly - Red Yellow Blue White and Black II.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Red Yellow Blue White and Black II",
+                "date_created": "1953",
+                "artist_details": "Ellsworth Kelly\nAmerican, 1923-2015",
+                "description": "<p><em>Red Yellow Blue White and Black II</em> is an early example of Kelly\u2019s multipanel paintings. While living in Europe between 1948 and 1954, the artist encountered winged altarpieces in churches and cathedrals, which sparked his interest in works composed of separate pieces. He began arranging the colors of his paintings using chance techniques, removing himself from decisions that would influence the aesthetic of the finished artwork. Rather than use handmade marks in this piece, Kelly relied on intersecting edges and flat planes of monochrome color to express form.</p>\n",
+                "dimensions": "99.1 \u00d7 350.2 cm (39 \u00d7 138 in.)",
+                "medium": "Oil on canvas; 7 joined panels"
+            }
         },
         {
-            "url": "https://www.artic.edu/artworks/61608/sunset"
+            "url": "https://www.artic.edu/artworks/61608/sunset",
+            "raw_file": "Paul Klee - Sunset.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Sunset",
+                "date_created": "1930",
+                "artist_details": "Paul Klee\nGerman, born Switzerland, 1879\u20131940",
+                "description": "<p>Paul Klee was an artist and teacher at the Bauhaus for most of that famed school\u2019s existence. Initially head of the bookbinding department, Klee made his greatest contribution as a lecturer on the theory of form in art for the basic design course. There, he developed his ideas about the \u201cpolyphony\u201d of painting\u2014the simultaneous effect of formal elements that produces \u201ca transformed beholder of art.\u201d</p>\n<p>Klee was also a trained musician and shared with many artists of the early twentieth century the idea that music was the key to producing a new, abstract art. He was interested in the temporal character of music and its possible translation into forms of art. Works like <em>Sunset</em> reflect the principles of rhythm: linear structures, forms, and tonal values are orchestrated into a measured, vibrating image. To produce such a harmonious effect, Klee layered an intricate pattern of dots over a neutral background. Abstract, geometric, and overlapping shapes balance with recognizable forms, such as the schematic face in the upper left and the red sun and arrow in the lower right. The resulting composition\u2014balancing stillness and movement, shallowness and depth\u2014relates to Klee\u2019s larger project of looking to music to produce an art that \u201cdoes not reproduce the visible, but makes visible.\u201d</p>\n",
+                "dimensions": "46.1 \u00d7 70.5 cm (18 1/8 \u00d7 27 3/4 in.)",
+                "medium": "Oil on canvas"
+            }
         },
         {
-            "url": "https://www.artic.edu/artworks/65868/silver-sun"
+            "url": "https://www.artic.edu/artworks/65868/silver-sun",
+            "raw_file": "Arthur Dove - Silver Sun.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Silver Sun",
+                "date_created": "1929",
+                "artist_details": "Arthur Dove (American, 1880\u20131946)",
+                "description": "<p>Shimmering concentric circles of silver and blue radiate downward from the deep black center of the sun, dwarfing its tiny reflection in the water below. Although Arthur Dove experimented early on with abstraction, in the 1920s he developed a unique representational style that simplified elements and toyed with scale to capture the fundamental forms and forces of nature. Dove was equally fascinated with the materials of art and here mixed metallic paint with something like wax to thicken its consistency. The textured brushwork emphasizes the sun\u2019s brilliance, making its rays almost tangible.</p>\n",
+                "dimensions": "55.3 \u00d7 74.9 cm (21 3/4 \u00d7 29 1/2 in.)",
+                "medium": "Oil, metallic paint, and an unidentified material (possibly wax) on canvas"
+            }
         },
         {
-            "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red"
+            "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
+            "raw_file": "Mark Rothko - Untitled Purple White and Red.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Untitled (Purple, White, and Red)",
+                "date_created": "1953",
+                "artist_details": "Mark Rothko (Marcus Rothkowitz)\nAmerican, born Russia (Latvia), 1903\u20131970",
+                "description": "<p><em>Untitled (Purple, White, and Red)</em> follows the characteristic format of Mark Rothko\u2019s mature work, in which stacked rectangles of color appear to float within the boundaries of the canvas. By directly staining the canvas with many thin washes of pigment and paying particular attention to the edges where the fields interact, he achieved the effect of light radiating from the image itself. This technique suited Rothko\u2019s metaphysical aims: to offer painting as a doorway into purely spiritual realms, making it as immaterial and evocative as music, and to directly communicate the most essential, raw forms of human emotion.</p>\n",
+                "dimensions": "Unframed: 197.5 \u00d7 207.7 cm (77 13/16 \u00d7 81 13/16 in.); 197.5 \u00d7 207.7 cm (77 3/4 \u00d7 81 3/4 in.)",
+                "medium": "Oil on canvas"
+            }
         },
         {
-            "url": "https://www.artic.edu/artworks/159710/la-peche-fishing"
+            "url": "https://www.artic.edu/artworks/159710/la-peche-fishing",
+            "raw_file": "Raoul Dufy - La Peche Fishing.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "La Peche\" (Fishing)",
+                "date_created": "c. 1919",
+                "artist_details": "Designed by Raoul Dufy (French, 1877\u20131953)\nProduced by Bianchini F\u00e9rier, founded 1888\nPrinted by Manufacture de Tournon\nFrance, Tournon",
+                "description": null,
+                "dimensions": "132.8 \u00d7 120 cm (52 1/4 \u00d7 47 1/4 in.); Repeat: 84.2 \u00d7 39.6 cm (33 1/8 \u00d7 15 3/8 in.)",
+                "medium": "Cotton and linen, plain weave; block printed"
+            }
         },
         {
-            "url": "https://artsandculture.google.com/asset/homage-to-the-square-sonorous-josef-albers/YAHHW_KLcb2m2w"
+            "url": "https://artsandculture.google.com/asset/homage-to-the-square-sonorous-josef-albers/YAHHW_KLcb2m2w",
+            "raw_file": "Albers, Josef; Homage to the Square, Sonorous; 1958.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Homage to the Square, Sonorous",
+                "creator": "Josef Albers",
+                "creator_lived": "1888/1976",
+                "date_created": "1958",
+                "rights": "\u00a9 The Josef and Anni Albers Foundation / VG Bild-Kunst, Bonn 2023",
+                "medium": "Oil on hardboard"
+            }
         },
         {
-            "url": "https://artsandculture.google.com/asset/full-homage-to-the-square-josef-albers/uwFaRKFNNWjOSg"
+            "url": "https://artsandculture.google.com/asset/full-homage-to-the-square-josef-albers/uwFaRKFNNWjOSg",
+            "raw_file": "Albers, Josef; Full (Homage to the Square); 1962_0002.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Full (Homage to the Square)",
+                "creator": "Josef Albers",
+                "date_created": "1962",
+                "dimensions": "28 x 28 cm",
+                "rights": "Courtesy of the artist",
+                "medium": "Screenprint"
+            }
         },
         {
-            "url": "https://artsandculture.google.com/asset/cat-litter-robert-gober/YQFZtnXTyaYTHg"
+            "url": "https://artsandculture.google.com/asset/cat-litter-robert-gober/YQFZtnXTyaYTHg",
+            "raw_file": "Cat Litter - Robert Gober.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Cat Litter",
+                "creator": "Robert Gober",
+                "creator_lived": "September 12, 1954",
+                "creator_nationality": "American",
+                "date_created": "1989",
+                "dimensions": "w203 x h432 x d127 mm",
+                "rights": "\u00a9 2012 Robert Gober",
+                "medium": "Plaster, ink, and latex paint"
+            }
         },
         {
-            "url": "https://artsandculture.google.com/asset/ph-129-clyfford-still/FwHVp26mrlpKfQ"
+            "url": "https://artsandculture.google.com/asset/ph-129-clyfford-still/FwHVp26mrlpKfQ",
+            "raw_file": "Still, Clyfford; PH-129; 1949.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "PH-129",
+                "creator": "Clyfford Still",
+                "creator_lived": "1904 - 1980",
+                "creator_nationality": "American",
+                "date_created": "1949",
+                "dimensions": "h53 x w44.5 in",
+                "rights": "\u00a9 City and county of Denver",
+                "medium": "Oil on canvas"
+            }
         },
         {
-            "url": "https://artsandculture.google.com/asset/ion-11-victor-vasarely/zAGDIJRNphFaPw"
+            "url": "https://artsandculture.google.com/asset/ion-11-victor-vasarely/zAGDIJRNphFaPw",
+            "raw_file": "Vasarely, Victor; ION 11; 1967_1969_0001.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "ION 11",
+                "creator": "Victor Vasarely",
+                "date_created": "1967/1969",
+                "dimensions": "68 x 68 cm",
+                "medium": "serigraphy"
+            }
         },
         {
-            "url": "https://artsandculture.google.com/asset/natureza-morta-com-bromlia-amarela/SQElSKW2Ur1OBg"
+            "url": "https://artsandculture.google.com/asset/natureza-morta-com-bromlia-amarela/SQElSKW2Ur1OBg",
+            "raw_file": "Natureza-morta com brom\u00e9lia amarela - Ana Elisa Egreja_0001.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Natureza-morta com brom\u00e9lia amarela",
+                "creator": "Ana Elisa Egreja",
+                "date_created": "2015",
+                "dimensions": "40 x 30,2 cm",
+                "rights": "Acervo da Pinacoteca do Estado de S\u00e3o Paulo, Brasil. Doa\u00e7\u00e3o da artista, 2017"
+            }
         },
         {
-            "url": "https://artsandculture.google.com/asset/portrait-of-pablo-picasso-juan-gris-spanish-1887\\u20131927/RgGPipJ4FxSBiw\""
+            "url": "https://artsandculture.google.com/asset/portrait-of-pablo-picasso-juan-gris-spanish-1887%E2%80%931927/RgGPipJ4FxSBiw",
+            "raw_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912_0001.jpg",
+            "resize_option": "cropped",
+            "metadata": {
+                "title": "Portrait of Pablo Picasso",
+                "creator": "Juan Gris (Spanish, 1887\u20131927)",
+                "creator_lived": "1887/1927",
+                "date_created": "January-February 1912",
+                "dimensions": "93.3 \u00d7 74.4 cm (36 3/4 \u00d7 29 5/16 in.)",
+                "medium": "Oil on canvas"
+            }
         }
     ]
 }

@@ -78,6 +78,15 @@ def get_ready_fullpath(raw_filename, ready_folder, resize_option):
     return ready_fullpath
 
 
+class DownloadError(Exception):
+    """Exception raised for errors in the download process."""
+
+    def __init__(self, url, message="Failed to download the file"):
+        self.url = url
+        self.message = message
+        super().__init__(f"{message}: {url}")
+
+
 class ArtFile:
     url: str = None
     resize_option: str = None
@@ -105,11 +114,10 @@ class ArtFile:
         return {"url": self.url, "raw_file": self.raw_file, "resize_option": self.resize_option, "metadata": self.metadata}
 
     @classmethod
-    def from_dict(cls, data: dict):
-        logging.info(f"ArtFile: from_dict ")
+    def from_dict(cls, data: dict, default_resize: str):
         url = data.get("url")
         raw_file = data.get("raw_file", None)
-        resize_option = data.get("resize_option", None)
+        resize_option = data.get("resize_option", default_resize)
         metadata = data.get("metadata", None)
         return cls(url=url, raw_file=raw_file, resize_option=resize_option, metadata=metadata)
 
@@ -138,11 +146,12 @@ class ArtFile:
                 self.raw_file = os.path.basename(fullpath)
                 self.raw_fullpath = fullpath
             else:
-                raise Exception("Error downloading image")
+                raise DownloadError(self.url)
 
         self.ready_fullpath = get_ready_fullpath(self.raw_file, config.art_folder_ready, self.resize_option)
 
         if not os.path.exists(self.ready_fullpath) or always_generate:
+            logging.info(f"Generating ready file at {self.ready_fullpath}")
             description_box = resize_file_with_matte(self.raw_fullpath, self.ready_fullpath, 3840, 2160, self.resize_option)
         # print(f"Processed {self.url}, metadata is {self.metadata}")
         if (self.metadata is None) or always_metadata:
@@ -170,12 +179,12 @@ class ArtFile:
 
     def to_json(self):
         # return a JSON representation of the art file, but only the fields that are needed to recreate the object
-        json = {
-            "url": self.url,
-            "raw_file": self.raw_file,
-            "resize_option": self.resize_option,
-        }
-        if self.metadata:
+        json = {"url": self.url}
+        if self.raw_file is not None:
+            json["raw_file"] = self.raw_file
+        if self.resize_option is not None:
+            json["resize_option"] = self.resize_option
+        if self.metadata is not None:
             json["metadata"] = self.metadata
         return json
 
@@ -196,25 +205,23 @@ class ArtSet:
         return {
             "name": self.name,
             "default_resize": self.default_resize,
-            "art": [art_file.to_dict() for art_file in self.art_list],
+            "art": [art_file.to_dict() for art_file in self.art],
         }
 
     @classmethod
     def from_dict(cls, data: dict):
-        print(f"from_dict: {data}")
         name = data.get("name", None)
         default_resize = data.get("default_resize", None)
-        art_json = data.get("art", None)
         source_file = data.get("source_file", None)
+        art_json = data.get("art", None)
         art: list[ArtFile] = []
         if art_json:
-            for art_json_data in data["art"]:
-                art_file = ArtFile.from_dict(art_json_data)
-                art.append(art_file)
+            art_list = data.pop("art")
+            art = [ArtFile.from_dict(art_file, default_resize) for art_file in art_list]
         return cls(name=name, default_resize=default_resize, source_file=source_file, art=art)
 
     @classmethod
-    def load(cls, source_file: str):
+    def from_file(cls, source_file: str):
         logging.info(f"Loading art set from {source_file}")
         try:
             with open(source_file, "r") as file:
@@ -324,17 +331,24 @@ async def save_uploaded_files(uploaded_files):
 
 async def process_set_file(set_file, always_download: bool = False, always_generate: bool = False, always_metadata: bool = False):
     logging.info(f"Processing set file {set_file}")
-    artset = ArtSet()
-
+    artset = ArtSet.from_file(set_file)
     try:
-        artset.load(set_file)
+        artset = ArtSet.from_file(set_file)
     except Exception as e:
         logging.error(f"Error loading set file: {e}")
         sys.exit()
+    print(f"ArtSet: {artset.name}, {artset.default_resize} has {len(artset.art)} items")
 
     for art_file in artset.art:
-        logging.info(f"Processing {art_file.url}")
-        await art_file.process(always_download, always_generate, always_metadata)
+        try:
+            await art_file.process(always_download, always_generate, always_metadata)
+        except DownloadError as e:
+            logging.info(f"Error downloading file: {e}")
+            continue
+        except Exception as e:
+            logging.error(f"Error processing file: {e}")
+            raise e
+
         artset.save()
 
 
@@ -429,6 +443,17 @@ async def image_callback(event, response):
     logging.info("CALLBACK: image callback: {}, {}".format(event, response))
 
 
+async def ensure_folders_exist():
+    # Ensure that the folders exist
+    if not os.path.exists(config.base_folder):
+        raise FileNotFoundError(f"Base folder {config.base_folder} does not exist.")
+
+    for folder in [config.art_folder_raw, config.art_folder_ready, config.dezoomify_tile_cache]:
+        if not os.path.exists(folder):
+            logging.info(f'Creating folder "{folder}"')
+            os.makedirs(folder)
+
+
 async def main():
     # Increase debug level
     args = parse_args()
@@ -436,6 +461,11 @@ async def main():
     logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
     logging.info("Starting art.py!")
     logging.debug("Logging in debug mode")
+    try:
+        await ensure_folders_exist()
+    except FileNotFoundError as e:
+        logging.error(f"Base folder {config.base_folder} does not exist.")
+        return
 
     # Set your TVs local IP address. Highly recommend using a static IP address for your TV.
     if not args.no_tv:
