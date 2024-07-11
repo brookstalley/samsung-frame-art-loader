@@ -107,6 +107,9 @@ class ArtFile:
     @classmethod
     def from_dict(cls, data: dict):
         logging.info(f"ArtFile: from_dict ")
+        url = data.get("url")
+        raw_file = data.get("raw_file", None)
+
         return cls(url=data["url"], raw_file=data["raw_file"], resize_option=data["resize_option"], metadata=data["metadata"])
 
     async def process(self, always_download=False, always_generate=False, always_metadata=False):
