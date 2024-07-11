@@ -73,23 +73,23 @@ async def get_artic_metadata(url: str):
     return cleaned_metadata
 
 
-def get_xmp_metadata(image_path):
-    # Open the file and get the XMP data
-    xmp_dict = file_to_dict(image_path)
-    try:
-        dublin_core = xmp_dict[consts.XMP_NS_DC]
-        # print(f"{image_path} Dublin Core: {dublin_core}")
-        metadata = {}
-        for item in dublin_core:
-            tag = item[0]
-            value = item[1]
-            attributes = item[2]
-            metadata[tag] = value
-        print(f"Got XMP Dublin core for {image_path}: {metadata}")
-        return metadata
-    except KeyError:
-        print(f"{image_path} has no Dublin Core metadata")
-        return None
+# def get_xmp_metadata(image_path):
+#     # Open the file and get the XMP data
+#     xmp_dict = file_to_dict(image_path)
+#     try:
+#         dublin_core = xmp_dict[consts.XMP_NS_DC]
+#         # print(f"{image_path} Dublin Core: {dublin_core}")
+#         metadata = {}
+#         for item in dublin_core:
+#             tag = item[0]
+#             value = item[1]
+#             attributes = item[2]
+#             metadata[tag] = value
+#         print(f"Got XMP Dublin core for {image_path}: {metadata}")
+#         return metadata
+#     except KeyError:
+#         print(f"{image_path} has no Dublin Core metadata")
+#         return None
 
 
 def get_exif_metadata(file_path: str):

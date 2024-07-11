@@ -13,6 +13,8 @@ from image_utils import ResizeOptions, ImageSources
 from image_utils import resize_file_with_matte, image_source, get_image
 from metadata import get_google_metadata, get_file_metadata, get_artic_metadata
 
+import config
+
 sys.path.append("../")
 
 from samsungtvws.async_art import SamsungTVAsyncArt
@@ -22,8 +24,6 @@ from samsungtvws.async_remote import SamsungTVWSAsyncRemote
 
 
 artsets = []
-tv_address = "10.23.17.77"
-tv_port = 8002
 
 # debug params: --always-generate --upload-all --resize-option cropped
 
@@ -63,11 +63,6 @@ def parse_args():
     return parser.parse_args()
 
 
-# Set the path to the folder containing the images
-base_folder = "/home/brooks/art"
-art_folder_raw = f"{base_folder}/raw"
-art_folder_ready = f"{base_folder}/ready"
-
 UPLOADED_CATEGORY = "MY-C0002"
 
 # Set the path to the file that will store the list of uploaded filenames
@@ -106,6 +101,14 @@ class ArtFile:
         self.resize_option = resize_option
         self.metadata = metadata
 
+    def to_dict(self):
+        return {"url": self.url, "raw_file": self.raw_file, "resize_option": self.resize_option, "metadata": self.metadata}
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        logging.info(f"ArtFile: from_dict ")
+        return cls(url=data["url"], raw_file=data["raw_file"], resize_option=data["resize_option"], metadata=data["metadata"])
+
     async def process(self, always_download=False, always_generate=False, always_metadata=False):
         """Process the art file. Download the raw file if necessary, and generate the ready file."""
         """ TODO: Support files that are already downloaded and have no URL """
@@ -119,12 +122,12 @@ class ArtFile:
         # URL is specified
         raw_file_exists = False
         if self.raw_file:
-            self.raw_fullpath = art_folder_raw + "/" + self.raw_file
+            self.raw_fullpath = config.art_folder_raw + "/" + self.raw_file
             if os.path.exists(self.raw_fullpath) and not always_download:
                 raw_file_exists = True
         if not raw_file_exists:
             # Raw file is not specified or does not exist. For now always download because we can't get the filename from the URL
-            result, fullpath = await get_image(self.url, destination_fullpath=None, destination_dir=art_folder_raw)
+            result, fullpath = await get_image(self.url, destination_fullpath=None, destination_dir=config.art_folder_raw)
             if result:
                 raw_file_exists = True
                 # Only save the basename so the program is portable
@@ -133,7 +136,7 @@ class ArtFile:
             else:
                 raise Exception("Error downloading image")
 
-        self.ready_fullpath = get_ready_fullpath(self.raw_file, art_folder_ready, self.resize_option)
+        self.ready_fullpath = get_ready_fullpath(self.raw_file, config.art_folder_ready, self.resize_option)
 
         if not os.path.exists(self.ready_fullpath) or always_generate:
             description_box = resize_file_with_matte(self.raw_fullpath, self.ready_fullpath, 3840, 2160, self.resize_option)
@@ -176,23 +179,58 @@ class ArtFile:
 class ArtSet:
     name: str = None
     default_resize: str = None
-    art_list: list[ArtFile] = []
+    art: list[ArtFile] = []
     source_file: str = None
 
-    def __init__(self, source_file, name, default_resize, art):
+    def __init__(self, source_file=None, name=None, default_resize=None, art: list[ArtFile] = []):
         self.name = name
         self.default_resize = default_resize
         self.art = art
+        self.source_file = source_file
+
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "default_resize": self.default_resize,
+            "art": [art_file.to_dict() for art_file in self.art_list],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict):
+        print(f"from_dict: {data}")
+        art_list = [ArtFile.from_dict(art_file_data) for art_file_data in data["art_list"]]
+        return cls(name=data["name"], default_resize=data["default_resize"], source_file=data["source_file"], art=art_list)
+
+    @classmethod
+    def load(cls, source_file: str):
+        logging.info(f"Loading art set from {source_file}")
+        try:
+            with open(source_file, "r") as file:
+                data = json.load(file)
+        except FileNotFoundError:
+            logging.error(f"File {source_file} not found")
+            raise e
+        except Exception as e:
+            logging.error(f"Error loading file {source_file}: {e}")
+            raise e
+
+        data["source_file"] = source_file
+        return cls.from_dict(data)
+
+    def save(self):
+        """Save the art set to a JSON file."""
+        with open(self.source_file, "w") as file:
+            json.dump(self.to_dict(), file, indent=4)
 
     # Provide setter and gett for the art list
     def set_art(self, art_list: list[ArtFile]):
-        self.art_list = art_list
+        self.art = art_list
 
     def get_art(self) -> list[ArtFile]:
-        return self.art_list
+        return self.art
 
     def add_art(self, art: ArtFile):
-        self.art_list.append(art)
+        self.art.append(art)
 
     def to_json(self):
         # return a JSON representation of the art set
@@ -223,16 +261,16 @@ async def get_available(tv, category=None):
 
 
 async def show_available(tv, category=None):
-    available_art = get_available(tv, category)
+    available_art = await get_available(tv, category)
     logging.info("Available art:")
     for art in available_art:
         logging.info(art)
 
 
-async def delete_all_uploaded(tv):
-    available_art = get_available(tv, UPLOADED_CATEGORY)
+async def delete_all_uploaded(tv_art):
+    available_art = await get_available(tv_art, UPLOADED_CATEGORY)
     logging.info(f"Deleting {len(available_art)} uploaded images")
-    tv.art().delete_list([art["content_id"] for art in available_art])
+    await tv_art.delete_list([art["content_id"] for art in available_art])
     logging.info("Deleted all uploaded images")
     # Clear the list of uploaded filenames
     uploaded_files = []
@@ -274,46 +312,18 @@ async def save_uploaded_files(uploaded_files):
 
 
 async def process_set_file(set_file, always_download: bool = False, always_generate: bool = False, always_metadata: bool = False):
-    logging.debug(f"Processing set file {set_file}")
+    logging.info(f"Processing set file {set_file}")
+    artset = ArtSet()
+
     try:
-        with open(set_file, "r") as f:
-            set_json = json.load(f)
-        f.close()
+        artset.load(set_file)
     except Exception as e:
         logging.error(f"Error loading set file: {e}")
         sys.exit()
 
-    set_schema_version = set_json["schema_version"]
-    set_name = set_json["name"]
-    set_resize = set_json["default_resize"]
-    set_art = set_json["art"]
-
-    artset = ArtSet(set_file, set_name, set_resize, set_art)
-    artsets.append(artset)
-
-    for art_item in set_art:
-        af = ArtFile()
-        if "url" in art_item:
-            url = art_item["url"]
-            # print(f"Processing {url}")
-            af.url = art_item["url"]
-        if "raw_file" in art_item:
-            af.raw_file = art_item["raw_file"]
-        if "resize_option" in art_item:
-            af.resize_option = art_item["resize_option"]
-        else:
-            af.resize_option = set_resize
-        if "metadata" in art_item:
-            af.metadata = art_item["metadata"]
-
-        await af.process(always_download, always_generate, always_metadata)
-        artset.add_art(af)
-        updated_json = artset.to_json()
-        with open(set_file, "w") as o:
-            # write the updated JSON in human readable format
-            json.dump(updated_json, o, indent=4)
-
-        o.close()
+    for art_item in artset.art:
+        await art_item.process(always_download, always_generate, always_metadata)
+        artset.save()
 
 
 async def upload_one(local_file: str, tv_art: SamsungTVAsyncArt) -> str:
@@ -336,7 +346,7 @@ async def upload_one(local_file: str, tv_art: SamsungTVAsyncArt) -> str:
     return remote_filename
 
 
-async def upload_all(tv: SamsungTVAsyncArt, always_upload: bool = False):
+async def upload_all(tv_art: SamsungTVAsyncArt, always_upload: bool = False):
     # Build the list of all ready files that need to be uploaded
     files = []
     for artset in artsets:
@@ -363,10 +373,10 @@ async def upload_all(tv: SamsungTVAsyncArt, always_upload: bool = False):
             remote_filename = remote_files[file_to_upload]
             logging.info("Image already uploaded.")
         else:
-            remote_filename = await upload_one(file_to_upload, tv)
+            remote_filename = await upload_one(file_to_upload, tv_art)
             # Add the filename to the list of uploaded filenames
             uploaded_files.append({"file": file_to_upload, "remote_filename": remote_filename})
-            tv.art().select_image(remote_filename, show=True)
+            await tv_art.select_image(remote_filename, show=True)
 
         # Save the list of uploaded filenames to the file
         with open(upload_list_path, "w") as f:
@@ -392,7 +402,15 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
 
     # It is during waking hours. If the TV is off, turn it on and set to art mode
     if not tv_on:
+        logging.info("Turning TV on")
         await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
+        await asyncio.sleep
+        tv_on = True
+
+    if tv_on and not art_mode:
+        logging.info("Clicking power to set art mode")
+        await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
+        await asyncio.sleep
 
 
 async def image_callback(event, response):
@@ -409,14 +427,14 @@ async def main():
 
     # Set your TVs local IP address. Highly recommend using a static IP address for your TV.
     if not args.no_tv:
-        logging.info(f"Creating TV object for {tv_address}")
-        tv_art = SamsungTVAsyncArt(host=tv_address, port=tv_port, token_file="token_file")
-        logging.info(f"Starting art listening on {tv_address}:{tv_port}")
+        logging.info(f"Creating TV object for {config.tv_address}")
+        tv_art = SamsungTVAsyncArt(host=config.tv_address, port=config.tv_port, token_file="token_file")
+        logging.info(f"Starting art listening on {config.tv_address}:{config.tv_port}")
         await tv_art.start_listening()
-        logging.info(f"Listening on {tv_address} started")
+        logging.info(f"Listening on {config.tv_address} started")
 
-        tv_remote = SamsungTVWSAsyncRemote(host=tv_address, port=tv_port, token_file="token_file")
-        logging.debug(f"Connecting to {tv_address}:{tv_port}")
+        tv_remote = SamsungTVWSAsyncRemote(host=config.tv_address, port=config.tv_port, token_file="token_file")
+        logging.debug(f"Connecting to {config.tv_address}:{config.tv_port}")
         await tv_remote.start_listening()
         logging.debug("Connected")
 
@@ -429,7 +447,7 @@ async def main():
         logging.info("Art mode supported")
         art_mode_version = await tv_art.get_api_version()
 
-        logging.info(f"TV at {tv_address} supports art mode version {art_mode_version}")
+        logging.info(f"TV at {config.tv_address} supports art mode version {art_mode_version}")
 
         # example callbacks
         tv_art.set_callback("slideshow_image_changed", image_callback)  # new api
@@ -445,6 +463,8 @@ async def main():
 
         if args.delete_all:
             logging.info("Deleting all uploaded images")
+            await delete_all_uploaded(tv_art)
+
     else:
         logging.info("Not connecting to TV")
 

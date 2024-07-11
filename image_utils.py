@@ -1,6 +1,7 @@
 # import resizing from PIL
 from PIL import Image
 
+import asyncio
 import cv2
 import logging
 import numpy as np
@@ -10,11 +11,16 @@ from skimage.transform import resize
 import requests
 import re
 from source_utils import artic_metadata_for_url
+import time
+
+import config
 
 logging.basicConfig(level=logging.INFO)
 
 dezoomify_rs_path = "dezoomify-rs"
-dezoomify_params = "--max-width 8192 --max-height 8192 --compression 0 --parallelism 8 --min-interval 1s"
+dezoomify_params = f'--max-width 8192 --max-height 8192 --compression 0 --parallelism 12 --min-interval 250ms --tile-cache "{config.dezoomify_tile_cache}" --header "{config.dezoomify_user_agent}"'
+
+last_artic_call = 0
 
 
 # Enums for resizing options
@@ -157,7 +163,9 @@ def resize_file_with_matte(in_file: str, out_file: str, width, height, resize_op
     logging.info(f"Resized {in_file} to {out_file}")
 
 
-async def get_dezoomify_file(url, download_dir: str, destination_fullpath: str, out_file: str = "") -> tuple[bool, str]:
+async def get_dezoomify_file(
+    url, download_dir: str, destination_fullpath: str, out_file: str = "", http_referer: str = None
+) -> tuple[bool, str]:
     # Run dezoomify-rs, passing dezoomify_params as arguments and starting in the art_folder_raw directory
     # See https://github.com/lovasoa/dezoomify-rs for info
     if out_file is not None:
@@ -166,7 +174,10 @@ async def get_dezoomify_file(url, download_dir: str, destination_fullpath: str, 
         if os.path.exists(out_file):
             os.remove(out_file)
 
-    cmdline = f'{dezoomify_rs_path} {dezoomify_params} "{url}" "{out_file}"'.strip()
+    my_params = dezoomify_params
+    if http_referer is not None:
+        my_params = f"{my_params} --header 'Referer: {http_referer}'"
+    cmdline = f'{dezoomify_rs_path} {my_params} "{url}" "{out_file}"'.strip()
     logging.info(f"Running: {cmdline}")
     p = subprocess.Popen(
         cmdline,
@@ -217,10 +228,30 @@ async def get_http_image(url, destination_fullpath: str = None, destination_dir:
     return True, filename
 
 
+async def artic_throttle():
+    global last_artic_call
+
+    current_time = time.time()
+    elapsed_time = current_time - last_artic_call
+    if elapsed_time < 5000:
+        wait_time = 5000 - elapsed_time
+        logging.info(f"Waiting {wait_time}ms")
+        await asyncio.sleep(wait_time / 1000)
+
+
+async def artic_accessed():
+    global last_artic_call
+    last_artic_call = time.time()
+
+
 async def get_artic_image(url, destination_fullpath: str = None, destination_dir: str = None) -> tuple[bool, str]:
     # Download the image from the URL
+    global last_artic_call
+
     logging.info(f"Downloading {url}")
+    await artic_throttle()
     metadata = await artic_metadata_for_url(url)
+    await artic_accessed()
 
     try:
         # load json from the API url
@@ -235,8 +266,11 @@ async def get_artic_image(url, destination_fullpath: str = None, destination_dir
         filename = f"{artist} - {title}.jpg"
         keepcharacters = (" ", ".", "_", "-")
         clean_filename = "".join(c for c in filename if c.isalnum() or c in keepcharacters).rstrip()
-
-        success, out_file = await get_dezoomify_file(info_url, destination_dir, destination_fullpath, clean_filename)
+        await artic_throttle()
+        success, out_file = await get_dezoomify_file(
+            info_url, destination_dir, destination_fullpath, clean_filename, http_referer=info_url
+        )
+        await artic_accessed()
         return success, out_file
 
     except requests.exceptions.RequestException as e:
