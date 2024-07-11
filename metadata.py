@@ -68,6 +68,7 @@ def get_google_metadata(url: str):
 async def get_artic_metadata(url: str):
     api_response = await artic_metadata_for_url(url)
     metadata = api_response["data"]
+    thumbail_data = metadata.pop("thumbnail")
     cleaned_metadata = process_key_value_pairs(metadata, metadata_map)
     # print(f"Got metadata for {url}: {cleaned_metadata}")
     return cleaned_metadata

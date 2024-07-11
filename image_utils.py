@@ -163,6 +163,13 @@ def resize_file_with_matte(in_file: str, out_file: str, width, height, resize_op
     logging.info(f"Resized {in_file} to {out_file}")
 
 
+def get_image_dimensions(image_path: str) -> tuple[int, int]:
+    image = Image.open(image_path)
+    width, height = image.size[0], image.size[1]
+    image.close()
+    return width, height
+
+
 async def get_dezoomify_file(
     url, destination_dir: str, destination_fullpath: str, out_file: str = "", http_referer: str = None
 ) -> tuple[bool, str]:

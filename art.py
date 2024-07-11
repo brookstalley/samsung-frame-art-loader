@@ -10,7 +10,7 @@ import requests
 import time
 
 from image_utils import ResizeOptions, ImageSources
-from image_utils import resize_file_with_matte, image_source, get_image
+from image_utils import resize_file_with_matte, image_source, get_image, get_image_dimensions
 from metadata import get_google_metadata, get_file_metadata, get_artic_metadata
 
 import config
@@ -99,9 +99,8 @@ class ArtFile:
         self,
         url=None,
         raw_file=None,
-        raw_fullpath=None,
-        ready_file=None,
-        ready_fullpath=None,
+        raw_file_width=None,
+        raw_file_height=None,
         resize_option=None,
         metadata=None,
     ):
@@ -109,17 +108,40 @@ class ArtFile:
         self.raw_file = raw_file
         self.resize_option = resize_option
         self.metadata = metadata
+        self.raw_file_width = raw_file_width
+        self.raw_file_height = raw_file_height
 
     def to_dict(self):
-        return {"url": self.url, "raw_file": self.raw_file, "resize_option": self.resize_option, "metadata": self.metadata}
+        # return a JSON representation of the art file, but only the fields that are needed to recreate the object
+        me = {"url": self.url}
+        if self.raw_file is not None:
+            me["raw_file"] = self.raw_file
+        if self.raw_file_width is not None:
+            me["raw_file_width"] = self.raw_file_width
+        if self.raw_file_height is not None:
+            me["raw_file_height"] = self.raw_file_height
+        if self.resize_option is not None:
+            me["resize_option"] = self.resize_option
+        if self.metadata is not None:
+            me["metadata"] = self.metadata
+        return me
 
     @classmethod
     def from_dict(cls, data: dict, default_resize: str):
         url = data.get("url")
         raw_file = data.get("raw_file", None)
+        raw_file_width = data.get("raw_file_width", None)
+        raw_file_height = data.get("raw_file_height", None)
         resize_option = data.get("resize_option", default_resize)
         metadata = data.get("metadata", None)
-        return cls(url=url, raw_file=raw_file, resize_option=resize_option, metadata=metadata)
+        return cls(
+            url=url,
+            raw_file=raw_file,
+            raw_file_width=raw_file_width,
+            raw_file_height=raw_file_height,
+            resize_option=resize_option,
+            metadata=metadata,
+        )
 
     async def process(self, always_download=False, always_generate=False, always_metadata=False):
         """Process the art file. Download the raw file if necessary, and generate the ready file."""
@@ -147,6 +169,11 @@ class ArtFile:
                 self.raw_fullpath = fullpath
             else:
                 raise DownloadError(self.url)
+        if self.raw_file_width is None or self.raw_file_height is None:
+            self.raw_file_width, self.raw_file_height = get_image_dimensions(self.raw_fullpath)
+            logging.info(f"Got dimensions {self.raw_file_width}x{self.raw_file_height} for {self.raw_fullpath}")
+        else:
+            logging.info(f"Using dimensions {self.raw_file_width}x{self.raw_file_height} for {self.raw_fullpath}")
 
         self.ready_fullpath = get_ready_fullpath(self.raw_file, config.art_folder_ready, self.resize_option)
 
@@ -176,17 +203,6 @@ class ArtFile:
                     self.metadata = None
             case _:
                 raise Exception("Unknown image source")
-
-    def to_json(self):
-        # return a JSON representation of the art file, but only the fields that are needed to recreate the object
-        json = {"url": self.url}
-        if self.raw_file is not None:
-            json["raw_file"] = self.raw_file
-        if self.resize_option is not None:
-            json["resize_option"] = self.resize_option
-        if self.metadata is not None:
-            json["metadata"] = self.metadata
-        return json
 
 
 class ArtSet:
@@ -237,6 +253,7 @@ class ArtSet:
 
     def save(self):
         """Save the art set to a JSON file."""
+        logging.info(f'Saving art set "{self.name}" to {self.source_file}')
         with open(self.source_file, "w") as file:
             json.dump(self.to_dict(), file, indent=4)
 
