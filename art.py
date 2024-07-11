@@ -413,7 +413,7 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
     if not tv_on:
         logging.info("Turning TV on")
         await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
-        await asyncio.sleep
+        await asyncio.sleep(3)
         tv_on = True
 
     if tv_on and not art_mode:
