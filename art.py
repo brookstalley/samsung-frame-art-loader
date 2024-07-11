@@ -121,7 +121,7 @@ class ArtFile:
         if not self.url:
             raise Exception("URL is required")
 
-        logging.debug(f"Processing {self.url}")
+        logging.info(f"Processing {self.url}")
 
         # URL is specified
         raw_file_exists = False
