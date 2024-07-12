@@ -538,6 +538,7 @@ async def main():
     if len(artsets) > 0:
         await upload_all(tv_art)
 
+    await set_correct_mode(tv_art, tv_remote)
     if args.stay:
         logging.info(f"Staying alive. Ctrl-c to exit")
         exit_requested = False
@@ -548,7 +549,7 @@ async def main():
                 for i in range(0, 59):
                     await asyncio.sleep(60)
             except KeyboardInterrupt:
-                log.info("Exiting...")
+                logging.info("Exiting...")
                 exit_requested = True
                 continue
 
