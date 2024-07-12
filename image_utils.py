@@ -230,6 +230,19 @@ async def get_dezoomify_file(
     return True, out_file
 
 
+async def images_match(image1: Image, image2: Image, match_threshold=0.2) -> bool:
+    # Use numpy for a fast compare. Resize images to 384x216 for faster compare.
+    # Check for a close match because resizing and other factors can cause a perfect match to fail
+    image1 = image1.resize((384, 216), Image.LANCZOS)
+    image2 = image2.resize((384, 216), Image.LANCZOS)
+    np_image1 = np.array(image1)
+    np_image2 = np.array(image2)
+    # Compare the images
+    diff = np.sum(np.abs(np_image1 - np_image2)) / np_image1.size
+    logging.info(f"Images match: {diff}")
+    return diff < match_threshold
+
+
 async def get_google_image(url, destination_fullpath: str, destination_dir: str) -> tuple[bool, str]:
     success, out_file = await get_dezoomify_file(
         url=url, destination_dir=destination_dir, destination_fullpath=destination_fullpath
