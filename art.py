@@ -59,6 +59,7 @@ def parse_args():
     )
     parser.add_argument("--delete-all", action="store_true", help="Delete all uploaded images")
     parser.add_argument("--no-tv", action="store_true", help="Do not connect to TV")
+    parser.add_argument("--stay", action="store_true", help="Keep running")
 
     return parser.parse_args()
 
@@ -181,9 +182,9 @@ class ArtFile:
 
         if self.raw_file_width is None or self.raw_file_height is None:
             self.raw_file_width, self.raw_file_height = get_image_dimensions(self.raw_fullpath)
-            logging.info(f"Got dimensions {self.raw_file_width}x{self.raw_file_height} for {self.raw_fullpath}")
+            logging.debug(f"Got dimensions {self.raw_file_width}x{self.raw_file_height} for {self.raw_fullpath}")
         else:
-            logging.info(f"Using dimensions {self.raw_file_width}x{self.raw_file_height} for {self.raw_fullpath}")
+            logging.debug(f"Using dimensions {self.raw_file_width}x{self.raw_file_height} for {self.raw_fullpath}")
 
         self.ready_fullpath = get_ready_fullpath(self.raw_file, config.art_folder_ready, self.resize_option)
 
@@ -411,7 +412,13 @@ async def upload_all(tv_art: SamsungTVAsyncArt, always_upload: bool = False):
             remote_filename = await upload_one(file_to_upload, tv_art)
             # Add the filename to the list of uploaded filenames
             uploaded_files.append({"file": file_to_upload, "remote_filename": remote_filename})
-            await tv_art.select_image(remote_filename, show=True)
+            try:
+                await tv_art.select_image(remote_filename, show=True)
+            except SamsungTVAsyncArt.samsungtvws.exceptions.ResponseError as e:
+                # fine to swallow this one
+                logging.error(f"Could not select image {remote_filename}: {e}")
+            except Exception as e:
+                raise e
 
         # Save the list of uploaded filenames to the file
         with open(upload_list_path, "w") as f:
@@ -522,7 +529,7 @@ async def main():
 
     if args.show_uploaded:
         await show_available(tv_art, UPLOADED_CATEGORY)
-        sys.exit()
+        return
 
     if args.delete_all:
         logging.info("Deleting all uploaded images")
@@ -531,7 +538,19 @@ async def main():
     if len(artsets) > 0:
         await upload_all(tv_art)
 
-    await set_correct_mode(tv_art, tv_remote)
+    if args.stay:
+        logging.info(f"Staying alive. Ctrl-c to exit")
+        exit_requested = False
+        while not exit_requested:
+            try:
+                await set_correct_mode(tv_art, tv_remote)
+                # wait one second at a time, 60 times
+                for i in range(0, 59):
+                    await asyncio.sleep(60)
+            except KeyboardInterrupt:
+                log.info("Exiting...")
+                exit_requested = True
+                continue
 
     logging.info("Closing connection")
     await tv_art.close()

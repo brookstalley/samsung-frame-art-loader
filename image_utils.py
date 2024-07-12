@@ -86,10 +86,16 @@ def resize_image_with_matte(image: Image, resize_option, width, height) -> Image
     dominant_color = (0, 0, 0)
     if resize_option == ResizeOptions.SCALE:
         average, dominant = get_average_color(image)
+        print(f"Average color: {average}, dominant color: {dominant}")
+        # dominant_color = (
+        #     int((dominant[0] + 127) / 2),
+        #     int((dominant[1] + 127) / 2),
+        #     int((dominant[2] + 127) / 2),
+        # )
         dominant_color = (
-            int((dominant[0] + 127) / 2),
-            int((dominant[1] + 127) / 2),
-            int((dominant[2] + 127) / 2),
+            int((dominant[0] * 256) / 2),
+            int((dominant[1] * 256) / 2),
+            int((dominant[2] * 256) / 2),
         )
     canvas = Image.new("RGB", (width, height), dominant_color)
     description_box = None
