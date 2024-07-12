@@ -5,6 +5,7 @@
         {
             "url": "https://www.artic.edu/artworks/64276/and-the-home-of-the-brave",
             "raw_file": "Charles Demuth - ...And the Home of the Brave.jpg",
+            "ready_file": "Charles Demuth - ...And the Home of the Brave_cropped.jpg",
             "raw_file_width": 4417,
             "raw_file_height": 5492,
             "resize_option": "cropped",
@@ -20,6 +21,7 @@
         {
             "url": "https://www.artic.edu/artworks/111654/the-policeman",
             "raw_file": "Joan Mir\u00f3 - The Policeman.jpg",
+            "ready_file": "Joan Mir\u00f3 - The Policeman_cropped.jpg",
             "raw_file_width": 6107,
             "raw_file_height": 7664,
             "resize_option": "cropped",
@@ -35,6 +37,7 @@
         {
             "url": "https://www.artic.edu/artworks/61428/cow-s-skull-with-calico-roses",
             "raw_file": "Georgia OKeeffe - Cows Skull with Calico Roses.jpg",
+            "ready_file": "Georgia OKeeffe - Cows Skull with Calico Roses_cropped.jpg",
             "raw_file_width": 4713,
             "raw_file_height": 7085,
             "resize_option": "cropped",
@@ -50,6 +53,7 @@
         {
             "url": "https://www.artic.edu/artworks/100858/sky-above-clouds-iv",
             "raw_file": "Georgia OKeeffe - Sky above Clouds IV.jpg",
+            "ready_file": "Georgia OKeeffe - Sky above Clouds IV_cropped.jpg",
             "raw_file_width": 4853,
             "raw_file_height": 1604,
             "resize_option": "cropped",
@@ -65,9 +69,10 @@
         {
             "url": "https://www.artic.edu/artworks/91194/golden-bird",
             "raw_file": "Constantin Brancusi - Golden Bird.jpg",
+            "ready_file": "Constantin Brancusi - Golden Bird_cropped.jpg",
             "raw_file_width": 3160,
             "raw_file_height": 4898,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Golden Bird",
                 "date_created": "1919/20 (base c. 1922)",
@@ -80,6 +85,7 @@
         {
             "url": "https://www.artic.edu/artworks/105203/triptych-window-from-the-coonley-playhouse-riverside-illinois",
             "raw_file": "Frank Lloyd Wright - Triptych Window from the Coonley Playhouse Riverside Illinois.jpg",
+            "ready_file": "Frank Lloyd Wright - Triptych Window from the Coonley Playhouse Riverside Illinois_cropped.jpg",
             "raw_file_width": 6396,
             "raw_file_height": 3904,
             "resize_option": "cropped",
@@ -95,6 +101,7 @@
         {
             "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
             "raw_file": "Mark Rothko - Untitled Purple White and Red.jpg",
+            "ready_file": "Mark Rothko - Untitled Purple White and Red_cropped.jpg",
             "raw_file_width": 2370,
             "raw_file_height": 2250,
             "resize_option": "cropped",
@@ -110,9 +117,10 @@
         {
             "url": "https://www.artic.edu/artworks/100089/chicago",
             "raw_file": "Harry Callahan - Chicago.jpg",
+            "ready_file": "Harry Callahan - Chicago_cropped.jpg",
             "raw_file_width": 7101,
             "raw_file_height": 5632,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Chicago",
                 "date_created": "1950",
@@ -125,9 +133,10 @@
         {
             "url": "https://www.artic.edu/artworks/229351/target",
             "raw_file": "Jasper Johns - Target.jpg",
+            "ready_file": "Jasper Johns - Target_cropped.jpg",
             "raw_file_width": 5357,
             "raw_file_height": 5332,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Target",
                 "date_created": "1961",
@@ -140,6 +149,7 @@
         {
             "url": "https://www.artic.edu/artworks/157156/red-yellow-blue-white-and-black-ii",
             "raw_file": "Ellsworth Kelly - Red Yellow Blue White and Black II.jpg",
+            "ready_file": "Ellsworth Kelly - Red Yellow Blue White and Black II_cropped.jpg",
             "raw_file_width": 5945,
             "raw_file_height": 1707,
             "resize_option": "cropped",
@@ -155,6 +165,7 @@
         {
             "url": "https://www.artic.edu/artworks/61608/sunset",
             "raw_file": "Paul Klee - Sunset.jpg",
+            "ready_file": "Paul Klee - Sunset_cropped.jpg",
             "raw_file_width": 5549,
             "raw_file_height": 3630,
             "resize_option": "cropped",
@@ -170,6 +181,7 @@
         {
             "url": "https://www.artic.edu/artworks/65868/silver-sun",
             "raw_file": "Arthur Dove - Silver Sun.jpg",
+            "ready_file": "Arthur Dove - Silver Sun_cropped.jpg",
             "raw_file_width": 3000,
             "raw_file_height": 2198,
             "resize_option": "cropped",
@@ -185,6 +197,7 @@
         {
             "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
             "raw_file": "Mark Rothko - Untitled Purple White and Red.jpg",
+            "ready_file": "Mark Rothko - Untitled Purple White and Red_cropped.jpg",
             "raw_file_width": 2370,
             "raw_file_height": 2250,
             "resize_option": "cropped",
@@ -200,6 +213,7 @@
         {
             "url": "https://www.artic.edu/artworks/159710/la-peche-fishing",
             "raw_file": "Raoul Dufy - La Peche Fishing.jpg",
+            "ready_file": "Raoul Dufy - La Peche Fishing_cropped.jpg",
             "raw_file_width": 2043,
             "raw_file_height": 2250,
             "resize_option": "cropped",
@@ -214,10 +228,11 @@
         },
         {
             "url": "https://artsandculture.google.com/asset/homage-to-the-square-sonorous-josef-albers/YAHHW_KLcb2m2w",
-            "raw_file": "Albers, Josef; Homage to the Square, Sonorous; 1958.jpg",
+            "raw_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_0001.jpg",
+            "ready_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_0001_cropped.jpg",
             "raw_file_width": 2488,
             "raw_file_height": 2494,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Homage to the Square, Sonorous",
                 "creator": "Josef Albers",
@@ -229,10 +244,11 @@
         },
         {
             "url": "https://artsandculture.google.com/asset/full-homage-to-the-square-josef-albers/uwFaRKFNNWjOSg",
-            "raw_file": "Albers, Josef; Full (Homage to the Square); 1962_0002.jpg",
+            "raw_file": "Albers, Josef; Full (Homage to the Square); 1962_0001.jpg",
+            "ready_file": "Albers, Josef; Full (Homage to the Square); 1962_0001_cropped.jpg",
             "raw_file_width": 2912,
             "raw_file_height": 3153,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Full (Homage to the Square)",
                 "creator": "Josef Albers",
@@ -244,10 +260,11 @@
         },
         {
             "url": "https://artsandculture.google.com/asset/cat-litter-robert-gober/YQFZtnXTyaYTHg",
-            "raw_file": "Cat Litter - Robert Gober.jpg",
+            "raw_file": "Cat Litter - Robert Gober_0001.jpg",
+            "ready_file": "Cat Litter - Robert Gober_0001_cropped.jpg",
             "raw_file_width": 3288,
             "raw_file_height": 4264,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Cat Litter",
                 "creator": "Robert Gober",
@@ -261,10 +278,11 @@
         },
         {
             "url": "https://artsandculture.google.com/asset/ph-129-clyfford-still/FwHVp26mrlpKfQ",
-            "raw_file": "Still, Clyfford; PH-129; 1949.jpg",
+            "raw_file": "Still, Clyfford; PH-129; 1949_0001.jpg",
+            "ready_file": "Still, Clyfford; PH-129; 1949_0001_cropped.jpg",
             "raw_file_width": 3514,
             "raw_file_height": 4135,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "PH-129",
                 "creator": "Clyfford Still",
@@ -279,9 +297,10 @@
         {
             "url": "https://artsandculture.google.com/asset/ion-11-victor-vasarely/zAGDIJRNphFaPw",
             "raw_file": "Vasarely, Victor; ION 11; 1967_1969_0001.jpg",
+            "ready_file": "Vasarely, Victor; ION 11; 1967_1969_0001_cropped.jpg",
             "raw_file_width": 1295,
             "raw_file_height": 1294,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "ION 11",
                 "creator": "Victor Vasarely",
@@ -293,6 +312,7 @@
         {
             "url": "https://artsandculture.google.com/asset/natureza-morta-com-bromlia-amarela/SQElSKW2Ur1OBg",
             "raw_file": "Natureza-morta com brom\u00e9lia amarela - Ana Elisa Egreja_0001.jpg",
+            "ready_file": "Natureza-morta com brom\u00e9lia amarela - Ana Elisa Egreja_0001_cropped.jpg",
             "raw_file_width": 5204,
             "raw_file_height": 6880,
             "resize_option": "cropped",
@@ -306,10 +326,11 @@
         },
         {
             "url": "https://artsandculture.google.com/asset/portrait-of-pablo-picasso-juan-gris-spanish-1887%E2%80%931927/RgGPipJ4FxSBiw",
-            "raw_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912_0001.jpg",
+            "raw_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912_0002.jpg",
+            "ready_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912_0002_cropped.jpg",
             "raw_file_width": 6220,
             "raw_file_height": 7912,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Portrait of Pablo Picasso",
                 "creator": "Juan Gris (Spanish, 1887\u20131927)",

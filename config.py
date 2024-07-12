@@ -1,5 +1,6 @@
 # Set the path to the folder containing the images
-base_folder = "/home/brooks/art"
+# base_folder = "/home/brooks/art"
+base_folder = "/Users/brookstalley/art"
 art_folder_raw = f"{base_folder}/raw"
 art_folder_ready = f"{base_folder}/ready"
 dezoomify_tile_cache = f"{base_folder}/tile-cache"

@@ -18,7 +18,7 @@ import config
 logging.basicConfig(level=logging.INFO)
 
 dezoomify_rs_path = "dezoomify-rs"
-dezoomify_params = f'--max-width 8192 --max-height 8192 --compression 0 --parallelism 12 --min-interval 250ms --tile-cache "{config.dezoomify_tile_cache}" --header "{config.dezoomify_user_agent}"'
+dezoomify_params = f'--max-width 8192 --max-height 8192 --compression 0 --parallelism 16 --min-interval 100ms --tile-cache "{config.dezoomify_tile_cache}" --header "{config.dezoomify_user_agent}"'
 
 last_artic_call = 0
 
@@ -176,7 +176,6 @@ async def get_dezoomify_file(
     # Run dezoomify-rs, passing dezoomify_params as arguments and starting in the art_folder_raw directory
     # See https://github.com/lovasoa/dezoomify-rs for info
     if out_file is not None and out_file != "":
-        print(f'*** out_file is "{out_file}", download_dir is "{destination_dir}"')
         out_file = os.path.join(destination_dir, out_file)
         # Dezoomify will error out if the file already exists. If out_file is specified, delete it if it does exist
         if os.path.exists(out_file):
@@ -187,9 +186,9 @@ async def get_dezoomify_file(
         my_params = f"{my_params} --header 'Referer: {http_referer}'"
     cmdline = f'{dezoomify_rs_path} {my_params} "{url}"'
     if out_file is not None and out_file != "":
-        cmdline = f"{cmdline} {out_file}"
+        cmdline = f'{cmdline} "{out_file}"'
     cmdline = cmdline.strip()
-    logging.debug(f"Running: {cmdline}")
+    logging.info(f"Running: {cmdline}")
     p = subprocess.Popen(
         cmdline,
         shell=True,
@@ -260,7 +259,7 @@ async def artic_throttle():
     elapsed_time = current_time - last_artic_call
     if elapsed_time < 5000:
         wait_time = 5000 - elapsed_time
-        logging.info(f"Waiting {wait_time}ms")
+        logging.debug(f"Waiting {wait_time}ms")
         await asyncio.sleep(wait_time / 1000)
 
 
@@ -273,7 +272,7 @@ async def get_artic_image(url, destination_fullpath: str = None, destination_dir
     # Download the image from the URL
     global last_artic_call
 
-    logging.info(f"Downloading {url}")
+    logging.debug(f"Downloading {url}")
     await artic_throttle()
     metadata = await artic_metadata_for_url(url)
     await artic_accessed()
