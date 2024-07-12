@@ -92,10 +92,11 @@ def resize_image_with_matte(image: Image, resize_option, width, height) -> Image
         #     int((dominant[1] + 127) / 2),
         #     int((dominant[2] + 127) / 2),
         # )
+        mutiplier: float = 0.66
         dominant_color = (
-            int((dominant[0] * 256) / 2),
-            int((dominant[1] * 256) / 2),
-            int((dominant[2] * 256) / 2),
+            int((dominant[0] * 256) * mutiplier),
+            int((dominant[1] * 256) * mutiplier),
+            int((dominant[2] * 256) * mutiplier),
         )
     canvas = Image.new("RGB", (width, height), dominant_color)
     description_box = None
@@ -126,12 +127,7 @@ def resize_image_with_matte(image: Image, resize_option, width, height) -> Image
             scale = height / y
             x = int(x * scale)
             image = image.resize((x, height), Image.Resampling.LANCZOS)
-            crop_box = (
-                int((x - width) / 2),
-                0,
-                int((x + width) / 2),
-                height,
-            )
+            crop_box = (int((x - width) / 2), 0, int((x + width) / 2), height)
             image = image.crop(crop_box)
 
         else:
@@ -139,12 +135,7 @@ def resize_image_with_matte(image: Image, resize_option, width, height) -> Image
             scale = width / x
             y = int(y * scale)
             image = image.resize((width, y), Image.Resampling.LANCZOS)
-            crop_box = (
-                0,
-                int((y - height) / 2),
-                width,
-                int((y + height) / 2),
-            )
+            crop_box = (0, int((y - height) / 2), width, int((y + height) / 2))
             image = image.crop(crop_box)
 
         canvas.paste(image, (0, 0))
