@@ -220,6 +220,7 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
 
 async def image_callback(event, response):
     logging.info("CALLBACK: image callback: {}, {}".format(event, response))
+    tv_content_id = response["contentId"]
 
 
 async def ensure_folders_exist():

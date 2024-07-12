@@ -166,7 +166,7 @@ def resize_file_with_matte(in_file: str, out_file: str, width, height, resize_op
         resized.save(out_file, "JPEG", quality=95)
     elif in_file.endswith(".png"):
         resized.save(out_file, "PNG")
-    logging.info(f"Resized {in_file} to {out_file}")
+    logging.debug(f"Resized {in_file} to {out_file}")
 
 
 def get_image_dimensions(image_path: str) -> tuple[int, int]:
@@ -194,7 +194,7 @@ async def get_dezoomify_file(
     if out_file is not None and out_file != "":
         cmdline = f'{cmdline} "{out_file}"'
     cmdline = cmdline.strip()
-    logging.info(f"Running: {cmdline}")
+    logging.debug(f"Running: {cmdline}")
     p = subprocess.Popen(
         cmdline,
         shell=True,
@@ -325,7 +325,7 @@ async def get_artic_image(url, destination_fullpath: str = None, destination_dir
 
 
 async def get_image(url, destination_fullpath: str = None, destination_dir: str = None) -> tuple[bool, str]:
-    logging.info(f"Getting image from {url}")
+    logging.debug(f"Getting image from {url}")
     match image_source(url):
         case ImageSources.GOOGLE_ARTSANDCULTURE:
             # Dezoomify can get a good filename for Google even if destination_fullpath is None

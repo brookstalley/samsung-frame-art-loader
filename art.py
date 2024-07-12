@@ -130,7 +130,7 @@ class ArtFile:
         self.ready_fullpath = self.get_ready_fullpath()
 
         if not os.path.exists(self.ready_fullpath) or always_generate:
-            logging.info(f"Generating ready file at {self.ready_fullpath}")
+            logging.debug(f"Generating ready file at {self.ready_fullpath}")
             description_box = resize_file_with_matte(self.raw_fullpath, self.ready_fullpath, 3840, 2160, self.resize_option)
 
         self.ready_file = os.path.basename(self.ready_fullpath)
