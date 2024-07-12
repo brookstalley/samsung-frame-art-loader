@@ -69,7 +69,7 @@
         {
             "url": "https://www.artic.edu/artworks/91194/golden-bird",
             "raw_file": "Constantin Brancusi - Golden Bird.jpg",
-            "ready_file": "Constantin Brancusi - Golden Bird_cropped.jpg",
+            "ready_file": "Constantin Brancusi - Golden Bird_scaled.jpg",
             "raw_file_width": 3160,
             "raw_file_height": 4898,
             "resize_option": "scaled",
@@ -117,7 +117,7 @@
         {
             "url": "https://www.artic.edu/artworks/100089/chicago",
             "raw_file": "Harry Callahan - Chicago.jpg",
-            "ready_file": "Harry Callahan - Chicago_cropped.jpg",
+            "ready_file": "Harry Callahan - Chicago_scaled.jpg",
             "raw_file_width": 7101,
             "raw_file_height": 5632,
             "resize_option": "scaled",
@@ -133,7 +133,7 @@
         {
             "url": "https://www.artic.edu/artworks/229351/target",
             "raw_file": "Jasper Johns - Target.jpg",
-            "ready_file": "Jasper Johns - Target_cropped.jpg",
+            "ready_file": "Jasper Johns - Target_scaled.jpg",
             "raw_file_width": 5357,
             "raw_file_height": 5332,
             "resize_option": "scaled",
@@ -229,7 +229,7 @@
         {
             "url": "https://artsandculture.google.com/asset/homage-to-the-square-sonorous-josef-albers/YAHHW_KLcb2m2w",
             "raw_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_0001.jpg",
-            "ready_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_0001_cropped.jpg",
+            "ready_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_0001_scaled.jpg",
             "raw_file_width": 2488,
             "raw_file_height": 2494,
             "resize_option": "scaled",
@@ -245,7 +245,7 @@
         {
             "url": "https://artsandculture.google.com/asset/full-homage-to-the-square-josef-albers/uwFaRKFNNWjOSg",
             "raw_file": "Albers, Josef; Full (Homage to the Square); 1962_0001.jpg",
-            "ready_file": "Albers, Josef; Full (Homage to the Square); 1962_0001_cropped.jpg",
+            "ready_file": "Albers, Josef; Full (Homage to the Square); 1962_0001_scaled.jpg",
             "raw_file_width": 2912,
             "raw_file_height": 3153,
             "resize_option": "scaled",
@@ -261,7 +261,7 @@
         {
             "url": "https://artsandculture.google.com/asset/cat-litter-robert-gober/YQFZtnXTyaYTHg",
             "raw_file": "Cat Litter - Robert Gober_0001.jpg",
-            "ready_file": "Cat Litter - Robert Gober_0001_cropped.jpg",
+            "ready_file": "Cat Litter - Robert Gober_0001_scaled.jpg",
             "raw_file_width": 3288,
             "raw_file_height": 4264,
             "resize_option": "scaled",
@@ -279,7 +279,7 @@
         {
             "url": "https://artsandculture.google.com/asset/ph-129-clyfford-still/FwHVp26mrlpKfQ",
             "raw_file": "Still, Clyfford; PH-129; 1949_0001.jpg",
-            "ready_file": "Still, Clyfford; PH-129; 1949_0001_cropped.jpg",
+            "ready_file": "Still, Clyfford; PH-129; 1949_0001_scaled.jpg",
             "raw_file_width": 3514,
             "raw_file_height": 4135,
             "resize_option": "scaled",
@@ -297,7 +297,7 @@
         {
             "url": "https://artsandculture.google.com/asset/ion-11-victor-vasarely/zAGDIJRNphFaPw",
             "raw_file": "Vasarely, Victor; ION 11; 1967_1969_0001.jpg",
-            "ready_file": "Vasarely, Victor; ION 11; 1967_1969_0001_cropped.jpg",
+            "ready_file": "Vasarely, Victor; ION 11; 1967_1969_0001_scaled.jpg",
             "raw_file_width": 1295,
             "raw_file_height": 1294,
             "resize_option": "scaled",
@@ -327,7 +327,7 @@
         {
             "url": "https://artsandculture.google.com/asset/portrait-of-pablo-picasso-juan-gris-spanish-1887%E2%80%931927/RgGPipJ4FxSBiw",
             "raw_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912_0002.jpg",
-            "ready_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912_0002_cropped.jpg",
+            "ready_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912_0002_scaled.jpg",
             "raw_file_width": 6220,
             "raw_file_height": 7912,
             "resize_option": "scaled",
