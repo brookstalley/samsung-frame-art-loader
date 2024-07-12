@@ -12,13 +12,15 @@ from image_utils import images_match
 
 import config
 
-sys.path.append("../")
+# sys.path.append("../")
 
 from samsungtvws.async_art import SamsungTVAsyncArt
 from samsungtvws import exceptions
 from samsungtvws.remote import SendRemoteKey
 from samsungtvws.async_remote import SamsungTVWSAsyncRemote
 
+
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
 
 artsets = []
 uploaded_files = {}
@@ -66,22 +68,9 @@ def update_uploaded_files(local_file, tv_content_id):
     uploaded_files[local_file] = {"tv_content_id": tv_content_id}
 
 
-def debug(tv: SamsungTVAsyncArt):
-    # Check if TV is reachable in debug mode
-    try:
-        logging.info("Checking if the TV can be reached.")
-        info = tv.rest_device_info()
-        logging.info("If you do not see an error, your TV could be reached.")
-        sys.exit()
-    except Exception as e:
-        logging.error("Could not reach the TV: " + str(e))
-        sys.exit()
-
-
 async def get_available(tv, category=None):
     # Retrieve available art
-    available_art = await tv.available(category=category)
-    return available_art
+    return await tv.available(category=category)
 
 
 async def show_available(tv, category=None):
@@ -238,9 +227,6 @@ async def main():
     # Increase debug level
     args = parse_args()
 
-    logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
-    # logging.getLogger().setLevel(logging.DEBUG)
-
     logging.info("Starting art.py!")
     logging.debug("Logging in debug mode")
     try:
@@ -289,7 +275,7 @@ async def main():
     tv_art.set_callback("image_selected", image_callback)
 
     if args.debug:
-        await debug()
+        logging.getLogger().setLevel(logging.DEBUG)
 
     if args.show_uploaded:
         await show_available(tv_art, UPLOADED_CATEGORY)

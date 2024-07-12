@@ -10,7 +10,10 @@ Copyright (c) 2024 Brooks Talley
 
 """
 
+import logging
 from PIL import Image, ImageDraw, ImageFont
+
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
 
 
 class ArtLabel:

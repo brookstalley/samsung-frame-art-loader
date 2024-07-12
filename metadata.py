@@ -1,11 +1,13 @@
+import logging
 import requests
-import re
 from bs4 import BeautifulSoup
 
 # from libxmp import XMPFiles, consts, XMPMeta
 # from libxmp.utils import file_to_dict
 from PIL import Image, ExifTags
 from source_utils import artic_metadata_for_url
+
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
 
 metadata_map = {
     "creator": ["creator", "artist", "created by", "by"],

@@ -2,6 +2,8 @@ import requests
 import re
 import logging
 
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
+
 
 async def get_artic_api_for_url(url: str) -> str:
     # extract the artwork ID. https://www.artic.edu/artworks/100472/untitled-purple-white-and-red becomes 100472

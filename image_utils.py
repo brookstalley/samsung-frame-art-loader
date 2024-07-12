@@ -15,7 +15,7 @@ import time
 
 import config
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
 
 dezoomify_rs_path = "dezoomify-rs"
 dezoomify_params = f'--max-width 8192 --max-height 8192 --compression 0 --parallelism 16 --min-interval 100ms --tile-cache "{config.dezoomify_tile_cache}" --header "{config.dezoomify_user_agent}"'
