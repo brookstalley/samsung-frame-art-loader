@@ -1,5 +1,5 @@
 # import resizing from PIL
-from PIL import Image
+from PIL import Image, ImageFilter, ImageChops
 
 import asyncio
 import cv2
@@ -15,7 +15,7 @@ import time
 
 import config
 
-logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
 dezoomify_rs_path = "dezoomify-rs"
 dezoomify_params = f'--max-width 8192 --max-height 8192 --compression 0 --parallelism 16 --min-interval 100ms --tile-cache "{config.dezoomify_tile_cache}" --header "{config.dezoomify_user_agent}"'
@@ -221,15 +221,13 @@ async def get_dezoomify_file(
     return True, out_file
 
 
-async def images_match(image1: Image, image2: Image, match_threshold=0.2) -> bool:
+async def images_match(image1: Image, image2: Image, match_threshold=0.10) -> bool:
     # Use numpy for a fast compare. Resize images to 384x216 for faster compare.
     # Check for a close match because resizing and other factors can cause a perfect match to fail
-    image1 = image1.resize((384, 216), Image.LANCZOS)
-    image2 = image2.resize((384, 216), Image.LANCZOS)
-    np_image1 = np.array(image1)
-    np_image2 = np.array(image2)
-    # Compare the images
-    diff = np.sum(np.abs(np_image1 - np_image2)) / np_image1.size
+    image1 = image1.convert("L").resize((384, 216)).filter(ImageFilter.GaussianBlur(radius=2))
+    image2 = image2.convert("L").resize((384, 216)).filter(ImageFilter.GaussianBlur(radius=2))
+    img3 = ImageChops.subtract(image1, image2)
+    diff = sum(list(img3.getdata())) / (384 * 216)  # normalize
     logging.info(f"Images match: {diff}")
     return diff < match_threshold
 

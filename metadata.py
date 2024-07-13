@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from PIL import Image, ExifTags
 from source_utils import artic_metadata_for_url
 
-logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
 metadata_map = {
     "creator": ["creator", "artist", "created by", "by"],

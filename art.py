@@ -8,7 +8,7 @@ from image_utils import ResizeOptions, ImageSources
 from image_utils import resize_file_with_matte, image_source, get_image, get_image_dimensions
 from metadata import get_google_metadata, get_file_metadata, get_artic_metadata
 
-logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
 
 class DownloadError(Exception):

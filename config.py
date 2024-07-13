@@ -1,8 +1,10 @@
 # Set the path to the folder containing the images
-base_folder = "/home/brooks/art"
-# base_folder = "/Users/brookstalley/art"
+# base_folder = "/home/brooks/art"
+base_folder = "/Users/brookstalley/art"
 art_folder_raw = f"{base_folder}/raw"
 art_folder_ready = f"{base_folder}/ready"
+art_folder_tv_thumbs = f"{base_folder}/tv-thumbs"
+
 dezoomify_tile_cache = f"{base_folder}/tile-cache"
 
 # Set the path to the file that will store the list of uploaded filenames

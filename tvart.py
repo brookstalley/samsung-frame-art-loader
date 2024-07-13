@@ -3,6 +3,7 @@ import sys
 import logging
 import os
 import io
+import json
 import argparse
 
 import time
@@ -20,7 +21,7 @@ from samsungtvws.remote import SendRemoteKey
 from samsungtvws.async_remote import SamsungTVWSAsyncRemote
 
 
-logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
 artsets = []
 uploaded_files = {}
@@ -111,7 +112,11 @@ async def upload_file(local_file: str, tv_art: SamsungTVAsyncArt) -> str:
 async def get_thumbnails(tv_art: SamsungTVAsyncArt, content_ids):
     thumbnails = {}
     if content_ids:
-        thumbnails = {os.path.splitext(k)[0]: v for k, v in (await tv_art.get_thumbnail_list(content_ids)).items()}
+        thumbnail_list = await tv_art.get_thumbnail_list(content_ids)
+        thumbnails = {os.path.splitext(k)[0]: v for k, v in thumbnail_list.items()}
+        for tv_content_id, thumbnail_data in thumbnails.items():
+            with open(f"{config.art_folder_tv_thumbs}/{tv_content_id}.jpg", "wb") as f:
+                f.write(thumbnail_data)
     logging.info("got {} thumbnails".format(len(thumbnails)))
     return thumbnails
 
@@ -119,12 +124,21 @@ async def get_thumbnails(tv_art: SamsungTVAsyncArt, content_ids):
 async def upload_art_files(tv_art: SamsungTVAsyncArt, art_files: list[ArtFile]):
     for art_file in art_files:
         logging.info(f"Uploading {art_file.ready_fullpath}")
-        try:
-            tv_content_id = await upload_file(art_file.ready_fullpath, tv_art)
-            update_uploaded_files(art_file.ready_fullpath, tv_content_id)
-            art_file.tv_content_id = tv_content_id
-        except Exception as e:
-            logging.error(f"Error uploading {art_file.ready_fullpath}: {e}")
+        retry_limit = 3
+        retries = 0
+        success = False
+        while not success and retries < retry_limit:
+            try:
+                tv_content_id = await upload_file(art_file.ready_fullpath, tv_art)
+                update_uploaded_files(art_file.ready_fullpath, tv_content_id)
+                art_file.tv_content_id = tv_content_id
+                success = True
+            except BrokenPipeError:
+                retries += 1
+                logging.warning(f"Erorr uploading, now on retry {retries}")
+            except Exception as e:
+                logging.error(f"Error uploading {art_file.ready_fullpath}: {e}")
+                raise e
     return
 
 
@@ -146,8 +160,9 @@ async def sync_artsets_to_tv(tv_art: SamsungTVAsyncArt):
     but if the `always_upload` flag is set to True, it will delete all user files on the TV and upload everything.
     """
     tv_images = await get_available(tv_art, UPLOADED_CATEGORY)
-    if tv_images:
-        tv_thumbnails = await get_thumbnails(tv_images)
+    tv_content_ids = [image["content_id"] for image in tv_images]
+    if tv_content_ids:
+        tv_thumbnails = await get_thumbnails(tv_art, tv_content_ids)
         logging.info(f"Got thumbnails for {len(tv_thumbnails)}.")
         checked = 0
         matched = 0
@@ -156,25 +171,26 @@ async def sync_artsets_to_tv(tv_art: SamsungTVAsyncArt):
             for art_file in art_set.art:
                 art_image = Image.open(art_file.ready_fullpath)
                 for i, (tv_content_id, thumbnail_data) in enumerate(tv_thumbnails.items()):
+                    logging.info(f"*** Checking {tv_content_id} to {art_file.ready_fullpath} ")
                     thumbnail_image = Image.open(io.BytesIO(thumbnail_data))
-                    if images_match(art_image, thumbnail_image):
-                        logging.info(f"Found match for {art_file.ready_fullpath} in TV images")
+                    if await images_match(art_image, thumbnail_image):
+                        logging.info(f"Found match for {art_file.ready_fullpath} in TV image {tv_content_id}")
                         update_uploaded_files(art_file.ready_fullpath, tv_content_id)
                         art_file.tv_content_id = tv_content_id
                         matched += 1
-                    checked += 1
-                    print(f"Checked {checked} / {total_art_files}. Matched: {matched}")
+                checked += 1
+        print(f"Checked {checked} / {total_art_files}. Matched: {matched}")
 
         # Delete images on TV but not in any artset
         tv_ids_in_use = [art_file.tv_content_id for art_set in artsets for art_file in art_set.art if art_file.tv_content_id]
         tv_ids_not_used = [tv_content_id for tv_content_id in tv_thumbnails.keys() if tv_content_id not in tv_ids_in_use]
-        logging.info(f"Deleting {len(tv_ids_not_used)} unused images from TV")
+        logging.info(f"Deleting {len(tv_ids_not_used)} unused images from TV: {tv_ids_not_used}")
         await tv_art.delete_list(tv_ids_not_used)
 
-        # upload art_files that do not have a tv_content_id yet
-        art_files_to_upload = [art_file for art_set in artsets for art_file in art_set.art if not art_file.tv_content_id]
-        logging.info(f"Uploading {len(art_files_to_upload)} new images to TV")
-        await upload_art_files(tv_art, art_files_to_upload)
+    # upload art_files that do not have a tv_content_id yet
+    art_files_to_upload = [art_file for art_set in artsets for art_file in art_set.art if not art_file.tv_content_id]
+    logging.info(f"Uploading {len(art_files_to_upload)} new images to TV")
+    await upload_art_files(tv_art, art_files_to_upload)
 
 
 async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyncRemote):
@@ -202,14 +218,33 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
         tv_on = True
 
     if tv_on and not art_mode:
+        await tv_art.set_artmode(True)
         logging.info("Clicking power to set art mode")
         await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
-        await asyncio.sleep
+        await asyncio.sleep(3)
+
+    await tv_art.set_slideshow_status(duration=3, type=True, category=2)
 
 
 async def image_callback(event, response):
-    logging.info("CALLBACK: image callback: {}, {}".format(event, response))
-    tv_content_id = response["contentId"]
+    logging.debug("CALLBACK: image callback: {}, {}".format(event, response))
+    data_str = response["data"]
+    data = json.loads(data_str)
+    event = data.get("event", None)
+    tv_content_id = data.get("content_id", None)
+    is_shown = data.get("is_shown", None)
+    displayed_artfile = None
+    if event == "image_selected" and is_shown == "Yes":
+        # find the artfile with the matching tv_content_id
+        for art_set in artsets:
+            for art_file in art_set.art:
+                if art_file.tv_content_id == tv_content_id:
+                    displayed_artfile = art_file
+                    break
+        if not displayed_artfile:
+            logging.error(f"Could not find artfile with tv_content_id {tv_content_id}")
+            return
+        logging.info(f"Displayed artfile: {displayed_artfile.ready_fullpath}\n{displayed_artfile.metadata}")
 
 
 async def ensure_folders_exist():
@@ -217,14 +252,13 @@ async def ensure_folders_exist():
     if not os.path.exists(config.base_folder):
         raise FileNotFoundError(f"Base folder {config.base_folder} does not exist.")
 
-    for folder in [config.art_folder_raw, config.art_folder_ready, config.dezoomify_tile_cache]:
+    for folder in [config.art_folder_raw, config.art_folder_ready, config.dezoomify_tile_cache, config.art_folder_tv_thumbs]:
         if not os.path.exists(folder):
             logging.info(f'Creating folder "{folder}"')
             os.makedirs(folder)
 
 
 async def main():
-    # Increase debug level
     args = parse_args()
 
     logging.info("Starting art.py!")
@@ -274,8 +308,8 @@ async def main():
     tv_art.set_callback("auto_rotation_image_changed", image_callback)  # old api
     tv_art.set_callback("image_selected", image_callback)
 
-    if args.debug:
-        logging.getLogger().setLevel(logging.DEBUG)
+    # if args.debug:
+    #     logging.getLogger().setLevel(logging.DEBUG)
 
     if args.show_uploaded:
         await show_available(tv_art, UPLOADED_CATEGORY)

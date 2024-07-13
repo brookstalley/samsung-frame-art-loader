@@ -2,7 +2,7 @@ import requests
 import re
 import logging
 
-logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
 
 async def get_artic_api_for_url(url: str) -> str:
