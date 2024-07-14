@@ -21,8 +21,8 @@ from samsungtvws.remote import SendRemoteKey
 from samsungtvws.async_remote import SamsungTVWSAsyncRemote
 
 
-logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
-
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
+logging.getLogger().setLevel(logging.DEBUG)
 artsets = []
 uploaded_files = {}
 
@@ -218,10 +218,10 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
         tv_on = True
 
     if tv_on and not art_mode:
-        await tv_art.set_artmode(True)
-        logging.info("Clicking power to set art mode")
-        await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
-        await asyncio.sleep(3)
+        await tv_art.set_artmode("on")
+        #logging.info("Clicking power to set art mode")
+        #await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
+        await asyncio.sleep(1)
 
     await tv_art.set_slideshow_status(duration=3, type=True, category=2)
 
@@ -282,7 +282,8 @@ async def main():
         return
 
     logging.info(f"Creating TV object for {config.tv_address}")
-    tv_art = SamsungTVAsyncArt(host=config.tv_address, port=config.tv_port, token_file="token_file")
+
+    tv_art = SamsungTVAsyncArt(host=config.tv_address, port=config.tv_port, name="tvpi", token_file="token_file")
     logging.info(f"Starting art listening on {config.tv_address}:{config.tv_port}")
     await tv_art.start_listening()
     logging.info(f"Listening on {config.tv_address} started")
