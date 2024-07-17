@@ -8,6 +8,12 @@ def parse_arguments():
     parser.add_argument(
         "output_file", type=str, nargs="?", default="DEFAULT", help="Output file (defaults to same as input but .json)"
     )
+    # --overwrite causes the whole file to be replaced
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite the output file with the new URLs (default is to append to the existing",
+    )
 
     args = parser.parse_args()
     return args
@@ -27,6 +33,17 @@ def write_urls_to_json(output_file, urls):
         json.dump(data, file, indent=4)
 
 
+def add_urls_to_json(output_file, urls):
+    with open(output_file, "r") as file:
+        data = json.load(file)
+
+    existing_urls = [art["url"] for art in data["art"]]
+    new_urls = [{"url": url} for url in urls if url not in existing_urls]
+    data["art"].extend(new_urls)
+    with open(output_file, "w") as file:
+        json.dump(data, file, indent=4)
+
+
 if __name__ == "__main__":
     args = parse_arguments()
 
@@ -36,6 +53,9 @@ if __name__ == "__main__":
         input_filename = args.input_file.split(".")[0]  # Strip the file extension
         args.output_file = f"{input_filename}.json"
 
-    write_urls_to_json(args.output_file, urls)
+    if args.overwrite:
+        write_urls_to_json(args.output_file, urls)
+    else:
+        add_urls_to_json(args.output_file, urls)
 
     print(f"URLs have been written to {args.output_file}")
