@@ -22,7 +22,7 @@ from samsungtvws.async_remote import SamsungTVWSAsyncRemote
 
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
-logging.getLogger().setLevel(logging.DEBUG)
+# logging.getLogger().setLevel(logging.DEBUG)
 artsets = []
 uploaded_files = {}
 
@@ -93,7 +93,7 @@ async def upload_file(local_file: str, tv_art: SamsungTVAsyncArt) -> str:
     logging.debug(f"Processing {local_file}")
     if not os.path.exists(local_file):
         raise FileNotFoundError(f"File {local_file} does not exist.")
-    remote_file = None
+    remote_filename = None
     with open(local_file, "rb") as f:
         data = f.read()
     try:
@@ -101,11 +101,12 @@ async def upload_file(local_file: str, tv_art: SamsungTVAsyncArt) -> str:
             remote_filename = await tv_art.upload(data, file_type="JPEG", matte="none", portrait_matte="none")
         elif local_file.endswith(".png"):
             remote_filename = await tv_art.upload(data, file_type="PNG", matte="none", portrait_matte="none")
+        update_uploaded_files(local_file, remote_filename)
     except Exception as e:
         logging.error("There was an error: " + str(e))
     finally:
         f.close()
-    update_uploaded_files(local_file, remote_filename)
+
     return remote_filename
 
 
@@ -219,8 +220,8 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
 
     if tv_on and not art_mode:
         await tv_art.set_artmode("on")
-        #logging.info("Clicking power to set art mode")
-        #await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
+        # logging.info("Clicking power to set art mode")
+        # await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
         await asyncio.sleep(1)
 
     await tv_art.set_slideshow_status(duration=3, type=True, category=2)
