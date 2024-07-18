@@ -65,17 +65,17 @@ class ArtLabel:
         if self.artist_lifespan:
             artist_line += f" ({self.artist_lifespan})"
         draw.text((margin, current_height), artist_line, font=subtitle_font, fill=0)
-        current_height += line_spacing self.get_height_for_text(subtitle_font, artist_line) + margin // 2 
+        current_height += line_spacing * self.get_height_for_text(subtitle_font, artist_line) + margin // 2
 
         if self.creation_date and self.creation_date != "":
             draw.text((margin, current_height), f"Created {self.creation_date}", font=subtitle_font, fill=0)
             current_height += (
-                line_spacing + self.get_height_for_text(subtitle_font, f"Created {self.creation_date}") + margin // 2 
+                line_spacing + self.get_height_for_text(subtitle_font, f"Created {self.creation_date}") + margin // 2
             )
 
         if self.medium and self.medium != "":
             draw.text((margin, current_height), f"Medium: {self.medium}", font=text_font, fill=0)
-            current_height += line_spacing * self.get_height_for_text(text_font, f"Medium: {self.medium}") + margin // 2 
+            current_height += line_spacing * self.get_height_for_text(text_font, f"Medium: {self.medium}") + margin // 2
 
         if self.description and self.description != "":
             draw.text((margin, current_height), f"{self.description}", font=text_font, fill=0)
