@@ -5,7 +5,7 @@
         {
             "url": "https://www.artic.edu/artworks/64276/and-the-home-of-the-brave",
             "raw_file": "Charles Demuth - ...And the Home of the Brave.jpg",
-            "ready_file": "Charles Demuth - ...And the Home of the Brave_cropped.jpg",
+            "ready_file": "Charles Demuth - ...And the Home of the Brave_rcropped.jpg",
             "raw_file_width": 4417,
             "raw_file_height": 5492,
             "resize_option": "cropped",
@@ -21,7 +21,7 @@
         {
             "url": "https://www.artic.edu/artworks/111654/the-policeman",
             "raw_file": "Joan Mir\u00f3 - The Policeman.jpg",
-            "ready_file": "Joan Mir\u00f3 - The Policeman_cropped.jpg",
+            "ready_file": "Joan Mir\u00f3 - The Policeman_rcropped.jpg",
             "raw_file_width": 6107,
             "raw_file_height": 7664,
             "resize_option": "cropped",
@@ -37,7 +37,7 @@
         {
             "url": "https://www.artic.edu/artworks/61428/cow-s-skull-with-calico-roses",
             "raw_file": "Georgia OKeeffe - Cows Skull with Calico Roses.jpg",
-            "ready_file": "Georgia OKeeffe - Cows Skull with Calico Roses_cropped.jpg",
+            "ready_file": "Georgia OKeeffe - Cows Skull with Calico Roses_rcropped.jpg",
             "raw_file_width": 4713,
             "raw_file_height": 7085,
             "resize_option": "cropped",
@@ -53,7 +53,7 @@
         {
             "url": "https://www.artic.edu/artworks/100858/sky-above-clouds-iv",
             "raw_file": "Georgia OKeeffe - Sky above Clouds IV.jpg",
-            "ready_file": "Georgia OKeeffe - Sky above Clouds IV_cropped.jpg",
+            "ready_file": "Georgia OKeeffe - Sky above Clouds IV_rcropped.jpg",
             "raw_file_width": 4853,
             "raw_file_height": 1604,
             "resize_option": "cropped",
@@ -69,7 +69,7 @@
         {
             "url": "https://www.artic.edu/artworks/91194/golden-bird",
             "raw_file": "Constantin Brancusi - Golden Bird.jpg",
-            "ready_file": "Constantin Brancusi - Golden Bird_scaled.jpg",
+            "ready_file": "Constantin Brancusi - Golden Bird_rscaled.jpg",
             "raw_file_width": 3160,
             "raw_file_height": 4898,
             "resize_option": "scaled",
@@ -85,7 +85,7 @@
         {
             "url": "https://www.artic.edu/artworks/105203/triptych-window-from-the-coonley-playhouse-riverside-illinois",
             "raw_file": "Frank Lloyd Wright - Triptych Window from the Coonley Playhouse Riverside Illinois.jpg",
-            "ready_file": "Frank Lloyd Wright - Triptych Window from the Coonley Playhouse Riverside Illinois_cropped.jpg",
+            "ready_file": "Frank Lloyd Wright - Triptych Window from the Coonley Playhouse Riverside Illinois_rcropped.jpg",
             "raw_file_width": 6396,
             "raw_file_height": 3904,
             "resize_option": "cropped",
@@ -101,7 +101,7 @@
         {
             "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
             "raw_file": "Mark Rothko - Untitled Purple White and Red.jpg",
-            "ready_file": "Mark Rothko - Untitled Purple White and Red_scaled.jpg",
+            "ready_file": "Mark Rothko - Untitled Purple White and Red_rscaled.jpg",
             "raw_file_width": 2370,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -117,7 +117,7 @@
         {
             "url": "https://www.artic.edu/artworks/100089/chicago",
             "raw_file": "Harry Callahan - Chicago.jpg",
-            "ready_file": "Harry Callahan - Chicago_scaled.jpg",
+            "ready_file": "Harry Callahan - Chicago_rscaled.jpg",
             "raw_file_width": 7101,
             "raw_file_height": 5632,
             "resize_option": "scaled",
@@ -133,7 +133,7 @@
         {
             "url": "https://www.artic.edu/artworks/229351/target",
             "raw_file": "Jasper Johns - Target.jpg",
-            "ready_file": "Jasper Johns - Target_scaled.jpg",
+            "ready_file": "Jasper Johns - Target_rscaled.jpg",
             "raw_file_width": 5357,
             "raw_file_height": 5332,
             "resize_option": "scaled",
@@ -149,7 +149,7 @@
         {
             "url": "https://www.artic.edu/artworks/157156/red-yellow-blue-white-and-black-ii",
             "raw_file": "Ellsworth Kelly - Red Yellow Blue White and Black II.jpg",
-            "ready_file": "Ellsworth Kelly - Red Yellow Blue White and Black II_cropped.jpg",
+            "ready_file": "Ellsworth Kelly - Red Yellow Blue White and Black II_rcropped.jpg",
             "raw_file_width": 5945,
             "raw_file_height": 1707,
             "resize_option": "cropped",
@@ -165,7 +165,7 @@
         {
             "url": "https://www.artic.edu/artworks/61608/sunset",
             "raw_file": "Paul Klee - Sunset.jpg",
-            "ready_file": "Paul Klee - Sunset_cropped.jpg",
+            "ready_file": "Paul Klee - Sunset_rcropped.jpg",
             "raw_file_width": 5549,
             "raw_file_height": 3630,
             "resize_option": "cropped",
@@ -181,7 +181,7 @@
         {
             "url": "https://www.artic.edu/artworks/65868/silver-sun",
             "raw_file": "Arthur Dove - Silver Sun.jpg",
-            "ready_file": "Arthur Dove - Silver Sun_cropped.jpg",
+            "ready_file": "Arthur Dove - Silver Sun_rcropped.jpg",
             "raw_file_width": 3000,
             "raw_file_height": 2198,
             "resize_option": "cropped",
@@ -197,7 +197,7 @@
         {
             "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
             "raw_file": "Mark Rothko - Untitled Purple White and Red.jpg",
-            "ready_file": "Mark Rothko - Untitled Purple White and Red_scaled.jpg",
+            "ready_file": "Mark Rothko - Untitled Purple White and Red_rscaled.jpg",
             "raw_file_width": 2370,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -213,7 +213,7 @@
         {
             "url": "https://www.artic.edu/artworks/159710/la-peche-fishing",
             "raw_file": "Raoul Dufy - La Peche Fishing.jpg",
-            "ready_file": "Raoul Dufy - La Peche Fishing_cropped.jpg",
+            "ready_file": "Raoul Dufy - La Peche Fishing_rcropped.jpg",
             "raw_file_width": 2043,
             "raw_file_height": 2250,
             "resize_option": "cropped",
@@ -229,7 +229,7 @@
         {
             "url": "https://artsandculture.google.com/asset/homage-to-the-square-sonorous-josef-albers/YAHHW_KLcb2m2w",
             "raw_file": "Albers, Josef; Homage to the Square, Sonorous; 1958.jpg",
-            "ready_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_scaled.jpg",
+            "ready_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_rscaled.jpg",
             "raw_file_width": 2488,
             "raw_file_height": 2494,
             "resize_option": "scaled",
@@ -245,7 +245,7 @@
         {
             "url": "https://artsandculture.google.com/asset/full-homage-to-the-square-josef-albers/uwFaRKFNNWjOSg",
             "raw_file": "Albers, Josef; Full (Homage to the Square); 1962.jpg",
-            "ready_file": "Albers, Josef; Full (Homage to the Square); 1962_scaled.jpg",
+            "ready_file": "Albers, Josef; Full (Homage to the Square); 1962_rscaled.jpg",
             "raw_file_width": 2912,
             "raw_file_height": 3153,
             "resize_option": "scaled",
@@ -261,7 +261,7 @@
         {
             "url": "https://artsandculture.google.com/asset/cat-litter-robert-gober/YQFZtnXTyaYTHg",
             "raw_file": "Cat Litter - Robert Gober.jpg",
-            "ready_file": "Cat Litter - Robert Gober_scaled.jpg",
+            "ready_file": "Cat Litter - Robert Gober_rscaled.jpg",
             "raw_file_width": 3288,
             "raw_file_height": 4264,
             "resize_option": "scaled",
@@ -279,7 +279,7 @@
         {
             "url": "https://artsandculture.google.com/asset/ph-129-clyfford-still/FwHVp26mrlpKfQ",
             "raw_file": "Still, Clyfford; PH-129; 1949.jpg",
-            "ready_file": "Still, Clyfford; PH-129; 1949_scaled.jpg",
+            "ready_file": "Still, Clyfford; PH-129; 1949_rscaled.jpg",
             "raw_file_width": 3514,
             "raw_file_height": 4135,
             "resize_option": "scaled",
@@ -297,7 +297,7 @@
         {
             "url": "https://artsandculture.google.com/asset/ion-11-victor-vasarely/zAGDIJRNphFaPw",
             "raw_file": "Vasarely, Victor; ION 11; 1967_1969.jpg",
-            "ready_file": "Vasarely, Victor; ION 11; 1967_1969_scaled.jpg",
+            "ready_file": "Vasarely, Victor; ION 11; 1967_1969_rscaled.jpg",
             "raw_file_width": 1295,
             "raw_file_height": 1294,
             "resize_option": "scaled",
@@ -312,7 +312,7 @@
         {
             "url": "https://artsandculture.google.com/asset/natureza-morta-com-bromlia-amarela/SQElSKW2Ur1OBg",
             "raw_file": "Natureza-morta com brom\u00e9lia amarela - Ana Elisa Egreja.jpg",
-            "ready_file": "Natureza-morta com brom\u00e9lia amarela - Ana Elisa Egreja_cropped.jpg",
+            "ready_file": "Natureza-morta com brom\u00e9lia amarela - Ana Elisa Egreja_rcropped.jpg",
             "raw_file_width": 5204,
             "raw_file_height": 6880,
             "resize_option": "cropped",
@@ -327,7 +327,7 @@
         {
             "url": "https://artsandculture.google.com/asset/portrait-of-pablo-picasso-juan-gris-spanish-1887\\u20131927/RgGPipJ4FxSBiw",
             "raw_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912.jpg",
-            "ready_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912_scaled.jpg",
+            "ready_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912_rscaled.jpg",
             "raw_file_width": 6220,
             "raw_file_height": 7912,
             "resize_option": "scaled",
@@ -343,7 +343,7 @@
         {
             "url": "https://www.artic.edu/artworks/118718/the-banquet",
             "raw_file": "Ren\u00e9 Magritte - The Banquet.jpg",
-            "ready_file": "Ren\u00e9 Magritte - The Banquet_scaled.jpg",
+            "ready_file": "Ren\u00e9 Magritte - The Banquet_rscaled.jpg",
             "raw_file_width": 4391,
             "raw_file_height": 3275,
             "resize_option": "scaled",
@@ -359,7 +359,7 @@
         {
             "url": "https://www.artic.edu/artworks/8980/landscape-with-two-poplars",
             "raw_file": "Vasily Kandinsky - Landscape with Two Poplars.jpg",
-            "ready_file": "Vasily Kandinsky - Landscape with Two Poplars_scaled.jpg",
+            "ready_file": "Vasily Kandinsky - Landscape with Two Poplars_rscaled.jpg",
             "raw_file_width": 2877,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -375,7 +375,7 @@
         {
             "url": "https://www.artic.edu/artworks/21720/cranes-on-snow-covered-pine",
             "raw_file": "Katsushika Hokusai - Cranes on snow-covered pine.jpg",
-            "ready_file": "Katsushika Hokusai - Cranes on snow-covered pine_scaled.jpg",
+            "ready_file": "Katsushika Hokusai - Cranes on snow-covered pine_rscaled.jpg",
             "raw_file_width": 1379,
             "raw_file_height": 3000,
             "resize_option": "scaled",
@@ -391,7 +391,7 @@
         {
             "url": "https://www.artic.edu/artworks/118981/corpse-and-mirror-ii",
             "raw_file": "Jasper Johns - Corpse and Mirror II.jpg",
-            "ready_file": "Jasper Johns - Corpse and Mirror II_scaled.jpg",
+            "ready_file": "Jasper Johns - Corpse and Mirror II_rscaled.jpg",
             "raw_file_width": 2962,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -407,7 +407,7 @@
         {
             "url": "https://www.artic.edu/artworks/82410/untitled-painting",
             "raw_file": "Mark Rothko - Untitled Painting.jpg",
-            "ready_file": "Mark Rothko - Untitled Painting_scaled.jpg",
+            "ready_file": "Mark Rothko - Untitled Painting_rscaled.jpg",
             "raw_file_width": 5092,
             "raw_file_height": 4533,
             "resize_option": "scaled",
@@ -423,7 +423,7 @@
         {
             "url": "https://www.artic.edu/artworks/883/wounded-lioness",
             "raw_file": "Pierre Andrieu - Wounded Lioness.jpg",
-            "ready_file": "Pierre Andrieu - Wounded Lioness_scaled.jpg",
+            "ready_file": "Pierre Andrieu - Wounded Lioness_rscaled.jpg",
             "raw_file_width": 3000,
             "raw_file_height": 1791,
             "resize_option": "scaled",
@@ -439,7 +439,7 @@
         {
             "url": "https://www.artic.edu/artworks/81557/seascape",
             "raw_file": "Pierre-Auguste Renoir - Seascape.jpg",
-            "ready_file": "Pierre-Auguste Renoir - Seascape_scaled.jpg",
+            "ready_file": "Pierre-Auguste Renoir - Seascape_rscaled.jpg",
             "raw_file_width": 2855,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -455,7 +455,7 @@
         {
             "url": "https://www.artic.edu/artworks/73669/untitled-desert-landscape",
             "raw_file": "Salvador Dal\u00ed - Untitled Desert Landscape.jpg",
-            "ready_file": "Salvador Dal\u00ed - Untitled Desert Landscape_scaled.jpg",
+            "ready_file": "Salvador Dal\u00ed - Untitled Desert Landscape_rscaled.jpg",
             "raw_file_width": 5534,
             "raw_file_height": 7120,
             "resize_option": "scaled",
@@ -471,7 +471,7 @@
         {
             "url": "https://www.artic.edu/artworks/8987/painting-with-green-center",
             "raw_file": "Vasily Kandinsky - Painting with Green Center.jpg",
-            "ready_file": "Vasily Kandinsky - Painting with Green Center_scaled.jpg",
+            "ready_file": "Vasily Kandinsky - Painting with Green Center_rscaled.jpg",
             "raw_file_width": 2417,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -487,7 +487,7 @@
         {
             "url": "https://www.artic.edu/artworks/9090/jar-in-the-form-of-a-phallus",
             "raw_file": "Moche - Jar in the Form of a Phallus.jpg",
-            "ready_file": "Moche - Jar in the Form of a Phallus_scaled.jpg",
+            "ready_file": "Moche - Jar in the Form of a Phallus_rscaled.jpg",
             "raw_file_width": 4044,
             "raw_file_height": 5055,
             "resize_option": "scaled",
@@ -503,7 +503,7 @@
         {
             "url": "https://www.artic.edu/artworks/60510/hogs-killing-a-snake",
             "raw_file": "John Steuart Curry - Hogs Killing a Snake.jpg",
-            "ready_file": "John Steuart Curry - Hogs Killing a Snake_scaled.jpg",
+            "ready_file": "John Steuart Curry - Hogs Killing a Snake_rscaled.jpg",
             "raw_file_width": 5665,
             "raw_file_height": 4453,
             "resize_option": "scaled",
@@ -519,7 +519,7 @@
         {
             "url": "https://www.artic.edu/artworks/185779/train-landscape",
             "raw_file": "Ellsworth Kelly - Train Landscape.jpg",
-            "ready_file": "Ellsworth Kelly - Train Landscape_scaled.jpg",
+            "ready_file": "Ellsworth Kelly - Train Landscape_rscaled.jpg",
             "raw_file_width": 5482,
             "raw_file_height": 5477,
             "resize_option": "scaled",
@@ -535,7 +535,7 @@
         {
             "url": "https://www.artic.edu/artworks/14689/eggplant-and-plums",
             "raw_file": "Charles Demuth - Eggplant and Plums.jpg",
-            "ready_file": "Charles Demuth - Eggplant and Plums_scaled.jpg",
+            "ready_file": "Charles Demuth - Eggplant and Plums_rscaled.jpg",
             "raw_file_width": 5014,
             "raw_file_height": 3323,
             "resize_option": "scaled",

@@ -1,10 +1,14 @@
 # Set the path to the folder containing the images
 # base_folder = "/home/brooks/art"
-#base_folder = "/Users/brookstalley/art"
+# base_folder = "/Users/brookstalley/art"
 base_folder = "/home/tvpi/art"
 art_folder_raw = f"{base_folder}/raw"
 art_folder_ready = f"{base_folder}/ready"
 art_folder_tv_thumbs = f"{base_folder}/tv-thumbs"
+art_folder_label = f"{base_folder}/label"
+
+label_width = 1448
+label_height = 1072
 
 dezoomify_tile_cache = f"{base_folder}/tile-cache"
 
