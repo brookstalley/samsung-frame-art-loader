@@ -13,6 +13,9 @@ import requests
 import re
 from source_utils import artic_metadata_for_url
 import time
+from colormath.color_objects import sRGBColor, LabColor
+from colormath.color_conversions import convert_color
+from colormath.color_diff import delta_e_cie2000
 
 import config
 
@@ -101,33 +104,38 @@ import numpy as np
 import cv2
 
 
-def get_top_n_colors(image, coverage_threshold=0.95):
+def get_top_n_colors(image, coverage_threshold=0.9, tmp_name: str = None):
     # We don't need a giant image to get average color. If it is larger than 2048x2048, resize it. But do not overwrite the original image!
     max_size = 512
-    max_distance = 0.1
-    np_image = np.array(image)
-    working_image = resize(np_image, (max_size, max_size), anti_aliasing=False)
+    max_distance = 15
+
+    image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+
+    np_image = np.array(image.convert("RGB"))
+    lab_image = cv2.cvtColor(np_image, cv2.COLOR_RGB2LAB)
 
     # Reshape the image to a 2D array of pixels
-    pixels = np.float32(working_image.reshape(-1, 3))
+    pixels = lab_image.reshape(-1, 3).astype(np.float32)
 
     # Define criteria for k-means clustering
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 200, 0.1)
-    flags = cv2.KMEANS_RANDOM_CENTERS
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 200, 0.95)
+    # flags = cv2.KMEANS_RANDOM_CENTERS
+    flags = cv2.KMEANS_PP_CENTERS
 
     # Start with an initial guess for the number of clusters
     initial_n_colors = 2
     max_colors = 20  # Set a reasonable maximum to avoid infinite loops
     for n_colors in range(initial_n_colors, max_colors + 1):
         # Apply k-means clustering
-        _, labels, palette = cv2.kmeans(pixels, n_colors, None, criteria, 10, flags)
+        ret, labels, centers = cv2.kmeans(pixels, n_colors, None, criteria, 50, flags)
+        centers = np.uint8(centers)
 
         # Generate the intermediate image
-        intermediate_image = palette[labels.flatten()]
-        intermediate_image = intermediate_image.reshape(working_image.shape)
+        intermediate_image = centers[labels.flatten()]
+        intermediate_image = intermediate_image.reshape(lab_image.shape)
 
         # Calculate the absolute difference between each pixel and the intermediate image
-        diff = np.abs(working_image.astype(np.float32) - intermediate_image.astype(np.float32))
+        diff = np.abs(lab_image.astype(np.float32) - intermediate_image.astype(np.float32))
 
         # Calculate the distance (Euclidean norm) for each pixel
         distances = np.linalg.norm(diff, axis=2)
@@ -136,6 +144,16 @@ def get_top_n_colors(image, coverage_threshold=0.95):
         # Determine the number of pixels within the max_distance from any cluster center
         within_threshold = distances <= max_distance
         coverage = np.sum(within_threshold) / pixels.shape[0]
+
+        # generate image to show this cluster result
+        if tmp_name is not None:
+
+            img_file = f"{config.art_folder_temp}/{os.path.basename(tmp_name)}_cluster_{n_colors}_{int(coverage*100)}pct.jpg"
+
+            res3 = cv2.cvtColor(intermediate_image, cv2.COLOR_LAB2RGB)
+
+            print(f"writing {img_file}")
+            Image.fromarray(res3).save(img_file)
 
         print(f"Coverage for {n_colors} colors: {coverage})")
         # Check if the coverage exceeds the threshold
@@ -147,7 +165,7 @@ def get_top_n_colors(image, coverage_threshold=0.95):
 
     # Determine the number of colors required to meet the coverage threshold
     top_n = np.argmax(np.cumsum(np.bincount(flat_labels)) / pixels.shape[0] >= coverage_threshold) + 1
-    top_colors = palette[:top_n]
+    top_colors = centers[:top_n]
     top_color_counts = np.bincount(flat_labels)[:top_n]
 
     # Calculate the percentage of each top color
@@ -156,7 +174,7 @@ def get_top_n_colors(image, coverage_threshold=0.95):
     return top_colors, top_color_percentages
 
 
-def resize_image_with_matte(image: Image, resize_option, width, height) -> Image:
+def resize_image_with_matte(image: Image, resize_option, width, height, tmp_name=None) -> Image:
     # Get x and y dimensions
     x, y = image.size
     if (x == width) and (y == height):
@@ -166,7 +184,7 @@ def resize_image_with_matte(image: Image, resize_option, width, height) -> Image
     dominant_color = (0, 0, 0)
     if resize_option == ResizeOptions.SCALE:
         dominant = get_dominant_colors_five(image)
-        all_dominants = get_top_n_colors(image)
+        all_dominants = get_top_n_colors(image, tmp_name=tmp_name)
         print(f"dominant color: {dominant}")
 
         mutiplier: float = 0.66
@@ -224,7 +242,7 @@ def resize_file_with_matte(in_file: str, out_file: str, width, height, resize_op
     Image.MAX_IMAGE_PIXELS = 933120000
 
     image = Image.open(in_file)
-    resized, description_box = resize_image_with_matte(image, resize_option, width, height)
+    resized, description_box = resize_image_with_matte(image, resize_option, width, height, tmp_name=in_file)
 
     # Save the resized image
     os.makedirs(os.path.dirname(out_file), exist_ok=True)

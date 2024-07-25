@@ -253,7 +253,14 @@ async def ensure_folders_exist():
     if not os.path.exists(config.base_folder):
         raise FileNotFoundError(f"Base folder {config.base_folder} does not exist.")
 
-    for folder in [config.art_folder_raw, config.art_folder_ready, config.dezoomify_tile_cache, config.art_folder_tv_thumbs]:
+    for folder in [
+        config.art_folder_raw,
+        config.art_folder_ready,
+        config.dezoomify_tile_cache,
+        config.art_folder_tv_thumbs,
+        config.art_folder_label,
+        config.art_folder_temp,
+    ]:
         if not os.path.exists(folder):
             logging.info(f'Creating folder "{folder}"')
             os.makedirs(folder)
