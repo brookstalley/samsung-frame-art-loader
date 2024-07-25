@@ -1,6 +1,6 @@
 {
     "name": "placeholder",
-    "default_resize": "cropped",
+    "default_resize": "scaled",
     "art": [
         {
             "url": "https://www.artic.edu/artworks/64276/and-the-home-of-the-brave",
@@ -101,7 +101,7 @@
         {
             "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
             "raw_file": "Mark Rothko - Untitled Purple White and Red.jpg",
-            "ready_file": "Mark Rothko - Untitled Purple White and Red_cropped.jpg",
+            "ready_file": "Mark Rothko - Untitled Purple White and Red_scaled.jpg",
             "raw_file_width": 2370,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -197,7 +197,7 @@
         {
             "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
             "raw_file": "Mark Rothko - Untitled Purple White and Red.jpg",
-            "ready_file": "Mark Rothko - Untitled Purple White and Red_cropped.jpg",
+            "ready_file": "Mark Rothko - Untitled Purple White and Red_scaled.jpg",
             "raw_file_width": 2370,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -228,8 +228,8 @@
         },
         {
             "url": "https://artsandculture.google.com/asset/homage-to-the-square-sonorous-josef-albers/YAHHW_KLcb2m2w",
-            "raw_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_0001.jpg",
-            "ready_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_0001_scaled.jpg",
+            "raw_file": "Albers, Josef; Homage to the Square, Sonorous; 1958.jpg",
+            "ready_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_scaled.jpg",
             "raw_file_width": 2488,
             "raw_file_height": 2494,
             "resize_option": "scaled",
@@ -244,8 +244,8 @@
         },
         {
             "url": "https://artsandculture.google.com/asset/full-homage-to-the-square-josef-albers/uwFaRKFNNWjOSg",
-            "raw_file": "Albers, Josef; Full (Homage to the Square); 1962_0001.jpg",
-            "ready_file": "Albers, Josef; Full (Homage to the Square); 1962_0001_scaled.jpg",
+            "raw_file": "Albers, Josef; Full (Homage to the Square); 1962.jpg",
+            "ready_file": "Albers, Josef; Full (Homage to the Square); 1962_scaled.jpg",
             "raw_file_width": 2912,
             "raw_file_height": 3153,
             "resize_option": "scaled",
@@ -260,8 +260,8 @@
         },
         {
             "url": "https://artsandculture.google.com/asset/cat-litter-robert-gober/YQFZtnXTyaYTHg",
-            "raw_file": "Cat Litter - Robert Gober_0001.jpg",
-            "ready_file": "Cat Litter - Robert Gober_0001_scaled.jpg",
+            "raw_file": "Cat Litter - Robert Gober.jpg",
+            "ready_file": "Cat Litter - Robert Gober_scaled.jpg",
             "raw_file_width": 3288,
             "raw_file_height": 4264,
             "resize_option": "scaled",
@@ -278,8 +278,8 @@
         },
         {
             "url": "https://artsandculture.google.com/asset/ph-129-clyfford-still/FwHVp26mrlpKfQ",
-            "raw_file": "Still, Clyfford; PH-129; 1949_0001.jpg",
-            "ready_file": "Still, Clyfford; PH-129; 1949_0001_scaled.jpg",
+            "raw_file": "Still, Clyfford; PH-129; 1949.jpg",
+            "ready_file": "Still, Clyfford; PH-129; 1949_scaled.jpg",
             "raw_file_width": 3514,
             "raw_file_height": 4135,
             "resize_option": "scaled",
@@ -296,8 +296,8 @@
         },
         {
             "url": "https://artsandculture.google.com/asset/ion-11-victor-vasarely/zAGDIJRNphFaPw",
-            "raw_file": "Vasarely, Victor; ION 11; 1967_1969_0001.jpg",
-            "ready_file": "Vasarely, Victor; ION 11; 1967_1969_0001_scaled.jpg",
+            "raw_file": "Vasarely, Victor; ION 11; 1967_1969.jpg",
+            "ready_file": "Vasarely, Victor; ION 11; 1967_1969_scaled.jpg",
             "raw_file_width": 1295,
             "raw_file_height": 1294,
             "resize_option": "scaled",
@@ -311,8 +311,8 @@
         },
         {
             "url": "https://artsandculture.google.com/asset/natureza-morta-com-bromlia-amarela/SQElSKW2Ur1OBg",
-            "raw_file": "Natureza-morta com brom\u00e9lia amarela - Ana Elisa Egreja_0001.jpg",
-            "ready_file": "Natureza-morta com brom\u00e9lia amarela - Ana Elisa Egreja_0001_cropped.jpg",
+            "raw_file": "Natureza-morta com brom\u00e9lia amarela - Ana Elisa Egreja.jpg",
+            "ready_file": "Natureza-morta com brom\u00e9lia amarela - Ana Elisa Egreja_cropped.jpg",
             "raw_file_width": 5204,
             "raw_file_height": 6880,
             "resize_option": "cropped",
@@ -325,9 +325,9 @@
             }
         },
         {
-            "url": "https://artsandculture.google.com/asset/portrait-of-pablo-picasso-juan-gris-spanish-1887%E2%80%931927/RgGPipJ4FxSBiw",
-            "raw_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912_0002.jpg",
-            "ready_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912_0002_scaled.jpg",
+            "url": "https://artsandculture.google.com/asset/portrait-of-pablo-picasso-juan-gris-spanish-1887\\u20131927/RgGPipJ4FxSBiw",
+            "raw_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912.jpg",
+            "ready_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912_scaled.jpg",
             "raw_file_width": 6220,
             "raw_file_height": 7912,
             "resize_option": "scaled",
@@ -338,6 +338,214 @@
                 "date_created": "January-February 1912",
                 "dimensions": "93.3 \u00d7 74.4 cm (36 3/4 \u00d7 29 5/16 in.)",
                 "medium": "Oil on canvas"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/118718/the-banquet",
+            "raw_file": "Ren\u00e9 Magritte - The Banquet.jpg",
+            "ready_file": "Ren\u00e9 Magritte - The Banquet_scaled.jpg",
+            "raw_file_width": 4391,
+            "raw_file_height": 3275,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "The Banquet",
+                "date_created": "1958",
+                "artist_details": "Ren\u00e9 Magritte\nBelgian, 1898\u20131967",
+                "description": "<p>This canvas is the last, largest, and most impressive of four oil paintings of this title; the three other paintings are all dated to 1957 (ill. 851\u201352, and p. 272, no. 857). There are also five versions of this image in gouache, starting in 1956 and extending to 1964 (ill. In ibid., vol. 4, 1994, p. 193, no. 1421, p. 198, no. 1429, p. 273, no. 1563, and pp. 275\u201376, nos. 1566 and 1568). Magritte first realized the idea and conceived the title for this series in the first of these gouaches completed in 1956 shortly after he announced to Mirabelle Dors and Maurice Rapin, in a letter of November 9, 1956, that \"Le Banquet\" was one of his latest \"finds\" (ibid., vol. 3, 1993, p. 267). The little sketch in this letter shows the main motif of the sun visible before a clump of trees set in an unspecified landscape. In the first oil version (as in the earlier related image, <em>The Sixteenth of September</em>, 1956, location unknown; ibid., vol. 3, 1993, p. 254, no. 834, ill., which shows the crescent moon on a large tree), the clump of trees is set in a meadowlike clearing dotted with large stones. In the second oil version of <em>The Banquet</em>, as in the Bergman canvas, the woodland glade is replaced with a stone parapet or balustrade, whose top is lit by the sun's rays. This feature suggests a parklike setting, a domesticated concept of nature suited to Magritte's deadpan, realist style. The proportions of the objects in relation to one another also differ from canvas to canvas; in the picture under dis\u00adcussion, the sun looms larger in relation to the trees than in other versions and appears therefore closer to the viewer. It is interesting that, although the motif in essential respects is identical, significant variations mark each version as a distinct image. </p>\n <p>The Banquet series is a development of another se\u00adries on which Magritte had started working in February 1956 and which he called <em>The Place in the Sun</em>. In these pictures, Magritte focused on the Surrealist idea of displacement, but with a particular twist. One object was superimposed on another larger one to which it was unrelated. The original series included an image of a seated scribe superimposed on an apple (ibid., vol.  3, 1993, pp. 252\u201353, no. 833, ill.) and Sandro Botticell\u2019s <em>Primavera</em> silhouetted against a figure in a bowler hat seen from behind (ibid., vol. 3, 1998, p. 258, no. 837, ill.). Magritte's approach in these pictures resembled what he referred to as \"Objective stimulus,'' a term he applied to those instances in which he replaced an object familiar to a particular context with one related to it but out of place, as he did in his 1933 painting <em>Elective Affinities</em> of a huge egg in a birdcage (Paris, E. Perier; Sarah Whitfield, <em>Magritte</em>, London, The Hayward Gallery, 1992, exh. cat., no. 60, ill., n. pag.). As he explained to Rapin, <em>The Place in the Sun</em> is if you like an 'Objective stimulus' with the difference that the image which comes 'on' another has a still greater charge of strangeness (ibid., vol. 3, 1993, p. 253). In a subsequent letter to Dors and Rapin, Magritte wrote of <em>The Sixteenth of September</em>, \"I have continued with my 'Places in the Sun' but by now the title is no longer suitable for a big tree in the evening with a crescent moon above it!\" (ibid., vol. 3, 1993, p. 254). The object that would have been hidden (crescent moon, sun) is now visible, hiding part of the object that would have hidden it. </p>\n <p>These works are striking examples of Magritte's interest in the categories of the visible and the invisible. In a letter to Andr\u00e9 Bosmans of September 25, 1964, Magritte explained:</p>\n <p>\n<em>With regard to \"the invisible,\" I understand that which is not visible, for example; heat, weight, pleasure, etc. There is the</em> visible that is seen: <em>the apple on the face in</em> The Great War, <em>and the</em> visible that is hidden: <em>the face hidden by the visible apple. In</em> The Banquet <em>the sun hidden by the curtain of trees is, itself, visible</em> (Ren\u00e9 Magritte, <em>Lettres \u00e0 Andr\u00e9 Bosmans, 1958-1967</em>, ed. by Francine Perceval, Brussels, 1990, p. 383).\n</p>\n<p>According to the above criteria, the sun hidden by trees is an example of the \"visible that is hidden.\" In <em>the Banquet</em> series, Magritte carried the implications of these reflections one step further: he actually rendered the sun visible by creating a visual conundrum, in which the sun is not displaced from its customary context, but rendered strange. </p>\n <p>At this time Magritte seems to have been interested, moreover, in the varying quality of light at different times of day. Of the second version of <em>The Sixteenth of September</em> (1956, Antwerp, Koninklijk Museum voor Schone Kunsten; ibid., vol. 3, 1993, p. 257, no. 836, ill.), he wrote to Dors and Rapin on August 6, 1956: \"I have just painted the moon on a tree in the gray-blue colors of evening\" (ibid.). In the Bergman version of <em>The Banquet,</em> the strong red glow of the setting sun is framed by the darkening landscape, a naturalistic effect that further dramatizes the \"charge of strangeness\" (Magritte, quoted in ibid., vol. 3, 1993, p. 253). </p>\n <p>The Bergman painting also has a strong formal quality, with the sun as a pure circle in the center, balanced by the strong architectural horizontal of the balustrade. In this respect, the picture recalls Max Ernst's Forest series of the late 1920s (<em>Ernst Katalog</em>, vol. 3, pp. 180-209, nos. 1140-96, ills.), where the circular forms of sun or moon work pictorially in both an abstract and figurative sense. </p>\n<p>\u2013Entry, Dawn Ades, <em>Surrealist Art: The Lindy and Edwin Bergman Collection at the Art Institute of Chicago</em> (Chicago: Art Institute of Chicago, 1997), pp. 172\u201374, cat. 86.</p>\n",
+                "dimensions": "97.3 \u00d7 130.3 cm (38 1/4 \u00d7 51 1/4 in.)",
+                "medium": "Oil on canvas"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/8980/landscape-with-two-poplars",
+            "raw_file": "Vasily Kandinsky - Landscape with Two Poplars.jpg",
+            "ready_file": "Vasily Kandinsky - Landscape with Two Poplars_scaled.jpg",
+            "raw_file_width": 2877,
+            "raw_file_height": 2250,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Landscape with Two Poplars",
+                "date_created": "1912",
+                "artist_details": "Vasily Kandinsky\nBorn Moscow (formerly Russian Empire, now Russia), 1866; died Neuilly-sur-Seine, France, 1944",
+                "description": null,
+                "dimensions": "78.8 \u00d7 100.4 cm (31 \u00d7 39 1/2 in.)",
+                "medium": "Oil on canvas"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/21720/cranes-on-snow-covered-pine",
+            "raw_file": "Katsushika Hokusai - Cranes on snow-covered pine.jpg",
+            "ready_file": "Katsushika Hokusai - Cranes on snow-covered pine_scaled.jpg",
+            "raw_file_width": 1379,
+            "raw_file_height": 3000,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Cranes on snow-covered pine",
+                "date_created": "c. 1834",
+                "artist_details": "Katsushika Hokusai \u845b\u98fe \u5317\u658e\nJapanese, 1760-1849",
+                "description": null,
+                "dimensions": "52.4 \u00d7 23.5 cm (20 5/8 \u00d7 9 1/4 in.)",
+                "medium": "Color woodblock print; vertical nagaban"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/118981/corpse-and-mirror-ii",
+            "raw_file": "Jasper Johns - Corpse and Mirror II.jpg",
+            "ready_file": "Jasper Johns - Corpse and Mirror II_scaled.jpg",
+            "raw_file_width": 2962,
+            "raw_file_height": 2250,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Corpse and Mirror II",
+                "date_created": "1974/75",
+                "artist_details": "Jasper Johns\nAmerican, born 1930",
+                "description": "<p>In his work from 1972 to 1983, Jasper Johns used a distinct arrangement of crosshatched marks, traditionally considered a graphic method of adding depth and volume to an image or conveying the illusion of light in space. Johns first glimpsed this pattern on a passing car, recalling: \u201cI only saw it for a second, but knew immediately that I was going to use it. It had all the qualities that interest me\u2014literalness, repetitiveness, an obsessive quality, order with dumbness, and the possibility of a complete lack of meaning.\u201d Emphasizing the flatness of the painting, Johns\u2019s cross-hatching is gestural without being emotive; in this sense, the technique extends his larger critique of overtly expressionist models of painting. Johns forged a new model of painterly abstraction, using a schema that is repeatable and ordered but not strictly geometric or reductive.</p>\n",
+                "dimensions": "Including frame: 146.4 \u00d7 191.1 cm (57 11/16 \u00d7 75 1/4 in.); 146.4 \u00d7 191.2 cm (57 5/8 \u00d7 75 1/4 in.)",
+                "medium": "Oil and sand on four joined canvases, with artist's painted frame"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/82410/untitled-painting",
+            "raw_file": "Mark Rothko - Untitled Painting.jpg",
+            "ready_file": "Mark Rothko - Untitled Painting_scaled.jpg",
+            "raw_file_width": 5092,
+            "raw_file_height": 4533,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Untitled (Painting)",
+                "date_created": "1953/54",
+                "artist_details": "Mark Rothko (Marcus Rothkowitz)\nAmerican, born Russia (Latvia), 1903\u20131970",
+                "description": "<p>Known for an impassioned form of painting predicated on the poetics of color, Mark Rothko was one of the leading proponents of color-field painting, a type of nongestural Abstract Expressionism that entailed large canvases distinguished by monumental expanses of form and tone. The canvas of <em>Untitled (Painting)</em> burns with subtle variations of orange and yellow hues. The painting follows the characteristic format of Rothko\u2019s mature work, according to which stacked rectangles of color appear to float within the boundaries of the canvas. By directly staining the fabric of the canvas with many thin washes of pigment and by paying particular attention to the edges where the fields interact, he achieved the effect of light radiating from the image itself. This technique suited his metaphysical aims: to offer painting as a doorway into purely spiritual realms, making it as immaterial and evocative as music, and to communicate directly the most essential, rawest forms of human emotion. Rothko described his art as the \u201celimination of all obstacles between the painter and the idea, between the idea and the observer.\u201d In place of overt symbolism, he used color, overwhelming scale, and surface luminosity to elicit an emotive, profound response from the viewer.</p>\n",
+                "dimensions": "Unframed: 265.1 \u00d7 298.1 cm (104 3/8 \u00d7 117 3/8 in.); 265.2 \u00d7 298.2 cm (104 3/8 \u00d7 117 3/8 in.)",
+                "medium": "Oil on canvas"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/883/wounded-lioness",
+            "raw_file": "Pierre Andrieu - Wounded Lioness.jpg",
+            "ready_file": "Pierre Andrieu - Wounded Lioness_scaled.jpg",
+            "raw_file_width": 3000,
+            "raw_file_height": 1791,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Wounded Lioness",
+                "date_created": "1840/50",
+                "artist_details": "Pierre Andrieu (French, 1821-1892)",
+                "description": null,
+                "dimensions": "33.4 \u00d7 56.3 cm (13 1/8 \u00d7 22 1/8 in.); Framed: 62.3 \u00d7 84.2 cm (24 1/2 \u00d7 33 1/8 in.)",
+                "medium": "Oil on canvas"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/81557/seascape",
+            "raw_file": "Pierre-Auguste Renoir - Seascape.jpg",
+            "ready_file": "Pierre-Auguste Renoir - Seascape_scaled.jpg",
+            "raw_file_width": 2855,
+            "raw_file_height": 2250,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Seascape",
+                "date_created": "1879",
+                "artist_details": "Pierre-Auguste Renoir\nFrench, 1841-1919",
+                "description": null,
+                "dimensions": "72.6 \u00d7 91.6 cm (28 1/2 \u00d7 36 in.)",
+                "medium": "Oil on canvas"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/73669/untitled-desert-landscape",
+            "raw_file": "Salvador Dal\u00ed - Untitled Desert Landscape.jpg",
+            "ready_file": "Salvador Dal\u00ed - Untitled Desert Landscape_scaled.jpg",
+            "raw_file_width": 5534,
+            "raw_file_height": 7120,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Untitled (Desert Landscape)",
+                "date_created": "1934",
+                "artist_details": "Salvador Dal\u00ed\nSpanish, 1904\u20131989",
+                "description": null,
+                "dimensions": "18.1 \u00d7 14.1 cm (7 1/8 \u00d7 5 7/16 in.)",
+                "medium": "Oil on panel"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/8987/painting-with-green-center",
+            "raw_file": "Vasily Kandinsky - Painting with Green Center.jpg",
+            "ready_file": "Vasily Kandinsky - Painting with Green Center_scaled.jpg",
+            "raw_file_width": 2417,
+            "raw_file_height": 2250,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Painting with Green Center",
+                "date_created": "1913",
+                "artist_details": "Vasily Kandinsky\nBorn Moscow (formerly Russian Empire, now Russia), 1866; died Neuilly-sur-Seine, France, 1944",
+                "description": null,
+                "dimensions": "108.9 \u00d7 118.4 cm (43 1/4 \u00d7 47 1/2 in.)",
+                "medium": "Oil on canvas"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/9090/jar-in-the-form-of-a-phallus",
+            "raw_file": "Moche - Jar in the Form of a Phallus.jpg",
+            "ready_file": "Moche - Jar in the Form of a Phallus_scaled.jpg",
+            "raw_file_width": 4044,
+            "raw_file_height": 5055,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Jar in the Form of a Phallus",
+                "date_created": "100 BCE\u2013500 CE",
+                "artist_details": "Moche\nNorth coast, Peru",
+                "description": null,
+                "dimensions": "H.: 22.1 cm (8 11/16 in.)",
+                "medium": "Ceramic and pigment"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/60510/hogs-killing-a-snake",
+            "raw_file": "John Steuart Curry - Hogs Killing a Snake.jpg",
+            "ready_file": "John Steuart Curry - Hogs Killing a Snake_scaled.jpg",
+            "raw_file_width": 5665,
+            "raw_file_height": 4453,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Hogs Killing a Snake",
+                "date_created": "c. 1930",
+                "artist_details": "John Steuart Curry\nAmerican, 1897\u20131946",
+                "description": "<p>Along with Grant Wood and Thomas Hart Benton, John Steuart Curry attained significant fame as one of the three most important Regionalist painters of the 1930s. In 1941 Wood wrote about Curry: \u201cIt was action he loved most to interpret: the lunge through space, the split second before the kill, the suspended moment before the storm strikes.\u201d <em>Hogs Killing a Snake</em> reveals his fascination with the violence of nature and the struggle for survival. Curry deliberately constructed the dynamic composition to heighten the vitality of his subject; the hogs converge from all angles upon the writhing snake, giving a sense of violent motion. Curry accentuated the vigor of the composition with his painting technique, using short, choppy brushstrokes and even scratching on the surface of the paint to suggest the bristling hair on the hogs\u2019 backs. Although the subject was ostensibly drawn from a childhood experience, the painting transcends mere realism to become nearly epic.</p>\n",
+                "dimensions": "76.5 \u00d7 97.3 cm (30 1/8 \u00d7 38 1/4 in.)",
+                "medium": "Oil on canvas"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/185779/train-landscape",
+            "raw_file": "Ellsworth Kelly - Train Landscape.jpg",
+            "ready_file": "Ellsworth Kelly - Train Landscape_scaled.jpg",
+            "raw_file_width": 5482,
+            "raw_file_height": 5477,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Train Landscape",
+                "date_created": "1953",
+                "artist_details": "Ellsworth Kelly\nAmerican, 1923-2015",
+                "description": "<p>Ellsworth Kelly explored the fundamentals of color, line, and form, yet the basis of his abstraction always lay in his observations of natural and built environments. <em>Train Landscape</em>, which Kelly made during his formative years in Paris (from 1948 to 1954), draws its vivid colors from nature. The title refers to fields of lettuce, spinach, and mustard that the young artist viewed from a train while speeding through the French countryside\u2014this perceptual blur here pushed to the extreme of a flat, pristine monochrome. The multipanel composition emphasizes the status of the painting as an object on the wall, with a shape, density, and heft of its own.</p>\n",
+                "dimensions": "111.8 \u00d7 111.8 cm (44 \u00d7 44 in.)",
+                "medium": "Oil on canvas; three joined panels"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/14689/eggplant-and-plums",
+            "raw_file": "Charles Demuth - Eggplant and Plums.jpg",
+            "ready_file": "Charles Demuth - Eggplant and Plums_scaled.jpg",
+            "raw_file_width": 5014,
+            "raw_file_height": 3323,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Eggplant and Plums",
+                "date_created": "1921/33",
+                "artist_details": "Charles Demuth\nAmerican, 1883-1935",
+                "description": null,
+                "dimensions": "30.4 \u00d7 45.9 cm (12 \u00d7 18 1/8 in.)",
+                "medium": "Watercolor with graphite on ivory wove paper"
             }
         }
     ]

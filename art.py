@@ -7,6 +7,7 @@ import json
 from image_utils import ResizeOptions, ImageSources
 from image_utils import resize_file_with_matte, image_source, get_image, get_image_dimensions
 from metadata import get_google_metadata, get_file_metadata, get_artic_metadata
+from art_label import ArtLabel
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
@@ -34,6 +35,7 @@ class ArtFile:
         raw_file=None,
         raw_file_width=None,
         raw_file_height=None,
+        label_file=None,
         ready_file=None,
         resize_option=None,
         metadata=None,
@@ -41,6 +43,7 @@ class ArtFile:
         self.url: str = url
         self.raw_file: str = raw_file
         self.ready_file: str = ready_file
+        self.label_file: str = label_file
         self.resize_option = resize_option
         self.metadata = metadata
         self.raw_file_width: int = raw_file_width
@@ -54,6 +57,8 @@ class ArtFile:
             me["raw_file"] = self.raw_file
         if self.ready_file is not None:
             me["ready_file"] = self.ready_file
+        if self.label_file is not None:
+            me["label_file"] = self.label_file
         if self.raw_file_width is not None:
             me["raw_file_width"] = self.raw_file_width
         if self.raw_file_height is not None:
@@ -69,6 +74,7 @@ class ArtFile:
         url = data.get("url")
         raw_file = data.get("raw_file", None)
         ready_file = data.get("ready_file", None)
+        label_file = data.get("label_file", None)
         raw_file_width = data.get("raw_file_width", None)
         raw_file_height = data.get("raw_file_height", None)
         resize_option = data.get("resize_option", default_resize)
@@ -77,17 +83,20 @@ class ArtFile:
             url=url,
             raw_file=raw_file,
             ready_file=ready_file,
+            label_file=label_file,
             raw_file_width=raw_file_width,
             raw_file_height=raw_file_height,
             resize_option=resize_option,
             metadata=metadata,
         )
 
-    def get_ready_fullpath(self):
+    def get_fullpath(self, folder: str, options: dict):
         # Get the filename of the ready file
+        # build the suffix from the dict, e.g. {"r": "cropped"} -> "_rcropped.jpg" or {"w": "1920", "h": "1080"} -> "_w1920_h1080.jpg"
+        suffix = "".join([f"_{key}{value}" for key, value in options.items()])
         ready_fullpath = os.path.join(
-            config.art_folder_ready,
-            os.path.splitext(os.path.basename(self.raw_file))[0] + "_" + self.resize_option + ".jpg",
+            folder,
+            os.path.splitext(os.path.basename(self.raw_file))[0] + suffix + ".jpg",
         )
         return ready_fullpath
 
@@ -127,8 +136,7 @@ class ArtFile:
         else:
             logging.debug(f"Using dimensions {self.raw_file_width}x{self.raw_file_height} for {self.raw_fullpath}")
 
-        self.ready_fullpath = self.get_ready_fullpath()
-
+        self.ready_fullpath = self.get_fullpath(config.art_folder_ready, options={"r": self.resize_option})
         if not os.path.exists(self.ready_fullpath) or always_generate:
             logging.debug(f"Generating ready file at {self.ready_fullpath}")
             description_box = resize_file_with_matte(self.raw_fullpath, self.ready_fullpath, 3840, 2160, self.resize_option)
@@ -138,6 +146,24 @@ class ArtFile:
         # print(f"Processed {self.url}, metadata is {self.metadata}")
         if (self.metadata is None) or always_metadata:
             await self.get_metadata()
+
+        self.label_fullpath = self.get_fullpath(config.art_folder_label, {"w": config.label_width, "h": config.label_height})
+        if not os.path.exists(self.label_fullpath) or always_generate:
+            logging.debug(f"Generating label file at {self.label_fullpath}")
+            label = ArtLabel(
+                width=config.label_width,
+                height=config.label_height,
+                greyscale_bits=8,
+                artist_name=self.metadata.get("artist_details", ""),
+                artist_lifespan=self.metadata.get("artist_lifespan", ""),
+                artwork_title=self.metadata.get("title", ""),
+                creation_date=self.metadata.get("creation_date", ""),
+                medium=self.metadata.get("medium", ""),
+                description=self.metadata.get("description", ""),
+            )
+            label_image = label.create_label()
+            # Save the image to the fullpath
+            label_image.save(self.label_fullpath)
 
     async def get_metadata(self):
         match image_source(self.url):
