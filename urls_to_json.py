@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 
 
 def parse_arguments():
@@ -38,6 +39,7 @@ def add_urls_to_json(output_file, urls):
         data = json.load(file)
 
     existing_urls = [art["url"] for art in data["art"]]
+
     new_urls = [{"url": url} for url in urls if url not in existing_urls]
     data["art"].extend(new_urls)
     with open(output_file, "w") as file:
@@ -53,7 +55,7 @@ if __name__ == "__main__":
         input_filename = args.input_file.split(".")[0]  # Strip the file extension
         args.output_file = f"{input_filename}.json"
 
-    if args.overwrite:
+    if args.overwrite or not os.path.exists(args.output_file):
         write_urls_to_json(args.output_file, urls)
     else:
         add_urls_to_json(args.output_file, urls)

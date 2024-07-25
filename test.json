@@ -1,0 +1,55 @@
+{
+    "name": "placeholder",
+    "default_resize": "cropped",
+    "art": [
+        {
+            "url": "https://artsandculture.google.com/asset/ph-129-clyfford-still/FwHVp26mrlpKfQ",
+            "raw_file": "Still, Clyfford; PH-129; 1949_0001.jpg",
+            "ready_file": "Still, Clyfford; PH-129; 1949_0001_rscaled.jpg",
+            "raw_file_width": 3514,
+            "raw_file_height": 4135,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "PH-129",
+                "creator": "Clyfford Still",
+                "creator_lived": "1904 - 1980",
+                "creator_nationality": "American",
+                "date_created": "1949",
+                "dimensions": "h53 x w44.5 in",
+                "rights": "\u00a9 City and county of Denver",
+                "medium": "Oil on canvas"
+            }
+        },
+        {
+            "url": "https://artsandculture.google.com/asset/ion-11-victor-vasarely/zAGDIJRNphFaPw",
+            "raw_file": "Vasarely, Victor; ION 11; 1967_1969_0001.jpg",
+            "ready_file": "Vasarely, Victor; ION 11; 1967_1969_0001_rscaled.jpg",
+            "raw_file_width": 1295,
+            "raw_file_height": 1294,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "ION 11",
+                "creator": "Victor Vasarely",
+                "date_created": "1967/1969",
+                "dimensions": "68 x 68 cm",
+                "medium": "serigraphy"
+            }
+        },
+        {
+            "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
+            "raw_file": "Mark Rothko - Untitled Purple White and Red.jpg",
+            "ready_file": "Mark Rothko - Untitled Purple White and Red_rscaled.jpg",
+            "raw_file_width": 2370,
+            "raw_file_height": 2250,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Untitled (Purple, White, and Red)",
+                "date_created": "1953",
+                "artist_details": "Mark Rothko (Marcus Rothkowitz)\nAmerican, born Russia (Latvia), 1903\u20131970",
+                "description": "<p><em>Untitled (Purple, White, and Red)</em> follows the characteristic format of Mark Rothko\u2019s mature work, in which stacked rectangles of color appear to float within the boundaries of the canvas. By directly staining the canvas with many thin washes of pigment and paying particular attention to the edges where the fields interact, he achieved the effect of light radiating from the image itself. This technique suited Rothko\u2019s metaphysical aims: to offer painting as a doorway into purely spiritual realms, making it as immaterial and evocative as music, and to directly communicate the most essential, raw forms of human emotion.</p>\n",
+                "dimensions": "Unframed: 197.5 \u00d7 207.7 cm (77 13/16 \u00d7 81 13/16 in.); 197.5 \u00d7 207.7 cm (77 3/4 \u00d7 81 3/4 in.)",
+                "medium": "Oil on canvas"
+            }
+        }
+    ]
+}

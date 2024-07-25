@@ -8,6 +8,7 @@ import numpy as np
 import os
 import subprocess
 from skimage.transform import resize
+from scipy.spatial.distance import pdist, squareform
 import requests
 import re
 from source_utils import artic_metadata_for_url
@@ -45,6 +46,23 @@ def image_source(url):
         return ImageSources.HTTP
 
 
+def pairwise_distances(palette):
+    # Calculate pairwise Euclidean distances between the colors in the palette
+    distances = pdist(palette, metric="euclidean")
+
+    # Convert the distances to a square matrix form
+    distance_matrix = squareform(distances)
+
+    # Calculate the average distance
+    average_distance = np.mean(distances)
+
+    # Calculate the standard deviation of the distances
+    std_distance = np.std(distances)
+
+    print("Average Distance: ", average_distance)
+    print("Standard Deviation of Distances: ", std_distance)
+
+
 def get_average_color(image: Image):
     # skimage = io.imread(image)[:, :, :-1]
 
@@ -52,28 +70,90 @@ def get_average_color(image: Image):
     max_size = 768
     np_image = np.array(image)
     working_image = resize(np_image, (max_size, max_size), anti_aliasing=False)
-    # print(f"Image shape: {my_image.shape}")
-    # if my_image.shape[0] > max_size or my_image.shape[1] > max_size:
-    #     # If X is larger than Y, use max_size/X, otherwise use max_size/Y
-    #     ratio = max_size / max(my_image.shape[0], my_image.shape[1])
-
-    #     logging.info(f"Resizing image with ratio {ratio} to get average color")
-    #     my_image = my_image.resize((int(my_image.shape[1] * ratio), int(my_image.shape[0] * ratio)))
-    #     print(f"Image shape: {my_image.shape}")
 
     my_image = np.array(working_image)
     average = my_image.mean(axis=0).mean(axis=0)
-    pixels = np.float32(my_image.reshape(-1, 3))
 
+    return average
+
+
+def get_dominant_colors_five(image: Image):
+    # We don't need a giant image to get average color. If it is larger than 2048x2048, resize it. But do not overwrite the original image!
+    max_size = 768
+    np_image = np.array(image)
+    working_image = resize(np_image, (max_size, max_size), anti_aliasing=False)
+
+    pixels = np.float32(working_image.reshape(-1, 3))
     n_colors = 5
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 200, 0.1)
     flags = cv2.KMEANS_RANDOM_CENTERS
-
     _, labels, palette = cv2.kmeans(pixels, n_colors, None, criteria, 10, flags)
     _, counts = np.unique(labels, return_counts=True)
-    dominant = palette[np.argmax(counts)]
+    # pairwise_distances(palette)
+    # print(f"Dominant distance: {dom_distance}")
 
-    return average, dominant
+    dominant = palette[np.argmax(counts)]
+    print(f"dominant: {dominant}")
+    return dominant
+
+
+import numpy as np
+import cv2
+
+
+def get_top_n_colors(image, coverage_threshold=0.95):
+    # We don't need a giant image to get average color. If it is larger than 2048x2048, resize it. But do not overwrite the original image!
+    max_size = 512
+    max_distance = 0.1
+    np_image = np.array(image)
+    working_image = resize(np_image, (max_size, max_size), anti_aliasing=False)
+
+    # Reshape the image to a 2D array of pixels
+    pixels = np.float32(working_image.reshape(-1, 3))
+
+    # Define criteria for k-means clustering
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 200, 0.1)
+    flags = cv2.KMEANS_RANDOM_CENTERS
+
+    # Start with an initial guess for the number of clusters
+    initial_n_colors = 2
+    max_colors = 20  # Set a reasonable maximum to avoid infinite loops
+    for n_colors in range(initial_n_colors, max_colors + 1):
+        # Apply k-means clustering
+        _, labels, palette = cv2.kmeans(pixels, n_colors, None, criteria, 10, flags)
+
+        # Generate the intermediate image
+        intermediate_image = palette[labels.flatten()]
+        intermediate_image = intermediate_image.reshape(working_image.shape)
+
+        # Calculate the absolute difference between each pixel and the intermediate image
+        diff = np.abs(working_image.astype(np.float32) - intermediate_image.astype(np.float32))
+
+        # Calculate the distance (Euclidean norm) for each pixel
+        distances = np.linalg.norm(diff, axis=2)
+        # print(f"average distance for {n_colors} colors: {np.mean(distances)}")
+
+        # Determine the number of pixels within the max_distance from any cluster center
+        within_threshold = distances <= max_distance
+        coverage = np.sum(within_threshold) / pixels.shape[0]
+
+        print(f"Coverage for {n_colors} colors: {coverage})")
+        # Check if the coverage exceeds the threshold
+        if coverage >= coverage_threshold:
+            break
+
+    # Flatten labels for bincount
+    flat_labels = labels.flatten()
+
+    # Determine the number of colors required to meet the coverage threshold
+    top_n = np.argmax(np.cumsum(np.bincount(flat_labels)) / pixels.shape[0] >= coverage_threshold) + 1
+    top_colors = palette[:top_n]
+    top_color_counts = np.bincount(flat_labels)[:top_n]
+
+    # Calculate the percentage of each top color
+    top_color_percentages = top_color_counts / pixels.shape[0]
+
+    return top_colors, top_color_percentages
 
 
 def resize_image_with_matte(image: Image, resize_option, width, height) -> Image:
@@ -85,13 +165,10 @@ def resize_image_with_matte(image: Image, resize_option, width, height) -> Image
 
     dominant_color = (0, 0, 0)
     if resize_option == ResizeOptions.SCALE:
-        average, dominant = get_average_color(image)
-        print(f"Average color: {average}, dominant color: {dominant}")
-        # dominant_color = (
-        #     int((dominant[0] + 127) / 2),
-        #     int((dominant[1] + 127) / 2),
-        #     int((dominant[2] + 127) / 2),
-        # )
+        dominant = get_dominant_colors_five(image)
+        all_dominants = get_top_n_colors(image)
+        print(f"dominant color: {dominant}")
+
         mutiplier: float = 0.66
         dominant_color = (
             int((dominant[0] * 256) * mutiplier),
@@ -101,19 +178,17 @@ def resize_image_with_matte(image: Image, resize_option, width, height) -> Image
     canvas = Image.new("RGB", (width, height), dominant_color)
     description_box = None
     if resize_option == ResizeOptions.SCALE:
-        # determine whether to scale x or y to width x height
+        # Determine whether to scale x or y to width x height
         if (x / width) > (y / height):
-            x = width
-            y = int(y * (width / x))
-            image = image.resize((x, y), Image.Resampling.LANCZOS)
-            # Get the bottom area for descriptions
-            description_box = (0, y, width, height)
+            new_y = int(y * (width / x))
+            new_x = width
+            description_box = (0, y, width, height)  # Get the bottom area for descriptions
         else:
-            x = int(x * (height / y))
-            y = height
-            image = image.resize((x, y), Image.Resampling.LANCZOS)
-            # Get the right area for descriptions
-            description_box = (x, 0, width, height)
+            new_x = int(x * (height / y))
+            new_y = height
+            description_box = (x, 0, width, height)  # Get the right area for descriptions
+
+        image = image.resize((new_x, new_y), Image.Resampling.LANCZOS)
 
         # paste image into center of canvas
         paste_box = (int((width - x) / 2), int((height - y) / 2))

@@ -5,10 +5,10 @@
         {
             "url": "https://www.artic.edu/artworks/64276/and-the-home-of-the-brave",
             "raw_file": "Charles Demuth - ...And the Home of the Brave.jpg",
-            "ready_file": "Charles Demuth - ...And the Home of the Brave_rcropped.jpg",
+            "ready_file": "Charles Demuth - ...And the Home of the Brave_rscaled.jpg",
             "raw_file_width": 4417,
             "raw_file_height": 5492,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "...And the Home of the Brave",
                 "date_created": "1931",
@@ -85,10 +85,10 @@
         {
             "url": "https://www.artic.edu/artworks/105203/triptych-window-from-the-coonley-playhouse-riverside-illinois",
             "raw_file": "Frank Lloyd Wright - Triptych Window from the Coonley Playhouse Riverside Illinois.jpg",
-            "ready_file": "Frank Lloyd Wright - Triptych Window from the Coonley Playhouse Riverside Illinois_rcropped.jpg",
+            "ready_file": "Frank Lloyd Wright - Triptych Window from the Coonley Playhouse Riverside Illinois_rscaled.jpg",
             "raw_file_width": 6396,
             "raw_file_height": 3904,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Triptych Window from the Coonley Playhouse, Riverside, Illinois",
                 "date_created": "1912 (removed 1967)",
@@ -149,10 +149,10 @@
         {
             "url": "https://www.artic.edu/artworks/157156/red-yellow-blue-white-and-black-ii",
             "raw_file": "Ellsworth Kelly - Red Yellow Blue White and Black II.jpg",
-            "ready_file": "Ellsworth Kelly - Red Yellow Blue White and Black II_rcropped.jpg",
+            "ready_file": "Ellsworth Kelly - Red Yellow Blue White and Black II_rscaled.jpg",
             "raw_file_width": 5945,
             "raw_file_height": 1707,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Red Yellow Blue White and Black II",
                 "date_created": "1953",
