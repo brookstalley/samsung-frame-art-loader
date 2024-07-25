@@ -104,7 +104,7 @@ import numpy as np
 import cv2
 
 
-def get_top_n_colors(image, coverage_threshold=0.9, tmp_name: str = None):
+def get_top_n_colors(image, coverage_threshold=0.8, tmp_name: str = None):
     # We don't need a giant image to get average color. If it is larger than 2048x2048, resize it. But do not overwrite the original image!
     max_size = 512
     max_distance = 15
