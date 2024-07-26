@@ -5,7 +5,6 @@
         {
             "url": "https://www.artic.edu/artworks/64276/and-the-home-of-the-brave",
             "raw_file": "Charles Demuth - ...And the Home of the Brave.jpg",
-            "ready_file": "Charles Demuth - ...And the Home of the Brave_rscaled.jpg",
             "raw_file_width": 4417,
             "raw_file_height": 5492,
             "resize_option": "scaled",
@@ -16,15 +15,15 @@
                 "description": "<p>Charles Demuth here portrayed a cigar factory using a sharply linear, planar style inspired by streamlined machinery. The building was part of the industrial landscape in his hometown of Lancaster, Pennsylvania, which Demuth began depicting with increasing monumentality in the last years of his life. Although he presented the factory with no reference to the potentially detrimental effects of industrialization, the painting expresses some irony or ambivalence. Demuth drew the title from the last line of \u201cThe Star-Spangled Banner,\u201d which was adopted as the United States national anthem the year he painted this work, thus implying that for many workers, the factory was the new \u201chome of the brave.\u201d</p>\n",
                 "dimensions": "74.8 \u00d7 59.7 cm (29 1/2 \u00d7 23 1/2 in.)",
                 "medium": "Oil and graphite on fiber board"
-            }
+            },
+            "mat_hexrgb": "#3a3a3c"
         },
         {
             "url": "https://www.artic.edu/artworks/111654/the-policeman",
             "raw_file": "Joan Mir\u00f3 - The Policeman.jpg",
-            "ready_file": "Joan Mir\u00f3 - The Policeman_rcropped.jpg",
             "raw_file_width": 6107,
             "raw_file_height": 7664,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "The Policeman",
                 "date_created": "1925",
@@ -37,10 +36,9 @@
         {
             "url": "https://www.artic.edu/artworks/61428/cow-s-skull-with-calico-roses",
             "raw_file": "Georgia OKeeffe - Cows Skull with Calico Roses.jpg",
-            "ready_file": "Georgia OKeeffe - Cows Skull with Calico Roses_rcropped.jpg",
             "raw_file_width": 4713,
             "raw_file_height": 7085,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Cow's Skull with Calico Roses",
                 "date_created": "1931",
@@ -53,10 +51,9 @@
         {
             "url": "https://www.artic.edu/artworks/100858/sky-above-clouds-iv",
             "raw_file": "Georgia OKeeffe - Sky above Clouds IV.jpg",
-            "ready_file": "Georgia OKeeffe - Sky above Clouds IV_rcropped.jpg",
             "raw_file_width": 4853,
             "raw_file_height": 1604,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Sky above Clouds IV",
                 "date_created": "1965",
@@ -69,7 +66,6 @@
         {
             "url": "https://www.artic.edu/artworks/91194/golden-bird",
             "raw_file": "Constantin Brancusi - Golden Bird.jpg",
-            "ready_file": "Constantin Brancusi - Golden Bird_rscaled.jpg",
             "raw_file_width": 3160,
             "raw_file_height": 4898,
             "resize_option": "scaled",
@@ -80,12 +76,12 @@
                 "description": "<p>Trained in both folk and academic traditions, Constantin Brancusi sought his own path for sculpture around 1907. Breaking with the currents of the time, he adopted direct carving, combined different materials for single works, and simplified form in his search for his subjects\u2019 essential characters. His works have profoundly influenced the development of twentieth-century abstraction.</p>\n<p>More than any other theme, Brancusi\u2019s series <em>Bird</em> summarizes his quest for a self-sufficient form. \u201cAll my life, I have sought to render the essence of flight,\u201d the artist once said. He began the first of twenty-seven <em>Bird</em> sculptures around 1910 and completed the last in the 1940s. He called the earliest variations <em>Maiastra</em>, referring to a bird in Romanian folklore that leads a prince to his princess. In the Art Institute\u2019s <em>Golden Bird</em>, details such as feet, a tail, and an upturned crowing beak are only suggested in an elegant, streamlined silhouette. Br\u00e2ncusi perched this refined shape on a rough-hewn, geometric base, contrasting the disembodied, light-reflective surface with an earthbound mass. The central polyhedron was cut from the middle of a tree trunk, and its circles (indicating the tree\u2019s age) rotate like a sun, as if radiating light over the bird.</p>\n",
                 "dimensions": "217.8 \u00d7 29.9 \u00d7 29.9 cm (86 \u00d7 11 3/4 \u00d7 11 3/4 in.)",
                 "medium": "Bronze, stone, and wood"
-            }
+            },
+            "mat_hexrgb": "#323232"
         },
         {
             "url": "https://www.artic.edu/artworks/105203/triptych-window-from-the-coonley-playhouse-riverside-illinois",
             "raw_file": "Frank Lloyd Wright - Triptych Window from the Coonley Playhouse Riverside Illinois.jpg",
-            "ready_file": "Frank Lloyd Wright - Triptych Window from the Coonley Playhouse Riverside Illinois_rscaled.jpg",
             "raw_file_width": 6396,
             "raw_file_height": 3904,
             "resize_option": "scaled",
@@ -96,12 +92,12 @@
                 "description": "<p>This colorful, whimsical triptych window is from the Avery Coonley Playhouse, a small structure that Frank Lloyd Wright designed as an addition to the Coonleys\u2019 suburban Chicago estate, which he had previously completed in 1908. Louis Sullivan\u2019s foremost student, Wright continued his teacher\u2019s search for an indigenous American architecture. Like Sullivan, Wright drew inspiration from nature and natural forms, and both men were pioneers of the Prairie School of architecture, characterized by low-slung, horizontal lines and rambling, open spaces that reflect the gently rolling landscape of the Midwest. Odes to the middle-class American family at the turn of the century, Wright\u2019s residences are organic, designed not only to adapt to a family\u2019s changing structure but also to contain the sense of a unified and harmonious whole. Every detail of the Coonley complex, like all of Wright\u2019s projects, bore his personal imprint, down to the creation and placement of the furniture and the design of this window. Referencing such Americana as the flag and colored balloons, Wright explored the use of glass both as a transparent screen uniting exterior and interior and as a decorative element, the colors and design of which anticipate the later abstractions of Piet Mondrian.</p>\n",
                 "dimensions": "Center panel: 35 1/4 \u00d7 43 in. (89.5 \u00d7 109.2 cm)\nTwo side panels: 36 \u00d7 7 3/4 in. (91.4 \u00d7 19.7 cm) (each)",
                 "medium": "Clear and colored leaded glass in oak frames"
-            }
+            },
+            "mat_hexrgb": "#2d2d2d"
         },
         {
             "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
             "raw_file": "Mark Rothko - Untitled Purple White and Red.jpg",
-            "ready_file": "Mark Rothko - Untitled Purple White and Red_rscaled.jpg",
             "raw_file_width": 2370,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -112,12 +108,12 @@
                 "description": "<p><em>Untitled (Purple, White, and Red)</em> follows the characteristic format of Mark Rothko\u2019s mature work, in which stacked rectangles of color appear to float within the boundaries of the canvas. By directly staining the canvas with many thin washes of pigment and paying particular attention to the edges where the fields interact, he achieved the effect of light radiating from the image itself. This technique suited Rothko\u2019s metaphysical aims: to offer painting as a doorway into purely spiritual realms, making it as immaterial and evocative as music, and to directly communicate the most essential, raw forms of human emotion.</p>\n",
                 "dimensions": "Unframed: 197.5 \u00d7 207.7 cm (77 13/16 \u00d7 81 13/16 in.); 197.5 \u00d7 207.7 cm (77 3/4 \u00d7 81 3/4 in.)",
                 "medium": "Oil on canvas"
-            }
+            },
+            "mat_hexrgb": "#575757"
         },
         {
             "url": "https://www.artic.edu/artworks/100089/chicago",
             "raw_file": "Harry Callahan - Chicago.jpg",
-            "ready_file": "Harry Callahan - Chicago_rscaled.jpg",
             "raw_file_width": 7101,
             "raw_file_height": 5632,
             "resize_option": "scaled",
@@ -133,7 +129,6 @@
         {
             "url": "https://www.artic.edu/artworks/229351/target",
             "raw_file": "Jasper Johns - Target.jpg",
-            "ready_file": "Jasper Johns - Target_rscaled.jpg",
             "raw_file_width": 5357,
             "raw_file_height": 5332,
             "resize_option": "scaled",
@@ -149,7 +144,6 @@
         {
             "url": "https://www.artic.edu/artworks/157156/red-yellow-blue-white-and-black-ii",
             "raw_file": "Ellsworth Kelly - Red Yellow Blue White and Black II.jpg",
-            "ready_file": "Ellsworth Kelly - Red Yellow Blue White and Black II_rscaled.jpg",
             "raw_file_width": 5945,
             "raw_file_height": 1707,
             "resize_option": "scaled",
@@ -165,10 +159,9 @@
         {
             "url": "https://www.artic.edu/artworks/61608/sunset",
             "raw_file": "Paul Klee - Sunset.jpg",
-            "ready_file": "Paul Klee - Sunset_rcropped.jpg",
             "raw_file_width": 5549,
             "raw_file_height": 3630,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Sunset",
                 "date_created": "1930",
@@ -181,10 +174,9 @@
         {
             "url": "https://www.artic.edu/artworks/65868/silver-sun",
             "raw_file": "Arthur Dove - Silver Sun.jpg",
-            "ready_file": "Arthur Dove - Silver Sun_rcropped.jpg",
             "raw_file_width": 3000,
             "raw_file_height": 2198,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Silver Sun",
                 "date_created": "1929",
@@ -197,7 +189,6 @@
         {
             "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
             "raw_file": "Mark Rothko - Untitled Purple White and Red.jpg",
-            "ready_file": "Mark Rothko - Untitled Purple White and Red_rscaled.jpg",
             "raw_file_width": 2370,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -213,10 +204,9 @@
         {
             "url": "https://www.artic.edu/artworks/159710/la-peche-fishing",
             "raw_file": "Raoul Dufy - La Peche Fishing.jpg",
-            "ready_file": "Raoul Dufy - La Peche Fishing_rcropped.jpg",
             "raw_file_width": 2043,
             "raw_file_height": 2250,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "La Peche\" (Fishing)",
                 "date_created": "c. 1919",
@@ -229,7 +219,6 @@
         {
             "url": "https://artsandculture.google.com/asset/homage-to-the-square-sonorous-josef-albers/YAHHW_KLcb2m2w",
             "raw_file": "Albers, Josef; Homage to the Square, Sonorous; 1958.jpg",
-            "ready_file": "Albers, Josef; Homage to the Square, Sonorous; 1958_rscaled.jpg",
             "raw_file_width": 2488,
             "raw_file_height": 2494,
             "resize_option": "scaled",
@@ -245,7 +234,6 @@
         {
             "url": "https://artsandculture.google.com/asset/full-homage-to-the-square-josef-albers/uwFaRKFNNWjOSg",
             "raw_file": "Albers, Josef; Full (Homage to the Square); 1962.jpg",
-            "ready_file": "Albers, Josef; Full (Homage to the Square); 1962_rscaled.jpg",
             "raw_file_width": 2912,
             "raw_file_height": 3153,
             "resize_option": "scaled",
@@ -261,7 +249,6 @@
         {
             "url": "https://artsandculture.google.com/asset/cat-litter-robert-gober/YQFZtnXTyaYTHg",
             "raw_file": "Cat Litter - Robert Gober.jpg",
-            "ready_file": "Cat Litter - Robert Gober_rscaled.jpg",
             "raw_file_width": 3288,
             "raw_file_height": 4264,
             "resize_option": "scaled",
@@ -279,7 +266,6 @@
         {
             "url": "https://artsandculture.google.com/asset/ph-129-clyfford-still/FwHVp26mrlpKfQ",
             "raw_file": "Still, Clyfford; PH-129; 1949.jpg",
-            "ready_file": "Still, Clyfford; PH-129; 1949_rscaled.jpg",
             "raw_file_width": 3514,
             "raw_file_height": 4135,
             "resize_option": "scaled",
@@ -297,7 +283,6 @@
         {
             "url": "https://artsandculture.google.com/asset/ion-11-victor-vasarely/zAGDIJRNphFaPw",
             "raw_file": "Vasarely, Victor; ION 11; 1967_1969.jpg",
-            "ready_file": "Vasarely, Victor; ION 11; 1967_1969_rscaled.jpg",
             "raw_file_width": 1295,
             "raw_file_height": 1294,
             "resize_option": "scaled",
@@ -312,10 +297,9 @@
         {
             "url": "https://artsandculture.google.com/asset/natureza-morta-com-bromlia-amarela/SQElSKW2Ur1OBg",
             "raw_file": "Natureza-morta com brom\u00e9lia amarela - Ana Elisa Egreja.jpg",
-            "ready_file": "Natureza-morta com brom\u00e9lia amarela - Ana Elisa Egreja_rcropped.jpg",
             "raw_file_width": 5204,
             "raw_file_height": 6880,
-            "resize_option": "cropped",
+            "resize_option": "scaled",
             "metadata": {
                 "title": "Natureza-morta com brom\u00e9lia amarela",
                 "creator": "Ana Elisa Egreja",
@@ -327,7 +311,6 @@
         {
             "url": "https://artsandculture.google.com/asset/portrait-of-pablo-picasso-juan-gris-spanish-1887\\u20131927/RgGPipJ4FxSBiw",
             "raw_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912.jpg",
-            "ready_file": "Gris, Juan; Portrait of Pablo Picasso; January-February 1912_rscaled.jpg",
             "raw_file_width": 6220,
             "raw_file_height": 7912,
             "resize_option": "scaled",
@@ -343,7 +326,6 @@
         {
             "url": "https://www.artic.edu/artworks/118718/the-banquet",
             "raw_file": "Ren\u00e9 Magritte - The Banquet.jpg",
-            "ready_file": "Ren\u00e9 Magritte - The Banquet_rscaled.jpg",
             "raw_file_width": 4391,
             "raw_file_height": 3275,
             "resize_option": "scaled",
@@ -359,7 +341,6 @@
         {
             "url": "https://www.artic.edu/artworks/8980/landscape-with-two-poplars",
             "raw_file": "Vasily Kandinsky - Landscape with Two Poplars.jpg",
-            "ready_file": "Vasily Kandinsky - Landscape with Two Poplars_rscaled.jpg",
             "raw_file_width": 2877,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -375,7 +356,6 @@
         {
             "url": "https://www.artic.edu/artworks/21720/cranes-on-snow-covered-pine",
             "raw_file": "Katsushika Hokusai - Cranes on snow-covered pine.jpg",
-            "ready_file": "Katsushika Hokusai - Cranes on snow-covered pine_rscaled.jpg",
             "raw_file_width": 1379,
             "raw_file_height": 3000,
             "resize_option": "scaled",
@@ -391,7 +371,6 @@
         {
             "url": "https://www.artic.edu/artworks/118981/corpse-and-mirror-ii",
             "raw_file": "Jasper Johns - Corpse and Mirror II.jpg",
-            "ready_file": "Jasper Johns - Corpse and Mirror II_rscaled.jpg",
             "raw_file_width": 2962,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -407,7 +386,6 @@
         {
             "url": "https://www.artic.edu/artworks/82410/untitled-painting",
             "raw_file": "Mark Rothko - Untitled Painting.jpg",
-            "ready_file": "Mark Rothko - Untitled Painting_rscaled.jpg",
             "raw_file_width": 5092,
             "raw_file_height": 4533,
             "resize_option": "scaled",
@@ -423,7 +401,6 @@
         {
             "url": "https://www.artic.edu/artworks/883/wounded-lioness",
             "raw_file": "Pierre Andrieu - Wounded Lioness.jpg",
-            "ready_file": "Pierre Andrieu - Wounded Lioness_rscaled.jpg",
             "raw_file_width": 3000,
             "raw_file_height": 1791,
             "resize_option": "scaled",
@@ -439,7 +416,6 @@
         {
             "url": "https://www.artic.edu/artworks/81557/seascape",
             "raw_file": "Pierre-Auguste Renoir - Seascape.jpg",
-            "ready_file": "Pierre-Auguste Renoir - Seascape_rscaled.jpg",
             "raw_file_width": 2855,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -455,7 +431,6 @@
         {
             "url": "https://www.artic.edu/artworks/73669/untitled-desert-landscape",
             "raw_file": "Salvador Dal\u00ed - Untitled Desert Landscape.jpg",
-            "ready_file": "Salvador Dal\u00ed - Untitled Desert Landscape_rscaled.jpg",
             "raw_file_width": 5534,
             "raw_file_height": 7120,
             "resize_option": "scaled",
@@ -471,7 +446,6 @@
         {
             "url": "https://www.artic.edu/artworks/8987/painting-with-green-center",
             "raw_file": "Vasily Kandinsky - Painting with Green Center.jpg",
-            "ready_file": "Vasily Kandinsky - Painting with Green Center_rscaled.jpg",
             "raw_file_width": 2417,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -487,7 +461,6 @@
         {
             "url": "https://www.artic.edu/artworks/9090/jar-in-the-form-of-a-phallus",
             "raw_file": "Moche - Jar in the Form of a Phallus.jpg",
-            "ready_file": "Moche - Jar in the Form of a Phallus_rscaled.jpg",
             "raw_file_width": 4044,
             "raw_file_height": 5055,
             "resize_option": "scaled",
@@ -503,7 +476,6 @@
         {
             "url": "https://www.artic.edu/artworks/60510/hogs-killing-a-snake",
             "raw_file": "John Steuart Curry - Hogs Killing a Snake.jpg",
-            "ready_file": "John Steuart Curry - Hogs Killing a Snake_rscaled.jpg",
             "raw_file_width": 5665,
             "raw_file_height": 4453,
             "resize_option": "scaled",
@@ -519,7 +491,6 @@
         {
             "url": "https://www.artic.edu/artworks/185779/train-landscape",
             "raw_file": "Ellsworth Kelly - Train Landscape.jpg",
-            "ready_file": "Ellsworth Kelly - Train Landscape_rscaled.jpg",
             "raw_file_width": 5482,
             "raw_file_height": 5477,
             "resize_option": "scaled",
@@ -535,7 +506,6 @@
         {
             "url": "https://www.artic.edu/artworks/14689/eggplant-and-plums",
             "raw_file": "Charles Demuth - Eggplant and Plums.jpg",
-            "ready_file": "Charles Demuth - Eggplant and Plums_rscaled.jpg",
             "raw_file_width": 5014,
             "raw_file_height": 3323,
             "resize_option": "scaled",
