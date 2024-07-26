@@ -4,8 +4,9 @@ import logging
 import config
 import json
 
+from colour import Color
 from image_utils import ResizeOptions, ImageSources
-from image_utils import resize_file_with_matte, image_source, get_image, get_image_dimensions
+from image_utils import crop_file, resize_file_with_matte, image_source, get_image, get_image_dimensions
 from metadata import get_google_metadata, get_file_metadata, get_artic_metadata
 from art_label import ArtLabel
 
@@ -36,27 +37,26 @@ class ArtFile:
         raw_file_width=None,
         raw_file_height=None,
         label_file=None,
-        ready_file=None,
         resize_option=None,
-        metadata=None,
+        metadata: str = None,
+        mat_color: Color = None,
     ):
         self.url: str = url
         self.raw_file: str = raw_file
-        self.ready_file: str = ready_file
         self.label_file: str = label_file
         self.resize_option = resize_option
         self.metadata = metadata
         self.raw_file_width: int = raw_file_width
         self.raw_file_height: int = raw_file_height
+        self.mat_color: Color = mat_color
         self.tv_content_id: str = None
+        self.ready_file: str = None
 
     def to_dict(self):
         # return a JSON representation of the art file, but only the fields that are needed to recreate the object
         me = {"url": self.url}
         if self.raw_file is not None:
             me["raw_file"] = self.raw_file
-        if self.ready_file is not None:
-            me["ready_file"] = self.ready_file
         if self.label_file is not None:
             me["label_file"] = self.label_file
         if self.raw_file_width is not None:
@@ -67,27 +67,30 @@ class ArtFile:
             me["resize_option"] = self.resize_option
         if self.metadata is not None:
             me["metadata"] = self.metadata
+        if self.mat_color is not None:
+            me["mat_hexrgb"] = self.mat_color.get_hex_l()
         return me
 
     @classmethod
     def from_dict(cls, data: dict, default_resize: str):
         url = data.get("url")
         raw_file = data.get("raw_file", None)
-        ready_file = data.get("ready_file", None)
         label_file = data.get("label_file", None)
         raw_file_width = data.get("raw_file_width", None)
         raw_file_height = data.get("raw_file_height", None)
         resize_option = data.get("resize_option", default_resize)
         metadata = data.get("metadata", None)
+        mat_hexrgb = data.get("mat_hexrgb", None)
+        mat_color = Color(mat_hexrgb) if mat_hexrgb is not None else None
         return cls(
             url=url,
             raw_file=raw_file,
-            ready_file=ready_file,
             label_file=label_file,
             raw_file_width=raw_file_width,
             raw_file_height=raw_file_height,
             resize_option=resize_option,
             metadata=metadata,
+            mat_color=mat_color,
         )
 
     def get_fullpath(self, folder: str, options: dict):
@@ -139,7 +142,12 @@ class ArtFile:
         self.ready_fullpath = self.get_fullpath(config.art_folder_ready, options={"r": self.resize_option})
         if not os.path.exists(self.ready_fullpath) or always_generate:
             logging.debug(f"Generating ready file at {self.ready_fullpath}")
-            description_box = resize_file_with_matte(self.raw_fullpath, self.ready_fullpath, 3840, 2160, self.resize_option)
+            if self.resize_option == ResizeOptions.CROP:
+                crop_file(self.raw_fullpath, self.ready_fullpath, 3840, 2160)
+            elif self.resize_option == ResizeOptions.SCALE:
+                mat_hexrgb = resize_file_with_matte(self.raw_fullpath, self.ready_fullpath, 3840, 2160, mat_hexrgb=self.mat_color)
+                if mat_hexrgb is not None:
+                    self.mat_color = mat_hexrgb
 
         self.ready_file = os.path.basename(self.ready_fullpath)
 

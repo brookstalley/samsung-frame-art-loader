@@ -29,7 +29,7 @@ def read_urls_from_file(input_file):
 
 
 def write_urls_to_json(output_file, urls):
-    data = {"schema_version": 1, "name": "placeholder", "default_resize": "cropped", "art": [{"url": url} for url in urls]}
+    data = {"schema_version": 1, "name": "placeholder", "default_resize": "scaled", "art": [{"url": url} for url in urls]}
     with open(output_file, "w") as file:
         json.dump(data, file, indent=4)
 

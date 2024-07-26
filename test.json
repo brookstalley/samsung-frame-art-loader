@@ -1,11 +1,10 @@
 {
     "name": "placeholder",
-    "default_resize": "cropped",
+    "default_resize": "scaled",
     "art": [
         {
             "url": "https://artsandculture.google.com/asset/ph-129-clyfford-still/FwHVp26mrlpKfQ",
-            "raw_file": "Still, Clyfford; PH-129; 1949_0001.jpg",
-            "ready_file": "Still, Clyfford; PH-129; 1949_0001_rscaled.jpg",
+            "raw_file": "Still, Clyfford; PH-129; 1949_0003.jpg",
             "raw_file_width": 3514,
             "raw_file_height": 4135,
             "resize_option": "scaled",
@@ -18,12 +17,12 @@
                 "dimensions": "h53 x w44.5 in",
                 "rights": "\u00a9 City and county of Denver",
                 "medium": "Oil on canvas"
-            }
+            },
+            "mat_hexrgb": "#7e5c03"
         },
         {
             "url": "https://artsandculture.google.com/asset/ion-11-victor-vasarely/zAGDIJRNphFaPw",
-            "raw_file": "Vasarely, Victor; ION 11; 1967_1969_0001.jpg",
-            "ready_file": "Vasarely, Victor; ION 11; 1967_1969_0001_rscaled.jpg",
+            "raw_file": "Vasarely, Victor; ION 11; 1967_1969_0003.jpg",
             "raw_file_width": 1295,
             "raw_file_height": 1294,
             "resize_option": "scaled",
@@ -33,12 +32,12 @@
                 "date_created": "1967/1969",
                 "dimensions": "68 x 68 cm",
                 "medium": "serigraphy"
-            }
+            },
+            "mat_hexrgb": "#242633"
         },
         {
             "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
             "raw_file": "Mark Rothko - Untitled Purple White and Red.jpg",
-            "ready_file": "Mark Rothko - Untitled Purple White and Red_rscaled.jpg",
             "raw_file_width": 2370,
             "raw_file_height": 2250,
             "resize_option": "scaled",
@@ -49,7 +48,8 @@
                 "description": "<p><em>Untitled (Purple, White, and Red)</em> follows the characteristic format of Mark Rothko\u2019s mature work, in which stacked rectangles of color appear to float within the boundaries of the canvas. By directly staining the canvas with many thin washes of pigment and paying particular attention to the edges where the fields interact, he achieved the effect of light radiating from the image itself. This technique suited Rothko\u2019s metaphysical aims: to offer painting as a doorway into purely spiritual realms, making it as immaterial and evocative as music, and to directly communicate the most essential, raw forms of human emotion.</p>\n",
                 "dimensions": "Unframed: 197.5 \u00d7 207.7 cm (77 13/16 \u00d7 81 13/16 in.); 197.5 \u00d7 207.7 cm (77 3/4 \u00d7 81 3/4 in.)",
                 "medium": "Oil on canvas"
-            }
+            },
+            "mat_hexrgb": "#3b2d36"
         }
     ]
 }

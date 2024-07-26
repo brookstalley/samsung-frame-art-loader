@@ -7,6 +7,7 @@ import logging
 import numpy as np
 import os
 import subprocess
+from colour import Color
 from skimage.transform import resize
 from scipy.spatial.distance import pdist, squareform
 import requests
@@ -16,6 +17,7 @@ import time
 from colormath.color_objects import sRGBColor, LabColor
 from colormath.color_conversions import convert_color
 from colormath.color_diff import delta_e_cie2000
+
 
 import config
 
@@ -49,39 +51,11 @@ def image_source(url):
         return ImageSources.HTTP
 
 
-def pairwise_distances(palette):
-    # Calculate pairwise Euclidean distances between the colors in the palette
-    distances = pdist(palette, metric="euclidean")
-
-    # Convert the distances to a square matrix form
-    distance_matrix = squareform(distances)
-
-    # Calculate the average distance
-    average_distance = np.mean(distances)
-
-    # Calculate the standard deviation of the distances
-    std_distance = np.std(distances)
-
-    print("Average Distance: ", average_distance)
-    print("Standard Deviation of Distances: ", std_distance)
-
-
-def get_average_color(image: Image):
-    # skimage = io.imread(image)[:, :, :-1]
-
+def get_dominant_colors_five(in_file: str) -> Color:
     # We don't need a giant image to get average color. If it is larger than 2048x2048, resize it. But do not overwrite the original image!
-    max_size = 768
-    np_image = np.array(image)
-    working_image = resize(np_image, (max_size, max_size), anti_aliasing=False)
+    Image.MAX_IMAGE_PIXELS = 933120000
+    image = Image.open(in_file)
 
-    my_image = np.array(working_image)
-    average = my_image.mean(axis=0).mean(axis=0)
-
-    return average
-
-
-def get_dominant_colors_five(image: Image):
-    # We don't need a giant image to get average color. If it is larger than 2048x2048, resize it. But do not overwrite the original image!
     max_size = 768
     np_image = np.array(image)
     working_image = resize(np_image, (max_size, max_size), anti_aliasing=False)
@@ -97,14 +71,13 @@ def get_dominant_colors_five(image: Image):
 
     dominant = palette[np.argmax(counts)]
     print(f"dominant: {dominant}")
-    return dominant
+    return Color(rgb=dominant)
 
 
-import numpy as np
-import cv2
+def get_top_n_colors(in_file: str, coverage_threshold=0.8, tmp_name: str = None):
+    Image.MAX_IMAGE_PIXELS = 933120000
+    image = Image.open(in_file)
 
-
-def get_top_n_colors(image, coverage_threshold=0.8, tmp_name: str = None):
     # We don't need a giant image to get average color. If it is larger than 2048x2048, resize it. But do not overwrite the original image!
     max_size = 512
     max_distance = 15
@@ -165,7 +138,8 @@ def get_top_n_colors(image, coverage_threshold=0.8, tmp_name: str = None):
 
     # Determine the number of colors required to meet the coverage threshold
     top_n = np.argmax(np.cumsum(np.bincount(flat_labels)) / pixels.shape[0] >= coverage_threshold) + 1
-    top_colors = centers[:top_n]
+    top_colors = [Color(rgb=rgb_255 / 255.0) for rgb_255 in centers[:top_n]]
+    x = Color()
     top_color_counts = np.bincount(flat_labels)[:top_n]
 
     # Calculate the percentage of each top color
@@ -174,83 +148,88 @@ def get_top_n_colors(image, coverage_threshold=0.8, tmp_name: str = None):
     return top_colors, top_color_percentages
 
 
-def resize_image_with_matte(image: Image, resize_option, width, height, tmp_name=None) -> Image:
-    # Get x and y dimensions
-    x, y = image.size
-    if (x == width) and (y == height):
-        # image is already the correct size
-        return image
+def get_mat_color(in_file: str) -> Color:
+    dominant = get_dominant_colors_five(in_file)
+    print(f"dominant color: {dominant}")
 
-    dominant_color = (0, 0, 0)
-    if resize_option == ResizeOptions.SCALE:
-        dominant = get_dominant_colors_five(image)
-        all_dominants = get_top_n_colors(image, tmp_name=tmp_name)
-        print(f"dominant color: {dominant}")
+    top_colors, top_counts = get_top_n_colors(in_file)
+    # show each top color and the count for that color
+    for i, color in enumerate(top_colors):
+        print(f"color: {color} count: {top_counts[i]}")
 
-        mutiplier: float = 0.66
-        dominant_color = (
-            int((dominant[0] * 256) * mutiplier),
-            int((dominant[1] * 256) * mutiplier),
-            int((dominant[2] * 256) * mutiplier),
-        )
-    canvas = Image.new("RGB", (width, height), dominant_color)
-    description_box = None
-    if resize_option == ResizeOptions.SCALE:
-        # Determine whether to scale x or y to width x height
-        if (x / width) > (y / height):
-            new_y = int(y * (width / x))
-            new_x = width
-            description_box = (0, y, width, height)  # Get the bottom area for descriptions
-        else:
-            new_x = int(x * (height / y))
-            new_y = height
-            description_box = (x, 0, width, height)  # Get the right area for descriptions
-
-        image = image.resize((new_x, new_y), Image.Resampling.LANCZOS)
-
-        # paste image into center of canvas
-        paste_box = (int((width - x) / 2), int((height - y) / 2))
-        canvas.paste(image, paste_box)
-        # Get the coordinates of the added borders
-
-    elif resize_option == ResizeOptions.CROP:
-        # first resize so the smallest dimension is width or height
-        if (x / width) > (y / height):
-            # The image's aspect ratio is wider than the target. Scale y to match target height and then crop x to match target width
-            scale = height / y
-            x = int(x * scale)
-            image = image.resize((x, height), Image.Resampling.LANCZOS)
-            crop_box = (int((x - width) / 2), 0, int((x + width) / 2), height)
-            image = image.crop(crop_box)
-
-        else:
-            # The image's aspect ratio is taller than the target. Scale x to match target width and then crop y to match target height
-            scale = width / x
-            y = int(y * scale)
-            image = image.resize((width, y), Image.Resampling.LANCZOS)
-            crop_box = (0, int((y - height) / 2), width, int((y + height) / 2))
-            image = image.crop(crop_box)
-
-        canvas.paste(image, (0, 0))
-    return canvas, description_box
+    mutiplier: float = 0.66
+    dominant.set_luminance(dominant.get_luminance() * mutiplier)
+    print(f"dominant color after set_luminance: {dominant}")
+    return dominant
 
 
-def resize_file_with_matte(in_file: str, out_file: str, width, height, resize_option):
+def crop_file(in_file: str, out_file: str, width, height):
     # load image from file
     # set decompression limit high
+    logging.info(f"Cropping {in_file} to {out_file} at {width}x{height}")
+    Image.MAX_IMAGE_PIXELS = 933120000
+
+    image = Image.open(in_file)
+    if (image.width == width) and (image.height == height):
+        # image is already the correct size
+        return
+
+    scale = max(width / image.width, height / image.height)
+    new_size = (int(image.width * scale), int(image.height * scale))
+
+    # Resize the image
+    image = image.resize(new_size, Image.Resampling.LANCZOS)
+
+    # Calculate the cropping box
+    crop_box = ((new_size[0] - width) // 2, (new_size[1] - height) // 2, (new_size[0] + width) // 2, (new_size[1] + height) // 2)
+
+    # Crop the image
+    image = image.crop(crop_box)
+
+    # Save the cropped image
+    if in_file.endswith(".jpg"):
+        image.save(out_file, "JPEG", quality=95)
+    elif in_file.endswith(".png"):
+        image.save(out_file, "PNG")
+    logging.debug(f"Cropped {in_file} to {out_file}")
+
+
+def resize_file_with_matte(in_file: str, out_file: str, width, height, mat_hexrgb: str = None):
     logging.info(f"Resizing {in_file} to {out_file} at {width}x{height}")
     Image.MAX_IMAGE_PIXELS = 933120000
 
     image = Image.open(in_file)
-    resized, description_box = resize_image_with_matte(image, resize_option, width, height, tmp_name=in_file)
+
+    if (image.width == width) and (image.height == height):
+        # image is already the correct size
+        return image
+
+    # If we don't have the mat color yet, get it
+    if mat_hexrgb is None:
+        mat_hexrgb = get_mat_color(in_file)
+
+    rgb_color = tuple(int(x * 255) for x in mat_hexrgb.get_rgb())
+
+    canvas = Image.new("RGB", (width, height), rgb_color)
+
+    scale = min(width / image.width, height / image.height)
+    new_size = (int(image.width * scale), int(image.height * scale))
+
+    # Resize the image
+    resized_image = image.resize(new_size, Image.Resampling.LANCZOS)
+
+    # Create a new image with the target size and paste the resized image onto it
+    paste_position = ((width - new_size[0]) // 2, (height - new_size[1]) // 2)
+    canvas.paste(resized_image, paste_position)
 
     # Save the resized image
     os.makedirs(os.path.dirname(out_file), exist_ok=True)
     if in_file.endswith(".jpg"):
-        resized.save(out_file, "JPEG", quality=95)
+        canvas.save(out_file, "JPEG", quality=95)
     elif in_file.endswith(".png"):
-        resized.save(out_file, "PNG")
+        canvas.save(out_file, "PNG")
     logging.debug(f"Resized {in_file} to {out_file}")
+    return mat_hexrgb
 
 
 def get_image_dimensions(image_path: str) -> tuple[int, int]:
