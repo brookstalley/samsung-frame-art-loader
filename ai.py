@@ -23,6 +23,23 @@ JSON must be in the format:
   "reason": "a very short reason for why this color was chosen"
 }"""
 
+mat_prompt2 = """This artwork will be displayed on a 16:9 display, scaled so that there will be bars on either the sides or top and bottom. 
+
+Think of these bars like the mat on a framed artwork. Suggest a mat color that will highlight the artwork. Use best practices and color theory to produce an elegant color choice that will not overpower the artwork on a LCD display.
+
+Avoid making the mat brighter or more saturated than the artwork since this will be on a LCD display. If in doubt, go darker and less saturated.
+
+For your response, ONLY provide JSON with the color values and a very short reason for this color choice. Do not explain aspect ratios or anything else. Just the preview image and the JSON.
+
+JSON must be in the format:
+{
+  "mat_color": {
+      "RGB": {"red": "123", "green" : "89", "blue": "98"},
+      "RGB_HEX" : "#7B5962",
+  },
+  "reason": "a very short reason for why this color was chosen"
+}"""
+
 
 def ai_mat_color(image: Image) -> Color:
     # get base64 encoded image from the PIL.Image
@@ -49,7 +66,7 @@ def ai_mat_color(image: Image) -> Color:
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": mat_prompt},
+                        {"type": "text", "text": mat_prompt2},
                         {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_image}"}},
                     ],
                 },
@@ -59,13 +76,19 @@ def ai_mat_color(image: Image) -> Color:
         response_str = response.choices[0].message.content
         try:
             response = json.loads(response_str)
+            rgb_hex = response["mat_color"]["RGB_HEX"]
+            reason = response["reason"]
             good_result = True
         except json.JSONDecodeError:
             print(f"Bad response from AI: {response_str}")
             print(f"Trying again")
             tries += 1
+        except KeyError:
+            print(f"Bad response from AI: {response_str}")
+            print(f"Trying again")
+            tries += 1
     if good_result:
         # print(f"AI response: {response}")
-        return Color(response["mat_color"]["RGB_HEX"]), response["reason"]
+        return Color(rgb_hex), reason
     else:
         return None
