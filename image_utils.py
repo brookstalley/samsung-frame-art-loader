@@ -15,11 +15,6 @@ import re
 from ai import ai_mat_color
 from source_utils import artic_metadata_for_url
 import time
-from colormath.color_objects import sRGBColor, LabColor
-from colormath.color_conversions import convert_color
-from colormath.color_diff import delta_e_cie2000
-
-
 import config
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
@@ -177,70 +172,74 @@ def get_mat_color(in_file: str) -> Color:
 
 
 def crop_file(in_file: str, out_file: str, width, height):
-    # load image from file
-    # set decompression limit high
     logging.info(f"Cropping {in_file} to {out_file} at {width}x{height}")
     Image.MAX_IMAGE_PIXELS = 933120000
 
-    image = Image.open(in_file)
-    if (image.width == width) and (image.height == height):
-        # image is already the correct size
-        return
+    with Image.open(in_file) as image:
+        if (image.width == width) and (image.height == height):
+            # image is already the correct size
+            return
 
-    scale = max(width / image.width, height / image.height)
-    new_size = (int(image.width * scale), int(image.height * scale))
+        scale = max(width / image.width, height / image.height)
+        new_size = (int(image.width * scale), int(image.height * scale))
 
-    # Resize the image
-    image = image.resize(new_size, Image.Resampling.LANCZOS)
+        # Resize the image
+        image = image.resize(new_size, Image.Resampling.LANCZOS)
 
-    # Calculate the cropping box
-    crop_box = ((new_size[0] - width) // 2, (new_size[1] - height) // 2, (new_size[0] + width) // 2, (new_size[1] + height) // 2)
+        # Calculate the cropping box
+        crop_box = (
+            (new_size[0] - width) // 2,
+            (new_size[1] - height) // 2,
+            (new_size[0] + width) // 2,
+            (new_size[1] + height) // 2,
+        )
 
-    # Crop the image
-    image = image.crop(crop_box)
+        # Crop the image
+        image = image.crop(crop_box)
 
-    # Save the cropped image
-    if in_file.endswith(".jpg"):
-        image.save(out_file, "JPEG", quality=95)
-    elif in_file.endswith(".png"):
-        image.save(out_file, "PNG")
-    logging.debug(f"Cropped {in_file} to {out_file}")
+        # Save the cropped image
+        if in_file.endswith(".jpg"):
+            image.save(out_file, "JPEG", quality=95)
+        elif in_file.endswith(".png"):
+            image.save(out_file, "PNG")
+        logging.debug(f"Cropped {in_file} to {out_file}")
 
 
 def resize_file_with_matte(in_file: str, out_file: str, width, height, mat_color: Color = None, always_generate: bool = False):
     logging.info(f"Resizing {in_file} to {out_file} at {width}x{height}")
     Image.MAX_IMAGE_PIXELS = 933120000
 
-    image = Image.open(in_file)
+    with Image.open(in_file) as image:
+        if (image.width == width) and (image.height == height):
+            # image is already the correct size
+            return image
 
-    if (image.width == width) and (image.height == height):
-        # image is already the correct size
-        return image
+        # If we don't have the mat color yet, get it
+        if (mat_color is None) or always_generate:
+            mat_color, reason = get_mat_color(in_file)
+            print(f"Got mat color {mat_color} because {reason}")
 
-    # If we don't have the mat color yet, get it
-    if (mat_color is None) or always_generate:
-        mat_color, reason = get_mat_color(in_file)
-        print(f"Got mat color {mat_color} because {reason}")
+        rgb_color = tuple(int(x * 255) for x in mat_color.get_rgb())
+        canvas = Image.new("RGB", (width, height), rgb_color)
 
-    rgb_color = tuple(int(x * 255) for x in mat_color.get_rgb())
-    canvas = Image.new("RGB", (width, height), rgb_color)
+        # scale = min(width / image.width, height / image.height)
+        # new_size = (int(image.width * scale), int(image.height * scale))
+        # resized_image = image.resize(new_size, Image.Resampling.LANCZOS)
 
-    scale = min(width / image.width, height / image.height)
-    new_size = (int(image.width * scale), int(image.height * scale))
-    resized_image = image.resize(new_size, Image.Resampling.LANCZOS)
+        image.thumbnail((width, height), Image.Resampling.LANCZOS)
 
-    # Create a new image with the target size and paste the resized image onto it
-    paste_position = ((width - new_size[0]) // 2, (height - new_size[1]) // 2)
-    canvas.paste(resized_image, paste_position)
+        # Create a new image with the target size and paste the resized image onto it
+        paste_position = ((width - image.width) // 2, (height - image.height) // 2)
+        canvas.paste(image, paste_position)
 
-    # Save the resized image
-    os.makedirs(os.path.dirname(out_file), exist_ok=True)
-    if in_file.endswith(".jpg"):
-        canvas.save(out_file, "JPEG", quality=95)
-    elif in_file.endswith(".png"):
-        canvas.save(out_file, "PNG")
-    logging.debug(f"Resized {in_file} to {out_file}")
-    return mat_color
+        # Save the resized image
+        os.makedirs(os.path.dirname(out_file), exist_ok=True)
+        if in_file.endswith(".jpg"):
+            canvas.save(out_file, "JPEG", quality=95)
+        elif in_file.endswith(".png"):
+            canvas.save(out_file, "PNG")
+        logging.debug(f"Resized {in_file} to {out_file}")
+        return mat_color
 
 
 def get_image_dimensions(image_path: str) -> tuple[int, int]:
