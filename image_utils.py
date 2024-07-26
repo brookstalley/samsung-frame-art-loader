@@ -12,6 +12,7 @@ from skimage.transform import resize
 from scipy.spatial.distance import pdist, squareform
 import requests
 import re
+from ai import ai_mat_color
 from source_utils import artic_metadata_for_url
 import time
 from colormath.color_objects import sRGBColor, LabColor
@@ -148,19 +149,31 @@ def get_top_n_colors(in_file: str, coverage_threshold=0.8, tmp_name: str = None)
     return top_colors, top_color_percentages
 
 
+def get_ai_mat_suggestion(in_file: str):
+    Image.MAX_IMAGE_PIXELS = 933120000
+    image = Image.open(in_file)
+    mat_color, reason = ai_mat_color(image)
+    return mat_color, reason
+
+
 def get_mat_color(in_file: str) -> Color:
+    mat_color, reason = get_ai_mat_suggestion(in_file)
+    if mat_color is not None:
+        return mat_color, reason
+
+    # AI failed
     dominant = get_dominant_colors_five(in_file)
     print(f"dominant color: {dominant}")
 
-    top_colors, top_counts = get_top_n_colors(in_file)
+    # top_colors, top_counts = get_top_n_colors(in_file)
     # show each top color and the count for that color
-    for i, color in enumerate(top_colors):
-        print(f"color: {color} count: {top_counts[i]}")
+    # for i, color in enumerate(top_colors):
+    #     print(f"color: {color} count: {top_counts[i]}")
 
     mutiplier: float = 0.66
     dominant.set_luminance(dominant.get_luminance() * mutiplier)
     print(f"dominant color after set_luminance: {dominant}")
-    return dominant
+    return dominant, "Generated from dominant color"
 
 
 def crop_file(in_file: str, out_file: str, width, height):
@@ -194,7 +207,7 @@ def crop_file(in_file: str, out_file: str, width, height):
     logging.debug(f"Cropped {in_file} to {out_file}")
 
 
-def resize_file_with_matte(in_file: str, out_file: str, width, height, mat_hexrgb: str = None):
+def resize_file_with_matte(in_file: str, out_file: str, width, height, mat_color: Color = None, always_generate: bool = False):
     logging.info(f"Resizing {in_file} to {out_file} at {width}x{height}")
     Image.MAX_IMAGE_PIXELS = 933120000
 
@@ -205,17 +218,15 @@ def resize_file_with_matte(in_file: str, out_file: str, width, height, mat_hexrg
         return image
 
     # If we don't have the mat color yet, get it
-    if mat_hexrgb is None:
-        mat_hexrgb = get_mat_color(in_file)
+    if (mat_color is None) or always_generate:
+        mat_color, reason = get_mat_color(in_file)
+        print(f"Got mat color {mat_color} because {reason}")
 
-    rgb_color = tuple(int(x * 255) for x in mat_hexrgb.get_rgb())
-
+    rgb_color = tuple(int(x * 255) for x in mat_color.get_rgb())
     canvas = Image.new("RGB", (width, height), rgb_color)
 
     scale = min(width / image.width, height / image.height)
     new_size = (int(image.width * scale), int(image.height * scale))
-
-    # Resize the image
     resized_image = image.resize(new_size, Image.Resampling.LANCZOS)
 
     # Create a new image with the target size and paste the resized image onto it
@@ -229,7 +240,7 @@ def resize_file_with_matte(in_file: str, out_file: str, width, height, mat_hexrg
     elif in_file.endswith(".png"):
         canvas.save(out_file, "PNG")
     logging.debug(f"Resized {in_file} to {out_file}")
-    return mat_hexrgb
+    return mat_color
 
 
 def get_image_dimensions(image_path: str) -> tuple[int, int]:

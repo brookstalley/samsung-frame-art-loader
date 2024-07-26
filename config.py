@@ -1,3 +1,12 @@
+from dotenv import load_dotenv
+import os
+
+# load environment from .env
+# override enabled so we don't use cached values that pipenv loaded
+load_dotenv(override=True)
+
+OPENAI_KEY = os.environ.get("OPENAI_KEY", default=None)
+
 # Set the path to the folder containing the images
 base_folder = "/home/brooks/art"
 # base_folder = "/Users/brookstalley/art"

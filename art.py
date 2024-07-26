@@ -145,9 +145,11 @@ class ArtFile:
             if self.resize_option == ResizeOptions.CROP:
                 crop_file(self.raw_fullpath, self.ready_fullpath, 3840, 2160)
             elif self.resize_option == ResizeOptions.SCALE:
-                mat_hexrgb = resize_file_with_matte(self.raw_fullpath, self.ready_fullpath, 3840, 2160, mat_hexrgb=self.mat_color)
-                if mat_hexrgb is not None:
-                    self.mat_color = mat_hexrgb
+                mat_color = resize_file_with_matte(
+                    self.raw_fullpath, self.ready_fullpath, 3840, 2160, mat_color=self.mat_color, always_generate=always_generate
+                )
+                if mat_color is not None:
+                    self.mat_color = mat_color
 
         self.ready_file = os.path.basename(self.ready_fullpath)
 
