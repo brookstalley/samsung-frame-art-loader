@@ -191,8 +191,7 @@
                 "dimensions": "167.6 \u00d7 167.6 cm (66 \u00d7 66 in.)",
                 "medium": "Encaustic and newspaper on canvas",
                 "artist": "Jasper Johns",
-                "creator_born": 1930,
-                "creator_died": null
+                "creator_born": 1930
             },
             "mat_hexrgb": "#53338d",
             "tv_content_id": "MY_F0646"
@@ -295,7 +294,6 @@
                 "title": "La Peche\" (Fishing)",
                 "date_created": "c. 1919",
                 "artist_details": "Designed by Raoul Dufy (French, 1877\u20131953)\nProduced by Bianchini F\u00e9rier, founded 1888\nPrinted by Manufacture de Tournon\nFrance, Tournon",
-                "description": null,
                 "dimensions": "132.8 \u00d7 120 cm (52 1/4 \u00d7 47 1/4 in.); Repeat: 84.2 \u00d7 39.6 cm (33 1/8 \u00d7 15 3/8 in.)",
                 "medium": "Cotton and linen, plain weave; block printed",
                 "artist": "Raoul Dufy",
@@ -475,7 +473,6 @@
                 "title": "Landscape with Two Poplars",
                 "date_created": "1912",
                 "artist_details": "Vasily Kandinsky\nBorn Moscow (formerly Russian Empire, now Russia), 1866; died Neuilly-sur-Seine, France, 1944",
-                "description": null,
                 "dimensions": "78.8 \u00d7 100.4 cm (31 \u00d7 39 1/2 in.)",
                 "medium": "Oil on canvas",
                 "artist": "Vasily Kandinsky",
@@ -497,7 +494,6 @@
                 "title": "Cranes on snow-covered pine",
                 "date_created": "c. 1834",
                 "artist_details": "Katsushika Hokusai \u845b\u98fe \u5317\u658e\nJapanese, 1760-1849",
-                "description": null,
                 "dimensions": "52.4 \u00d7 23.5 cm (20 5/8 \u00d7 9 1/4 in.)",
                 "medium": "Color woodblock print; vertical nagaban",
                 "artist": "Katsushika Hokusai",
@@ -523,8 +519,7 @@
                 "dimensions": "Including frame: 146.4 \u00d7 191.1 cm (57 11/16 \u00d7 75 1/4 in.); 146.4 \u00d7 191.2 cm (57 5/8 \u00d7 75 1/4 in.)",
                 "medium": "Oil and sand on four joined canvases, with artist's painted frame",
                 "artist": "Jasper Johns",
-                "creator_born": 1930,
-                "creator_died": null
+                "creator_born": 1930
             },
             "mat_hexrgb": "#343434",
             "tv_content_id": "MY_F0662"
@@ -562,7 +557,6 @@
                 "title": "Wounded Lioness",
                 "date_created": "1840/50",
                 "artist_details": "Pierre Andrieu (French, 1821-1892)",
-                "description": null,
                 "dimensions": "33.4 \u00d7 56.3 cm (13 1/8 \u00d7 22 1/8 in.); Framed: 62.3 \u00d7 84.2 cm (24 1/2 \u00d7 33 1/8 in.)",
                 "medium": "Oil on canvas",
                 "artist": "Pierre Andrieu",
@@ -583,7 +577,6 @@
                 "title": "Seascape",
                 "date_created": "1879",
                 "artist_details": "Pierre-Auguste Renoir\nFrench, 1841-1919",
-                "description": null,
                 "dimensions": "72.6 \u00d7 91.6 cm (28 1/2 \u00d7 36 in.)",
                 "medium": "Oil on canvas",
                 "artist": "Pierre-Auguste Renoir",
@@ -605,7 +598,6 @@
                 "title": "Untitled (Desert Landscape)",
                 "date_created": "1934",
                 "artist_details": "Salvador Dal\u00ed\nSpanish, 1904\u20131989",
-                "description": null,
                 "dimensions": "18.1 \u00d7 14.1 cm (7 1/8 \u00d7 5 7/16 in.)",
                 "medium": "Oil on panel",
                 "artist": "Salvador Dal\u00ed",
@@ -627,7 +619,6 @@
                 "title": "Painting with Green Center",
                 "date_created": "1913",
                 "artist_details": "Vasily Kandinsky\nBorn Moscow (formerly Russian Empire, now Russia), 1866; died Neuilly-sur-Seine, France, 1944",
-                "description": null,
                 "dimensions": "108.9 \u00d7 118.4 cm (43 1/4 \u00d7 47 1/2 in.)",
                 "medium": "Oil on canvas",
                 "artist": "Vasily Kandinsky",
@@ -649,13 +640,10 @@
                 "title": "Jar in the Form of a Phallus",
                 "date_created": "100 BCE\u2013500 CE",
                 "artist_details": "Moche\nNorth coast, Peru",
-                "description": null,
                 "dimensions": "H.: 22.1 cm (8 11/16 in.)",
                 "medium": "Ceramic and pigment",
                 "artist": "Moche",
-                "artist_nationality": "North coast, Peru",
-                "creator_born": null,
-                "creator_died": null
+                "artist_nationality": "North coast, Peru"
             },
             "mat_hexrgb": "#785a3c",
             "tv_content_id": "MY_F0668"
@@ -715,7 +703,6 @@
                 "title": "Eggplant and Plums",
                 "date_created": "1921/33",
                 "artist_details": "Charles Demuth\nAmerican, 1883-1935",
-                "description": null,
                 "dimensions": "30.4 \u00d7 45.9 cm (12 \u00d7 18 1/8 in.)",
                 "medium": "Watercolor with graphite on ivory wove paper",
                 "artist": "Charles Demuth",

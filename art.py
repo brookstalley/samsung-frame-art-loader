@@ -44,7 +44,7 @@ class ArtFile:
         raw_file_height=None,
         label_file=None,
         resize_option=None,
-        metadata: str = None,
+        metadata=None,
         mat_color: Color = None,
         tv_content_id: str = None,
     ):
@@ -52,12 +52,15 @@ class ArtFile:
         self.raw_file: str = raw_file
         self.label_file: str = label_file
         self.resize_option = resize_option
-        self.metadata = metadata
         self.raw_file_width: int = raw_file_width
         self.raw_file_height: int = raw_file_height
         self.mat_color: Color = mat_color
         self.tv_content_id: str = tv_content_id
         self.ready_file: str = None
+        # if metadata is a dict, strip out any values that are set to None
+        if metadata is not None:
+            self.metadata = {k: v for k, v in metadata.items() if v is not None}
+            self.metadata = metadata
 
     def to_dict(self):
         # return a JSON representation of the art file, but only the fields that are needed to recreate the object
@@ -73,7 +76,9 @@ class ArtFile:
         if self.resize_option is not None:
             me["resize_option"] = self.resize_option
         if self.metadata is not None:
-            me["metadata"] = self.metadata
+            # only save values that are not None
+            save_metadata = {k: v for k, v in self.metadata.items() if v is not None}
+            me["metadata"] = save_metadata
         if self.mat_color is not None:
             me["mat_hexrgb"] = self.mat_color.get_hex_l()
         if self.tv_content_id is not None:
@@ -215,7 +220,7 @@ class ArtLabel:
         self.height = height
 
         self.line_spacing = 1.5
-        self.margin = self.width // 50
+        self.margin = 0
 
     def get_image(self) -> Image:
         # Create a Cairo surface and context
@@ -238,7 +243,7 @@ class ArtLabel:
         death_date = self.metadata.get("creator_died", None)
         creator_lived = self.metadata.get("creator_lived", None)
         artist_life = None
-        artist_nationality = self.metadata.get("artist_nationality", "")
+        artist_nationality = self.metadata.get("artist_nationality", None)
 
         if birth_date and death_date:
             artist_life = f"{birth_date} - {death_date}"
@@ -249,15 +254,13 @@ class ArtLabel:
         elif creator_lived:
             artist_life = creator_lived
 
-        if artist_nationality != "" and artist_life:
-            artist_nationality += ", "
-
-        if artist_nationality or artist_life:
-            label_text += f'<span size="large" color="#000000">{artist_nationality}{artist_life}\n</span>'
+        nationality_dates_line = ", ".join(filter(None, [artist_nationality, artist_life])) or None
+        if nationality_dates_line:
+            label_text += f'<span size="large" color="#000000">{nationality_dates_line}\n</span>'
 
         label_text += f'<span color="#000000">\n</span>'
 
-        label_text += f'<span size="xx-large" color="#000000"><b>{self.metadata.get("title","*** No title")}</b>\n</span>'
+        label_text += f'<span size="xx-large" color="#000000"><b><i>{self.metadata.get("title","*** No title")}</i></b>\n</span>'
 
         create_line = ", ".join(filter(None, [self.metadata.get("medium"), self.metadata.get("date_created")])) or None
         if create_line:

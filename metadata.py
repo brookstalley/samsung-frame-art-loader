@@ -40,7 +40,9 @@ def process_key_value_pairs(input_dict, synonyms_map):
     for key, value in input_dict.items():
         normalized_key = normalize_key(key, synonyms_map)
         if normalized_key:
-            result[normalized_key] = f"{value}"
+            value = str(value)
+            if value is not None and value.lower() != "none" and value.lower() != "null":
+                result[normalized_key] = f"{value}"
     return result
 
 
