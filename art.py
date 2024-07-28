@@ -56,7 +56,7 @@ class ArtFile:
         self.raw_file_width: int = raw_file_width
         self.raw_file_height: int = raw_file_height
         self.mat_color: Color = mat_color
-        self.tv_content_id: str = None
+        self.tv_content_id: str = tv_content_id
         self.ready_file: str = None
 
     def to_dict(self):

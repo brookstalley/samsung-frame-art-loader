@@ -243,6 +243,10 @@ async def image_callback(event, response):
     tv_content_id = data.get("content_id", None)
     is_shown = data.get("is_shown", None)
     displayed_artfile = None
+    if label_display is None:
+        logging.error("Label display is None")
+        return
+
     if event == "image_selected" and is_shown == "Yes" and tv_content_id != last_tv_content_id:
         last_tv_content_id = tv_content_id
         # find the artfile with the matching tv_content_id
