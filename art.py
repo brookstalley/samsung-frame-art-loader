@@ -258,7 +258,7 @@ class ArtLabel:
         if nationality_dates_line:
             label_text += f'<span size="large" color="#000000">{nationality_dates_line}\n</span>'
 
-        label_text += f'<span color="#000000">\n</span>'
+        label_text += f'<span size="small" color="#000000">\n</span>'
 
         label_text += f'<span size="xx-large" color="#000000"><b><i>{self.metadata.get("title","*** No title")}</i></b>\n</span>'
 
