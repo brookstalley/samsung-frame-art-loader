@@ -122,7 +122,7 @@ class ArtFile:
         if not self.url:
             raise Exception("URL is required")
 
-        logging.info(
+        logging.debug(
             f"Processing {self.url}. Always download: {always_download}, always generate: {always_generate}, always metadata: {always_metadata}, always labels: {always_labels}"
         )
 
@@ -253,14 +253,15 @@ class ArtLabel:
             artist_nationality += ", "
 
         if artist_nationality or artist_life:
-            label_text += f'<span size="x-large" color="#000000">{artist_nationality}{artist_life}\n</span>'
-        label_text += f'<span size="large" color="#000000">\n</span>'
+            label_text += f'<span size="large" color="#000000">{artist_nationality}{artist_life}\n</span>'
+
+        label_text += f'<span color="#000000">\n</span>'
 
         label_text += f'<span size="xx-large" color="#000000"><b>{self.metadata.get("title","*** No title")}</b>\n</span>'
-        if self.metadata.get("creation_date", None):
-            label_text += f'<span size="x-large" color="#000000">{self.metadata.get("date_created")}\n</span>'
-        if self.metadata.get("medium", None):
-            label_text += f'<span size="x-large" color="#000000"><i>{self.metadata.get("medium")}</i>\n</span>'
+
+        create_line = ", ".join(filter(None, [self.metadata.get("medium"), self.metadata.get("date_created")])) or None
+        if create_line:
+            label_text += f'<span size="large" color="#000000">{create_line}\n</span>'
 
         if self.metadata.get("description", None):
             desc = self.metadata.get("description")

@@ -230,6 +230,10 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
         # await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
         await asyncio.sleep(1)
 
+    slideshow_duration = 3
+    slideshow_shuffle = True
+
+    logging.info(f"Setting slideshow to {slideshow_duration} seconds, shuffle: {slideshow_shuffle}")
     await tv_art.set_slideshow_status(duration=3, type=True, category=2)
 
 

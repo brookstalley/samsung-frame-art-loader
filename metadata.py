@@ -107,7 +107,7 @@ async def get_artic_metadata(url: str):
     # print(f"Artwork metadata: {artwork_metadata}")
 
     filtered_artwork_metadata = process_key_value_pairs(artwork_metadata, metadata_map)
-    print(f"filtered artwork: {filtered_artwork_metadata}")
+    # print(f"filtered artwork: {filtered_artwork_metadata}")
 
     artist_id = artwork_metadata.pop("artist_ids")[0]
     artist_api = f"https://api.artic.edu/api/v1/artists/{artist_id}"
@@ -120,7 +120,7 @@ async def get_artic_metadata(url: str):
     filtered_artist_metadata = process_key_value_pairs(artist_metadata, metadata_map)
     cleaned_metadata = {**filtered_artwork_metadata, **filtered_artist_metadata}
 
-    print(f"Got metadata for {url}: {cleaned_metadata}")
+    # print(f"Got metadata for {url}: {cleaned_metadata}")
     return cleaned_metadata
 
 
