@@ -2,15 +2,15 @@ aiohttp==3.9.5
 async_timeout==4.0.3
 beautifulsoup4==4.12.3
 bs4==0.0.2
+colour==0.1.5
 ExifRead==3.0.0
-IT8951 @ git+https://github.com/GregDMeyer/IT8951.git@9f136139378f74e17d9972d7165dc6ae53a2568e
 lxml==5.2.2
 numpy==2.0.0
-omni_epd @ git+https://github.com/robweber/omni-epd.git@1a3acf59522c1a01f64585798af8d98226de8822
+openai==1.37.1
 opencv-python==4.10.0.84
 pillow==10.4.0
+python-dotenv==1.0.1
 requests==2.32.3
-RPi.GPIO==0.7.1
 samsungtvws @ git+https://github.com/NickWaterton/samsung-tv-ws-api.git@fa37fffd7a9f8e82147c0883f18bebcd67fd8ff8
 scikit-image==0.24.0
 websockets==12.0

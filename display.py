@@ -1,31 +1,44 @@
 # good info: https://github.com/jhirner/pi-frame/
 
-from omni_epd import displayfactory
+from art import ArtFile
+from omni_epd import displayfactory, EPDNotFoundError
 from PIL import Image
 from art_label import ArtLabel
+import config
 
-class DisplayIT8951:
+
+class DisplayLabel:
     def __init__(self):
-        self.epd = displayfactory.load_display_driver("waveshare_epd.it8951")
-        self.epd.prepare()
+        self.rotate = 180
+        try:
+            self.epd = displayfactory.load_display_driver(config.EPD_TYPE)
+        except EPDNotFoundError:
+            print(f"Could not find EPD dispaly {config.EPD_TYPE}")
+            return
 
     def display_image(self, image: Image):
-        self.epd.display(image)
+        my_image = image.copy()
+        my_image = my_image.rotate(self.rotate)
+        self.epd.prepare()
+        self.epd.display(my_image)
+        self.epd.sleep()
 
     def close(self):
         self.epd.close()
 
+
 if __name__ == "__main__":
-    display = DisplayIT8951()
-    art_label = ArtLabel(
-        width=1448,
-        height=1072,
-        greyscale_bits=4,
+    display = DisplayLabel()
+    artfile = ArtFile(
         artist_name="Artist Name",
         artist_lifespan="Artist Lifespan",
         artwork_title="Artwork Title",
-        creation_date="Creation Date"
+        creation_date="Creation Date",
+        medium="Artwork medium",
+        description="Artwork description",
     )
-    display.display_image(art_label)
+    artlabel = ArtLabel(width=648, height=480, greyscale_bits=1, artfile=artfile)
+    label_image = artlabel.get_image()
+    label_image.save(config.art_folder_label + "/label_test.png")
+    display.display_image(label_image)
     display.close()
-

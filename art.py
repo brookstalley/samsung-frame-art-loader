@@ -171,7 +171,7 @@ class ArtFile:
                 medium=self.metadata.get("medium", ""),
                 description=self.metadata.get("description", ""),
             )
-            label_image = label.create_label()
+            label_image = label.get_image()
             # Save the image to the fullpath
             label_image.save(self.label_fullpath)
 

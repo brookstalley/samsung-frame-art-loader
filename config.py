@@ -6,11 +6,12 @@ import os
 load_dotenv(override=True)
 
 OPENAI_KEY = os.environ.get("OPENAI_KEY", default=None)
+EPD_TYPE = os.environ.get("EPD_TYPE", default=None)
 
 # Set the path to the folder containing the images
-base_folder = "/home/brooks/art"
+# base_folder = "/home/brooks/art"
 # base_folder = "/Users/brookstalley/art"
-# base_folder = "/home/tvpi/art"
+base_folder = "/home/tvpi/art"
 art_folder_raw = f"{base_folder}/raw"
 art_folder_ready = f"{base_folder}/ready"
 art_folder_tv_thumbs = f"{base_folder}/tv-thumbs"

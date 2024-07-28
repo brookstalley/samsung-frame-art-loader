@@ -27,7 +27,7 @@ mat_prompt2 = """This artwork will be displayed on a 16:9 display, scaled so tha
 
 Think of these bars like the mat on a framed artwork. Suggest a mat color that will highlight the artwork. Use best practices and color theory to produce an elegant color choice that will not overpower the artwork on a LCD display.
 
-Avoid making the mat brighter or more saturated than the artwork since this will be on a LCD display. If in doubt, go darker and less saturated.
+Avoid making the mat brighter or more saturated than the artwork since this will be on a LCD display. If in doubt, go darker and less saturated. But avoid greys if there is a more interesting choice.
 
 For your response, ONLY provide JSON with the color values and a very short reason for this color choice. Do not explain aspect ratios or anything else. Just the preview image and the JSON.
 
