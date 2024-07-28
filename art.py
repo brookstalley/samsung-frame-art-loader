@@ -7,8 +7,14 @@ import json
 from colour import Color
 from image_utils import ResizeOptions, ImageSources
 from image_utils import crop_file, resize_file_with_matte, image_source, get_image, get_image_dimensions
-from metadata import get_google_metadata, get_file_metadata, get_artic_metadata
-from art_label import ArtLabel
+from metadata import google_metadata_for_artwork_url, get_file_metadata, get_artic_metadata, google_get_metadata
+import cairo
+import gi
+from PIL import Image
+
+gi.require_version("Pango", "1.0")
+gi.require_version("PangoCairo", "1.0")
+from gi.repository import Pango, PangoCairo
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
@@ -40,6 +46,7 @@ class ArtFile:
         resize_option=None,
         metadata: str = None,
         mat_color: Color = None,
+        tv_content_id: str = None,
     ):
         self.url: str = url
         self.raw_file: str = raw_file
@@ -69,6 +76,8 @@ class ArtFile:
             me["metadata"] = self.metadata
         if self.mat_color is not None:
             me["mat_hexrgb"] = self.mat_color.get_hex_l()
+        if self.tv_content_id is not None:
+            me["tv_content_id"] = self.tv_content_id
         return me
 
     @classmethod
@@ -82,6 +91,7 @@ class ArtFile:
         metadata = data.get("metadata", None)
         mat_hexrgb = data.get("mat_hexrgb", None)
         mat_color = Color(mat_hexrgb) if mat_hexrgb is not None else None
+        tv_content_id = data.get("tv_content_id", None)
         return cls(
             url=url,
             raw_file=raw_file,
@@ -91,6 +101,7 @@ class ArtFile:
             resize_option=resize_option,
             metadata=metadata,
             mat_color=mat_color,
+            tv_content_id=tv_content_id,
         )
 
     def get_fullpath(self, folder: str, options: dict):
@@ -103,7 +114,7 @@ class ArtFile:
         )
         return ready_fullpath
 
-    async def process(self, always_download=False, always_generate=False, always_metadata=False):
+    async def process(self, always_download=False, always_generate=False, always_metadata=False, always_labels=False):
         """Process the art file. Download the raw file if necessary, and generate the ready file."""
         """ TODO: Support files that are already downloaded and have no URL """
         raw_file_exists = False
@@ -111,7 +122,9 @@ class ArtFile:
         if not self.url:
             raise Exception("URL is required")
 
-        logging.info(f"Processing {self.url}")
+        logging.info(
+            f"Processing {self.url}. Always download: {always_download}, always generate: {always_generate}, always metadata: {always_metadata}, always labels: {always_labels}"
+        )
 
         # URL is specified
         raw_file_exists = False
@@ -158,33 +171,31 @@ class ArtFile:
             await self.get_metadata()
 
         self.label_fullpath = self.get_fullpath(config.art_folder_label, {"w": config.label_width, "h": config.label_height})
-        if not os.path.exists(self.label_fullpath) or always_generate:
+        if not os.path.exists(self.label_fullpath) or always_labels:
             logging.debug(f"Generating label file at {self.label_fullpath}")
-            label = ArtLabel(
-                width=config.label_width,
-                height=config.label_height,
-                greyscale_bits=8,
-                artist_name=self.metadata.get("artist_details", ""),
-                artist_lifespan=self.metadata.get("artist_lifespan", ""),
-                artwork_title=self.metadata.get("title", ""),
-                creation_date=self.metadata.get("creation_date", ""),
-                medium=self.metadata.get("medium", ""),
-                description=self.metadata.get("description", ""),
-            )
+            label = ArtLabel(width=config.label_width, height=config.label_height, greyscale_bits=8, metadata=self.metadata)
             label_image = label.get_image()
+            label_image = label_image.convert("RGB")
             # Save the image to the fullpath
             label_image.save(self.label_fullpath)
+            self.label_file = os.path.basename(self.label_fullpath)
 
     async def get_metadata(self):
         match image_source(self.url):
             case ImageSources.GOOGLE_ARTSANDCULTURE:
-                new_metadata = get_google_metadata(self.url)
-                if new_metadata:
-                    self.metadata = new_metadata | (self.metadata if self.metadata else {})
+                new_metadata = await google_get_metadata(self.url)
+                if self.metadata:
+                    self.metadata = {**new_metadata, **self.metadata}
+                else:
+                    self.metadata = new_metadata
             case ImageSources.ARTIC:
                 new_metadata = await get_artic_metadata(self.url)
                 if new_metadata:
-                    self.metadata = new_metadata | (self.metadata if self.metadata else {})
+                    # print(f"**** new metadata: {new_metadata}")
+                    if self.metadata:
+                        self.metadata = {**new_metadata, **self.metadata}
+                    else:
+                        self.metadata = new_metadata
             case ImageSources.HTTP:
                 if self.raw_file is not None:
                     new_metadata = get_file_metadata(self.raw_fullpath)
@@ -194,6 +205,95 @@ class ArtFile:
                     self.metadata = None
             case _:
                 raise Exception("Unknown image source")
+
+
+class ArtLabel:
+    def __init__(self, width, height, greyscale_bits, metadata):
+        self.metadata = metadata
+
+        self.width = width
+        self.height = height
+
+        self.line_spacing = 1.5
+        self.margin = self.width // 50
+
+    def get_image(self) -> Image:
+        # Create a Cairo surface and context
+        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, self.width, self.height)
+        context = cairo.Context(surface)
+        context.set_source_rgb(1, 1, 1)
+        context.paint()
+
+        # Create a Pango layout
+        layout = PangoCairo.create_layout(context)
+        # artist_name=self.metadata.get("artist_details", ""),
+        # artist_lifespan=self.metadata.get("artist_lifespan", ""),
+        # artwork_title=self.metadata.get("title", ""),
+        # creation_date=self.metadata.get("creation_date", ""),
+        # medium=self.metadata.get("medium", ""),
+        # description=self.metadata.get("description", ""),
+
+        label_text = f'<span size="xx-large" color="#000000"><b>{self.metadata.get("artist","*** No details")}</b>\n</span>'
+        birth_date = self.metadata.get("creator_born", None)
+        death_date = self.metadata.get("creator_died", None)
+        creator_lived = self.metadata.get("creator_lived", None)
+        artist_life = None
+        artist_nationality = self.metadata.get("artist_nationality", "")
+
+        if birth_date and death_date:
+            artist_life = f"{birth_date} - {death_date}"
+        elif birth_date and (death_date is None):
+            artist_life = f"b. {birth_date}"
+        elif (birth_date is None) and death_date:
+            artist_life = f"d. {death_date}"
+        elif creator_lived:
+            artist_life = creator_lived
+
+        if artist_nationality != "" and artist_life:
+            artist_nationality += ", "
+
+        if artist_nationality or artist_life:
+            label_text += f'<span size="x-large" color="#000000">{artist_nationality}{artist_life}\n</span>'
+        label_text += f'<span size="large" color="#000000">\n</span>'
+
+        label_text += f'<span size="xx-large" color="#000000"><b>{self.metadata.get("title","*** No title")}</b>\n</span>'
+        if self.metadata.get("creation_date", None):
+            label_text += f'<span size="x-large" color="#000000">{self.metadata.get("date_created")}\n</span>'
+        if self.metadata.get("medium", None):
+            label_text += f'<span size="x-large" color="#000000"><i>{self.metadata.get("medium")}</i>\n</span>'
+
+        if self.metadata.get("description", None):
+            desc = self.metadata.get("description")
+            # print(f"{desc}")
+            # replace all <p> and </p> with newlines
+            desc = desc.replace("<p>", "\n").replace("</p>", "\n")
+            desc = desc.replace("<em>", "<i>").replace("</em>", "</i>")
+            label_text += f'<span color="#000000">{desc}</span>'
+
+        layout.set_markup(label_text, -1)
+        layout.set_width((self.width - 2 * self.margin) * Pango.SCALE)
+
+        font_description = Pango.FontDescription("Sans 18")
+        layout.set_font_description(font_description)
+        layout.set_spacing(Pango.units_from_double(10))
+
+        # Get the text extents
+        text_width, text_height = layout.get_size()
+        text_width /= Pango.SCALE
+        text_height /= Pango.SCALE
+
+        # Left align the text, offset by self.margin. Also move as high as it can go on the display
+        context.move_to(self.margin, self.margin)
+        # context.move_to((self.width - text_width) / 2, (self.height - text_height) / 2)
+
+        # Render the text
+        PangoCairo.show_layout(context, layout)
+        buffer = surface.get_data()
+        self.label_image = Image.frombuffer("RGBA", (self.width, self.height), buffer, "raw", "BGRA", 0, 1)
+        return self.label_image
+
+        # return the image
+        return self.label_image
 
 
 class ArtSet:
@@ -248,13 +348,24 @@ class ArtSet:
         with open(self.source_file, "w") as file:
             json.dump(self.to_dict(), file, indent=4)
 
-    async def process(self, always_download: bool = False, always_generate: bool = False, always_metadata: bool = False) -> bool:
+    async def process(
+        self,
+        always_download: bool = False,
+        always_generate: bool = False,
+        always_metadata: bool = False,
+        always_labels: bool = False,
+    ) -> bool:
         logging.info(f"Processing set file {self.name}")
         print(f"ArtSet: {self.name}, {self.default_resize} has {len(self.art)} items")
         errors_downloading = False
         for art_file in self.art:
             try:
-                await art_file.process(always_download, always_generate, always_metadata)
+                await art_file.process(
+                    always_download=always_download,
+                    always_generate=always_generate,
+                    always_metadata=always_metadata,
+                    always_labels=always_labels,
+                )
             except DownloadError as e:
                 logging.info(f"Error downloading file: {e}")
                 errors_downloading = True

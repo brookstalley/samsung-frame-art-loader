@@ -1,22 +1,25 @@
 import logging
 import requests
-from bs4 import BeautifulSoup
+import re
+
 
 # from libxmp import XMPFiles, consts, XMPMeta
 # from libxmp.utils import file_to_dict
 from PIL import Image, ExifTags
-from source_utils import artic_metadata_for_url
+from source_utils import artic_metadata_for_artwork_url, artic_json_for_api_url, google_metadata_for_artwork_url
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
 metadata_map = {
-    "creator": ["creator", "artist", "created by", "by"],
+    "artist": ["creator", "artist", "created by", "by", "artist_title"],
     "date_created": ["date created", "date", "date_display"],
     "title": ["title", "name"],
     "medium": ["medium", "media", "medium_display"],
-    "creator_nationality": ["creator nationality"],
+    "artist_nationality": ["creator nationality", "artist_nationality", "creator_nationality"],
     "dimensions": ["dimensions", "size", "physical dimensions"],
-    "creator_lived": ["creator lifespan"],
+    "creator_lived": ["creator_lived", "creator lifespan", "artist_lifespan"],
+    "creator_born": ["creator_born", "birth_year", "birth_date"],
+    "creator_died": ["creator_died", "death_year", "death_date"],
     "rights": ["rights", "usage rights", "dc:rights", "dc:rights[1]"],
     "description": ["description", "caption", "dc:description"],
     "artist_details": ["artist details", "artist_display"],
@@ -37,42 +40,87 @@ def process_key_value_pairs(input_dict, synonyms_map):
     for key, value in input_dict.items():
         normalized_key = normalize_key(key, synonyms_map)
         if normalized_key:
-            result[normalized_key] = value
+            result[normalized_key] = f"{value}"
     return result
 
 
-def get_google_metadata(url: str):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.60 Safari/537.36",
-    }
+async def parse_artic_details(artist_details: str):
+    artist_nationality = None
+    birth_year = None
+    death_year = None
 
-    params = {}
-    html = requests.get(url, params=params, headers=headers, timeout=30)
-    soup = BeautifulSoup(html.text, "lxml")
-    divs = soup.find_all("div", id=lambda x: x and x.startswith("metadata-"))
+    # logging.info(f"Got {artist_details}")
+    # Patterns for extracting birth and death years
+    birth_pattern = re.compile(r"(\b(?:b\.|born)\s*(\d{4}))|(\b(\d{4})\b)(?=\s*-\s*\d{4})")
+    death_pattern = re.compile(r"(\b(?:d\.|died)\s*(\d{4}))|(?<=\s-\s)(\d{4})")
 
-    raw_metadata = {}
-    for div in divs:
-        ul = div.find("ul")
-        if ul:
-            lis = ul.find_all("li")
-            for li in lis:
-                span = li.find("span")
-                if span:
-                    key = span.text.replace(":", "").strip().lower()
-                    value = li.text.replace(span.text, "").strip()
-                    raw_metadata[key] = value
-    cleaned_metadata = process_key_value_pairs(raw_metadata, metadata_map)
-    # print(cleaned_metadata)
-    return cleaned_metadata
+    # Pattern for extracting nationality
+    nationality_pattern = re.compile(r"^([A-Za-z\s\(\),]+?)(?=,\s\d|$)")
+
+    # Search for nationality
+    nationality_match = nationality_pattern.search(artist_details)
+    if nationality_match:
+        artist_nationality = nationality_match[0]
+        # logging.info(f"Got naionality: {artist_nationality}")
+
+    # Search for birth year
+    birth_match = birth_pattern.search(artist_details)
+    if birth_match:
+        birth_year = birth_match.group(2) or birth_match.group(4)
+
+    # Search for death year
+    death_match = death_pattern.search(artist_details)
+    if death_match:
+        death_year = death_match.group(2) or death_match.group(3)
+
+    # Convert years to integers if found
+    if birth_year:
+        birth_year = int(birth_year)
+    if death_year:
+        death_year = int(death_year)
+
+    return artist_nationality, birth_year, death_year
 
 
 async def get_artic_metadata(url: str):
-    api_response = await artic_metadata_for_url(url)
-    metadata = api_response["data"]
-    thumbail_data = metadata.pop("thumbnail")
-    cleaned_metadata = process_key_value_pairs(metadata, metadata_map)
-    # print(f"Got metadata for {url}: {cleaned_metadata}")
+    artwork_api_response = await artic_metadata_for_artwork_url(url)
+    artwork_metadata = artwork_api_response["data"]
+    thumbail_data = artwork_metadata.pop("thumbnail")
+    # print(f"Raw artic metadata: {metadata}")
+    # artic likes to put the arist name, nationality, and birth/death in the artist_details field, separated by newlines.
+    # break them out if it's written that way
+    artist_details = artwork_metadata.get("artist_display", "")
+    # split artist details at \n
+    artist_details = artist_details.split("\n")
+    if len(artist_details) > 1:
+        artist_info = artist_details[1]
+        nationality, birth_year, death_year = await parse_artic_details(artist_info)
+        if nationality:
+            # print(f"****  setting nationality to: {nationality}")
+            artwork_metadata["artist_nationality"] = nationality
+
+        if birth_year:
+            artwork_metadata["creator_born"] = birth_year
+        if death_year:
+            artwork_metadata["creator_died"] = death_year
+
+    # print(f"Artwork metadata: {artwork_metadata}")
+
+    filtered_artwork_metadata = process_key_value_pairs(artwork_metadata, metadata_map)
+    print(f"filtered artwork: {filtered_artwork_metadata}")
+
+    artist_id = artwork_metadata.pop("artist_ids")[0]
+    artist_api = f"https://api.artic.edu/api/v1/artists/{artist_id}"
+    artist_api_response = await artic_json_for_api_url(artist_api)
+    artist_metadata = artist_api_response["data"]
+    # print(f"Got artist metadata for {artist_api}: {artist_metadata}")
+    # the artist response will have the artist name in the title field, move it to artist
+    artist_metadata["artist"] = artist_metadata.pop("title")
+    artist_metadata["artist_description"] = artist_metadata.pop("description")
+    filtered_artist_metadata = process_key_value_pairs(artist_metadata, metadata_map)
+    cleaned_metadata = {**filtered_artwork_metadata, **filtered_artist_metadata}
+
+    print(f"Got metadata for {url}: {cleaned_metadata}")
     return cleaned_metadata
 
 
@@ -116,3 +164,11 @@ def get_file_metadata(file_path: str):
     exif_data = get_exif_metadata(file_path)
 
     return metadata
+
+
+async def google_get_metadata(url: str):
+    raw_metadata = await google_metadata_for_artwork_url(url)
+
+    cleaned_metadata = process_key_value_pairs(raw_metadata, metadata_map)
+    # print(cleaned_metadata)
+    return cleaned_metadata

@@ -13,7 +13,7 @@ from scipy.spatial.distance import pdist, squareform
 import requests
 import re
 from ai import ai_mat_color
-from source_utils import artic_metadata_for_url
+from source_utils import artic_metadata_for_artwork_url
 import time
 import config
 
@@ -364,7 +364,7 @@ async def get_artic_image(url, destination_fullpath: str = None, destination_dir
 
     logging.debug(f"Downloading {url}")
     await artic_throttle()
-    metadata = await artic_metadata_for_url(url)
+    metadata = await artic_metadata_for_artwork_url(url)
     await artic_accessed()
 
     try:

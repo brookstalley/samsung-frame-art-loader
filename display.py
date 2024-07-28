@@ -1,9 +1,8 @@
 # good info: https://github.com/jhirner/pi-frame/
 
-from art import ArtFile
+from art import ArtFile, ArtLabel
 from omni_epd import displayfactory, EPDNotFoundError
 from PIL import Image
-from art_label import ArtLabel
 import config
 
 
@@ -29,15 +28,16 @@ class DisplayLabel:
 
 if __name__ == "__main__":
     display = DisplayLabel()
-    artfile = ArtFile(
-        artist_name="Artist Name",
-        artist_lifespan="Artist Lifespan",
-        artwork_title="Artwork Title",
-        creation_date="Creation Date",
-        medium="Artwork medium",
-        description="Artwork description",
-    )
-    artlabel = ArtLabel(width=648, height=480, greyscale_bits=1, artfile=artfile)
+    metadata = {
+        "artist_details": "Artist Name",
+        "artist_lifespan": "b. 1950",
+        "title": "Artwork Title",
+        "creation_date": "1970",
+        "medium": "Artwork medium",
+        "description": "Artwork description",
+    }
+
+    artlabel = ArtLabel(width=648, height=480, greyscale_bits=1, metadata=metadata)
     label_image = artlabel.get_image()
     label_image.save(config.art_folder_label + "/label_test.png")
     display.display_image(label_image)

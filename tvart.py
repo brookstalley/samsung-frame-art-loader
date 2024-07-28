@@ -10,6 +10,8 @@ import time
 from PIL import Image
 from art import ArtFile, ArtSet
 from image_utils import images_match
+from display import DisplayLabel
+
 
 import config
 
@@ -25,6 +27,8 @@ logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
 # logging.getLogger().setLevel(logging.DEBUG)
 artsets = []
 uploaded_files = {}
+label_display: DisplayLabel = None
+last_tv_content_id = None
 
 UPLOADED_CATEGORY = "MY-C0002"
 
@@ -52,6 +56,8 @@ def parse_args():
     )
     parser.add_argument("--always-generate", action="store_true", help="Always generate resized images")
     parser.add_argument("--always-metadata", action="store_true", help="Always retrieve metadata")
+    parser.add_argument("--always-labels", action="store_true", help="Always generate labels")
+    parser.add_argument("--skip-upload", action="store_true", help="Skip uploading images to TV")
 
     parser.add_argument(
         "--always-download",
@@ -228,6 +234,8 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
 
 
 async def image_callback(event, response):
+    global label_display, last_tv_content_id
+
     logging.debug("CALLBACK: image callback: {}, {}".format(event, response))
     data_str = response["data"]
     data = json.loads(data_str)
@@ -235,7 +243,8 @@ async def image_callback(event, response):
     tv_content_id = data.get("content_id", None)
     is_shown = data.get("is_shown", None)
     displayed_artfile = None
-    if event == "image_selected" and is_shown == "Yes":
+    if event == "image_selected" and is_shown == "Yes" and tv_content_id != last_tv_content_id:
+        last_tv_content_id = tv_content_id
         # find the artfile with the matching tv_content_id
         for art_set in artsets:
             for art_file in art_set.art:
@@ -245,7 +254,17 @@ async def image_callback(event, response):
         if not displayed_artfile:
             logging.error(f"Could not find artfile with tv_content_id {tv_content_id}")
             return
-        logging.info(f"Displayed artfile: {displayed_artfile.ready_fullpath}\n{displayed_artfile.metadata}")
+        # logging.info(f"Displayed artfile: {displayed_artfile.ready_fullpath}\n{displayed_artfile.metadata}")
+        if config.use_art_label:
+            if displayed_artfile.label_file:
+                fullpath = os.path.join(config.art_folder_label, displayed_artfile.label_file)
+                if os.path.exists(fullpath):
+                    label_image = Image.open(fullpath)
+                    label_display.display_image(label_image)
+                else:
+                    logging.error(f"Label file {fullpath} does not exist.")
+            else:
+                logging.info(f'No label file for {displayed_artfile.metadata.get("title", "Unknown")}')
 
 
 async def ensure_folders_exist():
@@ -260,6 +279,7 @@ async def ensure_folders_exist():
         config.art_folder_tv_thumbs,
         config.art_folder_label,
         config.art_folder_temp,
+        config.cache_folder,
     ]:
         if not os.path.exists(folder):
             logging.info(f'Creating folder "{folder}"')
@@ -267,6 +287,8 @@ async def ensure_folders_exist():
 
 
 async def main():
+    global label_display
+
     args = parse_args()
 
     logging.info("Starting art.py!")
@@ -279,7 +301,9 @@ async def main():
 
     if args.setfile:
         loaded_set = ArtSet.from_file(args.setfile)
-        download_success = await loaded_set.process(args.always_download, args.always_generate, args.always_metadata)
+        download_success = await loaded_set.process(
+            args.always_download, args.always_generate, args.always_metadata, args.always_labels
+        )
         if not download_success:
             logging.error(f"Could not download all files in set {args.setfile}")
             return
@@ -329,11 +353,18 @@ async def main():
         await delete_all_uploaded(tv_art)
 
     if len(artsets) > 0:
-        await sync_artsets_to_tv(tv_art)
+        if args.skip_upload:
+            logging.info("Skipping upload to TV")
+        else:
+            await sync_artsets_to_tv(tv_art)
+            for art_set in artsets:
+                # write the updated tv ID's
+                art_set.save()
 
     await set_correct_mode(tv_art, tv_remote)
     if args.stay:
         logging.info(f"Staying alive. Ctrl-c to exit")
+        label_display = DisplayLabel()
         exit_requested = False
         while not exit_requested:
             try:
@@ -345,6 +376,7 @@ async def main():
                 logging.info("Exiting...")
                 exit_requested = True
                 continue
+        label_display.close()
 
     logging.info("Closing connection")
     await tv_art.close()

@@ -18,8 +18,10 @@ art_folder_tv_thumbs = f"{base_folder}/tv-thumbs"
 art_folder_label = f"{base_folder}/label"
 art_folder_temp = f"{base_folder}/temp"
 
-label_width = 1448
-label_height = 1072
+cache_folder = f"{base_folder}/api-cache"
+
+label_width = 648
+label_height = 480
 
 dezoomify_tile_cache = f"{base_folder}/tile-cache"
 
