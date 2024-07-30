@@ -47,6 +47,7 @@ class ArtFile:
         metadata=None,
         mat_color: Color = None,
         tv_content_id: str = None,
+        tv_content_thumb_md5: str = None,
     ):
         self.url: str = url
         self.raw_file: str = raw_file
@@ -56,6 +57,7 @@ class ArtFile:
         self.raw_file_height: int = raw_file_height
         self.mat_color: Color = mat_color
         self.tv_content_id: str = tv_content_id
+        self.tv_content_thumb_md5: str = tv_content_thumb_md5
         self.ready_file: str = None
         # if metadata is a dict, strip out any values that are set to None
         if metadata is not None:
@@ -83,6 +85,8 @@ class ArtFile:
             me["mat_hexrgb"] = self.mat_color.get_hex_l()
         if self.tv_content_id is not None:
             me["tv_content_id"] = self.tv_content_id
+        if self.tv_content_thumb_md5 is not None:
+            me["tv_content_tv_content_thumb_md5"] = self.tv_content_thumb_md5
         return me
 
     @classmethod
@@ -97,6 +101,7 @@ class ArtFile:
         mat_hexrgb = data.get("mat_hexrgb", None)
         mat_color = Color(mat_hexrgb) if mat_hexrgb is not None else None
         tv_content_id = data.get("tv_content_id", None)
+        tv_content_thumb_md5 = data.get("tv_content_thumb_md5", None)
         return cls(
             url=url,
             raw_file=raw_file,
@@ -107,6 +112,7 @@ class ArtFile:
             metadata=metadata,
             mat_color=mat_color,
             tv_content_id=tv_content_id,
+            tv_content_thumb_md5=tv_content_thumb_md5,
         )
 
     def get_fullpath(self, folder: str, options: dict):

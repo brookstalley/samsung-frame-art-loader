@@ -1,29 +1,24 @@
+import argparse
 import asyncio
-import sys
-import logging
-import os
+from datetime import datetime
+import hashlib
 import io
 import json
-import argparse
-
-import time
-from local import calculate_relative_brightness
+import logging
+import os
 from PIL import Image
-from art import ArtFile, ArtSet
-from image_utils import images_match
-from display import DisplayLabel
-from datetime import datetime
-
-
-import config
-
-# sys.path.append("../")
+import time
 
 from samsungtvws.async_art import SamsungTVAsyncArt
 from samsungtvws import exceptions
 from samsungtvws.remote import SendRemoteKey
 from samsungtvws.async_remote import SamsungTVWSAsyncRemote
 
+from art import ArtFile, ArtSet
+import config
+from display import DisplayLabel
+from local import calculate_relative_brightness
+from image_utils import images_match
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
 # logging.getLogger().setLevel(logging.DEBUG)
@@ -40,35 +35,66 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Upload images to Samsung TV.")
 
     parser.add_argument(
+        "--always-download",
+        action="store_true",
+        help="Always download images from URLs",
+    )
+    parser.add_argument(
+        "--always-generate",
+        action="store_true",
+        help="Always generate resized images",
+    )
+    parser.add_argument(
+        "--always-labels",
+        action="store_true",
+        help="Always generate labels",
+    )
+    parser.add_argument(
+        "--always-metadata",
+        action="store_true",
+        help="Always retrieve metadata",
+    )
+    parser.add_argument(
         "--debug",
         action="store_true",
         help="Enable debug mode to check if TV is reachable",
     )
-    parser.add_argument("--show-uploaded", action="store_true", help="Show uploaded images from TV")
+    parser.add_argument(
+        "--delete-all",
+        action="store_true",
+        help="Delete all uploaded images",
+    )
     parser.add_argument(
         "--ignore-uploaded",
         action="store_true",
         help="Ignore uploaded images and upload all",
     )
-
+    parser.add_argument(
+        "--no-tv",
+        action="store_true",
+        help="Do not connect to TV",
+    )
     parser.add_argument(
         "--setfile",
+        nargs="+",
         type=str,
         help="Load art set from file",
     )
-    parser.add_argument("--always-generate", action="store_true", help="Always generate resized images")
-    parser.add_argument("--always-metadata", action="store_true", help="Always retrieve metadata")
-    parser.add_argument("--always-labels", action="store_true", help="Always generate labels")
-    parser.add_argument("--skip-upload", action="store_true", help="Skip uploading images to TV")
-
     parser.add_argument(
-        "--always-download",
+        "--show-uploaded",
         action="store_true",
-        help="Always download images from URLs",
+        help="Show uploaded images from TV",
     )
-    parser.add_argument("--delete-all", action="store_true", help="Delete all uploaded images")
-    parser.add_argument("--no-tv", action="store_true", help="Do not connect to TV")
-    parser.add_argument("--stay", action="store_true", help="Keep running")
+    parser.add_argument(
+        "--skip-upload",
+        action="store_true",
+        help="Skip uploading images to TV",
+    )
+    parser.add_argument(
+        "--stay",
+        action="store_true",
+        help="Keep running to update labels and adjust brightness",
+    )
 
     return parser.parse_args()
 
@@ -130,6 +156,12 @@ async def get_thumbnails(tv_art: SamsungTVAsyncArt, content_ids):
     return thumbnails
 
 
+async def get_thumbnail_md5(tv_art: SamsungTVAsyncArt, content_id) -> str:
+    thumbnail_data = await tv_art.get_thumbnail(content_id)
+    md5 = hashlib.md5(thumbnail_data).hexdigest()
+    return md5
+
+
 async def upload_art_files(tv_art: SamsungTVAsyncArt, art_files: list[ArtFile]):
     for art_file in art_files:
         logging.info(f"Uploading {art_file.ready_fullpath}")
@@ -141,6 +173,8 @@ async def upload_art_files(tv_art: SamsungTVAsyncArt, art_files: list[ArtFile]):
                 tv_content_id = await upload_file(art_file.ready_fullpath, tv_art)
                 update_uploaded_files(art_file.ready_fullpath, tv_content_id)
                 art_file.tv_content_id = tv_content_id
+                md5 = await get_thumbnail_md5(tv_art, tv_content_id)
+                art_file.tv_content_thumb_md5 = md5
                 success = True
             except BrokenPipeError:
                 retries += 1
@@ -178,11 +212,11 @@ async def sync_artsets_to_tv(tv_art: SamsungTVAsyncArt):
         total_art_files = sum([len(art_set.art) for art_set in artsets])
         for art_set in artsets:
             for art_file in art_set.art:
-                art_image = Image.open(art_file.ready_fullpath)
+                # Clear the tv_content_id since we're not sure it's real, but leave the MD5 because the thumb should be the same
+                art_file.tv_content_id = None
                 for i, (tv_content_id, thumbnail_data) in enumerate(tv_thumbnails.items()):
-                    logging.info(f"*** Checking {tv_content_id} to {art_file.ready_fullpath} ")
-                    thumbnail_image = Image.open(io.BytesIO(thumbnail_data))
-                    if await images_match(art_image, thumbnail_image):
+                    tv_thumb_md5 = hashlib.md5(thumbnail_data).hexdigest()
+                    if tv_thumb_md5 == art_file.tv_content_thumb_md5:
                         logging.info(f"Found match for {art_file.ready_fullpath} in TV image {tv_content_id}")
                         update_uploaded_files(art_file.ready_fullpath, tv_content_id)
                         art_file.tv_content_id = tv_content_id
@@ -193,7 +227,7 @@ async def sync_artsets_to_tv(tv_art: SamsungTVAsyncArt):
         # Delete images on TV but not in any artset
         tv_ids_in_use = [art_file.tv_content_id for art_set in artsets for art_file in art_set.art if art_file.tv_content_id]
         tv_ids_not_used = [tv_content_id for tv_content_id in tv_thumbnails.keys() if tv_content_id not in tv_ids_in_use]
-        logging.info(f"Deleting {len(tv_ids_not_used)} unused images from TV: {tv_ids_not_used}")
+        logging.info(f"Deleting {len(tv_ids_not_used)} images from TV that are not in an active artset: {tv_ids_not_used}")
         await tv_art.delete_list(tv_ids_not_used)
 
     # upload art_files that do not have a tv_content_id yet
@@ -319,14 +353,19 @@ async def main():
         return
 
     if args.setfile:
-        loaded_set = ArtSet.from_file(args.setfile)
-        download_success = await loaded_set.process(
-            args.always_download, args.always_generate, args.always_metadata, args.always_labels
-        )
-        if not download_success:
-            logging.error(f"Could not download all files in set {args.setfile}")
-            return
-        artsets.append(loaded_set)
+        for setfle in args.setfile:
+            if not os.path.exists(setfle):
+                logging.error(f"Set file {setfle} does not exist.")
+                return
+
+            loaded_set = ArtSet.from_file(args.setfile)
+            download_success = await loaded_set.process(
+                args.always_download, args.always_generate, args.always_metadata, args.always_labels
+            )
+            if not download_success:
+                logging.error(f"Could not download all files in set {args.setfile}")
+                return
+            artsets.append(loaded_set)
 
     if args.no_tv:
         logging.info(f"Not connecting to TV, exiting")
