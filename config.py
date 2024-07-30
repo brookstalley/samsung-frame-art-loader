@@ -34,3 +34,9 @@ tv_port = 8002
 use_art_label = True
 
 dezoomify_user_agent = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
+
+# latitude and longitude for seattle WA
+latitude = 47.606
+longitude = -122.332
+
+max_brightness = 25.0

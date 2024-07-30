@@ -7,10 +7,12 @@ import json
 import argparse
 
 import time
+from local import calculate_relative_brightness
 from PIL import Image
 from art import ArtFile, ArtSet
 from image_utils import images_match
 from display import DisplayLabel
+from datetime import datetime
 
 
 import config
@@ -205,30 +207,39 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
     tv_on = await tv_art.on()
     art_mode = True if await tv_art.get_artmode() == "on" else False
     logging.info(f"TV on: {tv_on}, art mode: {art_mode}")
-    if art_mode:
-        info = await tv_art.get_artmode_settings()
-        logging.info("current artmode settings: {}".format(info))
 
     # if the current time is between 21:00 and 5:00
     if 21 <= time.localtime().tm_hour or time.localtime().tm_hour < 5:
         # if we're in art mode, turn the TV off. Otherwise, do nothing
-        if art_mode:
-            logging.info("Turning off TV")
-            await tv_remote.send_command(SendRemoteKey.hold("KEY_POWER", 3))
+        # if art_mode:
+        #     logging.info("Turning off TV")
+        #     await tv_remote.send_command(SendRemoteKey.hold("KEY_POWER", 3))
         return
 
     # It is during waking hours. If the TV is off, turn it on and set to art mode
     if not tv_on:
         logging.info("Turning TV on")
         await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)
         tv_on = True
 
-    if tv_on and not art_mode:
-        await tv_art.set_artmode("on")
-        # logging.info("Clicking power to set art mode")
-        # await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
-        await asyncio.sleep(1)
+    # if tv_on and not art_mode:
+    #     await tv_art.set_artmode("on")
+    #     art_mode = "on"
+    #     # logging.info("Clicking power to set art mode")
+    #     # await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
+    #     await asyncio.sleep(1)
+
+    if art_mode:
+        info = await tv_art.get_artmode_settings()
+        logging.info("current artmode settings: {}".format(info))
+        # Get the relative brightness based on current time, day of year, latitude, and longitude
+        # Get current datetime
+        current_dt = datetime.now()  # Use datetime.utcnow() if you need UTC time
+
+        # brightness for time of day, scaled 0.0 - 1.0
+        relative_brightness = calculate_relative_brightness(current_dt, config.latitude, config.longitude)
+        tv_art.set_brightness(int(relative_brightness * config.max_brightness))
 
     slideshow_duration = 3
     slideshow_shuffle = True
