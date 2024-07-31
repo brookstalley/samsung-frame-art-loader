@@ -75,6 +75,11 @@ def parse_args():
         help="Do not connect to TV",
     )
     parser.add_argument(
+        "--set-brightness",
+        type=str,
+        help="Set TV brightness (0-10)",
+    )
+    parser.add_argument(
         "--setfile",
         nargs="+",
         type=str,
@@ -86,7 +91,7 @@ def parse_args():
         help="Show uploaded images from TV",
     )
     parser.add_argument(
-        "--skip-upload",
+        "--skip-sync",
         action="store_true",
         help="Skip uploading images to TV",
     )
@@ -238,6 +243,8 @@ async def sync_artsets_to_tv(tv_art: SamsungTVAsyncArt):
 
 async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyncRemote):
     # get current state
+    logging.info("setting mode")
+
     tv_on = await tv_art.on()
     art_mode = True if await tv_art.get_artmode() == "on" else False
     logging.info(f"TV on: {tv_on}, art mode: {art_mode}")
@@ -248,6 +255,7 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
         # if art_mode:
         #     logging.info("Turning off TV")
         #     await tv_remote.send_command(SendRemoteKey.hold("KEY_POWER", 3))
+        print(f"Not setting TV mode")
         return
 
     # It is during waking hours. If the TV is off, turn it on and set to art mode
@@ -273,13 +281,25 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
 
         # brightness for time of day, scaled 0.0 - 1.0
         relative_brightness = calculate_relative_brightness(current_dt, config.latitude, config.longitude)
-        tv_art.set_brightness(int(relative_brightness * config.max_brightness))
+        # we know we'll never get to relative brightness 1.0. Scale it so 0.8 becomes 1.0
+        relative_brightness = min(1.0, relative_brightness * 1.25)
+        
+        brightness_range = config.max_brightness - config.min_brightness
+        cur_brightness = round(relative_brightness * brightness_range) + config.min_brightness
+        await tv_art.set_brightness(cur_brightness)
+        logging.info(f"Setting brightness to {cur_brightness} (calculated relat {relative_brightness})")
 
     slideshow_duration = 3
     slideshow_shuffle = True
 
     logging.info(f"Setting slideshow to {slideshow_duration} seconds, shuffle: {slideshow_shuffle}")
     await tv_art.set_slideshow_status(duration=3, type=True, category=2)
+
+
+async def set_brightness(tv_art: SamsungTVAsyncArt, brightness: str):
+    logging.info(f"Setting brightness to {brightness}")
+    data = await tv_art.set_brightness(brightness)
+    logging.info(f"Got data: {data}")
 
 
 async def image_callback(event, response):
@@ -353,12 +373,12 @@ async def main():
         return
 
     if args.setfile:
-        for setfle in args.setfile:
-            if not os.path.exists(setfle):
-                logging.error(f"Set file {setfle} does not exist.")
+        for setfile in args.setfile:
+            if not os.path.exists(setfile):
+                logging.error(f"Set file {setfile} does not exist.")
                 return
 
-            loaded_set = ArtSet.from_file(args.setfile)
+            loaded_set = ArtSet.from_file(setfile)
             download_success = await loaded_set.process(
                 args.always_download, args.always_generate, args.always_metadata, args.always_labels
             )
@@ -387,12 +407,21 @@ async def main():
     art_mode = await tv_art.supported()
     if not art_mode:
         logging.warning("Your TV does not support art mode.")
+        await tv_remote.close()
+        await tv_art.close()
         return
 
     logging.info("Art mode supported")
     art_mode_version = await tv_art.get_api_version()
 
     logging.info(f"TV at {config.tv_address} supports art mode version {art_mode_version}")
+
+    if args.set_brightness:
+        brightness = args.set_brightness
+        await set_brightness(tv_art, args.set_brightness)
+        await tv_remote.close()
+        await tv_art.close()
+        return
 
     # example callbacks
     tv_art.set_callback("slideshow_image_changed", image_callback)  # new api
@@ -411,7 +440,7 @@ async def main():
         await delete_all_uploaded(tv_art)
 
     if len(artsets) > 0:
-        if args.skip_upload:
+        if args.skip_sync:
             logging.info("Skipping upload to TV")
         else:
             await sync_artsets_to_tv(tv_art)
@@ -419,22 +448,24 @@ async def main():
                 # write the updated tv ID's
                 art_set.save()
 
-    await set_correct_mode(tv_art, tv_remote)
     if args.stay:
         logging.info(f"Staying alive. Ctrl-c to exit")
         label_display = DisplayLabel()
         exit_requested = False
         while not exit_requested:
+            logging.info("loop")
             try:
                 await set_correct_mode(tv_art, tv_remote)
-                # wait one second at a time, 60 times
-                for i in range(0, 59):
-                    await asyncio.sleep(60)
+                # wait one second at a time, 120 times
+                for i in range(0, 120):
+                    await asyncio.sleep(1)
             except KeyboardInterrupt:
                 logging.info("Exiting...")
                 exit_requested = True
                 continue
         label_display.close()
+    else:
+        await set_correct_mode(tv_art, tv_remote)  # just do it once
 
     logging.info("Closing connection")
     await tv_art.close()

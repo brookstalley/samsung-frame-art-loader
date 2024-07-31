@@ -39,4 +39,5 @@ dezoomify_user_agent = "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) Ap
 latitude = 47.606
 longitude = -122.332
 
-max_brightness = 25.0
+max_brightness = 10.0
+min_brightness = -4.0

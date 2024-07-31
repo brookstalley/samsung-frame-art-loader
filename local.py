@@ -1,6 +1,7 @@
 import math
-from datetime import datetime, timedelta
+import datetime
 import pytz
+from tzlocal import get_localzone
 from suntime import Sun
 
 
@@ -34,11 +35,32 @@ def calculate_relative_brightness(dt, latitude, longitude) -> float:
 
     # Get local sunrise and sunset times
     sun = Sun(latitude, longitude)
-    local_time = dt.astimezone(pytz.timezone("UTC"))  # Assuming the dt is in UTC
-    sunrise = sun.get_sunrise_time(local_time).astimezone(pytz.timezone("UTC"))
-    sunset = sun.get_sunset_time(local_time).astimezone(pytz.timezone("UTC"))
+    # local_time = dt.astimezone(pytz.timezone("UTC"))  # Assuming the dt is in UTC
+    local_time = dt
+    local_tz = get_localzone()
 
-    if local_time < sunrise or local_time > sunset:
+    print(f"local time is {local_time}")
+    today = datetime.date.today()
+    # Get the sunrise and sunset times in UTC
+    sunrise_utc = sun.get_sunrise_time(time_zone=local_tz)
+    sunset_utc = sun.get_sunset_time(time_zone=local_tz)
+
+    # Convert the times to the local timezone
+    sunrise = sunrise_utc.astimezone(local_tz)
+    sunset = sunset_utc.astimezone(local_tz)
+    # if the sunset is yesterday, add a day to sunset
+    if sunset.date() < today:
+        sunset = sunset + datetime.timedelta(days=1)
+
+    # adjust sunrise two hours earlier and sunset two hours later to account for twilight
+    sunrise = sunrise - datetime.timedelta(hours=2)
+    sunset = sunset + datetime.timedelta(hours=2)
+
+    print(f"adjusted sunrise is {sunrise}, sunset is {sunset}")
+
+    # if local time is before sunrise. Use datetime.
+
+    if datetime.datetime.now(local_tz) < sunrise or datetime.datetime.now(local_tz) > sunset:
         return 0
 
     # Calculate solar elevation angle
