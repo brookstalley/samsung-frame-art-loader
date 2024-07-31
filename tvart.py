@@ -241,8 +241,12 @@ async def sync_artsets_to_tv(tv_art: SamsungTVAsyncArt):
     await upload_art_files(tv_art, art_files_to_upload)
 
 
+previous_art_mode = False
+
+
 async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyncRemote):
     # get current state
+    global previous_art_mode
     logging.info("setting mode")
 
     tv_on = await tv_art.on()
@@ -283,17 +287,20 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
         relative_brightness = calculate_relative_brightness(current_dt, config.latitude, config.longitude)
         # we know we'll never get to relative brightness 1.0. Scale it so 0.8 becomes 1.0
         relative_brightness = min(1.0, relative_brightness * 1.25)
-        
+
         brightness_range = config.max_brightness - config.min_brightness
         cur_brightness = round(relative_brightness * brightness_range) + config.min_brightness
         await tv_art.set_brightness(cur_brightness)
         logging.info(f"Setting brightness to {cur_brightness} (calculated relat {relative_brightness})")
 
-    slideshow_duration = 3
-    slideshow_shuffle = True
+        if not previous_art_mode:
+            slideshow_duration = 3
+            slideshow_shuffle = True
 
-    logging.info(f"Setting slideshow to {slideshow_duration} seconds, shuffle: {slideshow_shuffle}")
-    await tv_art.set_slideshow_status(duration=3, type=True, category=2)
+            logging.info(f"Setting slideshow to {slideshow_duration} seconds, shuffle: {slideshow_shuffle}")
+            await tv_art.set_slideshow_status(duration=3, type=True, category=2)
+
+    previous_art_mode = art_mode
 
 
 async def set_brightness(tv_art: SamsungTVAsyncArt, brightness: str):
