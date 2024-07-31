@@ -1,72 +1,83 @@
-import math
-import datetime
-import pytz
-from tzlocal import get_localzone
-from suntime import Sun
+from astral import LocationInfo
+from astral.sun import sun, dawn, dusk
+
+import config
+from dataclasses import dataclass
+from datetime import datetime
+import ephem
+import logging
+from typing import Optional
+import tzlocal
+
+logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
 
-def calculate_relative_brightness(dt, latitude, longitude) -> float:
-    def solar_declination(day_of_year):
-        return 23.44 * math.cos(math.radians((360 / 365.24) * (day_of_year - 81)))
+# A dataclass to hold the sun's information
+@dataclass
+class SunInfo:
+    at_time: datetime
+    at_latitude: float
+    at_longitude: float
+    sunrise: Optional[datetime] = None
+    sunset: Optional[datetime] = None
+    civil_twilight_morning: Optional[datetime] = None
+    civil_twilight_evening: Optional[datetime] = None
+    declination: Optional[float] = None
+    relative_brightness: Optional[float] = None
 
-    def solar_elevation_angle(latitude, longitude, declination, time_utc):
-        time_offset = (time_utc.hour + time_utc.minute / 60 + time_utc.second / 3600 + longitude / 15) % 24
-        solar_hour_angle = 15 * (time_offset - 12)
-        latitude_rad = math.radians(latitude)
-        declination_rad = math.radians(declination)
-        elevation_angle = math.degrees(
-            math.asin(
-                math.sin(latitude_rad) * math.sin(declination_rad)
-                + math.cos(latitude_rad) * math.cos(declination_rad) * math.cos(math.radians(solar_hour_angle))
-            )
+    def __str__(self):
+        return (
+            f"SunInfo(at_time={self.at_time}, at_latitude={self.at_latitude}, "
+            f"at_longitude={self.at_longitude}, sunrise={self.sunrise}, sunset={self.sunset}, "
+            f"civil_twilight_morning={self.civil_twilight_morning}, civil_twilight_evening={self.civil_twilight_evening}, "
+            f"declination={self.declination}, relative_brightness={self.relative_brightness})"
         )
-        return elevation_angle
 
-    def scale_brightness(elevation_angle):
-        if elevation_angle <= 0:
-            return 0.0
-        elif elevation_angle >= 90:
-            return 10.0
-        return elevation_angle / 90.0
 
-    # Calculate solar declination
-    day_of_year = dt.timetuple().tm_yday
-    declination = solar_declination(day_of_year)
+def current_sun() -> SunInfo:
+    timezone = tzlocal.get_localzone_name()
 
-    # Get local sunrise and sunset times
-    sun = Sun(latitude, longitude)
-    # local_time = dt.astimezone(pytz.timezone("UTC"))  # Assuming the dt is in UTC
-    local_time = dt
-    local_tz = get_localzone()
+    # Get the current time
+    current_time = datetime.now(tz=tzlocal.get_localzone())
 
-    print(f"local time is {local_time}")
-    today = datetime.date.today()
-    # Get the sunrise and sunset times in UTC
-    sunrise_utc = sun.get_sunrise_time(time_zone=local_tz)
-    sunset_utc = sun.get_sunset_time(time_zone=local_tz)
+    # Get today's date
+    today = datetime.now().date()
+    latitude = config.latitude
+    longitude = config.longitude
 
-    # Convert the times to the local timezone
-    sunrise = sunrise_utc.astimezone(local_tz)
-    sunset = sunset_utc.astimezone(local_tz)
-    # if the sunset is yesterday, add a day to sunset
-    if sunset.date() < today:
-        sunset = sunset + datetime.timedelta(days=1)
+    # Create a LocationInfo object
+    location = LocationInfo(name="Current Location", region="Region", timezone=timezone, latitude=latitude, longitude=longitude)
 
-    # adjust sunrise two hours earlier and sunset two hours later to account for twilight
-    sunrise = sunrise - datetime.timedelta(hours=2)
-    sunset = sunset + datetime.timedelta(hours=2)
+    suninfo = SunInfo(at_time=current_time, at_latitude=latitude, at_longitude=longitude)
 
-    print(f"adjusted sunrise is {sunrise}, sunset is {sunset}")
+    # Calculate sunrise, sunset, and twilight times
+    s = sun(location.observer, date=today, tzinfo=tzlocal.get_localzone())
 
-    # if local time is before sunrise. Use datetime.
+    # Extract times
+    suninfo.sunrise = s["sunrise"]
+    suninfo.sunset = s["sunset"]
+    suninfo.civil_twilight_morning = s["dawn"]
+    suninfo.civil_twilight_evening = s["dusk"]
 
-    if datetime.datetime.now(local_tz) < sunrise or datetime.datetime.now(local_tz) > sunset:
-        return 0
+    # Create an observer using ephem
+    observer = ephem.Observer()
+    observer.lat = str(latitude)
+    observer.lon = str(longitude)
+    observer.date = current_time
 
-    # Calculate solar elevation angle
-    elevation_angle = solar_elevation_angle(latitude, longitude, declination, local_time)
+    # Create the sun object using ephem
+    sun_ephem = ephem.Sun(observer)
 
-    # Scale elevation angle to brightness (0-10)
-    brightness = scale_brightness(elevation_angle)
+    # Extract the sun's declination
+    declination = sun_ephem.dec
 
-    return brightness
+    # Convert declination to degrees
+    declination_degrees = declination * 180.0 / ephem.pi
+    suninfo.declination = declination_degrees
+    if current_time < suninfo.civil_twilight_morning or current_time > suninfo.civil_twilight_evening:
+        suninfo.relative_brightness = 0.0
+    else:
+        # we know civil twilight means the declination will be between -6.0 degrees and 90 degrees. Scale that to 0.0 to 1.0
+        suninfo.relative_brightness = (declination_degrees + 6.0) / 96.0
+
+    return suninfo

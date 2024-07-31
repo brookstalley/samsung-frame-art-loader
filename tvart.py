@@ -17,7 +17,7 @@ from samsungtvws.async_remote import SamsungTVWSAsyncRemote
 from art import ArtFile, ArtSet
 import config
 from display import DisplayLabel
-from local import calculate_relative_brightness
+from local import SunInfo, current_sun
 from image_utils import images_match
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
@@ -26,6 +26,8 @@ artsets = []
 uploaded_files = {}
 label_display: DisplayLabel = None
 last_tv_content_id = None
+previous_art_mode = False
+previous_auto_start = None
 
 UPLOADED_CATEGORY = "MY-C0002"
 
@@ -241,12 +243,27 @@ async def sync_artsets_to_tv(tv_art: SamsungTVAsyncArt):
     await upload_art_files(tv_art, art_files_to_upload)
 
 
-previous_art_mode = False
+async def set_brightness_for_local(tv_art: SamsungTVAsyncArt):
+    current_dt = datetime.now()  # Use datetime.utcnow() if you need UTC time
+
+    # brightness for time of day, scaled 0.0 - 1.0
+    suninfo: SunInfo = current_sun()
+    relative_brightness = suninfo.relative_brightness
+    # we know we'll never get to relative brightness 1.0. Scale it so 0.8 becomes 1.0
+    max_brightness_at_relative_brightness = 0.6
+    relative_brightness = min(1.0, relative_brightness * (1 / max_brightness_at_relative_brightness))
+
+    brightness_range = config.max_brightness - config.min_brightness
+    cur_brightness = round(relative_brightness * brightness_range) + config.min_brightness
+    await tv_art.set_brightness(cur_brightness)
+    logging.info(f"Setting brightness to {cur_brightness} (calculated relat {relative_brightness})")
 
 
 async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyncRemote):
     # get current state
     global previous_art_mode
+    global previous_auto_start
+
     logging.info("setting mode")
 
     tv_on = await tv_art.on()
@@ -254,20 +271,37 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
     logging.info(f"TV on: {tv_on}, art mode: {art_mode}")
 
     # if the current time is between 21:00 and 5:00
-    if 21 <= time.localtime().tm_hour or time.localtime().tm_hour < 5:
-        # if we're in art mode, turn the TV off. Otherwise, do nothing
-        # if art_mode:
-        #     logging.info("Turning off TV")
-        #     await tv_remote.send_command(SendRemoteKey.hold("KEY_POWER", 3))
-        print(f"Not setting TV mode")
-        return
+    # if 21 <= time.localtime().tm_hour or time.localtime().tm_hour < 5:
+    #     # if we're in art mode, turn the TV off. Otherwise, do nothing
+    #     # if art_mode:
+    #     #     logging.info("Turning off TV")
+    #     #     await tv_remote.send_command(SendRemoteKey.hold("KEY_POWER", 3))
+    #     print(f"Not setting TV mode")
+    #     return
 
-    # It is during waking hours. If the TV is off, turn it on and set to art mode
-    if not tv_on:
-        logging.info("Turning TV on")
-        await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
-        await asyncio.sleep(2)
-        tv_on = True
+    # It is during waking hours. If the TV is off, turn it on.  and set to art mode
+    # if previous_auto_start was not today, turn on the TV and set previous_autostart to today
+    # if previous_auto_start is today, do nothing
+    if previous_auto_start is None or previous_auto_start < datetime.now().date():
+        # config.auto_artmode_time_on is in 24 hour time (0530, 1715, etc). See if the current time is past that.
+        current_time_24h = datetime.now().strftime("%H%M")
+        if current_time_24h >= str(config.auto_artmode_time_on):
+            logging.info("Time to wake up and see the art")
+            if not tv_on:
+                await set_brightness_for_local(tv_art)
+                logging.info("Turning TV on")
+                await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
+                await asyncio.sleep(3)
+            if not art_mode:
+                await tv_art.set_artmode("on")
+            await set_brightness_for_local(tv_art)
+            previous_auto_start = datetime.now().date()
+
+    # if not tv_on:
+    #     logging.info("Turning TV on")
+    #     await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
+    #     await asyncio.sleep(2)
+    #     tv_on = True
 
     # if tv_on and not art_mode:
     #     await tv_art.set_artmode("on")
@@ -276,29 +310,20 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
     #     # await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
     #     await asyncio.sleep(1)
 
-    if art_mode:
+    if art_mode and not previous_art_mode:
+        # Artmode was switched on since last time we checked
         info = await tv_art.get_artmode_settings()
         logging.info("current artmode settings: {}".format(info))
         # Get the relative brightness based on current time, day of year, latitude, and longitude
         # Get current datetime
-        current_dt = datetime.now()  # Use datetime.utcnow() if you need UTC time
-
-        # brightness for time of day, scaled 0.0 - 1.0
-        relative_brightness = calculate_relative_brightness(current_dt, config.latitude, config.longitude)
-        # we know we'll never get to relative brightness 1.0. Scale it so 0.8 becomes 1.0
-        relative_brightness = min(1.0, relative_brightness * 1.25)
-
-        brightness_range = config.max_brightness - config.min_brightness
-        cur_brightness = round(relative_brightness * brightness_range) + config.min_brightness
-        await tv_art.set_brightness(cur_brightness)
-        logging.info(f"Setting brightness to {cur_brightness} (calculated relat {relative_brightness})")
-
-        if not previous_art_mode:
-            slideshow_duration = 3
-            slideshow_shuffle = True
-
-            logging.info(f"Setting slideshow to {slideshow_duration} seconds, shuffle: {slideshow_shuffle}")
-            await tv_art.set_slideshow_status(duration=3, type=True, category=2)
+        await set_brightness_for_local(tv_art)
+        slideshow_duration = 3
+        slideshow_shuffle = True
+        logging.info(f"Setting slideshow to {slideshow_duration} seconds, shuffle: {slideshow_shuffle}")
+        try:
+            data = await tv_art.set_slideshow_status(duration=3, type=True, category=2)
+        except AssertionError:
+            logging.error("No data returned setting slideshow status")
 
     previous_art_mode = art_mode
 

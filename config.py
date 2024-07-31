@@ -41,3 +41,7 @@ longitude = -122.332
 
 max_brightness = 10.0
 min_brightness = -4.0
+
+# Use strings so leading zeros don't get stripped
+auto_artmode_time_on = "0530"
+auto_artmode_time_off = "2200"
