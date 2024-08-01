@@ -37,7 +37,7 @@ class SunInfo:
 
 def calculate_solar_declination(day_of_year):
     # Approximate calculation of solar declination angle in degrees
-    return 23.44 * math.cos(math.radians(360 / 365 * (day_of_year + 10)))
+    return 23.44 * math.sin(math.radians((360 / 365) * (day_of_year - 81)))
 
 
 def perceived_brightness(weather_condition="clear"):
@@ -66,6 +66,8 @@ def perceived_brightness(weather_condition="clear"):
     day_of_year = current_time.timetuple().tm_yday
     declination = calculate_solar_declination(day_of_year)
 
+    # print(f"delta_hours: {delta_hours}, hour_angle: {hour_angle}, declination: {declination}")
+
     # Calculate solar angle
     solar_angle = math.degrees(
         math.asin(
@@ -89,8 +91,11 @@ def perceived_brightness(weather_condition="clear"):
             adjustment_pct = (current_time - s["dawn"]).total_seconds() / (s["sunrise"] - s["dawn"]).total_seconds()
         else:
             adjustment_pct = 1 - (current_time - s["sunset"]).total_seconds() / (s["dusk"] - s["sunset"]).total_seconds()
-    dawn_dusk_adjustment = 0.2 * adjustment_pct
-    brightness = max(0, dawn_dusk_adjustment + math.cos(math.radians(90 - solar_angle)))
+
+    dawn_dusk_adjustment = 0.15 * adjustment_pct
+    brightness = max(0, math.cos(math.radians(90 - solar_angle)))
+    brightness += dawn_dusk_adjustment
+    logging.info(f"dawn_dusk_adjustment: {dawn_dusk_adjustment}, brightness: {brightness}, solar_angle: {solar_angle}")
 
     # Adjust for weather conditions (simplified)
     weather_adjustments = {"clear": 1.0, "partly cloudy": 0.8, "cloudy": 0.5, "rain": 0.3, "storm": 0.1}
@@ -109,5 +114,6 @@ def perceived_brightness(weather_condition="clear"):
         solar_angle=solar_angle,
         brightness=brightness,
     )
+    print(suninfo)
 
     return suninfo

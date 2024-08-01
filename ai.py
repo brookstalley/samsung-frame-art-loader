@@ -9,9 +9,7 @@ from colour import Color
 
 mat_prompt = """I'm a curator at the museum that owns this artwork and we have rights to reproduce in all mediums. This artwork will be displayed on a 16:9 display, scaled so that there will be bars on either the sides or top and bottom. Think of these bars like the mat on a framed artwork. Suggest a mat color that will highlight the artwork. Think in LAB colorspace to align with human perception. Use best practices and color theory to produce an elegant color choice. Avoid greys if possible, and avoid having the mat seem brighter than the artwork since this will be on a LCD display. If in doubt, go darker. 
 
-To help us visualize what it will look like in the museum, redraw this exact artwork, expanding to a 16:9 aspect ratio with the mat color you chose. Do not crop or scale the original, just pad the top or sides as needed. 
-
-For your response, ONLY show the image and then provide JSON with the RGB and LAB color values and a very short reason for this color choice. Do not explain aspect ratios or anything else. Just the preview image and the JSON.
+For your response, ONLY provide JSON with the RGB and LAB color values and a very short reason for this color choice. Do not explain aspect ratios or anything else. Just the preview image and the JSON.
 
 JSON must be in the format:
 {
@@ -23,21 +21,28 @@ JSON must be in the format:
   "reason": "a very short reason for why this color was chosen"
 }"""
 
-mat_prompt2 = """This artwork will be displayed on a 16:9 display, scaled so that there will be bars on either the sides or top and bottom. 
+mat_prompt2 = """I'm a curator at the museum that owns this artwork. This artwork will be displayed on a 16:9 display, scaled so that there will be bars on either the sides or top and bottom.  Pick a mat color that will look great. Here are some guidelines:
 
-Think of these bars like the mat on a framed artwork. Suggest a mat color that will highlight the artwork. Use best practices and color theory to produce an elegant color choice that will not overpower the artwork on a LCD display.
+- Think carefully about the content of the artwork, the color palette, mood, and the overall aesthetic
+- If you recognize the artwork or artist, consider their style and preferences
+- Think in LAB colorspace to align with human perception
+- Consider best practices for mat color choices
+- Avoid greys unless the artwork is black and white or greyscale
+- Avoid colors or brightnesses that may blend in with the artwork
+- Only use saturated colors if most of the artwork is neutral and there is a small highlight to echo. 
+- Remember that the final display will be 16:9, so the art's aspect ratio will determine the size of the mat
+- When the mat is larger, the mat must be darker than the artwork
 
-Avoid making the mat brighter or more saturated than the artwork since this will be on a LCD display. If in doubt, go darker and less saturated. But avoid greys if there is a more interesting choice.
-
-For your response, ONLY provide JSON with the color values and a very short reason for this color choice. Do not explain aspect ratios or anything else. Just the preview image and the JSON.
+For your response, ONLY provide JSON with the RGB and LAB color values and the reasoning for this color choice.
 
 JSON must be in the format:
 {
   "mat_color": {
       "RGB": {"red": "123", "green" : "89", "blue": "98"},
-      "RGB_HEX" : "#7B5962",
+      "RGB_HEX" : "#6B3952",
+      "LAB": {"l": "96.34", "a": "103.27", "b": "67.31"}
   },
-  "reason": "a very short reason for why this color was chosen"
+  "reason": "This abstract artwork by Mark Rothko is considered to have great emotional weight. The artwork's average LAB lightness is 51 and the portrait aspect ratio means the side bars will be quite large, so the mat must be darker to highlight the artwork. This desaturated purple mat complements the artwork's dominant green and brown colors, while mirroring the brighter purple accents in a more muted tone. "
 }"""
 
 

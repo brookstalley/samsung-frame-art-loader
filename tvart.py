@@ -260,13 +260,19 @@ async def sync_artsets_to_tv(tv_art: SamsungTVAsyncArt):
         # Delete images on TV but not in any artset
         tv_ids_in_use = [art_file.tv_content_id for art_set in artsets for art_file in art_set.art if art_file.tv_content_id]
         tv_ids_not_used = [tv_content_id for tv_content_id in tv_thumbnails.keys() if tv_content_id not in tv_ids_in_use]
-        logging.info(f"Deleting {len(tv_ids_not_used)} images from TV that are not in an active artset: {tv_ids_not_used}")
-        await tv_art.delete_list(tv_ids_not_used)
+        if tv_ids_not_used:
+            logging.info(f"Deleting {len(tv_ids_not_used)} images from TV that are not in an active artset: {tv_ids_not_used}")
+            await tv_art.delete_list(tv_ids_not_used)
+        else:
+            logging.info(f"No images to delete from TV")
 
     # upload art_files that do not have a tv_content_id yet
     art_files_to_upload = [art_file for art_set in artsets for art_file in art_set.art if not art_file.tv_content_id]
-    logging.info(f"Uploading {len(art_files_to_upload)} new images to TV")
-    await upload_art_files(tv_art, art_files_to_upload)
+    if art_files_to_upload:
+        logging.info(f"Uploading {len(art_files_to_upload)} new images to TV")
+        await upload_art_files(tv_art, art_files_to_upload)
+    else:
+        logging.info(f"No new images to upload to TV")
 
 
 async def set_brightness_for_local(tv_art: SamsungTVAsyncArt):
@@ -276,7 +282,7 @@ async def set_brightness_for_local(tv_art: SamsungTVAsyncArt):
     suninfo: SunInfo = perceived_brightness()
     brightness = suninfo.brightness
     # we know we'll never get to relative brightness 1.0. Scale it so 0.8 becomes 1.0
-    max_brightness_at_relative_brightness = 0.6
+    max_brightness_at_relative_brightness = 1.0
     brightness = min(1.0, brightness * (1 / max_brightness_at_relative_brightness))
 
     brightness_range = config.max_brightness - config.min_brightness

@@ -19,9 +19,9 @@
                 "rights": "\u00a9 City and county of Denver",
                 "medium": "Oil on canvas"
             },
-            "mat_hexrgb": "#59758c",
-            "tv_content_id": "MY_F0929",
-            "tv_content_thumb_md5": "37f13c7c33f928bb37bbb4b8350f6e2d"
+            "mat_hexrgb": "#292752",
+            "tv_content_id": "MY_F1070",
+            "tv_content_thumb_md5": "dcd49e5647f1c997435e988a4081afef"
         },
         {
             "url": "https://artsandculture.google.com/asset/ion-11-victor-vasarely/zAGDIJRNphFaPw",
@@ -37,9 +37,9 @@
                 "dimensions": "68 x 68 cm",
                 "medium": "serigraphy"
             },
-            "mat_hexrgb": "#222244",
-            "tv_content_id": "MY_F0930",
-            "tv_content_thumb_md5": "00ada5e15efc38f9320f3aed4ba3f328"
+            "mat_hexrgb": "#212133",
+            "tv_content_id": "MY_F1071",
+            "tv_content_thumb_md5": "83f65b29881e48831bcc1ade248d503c"
         },
         {
             "url": "https://www.artic.edu/artworks/100472/untitled-purple-white-and-red",
@@ -60,8 +60,9 @@
                 "creator_born": "1903",
                 "creator_died": "1970"
             },
-            "tv_content_id": "MY_F0894",
-            "tv_content_thumb_md5": "688c5bb38fc2955443bb33712ed4804e"
+            "mat_hexrgb": "#3c2f26",
+            "tv_content_id": "MY_F1072",
+            "tv_content_thumb_md5": "bc46746ef6236c6dc0ebeddb63af19dc"
         }
     ]
 }
