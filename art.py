@@ -189,6 +189,9 @@ class ArtFile:
                 )
                 if mat_color is not None:
                     self.mat_color = mat_color
+            # Clear TV content ID and thumb MD5 because the image chnaged
+            self.tv_content_id = None
+            self.tv_content_thumb_md5 = None
 
         self.ready_file = os.path.basename(self.ready_fullpath)
 

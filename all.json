@@ -611,7 +611,7 @@
                 "creator_born": 1841,
                 "creator_died": 1919
             },
-            "mat_hexrgb": "#637887",
+            "mat_hexrgb": "#465a6e",
             "tv_content_id": "MY_F0956",
             "tv_content_thumb_md5": "e4b6ee104774cdfb9df84e202114adb6"
         },
@@ -633,7 +633,7 @@
                 "creator_born": 1904,
                 "creator_died": 1989
             },
-            "mat_hexrgb": "#664d3f",
+            "mat_hexrgb": "#2e4057",
             "tv_content_id": "MY_F0957",
             "tv_content_thumb_md5": "88572cff049f5de0f428f21f35624414"
         },
@@ -655,7 +655,7 @@
                 "creator_born": 1866,
                 "creator_died": 1944
             },
-            "mat_hexrgb": "#3c2f48",
+            "mat_hexrgb": "#593424",
             "tv_content_id": "MY_F0958",
             "tv_content_thumb_md5": "1f8614523cbba6c5fa70868c4e82261a"
         },
@@ -675,7 +675,7 @@
                 "artist": "Moche",
                 "artist_nationality": "North coast, Peru"
             },
-            "mat_hexrgb": "#785a3c",
+            "mat_hexrgb": "#695d49",
             "tv_content_id": "MY_F0959",
             "tv_content_thumb_md5": "577b7c4a5366eaa4a7d18c6eef490aa7"
         },
@@ -698,7 +698,7 @@
                 "creator_born": 1897,
                 "creator_died": 1946
             },
-            "mat_hexrgb": "#2d221d",
+            "mat_hexrgb": "#3f2f1a",
             "tv_content_id": "MY_F0960",
             "tv_content_thumb_md5": "4ef1abaa4703accc6000ae6e233b3b27"
         },
@@ -721,7 +721,7 @@
                 "creator_born": 1923,
                 "creator_died": 2015
             },
-            "mat_hexrgb": "#594024",
+            "mat_hexrgb": "#1f2f32",
             "tv_content_id": "MY_F0961",
             "tv_content_thumb_md5": "15138b34093293f120145377d481efe6"
         },
@@ -743,7 +743,7 @@
                 "creator_born": 1883,
                 "creator_died": 1935
             },
-            "mat_hexrgb": "#483d8b",
+            "mat_hexrgb": "#231c2f",
             "tv_content_id": "MY_F0962",
             "tv_content_thumb_md5": "908044b87b4a795118ca5015939f3233"
         },
@@ -766,7 +766,7 @@
                 "creator_born": "1910",
                 "creator_died": "1962"
             },
-            "mat_hexrgb": "#3c3c3c",
+            "mat_hexrgb": "#555555",
             "tv_content_id": "MY_F0963",
             "tv_content_thumb_md5": "54f1f7be46a18c0328c8e8d2d0f5b152"
         },
@@ -788,7 +788,7 @@
                 "creator_born": "1910",
                 "creator_died": "1962"
             },
-            "mat_hexrgb": "#4d4d4d",
+            "mat_hexrgb": "#2d2d30",
             "tv_content_id": "MY_F0964",
             "tv_content_thumb_md5": "51e9436349a9fb7c97305f0508995bf5"
         },
@@ -810,7 +810,7 @@
                 "creator_born": "1898",
                 "creator_died": "1976"
             },
-            "mat_hexrgb": "#222222",
+            "mat_hexrgb": "#2a2a2a",
             "tv_content_id": "MY_F0965",
             "tv_content_thumb_md5": "76835b121189d584788d1ed9fb8dd565"
         },
@@ -830,7 +830,7 @@
                 "artist": "Moche",
                 "artist_nationality": "North coast, Peru"
             },
-            "mat_hexrgb": "#755f46",
+            "mat_hexrgb": "#4e382f",
             "tv_content_id": "MY_F0966",
             "tv_content_thumb_md5": "471842f23ef0a00c9b9fda0b66b8780f"
         },
@@ -850,7 +850,7 @@
                 "artist": "Marilyn Minter",
                 "creator_born": "1948"
             },
-            "mat_hexrgb": "#643c3c",
+            "mat_hexrgb": "#264e67",
             "tv_content_id": "MY_F0967",
             "tv_content_thumb_md5": "b458be0509805c65f1a83453eeba44ef"
         },
@@ -867,7 +867,7 @@
                 "creator_lived": "1955",
                 "date_created": "1995"
             },
-            "mat_hexrgb": "#303048",
+            "mat_hexrgb": "#2b2d42",
             "tv_content_id": "MY_F0968",
             "tv_content_thumb_md5": "2727989e5d0a49b2b83031733923c069"
         },
@@ -890,7 +890,7 @@
                 "creator_born": "1872",
                 "creator_died": "1944"
             },
-            "mat_hexrgb": "#2b2b2b",
+            "mat_hexrgb": "#37344f",
             "tv_content_id": "MY_F0969",
             "tv_content_thumb_md5": "a99c242f434d0e3b2451ac921e3e3c23"
         }
