@@ -712,6 +712,67 @@
             },
             "mat_hexrgb": "#483d8b",
             "tv_content_id": "MY_F0826"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/102581/painting",
+            "raw_file": "Franz Kline - Painting.jpg",
+            "label_file": "Franz Kline - Painting_w648_h480.jpg",
+            "raw_file_width": 2930,
+            "raw_file_height": 2250,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Painting",
+                "date_created": "1952",
+                "artist_details": "Franz Kline\nAmerican, 1910-1962",
+                "description": "<p>Until the early 1940s, Franz Kline painted realistic landscapes, portraits, and cityscapes that were inspired by the textures and forms of New York City. Around 1949 he began to make black-and-white canvases such as <em>Painting</em>, which, while abstract, continue to suggest the invigorating energy of urban street life. The artist\u2019s preparation for his paintings included making numerous sketches on newspaper or telephone-book pages. He then translated a small-scale drawing onto canvas, as, what he called, \u201cstrokes expanding as entities in themselves.\u201d Utilizing housepainters\u2019 brushes, Kline tacked his canvases to a wood panel in order to obtain the hard surface that he needed to paint his world of eternally colliding forces. Though the many visible drip marks imply a quick, spontaneous execution, the artist returned to this work several times over a two-month period to refine and strengthen its rhythm and spacing.</p>\n",
+                "dimensions": "195.6 \u00d7 254 cm (77 \u00d7 100 in.)",
+                "medium": "Oil on canvas",
+                "artist": "Franz Kline",
+                "artist_nationality": "American",
+                "creator_born": "1910",
+                "creator_died": "1962"
+            },
+            "mat_hexrgb": "#3c3c3c"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/202444/chicago",
+            "raw_file": "Franz Kline - Chicago.jpg",
+            "label_file": "Franz Kline - Chicago_w648_h480.jpg",
+            "raw_file_width": 3259,
+            "raw_file_height": 2527,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Chicago",
+                "date_created": "1959",
+                "artist_details": "Franz Kline\nAmerican, 1910\u20131962",
+                "dimensions": "22.9 \u00d7 29.8 cm (9 1/16 \u00d7 11 3/4 in.)",
+                "medium": "Brush and black ink, white oil paint, and charcoal on off-white wove paper",
+                "artist": "Franz Kline",
+                "artist_nationality": "American",
+                "creator_born": "1910",
+                "creator_died": "1962"
+            },
+            "mat_hexrgb": "#4d4d4d"
+        },
+        {
+            "url": "https://www.artic.edu/artworks/109446/blue-half-circle",
+            "raw_file": "Alexander Calder - Blue Half Circle.jpg",
+            "label_file": "Alexander Calder - Blue Half Circle_w648_h480.jpg",
+            "raw_file_width": 4911,
+            "raw_file_height": 3378,
+            "resize_option": "scaled",
+            "metadata": {
+                "title": "Blue Half Circle",
+                "date_created": "1970",
+                "artist_details": "Alexander Calder\nAmerican, 1898-1976",
+                "dimensions": "74.7 \u00d7 109.6 cm (29 7/16 \u00d7 43 3/16 in.)",
+                "medium": "Gouache and brush and black ink on ivory wove paper",
+                "artist": "Alexander Calder",
+                "artist_nationality": "American",
+                "creator_born": "1898",
+                "creator_died": "1976"
+            },
+            "mat_hexrgb": "#222222"
         }
     ]
 }

@@ -17,7 +17,7 @@ from samsungtvws.async_remote import SamsungTVWSAsyncRemote
 from art import ArtFile, ArtSet
 import config
 from display import DisplayLabel
-from local import SunInfo, current_sun
+from local import SunInfo, perceived_brightness
 from image_utils import images_match
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
@@ -125,6 +125,10 @@ async def show_available(tv, category=None):
 async def delete_all_uploaded(tv_art):
     available_art = await get_available(tv_art, UPLOADED_CATEGORY)
     await tv_art.delete_list([art["content_id"] for art in available_art])
+    # clear the tv_content_id from any artfiles that were uploaded
+    for art_set in artsets:
+        for art_file in art_set.art:
+            art_file.tv_content_id = None
     logging.info(f"Deleted {len(available_art)} uploaded images")
     # Clear the list of uploaded filenames
     uploaded_files = {}
@@ -143,6 +147,7 @@ async def upload_file(local_file: str, tv_art: SamsungTVAsyncArt) -> str:
         elif local_file.endswith(".png"):
             remote_filename = await tv_art.upload(data, file_type="PNG", matte="none", portrait_matte="none")
         update_uploaded_files(local_file, remote_filename)
+        await tv_art.select_image(remote_filename)
     except Exception as e:
         logging.error("There was an error: " + str(e))
     finally:
@@ -164,8 +169,19 @@ async def get_thumbnails(tv_art: SamsungTVAsyncArt, content_ids):
 
 
 async def get_thumbnail_md5(tv_art: SamsungTVAsyncArt, content_id) -> str:
-    thumbnail_data = await tv_art.get_thumbnail(content_id)
-    md5 = hashlib.md5(thumbnail_data).hexdigest()
+    logging.info(f"Getting thumbnail for {content_id}")
+    try:
+        thumbnail_list = await tv_art.get_thumbnail_list([content_id])
+        keys = list(thumbnail_list.keys())
+        for key in keys:
+            new_key = key.rsplit(".", 1)[0]
+            thumbnail_list[new_key] = thumbnail_list.pop(key)
+        # logging.info(thumbnail_list)
+        # thumbnail_data = await tv_art.get_thumbnail(content_id)
+        md5 = hashlib.md5(thumbnail_list[content_id]).hexdigest()
+    except AssertionError:  # exceptions.ArtError as e:
+        logging.error(f"Error getting thumbnail for {content_id}")
+        md5 = None
     return md5
 
 
@@ -180,8 +196,13 @@ async def upload_art_files(tv_art: SamsungTVAsyncArt, art_files: list[ArtFile]):
                 tv_content_id = await upload_file(art_file.ready_fullpath, tv_art)
                 update_uploaded_files(art_file.ready_fullpath, tv_content_id)
                 art_file.tv_content_id = tv_content_id
-                md5 = await get_thumbnail_md5(tv_art, tv_content_id)
-                art_file.tv_content_thumb_md5 = md5
+                try:
+                    md5 = await get_thumbnail_md5(tv_art, tv_content_id)
+                    art_file.tv_content_thumb_md5 = md5
+                except AssertionError:
+                    md5 = None
+                    logging.error("No data returned getting thumbnail")
+
                 success = True
             except BrokenPipeError:
                 retries += 1
@@ -247,16 +268,16 @@ async def set_brightness_for_local(tv_art: SamsungTVAsyncArt):
     current_dt = datetime.now()  # Use datetime.utcnow() if you need UTC time
 
     # brightness for time of day, scaled 0.0 - 1.0
-    suninfo: SunInfo = current_sun()
-    relative_brightness = suninfo.relative_brightness
+    suninfo: SunInfo = perceived_brightness()
+    brightness = suninfo.brightness
     # we know we'll never get to relative brightness 1.0. Scale it so 0.8 becomes 1.0
     max_brightness_at_relative_brightness = 0.6
-    relative_brightness = min(1.0, relative_brightness * (1 / max_brightness_at_relative_brightness))
+    brightness = min(1.0, brightness * (1 / max_brightness_at_relative_brightness))
 
     brightness_range = config.max_brightness - config.min_brightness
-    cur_brightness = round(relative_brightness * brightness_range) + config.min_brightness
+    cur_brightness = round(brightness * brightness_range) + config.min_brightness
     await tv_art.set_brightness(cur_brightness)
-    logging.info(f"Setting brightness to {cur_brightness} (calculated relat {relative_brightness})")
+    logging.info(f"Setting brightness to {cur_brightness} (calculated relat {brightness})")
 
 
 async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyncRemote):
@@ -316,14 +337,16 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
         logging.info("current artmode settings: {}".format(info))
         # Get the relative brightness based on current time, day of year, latitude, and longitude
         # Get current datetime
-        await set_brightness_for_local(tv_art)
         slideshow_duration = 3
         slideshow_shuffle = True
-        logging.info(f"Setting slideshow to {slideshow_duration} seconds, shuffle: {slideshow_shuffle}")
+        logging.info(f"Setting slideshow to {slideshow_duration} minutes, shuffle: {slideshow_shuffle}")
         try:
             data = await tv_art.set_slideshow_status(duration=3, type=True, category=2)
         except AssertionError:
             logging.error("No data returned setting slideshow status")
+
+    if art_mode:
+        await set_brightness_for_local(tv_art)
 
     previous_art_mode = art_mode
 
@@ -470,6 +493,10 @@ async def main():
     if args.delete_all:
         logging.info("Deleting all uploaded images")
         await delete_all_uploaded(tv_art)
+        for art_set in artsets:
+            # write the updated tv ID's
+            logging.info(f"...saving {art_set.name}")
+            art_set.save()
 
     if len(artsets) > 0:
         if args.skip_sync:

@@ -63,6 +63,8 @@ class ArtFile:
         if metadata is not None:
             self.metadata = {k: v for k, v in metadata.items() if v is not None}
             self.metadata = metadata
+        else:
+            self.metadata = None
 
     def to_dict(self):
         # return a JSON representation of the art file, but only the fields that are needed to recreate the object
@@ -86,7 +88,7 @@ class ArtFile:
         if self.tv_content_id is not None:
             me["tv_content_id"] = self.tv_content_id
         if self.tv_content_thumb_md5 is not None:
-            me["tv_content_tv_content_thumb_md5"] = self.tv_content_thumb_md5
+            me["tv_content_thumb_md5"] = self.tv_content_thumb_md5
         return me
 
     @classmethod
