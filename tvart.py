@@ -52,6 +52,11 @@ def parse_args():
         help="Always generate labels",
     )
     parser.add_argument(
+        "--always-mat",
+        action="store_true",
+        help="Always generate new mat colors",
+    )
+    parser.add_argument(
         "--always-metadata",
         action="store_true",
         help="Always retrieve metadata",
@@ -435,7 +440,7 @@ async def main():
 
             loaded_set = ArtSet.from_file(setfile)
             download_success = await loaded_set.process(
-                args.always_download, args.always_generate, args.always_metadata, args.always_labels
+                args.always_download, args.always_generate, args.always_metadata, args.always_labels, args.always_mat
             )
             if not download_success:
                 logging.error(f"Could not download all files in set {args.setfile}")

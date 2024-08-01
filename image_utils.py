@@ -205,7 +205,9 @@ def crop_file(in_file: str, out_file: str, width, height):
         logging.debug(f"Cropped {in_file} to {out_file}")
 
 
-def resize_file_with_matte(in_file: str, out_file: str, width, height, mat_color: Color = None, always_generate: bool = False):
+def resize_file_with_matte(
+    in_file: str, out_file: str, width, height, mat_color: Color = None, always_generate: bool = False, always_mat: bool = False
+):
     logging.info(f"Resizing {in_file} to {out_file} at {width}x{height}")
     Image.MAX_IMAGE_PIXELS = 933120000
 
@@ -215,7 +217,7 @@ def resize_file_with_matte(in_file: str, out_file: str, width, height, mat_color
             return image
 
         # If we don't have the mat color yet, get it
-        if (mat_color is None) or always_generate:
+        if (mat_color is None) or always_mat:
             mat_color, reason = get_mat_color(in_file)
             print(f"Got mat color {mat_color} because {reason}")
 

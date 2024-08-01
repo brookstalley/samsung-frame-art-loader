@@ -127,7 +127,14 @@ class ArtFile:
         )
         return ready_fullpath
 
-    async def process(self, always_download=False, always_generate=False, always_metadata=False, always_labels=False):
+    async def process(
+        self,
+        always_download=False,
+        always_generate=False,
+        always_metadata=False,
+        always_labels=False,
+        always_mat=False,
+    ):
         """Process the art file. Download the raw file if necessary, and generate the ready file."""
         """ TODO: Support files that are already downloaded and have no URL """
         raw_file_exists = False
@@ -136,7 +143,7 @@ class ArtFile:
             raise Exception("URL is required")
 
         logging.debug(
-            f"Processing {self.url}. Always download: {always_download}, always generate: {always_generate}, always metadata: {always_metadata}, always labels: {always_labels}"
+            f"Processing {self.url}. Always download: {always_download}, always generate: {always_generate}, always metadata: {always_metadata}, always labels: {always_labels}, always_mat={always_mat}"
         )
 
         # URL is specified
@@ -166,13 +173,19 @@ class ArtFile:
             logging.debug(f"Using dimensions {self.raw_file_width}x{self.raw_file_height} for {self.raw_fullpath}")
 
         self.ready_fullpath = self.get_fullpath(config.art_folder_ready, options={"r": self.resize_option})
-        if not os.path.exists(self.ready_fullpath) or always_generate:
+        if not os.path.exists(self.ready_fullpath) or always_generate or always_mat:
             logging.debug(f"Generating ready file at {self.ready_fullpath}")
             if self.resize_option == ResizeOptions.CROP:
                 crop_file(self.raw_fullpath, self.ready_fullpath, 3840, 2160)
             elif self.resize_option == ResizeOptions.SCALE:
                 mat_color = resize_file_with_matte(
-                    self.raw_fullpath, self.ready_fullpath, 3840, 2160, mat_color=self.mat_color, always_generate=always_generate
+                    self.raw_fullpath,
+                    self.ready_fullpath,
+                    3840,
+                    2160,
+                    mat_color=self.mat_color,
+                    always_generate=always_generate,
+                    always_mat=always_mat,
                 )
                 if mat_color is not None:
                     self.mat_color = mat_color
@@ -366,9 +379,13 @@ class ArtSet:
         always_generate: bool = False,
         always_metadata: bool = False,
         always_labels: bool = False,
+        always_mat: bool = False,
     ) -> bool:
         logging.info(f"Processing set file {self.name}")
         print(f"ArtSet: {self.name}, {self.default_resize} has {len(self.art)} items")
+        print(
+            f"  always_download: {always_download}, always_generate: {always_generate}, always_metadata: {always_metadata}, always_labels: {always_labels}, always_mat: {always_mat}"
+        )
         errors_downloading = False
         for art_file in self.art:
             try:
@@ -377,6 +394,7 @@ class ArtSet:
                     always_generate=always_generate,
                     always_metadata=always_metadata,
                     always_labels=always_labels,
+                    always_mat=always_mat,
                 )
             except DownloadError as e:
                 logging.info(f"Error downloading file: {e}")
