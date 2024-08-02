@@ -314,20 +314,20 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
     # It is during waking hours. If the TV is off, turn it on.  and set to art mode
     # if previous_auto_start was not today, turn on the TV and set previous_autostart to today
     # if previous_auto_start is today, do nothing
-    if previous_auto_start is None or previous_auto_start < datetime.now().date():
-        # config.auto_artmode_time_on is in 24 hour time (0530, 1715, etc). See if the current time is past that.
-        current_time_24h = datetime.now().strftime("%H%M")
-        if current_time_24h >= str(config.auto_artmode_time_on):
-            logging.info("Time to wake up and see the art")
-            if not tv_on:
-                await set_brightness_for_local(tv_art)
-                logging.info("Turning TV on")
-                await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
-                await asyncio.sleep(3)
-            if not art_mode:
-                await tv_art.set_artmode("on")
-            await set_brightness_for_local(tv_art)
-            previous_auto_start = datetime.now().date()
+    # if previous_auto_start is None or previous_auto_start < datetime.now().date():
+    #     # config.auto_artmode_time_on is in 24 hour time (0530, 1715, etc). See if the current time is past that.
+    #     current_time_24h = datetime.now().strftime("%H%M")
+    #     if current_time_24h >= str(config.auto_artmode_time_on):
+    #         logging.info("Time to wake up and see the art")
+    #         if not tv_on:
+    #             await set_brightness_for_local(tv_art)
+    #             logging.info("Turning TV on")
+    #             await tv_remote.send_command(SendRemoteKey.click("KEY_POWER"))
+    #             await asyncio.sleep(3)
+    #         if not art_mode:
+    #             await tv_art.set_artmode("on")
+    #         await set_brightness_for_local(tv_art)
+    #         previous_auto_start = datetime.now().date()
 
     # if not tv_on:
     #     logging.info("Turning TV on")

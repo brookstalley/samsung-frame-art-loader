@@ -27,13 +27,11 @@ mat_prompt2 = """I'm a curator at the museum that owns this artwork. This artwor
 - If you recognize the artwork or artist, consider their style and preferences
 - Think in LAB colorspace to align with human perception
 - Consider best practices for mat color choices
-- Avoid greys unless the artwork is black and white or greyscale
 - Avoid colors or brightnesses that may blend in with the artwork
-- Only use saturated colors if most of the artwork is neutral and there is a small highlight to echo. 
-- Remember that the final display will be 16:9, so the art's aspect ratio will determine the size of the mat
+- The final display will be 16:9, so the art's aspect ratio will determine the size of the mat. Do not allow the mat to greatly increase overall brightness of the display.
 - When the mat is larger, the mat must be darker than the artwork
 
-For your response, ONLY provide JSON with the RGB and LAB color values and the reasoning for this color choice.
+For your response, ONLY provide JSON with the HEX RGB and LAB color values and the reasoning for this color choice.
 
 JSON must be in the format:
 {
@@ -42,7 +40,7 @@ JSON must be in the format:
       "RGB_HEX" : "#6B3952",
       "LAB": {"l": "96.34", "a": "103.27", "b": "67.31"}
   },
-  "reason": "This abstract artwork by Mark Rothko is considered to have great emotional weight. The artwork's average LAB lightness is 51 and the portrait aspect ratio means the side bars will be quite large, so the mat must be darker to highlight the artwork. This desaturated purple mat complements the artwork's dominant green and brown colors, while mirroring the brighter purple accents in a more muted tone. "
+  "reason": "This abstract artwork by Mark Rothko is considered to have great emotional weight. The artwork's average LAB lightness is 51 and the portrait aspect ratio means the side bars will be quite large, so the mat must be darker to highlight the artwork. This desaturated dark purple mat complements the artwork's dominant green and brown colors, while mirroring the brighter purple accents in a more muted tone. When used to pad the artwork to 16:9 it will not be too bright."
 }"""
 
 
