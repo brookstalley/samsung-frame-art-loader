@@ -445,12 +445,77 @@ pending ──┬──▶ accepted   (creates or links an Artwork)
     `unknown`. Whether rights *gate* anything is still open; recording them is
     not.
 
+## Rotation is host-driven, and the product owns its timing
+
+> **This section corrects an earlier assumption in this artifact.** Rotation
+> ordering and timing were initially listed as "deliberately not modelled — owned
+> by the TV's own art-mode slideshow settings". Verifying the Samsung art API
+> against the `samsungtvws` source proved that wrong, and the correction changes
+> the model rather than being a footnote.
+
+The TV supports exactly **one** user-upload category (`MY-C0002`), and its native
+slideshow can only be scoped to a whole category — `set_slideshow_status` takes
+`duration`, `type`, and `category_id`, and no content-id list. There is no album,
+playlist, or non-destructive "remove from rotation" verb.
+
+Taken at face value that forces delete-and-re-upload on every theme switch. But
+the library author's own production examples
+(`async_art_slideshow_anything.py`, `async_art_update_from_directory.py`) **never
+call `set_slideshow_status`.** They keep the full library on the TV and drive
+rotation from the host with a local timer calling `select_image(content_id)`.
+
+**This product adopts host-driven rotation.** The consequence for the model: an
+active theme becomes a *host-side pointer into a TV-side content library*, and
+rotation timing becomes this product's data rather than the TV's setting.
+
+### Theme — additional fields
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `rotation_interval_seconds` | integer | nullable | How long each work is shown. Null ⇒ inherit the global default. |
+| `shuffle` | boolean | nullable | Random vs. `ThemeMembership.position` order. Null ⇒ global default. |
+
+> `[ASSUMPTION: rotation timing is per-theme with a global fallback, rather than
+> a single global setting | LOW impact | user can collapse to global]` — it costs
+> two nullable columns and lets a contemplative theme breathe while a busy one
+> moves, but no stated requirement demands it.
+
+### Why this is nearly free here
+
+Host-driven rotation normally trades away independence: the TV stops rotating if
+the host stops. **This product already pays that cost.** The e-paper label
+requires the display plane to be running and reacting to `image_selected`
+callbacks, so a stopped Pi already means a stale label. Adding rotation to the
+same process introduces no new availability requirement — a stopped Pi now yields
+a frozen image *and* a stale label instead of a rotating image *and* a stale
+label. The failure is benign: the TV stays in art mode showing the last selected
+work.
+
+What it buys is large: **theme switching becomes zero TV writes.** The
+delete-and-re-upload path costs roughly 5 seconds per file by the examples'
+own budgeting, so switching a 50-work theme would take minutes of churn — for the
+single interaction the product exists to make easy.
+
+### Consequent requirements
+
+1. **`TvBinding` is persistent and survives theme changes.** It already is, in
+   this model. Under the native-slideshow design it would have had to be
+   torn down and rebuilt per switch.
+2. **The native slideshow must be explicitly disabled once** —
+   `set_slideshow_status(duration=0)` — so it does not fight host-driven
+   `select_image` calls.
+3. **The display plane resolves** active Theme → ThemeMembership → Artwork →
+   TvBinding.`tv_content_id`, then rotates over that id list.
+
 ## Deliberately not modelled
 
 - **Users, accounts, roles, sessions.** Single operator; `has_multiple_party_types`
   is false. Adding these later is accommodated by the fact that Theme and
   DiscoveryRun already have owners implicitly (there is one).
-- **Slideshow ordering and timing.** Owned by the TV's own art-mode slideshow
-  settings, not by this product's data.
 - **Agent conversation history.** Agents are stateless across sessions by
   decision; there is no memory to persist.
+- **TV favourites (`MY-C0004`).** A tagging primitive exists (`change_favorite`),
+  but the library author notes that on 2022+ sets favourites can only be applied
+  to Art Store artwork, not user uploads. Unconfirmed against real hardware, and
+  it would only ever support one active subset rather than named themes — so it
+  is not a path to this product's requirements even if it works.

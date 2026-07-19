@@ -168,7 +168,31 @@ classification:
   # triggers the Critic's verify-api check (methodology/planning.md).
   foreign_apis:
     - name: "Samsung TV WebSocket art API (via samsungtvws fork)"
-      notes: "Persistent connection, callback-driven. Pinned to a fork git SHA, not PyPI. Firmware-fragile — see risk factors."
+      notes: >
+        Persistent connection, callback-driven. Pinned to fork SHA fa37fff (May
+        2024), not PyPI. Verified against source 2026-07-19 — key facts that
+        constrain the design:
+          * ONE user-upload category exists (MY-C0002). Categories are 2=my
+            pictures, 4=favourites, 8=store; nothing creates new ones, and
+            upload() takes no category argument.
+          * set_slideshow_status accepts only duration/type/category_id — NO
+            content-id list. Native slideshow is whole-category or nothing.
+          * No album, playlist, or non-destructive remove-from-rotation verb
+            across the library's 30 request verbs. delete_list is the only
+            removal.
+          * Old vs new API split is version-numeric (<4000 = old): old uses
+            auto_rotation_*, new uses slideshow_*. Neither is deprecated; the
+            failure modes are asymmetric (old fails silently on new TVs, throws
+            AssertionError on older ones), so probing must be defensive. The
+            existing dual-callback registration in tvart.py is correct.
+          * The pinned SHA is ~2 years behind master. Its upload() lacks the
+            timeout and CHUNK_SIZE parameters and buffers whole files in memory.
+            Category and slideshow semantics are unchanged, so design conclusions
+            hold — but the upload reliability improvements are absent.
+          * async delete_list has NO return statement, so it always yields None
+            and cannot confirm deletion. The sync path returns a value the async
+            path does not. Another instance of the silent-failure pattern this
+            product is already correcting.
     - name: "Art Institute of Chicago API"
       notes: "api.artic.edu. Already throttled in source_utils.py; responses cached to api-cache/."
     - name: "Google Arts & Culture"
@@ -395,6 +419,31 @@ technical_decisions:
         - "Single process on the Pi — no longer impossible once 3tears is relaxed, but rejected: it would put the whole curation stack, the LLM agent loop, and gigapixel image processing on a Pi 4, and forfeit the availability asymmetry that keeps art on the wall when curation breaks."
         - "Drop 3tears to stay single-process on 3.13 — viable, but forfeits the agent primitives the discovery work wants."
         - "Drop the e-paper panel to move the Pi to 3.14 — rejected; the operator chose to keep the panel behind an interface."
+      date: 2026-07-19
+    - decision: "Rotation is host-driven from the display plane (timed select_image calls), not delegated to the TV's native slideshow."
+      rationale: >
+        Decided 2026-07-19 after verifying the Samsung art API against
+        samsungtvws source. The TV holds exactly one user-upload category and its
+        native slideshow can only be scoped to a whole category — there is no
+        content-id list parameter and no non-destructive way to remove an image
+        from rotation. Using the native slideshow therefore forces
+        delete-and-re-upload on every theme switch, roughly 5 seconds per file by
+        the library examples' own budgeting: minutes of churn for the single
+        interaction this product exists to make easy.
+
+        Host-driven rotation — the pattern used by every production-grade example
+        in the library, none of which call set_slideshow_status — keeps the full
+        library on the TV and varies only which content ids the host selects.
+        Theme switching becomes zero TV writes.
+
+        The usual objection is that rotation becomes an availability dependency
+        on the Pi. This product ALREADY pays that cost: the e-paper label requires
+        the display plane to be running and reacting to image_selected callbacks,
+        so a stopped Pi already means a stale label. The added failure is benign —
+        the TV stays in art mode holding the last selected work.
+      alternatives_considered:
+        - "TV-native slideshow — no host dependency, but theme switching means delete + re-upload of every work."
+        - "TV favourites (MY-C0004) as the active set — the library author states favourites cannot be applied to user uploads on 2022+ sets (unconfirmed on real hardware), and it would support only ONE active subset, not named themes."
       date: 2026-07-19
     - decision: "The display plane must keep functioning when the curation plane is unavailable."
       rationale: "The household experiences only the TV. Curation downtime is invisible; display downtime is a blank wall. This asymmetry is the main reason the split is a benefit rather than a cost."

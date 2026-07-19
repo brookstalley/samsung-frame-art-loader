@@ -126,9 +126,12 @@ active theme changes what the TV shows. Themes are the curator's unit of
 intention — this is what "per-user preferences" resolved to, and it is a naming
 and grouping concept, not an accounts concept.
 
-**6. Display and sync.** Reconcile the active theme against what is on the TV:
-upload what is missing, delete what is orphaned, drive the label panel from TV
-callbacks. Largely exists today in `tvart.py`.
+**6. Display and sync.** Keep the accepted library uploaded to the TV, **rotate
+through the active theme's subset from the host**, and drive the label panel from
+the resulting callbacks. Partly exists in `tvart.py` — but the rotation mechanism
+changes: the TV's native slideshow can only be scoped to a whole category, so
+switching themes through it would mean deleting and re-uploading every work.
+Host-driven rotation makes a theme switch cost zero TV writes.
 
 **7. Ambient adaptation.** Brightness follows sun position; art mode follows time
 of day. Exists today in `local.py`; the auto art-mode logic is currently
