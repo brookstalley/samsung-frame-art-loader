@@ -106,9 +106,17 @@ classification:
       - factor: "Unbounded LLM spend on agentic art discovery"
         level: high
         rationale: "'Find recent award-winning art' is an open-ended agent loop, not a single call. Mitigated by a hard monthly cap that fails closed (confirmed 2026-07-19)."
-      - factor: "Samsung firmware may have removed the art-mode API"
-        level: high
-        rationale: "Firmware 1710 (Sept 2025) reportedly removed Art Mode entirely on some Frame units; enabling IP Control Art Mode has bricked art mode on at least one model. The TV has not been exercised since 2024-08-19. UNVERIFIED — this can invalidate the product premise and must be checked before design."
+      - factor: "Samsung firmware may remove the art-mode API in a future update"
+        level: medium
+        rationale: >
+          RETIRED AS A BLOCKER 2026-07-19 — operator confirmed art mode still works.
+          Cause unknown: either the TV never took the firmware that removed Art Mode
+          on some units (1710, Sept 2025), or the model was unaffected. Downgraded
+          from high to medium because the risk is now prospective rather than
+          present, but NOT to low: the capability the whole product rests on is
+          controlled by a vendor who has already removed it from some units, and a
+          future auto-update could do the same here. Worth knowing whether TV
+          auto-update can be disabled.
       - factor: "3tears is alpha with a shifting public API"
         level: medium
         rationale: "0.x line; README states the API can shift between minor versions. A 3tears breaking change becomes art-loader work. Mitigated by pinning."
@@ -258,7 +266,7 @@ product_definition:
     later:                # Not needed for v1 to be useful
       - "Re-enabling automatic art-mode on/off scheduling (currently commented out in tvart.py)"
       - "Weather-aware brightness (the weather_adjustments table in local.py is hardcoded to 'clear')"
-      - "3tears agent memory — deferred because pgvector forces Postgres; revisit if the infrastructure appears for another reason"
+      - "3tears agent memory — DROPPED, not merely deferred. Operator confirmed 2026-07-19 that agents may be stateless across sessions. This removes the only 3tears capability that forces Postgres, so the curation plane is infrastructure-free by decision rather than by compromise."
     never:                # Explicitly out of scope. Each: { item, rationale }
       - item: "Kubernetes, NATS, or multi-pod deployment"
         rationale: "Stated directly by the operator 2026-07-19. One household, one TV, one curation process — the coherence problems this infrastructure solves do not exist here."
@@ -304,18 +312,37 @@ product_definition:
       that independence is the main structural benefit of the two-plane split.
       Curation plane: on-demand; downtime is invisible to the household.
     cost_constraints: >
-      Hard monthly ceiling on LLM spend, failing closed (confirmed 2026-07-19).
-      The ceiling value is unset — see open_questions. No cloud hosting costs;
-      both planes run on hardware already owned.
+      Hard ceiling of USD 20/month on LLM spend, failing closed (confirmed
+      2026-07-19). No cloud hosting costs; both planes run on hardware already
+      owned. Note the cap's purpose is to bound an unbounded agent LOOP, not to
+      economise on token price — at the chosen models $20 buys far more discovery
+      than a household needs, so the cap should feel generous in normal use and
+      only bite when something has run away.
 
   regulatory: []          # Each: { regulation, applicability, impact }
   cost_estimates:         # Each: { item, estimated_monthly_cost, notes }
-    - item: "LLM — agentic art discovery"
-      estimated_monthly_cost: "unknown; dominant and unbounded without a cap"
-      notes: "The reason the cap exists. An open-ended 'find recent award-winning art' agent loop can issue many search + vision calls per run. Cost per run is far more meaningful than cost per month and should be shown in the UI before the run."
-    - item: "LLM — mat colour selection"
-      estimated_monthly_cost: "low"
-      notes: "One vision call per newly accepted artwork, retried up to 5 times on malformed JSON. Bounded by acceptance rate, not by time. The 2024 implementation used gpt-4o."
+    # Prices verified against OpenRouter model pages on 2026-07-19. LLM pricing
+    # moves fast — re-verify before relying on these figures.
+    - item: "LLM — agentic art discovery (text reasoning)"
+      estimated_monthly_cost: "$2-15 depending on run frequency"
+      notes: >
+        Operator selected GLM-5.2 ($0.2219/M in, $0.6974/M out) or DeepSeek V4 Pro
+        ($0.435/M in, $0.87/M out); both carry 1M-token context. A discovery run
+        estimated at ~500K input + ~20K output costs roughly $0.13 (GLM-5.2) or
+        $0.24 (V4 Pro), so $20 buys on the order of 85-160 runs a month. Even at
+        10x that estimate the ceiling holds. Cost per run matters far more than
+        cost per month and should be shown in the UI before the run.
+    - item: "LLM — mat colour selection (vision)"
+      estimated_monthly_cost: "negligible"
+      notes: >
+        One vision call per newly accepted artwork against a 1024x1024 thumbnail.
+        Bounded by acceptance rate, not by time. REQUIRES A DIFFERENT MODEL from
+        discovery — both models chosen for discovery are text-only (see
+        open_questions). Watch the retry loop: ai.py retries up to 5 times on
+        malformed JSON, so a persistently bad response costs 5x.
+    - item: "Web search during discovery"
+      estimated_monthly_cost: "unknown — potentially the dominant cost"
+      notes: "If discovery uses OpenRouter's `:online` variant or a separate search API, per-search fees can exceed token spend by an order of magnitude. Unresolved; see open_questions."
     - item: "Museum APIs and image acquisition"
       estimated_monthly_cost: "$0"
       notes: "ARTIC is free and already throttled and cached. Google Arts & Culture is scraped. Bandwidth only."
@@ -476,18 +503,35 @@ design_decisions:
 #   priority: high | medium | low
 
 open_questions:
-  - question: "Does the Samsung Frame TV still expose a working art-mode API on its current firmware?"
-    blocking: "Everything. If art mode is gone, the product premise changes and the whole design is moot."
-    waiting_on: user
+  - question: "Which specific cheap vision model handles mat-colour selection?"
+    blocking: "Nothing structural — the two-tier model split is decided; only the specific model is open."
+    waiting_on: research
+    priority: low
+    # RESOLVED IN PRINCIPLE 2026-07-19: operator confirmed a separate cheap vision
+    # model is fine. Pick the model at planning time and re-verify pricing then.
+    # Background: both models chosen for discovery are text-only — GLM-5.2 is listed
+    # "text input and output", and DeepSeek V4 Pro's OpenRouter page declares no
+    # image modality — while ai_mat_color() sends a base64 PNG. Discovery and
+    # mat-colour therefore need different models, which is exactly what the
+    # OpenRouter multi-provider decision already enables. Vision volume is one call
+    # per accepted artwork, so the model choice barely moves the monthly total.
+  - question: "Does agentic discovery need paid web search, and is that inside or outside the $20 ceiling?"
+    blocking: "Whether the $20 ceiling is realistic, and what the meter must count."
     priority: high
-    # Firmware 1710 (Sept 2025) reportedly removed Art Mode entirely on some Frame
-    # units; enabling IP Control Art Mode has bricked art mode on at least one
-    # model/firmware pair. The TV has not been exercised since 2024-08-19. This is
-    # a cheap check with a very wide cost asymmetry — do it before design work.
-  - question: "What is the hard monthly LLM spend ceiling, in dollars?"
-    blocking: "Implementing the fail-closed cap; also the cheap-vs-expensive model routing policy."
-    waiting_on: user
+    waiting_on: research
+    # Token costs at the chosen models are trivially small against $20. If discovery
+    # performs real web search (OpenRouter's `:online` variant, or a separate search
+    # API), per-search fees can dominate token spend by an order of magnitude and
+    # would become the actual binding cost. The meter must count whatever is billed,
+    # not just tokens.
+  - question: "Do the 3tears packages in scope genuinely require Python 3.14?"
+    blocking: "Whether the two-plane split is necessary at all. If core/models/media-contracts/observe run on 3.13, the entire product could collapse back to a single process on the Pi."
+    waiting_on: research
     priority: high
+    # Raised by the operator 2026-07-19, who proposed submitting an upstream PR to
+    # relax `requires-python` if the declaration is aspirational rather than real.
+    # This is the highest-leverage open question remaining: a negative answer
+    # simplifies the architecture more than any other single change.
   - question: "Can 3tears MCP tools be used without a running NATS broker?"
     blocking: "Whether MCP tooling can be part of the discovery agent design at all."
     waiting_on: research
