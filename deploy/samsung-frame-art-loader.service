@@ -1,0 +1,14 @@
+[Unit]
+Description=Samsung TV Art
+After=network.target
+
+[Service]
+ExecStart=/home/tvpi/source/samsung-frame-art-loader/.venv/bin/python /home/tvpi/source/samsung-frame-art-loader/tvart.py --setfile=all.json --stay
+WorkingDirectory=/home/tvpi/source/samsung-frame-art-loader
+Restart=always
+User=tvpi
+Environment="PATH=/home/tvpi/source/samsung-frame-art-loader/.venv/bin:/home/tvpi/.pyenv/shims:/home/tvpi/.pyenv/bin:/home/tvpi/.vscode-server/extensions/ms-python.python-2024.10.0-linux-arm64/python_files/deactivate/bash:/home/tvpi/source/samsung-frame-art-loader/.venv/bin:/home/tvpi/.local/bin:/home/tvpi/.cargo/bin:/home/tvpi/.pyenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/tvpi/.local/bin:/home/tvpi/.local/bin"
+Environment="VIRTUAL_ENV=/home/tvpi/source/samsung-frame-art-loader/.venv"
+
+[Install]
+WantedBy=multi-user.target
