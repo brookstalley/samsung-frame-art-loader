@@ -114,8 +114,10 @@ why it matched the intent. This is the flow with unbounded cost and runtime, and
 therefore the one the spend ceiling exists to bound.
 
 **3. Review and accept.** The curator accepts or rejects candidates. Only accepted
-works enter the catalogue. This is the human-in-the-loop gate that bounds both
-spend and taste, and it is deliberately not automatable.
+works enter the catalogue. This is the human-in-the-loop gate, and it is
+deliberately not automatable — by any surface, agent or human. It bounds three
+things, in ascending order of how well the argument holds: spend (weakest — the
+ceiling is $20), taste, and **content appropriateness** (strongest — see flow 8).
 
 **4. Acquire and prepare.** Fetch at gallery resolution (tiled where the source
 requires it), extract and normalise metadata across providers, select a mat
@@ -149,8 +151,17 @@ API consumers. Two consequences that are easy to miss:
 - **Agents never auto-accept.** An agent-driven add produces candidates awaiting
   review, exactly as UI-driven discovery does. So an agent cannot literally
   finish the Dalí request — it stages the works and the wall changes when the
-  curator looks. That is deliberate: the review gate bounds spend and taste, and
-  it is the one control that does not scale with agent capability.
+  curator looks. This is correct behaviour, not a limitation: *"add all of Dalí"*
+  states what the curator wants, the way asking an agent to delete a batch of
+  files states an intent rather than a licence to proceed unattended.
+
+  The gate's durable justification is **content appropriateness**, not spend.
+  Discovery searches the open web, so a bad search can surface work that is
+  explicit, disturbing, or simply wrong for a living room — and it would appear
+  on a wall in a shared home, seen by household members and guests who have no
+  interface with which to object, possibly while the curator is elsewhere. The
+  failure is fully reversible but publicly visible while it lasts. Spend alone
+  ($20 ceiling, ~$0.13 a run) would not justify the gate; this does.
 - **Parity is structural, not aspirational.** UI controls call HTTP and agents
   call MCP, so both must be thin bindings over one service layer. Two
   implementations of "accept a candidate" diverge within weeks, invisibly. The

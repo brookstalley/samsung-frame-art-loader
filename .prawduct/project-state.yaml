@@ -155,6 +155,25 @@ classification:
       - factor: "No test suite exists"
         level: medium
         rationale: "Zero tests across 2,216 lines. Any rewrite has no behaviour-preservation net. Reduced by the decision to start the catalogue over rather than migrate it."
+      - factor: "A bad discovery run surfaces content unfit for a shared domestic space"
+        level: medium
+        rationale: >
+          Added 2026-07-19. Discovery searches the open web, so a mis-aimed intent
+          or a poisoned page can surface work that is explicit, disturbing, or
+          simply wrong for a living room. The consequence lands on the household
+          persona — people with no interface, who never opted in, and who see
+          whatever is on the wall.
+
+          Distinct from the prompt-injection factor below: that one is about an
+          attacker steering the agent, this one fires just as easily from an
+          honest search returning honest results the curator would not have
+          chosen. No adversary required.
+
+          Structurally mitigated: agent-initiated additions always queue as
+          candidates, so nothing reaches the wall unreviewed (see
+          technical_decisions.data_model). This factor is the primary reason that
+          gate must not be relaxed later on convenience grounds — the spend
+          argument for it is weak, this one is not.
       - factor: "Untrusted web content reaches an agent holding mutating, spend-incurring tools"
         level: medium
         rationale: >
@@ -542,15 +561,35 @@ technical_decisions:
   data_model:
     - decision: "Agent-initiated additions always queue as candidates; agents never auto-accept into the active collection."
       rationale: >
-        Confirmed 2026-07-19. "Add all of Salvador Dali's most famous works" via
-        MCP produces candidates awaiting review, exactly as UI-driven discovery
-        does. The human review gate is what bounds both spend and taste, and it is
-        the one control that does not scale with agent capability — an agent that
-        can add faster is a reason to keep the gate, not to remove it.
+        Confirmed 2026-07-19, and reframed by the operator the same day in a way
+        that strengthens it. "Add all of Salvador Dali's most famous works" is a
+        statement that the curator WANTS this, not an expectation that it appears
+        on the TV without further steps — the same shape as an agent confirming
+        before deleting a batch of files.
+
+        THREE reasons the gate exists, in ascending order of durability:
+
+        1. Spend. Weakest on its own — the ceiling is USD 20 and a run costs
+           roughly USD 0.13, so this argument would not survive someone arguing
+           that auto-accept is cheap and convenient.
+        2. Taste. The curator's judgement is the product; delegating it defeats
+           the point of curation.
+        3. CONTENT APPROPRIATENESS — the load-bearing one. Discovery searches the
+           open web, so a bad search can surface work that is explicit,
+           disturbing, or simply wrong for a domestic space. That work would then
+           appear on a wall in a shared home, seen by household members and
+           guests who never opted in, possibly while the curator is not present
+           to notice.
+
+        Note the failure class is unlike data loss: fully reversible, but
+        PUBLICLY VISIBLE for as long as it lasts, and visible to people who have
+        no interface with which to object. That asymmetry is why the gate is not
+        a spend control that could be relaxed once spend looks safe.
 
         The honest cost: an agent cannot finish that request end to end. It gets
         works found and staged, but the wall does not change until the curator
-        looks. Accepted deliberately.
+        looks. Accepted deliberately, and the operator's own framing is that this
+        is correct behaviour rather than a limitation.
 
         No new entity is needed — `Candidate.verdict = pending` already expresses
         this. What the model gains is provenance: a DiscoveryRun must record which
