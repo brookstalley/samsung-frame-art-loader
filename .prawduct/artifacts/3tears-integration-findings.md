@@ -86,7 +86,121 @@ anything is designed on top of it.
 | `3tears-agent-memory` | yes | **Postgres + pgvector — hard requirement** |
 | `object-store` | yes | aioboto3 (S3-compatible) |
 
-## The hard constraint: Python 3.14
+## The Python 3.14 constraint is real today — and removable
+
+Audited 2026-07-19 by compiling every source file under `core`, `models`,
+`media-contracts`, and `observe` against real CPython 3.13 / 3.12 / 3.11
+interpreters, cross-checked with an AST-driven stdlib-symbol existence check and
+`vermin`. All three methods converged on the same list.
+
+**Verdict: 3.14 is genuinely required as shipped, not merely declared — but only
+by 16 source sites, every one of them mechanical.**
+
+| Package | Declared | True minimum as shipped | What sets the floor |
+| --- | --- | --- | --- |
+| `media-contracts` | >=3.14 | **3.9** | nothing — zero version-gated constructs |
+| `observe` | >=3.14 | **3.14** | `observe/logging.py:176` PEP 758 |
+| `models` | >=3.14 | **3.14** | `models/price_lookup.py:137` PEP 758 |
+| `core` | >=3.14 | **3.14** | `core/utils/atomic_write.py:18` `from uuid import uuid7` |
+
+### The complete blocker list — 16 sites
+
+**A. PEP 758 unparenthesised `except A, B:` (3.14-only syntax) — 13 sites, each a
+one-line fix (add parentheses):**
+
+- `core/backends/schema_sql.py:254`, `core/cache/duckdb.py:293`,
+  `core/cache/sqlite.py:460`, `core/collections/schema_backed.py:1252`
+- `models/price_lookup.py:137` and `:410`, `models/registry_loader.py:113`,
+  `models/tracking.py:361`
+- `observe/logging.py:176`, `observe/tracing.py:68`
+- `nats/client.py:236`, `:608`, `:1109`
+
+**B. `uuid.uuid7` (3.14 stdlib addition) — 3 sites, all in `core`:**
+
+- `core/backends/nats_proxy.py:14` (8 call sites), `core/coordination/lease.py:35`,
+  `core/utils/atomic_write.py:18`
+
+There is already an in-repo precedent for the fix: `core/collections/registry.py:11`
+and `observe/middleware.py:52` use `from uuid_utils import uuid7` (third party,
+`requires-python >=3.9`).
+
+**After remediation:** `core` floors at **3.12** (two PEP 695 type-parameter
+declarations — `core/utils/pg_pool_kwargs.py:304` and `core/knowledge/chains.py:69`;
+the latter is redundant, since the file already defines `T = TypeVar("T")` at line
+65). Converting those two drops the whole subset to **3.11**.
+
+### `3tears-nats` must be relaxed in the same change
+
+`core` hard-depends on `3tears-nats` and imports it at 8 sites
+(`collections/base.py:32`, `cache/kv.py:38`, `coordination/lease.py:41`,
+`security/jwks_provider.py:33`, …). It declares `>=3.14` too and carries 3 of the
+PEP 758 sites above. **Relaxing core without relaxing nats achieves nothing** —
+core cannot install below 3.14 regardless. Note this does *not* mean a broker is
+required at runtime; it is an install-time package dependency (see Answer 1).
+
+### Third-party dependencies impose no floor
+
+Verified against installed dist metadata. The highest floor across every declared
+dependency of the four packages is **3.10**: sqlalchemy >=3.7, asyncpg >=3.9,
+aiosqlite >=3.9, pydantic >=3.9, cryptography >=3.9, pyjwt >=3.9, nats-py >=3.7,
+uuid-utils >=3.9, langchain-* >=3.10, duckdb >=3.10.
+
+Relaxing 3tears is therefore **not** pointless — the dependency graph already
+supports 3.10+.
+
+### Two upstream defects found in passing
+
+Both are real bugs in 3tears today, independent of this product:
+
+1. **`3tears` core does not declare `uuid-utils`** despite
+   `core/collections/registry.py:11` importing it unconditionally at module scope.
+   It works only because `3tears-observe[asgi]`, langgraph, scheduled-jobs,
+   agent-skills, and agent-wake happen to pull it in transitively. Any install
+   that takes core without one of those breaks. A relaxation PR must add the
+   declaration.
+2. **`langchain-voyageai 0.3.3` declares `Requires-Python: >=3.10,<=3.13`** — the
+   `models[voyageai]` extra is upstream-declared *incompatible* with 3.14, and
+   `models/providers/_voyageai_compat.py:40` exists to paper over the breakage.
+   That is an argument **for** relaxing, not against.
+
+### What CI actually tests
+
+**Only Python 3.14, single runner, no matrix.** Both `ci.yml` and `release.yml`
+do `uv python install 3.14`. Reinforcing pins that would also need to move:
+`.python-version`, root `[tool.ruff] target-version = "py314"`, root
+`[tool.mypy] python_version = "3.14"`, `uv.lock` line 3, `docker/Dockerfile:35,53`,
+and the `Programming Language :: Python :: 3.14` classifiers. No enforcement test
+pins `requires-python`, so no test contract blocks the change.
+
+### The one thing a PR must prove
+
+The audit was static — syntax and stdlib-symbol level, high confidence. It could
+**not** execute the test suites under 3.13, because the venv is 3.14 and building
+a full 3.13 environment (asyncpg, duckdb, cryptography, testcontainers, langchain)
+was out of scope. The realistic residual risk is behavioural rather than syntactic:
+`asyncio` internals, and **pydantic/langchain annotation resolution under eager
+(3.13) versus lazy (3.14) `__annotations__`**. A static PEP 649 reliance check
+found zero hits, but only a real 3.13 test run closes this.
+
+Also unverified: wheel availability on 3.13 (near-certain — 3.13 is older and
+better covered than 3.14) and the workspace-wide `uv.lock`, which stays at
+`>=3.14` until the whole workspace moves or the lock is regenerated.
+
+## What this does NOT change
+
+Relaxing 3tears would remove the *forcing* reason for the two-plane split, but it
+does not follow that the planes should merge — **the display plane does not want
+3tears at all.** It needs an HTTP client, `samsungtvws`, PIL, and the e-paper
+driver. Three-tier entities are of no use to it, and the shared-catalogue use case
+that would justify them is precisely the multi-pod coherence problem the operator
+ruled out.
+
+So the split survives on its independent merits (Pi 4 performance, the
+upstream/derived data contract, availability asymmetry), and the PR is worth doing
+on *its* merits — a latent portability limit plus two real defects in a framework
+the operator maintains — rather than to unblock this product.
+
+## The original constraint, as first recorded
 
 **Every** 3tears package declares `requires-python = ">=3.14"` (verified across all
 `packages/*/pyproject.toml`).

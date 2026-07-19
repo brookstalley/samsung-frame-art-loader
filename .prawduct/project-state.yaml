@@ -358,19 +358,32 @@ product_definition:
 
 technical_decisions:
   architecture:
-    - decision: "Split into a curation plane (Python 3.14) and a display plane (Python 3.13 on the Pi), communicating over a defined contract."
+    - decision: "Split into a curation plane and a display plane, communicating over a defined contract."
       rationale: >
-        Forced, not chosen: every 3tears package requires Python >=3.14, while the
-        IT8951 e-paper driver compiles Cython from source and was last touched in
-        2023 — platform-and-dependency-findings.md deliberately targets 3.13 with a
-        3.12 fallback and rejects 3.14. The two cannot share an interpreter. The
-        split turns that constraint into three independent wins: it matches the
-        upstream/derived data contract already recorded in learnings.md, it moves
-        gigapixel fetching and 4K compositing off a Pi 4, and it makes "e-paper
-        behind an interface" a process boundary rather than a convention.
+        AMENDED 2026-07-19, same day, after auditing the constraint that originally
+        forced this. The split stands; its justification changed.
+
+        Originally recorded as forced: every 3tears package declares
+        requires-python >=3.14, while the IT8951 e-paper driver compiles Cython
+        from 2023 sources and is targeted at 3.13/3.12, so the two could not share
+        an interpreter. The audit (artifacts/3tears-integration-findings.md)
+        confirmed 3.14 is genuinely required as shipped — but only by 16 mechanical
+        source sites, all trivially fixable, with no third-party dependency
+        imposing any floor above 3.10. The constraint is therefore REMOVABLE, and
+        "forced" is no longer an honest rationale.
+
+        The split is retained on its independent merits: the display plane does not
+        want 3tears at all (it needs an HTTP client, samsungtvws, PIL, and the
+        e-paper driver — three-tier entities are useless to it, and the
+        shared-catalogue case that would justify them is the multi-pod coherence
+        problem the operator ruled out); it matches the upstream/derived data
+        contract in learnings.md; it moves gigapixel fetching, k-means over LAB
+        arrays, and 4K compositing off a Pi 4; it makes "e-paper behind an
+        interface" a process boundary; and it is what lets the display plane keep
+        working when curation is down.
       alternatives_considered:
-        - "Single process on the Pi — impossible; the Python version conflict is absolute."
-        - "Drop 3tears to stay single-process on 3.13 — viable, but forfeits the agent primitives that the LLM discovery work wants."
+        - "Single process on the Pi — no longer impossible once 3tears is relaxed, but rejected: it would put the whole curation stack, the LLM agent loop, and gigapixel image processing on a Pi 4, and forfeit the availability asymmetry that keeps art on the wall when curation breaks."
+        - "Drop 3tears to stay single-process on 3.13 — viable, but forfeits the agent primitives the discovery work wants."
         - "Drop the e-paper panel to move the Pi to 3.14 — rejected; the operator chose to keep the panel behind an interface."
       date: 2026-07-19
     - decision: "The display plane must keep functioning when the curation plane is unavailable."
@@ -524,14 +537,15 @@ open_questions:
     # API), per-search fees can dominate token spend by an order of magnitude and
     # would become the actual binding cost. The meter must count whatever is billed,
     # not just tokens.
-  - question: "Do the 3tears packages in scope genuinely require Python 3.14?"
-    blocking: "Whether the two-plane split is necessary at all. If core/models/media-contracts/observe run on 3.13, the entire product could collapse back to a single process on the Pi."
+  - question: "Does relaxing 3tears to 3.13 survive a real test run under 3.13?"
+    blocking: "Merging the upstream relaxation PR. Does NOT block this product — see the answered question below."
     waiting_on: research
-    priority: high
-    # Raised by the operator 2026-07-19, who proposed submitting an upstream PR to
-    # relax `requires-python` if the declaration is aspirational rather than real.
-    # This is the highest-leverage open question remaining: a negative answer
-    # simplifies the architecture more than any other single change.
+    priority: low
+    # The only gap left by the 2026-07-19 audit, which was static (syntax and
+    # stdlib-symbol level, high confidence, three converging methods). Residual
+    # risk is behavioural: asyncio internals, and pydantic/langchain annotation
+    # resolution under eager (3.13) vs lazy (3.14) __annotations__. A static PEP
+    # 649 reliance check found zero hits. Only a real 3.13 test run closes it.
   - question: "Can 3tears MCP tools be used without a running NATS broker?"
     blocking: "Whether MCP tooling can be part of the discovery agent design at all."
     waiting_on: research
