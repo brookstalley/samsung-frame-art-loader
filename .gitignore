@@ -183,3 +183,7 @@ cython_debug/
 
 # Prawduct plugin version marker (per-repo last-seen)
 .prawduct/.prawduct-version
+
+# Backlog service export — full-fidelity cutover backup, regenerable via
+# `prawduct-hook backlog export`. Tracked copy would duplicate GitHub Issues.
+.prawduct/backlog-export/

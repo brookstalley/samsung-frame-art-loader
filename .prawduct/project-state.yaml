@@ -944,7 +944,46 @@ operator_verification_required: false
 # backlog_format_version:
 # backlog_prefixes: []
 # backlog_external_imports: []
-# backlog_last_groomed_at:
+
+backlog_last_groomed_at: 2026-07-19
+
+# -----------------------------------------------------------------------------
+# BACKLOG SERVICE CUTOVER (API §2.4)
+# -----------------------------------------------------------------------------
+# The live backlog is GitHub Issues, reached through `prawduct-hook backlog`.
+# `.prawduct/backlog.md` is FROZEN HISTORY from this point — do not edit it, and
+# do not read it as current state. Setting this key repoints the session briefing
+# to the GV2 snapshot and retires every markdown-premise advisory probe.
+#
+# Cut over 2026-07-19 per skills/backlog/migration-scrub.md:
+#   0. backup      — backlog.md is git-tracked; full-fidelity dump in
+#                    .prawduct/backlog-export/ (export-manifest.json + item-N.json)
+#   1-2. disposition — 2 items, both `keep`; no stale, no duplicates, empty archive
+#                    (so open/all archive scope was moot)
+#   2b. restructure — both titles exceeded the 72-char issue standard; rewritten
+#                    via a plan applied at create. Originals preserved verbatim in
+#                    each issue's ```prawduct block (original_title/original_body).
+#   3. import      — CUI-WT3K -> #2, TVW-4Q7M -> #3; 0 skipped, 0 collisions
+#   4. verify      — counts {total:2, open:2, design:2}; both id:PFX aliases
+#                    resolve; label taxonomy complete on both issues
+#   5. cut over    — this key
+#
+# Labels were provisioned by hand (`prawduct-hook backlog provision`) because
+# /prawduct:onboard does not do it — an unimplemented requirement
+# (backlog-service-requirements.md GV5/GV6) that this repo's greenfield
+# onboarding surfaced empirically. Before provisioning, the repo carried only
+# GitHub's 9 stock labels and none of the prawduct namespace.
+#
+# NARROWER THAN FIRST RECORDED: the adapter auto-creates any label a write
+# references, so `area:` / `kind:` / `effort:` / `impact:` / `source:` / `id:`
+# all appeared on their own during import — 7 provisioned, 9 self-created.
+# Untested whether `stage:` / `status:` would also have self-created, since
+# provision ran first. So the practical GV5/GV6 gap is a missing explicit
+# taxonomy step, not a broken backlog.
+#
+# Rollback is total and cheap: unset this key. backlog.md is unmodified in git.
+
+backlog_service_repo: brookstalley/samsung-frame-art-loader
 
 # =============================================================================
 # CHANGE LOG

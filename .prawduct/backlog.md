@@ -102,6 +102,48 @@
   picked up — whether the design system leads (tokens first, screens against it)
   or lags one screen (build the first real screen, extract the system from it).
 
+- **[TVW-4Q7M]** Update the pinned samsungtvws fork SHA — stale upload() and unconfirmable delete_list
+  `effort: M · impact: L · area: tv-api · source: user · added: 2026-07-19 · status: open · stage: design · refs: project-state.yaml#foreign_apis`
+
+  `requirements.txt:15` pins the Samsung art API client to a fork SHA that is
+  roughly two years behind master:
+
+      samsungtvws @ git+https://github.com/NickWaterton/samsung-tv-ws-api.git@fa37fffd7a9f8e82147c0883f18bebcd67fd8ff8
+
+  Two concrete defects verified against the pinned source on 2026-07-19 (recorded
+  in `project-state.yaml` under `foreign_apis`):
+
+  - **`upload()` buffers whole files in memory** and lacks the `timeout` and
+    `CHUNK_SIZE` parameters that master has since added. This product uploads 4K
+    composited images, so the reliability improvements are exactly the ones it
+    needs and exactly the ones the pin excludes.
+  - **async `delete_list` has no `return` statement**, so it always yields `None`
+    and deletion can never be confirmed. The sync path returns a value the async
+    path does not. `delete_list` is the library's *only* removal verb, so an
+    unconfirmable delete is the single most consequential silent failure on the TV
+    interface — another instance of the silent-failure pattern this product is
+    already correcting elsewhere.
+
+  What does **not** change: category semantics (one user-upload category,
+  MY-C0002), slideshow scoping, and the old/new API version split are all
+  unchanged between the pin and master, so the design decisions taken on top of
+  them — host-driven rotation, no native slideshow — still hold. This is a
+  reliability item, not a redesign trigger.
+
+  Stage is `design`, not `ready`, because the target is undecided and the second
+  defect may not be fixable by bumping at all:
+  - Three candidate targets — the PyPI `samsungtvws` release (shipped 2026-05-28),
+    the fork's current master, or continuing to pin a fork SHA. The fork exists
+    for a reason (explicit LS03A/B/C/D support); confirm PyPI carries it before
+    treating the release as the default.
+  - **Verify at pick-up whether `delete_list`'s missing return is still present
+    upstream.** If it is, bumping does not fix it and the work needs either an
+    upstream PR or a local wrapper that confirms deletion independently — a
+    different shape of change than a version bump.
+  - The upgrade touches a live TV interface with asymmetric failure modes
+    (`tvart.py`'s dual-callback registration is correct today), so it needs a
+    real-hardware verification pass, not just a green install.
+
 ## Promoted
 
 <!-- Items currently being addressed in an active build plan. /backlog pick
