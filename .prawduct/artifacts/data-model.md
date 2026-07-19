@@ -123,14 +123,32 @@ may exist at several institutions, and a broken source does not break the work.
 | `id` | UUID | PK | |
 | `artwork_id` | UUID | FK → Artwork, required | |
 | `url` | string | required | The source URL. An attribute here, never an identity. |
-| `provider` | enum | required | `artic` \| `google_arts` \| `http` \| other, extensible. |
+| `provider` | string | required | e.g. `artic`, `google_arts`, `gallery_site`, `prize_site`, `artist_portfolio`, `http`. Open vocabulary — the contemporary web has no fixed provider list. |
+| `source_class` | enum | required | `institutional` \| `contemporary_web`. The load-bearing distinction; see below. |
 | `acquisition_method` | enum | required | `dezoomify` \| `direct_http` \| `api`. Determines the fetch path. |
+| `rights_status` | enum | required | `public_domain` \| `in_copyright` \| `unknown`. |
 | `is_primary` | boolean | default false | Which source was actually used for the held original. |
 | `last_fetch_status` | enum | nullable | `ok` \| `partial_tiles` \| `failed`. `partial_tiles` is a normal dezoomify outcome, not an error. |
 | `last_fetched_at` | datetime | nullable | |
 
 > **Q6.** Multiple sources per work is what makes re-acquisition robust when an
 > institution reorganises its site.
+>
+> **`source_class` is the field that carries the 2026-07-19 scope expansion.** The
+> two classes have almost nothing in common operationally:
+>
+> | | `institutional` | `contemporary_web` |
+> |---|---|---|
+> | Resolution | gigapixel via IIIF tiles | web JPEG, often ≤2000px |
+> | Metadata | structured API | scraped, partial, or absent |
+> | Rights | usually public domain | usually in copyright |
+> | Fetch path | `dezoomify` | `direct_http` |
+> | Rate limits | published, throttled | unknown, per-site |
+>
+> Modelling this as one undifferentiated `provider` string would push the
+> difference into conditionals scattered across the acquisition code. Making it a
+> column means the pipeline can branch once, and the review grid can show the
+> curator which kind of thing they are looking at.
 
 ### Original
 
@@ -147,6 +165,22 @@ the art tree that rsync carries and git does not.
 | `height` | integer | required | |
 | `byte_size` | integer | required | Zero-byte files are a known failure mode; see Constraints. |
 | `content_hash` | string | required | Identifies the bytes; lets a rendition detect a stale parent. |
+| `display_fit` | enum | required | `native` \| `matted_small` \| `upscaled` \| `below_floor`. How this original can honestly be shown on a 3840x2160 canvas. |
+
+> **`display_fit` exists because the mat engine has a resolution premise.** Its
+> whole design is that the artwork sits *inside* a mat at native resolution — the
+> mat is the deliberate frame, not padding around a stretched image. A 1200px
+> press image on a 4K canvas is either a small island in a very large mat, or an
+> upscale that undermines the quality bar the engine exists to protect.
+>
+> Deriving this once at acquisition, rather than re-deciding it at every render,
+> is what lets the review grid warn the curator *before* they accept a work.
+>
+> **The threshold values and the policy for `below_floor` are an open question**
+> (`project-state.yaml` → open_questions): reject outright, accept and upscale,
+> accept and mat generously, or surface it and let the curator choose per work.
+> The column is specified now because retrofitting it means re-examining every
+> acquired original.
 
 ### Rendition
 
@@ -236,6 +270,19 @@ candidates provenance.
 
 > `halted_by_budget` is a first-class terminal state, not an error. The cap fails
 > closed and the curator must be able to see that is what happened.
+>
+> **A run produces one batch, reviewed as a grid** (decided 2026-07-19). The run
+> completes, then the curator reviews its candidates together and accepts or
+> rejects in bulk. This is why `estimated_cost_usd` is meaningful: a batch run has
+> a knowable scope to estimate, which an open-ended iterative conversation would
+> not. It also matches the "short curation sessions" constraint — the curator is
+> not held at the keyboard while discovery works.
+>
+> `target_candidate_count` is deliberately **not** modelled as a column yet: it is
+> unclear whether the curator sets it per run, whether it is a global preference,
+> or whether the agent decides based on how much matches the intent. That is a
+> design question, and guessing it into the schema now would be a lock-in without
+> a requirement behind it.
 
 ### Candidate
 
@@ -252,9 +299,19 @@ Artwork: most candidates never become artworks.
 | `candidate_url` | string | nullable | Where it was found. |
 | `rationale` | text | required | Why the model matched it to the intent. **Q5.** |
 | `dedup_key` | string | required, indexed | Normalised identity for cross-run dedup. **Q3.** |
+| `source_class` | enum | nullable | `institutional` \| `contemporary_web`, where determinable pre-acquisition. |
+| `estimated_max_width` | integer | nullable | Best pre-acquisition guess at available resolution. |
+| `rights_status` | enum | nullable | `public_domain` \| `in_copyright` \| `unknown`. |
 | `verdict` | enum | required | `pending` \| `accepted` \| `rejected`. |
 | `rejected_reason` | text | nullable | Optional curator note. |
 | `decided_at` | datetime | nullable | |
+
+> The three nullable signal fields exist so the **review grid can show resolution
+> and rights before acceptance**, not after. Accepting a work triggers a slow,
+> possibly expensive acquisition; discovering only then that it is a 900px
+> in-copyright press photo wastes the fetch and the curator's attention. They are
+> nullable because they are estimates — some sources will not reveal available
+> resolution without fetching.
 
 > **Q3.** `dedup_key` is the field that stops discovery re-proposing declined
 > works forever. Its derivation (normalised artist + title, or a source
@@ -379,6 +436,14 @@ pending ──┬──▶ accepted   (creates or links an Artwork)
 9. **Spend is summed over a calendar month by `occurred_at`.** When the sum
    reaches the configured ceiling, discovery transitions to `halted_by_budget`
    rather than degrading.
+10. **An Original's `display_fit` is derived at acquisition, never at render
+    time.** Render paths read it; they do not recompute it. This keeps the
+    resolution policy in one place instead of implicit in each renderer.
+11. **`Source.rights_status` is recorded for every source, including `unknown`.**
+    Absence of a value is not permitted — "we did not check" and "we checked and
+    could not tell" are different facts, and only the second is honest as
+    `unknown`. Whether rights *gate* anything is still open; recording them is
+    not.
 
 ## Deliberately not modelled
 

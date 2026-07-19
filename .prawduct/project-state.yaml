@@ -129,9 +129,19 @@ classification:
       - factor: "No test suite exists"
         level: medium
         rationale: "Zero tests across 2,216 lines. Any rewrite has no behaviour-preservation net. Reduced by the decision to start the catalogue over rather than migrate it."
+      - factor: "Contemporary sources are in-copyright and low-resolution"
+        level: medium
+        rationale: >
+          Added 2026-07-19 with the decision to search the contemporary web. Two
+          distinct problems wearing one hat. (a) Quality: web-resolution press
+          images cannot fill a 4K panel, and the mat engine assumes native
+          resolution inside a mat rather than upscaling into one. (b) Rights: the
+          corpus becomes deliberately in-copyright. Private household display
+          keeps the legal stakes genuinely low, but the product should record a
+          decision rather than inherit a gap.
       - factor: "No PII, no regulatory exposure"
         level: low
-        rationale: "Single household, no accounts, credentials only. Caps the blast radius of everything above."
+        rationale: "Single household, no accounts, credentials only, LAN-only surface reached via overlay network. Caps the blast radius of everything above."
 
   # Prior art surfaced during discovery (via web search or domain knowledge).
   # Informational — informs scope decisions, not a gate.
@@ -431,7 +441,40 @@ technical_decisions:
       rationale: "tv_content_id, tv_content_thumb_md5, and geometry-stamped label filenames are facts about one specific television and one specific panel, not about the artwork. Keeping them out is what lets the catalogue be plane-independent and lets derived artifacts regenerate per-device (learnings.md, Data and cache contract)."
       alternatives_considered: ["Keep them in the record as today — the defect being corrected."]
       date: 2026-07-19
-  integrations: []
+  integrations:
+    - decision: "Discovery searches museum/public-domain collections AND the contemporary web (gallery sites, prize announcements, artist portfolios)."
+      rationale: >
+        Confirmed 2026-07-19. The curator's motivating example — "find recent
+        award-winning art" — cannot be satisfied from institutional collections
+        alone, so restricting to museums would defeat the product's purpose.
+      alternatives_considered:
+        - "Museum/public-domain only — keeps the existing gigapixel + IIIF + metadata-API pipeline intact and rights trivial, but makes 'recent award-winning' undeliverable."
+        - "Contemporary-first — rejected; would forfeit the gigapixel museum path that produces the best output."
+      consequences: >
+        This is a genuine scope expansion, not a source list. The existing
+        acquisition pipeline assumes public domain, IIIF tile servers, structured
+        metadata APIs, and gigapixel originals. Contemporary web sources satisfy
+        NONE of those: typically web-resolution JPEGs, in copyright, no metadata
+        API, no tile server. Three things follow:
+          1. A second acquisition path with different resolution expectations.
+          2. A minimum-resolution policy — the mat engine's premise is that the
+             artwork sits INSIDE a mat at native resolution rather than being
+             upscaled into one. A 1200px press image on a 3840x2160 canvas either
+             occupies a small island or must be upscaled.
+          3. Rights handling stops being cosmetic. Personal display keeps the
+             stakes low, but "captured and ignored" is no longer a defensible
+             default when the corpus is deliberately in-copyright.
+      date: 2026-07-19
+    - decision: "Curation UI is LAN-only, reached remotely via an overlay network (Tailscale/VPN) rather than by public exposure."
+      rationale: >
+        Confirmed 2026-07-19. The network layer carries the trust boundary, so the
+        application does not need authentication, TLS termination, rate limiting,
+        or public-surface hardening. For a single-operator household tool this is
+        the proportionate answer and it keeps the security model genuinely short.
+      alternatives_considered:
+        - "Public internet exposure — would make authn, TLS, rate limiting, and API-key protection real requirements for one user."
+        - "Strictly LAN with no remote access — simpler still, but no access while away."
+      date: 2026-07-19
   operational:
     - decision: "Pin the IT8951 driver to 9f13613 or vendor it."
       rationale: "omni-epd declares it as an unpinned git dependency resolving to whatever master currently is. Builds are only reproducible today because the repo has not moved since 2023. Roughly 1,500 lines of frozen code the project depends on completely."
@@ -448,8 +491,58 @@ technical_decisions:
 design_decisions:
   information_architecture: []
   interaction_patterns: []
-  accessibility_approach: null
-  error_handling_approach: null
+  accessibility_approach: >
+    Two surfaces with completely different accessibility profiles, and the
+    important one is physical.
+
+    Curation UI (LAN-only web app, single advanced operator): WCAG 2.1 AA as the
+    baseline — keyboard navigation, visible focus, meaningful labels, sufficient
+    contrast. One domain-specific caution: this is an image-review tool whose
+    whole job is judging colour, so the UI chrome must never sit at a contrast
+    ratio that competes with the artwork, and colour must never be the sole
+    carrier of state in a candidate grid (accept/reject needs a non-colour
+    indicator).
+
+    The e-paper label is the accessibility surface that actually matters. It is
+    read by household members and guests at standing distance, on a 16-level
+    greyscale panel with no backlight, in whatever ambient light the room has. It
+    has no interface to navigate — legibility IS the accessibility story:
+    type size at reading distance, contrast on a non-emissive panel, and line
+    length. The 2024 implementation hardcodes "Sans 18" for a panel geometry that
+    is no longer the target, so this needs re-deriving for the 1448x1072 panel
+    rather than carrying forward.
+
+    The TV surface has no accessibility affordances by deliberate design — it is
+    artwork on a wall, and adding overlays would violate the product's core
+    identity constraint.
+  error_handling_approach: >
+    Scaled to medium risk, and shaped by one dominant fact: on the display plane
+    a swallowed error is invisible, because the only feedback channel is a picture
+    on a wall that keeps looking fine.
+
+    Taxonomy the design must distinguish:
+      * Recoverable and expected — partial dezoomify tile fetches, museum rate
+        limiting, malformed LLM JSON, transient TV websocket drops. Retry with
+        backoff; these are normal operating conditions, not incidents.
+      * Recoverable but degrading — vision model unavailable so mat colour falls
+        back to the dominant-colour algorithm. Must be RECORDED (MatColor.method),
+        not silent: the 2024 code degrades invisibly.
+      * Fatal for one item — an artwork that cannot be acquired or rendered. Fails
+        that item, marks it, and continues the batch. Never aborts the run.
+      * Fatal for the run — budget ceiling reached, TV unreachable, ART_ROOT
+        missing. Terminates with a distinguishable state; `halted_by_budget` is a
+        first-class outcome, not an error.
+
+    Two rules that exist because the 2024 code broke them:
+      * Never report success on a failed operation. `upload_file` catches every
+        exception, logs it, and still returns — recording a null content id while
+        the retry loop sets success = True.
+      * Catch specific exception types. A genuinely necessary broad catch carries
+        `# prawduct:allow prawduct/broad-except -- reason`.
+
+    Curator-facing errors surface in the web UI with enough context to act on;
+    display-plane errors must reach somewhere a human actually looks, which the
+    systemd journal alone does not satisfy.
   # API decisions — populate when classification.structural.exposes_programmatic_interface is set.
   # These record the DECISION (including a deliberate "none — internal-only"), not a mandate to
   # version. A deferral must be dated and carry a revisit trigger. See the api-contract artifact.
@@ -568,12 +661,25 @@ open_questions:
     # platform-and-dependency-findings.md flagged lagging 3.14 wheels as a reason to
     # avoid 3.14 on the Pi. The image pipeline moves to the 3.14 curation plane, so
     # the same concern follows it. Cheap to verify; expensive to discover late.
-  - question: "Should discovery results carry licence/rights enforcement, or is rights metadata display-only?"
-    blocking: "The candidate data model and what the review UI must show."
+  - question: "What is the minimum acceptable source resolution, and what happens to works below it?"
+    blocking: "The acquisition pipeline's second path, the Original entity, and the mat engine's contract."
     waiting_on: user
-    priority: low
-    # Today `rights` is captured for 5 of 41 works and never used. Personal display
-    # keeps the stakes low, but it should be a recorded decision rather than a gap.
+    priority: high
+    # Raised by the 2026-07-19 decision to include contemporary web sources. The
+    # mat engine assumes the artwork sits INSIDE a mat at native resolution; a
+    # 1200px press image on a 3840x2160 canvas either occupies a small island or
+    # must be upscaled. Options: reject below a floor, accept and upscale, accept
+    # and mat generously, or let the curator decide per work. This determines
+    # whether resolution is a hard filter during discovery or a review-time signal.
+  - question: "Should discovery results carry licence/rights enforcement, or is rights metadata display-only?"
+    blocking: "The Candidate/Artwork model and what the review grid must show."
+    waiting_on: user
+    priority: medium
+    # RAISED from low 2026-07-19: the corpus is now deliberately in-copyright, so
+    # "captured and ignored" is no longer a defensible default. Today `rights` is
+    # populated for 5 of 41 works and never read. Private household display keeps
+    # the stakes genuinely low — this wants a recorded decision, not a compliance
+    # regime.
 
 # =============================================================================
 # USER EXPERTISE PROFILE

@@ -66,6 +66,42 @@
 
 <!-- Items available to pick up. -->
 
+- **[CUI-WT3K]** Establish a real design system for the curation web UI (Claude design tooling, not ad-hoc styling)
+  `effort: L · impact: L · area: curation-ui · source: user · added: 2026-07-19 · status: open · stage: design · refs: project-state.yaml#design_decisions`
+
+  The curation web UI is the product's only human interface and has **no visual
+  precedent in this repo** — the 2024 product had no visual surface at all, and
+  `design_decisions.visual_direction` is currently "deferred to design". Left
+  alone, that gap gets filled by ad-hoc per-page styling as screens get built,
+  which is the failure this item exists to prevent.
+
+  Do it deliberately instead: use Claude's design tooling to produce an actual
+  design system — tokens (colour, type scale, spacing, radius, elevation),
+  component inventory, and light/dark handling — before the UI accumulates
+  one-off CSS. Then build screens against it.
+
+  Constraints already decided in project-state that the system must satisfy:
+  - **WCAG 2.1 AA baseline** — keyboard navigation, visible focus, meaningful
+    labels, sufficient contrast (`design_decisions.accessibility_approach`).
+  - **Chrome must never compete with the artwork.** This is an image-review tool
+    whose whole job is judging colour; UI surfaces must sit at a contrast and
+    saturation that recedes behind the candidate images.
+  - **Colour is never the sole carrier of state.** Accept/reject in a candidate
+    grid needs a non-colour indicator.
+  - Single advanced operator, short leisure-time sessions — the UI must not feel
+    like sysadmin work, and must not be condescending.
+
+  Out of scope: the Frame TV art-mode output (no chrome by hard constraint) and
+  the e-paper label panel (16-level greyscale, non-emissive, legibility-at-distance
+  is its own design problem). Three output surfaces, only one of them gets this
+  design system.
+
+  Stage is `design`, not `ready`: `information_architecture` and
+  `interaction_patterns` are both still empty in project-state, so the screens
+  this system dresses aren't specified yet. Sequencing question to settle when
+  picked up — whether the design system leads (tokens first, screens against it)
+  or lags one screen (build the first real screen, extract the system from it).
+
 ## Promoted
 
 <!-- Items currently being addressed in an active build plan. /backlog pick
