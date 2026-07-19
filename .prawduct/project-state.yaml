@@ -42,10 +42,36 @@ classification:
     # decisions in design_decisions (api_versioning_approach, api_error_model_approach);
     # the api-versioning advisory nudges until they are recorded.
     exposes_programmatic_interface:
-      consumers: internal
-      # Exposes: an HTTP API backing the curation UI, plus the curation↔display
-      # plane contract. Both internal — nothing third-party consumes them.
+      consumers: both
+      # FLIPPED from `internal` on 2026-07-19 — a recorded classification change,
+      # not a detail. The product exposes an MCP tool surface covering all content
+      # management operations, and Claude Code (or any MCP client) drives it:
+      # "point Claude Code at the server and say 'add all of Salvador Dali's most
+      # famous works'". That is an EXTERNAL consumer — one not deployed from this
+      # repo.
+      #
+      # Surfaces exposed:
+      #   * MCP tool surface — external consumers (Claude Code, the in-UI agent)
+      #   * HTTP API backing the curation UI's direct controls — internal
+      #   * curation↔display plane contract — internal
       # Consumes six foreign surfaces; see foreign_apis below.
+      #
+      # Consequences re-derived on the flip (methodology/discovery.md, "A
+      # structural characteristic flipped"):
+      #   1. api_versioning_approach's own revisit trigger FIRED — it said "any
+      #      consumer not deployed from this repo". Re-opened below.
+      #   2. api_error_model_approach can no longer stay deferred: agents bind to
+      #      tool error shapes.
+      #   3. An api-contract artifact is now owed (strategy-class coverage).
+      #   4. MCP became a CORE surface rather than optional, which promoted the
+      #      3tears-mcp/NATS question from medium to decisive. Resolved — see
+      #      technical_decisions.technology.
+      #   5. New security surface: untrusted web content reaches an agent holding
+      #      mutating, spend-incurring tools. See risk_profile.
+      #
+      # NOT flipped: has_multiple_party_types stays false. An agent is a
+      # CONSUMER, not a party type — there is still exactly one principal whose
+      # intent matters, and no per-party trust boundary or data isolation.
     # Multiple distinct user types. parties: [list of distinct user types]
     has_multiple_party_types: false
       # Confirmed 2026-07-19: single operator. "Per-user preferences" means named
@@ -129,6 +155,26 @@ classification:
       - factor: "No test suite exists"
         level: medium
         rationale: "Zero tests across 2,216 lines. Any rewrite has no behaviour-preservation net. Reduced by the decision to start the catalogue over rather than migrate it."
+      - factor: "Untrusted web content reaches an agent holding mutating, spend-incurring tools"
+        level: medium
+        rationale: >
+          Added 2026-07-19 with the MCP flip. Discovery reads arbitrary gallery
+          sites, prize pages, and artist portfolios — attacker-influencable text —
+          and feeds it into an agent whose MCP tools can mutate the catalogue and
+          spend real money. That is the classic prompt-injection shape.
+
+          Genuinely bounded here, and worth being honest about why rather than
+          inflating it: there is no PII, no multi-tenancy, no payment surface, and
+          the LAN-only/overlay-network exposure means the attacker must first get
+          content in front of a discovery run. The realistic worst case is a
+          poisoned page steering candidate selection or burning budget — annoying
+          and visible, not a breach.
+
+          The two structural mitigations already decided do most of the work:
+          agents cannot auto-accept (every addition stops at curator review), and
+          the spend cap fails closed. What remains is keeping tool authority
+          narrow — no filesystem, no shell, no arbitrary fetch — so the blast
+          radius stays inside the catalogue.
       - factor: "Contemporary sources are in-copyright and low-resolution"
         level: medium
         rationale: >
@@ -470,11 +516,50 @@ technical_decisions:
         - "Direct Anthropic or OpenAI SDK — fewer layers, but no provider routing and no shared foundation."
         - "Keep openai==1.37.1 / gpt-4o as in ai.py — rejected; the pin and the model are both from mid-2024."
       date: 2026-07-19
+    - decision: "Build the MCP server on the official `mcp` SDK directly, not on `3tears-mcp`."
+      rationale: >
+        Decided 2026-07-19 when MCP became a core surface. `3tears-mcp` depends on
+        `3tears` core, `3tears-epoch`, and `3tears-nats`, and `mcp/auth.py`
+        imports `EpochClient`/`EpochListener` at module scope — so taking it would
+        drag NATS into a product whose operator explicitly ruled it out.
+
+        What `3tears-mcp` adds over the raw SDK is an RBAC-gated `McpServer` with
+        pluggable identity and authorizer protocols. This product has ONE
+        principal. There are no roles to gate, so the entire value-add is
+        inapplicable, and `3tears-mcp` depends on `mcp>=1.27` anyway — the same
+        official SDK, reachable directly.
+
+        This resolves the open question about running 3tears MCP without a broker
+        by making it moot rather than by answering it.
+      alternatives_considered:
+        - "3tears-mcp — brings RBAC this product cannot use, at the cost of NATS + Postgres."
+        - "Custom JSON-RPC surface instead of MCP — rejected; MCP is the requirement, and Claude Code speaks it natively."
+      date: 2026-07-19
     - decision: "Defer 3tears agent memory."
       rationale: "It depends on pgvector, a PostgreSQL extension — the one 3tears capability that genuinely forces infrastructure. Deferring it is what keeps the whole curation plane infrastructure-free. Revisit only if Postgres appears for another reason."
       alternatives_considered: ["Run Postgres for agent memory — rejected as disproportionate for one household."]
       date: 2026-07-19
   data_model:
+    - decision: "Agent-initiated additions always queue as candidates; agents never auto-accept into the active collection."
+      rationale: >
+        Confirmed 2026-07-19. "Add all of Salvador Dali's most famous works" via
+        MCP produces candidates awaiting review, exactly as UI-driven discovery
+        does. The human review gate is what bounds both spend and taste, and it is
+        the one control that does not scale with agent capability — an agent that
+        can add faster is a reason to keep the gate, not to remove it.
+
+        The honest cost: an agent cannot finish that request end to end. It gets
+        works found and staged, but the wall does not change until the curator
+        looks. Accepted deliberately.
+
+        No new entity is needed — `Candidate.verdict = pending` already expresses
+        this. What the model gains is provenance: a DiscoveryRun must record which
+        client initiated it, so "why did 40 Dali candidates appear" is answerable.
+      alternatives_considered:
+        - "Bounded auto-accept behind an explicit flag — completes the request, but changes the wall without the curator seeing it."
+        - "Auto-accept into a non-active staging theme — keeps the gate while letting the agent finish; rejected as a third state duplicating what `candidate` already means."
+        - "Trust by caller (Claude Code auto-accepts, in-UI agent queues) — rejected: exactly the parity split the MCP requirement exists to avoid."
+      date: 2026-07-19
     - decision: "Rebuild the catalogue through curation rather than migrating all.json."
       rationale: >
         The existing 41 records have three known defects (identity keyed on the
@@ -598,24 +683,50 @@ design_decisions:
   # api_versioning_approach: { scheme, deprecation_policy, stability_tiers,
   #                            status: active|deferred, rationale, revisit_trigger (if deferred), date }
   api_versioning_approach:
-    scheme: "none — internal-only"
-    deprecation_policy: "n/a"
-    stability_tiers: "n/a"
-    status: active
+    scheme: "undecided — REOPENED, was 'none — internal-only'"
+    deprecation_policy: "undecided"
+    stability_tiers: "undecided"
+    status: deferred
     rationale: >
-      Both HTTP surfaces (curation UI backend, curation↔display contract) have
-      exactly one consumer each, shipped from this repo and deployed together.
-      Versioning buys nothing against a single first-party consumer. This is a
-      recorded decision that versioning is NOT needed, not an oversight.
-    revisit_trigger: "A second display plane, a second TV, or any consumer not deployed from this repo."
+      SUPERSEDED 2026-07-19, same day, by its own revisit trigger firing. The
+      original decision — no versioning, internal-only — was sound while every
+      surface had exactly one first-party consumer deployed from this repo. The
+      MCP requirement invalidated that premise: Claude Code is an external
+      consumer, and an MCP tool surface is precisely the case where adding
+      versioning later breaks every bound client.
+
+      This is recorded as REOPENED rather than silently amended, because the
+      trigger doing its job is the evidence the mechanism works.
+
+      Two surfaces now need separate answers, and they are not the same problem:
+        * MCP tool surface — external. Tool names, argument schemas, and result
+          shapes are the contract. Needs a stance on adding/removing tools,
+          renaming arguments, and changing result shapes.
+        * curation↔display contract — still internal, single consumer, deployed
+          together. The original "none" reasoning still holds here.
+    revisit_trigger: "RESOLVED — fired 2026-07-19 on the MCP requirement. Decide before the first MCP tool ships."
     date: 2026-07-19
   # api_error_model_approach: { envelope (e.g. RFC-7807/problem+json), codes, status, rationale, date }
   api_error_model_approach:
-    envelope: "deferred to planning"
-    codes: "deferred to planning"
+    envelope: "undecided — must be settled before the first MCP tool ships"
+    codes: "undecided"
     status: deferred
-    rationale: "The curation↔display contract does not exist yet, so its error model cannot be designed. What is already decided: errors on that boundary must be explicit and typed, because the display plane's failure mode is a silently frozen picture."
-    revisit_trigger: "Designing the curation↔display contract."
+    rationale: >
+      No longer safely deferrable. Agents bind to error shapes to decide whether
+      to retry, escalate, or stop, so an unstable or unstructured error model is
+      a correctness problem for every MCP client, not a nicety.
+
+      Already decided regardless of envelope choice:
+        * Errors must be explicit and typed. The display plane's failure mode is
+          a silently frozen picture, and the product's existing defect pattern is
+          operations reporting success on failure.
+        * `halted_by_budget` is a distinguishable outcome, not a generic error —
+          an agent must be able to tell "you are out of money" from "the fetch
+          failed" and stop rather than retry.
+        * Partial success is normal (partial dezoomify tiles, some candidates
+          acquired), so the model must express it rather than collapsing to
+          ok/fail.
+    revisit_trigger: "Designing the MCP tool surface — which is now v1 scope, not later."
     date: 2026-07-19
   observability_approach: >
     The defining constraint is that failure is silent by construction — the only
@@ -688,15 +799,18 @@ open_questions:
     # risk is behavioural: asyncio internals, and pydantic/langchain annotation
     # resolution under eager (3.13) vs lazy (3.14) __annotations__. A static PEP
     # 649 reliance check found zero hits. Only a real 3.13 test run closes it.
-  - question: "Can 3tears MCP tools be used without a running NATS broker?"
-    blocking: "Whether MCP tooling can be part of the discovery agent design at all."
-    waiting_on: research
-    priority: medium
-    # 3tears-mcp -> 3tears-epoch -> 3tears-nats, and mcp/auth.py imports
-    # EpochClient/EpochListener/Subjects at module scope. nats-py is therefore
-    # installed regardless. Whether a LIVE broker is required depends on whether the
-    # RBAC/auth path is exercised — the imports are in auth.py, not tool.py or
-    # server.py. Needs a spike; plausible but UNVERIFIED.
+  - question: "What is the MCP tool surface — the operations, their granularity, and their error model?"
+    blocking: "The api-contract artifact, the versioning and error-model decisions, and the service layer's shape."
+    waiting_on: user
+    priority: high
+    # Opened 2026-07-19 by the MCP flip. The requirement is parity with the web
+    # UI "or more", and the worked example is "add all of Salvador Dali's most
+    # famous works" — an intention, not a CRUD call. So granularity is the real
+    # question: intention-shaped tools (discover_and_add, switch_theme) versus
+    # fine-grained CRUD, and where the boundary sits.
+    # Note this is deliberately NOT answered by inference — tool surfaces are
+    # contracts that external clients bind to, and guessing one into existence is
+    # the expensive kind of wrong.
   - question: "Where does the curation plane actually run, and is it always-on?"
     blocking: "Deployment design, and whether discovery can be a background job or must be strictly foreground."
     waiting_on: user

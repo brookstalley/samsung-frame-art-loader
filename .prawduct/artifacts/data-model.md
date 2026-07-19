@@ -263,6 +263,7 @@ candidates provenance.
 | `id` | UUID | PK | |
 | `intent_text` | text | required | The curator's natural-language intent, verbatim. |
 | `strategy` | text | nullable | The interpreted plan, for explaining results. |
+| `initiated_by` | enum | required | `web_ui` \| `web_ui_agent` \| `mcp_client`. Which surface started this run. |
 | `status` | enum | required | `estimating` \| `running` \| `completed` \| `failed` \| `halted_by_budget`. |
 | `estimated_cost_usd` | decimal | nullable | Shown before the run. |
 | `actual_cost_usd` | decimal | nullable | Reconciled after. |
@@ -283,6 +284,19 @@ candidates provenance.
 > or whether the agent decides based on how much matches the intent. That is a
 > design question, and guessing it into the schema now would be a lock-in without
 > a requirement behind it.
+>
+> **`initiated_by` exists because agents can now start runs.** An MCP client can
+> issue "add all of Salvador Dalí's most famous works" without the curator
+> watching, so "why did forty Dalí candidates appear, and who asked for them"
+> must be answerable from the data. It is also the field that makes agent spend
+> attributable in `SpendRecord` — cost per surface, not just cost per month.
+>
+> Note what `initiated_by` is **not**: an authorisation input. Every surface has
+> identical authority, because `has_multiple_party_types` is false and there is
+> one principal. Agent-initiated runs queue candidates for exactly the same
+> reason UI-initiated runs do — the review gate is universal, not a restriction
+> applied to agents. Branching behaviour on this field would reintroduce the
+> parity split the MCP requirement exists to prevent.
 
 ### Candidate
 

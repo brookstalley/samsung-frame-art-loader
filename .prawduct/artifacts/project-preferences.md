@@ -130,6 +130,7 @@ This per-preference table is the product's **norm index** (`/prawduct:methodolog
 | No hardcoded deployment values in source (IP, art root, coordinates) | Critic | — | janitor | The same code runs on the Pi and on a dev Mac; a hardcoded `/home/tvpi/art` means the dev path is a source edit, which is how config drift starts. |
 | Async at the I/O boundary, synchronous core | Critic | — | janitor | `samsungtvws` forces async at the TV edge only. Letting it spread makes the image and metadata logic untestable without an event loop. |
 | Hardware + network access sits behind an interface | Critic | — | janitor | Both display drivers are dormant upstream and one is unpinned; an interface keeps a frozen 2023 driver from dictating the project's Python version (learnings § Platform and dependencies). |
+| **Operation logic lives ONLY in the service layer. MCP tools and HTTP handlers are thin bindings and contain no business logic.** | Critic | — | janitor | The product requires MCP at parity with the web UI, but UI controls call HTTP rather than MCP — so parity is only guaranteed if both are bindings over one implementation. Two implementations of "accept a candidate" diverge within weeks, and the divergence is invisible until an agent and a click produce different results. A handler that validates, orders, or decides is the violation; a handler that unpacks arguments, calls one service method, and formats the result is the norm. |
 
 ### Known departures (existing code, not yet conforming)
 

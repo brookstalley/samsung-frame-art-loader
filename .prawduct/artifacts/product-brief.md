@@ -101,6 +101,7 @@ Framed as a pipeline with a human gate in the middle, because the product both
 | 5 | Organise into themes | must-have |
 | 6 | Display and sync | must-have |
 | 7 | Ambient adaptation | nice-to-have |
+| 8 | Drive everything from an agent, over MCP | must-have |
 
 **1. Express curatorial intent.** The curator states an intent in the web UI. The
 system interprets it into a discovery strategy and shows an estimated cost
@@ -137,6 +138,24 @@ Host-driven rotation makes a theme switch cost zero TV writes.
 of day. Exists today in `local.py`; the auto art-mode logic is currently
 commented out.
 
+**8. Drive everything from an agent, over MCP.** Every content-management
+operation is available as an MCP tool, at parity with the web UI. The worked
+example: point Claude Code at the server and say *"add all of Salvador Dalí's most
+famous works."* The same tools back the in-UI agent.
+
+This is a **must-have**, and it is what flipped the product to having external
+API consumers. Two consequences that are easy to miss:
+
+- **Agents never auto-accept.** An agent-driven add produces candidates awaiting
+  review, exactly as UI-driven discovery does. So an agent cannot literally
+  finish the Dalí request — it stages the works and the wall changes when the
+  curator looks. That is deliberate: the review gate bounds spend and taste, and
+  it is the one control that does not scale with agent capability.
+- **Parity is structural, not aspirational.** UI controls call HTTP and agents
+  call MCP, so both must be thin bindings over one service layer. Two
+  implementations of "accept a candidate" diverge within weeks, invisibly. The
+  norm is recorded in `project-preferences.md`.
+
 ## Success Criteria
 
 - A curator goes from natural-language intent to artwork on the wall without
@@ -160,6 +179,9 @@ commented out.
   2026-07-19, art mode confirmed working**
 - Curation plane and display plane, split as the architecture requires
 - Web UI for curation: LLM-assisted discovery, review/accept, themes
+- **MCP tool surface covering all content management, at parity with the web UI** —
+  on the official `mcp` SDK, with a service layer that both MCP tools and the
+  UI's HTTP handlers bind over
 - New catalogue built through curation, seeded with the existing 41 artworks as
   worked examples
 - Hard monthly LLM spend cap (USD 20) that fails closed
