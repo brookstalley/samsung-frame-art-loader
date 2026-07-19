@@ -17,6 +17,46 @@ for the full record established 2026-07-19. Summary:
   belongs behind an interface. That is what keeps a frozen 2023 driver from
   dictating the project's Python version.
 
+**This constraint turned out to be architecture-defining.** See below.
+
+## The Python version split is not negotiable
+
+Established 2026-07-19 during discovery; full record in
+[3tears-integration-findings.md](artifacts/3tears-integration-findings.md).
+
+Every 3tears package requires **Python >=3.14**. The e-paper driver stack is
+pinned to **3.13/3.12** for the reasons above. These cannot share an interpreter,
+which is why the product is two planes rather than one process:
+
+- **Curation plane** — Python 3.14. Web UI, LLM discovery, image acquisition and
+  preparation. Runs off the Pi.
+- **Display plane** — Python 3.13 on the Pi 4. TV websocket and e-paper only.
+
+The split was forced by a version conflict but pays for itself three ways: it
+matches the upstream/derived data contract below, it moves gigapixel fetching and
+4K compositing off a Pi 4, and it makes "e-paper behind an interface" a process
+boundary rather than a convention.
+
+## 3tears can run with zero infrastructure
+
+Also 2026-07-19, verified by reading the source — not assumed:
+
+- **L2 (NATS) is optional by design.** `CollectionRegistry` initialises all tiers
+  to `None`; `BaseCollection` guards every L2 use and has one-shot warning
+  machinery for the missing-client case. Spam suppression for a path implies the
+  path is expected.
+- **L3 is pluggable.** The `DurableStore` protocol is explicitly documented as
+  "the seam that makes a non-SQL durable backend possible", and scriob's
+  `GitL3Backend` is a working precedent.
+- **`3tears-models` needs no core at all** — only `media-contracts` and `observe`.
+- **`3tears-agent-memory` is the exception**: it depends on `pgvector`, so it
+  genuinely requires Postgres. Deferring it is what keeps the curation plane
+  infrastructure-free.
+
+> The whole decision reduces to one question: do you want 3tears agent memory?
+> No → zero infrastructure. Yes → Postgres. Nothing in between buys anything,
+> because NATS only earns its keep across multiple pods.
+
 ## Data and cache contract
 
 Established 2026-07-19. The `art/` tree is not one thing, and the two halves are

@@ -15,46 +15,152 @@ classification:
   # Product domain. Values: utility, social, marketplace, productivity, b2b,
   # content, automation, developer-tool, education, health, finance,
   # entertainment, communication. May be multiple for hybrid products.
-  domain: null
+  domain: [content, automation, utility]
 
   # Structural characteristics — architectural facts that determine what KINDS
   # of artifacts a product needs. These are a small, stable set (6) that drive
   # artifact generation. null = not applicable.
   structural:
     # User-facing interface. modality: screen|terminal|voice|spatial|minimal; platform: mobile|web|desktop|cross-platform
-    has_human_interface: null
+    has_human_interface:
+      modality: screen
+      platform: web
+      # Confirmed 2026-07-19: a browser curation UI is the direction. Three
+      # distinct output surfaces exist and must not be conflated:
+      #   1. the curation web UI (the actual human interface)
+      #   2. the Frame TV in art mode (ambient output, no controls)
+      #   3. the e-paper label panel (ambient output, no controls)
+      # The pre-2024 CLI remains as an operator surface, not the product's UI.
     # Runs without user interaction. trigger: scheduled|event-driven|always-on
-    runs_unattended: null
+    runs_unattended:
+      trigger: always-on
+      # Display plane is a systemd daemon (Restart=always) reacting to TV
+      # websocket callbacks and a sun-position brightness loop. Silent failure
+      # is the default failure mode here — see observability_approach.
     # Exposes or consumes APIs. consumers: internal|external|both
     # When this exposes an interface, record the versioning + deprecation + error-model
     # decisions in design_decisions (api_versioning_approach, api_error_model_approach);
     # the api-versioning advisory nudges until they are recorded.
-    exposes_programmatic_interface: null
+    exposes_programmatic_interface:
+      consumers: internal
+      # Exposes: an HTTP API backing the curation UI, plus the curation↔display
+      # plane contract. Both internal — nothing third-party consumes them.
+      # Consumes six foreign surfaces; see foreign_apis below.
     # Multiple distinct user types. parties: [list of distinct user types]
-    has_multiple_party_types: null
+    has_multiple_party_types: false
+      # Confirmed 2026-07-19: single operator. "Per-user preferences" means named
+      # profiles / theme sets that one curator switches between — NOT accounts.
+      # No authn, no per-party trust boundary, no data isolation in v1.
+      # If this flips, re-derive: auth, data isolation, audit (see norms guide).
     # Handles sensitive information. categories: [PII, financial, health, etc.]; regulatory: [list]
-    handles_sensitive_data: null
+    handles_sensitive_data:
+      categories: [credentials]
+      regulatory: []
+      # No PII, no regulatory surface. Holds an OpenRouter/LLM API key (real
+      # spend) and the Samsung TV pairing token. `token_file` is currently
+      # committed to git — flagged for removal.
     # Multiple processes or services communicating at runtime. topology: monolith-with-workers|client-server|microservices|pipeline
-    multi_process_distributed: null
+    multi_process_distributed:
+      topology: client-server
+      # Two planes on two machines, forced by an irreconcilable Python version
+      # constraint (3tears needs >=3.14; the IT8951 e-paper driver is pinned to
+      # 3.13/3.12). See artifacts/3tears-integration-findings.md.
+      #   * curation plane — Python 3.14, web UI + LLM discovery + image pipeline
+      #   * display plane  — Python 3.13 on the Pi 4, TV websocket + e-paper
+      # This flipped from `false` during discovery when the UX direction landed.
 
   # Domain-specific characteristics — what makes THIS product unique in its domain.
   # Dynamically identified, not from a predefined list.
   # Each: { characteristic: string, implications: [string] }
-  domain_characteristics: []
+  domain_characteristics:
+    - characteristic: "Curation is intent-driven, not query-driven"
+      implications:
+        - "A curation request may be 'find recent award-winning art', not 'Monet's flowers'. The system must discover candidate works, not just filter a known set."
+        - "Discovery is an open-ended agentic search over the open web plus museum APIs — unbounded in cost and runtime unless deliberately bounded."
+        - "Results need provenance: which source, which licence, why this work matched the intent."
+    - characteristic: "Source images are gigapixel and licence-encumbered"
+      implications:
+        - "Acquisition is tiled (dezoomify-rs) and slow; partial-tile failures are normal and already handled."
+        - "Museum rate limits are real — the ARTIC path already throttles."
+        - "Rights metadata is captured but never enforced or surfaced; personal display keeps this low-stakes, but it should be a recorded decision, not an omission."
+    - characteristic: "Presentation quality is the product"
+      implications:
+        - "The mat-colour engine (LAB-space, vision-model-assisted) is the hardest-won logic in the codebase and must survive any rewrite."
+        - "Output geometry is per-device (4K for the TV, 1448x1072 for the e-paper), so derived artifacts are never portable between planes."
+    - characteristic: "Failure is silent by construction"
+      implications:
+        - "The only feedback channel is a picture on a wall. A stalled loader looks identical to a working one showing a static image."
+        - "Existing code makes this worse: upload_file swallows every exception and still reports success."
 
   # Risk and complexity profile.
   risk_profile:
     # Overall risk: low, medium, high.
     # Drives discovery depth (low: 5-8 questions, medium: 8-15, high: 15-25).
-    overall: null
+    overall: medium
+    # Started low (household utility, no PII). Raised to medium on 2026-07-19 when
+    # the UX direction landed: unbounded LLM spend, an alpha framework dependency,
+    # and a two-plane topology are each a real failure surface.
     # Specific risk factors identified during classification.
     # Each: { factor, level (low/medium/high), rationale }
-    factors: []
+    factors:
+      - factor: "Unbounded LLM spend on agentic art discovery"
+        level: high
+        rationale: "'Find recent award-winning art' is an open-ended agent loop, not a single call. Mitigated by a hard monthly cap that fails closed (confirmed 2026-07-19)."
+      - factor: "Samsung firmware may have removed the art-mode API"
+        level: high
+        rationale: "Firmware 1710 (Sept 2025) reportedly removed Art Mode entirely on some Frame units; enabling IP Control Art Mode has bricked art mode on at least one model. The TV has not been exercised since 2024-08-19. UNVERIFIED — this can invalidate the product premise and must be checked before design."
+      - factor: "3tears is alpha with a shifting public API"
+        level: medium
+        rationale: "0.x line; README states the API can shift between minor versions. A 3tears breaking change becomes art-loader work. Mitigated by pinning."
+      - factor: "E-paper driver stack is dormant upstream"
+        level: medium
+        rationale: "omni-epd last touched 2024-11, IT8951 2023-11 with no releases and an unpinned dependency. Mitigated by the display-plane interface boundary and by pinning 9f13613."
+      - factor: "Two-plane topology introduces a contract to maintain"
+        level: medium
+        rationale: "Forced by the Python 3.14 vs 3.13 constraint, not chosen. Adds a real seam and a second always-on machine."
+      - factor: "No test suite exists"
+        level: medium
+        rationale: "Zero tests across 2,216 lines. Any rewrite has no behaviour-preservation net. Reduced by the decision to start the catalogue over rather than migrate it."
+      - factor: "No PII, no regulatory exposure"
+        level: low
+        rationale: "Single household, no accounts, credentials only. Caps the blast radius of everything above."
 
   # Prior art surfaced during discovery (via web search or domain knowledge).
   # Informational — informs scope decisions, not a gate.
   # Each: { name, url (optional), relevance, relationship (alternative|complement|reference) }
-  prior_art: []
+  prior_art:
+    - name: "NickWaterton/gallery"
+      url: "https://github.com/NickWaterton/gallery"
+      relevance: "Flask web front-end on a Raspberry Pi for Frame TVs: kiosk vs display modes, a dedicated caption display for metadata, multi-TV, LLM-generated descriptions. By the author of the samsungtvws fork this project already depends on. Closest existing thing to the planned architecture — worth reading before designing the curation UI."
+      relationship: reference
+    - name: "NickWaterton/samsung-tv-ws-api"
+      url: "https://github.com/NickWaterton/samsung-tv-ws-api"
+      relevance: "The fork this project pins. Verified alive 2026-07-19: 326 commits, explicit support for LS03A/B/C/D (2021-2024 models), async art API recommended over sync. PyPI samsungtvws shipped 2026-05-28. The 2024 architecture choice held up."
+      relationship: complement
+    - name: "pacepace/3tears"
+      url: "https://github.com/pacepace/3tears"
+      relevance: "The user's own alpha framework. Agent-native primitives and multi-provider model adapters are a strong fit; the three-tier cache is sized for multi-pod deployments this product will never have. See artifacts/3tears-integration-findings.md."
+      relationship: complement
+    - name: "pacepace/scriob"
+      relevance: "The user's sibling project and the working precedent for this architecture: engine (CLI) + server (API) + frontend, on 3tears. Its GitL3Backend proves a non-SQL DurableStore L3 is viable, which is what makes a zero-infrastructure 3tears configuration possible here."
+      relationship: reference
+
+  # Foreign API surfaces this product consumes but does not own. Each becomes a
+  # `**Foreign API:** <name>` annotation on the chunk that first wraps it, which
+  # triggers the Critic's verify-api check (methodology/planning.md).
+  foreign_apis:
+    - name: "Samsung TV WebSocket art API (via samsungtvws fork)"
+      notes: "Persistent connection, callback-driven. Pinned to a fork git SHA, not PyPI. Firmware-fragile — see risk factors."
+    - name: "Art Institute of Chicago API"
+      notes: "api.artic.edu. Already throttled in source_utils.py; responses cached to api-cache/."
+    - name: "Google Arts & Culture"
+      notes: "HTML scraping via BeautifulSoup, not an API. Breaks silently on markup changes — the most fragile metadata source."
+    - name: "OpenRouter (LLM)"
+      notes: "Chosen 2026-07-19 for multi-provider routing. Replaces the direct openai==1.37.1 gpt-4o call in ai.py."
+    - name: "dezoomify-rs"
+      notes: "External binary invoked via subprocess with shell=True. Not a network API, but an unowned interface with its own failure modes and output-parsing contract."
+    - name: "IT8951 / omni-epd e-paper drivers"
+      notes: "Dormant upstream, unpinned. Display plane only."
 
 # =============================================================================
 # PRODUCT DEFINITION
@@ -63,10 +169,21 @@ classification:
 
 product_definition:
   # One-sentence description of what this product is and why it exists.
-  vision: null
+  vision: >
+    A curated art appliance for a Samsung Frame TV: the curator expresses intent
+    in natural language ("recent award-winning work", "American modernists"), an
+    LLM-assisted discovery layer finds and acquires matching artwork at gallery
+    resolution, and the system presents it on the wall with a museum-quality mat
+    and a physical label — without the curator managing files, URLs, or geometry.
 
   # Measurable success criteria. What does "this worked" look like?
-  goals: []
+  goals:
+    - "A curator can go from a natural-language intent to artwork on the wall without touching the filesystem, editing JSON, or SSHing into the Pi."
+    - "Themes/groups are switchable from the web UI and materialise on the TV without a redeploy."
+    - "LLM spend stays under a declared monthly ceiling, and hitting the ceiling stops discovery rather than degrading it silently."
+    - "The display plane keeps showing art when the curation plane is down."
+    - "A failure in the unattended loader is visible without inspecting the wall — it reaches a log or surface a human actually reads."
+    - "Mat-colour quality is at least as good as the 2024 implementation. This is a subjective bar; the 41 existing artworks and their hand-tuned mats are the regression corpus."
 
   # Who uses this product and what they need.
   users:
@@ -76,36 +193,135 @@ product_definition:
     #   technical_level: none | basic | intermediate | advanced
     #   primary_needs: [string]
     #   constraints: [string]
-    personas: []
+    personas:
+      - name: "The curator (operator)"
+        description: "The single operator. Owns the hardware, the API keys, and every decision. Technically expert — authors the 3tears framework this product may build on — so the UI must not be condescending, but curation is a leisure activity and must not feel like sysadmin work."
+        technical_level: advanced
+        primary_needs:
+          - "Express curatorial intent in natural language and get real candidate works back"
+          - "Review, accept, and reject discovered art before it reaches the wall"
+          - "Organise accepted work into themes/groups and switch what the TV is showing"
+          - "See what LLM discovery cost, before and after running it"
+        constraints:
+          - "Will not run Kubernetes, NATS, or heavy infrastructure for a household appliance (stated 2026-07-19)"
+          - "Curation happens in short sessions, not long ones"
+      - name: "The household (viewers)"
+        description: "Everyone who sees the TV. Non-interactive — they never log in, configure, or curate. They experience only the artwork and the physical label beside it."
+        technical_level: none
+        primary_needs:
+          - "Art that looks good on the wall at every time of day"
+          - "Enough context to know what they are looking at, via the e-paper label"
+        constraints:
+          - "No interface, no accounts, no controls — this is the accessibility surface that matters most and it is a physical one"
 
   # Core user flows (UI), operations (API), or pipeline stages (automation).
   # Each: { name, description, steps (optional), priority (must-have/nice-to-have) }
-  core_flows: []
+  core_flows:
+    - name: "Express curatorial intent"
+      description: "Curator states an intent in natural language in the web UI. The system interprets it into a discovery strategy and shows the estimated cost before running anything."
+      priority: must-have
+    - name: "LLM-assisted discovery"
+      description: "An agentic search over museum APIs and the open web produces candidate works with provenance — source, licence, and why it matched the intent."
+      priority: must-have
+    - name: "Review and accept"
+      description: "Curator reviews candidates and accepts or rejects. Only accepted works enter the catalogue. This is the human-in-the-loop gate that bounds both cost and taste."
+      priority: must-have
+    - name: "Acquire and prepare"
+      description: "Fetch at gallery resolution (tiled where needed), extract and normalise metadata, choose a mat colour, render the 4K TV image and the e-paper label. Largely exists today in art.py / image_utils.py."
+      priority: must-have
+    - name: "Organise into themes"
+      description: "Group accepted works into named themes/profiles. Switching the active theme changes what the TV shows."
+      priority: must-have
+    - name: "Display and sync"
+      description: "Display plane reconciles the active theme against what is on the TV, uploads what is missing, deletes what is orphaned, and drives the label panel from TV callbacks. Largely exists today in tvart.py."
+      priority: must-have
+    - name: "Ambient adaptation"
+      description: "Brightness follows sun position; art mode follows time of day. Exists today in local.py; the auto art-mode logic is currently commented out."
+      priority: nice-to-have
 
   # Scope decisions.
   scope:
-    v1: []                # Must have for initial release
-    accommodate: []       # Design for but don't build yet
-    later: []             # Not needed for v1 to be useful
-    never: []             # Explicitly out of scope. Each: { item, rationale }
+    v1:                   # Must have for initial release
+      - "Verify the Frame TV art API still works on current firmware (gating — do this first)"
+      - "Two-plane split: curation plane (Python 3.14) and display plane (Python 3.13 on the Pi)"
+      - "Web UI for curation with LLM-assisted discovery, review/accept, and themes"
+      - "New catalogue built by curation, seeded with the existing 41 artworks as worked examples"
+      - "Hard monthly LLM spend cap that fails closed"
+      - "OpenRouter multi-provider model access"
+      - "E-paper label rendering behind a display interface"
+      - "Test suite established — none exists today"
+      - "Deployment values out of source (ART_ROOT first); token_file out of git"
+    accommodate:          # Design for but don't build yet
+      - "Multiple household accounts with per-user curation (explicitly not v1 — single operator with named profiles)"
+      - "Multiple TVs / multiple display planes"
+      - "Swapping the e-paper panel or driver without touching curation"
+    later:                # Not needed for v1 to be useful
+      - "Re-enabling automatic art-mode on/off scheduling (currently commented out in tvart.py)"
+      - "Weather-aware brightness (the weather_adjustments table in local.py is hardcoded to 'clear')"
+      - "3tears agent memory — deferred because pgvector forces Postgres; revisit if the infrastructure appears for another reason"
+    never:                # Explicitly out of scope. Each: { item, rationale }
+      - item: "Kubernetes, NATS, or multi-pod deployment"
+        rationale: "Stated directly by the operator 2026-07-19. One household, one TV, one curation process — the coherence problems this infrastructure solves do not exist here."
+      - item: "Migrating the existing all.json schema"
+        rationale: "Decided 2026-07-19 to start over with curation rather than migrate. The 41 records have known defects (identity keyed on source URL, per-device TV state embedded, semi-structured artist_details) and all works are re-fetchable from their source URLs."
+      - item: "Public or third-party API consumers"
+        rationale: "The HTTP surface exists only to back this product's own UI and its display plane."
 
   # Product identity.
   product_identity:
     name: "Samsung Frame Art Loader"
-    personality: null     # Brand personality, mood (null for internal tools)
-    visual_preferences: null  # Look/feel preferences (null for non-visual products)
+    personality: >
+      Museum, not gadget. The curator-facing surface should feel like a private
+      collection management tool — calm, typographic, image-forward — and the
+      household-facing surface (TV + label) should disappear entirely into the
+      artwork. Nothing on the wall should read as software.
+    visual_preferences: >
+      Deferred to design. The one hard constraint from the existing product: the
+      TV output is the artwork plus a mat, with no chrome, no overlay, and no
+      branding — the mat-colour engine exists precisely so the bars look
+      deliberate rather than like letterboxing.
 
-  platform: null          # Where this runs (web, mobile, CLI, etc.)
+  platform: >
+    Two planes. Curation: Python 3.14 web application, deployed wherever Docker
+    or a long-running process is available (desktop, NAS, or a second Pi).
+    Display: Python 3.13 systemd daemon on a Raspberry Pi 4 Model B driving a
+    Samsung Frame TV over LAN websocket and a Waveshare 6" HD e-paper HAT over SPI.
 
   # Non-functional requirements, calibrated to risk.
   nonfunctional:
-    performance: null
-    scalability: null
-    uptime: null
-    cost_constraints: null
+    performance: >
+      No latency budget on curation — discovery is expected to take minutes and
+      is explicitly human-triggered. The display plane must react to a TV
+      image-change callback fast enough that the e-paper label is not visibly
+      stale; the panel's own refresh (seconds) dominates. Image preparation moves
+      off the Pi entirely, which is a substantial improvement over 2024 where the
+      Pi 4 ran tiled gigapixel downloads, k-means over LAB arrays, and 4K compositing.
+    scalability: >
+      Explicitly not a goal. Design target is one household, one TV, hundreds of
+      artworks. Anything that trades simplicity for scale is the wrong trade here.
+    uptime: >
+      Display plane: continuous, and must survive the curation plane being down —
+      that independence is the main structural benefit of the two-plane split.
+      Curation plane: on-demand; downtime is invisible to the household.
+    cost_constraints: >
+      Hard monthly ceiling on LLM spend, failing closed (confirmed 2026-07-19).
+      The ceiling value is unset — see open_questions. No cloud hosting costs;
+      both planes run on hardware already owned.
 
   regulatory: []          # Each: { regulation, applicability, impact }
-  cost_estimates: []      # Each: { item, estimated_monthly_cost, notes }
+  cost_estimates:         # Each: { item, estimated_monthly_cost, notes }
+    - item: "LLM — agentic art discovery"
+      estimated_monthly_cost: "unknown; dominant and unbounded without a cap"
+      notes: "The reason the cap exists. An open-ended 'find recent award-winning art' agent loop can issue many search + vision calls per run. Cost per run is far more meaningful than cost per month and should be shown in the UI before the run."
+    - item: "LLM — mat colour selection"
+      estimated_monthly_cost: "low"
+      notes: "One vision call per newly accepted artwork, retried up to 5 times on malformed JSON. Bounded by acceptance rate, not by time. The 2024 implementation used gpt-4o."
+    - item: "Museum APIs and image acquisition"
+      estimated_monthly_cost: "$0"
+      notes: "ARTIC is free and already throttled and cached. Google Arts & Culture is scraped. Bandwidth only."
+    - item: "Hosting and hardware"
+      estimated_monthly_cost: "$0 incremental"
+      notes: "Pi 4 and curation host already owned. Electricity only."
 
 # =============================================================================
 # TECHNICAL DECISIONS
@@ -114,11 +330,73 @@ product_definition:
 # Each: { decision, rationale, alternatives_considered, date }
 
 technical_decisions:
-  architecture: []
-  technology: []
-  data_model: []
+  architecture:
+    - decision: "Split into a curation plane (Python 3.14) and a display plane (Python 3.13 on the Pi), communicating over a defined contract."
+      rationale: >
+        Forced, not chosen: every 3tears package requires Python >=3.14, while the
+        IT8951 e-paper driver compiles Cython from source and was last touched in
+        2023 — platform-and-dependency-findings.md deliberately targets 3.13 with a
+        3.12 fallback and rejects 3.14. The two cannot share an interpreter. The
+        split turns that constraint into three independent wins: it matches the
+        upstream/derived data contract already recorded in learnings.md, it moves
+        gigapixel fetching and 4K compositing off a Pi 4, and it makes "e-paper
+        behind an interface" a process boundary rather than a convention.
+      alternatives_considered:
+        - "Single process on the Pi — impossible; the Python version conflict is absolute."
+        - "Drop 3tears to stay single-process on 3.13 — viable, but forfeits the agent primitives that the LLM discovery work wants."
+        - "Drop the e-paper panel to move the Pi to 3.14 — rejected; the operator chose to keep the panel behind an interface."
+      date: 2026-07-19
+    - decision: "The display plane must keep functioning when the curation plane is unavailable."
+      rationale: "The household experiences only the TV. Curation downtime is invisible; display downtime is a blank wall. This asymmetry is the main reason the split is a benefit rather than a cost."
+      alternatives_considered: ["Display plane as a thin client that fails when the server is down — rejected; inverts the availability priority."]
+      date: 2026-07-19
+  technology:
+    - decision: "Use 3tears three-tier entities in an L1-only (SQLite) configuration, with no NATS and no Postgres."
+      rationale: >
+        Verified against the source rather than assumed (artifacts/3tears-integration-findings.md):
+        CollectionRegistry initialises all three tiers to None and injects only what
+        is configured; BaseCollection guards every L2 use and emits a one-shot
+        warning when the client is absent — the anti-log-spam machinery proves the
+        no-broker path is designed for, not accidental. The L3 DurableStore protocol
+        is explicitly the seam for non-SQL backends, and scriob's GitL3Backend is a
+        working precedent. This satisfies the operator's "no NATS or anything crazy"
+        constraint while keeping the 3tears entity model.
+      alternatives_considered:
+        - "Full 3tears stack with NATS + Postgres — rejected by the operator; solves multi-pod coherence problems this product does not have."
+        - "No 3tears at all — viable and simplest, but forfeits shared foundation with the operator's other projects."
+      date: 2026-07-19
+    - decision: "Use 3tears-models for LLM access, routed through OpenRouter."
+      rationale: "3tears-models depends only on media-contracts and observe — no core, no infrastructure — and already carries langchain-openrouter. Multi-provider routing directly enables the cheap-by-default / escalate-on-request pattern that keeps discovery spend bounded."
+      alternatives_considered:
+        - "Direct Anthropic or OpenAI SDK — fewer layers, but no provider routing and no shared foundation."
+        - "Keep openai==1.37.1 / gpt-4o as in ai.py — rejected; the pin and the model are both from mid-2024."
+      date: 2026-07-19
+    - decision: "Defer 3tears agent memory."
+      rationale: "It depends on pgvector, a PostgreSQL extension — the one 3tears capability that genuinely forces infrastructure. Deferring it is what keeps the whole curation plane infrastructure-free. Revisit only if Postgres appears for another reason."
+      alternatives_considered: ["Run Postgres for agent memory — rejected as disproportionate for one household."]
+      date: 2026-07-19
+  data_model:
+    - decision: "Rebuild the catalogue through curation rather than migrating all.json."
+      rationale: >
+        The existing 41 records have three known defects (identity keyed on the
+        source URL, per-device TV state embedded in the record, semi-structured
+        artist_details), and every work is re-fetchable from its source URL. The
+        existing artworks become worked examples that seed curation, and their
+        hand-tuned mat colours become the regression corpus for the mat engine.
+      alternatives_considered:
+        - "Full schema migration with re-identity — more up-front cost for data that is cheaply re-derivable."
+        - "Leave all.json as-is — carries all three defects into the new design."
+      date: 2026-07-19
+    - decision: "Per-device runtime state never lives in the catalogue."
+      rationale: "tv_content_id, tv_content_thumb_md5, and geometry-stamped label filenames are facts about one specific television and one specific panel, not about the artwork. Keeping them out is what lets the catalogue be plane-independent and lets derived artifacts regenerate per-device (learnings.md, Data and cache contract)."
+      alternatives_considered: ["Keep them in the record as today — the defect being corrected."]
+      date: 2026-07-19
   integrations: []
-  operational: []
+  operational:
+    - decision: "Pin the IT8951 driver to 9f13613 or vendor it."
+      rationale: "omni-epd declares it as an unpinned git dependency resolving to whatever master currently is. Builds are only reproducible today because the repo has not moved since 2023. Roughly 1,500 lines of frozen code the project depends on completely."
+      alternatives_considered: ["Leave unpinned — a silent reproducibility failure waiting on an upstream commit."]
+      date: 2026-07-19
 
 # =============================================================================
 # DESIGN DECISIONS
@@ -137,12 +415,54 @@ design_decisions:
   # version. A deferral must be dated and carry a revisit trigger. See the api-contract artifact.
   # api_versioning_approach: { scheme, deprecation_policy, stability_tiers,
   #                            status: active|deferred, rationale, revisit_trigger (if deferred), date }
-  api_versioning_approach: null
+  api_versioning_approach:
+    scheme: "none — internal-only"
+    deprecation_policy: "n/a"
+    stability_tiers: "n/a"
+    status: active
+    rationale: >
+      Both HTTP surfaces (curation UI backend, curation↔display contract) have
+      exactly one consumer each, shipped from this repo and deployed together.
+      Versioning buys nothing against a single first-party consumer. This is a
+      recorded decision that versioning is NOT needed, not an oversight.
+    revisit_trigger: "A second display plane, a second TV, or any consumer not deployed from this repo."
+    date: 2026-07-19
   # api_error_model_approach: { envelope (e.g. RFC-7807/problem+json), codes, status, rationale, date }
-  api_error_model_approach: null
-  observability_approach: null    # Signal types, correlation context, sensitive data filtering, operational model
-  infrastructure_dependencies: null  # External services (DB, queue, auth, APIs), mock boundaries, integration test strategy
-  visual_direction: null
+  api_error_model_approach:
+    envelope: "deferred to planning"
+    codes: "deferred to planning"
+    status: deferred
+    rationale: "The curation↔display contract does not exist yet, so its error model cannot be designed. What is already decided: errors on that boundary must be explicit and typed, because the display plane's failure mode is a silently frozen picture."
+    revisit_trigger: "Designing the curation↔display contract."
+    date: 2026-07-19
+  observability_approach: >
+    The defining constraint is that failure is silent by construction — the only
+    feedback channel is a picture on a wall, and a stalled loader is
+    indistinguishable from a working one showing a static image. Scaled to medium
+    risk: structured logging with correlation context on both planes, and the
+    display plane must surface its health somewhere a human actually looks rather
+    than only to the systemd journal. Two specific defects to fix, not inherit:
+    upload_file catches every exception, logs, and still reports success; and
+    print() is used for operational output throughout, which produces journal
+    lines with no level and no timestamp. LLM spend is an observability signal
+    here, not just a cost control — the hard cap cannot fail closed without
+    metering. 3tears-observe is available and carries structured logging plus
+    OpenTelemetry, at no infrastructure cost.
+  infrastructure_dependencies: >
+    Deliberately near-zero. Curation plane: SQLite on local disk; no database
+    server, no message broker, no container orchestration (see technical_decisions
+    and the operator's explicit "no NATS or anything crazy" constraint). Display
+    plane: the local filesystem and two devices — the Frame TV over LAN websocket
+    and the e-paper HAT over SPI.
+    Mock boundaries for testing: the six foreign APIs listed under
+    classification.foreign_apis are all mocked at their module boundary. The TV and
+    the e-paper panel are the two that CANNOT be meaningfully faked end-to-end —
+    they need either real hardware or an accepted gap, which is what makes the
+    "verify the TV still works" item gating rather than routine.
+  visual_direction: >
+    Deferred to design; see product_identity.visual_preferences for the one hard
+    constraint (no chrome on the TV output). The curation UI has no precedent in
+    this repo — the 2024 product had no visual surface at all.
 
 # =============================================================================
 # OPEN QUESTIONS
@@ -155,7 +475,47 @@ design_decisions:
 #   waiting_on: "user" | "research"
 #   priority: high | medium | low
 
-open_questions: []
+open_questions:
+  - question: "Does the Samsung Frame TV still expose a working art-mode API on its current firmware?"
+    blocking: "Everything. If art mode is gone, the product premise changes and the whole design is moot."
+    waiting_on: user
+    priority: high
+    # Firmware 1710 (Sept 2025) reportedly removed Art Mode entirely on some Frame
+    # units; enabling IP Control Art Mode has bricked art mode on at least one
+    # model/firmware pair. The TV has not been exercised since 2024-08-19. This is
+    # a cheap check with a very wide cost asymmetry — do it before design work.
+  - question: "What is the hard monthly LLM spend ceiling, in dollars?"
+    blocking: "Implementing the fail-closed cap; also the cheap-vs-expensive model routing policy."
+    waiting_on: user
+    priority: high
+  - question: "Can 3tears MCP tools be used without a running NATS broker?"
+    blocking: "Whether MCP tooling can be part of the discovery agent design at all."
+    waiting_on: research
+    priority: medium
+    # 3tears-mcp -> 3tears-epoch -> 3tears-nats, and mcp/auth.py imports
+    # EpochClient/EpochListener/Subjects at module scope. nats-py is therefore
+    # installed regardless. Whether a LIVE broker is required depends on whether the
+    # RBAC/auth path is exercised — the imports are in auth.py, not tool.py or
+    # server.py. Needs a spike; plausible but UNVERIFIED.
+  - question: "Where does the curation plane actually run, and is it always-on?"
+    blocking: "Deployment design, and whether discovery can be a background job or must be strictly foreground."
+    waiting_on: user
+    priority: medium
+    # Desktop, NAS, and second-Pi have materially different availability profiles.
+    # A sleeping desktop is fine for on-demand curation, not for scheduled discovery.
+  - question: "Do opencv, scikit-image, and pycairo have working aarch64/current wheels on Python 3.14?"
+    blocking: "Whether the image pipeline can live on the curation plane as designed."
+    waiting_on: research
+    priority: medium
+    # platform-and-dependency-findings.md flagged lagging 3.14 wheels as a reason to
+    # avoid 3.14 on the Pi. The image pipeline moves to the 3.14 curation plane, so
+    # the same concern follows it. Cheap to verify; expensive to discover late.
+  - question: "Should discovery results carry licence/rights enforcement, or is rights metadata display-only?"
+    blocking: "The candidate data model and what the review UI must show."
+    waiting_on: user
+    priority: low
+    # Today `rights` is captured for 5 of 41 works and never used. Personal display
+    # keeps the stakes low, but it should be a recorded decision rather than a gap.
 
 # =============================================================================
 # USER EXPERTISE PROFILE
@@ -164,12 +524,33 @@ open_questions: []
 # Drives vocabulary, explanation depth, and involvement calibration.
 
 user_expertise:
-  product_thinking: null      # none | basic | intermediate | advanced
-  technical_depth: null
-  design_sensibility: null
-  domain_knowledge: null
-  operational_awareness: null
-  evidence: []                # Each: { dimension, signal, inferred_from }
+  product_thinking: advanced      # none | basic | intermediate | advanced
+  technical_depth: advanced
+  design_sensibility: advanced
+  domain_knowledge: advanced
+  operational_awareness: advanced
+  evidence:
+    - dimension: technical_depth
+      signal: "Authors 3tears, a three-tier caching and agent framework with NATS KV, asyncpg, protocol-based backend seams, and RBAC-gated MCP."
+      inferred_from: "/Users/brookstalley/source/3tears"
+    - dimension: technical_depth
+      signal: "Asked precisely the right question about the framework — 'is there really no way to avoid pulling in docker/postgres/nats' — rather than accepting the stack as given."
+      inferred_from: "discovery, 2026-07-19"
+    - dimension: operational_awareness
+      signal: "Interrupted mid-discovery to constrain scope ('we WILL NOT be deploying to k8s or using nats or anything crazy') before any design work had been committed."
+      inferred_from: "discovery, 2026-07-19"
+    - dimension: product_thinking
+      signal: "Framed the curation requirement by its hardest case — 'find recent award-winning art', not 'Monet's flowers' — which is the distinction between search and discovery."
+      inferred_from: "discovery, 2026-07-19"
+    - dimension: design_sensibility
+      signal: "The 2024 mat-colour prompt reasons in LAB colourspace, accounts for aspect-ratio-driven mat area, and constrains mat luminance against artwork luminance on an emissive display."
+      inferred_from: "ai.py mat_prompt2"
+    - dimension: domain_knowledge
+      signal: "Built museum-grade metadata normalisation across ARTIC and Google Arts & Culture, with artist nationality/lifespan parsing and Pango-typeset physical labels."
+      inferred_from: "metadata.py, art.py ArtLabel"
+    - dimension: operational_awareness
+      signal: "Chose a communication style preference: wants the expert take and the pushback, evidenced by engaging substantively with the 3tears scale critique rather than deflecting it."
+      inferred_from: "discovery, 2026-07-19"
 
 # =============================================================================
 # BUILD PREFERENCES
@@ -178,9 +559,12 @@ user_expertise:
 # tooling). Optional — only when the user expresses preferences.
 
 build_preferences:
-  file_path: null             # Path to project-preferences.md (relative to .prawduct/)
-  last_updated: null
-  source: null                # discovery | inferred | iteration
+  file_path: artifacts/project-preferences.md
+  last_updated: 2026-07-19
+  source: inferred            # discovery | inferred | iteration
+  # Inferred from the 2024-era codebase, NOT confirmed by the owner. Entries
+  # marked (target) in that file are norms the existing code does not meet yet.
+  # Confirm during discovery.
 
 # =============================================================================
 # HEALTH CHECK

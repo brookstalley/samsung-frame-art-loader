@@ -2,40 +2,95 @@
 
 Developer preferences for how code is written in this project. Captured during discovery, updated as preferences evolve. Every session should read this before writing code.
 
+> **Status: inferred from the existing codebase on 2026-07-19, not yet confirmed by the
+> owner.** Every entry below marked _(inferred)_ is a vetoable assumption. Entries marked
+> _(target)_ are norms the existing 2024-era code does **not** yet meet — they bind new and
+> touched code, and the gap is tracked in "Known departures" below rather than papered over
+> by weakening the norm.
+
 ## Language & Runtime
 
-- **Language**:
-- **Version**:
-- **Package manager**:
+- **Language**: Python _(inferred — all 13 modules are `.py`)_
+- **Version**: target 3.13, floor 3.12. Raspberry Pi OS Trixie ships 3.13; 3.12 is the
+  last version verified working. `pyproject.toml` still declares `target-version = ["py312"]`.
+  See [learnings.md](../learnings.md) § Platform and dependencies.
+- **Package manager**: pip against a pinned `requirements.txt` _(inferred)_. `pyproject.toml`
+  exists but carries only black config — there is no project/dependency table, so the repo is
+  not an installable package. _(target)_ Choose one dependency manager during discovery;
+  `requirements.txt` pins exact versions today, which is good and should survive whatever
+  replaces it.
 
 ## Code Style
 
-- **Naming**: (e.g., snake_case functions, PascalCase classes)
-- **Formatting**: (e.g., black, prettier, gofmt)
-- **Linting**: (e.g., ruff, eslint)
-- **Type annotations**: (e.g., required, preferred, not used)
-- **Imports**: (e.g., absolute, grouped by stdlib/third-party/local)
+- **Naming**: `snake_case` functions and module-level names, `PascalCase` classes
+  (`ArtFile`, `ArtSet`, `DisplayLabel`, `ResizeOptions`) _(inferred — consistent across all modules)_
+- **Formatting**: black, `line-length = 130` (configured in `pyproject.toml`)
+- **Linting**: none configured _(target: adopt ruff)_ — with no linter, every mechanical
+  style norm below falls through to the Critic, which is weaker and slower than a lint rule.
+- **Type annotations**: currently sparse and inconsistent — `image_utils.py` annotates 8
+  return types, six modules annotate none, and `art.py` mixes bare class attributes with
+  annotated `__init__` params. _(target)_ Annotate every new or touched function signature.
+- **Imports**: absolute, one module per line, stdlib-then-third-party-then-local **loosely**
+  grouped — `art.py` and `ai.py` interleave `config` with third-party imports. _(target)_
+  Group strictly: stdlib / third-party / local, blank line between.
+- **Logging vs print**: `logging` is configured in `art.py` and `tvart.py`, but `print()` is
+  used for operational output throughout (`ai.py`, `display.py`). _(target)_ `logging` only;
+  `print()` is reserved for deliberate CLI output.
 
 ## Testing
 
-- **Framework**: (e.g., pytest, vitest, go test)
-- **Style**: (e.g., descriptive names, AAA pattern, table-driven)
-- **Coverage expectations**: (e.g., happy path + error cases, comprehensive edge cases)
-- **Testing strategies**: (e.g., property-based (hypothesis), property-based (proptest), contract testing, not applicable)
-- **Test location**: (e.g., tests/ mirror of src/, colocated, __tests__/)
-- **Parallelization**: (e.g., pytest-xdist with --dist loadgroup, vitest threads)
+- **Framework**: none — there is no test suite, no `tests/` directory, and no test runner
+  in `requirements.txt`. _(target: pytest)_
+- **Style**: _(target)_ descriptive test names stating the behaviour under test.
+- **Coverage expectations**: _(target)_ happy path + error cases for pure logic
+  (`image_utils`, `metadata` parsing, `source_utils`, the `all.json` catalogue round-trip).
+  Hardware and network paths are covered behind interfaces, not by hitting a real TV.
+- **Testing strategies**: _(target)_ plain example-based tests; the network (museum APIs,
+  OpenAI, the TV websocket) and the e-paper panel are mocked at their module boundary.
+- **Test location**: _(target)_ `tests/` mirroring the module layout.
+- **Parallelization**: not applicable at this size.
 
 ## Architecture Patterns
 
-- **Data modeling**: (e.g., Pydantic v2, TypeScript interfaces, Go structs)
-- **Error handling**: (e.g., exceptions, Result types, error codes)
-- **Async**: (e.g., async/await throughout, sync unless needed)
-- **File organization**: (e.g., feature folders, layer folders, flat)
+- **Data modeling**: hand-rolled classes with `to_json`/`from_json`-style methods
+  (`ArtFile`, `ArtSet` in `art.py`), persisted to `all.json` _(inferred)_. The catalogue's
+  known defects — identity keyed on source URL, per-device state mixed into the record,
+  semi-structured `artist_details` — are recorded in [learnings.md](../learnings.md)
+  § Known problems in the existing index.
+- **Error handling**: exceptions, with one custom domain exception (`DownloadError` in
+  `art.py`) _(inferred)_. _(target)_ Catch specific exception types; a genuinely necessary
+  broad catch carries `# prawduct:allow prawduct/broad-except -- reason`.
+- **Async**: `asyncio` at the TV boundary only (`tvart.py`, driven by `samsungtvws`'s
+  `SamsungTVAsyncArt`); everything else is synchronous _(inferred)_. _(target)_ Keep it that
+  way — async at the I/O boundary, sync core.
+- **File organization**: flat — 13 modules at the repository root, no package directory
+  _(inferred)_. _(target)_ Decide during discovery whether to keep flat or move to a package;
+  flat is defensible at 2,216 lines but the hardware and TV boundaries need real interfaces
+  regardless (see learnings § Platform and dependencies).
 
 ## Tooling
 
-- **Key libraries**: (list anything non-obvious that new sessions should know about)
-- **Dev commands**: (e.g., `pytest tests/`, `npm run dev`, `cargo test`)
+- **Key libraries**:
+  - `samsungtvws` — pinned to a **git SHA on a fork** (`NickWaterton/samsung-tv-ws-api`),
+    not PyPI. This is the TV control surface.
+  - `omni-epd` (`display.py`) — e-paper driver, dormant upstream since 2024-11. Not in
+    `requirements.txt`; installed out-of-band on the Pi.
+  - `pycairo` + `PyGObject`/Pango (`art.py`) — label typesetting. System-level GTK
+    dependencies, not pure-Python wheels.
+  - `openai` (`ai.py`) — mat-colour selection, currently calling `gpt-4o`. Real per-call spend.
+  - `dezoomify` (external binary, configured in `config.py`) — tiled high-res image fetch.
+- **Dev commands**: `python tvart.py [--flags]` is the entry point. There is no test, lint,
+  or format command wired up. _(target)_ Establish `pytest`, `ruff check`, `black .`.
+- **`requirements.txt` vs `r`**: `requirements.txt` is the hand-maintained direct-dependency
+  list (18 entries). `r` is an extensionless **`pip freeze` capture from the Pi's venv** (60
+  entries) — it is the only record of the full transitive set that actually ran, including
+  four git-sourced packages absent from `requirements.txt`: `IT8951` (pinned to `9f13613`),
+  `omni_epd`, `waveshare-epd`, and the `inky`/`spidev`/`RPi.GPIO` hardware stack. Treat it as
+  a recovered lockfile, not scratch — it is evidence, and it should be renamed to say so.
+- **Configuration**: split — secrets via `.env` → `config.py` (`OPENAI_KEY`, `EPD_TYPE`),
+  everything else hardcoded as module constants in `config.py` including the TV's IP address,
+  the art root `/home/tvpi/art`, and geographic coordinates. _(target)_ Hoist deployment-
+  specific values (starting with `ART_ROOT`) out of source; see learnings § Data and cache contract.
 
 ## Workflow
 
@@ -66,8 +121,29 @@ This per-preference table is the product's **norm index** (`/prawduct:methodolog
 
 | Preference / norm | Mechanism | Enforcement artifact | Audit home | Why |
 |---|---|---|---|---|
-| *(a code-level convention)* | Test | `tests/preferences/test_*.py` | janitor | *(the constraint's rationale)* |
-| norm lives in `observability-strategy.md` § Direction | Critic | — | advisory | *(pointer row — the why lives in the Direction entry)* |
+| black formatting, line-length 130 | Linter | `pyproject.toml` `[tool.black]` | janitor | Already configured; removes formatting from review entirely. |
+| snake_case functions, PascalCase classes | Critic | — | janitor | No linter configured yet; promote to a ruff `N` rule once ruff lands. |
+| Strict stdlib / third-party / local import grouping | Critic | — | janitor | Promote to ruff `I` (isort) once ruff lands — mechanical, shouldn't cost review attention. |
+| `logging` only; `print()` reserved for deliberate CLI output | Critic | — | janitor | This runs unattended on a Pi under systemd; `print()` output has no level and no timestamp, so failures are invisible in the journal. |
+| Type-annotate every new or touched function signature | Critic | — | janitor | Annotating on touch converts a 2,216-line untyped codebase incrementally, without a stop-the-world typing pass. Promote to a mypy/ruff gate once the ratio is high enough to be worth failing on. |
+| Catch specific exceptions; broad catch needs `# prawduct:allow prawduct/broad-except -- reason` | Critic | — | advisory | A swallowed exception in an unattended loader shows up as "the TV just stopped changing", with nothing in the log to say why. |
+| No hardcoded deployment values in source (IP, art root, coordinates) | Critic | — | janitor | The same code runs on the Pi and on a dev Mac; a hardcoded `/home/tvpi/art` means the dev path is a source edit, which is how config drift starts. |
+| Async at the I/O boundary, synchronous core | Critic | — | janitor | `samsungtvws` forces async at the TV edge only. Letting it spread makes the image and metadata logic untestable without an event loop. |
+| Hardware + network access sits behind an interface | Critic | — | janitor | Both display drivers are dormant upstream and one is unpinned; an interface keeps a frozen 2023 driver from dictating the project's Python version (learnings § Platform and dependencies). |
+
+### Known departures (existing code, not yet conforming)
+
+These are real gaps, not exemptions. They are listed so no future session mistakes the
+current state for the norm — and so nobody "fixes" the mismatch by weakening a norm.
+
+| Departure | Where | Disposition |
+|---|---|---|
+| No test suite at all | whole repo | Blocking for medium+ work. Establish pytest before the first substantive build chunk. |
+| No linter | whole repo | Adopt ruff; migrate the Critic-enforced mechanical norms above to lint rules. |
+| `print()` used for operational output | `ai.py`, `display.py`, others | Convert on touch. |
+| Deployment values hardcoded | `config.py` (`tv_address`, `base_folder`, lat/long) | Hoist during the config work; `ART_ROOT` first. |
+| Sparse type annotations | 6 of 13 modules have none | Annotate on touch. |
+| `pyproject.toml` declares `py312` while the platform target is 3.13 | `pyproject.toml` | Reconcile once 3.13 is actually verified on the Pi. |
 
 **Rule for adding a new preference:** assign a mechanism. If the preference can be expressed as "every file/function/config matches pattern X with named exceptions" → write a test. If a linter rule already exists for it → configure the linter. If it requires understanding intent → assign to Critic. Never leave a preference unassigned.
 
