@@ -785,11 +785,31 @@ pending ──┬──▶ accepted  (mints an Artwork)      │
           ├──▶ rejected  (terminal; suppresses)  │
           └──▶ awaiting_better_image ────────────┘
                entered ONLY via art_review(reject_image)
+                    │
+                    ├──▶ accepted   via set_verdict
+                    └──▶ rejected   via set_verdict
 ```
 
 `awaiting_better_image` is **not terminal**. It returns to `pending` once a
 resolution attempt selects a fresh instance, and it must not write
 `work_dedup_key` suppression — that is reserved for `rejected` (**Q11**).
+**The curator may also leave it directly** via `set_verdict` — accepting the best
+instance on offer, or giving up on the work — which is why the two edges above
+exist (added 2026-07-20; the diagram previously drew no exit but `set_verdict`
+constrains only its *target* value, so the transition was reachable and unmodelled).
+
+**Terminal verdicts are never overwritten by a resolve run (decided 2026-07-20).**
+`verdict` has two writers — the curator through `art_review`, and a resolve run
+completing — and only the curator's is authoritative. A resolve run writes
+`pending` **only if the work is still `awaiting_better_image` when it finishes**;
+if the curator has since accepted or rejected it, the run's result is **reported,
+not applied**, and the verdict stands. Without this rule a resolve completing after
+an accept writes `pending` over `accepted`, leaving a work with an `artwork_id` and
+a non-accepted verdict — a combination nothing else in this model can produce or
+repair. Constraint 14 does not cover it: that guards resolve-run *creation*, not
+the write at completion. Note the guard lives at the completion write, not on
+`set_verdict`, which stays available at all times — a curator must never be blocked
+on a background job.
 
 **The three situations inside it are distinguished without storing them
 (decided 2026-07-20).** The verdict was carrying "not yet re-searched",

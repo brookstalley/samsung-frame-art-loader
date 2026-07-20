@@ -210,6 +210,15 @@ Rejecting an *instance* is `reject_image`'s job, and it is the only way into
 `awaiting_better_image`. `set_verdict` accepts `accepted` and `rejected` only, and
 returns an error naming `reject_image` when asked for `awaiting_better_image`.
 
+**This constrains the target value only — never the source state** (clarified
+2026-07-20). `set_verdict` is available from any non-terminal state, including
+`awaiting_better_image`: the curator may accept the best instance on offer or give
+up on the work without waiting for a re-search, and must never be blocked on a
+background job. The corresponding guard therefore lives on the *other* writer — a
+resolve run completing writes `pending` only if the work is still
+`awaiting_better_image`, and otherwise reports its result without applying it. See
+`data-model.md` → CandidateWork, "Terminal verdicts are never overwritten".
+
 **Both paths used to reach that state and only `reject_image` set `rejected_at`** —
 so a work sent there via `set_verdict` had no suppressed instance, and the re-search
 could legitimately hand back the image the curator had just turned down. That is the

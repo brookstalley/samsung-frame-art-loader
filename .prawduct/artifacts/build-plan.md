@@ -256,8 +256,14 @@ architecture-proving slice is Chunk 07.
   It lands here because this is the first chunk that produces code to test, and
   the no-test-suite departure must close before any substantive chunk; Chunk 06
   splits the suite per plane
+- **Carried finding:** "no secret may ever reach a log line" is stated forcefully
+  in two artifacts but has no mechanism, no norm-index row, and no chunk — while
+  `operational-spec.md` mandates logging resolved config at startup, which is
+  exactly where a secret would leak. This chunk writes that startup logging, so
+  it owns the redaction helper and the norm-index row that makes it enforceable.
 - **Tests:** unit — config loading fails fast with a clear message naming `.env`
-  when `ART_ROOT` is missing
+  when `ART_ROOT` is missing; no configured secret appears in the startup log
+  line (assert on the emitted record, with a secret deliberately set)
 - **Acceptance criteria:** the code runs on the dev Mac and the Pi with no source
   edit, only `.env` differences; a missing `ART_ROOT` fails at import with an
   actionable message
@@ -463,6 +469,11 @@ the existing 41 works are seeded into them.
 - **Depends on:** Chunk 07
 - **Artifacts consumed:** `data-model.md` in full (entities, relationships,
   state machines, constraints 1–15)
+- **Carried finding:** the curation-side directive sequence counter is pinned as
+  catalogue-side by `architecture.md` but has no modelled home, and a catalogue
+  restore restores it — so it is part of the persisted format. Give it one here
+  (a settings/singleton row or equivalent) rather than letting Chunk 09 invent it
+  implicitly; `pinned_work_id`'s clearing rule is unstated and settles here too
 - **Deliverables:** the full schema in `curation/src/curation/persistence/`,
   service-layer operations and transitions, reconciliation on startup,
   `display_fit` as the single service-layer derivation (never stored)
@@ -497,6 +508,9 @@ the existing 41 works are seeded into them.
   enters configuration here — curation's alone, since curation composes the mat —
   and is logged at startup.
 - **Depends on:** Chunk 08
+- **Carried finding:** archiving a work has no specified effect on manifest
+  membership, and `security-model.md` bound 4 depends on it having one. Settle it
+  here, where readiness is evaluated: an archived work leaves the manifest.
 - **Artifacts consumed:** `architecture.md` (§ The theme manifest, § Readiness),
   `api-contract.md` § How `art_display` reaches the display plane,
   `boundary-patterns.md` § curation ↔ display contract,
@@ -690,6 +704,9 @@ discovery build against these surfaces.
   § Output Quality (label legibility) and Performance (15 s label budget),
   `design_decisions.accessibility_approach`
 - **Foreign API:** IT8951 / omni-epd (build verified in Chunk 04)
+  <!-- Chunk 04 verified that the stack COMPILES, not how it displays. This
+       chunk writes a driver against omni-epd's runtime surface, so it owes its
+       own verify-api (step 0 below). -->
 - **Visual change:** yes — label legibility at standing distance on the real
   panel needs the operator's eyes, not a test
 - **Deliverables:** new `display/src/display/panel/` (driver behind an
@@ -704,6 +721,9 @@ discovery build against these surfaces.
   through a TV power-cycle and a display restart with no human action; heartbeat
   advances and carries honest state
 - **Done when:**
+  0. verify-api — probe omni-epd/IT8951's runtime display surface on the real
+     panel (init, draw, partial vs full refresh, and what a failure returns)
+     before writing the driver; Chunk 04 verified the build, not this
   1. Acceptance criteria met on the Pi, including the operator's legibility look
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
@@ -833,8 +853,12 @@ core, built against the surfaces the contract tests already pin.
   rationale; preview caching
 - **Tests:** unit — selection respects suppression (`rejected_at` instances
   excluded; the work stays eligible — Q11), constraint 14 refusal names ids,
-  below-floor never auto-selected, unresolved reported; integration — a
-  double-submitted resolve is refused, an interrupted resolve frees its coverage
+  below-floor never auto-selected, unresolved reported; **the terminal-verdict
+  guard — a resolve run completing against a work the curator accepted (or
+  rejected) in the meantime leaves the verdict alone and reports its result, and
+  no path ever yields a work with an `artwork_id` and a non-accepted verdict**;
+  integration — a double-submitted resolve is refused, an interrupted resolve
+  frees its coverage
 - **Acceptance criteria:** a run over a small intent produces one card's worth
   of data per work — selected instance, alternates, rationale — with unresolved
   works reported as their own outcome
@@ -875,6 +899,8 @@ core, built against the surfaces the contract tests already pin.
   asserted present in results
 - **Tests:** unit — promotion mirrors the candidate shape into the catalogue
   shape; suppression scopes never share a key (Q3 vs Q11, both directions);
+  `set_verdict` is accepted from `awaiting_better_image` (the curator is never
+  blocked on a running re-search) while still refusing that value as a *target*;
   contract — every accept-capable result carries the image block; a 40-work
   listing stays under the token ceiling; explicit-ids enforcement
 - **Acceptance criteria:** the worked example runs end to end over MCP from a
@@ -918,12 +944,24 @@ core, built against the surfaces the contract tests already pin.
   <!-- Its CLI contract is unowned and unversioned: capture it at step 0 below
        rather than inferring it from the 2024 call site. -->
 
+- **Carried finding:** `tile-cache/` and `api-cache/` are created here and have
+  no lifecycle owner. "Transient working space" holds only if something reclaims
+  them — on the device already named the top operational risk. Give them a
+  reclaim rule, or record that the operator prunes them and surface it on the
+  health panel.
 - **Visual change:** yes — mats over the regression corpus need the operator's
   eyes; "at least as good as 2024" is the subjective bar
 - **Deliverables:** new `curation/src/curation/acquisition/` (fetch, prepare,
   mat engine); remaining `art_catalogue` actions (`archive`, `restore`,
   `retry_acquisition`, `set_mat_color`, `regenerate`); the free-space guard;
   vision-model choice recorded with verified pricing
+- **Carried finding — settle before writing the mat engine:** the two recorded
+  worked examples do not share a bottom-weight rule. The widths reproduce
+  exactly, but the 42" box implies bottom = 1.15x top and the 75" box implies
+  1.98x, and the factor itself is stated in no artifact. Those figures are named
+  below as the unit-test oracle, so an oracle that cannot be satisfied has to be
+  fixed first: derive the rule, correct whichever example is wrong, and record it
+  in `nonfunctional-requirements.md`.
 - **Tests:** unit — mat arithmetic against the recorded worked examples (42"/75"
   panels), floor classification, staleness detection, fallback recording;
   security — the fetch path refuses a non-allowlisted URL scheme, and a source
@@ -947,6 +985,11 @@ core, built against the surfaces the contract tests already pin.
 
 **UI and operations (Chunks 19–20).** Last by design: every operation the UI
 binds already exists and is contract-tested.
+
+> **Carried finding for Chunk 19:** the health panel is the product's *only*
+> alerting surface, but its scoped fields omit the TV, panel, and last-error
+> state that `observability-strategy.md`'s failure table maps failures onto.
+> Either the panel surfaces them or that table has no reader.
 
 ### Chunk 19: Curation web UI and HTTP API
 
@@ -1000,6 +1043,10 @@ binds already exists and is contract-tested.
   refills a restored catalogue), 19 (panel shows backup age)
 - **Artifacts consumed:** `operational-spec.md` (§ Backup and Restore, § Routine
   Operations), issue #14, `nonfunctional-requirements.md` § Durability
+- **Carried findings (hygiene, close-out):** `deploy/README.md` and the committed
+  unit still describe the single-process 2024 loader with no pointer to the
+  two-unit deployment; three artifact `depends_on` headers disagree with the
+  derivation their own prose shows. Both corrected here.
 - **Deliverables:** backup job + schedule in `deploy/`; backup age on the
   health panel; the restore exercise performed and its outcome recorded; legacy
   modules removed; README brought current

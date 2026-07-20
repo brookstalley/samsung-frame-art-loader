@@ -48,6 +48,53 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-20: Last blocking finding closed; remaining warnings routed to their chunks
+
+**Why:** R-10 was the last blocker and the only one needing an operator decision.
+Closing it clears the plan to build.
+
+**R-10 — `CandidateWork.verdict` had two writers and no rule between them.** The
+curator writes it through `art_review`; a resolve run writes it on completion.
+Nothing ordered them, so a resolve finishing after an accept wrote `pending` over
+`accepted`, leaving a work with an `artwork_id` and a non-accepted verdict — a
+combination nothing else in the model can produce or repair. Constraint 14 does
+not cover it; that guards run *creation*, not the write at completion.
+
+**Decided (operator, 2026-07-20): terminal verdicts win.** A resolve run writes
+`pending` only if the work is still `awaiting_better_image` when it finishes;
+otherwise its result is reported, not applied. The guard sits on the run's
+completion write rather than on `set_verdict`, which stays available at all times
+— **a curator must never be blocked on a background job.** The alternative
+(refusing verdicts during a resolve) was rejected for that reason, and because an
+interrupted run would strand the work.
+
+The state machine also gained two edges it always had in practice: `set_verdict`
+constrains its *target* value, never its source state, so `awaiting_better_image →
+accepted` and `→ rejected` were reachable and unmodelled. Both are now drawn, and
+Chunks 16 and 17 carry the tests.
+
+**Remaining warnings routed, not dropped.** Per the operator's cadence decision —
+build now, review at the checkpoints rather than every chunk — the twelve surviving
+warnings were written into the chunks that own them, where a builder meets them,
+rather than collected in a list nobody reads at the point of work:
+
+| Finding | Owner |
+|---|---|
+| Mat worked examples imply two different bottom-weight rules | Chunk 18, before the mat engine |
+| "No secret may ever reach a log line" has no mechanism | Chunk 02, which writes the startup logging |
+| Chunk 13 has a Foreign API with no verify-api (04 verified the *build*, not the display surface) | Chunk 13, new step 0 |
+| Directive sequence counter has no modelled home | Chunk 08 |
+| Archiving a work has no specified manifest effect | Chunk 09 |
+| Health panel omits the fields the failure table maps onto | Chunk 19 |
+| `tile-cache/`, `api-cache/` have no lifecycle owner | Chunk 18 |
+| Stale `deploy/README.md`; three wrong `depends_on` headers | Chunk 20 close-out |
+
+R-6 (no test evidence) resolves when Chunk 02 lands the first suite; R-8 (tracked
+token) is Chunk 01 and is why Chunk 01 is first; R-17/R-24 (revisit triggers for
+the alpha and dormant pins) belong at the post-Chunk-06 checkpoint.
+
+**No product code changed.**
+
 ## 2026-07-20: Second Critic round — two blocking closed, and one of my own claims retracted
 
 **Why:** The review of the revised plan returned 3 blocking. Two are closed here;
