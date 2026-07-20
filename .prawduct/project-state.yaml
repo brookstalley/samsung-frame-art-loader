@@ -1198,6 +1198,51 @@ technical_decisions:
         - "Strictly LAN with no remote access — simpler still, but no access while away."
       date: 2026-07-19
   operational:
+    - decision: "The curation plane's Python 3.14 is a uv-managed standalone build (`uv python install 3.14`); 3tears is NOT relaxed to 3.13."
+      rationale: >
+        Decided 2026-07-20 by the operator. This closes the open question opened the
+        same day by the co-location decision.
+
+        The recorded question rested on a premise that turned out to be false. It
+        framed a choice between a 30-45 minute pyenv compile per patch release,
+        relaxing 3tears to 3.13 (16 mechanical sites), or containerising from a
+        python:3.14 base — and the compile cost is what made the second option
+        attractive. But a prebuilt CPython for this exact target already exists:
+        cpython-3.14.4-linux-aarch64-gnu, distributed by Astral via
+        python-build-standalone. Verified 2026-07-20 with
+        `uv python list --all-platforms --all-arches --show-urls`. Installing it is a
+        download and extract, no compiler and no build dependencies. Trixie's glibc
+        is far above the build's baseline and the Pi is aarch64, which is the same
+        fact the earlier wheel audit established.
+
+        With the compile gone, relaxing 3tears buys nothing and costs a real
+        untested risk: the 2026-07-19 audit was STATIC, so behaviour under 3.13 —
+        asyncio internals, and pydantic/langchain annotation resolution under eager
+        vs lazy __annotations__ — was never exercised. Keeping 3tears unmodified
+        means that risk is never taken, and it preserves the Python version pin as
+        a live rationale for the two-plane split rather than leaving the split on
+        its other two legs.
+
+        Two consequences recorded rather than waved past. (1) Curation's interpreter
+        now comes from Astral's channel, not Debian's, so CPython security fixes
+        arrive via `uv python upgrade`, NOT `apt upgrade` — a CVE becomes a
+        two-plane action where an operator would reasonably assume one. Recorded in
+        security-model.md § Supply Chain and operational-spec.md § Routine
+        Operations. (2) A standalone interpreter cannot see distro site-packages.
+        That is survivable only because label rendering already moved to the display
+        plane: curation's stack is all wheels, and pycairo — the one source-only
+        aarch64 dependency — is on the display side. Adding anything to curation
+        that needs distro C bindings is what breaks this decision.
+
+        Knock-on for a still-open preference: uv is now a required install on the Pi
+        regardless, which makes it the incumbent dependency manager rather than a
+        new dependency. Noted in project-preferences.md; deliberately NOT decided
+        here, since the display plane builds Cython against system headers.
+      alternatives_considered:
+        - "Relax 3tears to 3.13 and use the system interpreter — simplest end state, one interpreter, but needs an upstream PR merged and carries untested behavioural risk under 3.13."
+        - "pyenv source build — same end state as the chosen option, but with a 30-45 minute compile per patch release. Strictly dominated once the prebuilt binary was found."
+        - "Container from a python:3.14 base — no compiling, but adds Docker against the operator's stated infrastructure constraint and complicates the shared ART_ROOT design the inter-plane contract rests on."
+      date: 2026-07-20
     - decision: "The hard monthly spend ceiling is an OpenRouter per-key credit limit, not application-side metering."
       rationale: >
         Decided 2026-07-20 by the operator, against a recommendation for a
@@ -1500,9 +1545,14 @@ open_questions:
     # specific museum page, and answering a recency-bound intent ("recent
     # award-winning art") — not on generic search relevance.
   - question: "Does relaxing 3tears to 3.13 survive a real test run under 3.13?"
-    blocking: "Merging the upstream relaxation PR. Does NOT block this product — see the answered question below."
+    blocking: "Merging the upstream relaxation PR. NOTHING in this product — see below."
     waiting_on: research
     priority: low
+    # NOW FULLY OFF THIS PRODUCT'S PATH as of the 2026-07-20 interpreter decision:
+    # curation runs a uv-managed 3.14 and 3tears is not relaxed, so this product
+    # never exercises 3tears under 3.13. Retained as an upstream 3tears concern
+    # only. Avoiding this untested risk was part of why the decision went the way
+    # it did.
     # The only gap left by the 2026-07-19 audit, which was static (syntax and
     # stdlib-symbol level, high confidence, three converging methods). Residual
     # risk is behavioural: asyncio internals, and pydantic/langchain annotation
@@ -1534,26 +1584,18 @@ open_questions:
   #
   # The number itself remains a deployment value and must NOT be hardcoded.
   # Setting it is a tuning exercise for first real use, not a blocking decision.
-  - question: "How does Python 3.14 get onto the Pi for the curation plane — or should 3tears be relaxed to 3.13 instead?"
-    blocking: "The curation plane's first build chunk. It determines what interpreter the venv is built against."
-    waiting_on: user
-    priority: high
-    # Opened 2026-07-20 by the co-location decision, which changed this from free to
-    # a real cost and nobody re-priced it. Raspberry Pi OS Trixie ships Python 3.13.
-    # NOTHING in this product needs 3.14 except 3tears, whose packages declare
-    # requires-python >=3.14 — and the 2026-07-19 audit found that requirement
-    # removable in 16 mechanical source sites, with no third-party dependency
-    # imposing a floor above 3.10.
-    # While curation was going to run on a desktop or NAS, 3.14 was free. On a Pi it
-    # is a 30-45 minute source build via pyenv, repeated per patch release.
-    # Options: (1) build 3.14 with pyenv; (2) relax 3tears to 3.13 and use the
-    # system interpreter — note the knock-on, since the version pin is the FIRST
-    # listed surviving rationale for the two-plane split, leaving it resting on its
-    # other two legs (both real, and the operator has already chosen to keep the
-    # split); (3) containerise curation from a python:3.14 base — no compiling, but
-    # it adds Docker against the operator's stated constraint and complicates the
-    # shared-directory design the inter-plane contract now rests on.
-    # See artifacts/operational-spec.md "The Python 3.14 Problem".
+  # RESOLVED 2026-07-20 by the operator: "How does Python 3.14 get onto the Pi for
+  # the curation plane — or should 3tears be relaxed to 3.13 instead?" A uv-managed
+  # standalone build; 3tears stays unmodified. Recorded in
+  # technical_decisions.operational; artifact text in operational-spec.md
+  # § The Curation Interpreter.
+  #
+  # This is the fifth question whose PREMISE was the thing that needed checking.
+  # It was framed as a cost tradeoff anchored on "3.14 on a Pi is a 30-45 minute
+  # source build per patch release" — true only of pyenv. A prebuilt
+  # cpython-3.14-linux-aarch64-gnu exists (python-build-standalone, via Astral),
+  # verified with `uv python list --all-platforms --all-arches`. The expensive
+  # option was never expensive, so the tradeoff the question posed did not exist.
   - question: "How is the re-search after reject_image modelled — its run row, its states, and its rejection record?"
     blocking: "The DiscoveryRun and CandidateImage state machines, and a money path that currently has no handle."
     waiting_on: user

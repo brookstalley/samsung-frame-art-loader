@@ -199,6 +199,27 @@ limit. The only "abuse" vector is an unbounded agent loop spending money, which 
 handled as a cost control (`nonfunctional-requirements.md` § Direction), not as an
 abuse control.
 
+## Supply Chain
+
+**Curation's CPython does not come from Debian.** The 2026-07-20 interpreter
+decision installs a uv-managed standalone build (`uv python install 3.14`), because
+Trixie ships 3.13 and `3tears` requires 3.14. The security consequence is a
+patching one, not a trust one: **`apt upgrade` does not patch curation's
+interpreter.** CPython fixes reach it only via `uv python upgrade`, on Astral's
+republish cadence rather than Debian's security cadence. The procedure is in
+`operational-spec.md` § Routine Operations; the point recorded here is that a
+CPython CVE is now a two-plane action where an operator would reasonably assume one.
+
+The display plane is unaffected — it runs the system 3.13 and is patched by `apt`
+like anything else.
+
+This is a narrowing of an already-accepted surface rather than a new one. Both
+planes install PyPI wheels into venvs, which is a far larger volume of third-party
+code than the interpreter, and that was accepted when the dependency set was
+chosen. No dependency pinning or provenance policy has been decided — for a
+single-principal LAN appliance that is a defensible position, but it is a position,
+not an oversight.
+
 ## Open
 
 - **Licence and rights enforcement.** Whether discovery results carry rights

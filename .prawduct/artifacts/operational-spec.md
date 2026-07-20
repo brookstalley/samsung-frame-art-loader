@@ -22,37 +22,52 @@ works — are decided rather than discovered.
 | Host | Raspberry Pi 4 Model B, 8 GB |
 | OS | Raspberry Pi OS Trixie (Debian 13) |
 | Boot media | SD card — see Risks |
-| Processes | `curation` (Python 3.14) and `display` (Python 3.13), both under systemd |
+| Processes | `curation` (Python 3.14, uv-managed standalone) and `display` (Python 3.13, system interpreter), both under systemd |
 | Shared state | `ART_ROOT` on local disk |
 
-## The Python 3.14 Problem — flagged, not solved
+## The Curation Interpreter — decided
 
 **Raspberry Pi OS Trixie ships Python 3.13. Nothing in this product needs 3.14
-except `3tears`, whose packages declare `requires-python = ">=3.14"` — and the
-2026-07-19 audit found that requirement removable in 16 mechanical source sites,
-with no third-party dependency imposing a floor above 3.10.**
+except `3tears`, whose packages declare `requires-python = ">=3.14"`. The curation
+plane gets its 3.14 from a uv-managed standalone build: `uv python install 3.14`.**
 
-While curation was going to run on a desktop or NAS, 3.14 was free. Co-locating
-onto the Pi changed the price and nobody has re-priced it. The options:
+The premise that made this a problem was wrong. It was recorded as a choice
+between a 30–45 minute pyenv compile per patch release, relaxing `3tears` to 3.13,
+or adding Docker — and the first of those set the price. But a prebuilt CPython
+3.14 for this exact target already exists and is what uv installs:
 
-1. **Build 3.14 on the Pi with pyenv.** Roughly 30–45 minutes of compile on a Pi 4,
-   repeated for every patch release you want to pick up. Works, costs nothing but
-   time, and is the path of least decision.
-2. **Relax 3tears to 3.13** (the 16 sites) and run both planes on the system
-   interpreter. Removes the build entirely. Note the knock-on: the Python version
-   pin is the *first* listed surviving rationale for the two-plane split, so this
-   would leave the split resting on its other two legs — the wall staying lit
-   through a curation restart, and e-paper behind a process boundary. Both are
-   real, and the operator has already chosen to keep the split, but the change
-   should be made knowingly.
-3. **Run curation in a container** from a `python:3.14` base image. No compiling,
-   but it adds Docker to a product whose operator explicitly ruled out heavy
-   infrastructure, and it complicates the shared-directory design that the whole
-   inter-plane contract now rests on.
+```
+cpython-3.14.4-linux-aarch64-gnu
+  releases.astral.sh/github/python-build-standalone/releases/download/
+  20260414/cpython-3.14.4+20260414-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz
+```
 
-**This is unresolved and is tracked as an open question.** It does not block the
-artifacts, but it does block the first build chunk, because it determines what
-interpreter the curation venv is built against.
+Verified 2026-07-20 against `uv python list --all-platforms --all-arches`. It is a
+download and extract — no compiler, no build dependencies, minutes at most. Trixie's
+glibc is far above the build's baseline, and the Pi is aarch64, which is the same
+fact the wheel audit already established.
+
+So the compile cost that made relaxing `3tears` attractive does not exist. That
+matters beyond convenience: relaxing `3tears` carried a real, *untested* behavioural
+risk — asyncio internals and pydantic/langchain annotation resolution under eager
+(3.13) versus lazy (3.14) `__annotations__`, which the 2026-07-19 audit could not
+close because it was static. Keeping `3tears` unmodified means that risk never has
+to be taken, and the Python version pin stays intact as a rationale for the
+two-plane split rather than leaving the split on its other two legs.
+
+**The tradeoff this does incur:** curation's interpreter now comes from Astral's
+distribution channel rather than Debian's, so CPython security fixes arrive via
+`uv python upgrade`, not `apt upgrade`. That is a real patching obligation and it is
+recorded in `security-model.md` § Supply Chain and in Routine Operations below.
+The display plane is unaffected — it stays on the system 3.13, which is what gives
+it the distro C bindings the e-paper driver needs.
+
+**A standalone interpreter cannot see distro site-packages.** That is fine here, and
+only because label rendering already moved to the display plane: curation's stack
+(FastAPI, opencv, scikit-image, numpy, pydantic) is all wheels, verified against the
+PyPI JSON API. `pycairo` — the one source-only aarch64 dependency — is on the
+display side, where the GTK stack already lives. **If anything needing distro C
+bindings is ever added to curation, this decision is what it breaks.**
 
 ## Process Management
 
@@ -137,6 +152,7 @@ that will actually get run rather than skipped.
 | Restart one plane | Safe at any time, in either order. The other is unaffected by design |
 | Add disk headroom | Prune `tile-cache/` and `temp/` — working space, not steady-state storage, sized by the largest single work in flight |
 | Bound the journal | `SystemMaxUse=` in `journald.conf`. **Set this explicitly** — see below |
+| Patch curation's CPython | `uv python upgrade 3.14`, then rebuild the venv and restart. **`apt upgrade` does not do this** — it patches the display plane's 3.13 only |
 | Re-pair the TV | Rotates the pairing token. **Do this before untracking `token_file`**, not after — see `security-model.md` |
 
 ## Failure Recovery

@@ -113,7 +113,9 @@ is no network between planes.
 ### curation
 
 - **Purpose:** turn curatorial intent into displayable, prepared artwork.
-- **Platform:** Python 3.14 venv, FastAPI on uvicorn, systemd unit. Always-on but
+- **Platform:** Python 3.14 venv on a uv-managed standalone interpreter — *not* the
+  system 3.13, and it cannot see distro site-packages (`operational-spec.md`
+  § The Curation Interpreter). FastAPI on uvicorn, systemd unit. Always-on but
   usually idle — it is on-demand in behaviour, resident in lifecycle.
 - **Owned state (sole writer):** the entire catalogue — works, image instances,
   verdicts, suppression scopes, mat colours, themes and their membership,

@@ -48,6 +48,50 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-20: Settle the curation interpreter — uv-managed 3.14, 3tears unmodified
+
+**Why:** The interpreter question was the highest-priority open item and it gated the
+curation plane's first build chunk, because it determines what the venv is built
+against.
+
+**The premise was wrong, which is the whole finding.** The question was framed as a
+cost tradeoff anchored on "3.14 on a Pi means a 30–45 minute source build per patch
+release" — and that made relaxing `3tears` to 3.13 look attractive despite an
+untested behavioural risk. But the 30–45 minutes is a fact about *pyenv*, not about
+3.14 on a Pi. A prebuilt `cpython-3.14.4-linux-aarch64-gnu` is published via
+python-build-standalone and is what `uv python install 3.14` fetches — verified with
+`uv python list --all-platforms --all-arches --show-urls`, not recalled. The
+expensive option was never expensive, so the tradeoff the question posed did not
+exist. **That is the fifth open question this project has dissolved by checking its
+premise rather than researching its answer.**
+
+Keeping `3tears` unmodified also avoids a risk the 2026-07-19 audit could not close:
+that audit was static, so behaviour under 3.13 — asyncio internals, pydantic/
+langchain annotation resolution under eager vs lazy `__annotations__` — was never
+exercised. And it preserves the Python version pin as a live rationale for the
+two-plane split.
+
+**Two consequences recorded rather than waved past.** Curation's CPython now comes
+from Astral's channel, so `apt upgrade` does not patch it — a CVE is a two-plane
+action where an operator would assume one (`security-model.md` § Supply Chain, new;
+`operational-spec.md` § Routine Operations). And a standalone interpreter cannot see
+distro site-packages, which is survivable only because label rendering already moved
+to the display plane — so adding anything needing distro C bindings to curation is
+what breaks this decision.
+
+**Swept by decision, not by grep** — the correction the learning demanded after three
+failures. Two dependents carried no matching text: `security-model.md` had no supply
+chain section at all, and the package-manager preference (still open, deferred to
+discovery) had its inputs changed, since uv is now a required install on the Pi
+regardless and is therefore the incumbent rather than a new dependency. Neither is
+reachable by grepping "3.14".
+
+**Files:** `operational-spec.md` (§ The Python 3.14 Problem → § The Curation
+Interpreter, now decided), `security-model.md` (new § Supply Chain),
+`project-preferences.md`, `architecture.md`, `.subagent-briefing.md`,
+`project-state.yaml` (decision recorded, question closed, the stale 3.13-test
+question marked off this product's path).
+
 ## 2026-07-20: Complete Phase B/C — five strategy artifacts, and co-locate the planes
 
 **Why:** Five strategy-class artifacts were missing and the structural-coverage
