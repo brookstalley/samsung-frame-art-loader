@@ -79,7 +79,14 @@ cheap, catches survivors; (2) walk `depends_on` and re-read dependents for the
 someone else wrote them** — catches the survivor sitting below your own edit. Pass 3
 is the one that was missing, and it is the cheapest of the three.
 
-5. **2026-07-20, sixth and seventh recurrences — the correction itself was the
+5. **2026-07-20, fifth recurrence — in the commit that authored the remedy.**
+   `project-preferences.md` still described a single product-wide Python target 140
+   lines below its own corrected per-plane section, in a file that same commit
+   edited. Pass 3 would have caught it on first application. Writing a remedy and
+   applying it are different acts, and the commit that adds the remedy is exactly
+   where the gap shows.
+
+6. **2026-07-20, sixth and seventh recurrences — the correction itself was the
    miss.** A Critic finding named three artifacts carrying the same rule
    (`data-model.md`, `architecture.md`, `operational-spec.md`). I edited one. My
    pass-3 grep used the literal strings from the file I had just written;
@@ -98,7 +105,9 @@ consistent; the survivors are, by definition, the sites that say it differently.
 for the *concept's* distinctive nouns (`awaiting_approval`, `reconcil`, `non-terminal`)
 rather than for a sentence.
 
-**A second structural gap, found by the Critic on the same review:** the two entries
+**A second structural gap, found by the Critic on `rev-20260720T145500Z-2fcf2f8f`**
+(the review that produced recurrence 4 — named rather than left as "the same review",
+after an inserted entry silently re-anchored that phrase to the wrong one)**:** the two entries
 under `artifact_manifest.findings` had *no `depends_on` edges at all*, so pass 2
 could not reach them even when run correctly — which is why the retired product-wide
 Python target survived in `platform-and-dependency-findings.md` across four

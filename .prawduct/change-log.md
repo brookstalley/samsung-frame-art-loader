@@ -147,6 +147,14 @@ the interpreter version, not the build frontend — and is now tracked separatel
 `security-model.md`, `product-brief.md`, `project-preferences.md`, `.gitignore`,
 `project-state.yaml`.
 
+**Deferred, not fixed:** thirteen WARNING findings from
+`rev-20260720T160759Z-cbc0d27e` remain open and are recorded as still present in the
+evidence store — among them panel geometry's two candidate homes, `constraint 8` vs
+`api-contract.md` on what `reject_image` costs, the manifest `sequence` counter
+having no persisted home, and the manifest exclusion report having no action or
+result field. They are advisory at the PR gate; naming them here so the round is not
+read as fully closed.
+
 ## 2026-07-20: Close the remaining decisions — mat geometry, resolution floor, rights, MCP resources, dependency manager
 
 **Why:** Walked the operator through every decision still blocking progress. Open
