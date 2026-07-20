@@ -87,12 +87,24 @@ classification:
       # committed to git — flagged for removal.
     # Multiple processes or services communicating at runtime. topology: monolith-with-workers|client-server|microservices|pipeline
     multi_process_distributed:
-      topology: client-server
-      # Two planes on two machines, forced by an irreconcilable Python version
-      # constraint (3tears needs >=3.14; the IT8951 e-paper driver is pinned to
-      # 3.13/3.12). See artifacts/3tears-integration-findings.md.
-      #   * curation plane — Python 3.14, web UI + LLM discovery + image pipeline
-      #   * display plane  — Python 3.13 on the Pi 4, TV websocket + e-paper
+      topology: shared-filesystem-pipeline
+      # AMENDED 2026-07-20. Previously `client-server`, described as "two planes on
+      # two machines, forced by an irreconcilable Python version constraint". Every
+      # part of that is now wrong:
+      #   * NOT two machines — both planes run on the one Pi 4 (8 GB), sharing
+      #     ART_ROOT. Operator's decision 2026-07-20.
+      #   * NOT forced — the 2026-07-19 audit found 3tears' >=3.14 requirement
+      #     removable in 16 mechanical sites. The split is a CHOICE, retained on
+      #     its own merits (see technical_decisions.architecture).
+      #   * NOT client-server — there is no request/response between the planes at
+      #     all. Curation writes one versioned JSON manifest; display reads it. The
+      #     display plane makes no network call to curation, by ratified norm.
+      # Still multi-process, and still warrants architecture.md: two processes that
+      # fail and restart independently. Multi-process but NOT distributed — which is
+      # why the resilience story is unusually short (no partition, no coordination
+      # protocol, no entity written by both).
+      #   * curation plane — Python 3.14, FastAPI, web UI + MCP + discovery + images
+      #   * display plane  — Python 3.13, TV websocket + e-paper + label rendering
       # This flipped from `false` during discovery when the UX direction landed.
 
   # Domain-specific characteristics — what makes THIS product unique in its domain.
@@ -150,8 +162,23 @@ classification:
         level: medium
         rationale: "omni-epd last touched 2024-11, IT8951 2023-11 with no releases and an unpinned dependency. Mitigated by the display-plane interface boundary and by pinning 9f13613."
       - factor: "Two-plane topology introduces a contract to maintain"
-        level: medium
-        rationale: "Forced by the Python 3.14 vs 3.13 constraint, not chosen. Adds a real seam and a second always-on machine."
+        level: low
+        rationale: >
+          DOWNGRADED from medium 2026-07-20, and its rationale corrected twice over.
+
+          It previously read "Forced by the Python 3.14 vs 3.13 constraint, not
+          chosen. Adds a real seam and a second always-on machine." Both halves were
+          stale: the 2026-07-19 audit established the split is a CHOICE (the 3.14
+          requirement is removable in 16 mechanical sites), and the 2026-07-20
+          co-location decision means there is no second machine — both planes run on
+          the one Pi. This is the third site where the "forced" phrasing outlived its
+          amendment; see learnings.md on retiring a claim being a repo-wide grep.
+
+          The seam is now a single versioned JSON file on a shared local filesystem,
+          written atomically and read one-way, with no network between the planes and
+          no entity written by both. That is close to the cheapest inter-process
+          contract available, which is why this drops to low rather than staying
+          medium.
       - factor: "No test suite exists"
         level: medium
         rationale: "Zero tests across 2,216 lines. Any rewrite has no behaviour-preservation net. Reduced by the decision to start the catalogue over rather than migrate it."
@@ -1463,6 +1490,26 @@ open_questions:
   #
   # The number itself remains a deployment value and must NOT be hardcoded.
   # Setting it is a tuning exercise for first real use, not a blocking decision.
+  - question: "How does Python 3.14 get onto the Pi for the curation plane — or should 3tears be relaxed to 3.13 instead?"
+    blocking: "The curation plane's first build chunk. It determines what interpreter the venv is built against."
+    waiting_on: user
+    priority: high
+    # Opened 2026-07-20 by the co-location decision, which changed this from free to
+    # a real cost and nobody re-priced it. Raspberry Pi OS Trixie ships Python 3.13.
+    # NOTHING in this product needs 3.14 except 3tears, whose packages declare
+    # requires-python >=3.14 — and the 2026-07-19 audit found that requirement
+    # removable in 16 mechanical source sites, with no third-party dependency
+    # imposing a floor above 3.10.
+    # While curation was going to run on a desktop or NAS, 3.14 was free. On a Pi it
+    # is a 30-45 minute source build via pyenv, repeated per patch release.
+    # Options: (1) build 3.14 with pyenv; (2) relax 3tears to 3.13 and use the
+    # system interpreter — note the knock-on, since the version pin is the FIRST
+    # listed surviving rationale for the two-plane split, leaving it resting on its
+    # other two legs (both real, and the operator has already chosen to keep the
+    # split); (3) containerise curation from a python:3.14 base — no compiling, but
+    # it adds Docker against the operator's stated constraint and complicates the
+    # shared-directory design the inter-plane contract now rests on.
+    # See artifacts/operational-spec.md "The Python 3.14 Problem".
   - question: "Should the MCP surface expose resources in addition to tools?"
     blocking: "Nothing — tools cover every current read. This is an optimisation and a UX question."
     waiting_on: user
@@ -1636,6 +1683,18 @@ artifact_manifest:
       file_path: .prawduct/artifacts/api-contract.md
       version: 1
       depends_on: [product-brief, data-model]
+    - name: security-model
+      file_path: .prawduct/artifacts/security-model.md
+      version: 1
+      depends_on: [product-brief, data-model, api-contract]
+    - name: observability-strategy
+      file_path: .prawduct/artifacts/observability-strategy.md
+      version: 1
+      depends_on: [product-brief, architecture, nonfunctional-requirements]
+    - name: operational-spec
+      file_path: .prawduct/artifacts/operational-spec.md
+      version: 1
+      depends_on: [architecture, nonfunctional-requirements, observability-strategy]
     - name: boundary-patterns
       file_path: .prawduct/artifacts/boundary-patterns.md
       version: 1
@@ -1644,9 +1703,9 @@ artifact_manifest:
   findings:
     - file_path: .prawduct/artifacts/platform-and-dependency-findings.md
     - file_path: .prawduct/artifacts/3tears-integration-findings.md
-  # Strategy-class artifacts still owed (structural-coverage advisory):
-  #   architecture.md, security-model.md, operational-spec.md,
-  #   observability-strategy.md, test-specifications.md
+  # Strategy-class artifacts still owed: test-specifications.md, and the build
+  # plan (Phase D). The structural-coverage advisory's named set was cleared
+  # 2026-07-20.
 
 # =============================================================================
 # BUILD STATE
