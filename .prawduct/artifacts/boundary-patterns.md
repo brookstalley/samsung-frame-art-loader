@@ -53,13 +53,28 @@
 
 ### curation ↔ display contract
 
-- **Exists:** no — to be designed.
-- **Producer:** curation plane. **Consumer:** display plane (Raspberry Pi).
-- **Contract:** undesigned. What must cross: the active theme's ordered artwork
-  ids, rotation timing, and enough metadata to render the e-paper label.
-- **Crosses a process and a machine boundary**, and the two planes do not share a
-  database — `TvBinding` references catalogue ids *by id only, never by foreign
-  key* (`data-model.md` → Relationships).
+- **Exists:** no — designed 2026-07-20, not implemented.
+- **Producer:** curation plane. **Consumer:** display plane. **Same machine.**
+- **Contract:** the **theme manifest** — a versioned JSON document written
+  atomically (temp + `os.replace`) into the shared `ART_ROOT` and polled by display
+  at ~1 s. It carries a schema version, the active theme, rotation settings
+  (`rotation_interval_seconds`, `shuffle`), a directive block (`sequence`,
+  optional `pinned_work_id`), and an ordered list of entries — work id, render
+  path, and the label fields.
+- **Stability obligation: bounded, not absent.** Additive changes are free; a
+  breaking change bumps the major, and display refuses an unrecognised major and
+  keeps the manifest it has. See `api-contract.md` → Surface Inventory.
+- **Crosses a process boundary — not a machine boundary** (corrected 2026-07-20;
+  both planes now run on the one Pi). The two planes do not share a database:
+  `TvBinding` is display-plane state and references catalogue ids *by id only,
+  never by foreign key* (`data-model.md` → Relationships).
+- **This boundary is governed by a ratified norm.** The manifest is the *only*
+  channel from curation to display (`architecture.md` § Direction). A change that
+  adds a second one is a norm departure requiring a recorded decision, and issue #7
+  files the plane-isolation test that enforces it.
+- **The reverse direction exists and is narrow:** display writes a heartbeat/status
+  file that curation reads. Sole writer is display; it never checks whether anyone
+  read it, so it creates no dependency in the protected direction.
 
 ### Catalogue schema
 

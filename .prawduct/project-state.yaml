@@ -708,6 +708,39 @@ technical_decisions:
         - "A materialised is_displayable column recomputed on input change — cheap to query, but it is derived state that drifts the first time a recompute path is missed."
         - "A readiness state machine on the work — rigorous, but machinery for a conjunction only one caller needs."
       date: 2026-07-20
+    - decision: "art_display's interactive commands ride in the manifest as a sequence-nonce directive, not on a second channel."
+      rationale: >
+        Decided 2026-07-20 in response to Critic finding R-17, which caught that
+        api-contract's art_display actions (show_now, next) predated the ratified
+        manifest-only norm and had no route to the plane that would execute them —
+        unimplementable as written, and tool names are frozen, so cheap to settle
+        now and expensive later.
+
+        The manifest gains a directive block: a monotonically increasing `sequence`
+        integer plus an optional `pinned_work_id`. Display acts once per advance —
+        no pin steps to the next work, a pin jumps to that work and continues from
+        there. This reframes the manifest from "the list" to DESIRED DISPLAY STATE,
+        which is what makes commands expressible without a command channel.
+
+        The norm survives literally and in spirit: one channel, one direction, and
+        no availability coupling — display runs forever off the last manifest and
+        merely stops receiving directives if curation dies. Nothing can be lost in
+        transit because nothing is in transit; there is only state.
+
+        NON-OBVIOUS CONSEQUENCE, recorded because it inverts the earlier reasoning:
+        the manifest poll interval is now set by `next`, not by theme switching. A
+        theme change tolerates seconds happily; a human pressing "next" and waiting
+        three seconds concludes the product is broken. So the interval drops to ~1s
+        — one stat() per second, free — where the list-only design had justified "a
+        few calls a minute".
+
+        Also follows: these actions return "the directive is written", never "the
+        wall changed". Claiming the latter would assert something curation cannot
+        observe, which is the false-success pattern this product already refuses.
+      alternatives_considered:
+        - "A separate command file or socket — the obvious shape, and exactly the second channel the norm exists to prevent."
+        - "Drop show_now and next from the tool surface — honest, but it removes real capability to preserve a norm that turned out not to require the removal."
+      date: 2026-07-20
     - decision: "The theme manifest carries a schema version; the curation-to-display stability exemption is narrowed."
       rationale: >
         Decided 2026-07-20, resolving a contradiction the Critic raised on
@@ -1091,8 +1124,23 @@ technical_decisions:
       alternatives_considered:
         - "Reject-and-re-add manually — puts the curator back in the position of re-issuing an intent to recover a work they already approved of."
       date: 2026-07-19
-    - decision: "The phase-1 work list is gated for approval only when the phase-2 cost estimate crosses a configured threshold."
+    - decision: "The phase-1 work list is gated for approval only when the resolved WORK COUNT crosses a configured threshold."
       rationale: >
+        AMENDED 2026-07-20. This decision originally read "...when the phase-2 COST
+        ESTIMATE crosses a configured threshold". The gate stands; what it triggers
+        on changed, and this canonical entry was missed when the amendment was
+        applied elsewhere (caught by Critic finding R-3).
+
+        Why count and not cost: once real per-run costs were measured ($0.16-0.49),
+        a dollar threshold was gating on the axis that does not matter — it either
+        never fires, or fires at a number that means nothing to a curator. The
+        judgement the gate exists to invite is SCOPE: "you asked for Dali and I
+        found 200 works — really?" Count is what a curator can act on at a glance;
+        "$1.00" does not tell them the run found 200 works.
+
+        The cost estimate is still computed and still shown (it is what makes phase
+        2 authorisable at all) — it is simply not what opens the gate.
+
         Chosen by the operator 2026-07-19 from four options. Always-gate gives the
         strongest cost control but demands two review passes per run, cutting
         against the recorded constraints that curation happens in short sessions and
@@ -1468,15 +1516,11 @@ open_questions:
   # turned out to be partly wrong: the intention-versus-CRUD trade dissolved once
   # it was noticed that the worked example ("add all of Dali") can never be one
   # call — phase 2 takes minutes and review needs a human.
-  - question: "Should set_verdict require explicit work ids rather than accepting a bulk 'everything pending'?"
-    blocking: "Nothing structural — the verdict tool exists either way. This is a blast-radius question."
-    waiting_on: user
-    priority: medium
-    # Opened 2026-07-19 as a consequence of putting the review gate on the MCP
-    # surface. Requiring explicit ids does not stop a determined prompt injection
-    # (an agent can enumerate first), but it does mean the accepted set appears in
-    # the transcript where the curator would see it. Trade: friction on the
-    # legitimate "accept them all" path, which is the common case after a good run.
+  # RESOLVED 2026-07-20 by the operator: set_verdict REQUIRES EXPLICIT WORK IDS and
+  # refuses a bare "accept everything pending". Recorded in
+  # technical_decisions.technology; the artifact text is in api-contract.md
+  # § Security. (This entry sat stale after the decision was written into prose —
+  # caught by Critic review, and the same sweep failure the learnings entry names.)
   # RESOLVED 2026-07-20: "What cost threshold triggers work-list approval before
   # phase 2?" The gate triggers on WORK COUNT, not cost — the framing in the
   # original decision was wrong and is amended.
@@ -1510,6 +1554,29 @@ open_questions:
     # it adds Docker against the operator's stated constraint and complicates the
     # shared-directory design the inter-plane contract now rests on.
     # See artifacts/operational-spec.md "The Python 3.14 Problem".
+  - question: "How is the re-search after reject_image modelled — its run row, its states, and its rejection record?"
+    blocking: "The DiscoveryRun and CandidateImage state machines, and a money path that currently has no handle."
+    waiting_on: user
+    priority: high
+    # Raised 2026-07-20 by Critic review (design reviewer), and NOT fixed in the
+    # same pass — recorded rather than silently carried, because it is three
+    # related defects on the one paid path:
+    #
+    #   1. `resolve_images` is a paid, minutes-long operation that creates NO run
+    #      row. So it has no handle to poll, no cancel, no cost attribution of its
+    #      own, and nothing prevents double-submission of the same work ids — on
+    #      the one tool the design says is the only one that spends money.
+    #   2. `awaiting_better_image` is one state covering three distinct situations:
+    #      "not yet re-searched", "re-search running", and "re-search found
+    #      nothing". A curator cannot tell a pending job from a dead end, and the
+    #      third case has no terminal representation at all.
+    #   3. `set_verdict` and `reject_image` both reach `awaiting_better_image` but
+    #      only one sets `rejected_at` — so a re-search can legitimately return the
+    #      image that was just rejected, which is the suppression bug Q11 exists to
+    #      prevent, reappearing on the other scope.
+    #
+    # These interact, which is why they are one question: fixing the run row
+    # without fixing the state split just moves the ambiguity.
   - question: "Should the MCP surface expose resources in addition to tools?"
     blocking: "Nothing — tools cover every current read. This is an optimisation and a UX question."
     waiting_on: user

@@ -48,6 +48,81 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-20: Complete Phase B/C — five strategy artifacts, and co-locate the planes
+
+**Why:** Five strategy-class artifacts were missing and the structural-coverage
+advisory named all of them. Authoring them in dependency order (NFRs before
+architecture, deliberately — so architecture couldn't be back-filled into
+requirements that happened to match it) forced four high-priority open questions to
+resolve and surfaced one structural change nobody had planned.
+
+**The structural change: both planes now run on the Pi, sharing a data directory.**
+The operator's call, made mid-session. It reversed the recorded deployment plan and
+retired the split's stated rationale — "it moves gigapixel fetching, k-means over LAB
+arrays, and 4K compositing off a Pi 4" — which is simply false once both planes are
+on the one machine. The split was *kept*, and it got cheaper rather than weaker: its
+cost was the distributed-systems tax (network contract, sync, two deployments) and a
+shared filesystem pays that down to near zero, while its benefit — the wall staying
+lit through a curation restart — matters more on one box, not less.
+
+**Questions that resolved by having their premise rejected rather than answered:**
+
+- **"Is paid web search inside or outside the $20 ceiling?"** Inside, comfortably.
+  The recorded worry that search could exceed token spend "by an order of magnitude"
+  was wrong: worst case it roughly doubles per-run cost, and a run is $0.16–0.49. The
+  metering half of the question dissolved too — search bills as OpenRouter credits, so
+  one ceiling covers both.
+- **"What is the single source of truth for *ready to display*?"** There isn't one,
+  and looking for one was the bug. Catalogue readiness (renderable) and device
+  readiness (on the TV) are different questions owned by different planes. Manifest
+  membership *is* catalogue readiness, so the recorded failure — the display plane
+  selecting a work it cannot render — became structurally impossible rather than
+  defended against.
+- **"What cost threshold gates the work list?"** None: it gates on **work count**.
+  Once runs were measured, a dollar threshold gated on the axis that doesn't matter.
+  The judgement the gate invites is scope — "you asked for Dalí and I found 200 works"
+  — and count is what a curator can act on at a glance.
+
+**Two claims withdrawn after reading source rather than trusting the record:**
+
+- **"The server MUST emit `notifications/progress`; it is what keeps the connection
+  alive."** `Context.report_progress` silently no-ops when the client sent no
+  `progressToken` — so the mechanism a design was resting on can do nothing, invisibly.
+  And it's unnecessary: with the run handle returning immediately, no call is ever idle
+  long enough to abort. Neither of the operator's production MCP servers emits them.
+- **Neither of those servers was a precedent for the framework decision either** —
+  hallucinote is stdio-only, cordyceps is C# on a hand-rolled `HttpListener`. The
+  previous session's pattern was to defer to their practice; here there was nothing to
+  defer to, and FastAPI was decided on merits. Recorded with the SDK's silent lifespan
+  hazard, which fails *every* request and gives no hint about lifespans.
+
+**Norms:** three candidates proposed, two ratified (provider-enforced spend ceilings;
+display-plane independence), one deliberately declined and demoted to prose with its
+lack of enforcement flagged. A third — the manifest as the only inter-plane channel —
+was ratified with a Test mechanism, so its test was filed as issue #7 at norm birth
+rather than left aspirational.
+
+**Verified rather than recalled:** every 3.14 aarch64 wheel question (all clear, via
+the PyPI API), OpenRouter's per-key credit limits and search pricing (via docs), the
+repo's public visibility, and the real corpus — 41 works, mean 17.6 MP, ~10 GB at 500
+works, which is what proved storage does not force a NAS.
+
+**Surfaced, not solved:** Pi OS Trixie ships Python 3.13, and nothing needs 3.14 except
+3tears — whose requirement the audit already found removable in 16 sites. On a desktop
+that was free; on a Pi it is a 30–45 minute source build per patch release. Filed high,
+because it gates the first build chunk.
+
+**Also swept:** two further sites where the "forced by a version conflict" phrasing had
+outlived its amendment — the third and fourth occurrences of the same recurrence
+`learnings.md` already records. One of the claims I had to retire this session was one I
+wrote myself an hour earlier.
+
+**Still open, not fixed:** `token_file` remains tracked (issue #4). The security model
+now records the order of operations that matters — rotate against the TV *first*, then
+untrack; the reverse leaves a live token in public history while looking resolved.
+
+**No code changed.**
+
 ## 2026-07-19: Resolve the MCP tool surface and split work from image instance
 
 **Why:** Two things were blocking Phase C. The MCP tool surface was the highest-value

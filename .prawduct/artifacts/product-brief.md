@@ -142,11 +142,18 @@ Three consequences follow from the split, and each is load-bearing:
   that must surface as its own outcome — never be silently dropped from the batch,
   and never be filled with a confident near-match.
 
-**Approving the work list is gated by cost, not by policy.** When the phase-2
-estimate is small the run proceeds straight through; when it crosses a configured
-threshold it stops and waits. A leisure activity in short sessions should not
-demand two review passes for a cheap run, and a run that would spend real money
-should not proceed unwatched.
+**Approving the work list is gated by scope, not by policy.** When the resolved
+work count is small the run proceeds straight through; when it crosses a
+configured threshold it stops and waits. A leisure activity in short sessions
+should not demand two review passes for a modest run, and a run that has
+interpreted the intent far more broadly than the curator meant should not proceed
+unwatched.
+
+> **Amended 2026-07-20** from "gated by cost". The gate stands; its trigger
+> changed. Real per-run costs turned out to be $0.16–0.49, so a dollar threshold
+> gated on the axis that does not matter. The estimate is still computed and still
+> shown — it is what makes phase 2 authorisable — it is simply not what opens the
+> gate.
 
 **Canonical selection trades two axes against each other.** *Confidence* asks
 whether this instance is genuinely that work — not a detail crop, a study, a

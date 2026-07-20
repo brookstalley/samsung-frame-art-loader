@@ -11,8 +11,20 @@ Developer preferences for how code is written in this project. Captured during d
 ## Language & Runtime
 
 - **Language**: Python _(inferred — all 13 modules are `.py`)_
-- **Version**: target 3.13, floor 3.12. Raspberry Pi OS Trixie ships 3.13; 3.12 is the
-  last version verified working. `pyproject.toml` still declares `target-version = ["py312"]`.
+- **Version**: **per plane, not one number** (corrected 2026-07-20 — this previously
+  read "target 3.13, floor 3.12" for the whole product, which had been true before
+  the two-plane split and was the fourth site where a superseded version claim
+  outlived its amendment).
+  - **Display plane: 3.13**, floor 3.12. Raspberry Pi OS Trixie ships 3.13, and the
+    IT8951 e-paper driver compiles Cython from 2023 sources targeting 3.13/3.12.
+    This is the plane whose version is pinned by hardware.
+  - **Curation plane: 3.14** as currently decided — required by nothing except
+    `3tears`, whose `requires-python = ">=3.14"` the 2026-07-19 audit found
+    removable in 16 mechanical sites. **This is an open question**, not a settled
+    preference: Trixie ships 3.13, so 3.14 on the Pi means a 30–45 minute source
+    build per patch release. See `operational-spec.md` § The Python 3.14 Problem.
+  - `pyproject.toml` still declares `target-version = ["py312"]` and matches
+    neither plane.
   See [learnings.md](../learnings.md) § Platform and dependencies.
 - **Package manager**: pip against a pinned `requirements.txt` _(inferred)_. `pyproject.toml`
   exists but carries only black config — there is no project/dependency table, so the repo is

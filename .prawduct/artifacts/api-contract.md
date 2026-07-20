@@ -26,7 +26,24 @@ Three surfaces, and they are not the same kind of thing:
 |---|---|---|---|
 | **MCP tool surface** | **External** — Claude Code, the in-UI agent, any MCP client | Model Context Protocol tools | **Real.** Clients bind to tool names, argument schemas, and result shapes. |
 | **HTTP API** | Internal — the curation UI's direct controls | JSON over HTTP on the LAN | None. Shipped and deployed with its only consumer. |
-| **curation↔display contract** | Internal — the display plane | To be designed | None. Single consumer, deployed together. |
+| **curation↔display contract** | Internal — the display plane | Theme manifest: a versioned JSON document on a shared filesystem | **Bounded.** Additive changes are free; a breaking change bumps the major version, and display refuses an unrecognised major and keeps the manifest it has. |
+
+> **Amended 2026-07-20.** This row read *"To be designed. None. Single consumer,
+> deployed together."* — the blanket exemption `architecture.md` § Deployment &
+> Version Skew explicitly recorded as owed an edit here, and which Critic findings
+> flagged as still standing.
+>
+> The exemption was incompatible with the ratified availability norm:
+> *deployed-together* and *survives-independently* cannot both be true without
+> saying what display holds and how stale it may be. And skew is real even with
+> both planes on one host — the two processes restart independently, so an upgrade
+> leaves a window where new curation has written a manifest an old display is still
+> reading, and a reboot mid-upgrade widens that to "until someone notices".
+>
+> The obligation is deliberately small rather than a full compatibility regime:
+> without a version field the failure is a misparse rendering wrong art or a crash
+> loop blanking the wall; with one, it is a logged refusal and yesterday's theme
+> still on the wall.
 
 ### Transport: streamable HTTP, not stdio
 
@@ -97,7 +114,35 @@ tool per action stops paying and consolidation starts.
 | `art_review` | `list_works`, `get_work`, `list_images`, `set_canonical`, `set_verdict`, `reject_image`, `help` | Returns thumbnails; see Inputs & Outputs. Never spends. |
 | `art_catalogue` | `list`, `get`, `archive`, `restore`, `retry_acquisition`, `set_mat_color`, `regenerate`, `help` | |
 | `art_theme` | `list`, `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`, `help` | `activate` changes the wall immediately. |
-| `art_display` | `status`, `sync`, `show_now`, `next`, `help` | |
+| `art_display` | `status`, `sync`, `show_now`, `next`, `help` | Every action goes through the theme manifest — see below. |
+
+### How `art_display` reaches the display plane
+
+**Corrected 2026-07-20 (Critic R-17).** This tool's actions were specified before
+the manifest-only channel was ratified, and `show_now`/`next` were left with no
+route to the plane that would execute them — unimplementable as written, and tool
+names are frozen, so it was cheap to settle now and expensive later.
+
+Every action resolves against the manifest. **The curation plane never sends the
+display plane a command; it writes desired state, and display converges on it.**
+
+| Action | What curation does | What display does |
+|---|---|---|
+| `status` | Reads the display plane's heartbeat file | Nothing — it wrote the heartbeat already |
+| `sync` | Rebuilds and rewrites the manifest from the active theme | Picks up the new manifest on its next poll and reconciles |
+| `show_now(work_id)` | Increments the manifest's directive `sequence` and sets `pinned_work_id` | Jumps to that work, then continues rotating from there |
+| `next` | Increments the directive `sequence` with no pin | Steps to the next work in the list |
+
+Two consequences worth stating because they surprise:
+
+- **These actions are not synchronous confirmations.** They return "the directive
+  is written", not "the wall changed". Actual latency is bounded by display's poll
+  interval (~1 s). A result claiming the TV has changed would be asserting
+  something curation cannot observe — the same false-success pattern this contract
+  already refuses elsewhere.
+- **If the display plane is down, the directives queue harmlessly.** The manifest
+  holds the latest desired state; display converges whenever it comes back. There
+  is no command to be lost, because there is no command — only state.
 
 ### Rejecting an image does not re-search — that is a separate, paid call
 

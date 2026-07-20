@@ -248,9 +248,9 @@ A derived, device-specific output. **Regenerated, never transported.**
 |---|---|---|---|
 | `id` | UUID | PK | |
 | `artwork_id` | UUID | FK → Artwork, required | |
-| `kind` | enum | required | `tv_display` \| `label` \| `thumbnail`. |
-| `target_width` | integer | required | e.g. 3840 for TV, 1448 for the 6" HD panel. |
-| `target_height` | integer | required | e.g. 2160, 1072. |
+| `kind` | enum | required | `tv_display` \| `thumbnail`. **`label` was removed 2026-07-20** — see below. |
+| `target_width` | integer | required | e.g. 3840 for the TV canvas. |
+| `target_height` | integer | required | e.g. 2160. |
 | `relative_path` | string | required | Relative to `ART_ROOT`. |
 | `source_content_hash` | string | required | The `Original.content_hash` this was rendered from. Mismatch ⇒ stale ⇒ regenerate. |
 | `generated_at` | datetime | auto | |
@@ -261,6 +261,22 @@ A derived, device-specific output. **Regenerated, never transported.**
 > staleness be detected rather than assumed — the 2024 code cleared TV state
 > whenever it regenerated an image, which is the same intent expressed
 > imperatively and only at one site.
+
+> **`kind = 'label'` removed 2026-07-20 (Critic R-2).** A label Rendition carried
+> `target_width` 1448 / `target_height` 1072 — the geometry of one specific e-paper
+> panel — in the **curation catalogue**. That is the precise thing this artifact's
+> third Direction norm forbids, and `_w648_h480` is the anti-pattern that norm
+> cites. Moving geometry from a filename suffix into columns fixed the *encoding*
+> and left the *ownership* violation intact, which is why it survived a norm
+> written to catch it.
+>
+> Labels are rendered **on the display plane** from the label fields carried in the
+> theme manifest (decided 2026-07-20). The panel's geometry lives with the plane
+> that owns the panel, and the catalogue no longer knows a panel exists.
+>
+> What remains here is correct: `tv_display` at 3840×2160 is a property of the
+> *artwork's presentation*, not of a device — any 4K display shows it, and the mat
+> is composed against that canvas. `thumbnail` is device-independent by definition.
 
 ### MatColor
 
@@ -325,7 +341,7 @@ candidates provenance.
 | `status` | enum | required | `resolving_works` \| `awaiting_approval` \| `resolving_images` \| `completed` \| `failed` \| `declined` \| `cancelled` \| `halted_by_budget`. See State Machines. |
 | `estimated_cost_usd` | decimal | nullable | Phase-2 estimate, computed from the phase-1 work count. |
 | `actual_cost_usd` | decimal | nullable | Reconciled after. |
-| `approval_required` | boolean | required | Whether the phase-2 estimate crossed the configured threshold. Recorded per run, not re-derived — the threshold can change. |
+| `approval_required` | boolean | required | Whether the resolved **work count** crossed the configured threshold (amended 2026-07-20 from "the phase-2 estimate"). Recorded per run, not re-derived — the threshold can change. |
 | `unresolved_work_count` | integer | nullable | Works from phase 1 for which no credible instance was found. **Q12.** |
 | `started_at`, `completed_at` | datetime | nullable | |
 
@@ -706,8 +722,27 @@ single interaction the product exists to make easy.
 2. **The native slideshow must be explicitly disabled once** —
    `set_slideshow_status(duration=0)` — so it does not fight host-driven
    `select_image` calls.
-3. **The display plane resolves** active Theme → ThemeMembership → Artwork →
-   TvBinding.`tv_content_id`, then rotates over that id list.
+3. **The display plane resolves nothing from the catalogue.** It reads the **theme
+   manifest** — an ordered list of entries written by curation into the shared
+   `ART_ROOT` — and rotates over that. It then maps each work id to a
+   `tv_content_id` using its *own* device-local store, which it is the sole writer
+   of.
+
+> **Corrected 2026-07-20 (Critic R-1/R-18).** This requirement previously read
+> *"The display plane resolves active Theme → ThemeMembership → Artwork →
+> TvBinding.`tv_content_id`, then rotates over that id list."* Theme,
+> ThemeMembership and Artwork are **catalogue** entities, and the Direction norm
+> ratified the same day says the display plane "makes no network call to the
+> curation process, imports no curation module, and queries no curation database."
+> A builder implementing the old sentence would have violated the norm on day one
+> — and it is exactly the violation issue #7's plane-isolation test exists to
+> catch.
+>
+> The resolution from theme to ordered id list happens **on the curation side, at
+> manifest-build time**, which is also where catalogue readiness is evaluated (see
+> `architecture.md` § Readiness). `TvBinding` is device state and lives in the
+> display plane's own store, not in the catalogue — per this artifact's own third
+> Direction norm.
 
 ## Deliberately not modelled
 

@@ -146,6 +146,7 @@ is no network between planes.
 |---|---|---|---|---|---|
 | 1 | Theme manifest | File in ART_ROOT, atomic write + rename | curation → display | async | Below, and `boundary-patterns.md` |
 | 2 | Image tree | Files in ART_ROOT | curation → display | async | Path convention, below |
+| 2b | **Heartbeat / display status** | File in ART_ROOT, atomic write + rename | **display → curation** | async | `observability-strategy.md` § The Health Surface |
 | 3 | MCP tool surface | Streamable HTTP at `/mcp` | external client → curation | sync | `api-contract.md` |
 | 4 | UI HTTP API | HTTP JSON at `/api/*` | browser → curation | sync | `api-contract.md` |
 | 5 | TV control | LAN websocket (`samsungtvws`) | display ↔ TV | async both ways | Foreign API |
@@ -172,13 +173,36 @@ read by display.
   onto the target. POSIX rename is atomic within a filesystem, so display never
   observes a partial manifest. This is the entire concurrency-control story
   between the planes.
-- **Contents:** a schema version, the active theme's identity, an ordered list of
-  entries, and for each entry — the work id, the path to its prepared 4K render,
-  and the label fields (title, artist, dates, medium, dimensions). Label *text*
-  crosses; label *rendering* does not.
-- **Change detection:** display polls the manifest's mtime on a short interval.
-  Polling rather than inotify, deliberately: it is a few stat calls a minute
-  against a mechanism that cannot silently unsubscribe.
+- **Contents:** a schema version, the active theme's identity, the **rotation
+  settings** that drive the display timer (`rotation_interval_seconds`, `shuffle`),
+  a **directive block** (below), and an ordered list of entries — for each, the
+  work id, the path to its prepared 4K render, and the label fields (title, artist,
+  dates, medium, dimensions). Label *text* crosses; label *rendering* does not.
+- **The directive block carries interactive commands.** A monotonically increasing
+  `sequence` integer plus an optional `pinned_work_id`. When display sees
+  `sequence` advance it acts once: with no pin it steps to the next work; with a
+  pin it jumps to that work and continues rotating from there.
+
+  > `[DECISION: interactive display commands ride in the manifest as a
+  > sequence-nonce directive rather than getting their own channel | the ratified
+  > norm makes the manifest the ONLY curation→display channel, and
+  > `art_display(action='show_now'|'next')` was otherwise unimplementable — Critic
+  > R-17. A directive in the manifest preserves the norm literally and in spirit:
+  > still one channel, still one direction, and still no availability coupling,
+  > because display works forever off the last manifest and simply stops receiving
+  > directives if curation dies | user can veto/override]`
+
+  The manifest is therefore **desired display state**, not merely a list. That
+  framing is what makes commands expressible without a command channel.
+
+- **Change detection:** display polls the manifest's mtime.
+- **The poll interval is set by `next`, not by theme switching.** This is the
+  non-obvious consequence of the decision above. A theme change tolerates seconds
+  of latency happily; a human pressing "next" and waiting three seconds thinks the
+  product is broken. So the interval is **~1 s**, which is one `stat()` per second
+  — free — rather than the "few calls a minute" that the list-only design would
+  have justified. Polling rather than inotify, deliberately: a mechanism that
+  cannot silently unsubscribe.
 - **Versioned, despite the co-location exemption.** See Deployment & Version Skew
   — this is where a recorded contradiction gets resolved rather than inherited.
 
@@ -192,11 +216,24 @@ read by display.
 | `theme-manifest.json` | curation | display |
 | image tree (`raw/`, `ready/`, …) | curation | display |
 | `display-state.sqlite` | display | display |
+| `display-status.json` (heartbeat) | display | curation |
 
 There is no entity written by both planes, so there is no coordination protocol,
 no conflict resolution, and no distributed-transaction problem. That is the payoff
 of taking the manifest as the only channel: **the hard part of two-writer systems
 is designed out rather than solved.**
+
+> **On the heartbeat and the ratified norm.** The Direction norm governs the
+> **curation → display** direction: display must never need curation reachable. The
+> heartbeat runs the other way, and creates no dependency in the protected
+> direction — display writes it and never checks whether anyone read it, so
+> curation being absent changes nothing about display's behaviour. Single-writer
+> still holds: display is its sole writer, curation only reads.
+>
+> Recorded explicitly because the omission was a real one — the heartbeat was
+> introduced in `observability-strategy.md` and initially reached neither of these
+> tables (Critic finding), which is how a second channel becomes load-bearing
+> without ever being reviewed as one.
 
 ### Readiness — the question that was open, and why it dissolved
 

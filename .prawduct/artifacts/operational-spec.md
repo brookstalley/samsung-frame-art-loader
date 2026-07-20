@@ -136,6 +136,7 @@ that will actually get run rather than skipped.
 | Rollback | `git checkout` the previous commit, restart both |
 | Restart one plane | Safe at any time, in either order. The other is unaffected by design |
 | Add disk headroom | Prune `tile-cache/` and `temp/` — working space, not steady-state storage, sized by the largest single work in flight |
+| Bound the journal | `SystemMaxUse=` in `journald.conf`. **Set this explicitly** — see below |
 | Re-pair the TV | Rotates the pairing token. **Do this before untracking `token_file`**, not after — see `security-model.md` |
 
 ## Failure Recovery
@@ -162,6 +163,15 @@ corruption story.
 This is what makes the backup *and restore* path load-bearing rather than
 diligent. Two cheap mitigations, neither yet decided: move `ART_ROOT` and the
 catalogue to USB storage, or move to SSD boot entirely. Either closes it.
+
+**Journal growth is an unguarded path to that same failure.** Structured logging is
+the product's primary observability signal and both planes log continuously to the
+journal, on a machine whose top risk is disk. **`SystemMaxUse=` must be set
+explicitly in `journald.conf`** rather than left to the default, which sizes itself
+as a fraction of the filesystem — so it grows with the disk you were trying to
+protect. The pre-acquisition free-space guard cannot see this: it is curation-side
+and checks before a fetch, while the journal fills between fetches and from the
+display plane, which never fetches anything.
 
 **Second risk: vendor removal of the TV art-mode API.** Samsung has already
 removed art mode from some units via firmware (1710, Sept 2025). The operator

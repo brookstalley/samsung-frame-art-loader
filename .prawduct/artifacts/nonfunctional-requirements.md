@@ -70,12 +70,18 @@ decision.
 > Python versions) and delivered none of its benefit, and the honest move would be
 > to collapse back to one process.
 >
-> **Boundary this norm has to survive:** `api-contract.md` currently exempts the
-> curation↔display contract from stability obligations on "single consumer,
-> deployed together" grounds. Deployed-together and survives-independently are not
-> compatible without saying what the display plane holds locally and how stale it
-> may be. That tension is unresolved and is `architecture.md`'s to settle — which
-> is the point of stating the requirement here and the mechanism there.
+> **Boundary this norm had to survive, now resolved.** `api-contract.md` used to
+> exempt the curation↔display contract from all stability obligations on "single
+> consumer, deployed together" grounds — incompatible with this norm, because
+> deployed-together and survives-independently cannot both hold without saying what
+> the display plane keeps locally and how stale it may be.
+>
+> Settled 2026-07-20: the display plane holds a **theme manifest** file and may be
+> arbitrarily stale — if curation stops, it keeps showing the last manifest
+> forever, which is correct behaviour rather than degradation. The exemption is
+> narrowed to a bounded obligation (additive changes free; a breaking change bumps
+> a major that display refuses). Mechanism in `architecture.md`; contract row in
+> `api-contract.md`.
 >
 > **Status:** steady-state.
 >
