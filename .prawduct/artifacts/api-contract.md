@@ -647,7 +647,13 @@ every instance found.
 Carried in `project-state.yaml` → `open_questions`; restated here so this artifact
 is self-contained:
 
-- Whether the MCP surface should expose *resources* in addition to tools. The
+- ~~Whether the MCP surface should expose *resources* in addition to tools.~~
+  **CLOSED 2026-07-20: no resources in v1**, recorded in `project-state.yaml`
+  with its reopen trigger and restated under the build plan's "Explicitly
+  deferred". Left listed as open here until 2026-07-20, which is a live invitation
+  to re-open a settled scope decision — this artifact is what an implementer binds
+  when building the tool surface. The original reasoning, which still holds and is
+  why the answer is no: the
   specification's split is about *control* — who decides when something enters
   context — not about mutability, and it never says read-only operations must be
   resources. Anthropic's own guidance says a tool is right when the result depends

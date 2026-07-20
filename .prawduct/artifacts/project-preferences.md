@@ -31,8 +31,12 @@ Developer preferences for how code is written in this project. Captured during d
 - **Package manager**: pip against a pinned `requirements.txt` _(inferred)_. `pyproject.toml`
   exists but carries only black config — there is no project/dependency table, so the repo is
   not an installable package. **DECIDED 2026-07-20: uv for both planes**, structured as
-  two projects in a uv workspace so each plane carries its own interpreter and its own
-  lock. uv was already required on the Pi to provision curation's interpreter, so it is
+  two **sibling uv projects** so each plane carries its own interpreter and its own
+  lock. _(AMENDED 2026-07-20: this said "a uv workspace". A workspace has one lockfile
+  and one resolved interpreter across all members — verified against uv 0.11.8, where a
+  workspace mixing `>=3.14` and `==3.13.*` refuses to lock at all: "Found conflicting
+  Python requirements". The per-plane interpreter and per-plane lock were always the
+  substance; only the mechanism is corrected.)_ uv was already required on the Pi to provision curation's interpreter, so it is
   the incumbent rather than a new dependency, and `uv.lock` gives real lockfiles while
   preserving the exact pinning `requirements.txt` has today. **Named verification item:**
   IT8951 compiles Cython from 2023-era `.pyx` sources, and a `setup.py` of that vintage

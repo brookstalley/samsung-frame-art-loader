@@ -142,9 +142,11 @@ Measured against the real 41-work corpus (`all.json`, 2026-07-19):
 
 **Storage is not an architectural constraint, and specifically does not force the
 curation plane onto a NAS.** 10 GB for a corpus ten times the current size fits on
-any laptop, any desktop, or a Pi with a USB SSD. This removes one input from the
-open question about where the curation plane runs — that decision should be made
-on availability and always-on-ness, not on disk.
+any laptop, any desktop, or a Pi with a USB SSD. This removed one input from the
+question of where the curation plane runs, which was **CLOSED 2026-07-20: both
+planes are co-located on the Pi** (`project-state.yaml`). Decided on availability
+and always-on-ness, as this section argued — not on disk. Left phrased as open
+here until 2026-07-20.
 
 **The one thing that could break this estimate** is gigapixel sourcing. Google
 Arts & Culture scans fetched via dezoomify can reach 1–2 gigapixels — roughly 100×
@@ -394,7 +396,7 @@ one — see `design_decisions.accessibility_approach`.
 | To | What |
 |---|---|
 | `architecture.md` | The display-plane independence norm states the *requirement*; architecture owes the *mechanism* — what the Pi holds locally, and how stale it may be |
-| `architecture.md` | Storage does not force a NAS; decide the curation host on availability grounds |
+| `architecture.md` | Storage does not force a NAS; the curation host was decided on availability grounds — co-located on the Pi, 2026-07-20 |
 | `observability-strategy.md` | Every availability target here is unobservable without detection. "Down looks like up" is the defining constraint |
 | `operational-spec.md` | Back up the catalogue; do not back up the image tree |
 | Acquisition pipeline design | The minimum-resolution floor — **resolved 2026-07-20**: a minimum rendered size in inches, derived from panel geometry and mat width, both deployment values |

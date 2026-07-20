@@ -1411,7 +1411,7 @@ technical_decisions:
         - "Strictly LAN with no remote access — simpler still, but no access while away."
       date: 2026-07-19
   operational:
-    - decision: "uv is the dependency manager for both planes, structured as two projects in a uv workspace."
+    - decision: "uv is the dependency manager for both planes, structured as two SIBLING uv projects (AMENDED 2026-07-20: not a uv workspace)."
       rationale: >
         Decided 2026-07-20 by the operator. Recorded here after Critic review found
         it stated as DECIDED in project-preferences.md while this file still said it
@@ -1424,14 +1424,25 @@ technical_decisions:
         has today, which project-preferences.md said should survive whatever
         replaced it.
 
-        THE WORKSPACE SPLIT IS THE LOAD-BEARING PART. The two planes are genuinely
+        THE PER-PLANE SPLIT IS THE LOAD-BEARING PART. The two planes are genuinely
         different projects — different interpreters (3.14 vs 3.13), different
-        dependency sets, and no single tool setting can describe both. Two projects
-        in a workspace gives each its own interpreter, its own lock, and its own
-        pyproject.toml, which also resolves the long-standing target-version
+        dependency sets, and no single tool setting can describe both. Each needs
+        its own interpreter, its own lock, and its own pyproject.toml, which also
+        resolves the long-standing target-version
         departure: black's target-version is a FLOOR, so py312 is right for display
         and wrong for curation, and the split lets each carry its own rather than
         forcing one number to be wrong somewhere.
+
+        AMENDED 2026-07-20 — "workspace" was the wrong mechanism and is struck.
+        A uv workspace has ONE lockfile and ONE resolved interpreter shared by all
+        members, which is precisely what this product cannot have. Verified
+        empirically against uv 0.11.8 rather than inferred: a workspace whose
+        members declare requires-python >=3.14 and ==3.13.* fails to lock at all,
+        with "error: Found conflicting Python requirements". The DECISION'S
+        SUBSTANCE IS UNCHANGED and was always the per-plane interpreter and
+        per-plane lock; only the mechanism changes, to two independent sibling uv
+        projects (curation/ and display/), each locking itself. This is what the
+        build plan already hedged toward, now settled with evidence instead.
 
         NAMED VERIFICATION ITEM: IT8951 compiles Cython from 2023-era .pyx sources,
         and a setup.py of that vintage may not declare Cython in build-requires —
@@ -2150,7 +2161,8 @@ artifact_manifest:
   # depends_on ADDED 2026-07-20 after Critic review found these entries had no
   # edges at all. That was not cosmetic: these two documents carry the most raw
   # decision text in the repo, and with no edges the dependency-graph sweep
-  # prescribed by the sweep learning — and the check proposed in issue #8 — could
+  # prescribed by the sweep learning — and the check proposed in issue #8, since
+  # moved upstream to brookstalley/prawduct#136 — could
   # not reach them. It is why the retired product-wide Python target survived here
   # through four recurrences while being corrected everywhere else.
   #

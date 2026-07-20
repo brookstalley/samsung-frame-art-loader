@@ -28,13 +28,13 @@ governed_by:
     dispositions:
       - "identity is never a source URL → conforms: Artwork identity is a UUID from Chunk 07 on; source URLs live on Source/CandidateImage rows only"
       - "a work is distinct from an image of it, at every stage → conforms: CandidateWork/CandidateImage land as separate entities in Chunk 08, before any discovery code exists; acceptance is promotion, not transformation (Chunk 17)"
-      - "per-device runtime state never lives in the catalogue → conforms: TvBinding and the last-acted-on sequence live in `display-state.sqlite` (Chunk 12); labels render display-side (Chunk 13); panel geometry is configuration both planes read, stored in neither (Chunks 02, 09, 12)"
+      - "per-device runtime state never lives in the catalogue → conforms: TvBinding and the last-acted-on sequence live in `display-state.sqlite` (Chunk 12); labels render display-side (Chunk 13); each plane's own panel geometry is configuration, stored in neither catalogue nor device state (Chunks 02, 09, 12) — the TV panel's physical size is curation's, the e-paper panel's is display's; corrected 2026-07-20, they are not one shared value"
       - "derived artifacts are regenerated, never transported → conforms: renditions carry `source_content_hash` and regenerate on staleness (Chunk 18); backup excludes the image tree (Chunk 20); candidate previews get their recorded disposable lifecycle in Chunk 17"
   - artifact: project-preferences
     dispositions:
       - "norm-index rows (formatting, naming, imports, logging-not-print, type-annotate-on-touch, specific exceptions, no hardcoded deployment values, async-at-the-boundary, hardware behind an interface) → conforms: ruff lands in Chunk 06 and the mechanical rows migrate to lint rules as each row's Why already directs; until then the Critic carries them per the index"
       - "no test suite (known departure, blocking for medium+ work) → conforms: pytest is established in Chunk 02 alongside the first code that needs it, before any substantive build chunk, and every chunk ships tests alongside code"
-      - "uv for both planes, each plane with its own interpreter and its own lock → conforms: Chunk 06, gated on Chunk 04's build verification. One mechanical detail is settled at that chunk: if uv's workspace semantics force a shared lockfile, two sibling uv projects satisfy the decision's substance (per-plane interpreter + per-plane lock) and the resolution is recorded there"
+      - "uv for both planes, each plane with its own interpreter and its own lock → conforms: Chunk 06, gated on Chunk 04's build verification. The mechanism was settled 2026-07-20 ahead of the chunk: two SIBLING uv projects, not a uv workspace — a workspace shares one lockfile and one resolved interpreter, and uv 0.11.8 refuses to lock members mixing >=3.14 and ==3.13.* at all. The decision's substance (per-plane interpreter + per-plane lock) is unchanged"
 last_validated: 2026-07-20
 ---
 
@@ -53,7 +53,7 @@ attached. The spine is deliberately evidence-first for exactly this reason.
 
 **Open assumptions / unknowns:**
 
-- [ASSUMPTION: the IT8951 stack builds under uv's PEP 517 isolation on 3.13/aarch64 | HIGH impact | Chunk 04 proves or disproves it before any workspace scaffolding exists; user can reorder]
+- [ASSUMPTION: the IT8951 stack builds under uv's PEP 517 isolation on 3.13/aarch64 | HIGH impact | Chunk 04 proves or disproves it before any plane scaffolding exists; user can reorder]
 - [ASSUMPTION: a samsungtvws target exists that carries LS03A/B/C/D support and a fixable `delete_list` | MED impact | Chunk 05's verify step answers it; the fallback (local confirm-deletion wrapper) is scoped in issue #3]
 - [ASSUMPTION: the 2024 code keeps running the wall throughout the build; cutover to the new display plane happens at Chunk 13, and the legacy modules are deleted only at Chunk 20 | MED impact | user can override with an earlier or later cutover]
 - [ASSUMPTION: the existing sun-position brightness behaviour (`local.py`) ports into the display daemon in v1 — it runs on the wall today, so dropping it would be a regression, but the v1 scope list does not name it | LOW impact | user can defer to Later]
@@ -299,7 +299,7 @@ architecture-proving slice is Chunk 07.
   module scope but does not declare it in build-requires fails under PEP 517
   isolation before a single `.pyx` is touched. Prove or disprove empirically on
   the Pi — read the pinned source first (cheap, may answer outright), then a
-  throwaway uv project pinning `9f13613`, **not** the full workspace. The same
+  throwaway uv project pinning `9f13613`, **not** the real display project. The same
   live install also answers the adjacent-but-distinct interpreter risk (the stack
   last proved on 3.12; 3.13 is an open assumption). If it fails, decide the
   remediation (declare build-requires via an override, vendor the ~1,500 lines,
@@ -363,8 +363,9 @@ the existing 41 works are seeded into them.
 
 - **Description:** Restructure onto the decided shape: `curation/` (3.14,
   uv-managed standalone) and `display/` (3.13, system interpreter), each with its
-  own pyproject, interpreter pin, and lockfile — settling the workspace-vs-sibling
-  mechanics per the governed_by note. Wire pytest per plane, adopt ruff (the
+  own pyproject, interpreter pin, and lockfile. **Two sibling projects, not a uv
+  workspace** — settled with evidence 2026-07-20, see the governed_by note; the
+  chunk builds the decided shape rather than rediscovering it. Wire pytest per plane, adopt ruff (the
   mechanical norm-index rows migrate to lint rules), carry black's line-length
   130, give each plane its own `target-version` (retiring the single `py312`
   departure). Extract the mat regression fixture from `all.json` — all 41 works
@@ -492,8 +493,9 @@ the existing 41 works are seeded into them.
   display side's regression/persistence obligations are Chunk 12's. Full
   `art_theme` (create/update/delete/add/remove/reorder/activate) and
   `art_display` (sync/show_now/next; `status` reads the heartbeat file and
-  reports honestly that none exists yet). Panel geometry enters configuration
-  here for curation and is logged at startup.
+  reports honestly that none exists yet). The **TV panel's physical geometry**
+  enters configuration here — curation's alone, since curation composes the mat —
+  and is logged at startup.
 - **Depends on:** Chunk 08
 - **Artifacts consumed:** `architecture.md` (§ The theme manifest, § Readiness),
   `api-contract.md` § How `art_display` reaches the display plane,
@@ -527,10 +529,20 @@ the existing 41 works are seeded into them.
   here rather than late: **it is what makes Chunks 12–13's cutover acceptance
   executable.** Re-ingest, do not migrate: read `all.json` as an input file and
   mint fresh entities through the service layer, so every catalogue invariant
-  from Chunk 08 applies to the seeded rows exactly as to discovered ones. All
-  41 records carry what this needs — `metadata` (title, artist, nationality,
-  lifespan, date, medium, dimensions, description), `raw_file`, `mat_hexrgb`,
-  and pixel dimensions — verified 2026-07-20. Originals point at the existing
+  from Chunk 08 applies to the seeded rows exactly as to discovered ones. **The corpus
+  is complete on identity and incomplete on the label** — measured against the
+  tracked `all.json` on 2026-07-20, not assumed: all 41 carry `title`, `artist`,
+  `date_created`, `raw_file`, `mat_hexrgb`, and pixel dimensions, but **14 of 41
+  have no nationality, 8 have no lifespan, 8 carry no `artist_details` at all,
+  and 2 each lack medium and physical dimensions.** That shapes the work: Artist
+  parsing cannot assume `artist_details` exists and must fall back to the flat
+  `artist` field; the label must render legibly with nationality and dates absent
+  (data-model Q9 wants them, so a partial label is a real outcome, not an error);
+  and the 2 works without physical dimensions can get neither mat geometry nor a
+  floor classification — they seed with dimensions null and are reported, which is
+  the same unknown-dimensions case `data-model.md`'s `display_fit` note still owes
+  a rule. **Backfilling from the source URL is out of scope here** — these works
+  are re-fetchable, and completing them is discovery's job, not seeding's. Originals point at the existing
   `raw/` tree and renditions at the existing `ready/` renders, with
   `source_content_hash` computed at ingest so Chunk 18's staleness rule governs
   them from birth. Known defects in the legacy shape are corrected on the way
@@ -549,14 +561,20 @@ the existing 41 works are seeded into them.
   hand-tuned value, never as a fresh derivation; a report of anything that did
   not seed cleanly, per work with a reason — silence is not success
 - **Tests:** unit — `artist_details` parsing across the corpus's real shapes
-  (including the multi-line "Charles Demuth\nAmerican, 1883–1935" form);
+  (the multi-line "Charles Demuth\nAmerican, 1883–1935" form, **and the 8
+  records carrying no `artist_details` at all**, which must fall back to the
+  flat `artist` field rather than fail); a work with no physical dimensions
+  seeds with nulls and is reported, never silently given a default size;
   identity is a UUID and no row carries a source URL as identity; no
   `tv_content_id` reaches the catalogue; idempotence — seeding twice yields 41
   works, not 82; integration — after seeding, a theme over all 41 builds a
-  manifest with 41 entries and an empty exclusion report
-- **Acceptance criteria:** all 41 works are in the catalogue and readiness-clean,
-  so a theme built over them produces a full manifest; the exclusion report
-  names any work that did not make it, with a reason
+  manifest whose entries and exclusions together account for all 41, with the
+  2 dimensionless works excluded by name and reason
+- **Acceptance criteria:** all 41 works are in the catalogue; a theme built over
+  them produces a manifest whose exclusions are exactly the works with a named,
+  understood cause, never a silent drop; every work with incomplete label
+  metadata is listed in the seed report, so the gap is visible now rather than
+  discovered at the wall
 - **Done when:**
   1. Acceptance criteria met and tests pass
   2. `/prawduct:critic` run and blocking findings resolved
@@ -628,8 +646,8 @@ discovery build against these surfaces.
 - **Deliverables:** new `display/src/display/daemon.py`, new
   `display/src/display/tv/`, new `display/src/display/state/` with
   `display-state.sqlite` (TvBinding + last-acted-on sequence), structured logging
-  with `work_id` correlation, resolved `ART_ROOT` and panel geometry logged at
-  startup; **a one-shot TvBinding adoption path** seeded from the 41 legacy
+  with `work_id` correlation, resolved `ART_ROOT` and the **e-paper panel's**
+  geometry logged at startup (display never reads the TV's physical size); **a one-shot TvBinding adoption path** seeded from the 41 legacy
   `tv_content_id` values in `all.json` — the works are already uploaded to this
   TV, so a fresh empty binding table would re-upload 41 4K images and orphan the
   existing set. Adoption is verified against the TV's own list, not trusted:
@@ -654,7 +672,7 @@ discovery build against these surfaces.
 ### Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
 
 - **Description:** The label renders on the display plane from manifest label
-  text — panel geometry stays with the plane that owns the panel. Type sizing is
+  text — the e-paper panel's geometry stays with the plane that owns that panel. Type sizing is
   re-derived for the 1448×1072 panel rather than carrying the 2024 "Sans 18"
   forward; this is the product's most important accessibility surface
   (`design_decisions.accessibility_approach`). On each `image_selected` callback,
@@ -716,8 +734,16 @@ core, built against the surfaces the contract tests already pin.
   (§ Long-running operations, § Error Model), `nonfunctional-requirements.md`
   (§ Cost Constraints, § Performance), issue #12
 - **Foreign API:** OpenRouter (chat + web-search plugin + key endpoint)
-- **Deliverables:** new `curation/src/curation/discovery/` phase-1 engine;
-  `art_discovery` actions live: `estimate`, `start`, `status`, `approve`,
+- **Deliverables:** **the spend ceiling itself, provisioned before the first paid
+  call** — a dedicated OpenRouter key with a USD 20/month per-key credit limit and
+  monthly reset (`nonfunctional-requirements.md` § Cost Constraints), recorded as a
+  routine-operations item in `operational-spec.md` and added to `.env.example` as
+  `OPENROUTER_API_KEY` (the file still declares only the legacy `OPENAI_KEY`). The
+  ratified norm forbids an application-side ceiling, which makes this key setting
+  the *entire* cap: an unprovisioned key is indistinguishable from a capped one on
+  every surface the product exposes, so leaving it to setup lore would mean there
+  is no ceiling at all. Then: new `curation/src/curation/discovery/` phase-1
+  engine; `art_discovery` actions live: `estimate`, `start`, `status`, `approve`,
   `decline`, `cancel`, `list_runs`, `spend` (`resolve_images` arrives in
   Chunk 16); per-run search cap as a deployment value; harness scenarios for the
   run lifecycle including `halted_by_budget` vs `failed` vs `interrupted`
@@ -729,7 +755,10 @@ core, built against the surfaces the contract tests already pin.
 - **Acceptance criteria:** a real intent resolves to a work list with a shown
   estimate; a recency-bound intent ("recent award-winning art") resolves to
   real, post-cutoff works; the curator can trim the list before paying for
-  phase 2
+  phase 2; **the ceiling is proven to fail closed, not assumed to** — provision a
+  throwaway key with a near-zero limit, drive a real call into the 402, and show
+  it surfacing as `halted_by_budget`. "Fails closed" is a claim about a path
+  nobody has executed until someone executes it
 - **Done when:**
   0. verify-api — probe the live OpenRouter key endpoint and one generation:
      capture the actual `limit_remaining` and per-generation `cost` shapes and
@@ -876,7 +905,7 @@ core, built against the surfaces the contract tests already pin.
   is one call per accepted work, so the choice barely moves cost), the
   dominant-colour fallback **recorded** on `MatColor.method` (never invisible),
   history retained. Composition: the mat in physical inches, bottom-weighted,
-  against configured panel geometry; the floor in rendered inches; **no
+  against the configured TV panel geometry; the floor in rendered inches; **no
   upscaling, ever**; renditions carry `source_content_hash` and regenerate on
   staleness. `retry_acquisition`, `set_mat_color`, `regenerate` actions land.
   Mat quality is judged against the 41-work fixture from Chunk 06.

@@ -48,6 +48,74 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-20: Second Critic round — two blocking closed, and one of my own claims retracted
+
+**Why:** The review of the revised plan returned 3 blocking. Two are closed here;
+the third (R-10) needs an operator decision and is not silently absorbed.
+
+**R-1/R-21 (blocking) — the spend ceiling had no owner.** The v1 scope commits to
+a "hard monthly LLM spend cap that fails closed" and the security model rates it
+bound #1, *Strong*. Every chunk covered only the consumption half. Because the
+ratified norm forbids an application-side ceiling, the unprovisioned key *was* the
+absence of any ceiling. Chunk 14 now provisions the USD 20/month per-key limit,
+adds `OPENROUTER_API_KEY` to `.env.example` (which still declared only the legacy
+`OPENAI_KEY`), and — the part that matters — **proves the 402 fails closed with a
+near-zero-limit key rather than asserting it**. `boundary-patterns.md` no longer
+lists the ceiling as deployment config, which had invited the very
+application-side enforcement the norm forbids.
+
+**R-9 (blocking) — "panel geometry" named two different physical panels.** The TV
+panel (physical inches; drives mat geometry and the resolution floor) and the
+Waveshare e-paper HAT (1448×1072; drives label typesetting) were one config value,
+and two artifacts concluded from the conflation that *display renders the mat* —
+it does not; curation composes the mat into the `tv_display` rendition. That made
+`architecture.md` self-contradictory and produced a false "two values must agree
+across both planes" analysis. Separated: TV geometry is curation's alone, e-paper
+geometry is display's alone, **neither is shared, so neither can drift** — the
+cross-plane mismatch risk dissolves rather than needing mitigation. `ART_ROOT` is
+again the only shared value. Swept through architecture, operational-spec, and
+five build-plan sites.
+
+**R-2 — a claim of mine, retracted.** Chunk 10 said all 41 legacy records carry
+seven named fields, "verified 2026-07-20". I had measured four. Measured properly:
+**14 of 41 have no nationality, 8 no lifespan, 8 no `artist_details` at all** — the
+field the chunk's own unit test was written around — and 2 each lack medium and
+physical dimensions. The chunk now states the real numbers and specifies the
+consequences: Artist parsing falls back to the flat `artist` field, labels render
+with dates absent, and the 2 dimensionless works seed with nulls and are reported
+rather than excluded silently. The acceptance criterion changed too — it had
+required an *empty* exclusion report, which the data cannot produce.
+
+**R-4/R-18 — the uv workspace decision was mechanically impossible.** Recorded as
+settled in two homes: "two projects in a uv workspace, each with its own
+interpreter and its own lock". A uv workspace has one lockfile and one resolved
+interpreter. Verified rather than reasoned: against uv 0.11.8, a workspace whose
+members declare `>=3.14` and `==3.13.*` refuses to lock — *"error: Found
+conflicting Python requirements"*. The decision's substance was always per-plane
+interpreter and per-plane lock; only the mechanism was wrong, and it is amended to
+two sibling projects. The build plan had hedged toward this; it is now settled with
+evidence, so Chunk 06 builds a decided shape instead of rediscovering it.
+
+**R-7, R-14 — two settled questions still written as open** (MCP resources in
+`api-contract.md`; the curation host in `nonfunctional-requirements.md`, both
+homes). The repo's signature defect, and cheap. `api-contract.md` is what an
+implementer binds, so a live "open question" there invites re-opening settled
+scope.
+
+**R-19 — the sweep failure this session created.** Moving issue #8 upstream left
+four stale pointers in `learnings.md` — the escalation document was the one home
+its own remedy missed. Swept. `change-log.md` and `reflections.md` were left
+alone deliberately: they are dated records, and rewriting them would falsify
+history rather than correct a live claim.
+
+**Still open — R-10 (blocking), for the operator.** `CandidateWork.verdict` has two
+writers and an incomplete transition set: a resolve run completing after an accept
+can write `pending` over `accepted`, leaving `artwork_id` set on a non-accepted
+work. Fixing it is a behaviour decision, not a coherence fix, so it is not being
+absorbed quietly.
+
+**No product code changed.**
+
 ## 2026-07-20: Plan revised on review — seeding chunk added, governance check moved upstream
 
 **Why:** A pre-build review of the Phase D plan against the open Critic round

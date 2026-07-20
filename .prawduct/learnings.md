@@ -61,9 +61,13 @@ carelessness.
 
 What would actually catch it: a check that, when a `technical_decisions` entry gains
 an `AMENDED`/`SUPERSEDED`/`RETIRED` marker, lists the artifacts declaring a
-`depends_on` edge to it and requires each to be acknowledged. Filed as issue #8
-rather than improvised here. **It must validate graph completeness first** — see the
-unedged-findings gap below, which would otherwise be inherited as a blind spot.
+`depends_on` edge to it and requires each to be acknowledged. Originally filed as
+issue #8 here; **moved to `brookstalley/prawduct#136` on 2026-07-20** — the check
+reads only prawduct's own data model, so it belongs in the framework rather than in
+one product. Issue #8 is closed `dropped` (no work landed here). **It must validate
+graph completeness first** — see the unedged-findings gap below, which would
+otherwise be inherited as a blind spot. **Until it ships, the sweep is manual and
+this learning is the whole control.**
 
 **Sharpest tell that this is systemic, not carelessness:** on 2026-07-20 the sweep
 failure landed in the same bundle that *added this learning*, three commits later —
@@ -115,15 +119,18 @@ is the one that was missing, and it is the cheapest of the three.
 
 8. **2026-07-20, ninth recurrence — a home the graph cannot reach.** Having just
    refreshed the recurrence tally in `learnings.md` *because the count is the
-   escalation argument*, I did not refresh it in **issue #8**, which is the artifact
-   the argument exists to support and the live home (`backlog_service_repo` is set).
+   escalation argument*, I did not refresh it in **issue #8**, which was then the
+   artifact the argument exists to support and the live home
+   (`backlog_service_repo` is set; the work has since moved to
+   `brookstalley/prawduct#136`).
    The issue still read "three times across two sessions" and still scoped its
    acceptance to "the three recorded violations".
 
 **The structural point, recorded here rather than only in a reflection: the backlog
 sits outside the artifact dependency graph entirely.** No sweep of `.prawduct/` can
 reach a GitHub issue, and no `depends_on` edge can ever point at one. A structural
-check built for issue #8 that walks artifacts will have this blind spot on day one —
+check of this shape (now `brookstalley/prawduct#136`) that walks artifacts will have
+this blind spot on day one —
 which is a different defect from an unedged manifest node, because this home can
 never be a manifest entry at all. **When a decision or count is cited in the backlog,
 the backlog is part of its sweep set.**
@@ -196,7 +203,9 @@ Python target survived in `platform-and-dependency-findings.md` across four
 corrections elsewhere. Edges added 2026-07-20. **A dependency-graph sweep is only as
 good as the graph**, and an unedged node is invisible rather than merely
 low-priority. Worth checking the graph is complete before trusting a walk of it —
-including for issue #8, whose check would have inherited the same blind spot.
+including for the check now tracked as `brookstalley/prawduct#136`, which would have
+inherited the same blind spot. (The build plan itself was an unedged node until
+2026-07-20, found by the same Critic goal — the pattern recurs at every scale.)
 
 **Related:** the same session produced a near-miss of the adjacent shape — an
 *unverified inference riding along with a verified claim* ("streamable HTTP is

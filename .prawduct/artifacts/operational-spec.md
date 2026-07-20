@@ -97,17 +97,25 @@ they do not.
 scoped that way in the v1 list. A mismatch is a silent failure: curation writes
 manifests nobody reads and display waits forever on a file that will never appear.
 
-**Panel geometry is the second (added 2026-07-20).** The mat is specified in
-physical units and the resolution floor is a minimum size on the wall, so both
-planes need the panel's dimensions: curation to judge whether a source is adequate
-and to show the curator what a work would look like, display to render the mat. A
-mismatch is quieter than the `ART_ROOT` one and therefore worse — nothing fails,
-the mat is simply the wrong width and the review grid's warnings are computed
-against a TV that isn't there. **Nothing may hardcode a panel size**; the reference
-deployment is 42" but the product must run on any Frame.
+**`ART_ROOT` is also the only value both planes share** (corrected 2026-07-20).
+Panel geometry was briefly listed as a second shared value; it is not, because
+"panel geometry" named two different physical panels:
 
-**Both planes log their resolved `ART_ROOT` and panel geometry at startup**, so
-either mismatch is one journal line away rather than a mystery.
+- **TV panel physical geometry** (reference: 42") — **curation only**. The mat is
+  specified in physical units and the resolution floor is a minimum size on the
+  wall, so curation needs it to judge whether a source is adequate, to show the
+  curator what a work would look like, and to compose the mat. Display receives the
+  `tv_display` rendition with the mat already in it and never needs the TV's size.
+- **E-paper panel geometry** (1448×1072) — **display only**, for label typesetting.
+
+Because neither is shared, neither can drift between planes. A wrong TV size is
+still a real defect — the mat comes out the wrong width and the review grid's
+warnings are computed against a TV that isn't there — but it is a single-plane
+misconfiguration, not a cross-plane mismatch. **Nothing may hardcode either panel's
+size**; the reference deployment is a 42" Frame but the product must run on any.
+
+**Each plane logs its resolved `ART_ROOT` and its own panel geometry at startup**,
+so a misconfiguration is one journal line away rather than a mystery.
 
 Secrets live in `.env`, never in source, never in a committed file — the
 repository is public (`security-model.md`).

@@ -156,8 +156,10 @@ is no network between planes.
 - **Serves three surfaces from one ASGI app:** the web UI, its HTTP API, and the
   MCP streamable-HTTP endpoint. All three are thin bindings over one service layer
   (`project-preferences.md`, Critic-enforced).
-- **Must never:** talk to the TV, talk to the e-paper panel, know panel geometry,
-  or know TV content ids. Every device fact belongs to display.
+- **Must never:** talk to the TV, talk to the e-paper panel, know the **e-paper
+  panel's** geometry, or know TV content ids. Every device fact belongs to display.
+  Note the TV panel's *physical* geometry is not a device fact in this sense and
+  is curation's — see § Configuration; the two were conflated until 2026-07-20.
 
 ### display
 
@@ -177,8 +179,10 @@ is no network between planes.
 - **Reconciliation loop:** read manifest → ensure every listed work is uploaded to
   the TV → rotate through the list on a timer → on each `image_selected` callback,
   render and push the e-paper label.
-- **Renders the e-paper label** (decided 2026-07-20 — see Decision Log). Panel
-  geometry stays with the plane that owns the panel.
+- **Renders the e-paper label** (decided 2026-07-20 — see Decision Log). The
+  **e-paper panel's** geometry (1448×1072) stays with the plane that owns that
+  panel. Display does *not* render the mat — the mat is composed by curation into
+  the `tv_display` rendition, so display never needs the TV's physical size.
 - **Must never:** write the catalogue, write the manifest, call the curation
   process, or import curation code.
 
@@ -446,15 +450,28 @@ curator lives.
 **Configuration and secrets.** Environment variables with a `.env` file, per the
 existing preference that deployment values never live in source. Each plane reads
 its own config at start; a config change means a restart of that plane only.
-**Two values must agree across both planes** (2026-07-20 — this previously said
-`ART_ROOT` was the only one). `ART_ROOT` is the first and remains the single most
-important thing to get out of source, already scoped that way in the v1 list.
-**Panel geometry is the second**: the mat is specified in physical units and the
-resolution floor is a minimum size on the wall, so curation needs the panel's
-dimensions to judge a source and display needs them to render the mat. Nothing may
-hardcode a panel size — the product must run on whatever Frame someone owns. Its
-mismatch mode is quieter than `ART_ROOT`'s and therefore worse: nothing fails, the
-mat is merely wrong. See `operational-spec.md` § Configuration.
+**`ART_ROOT` is the one value that must agree across both planes** (corrected
+2026-07-20 — this briefly said panel geometry was a second, on the mistaken
+premise that display renders the mat). It remains the single most important thing
+to get out of source, already scoped that way in the v1 list; a mismatch is a
+silent failure, with curation writing manifests nobody reads.
+
+**"Panel geometry" was one name for two different physical panels, and separating
+them is what dissolves the shared-value problem** (2026-07-20):
+
+- **The TV panel's physical geometry** (reference deployment: 42", 16:9) is
+  **curation's alone**. The mat is specified in physical inches and the resolution
+  floor is a minimum size on the wall, so curation needs it to judge a source, to
+  show the curator what a work would look like, and to compose the mat into the
+  `tv_display` rendition. Display receives that rendition already composed and
+  never needs the TV's size.
+- **The e-paper panel's geometry** (1448×1072) is **display's alone**, for label
+  typesetting. Curation never needs it.
+
+Neither is shared, so neither can drift between planes — the quiet-mismatch risk
+this section previously described for panel geometry does not exist once the two
+are named apart. **Nothing may hardcode either panel's size**: the product must run
+on whatever Frame someone owns. See `operational-spec.md` § Configuration.
 
 API keys are curation-only; display holds no credentials except the TV pairing
 token, which is device state and lives with display.

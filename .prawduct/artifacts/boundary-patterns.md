@@ -119,10 +119,16 @@
 - **Producer:** environment / config file. **Consumer:** both planes.
 - **Contract:** no hardcoded deployment values in source (Critic-enforced norm).
   `ART_ROOT` is the first to hoist.
-- Values known to belong here: `ART_ROOT`, TV address, coordinates, the LLM spend
-  ceiling, the **phase-2 approval work-count threshold** (added 2026-07-19 as a
-  cost threshold; amended 2026-07-20 to count — see `data-model.md`), and the
-  **per-run search cap** (added 2026-07-20).
+- Values known to belong here: `ART_ROOT`, TV address, coordinates, the **phase-2
+  approval work-count threshold** (added 2026-07-19 as a cost threshold; amended
+  2026-07-20 to count — see `data-model.md`), and the **per-run search cap**
+  (added 2026-07-20).
+- **The LLM spend ceiling is deliberately *not* here** (struck 2026-07-20): the
+  ratified norm is that spend ceilings are enforced by the provider, never by
+  application code, so the ceiling is a setting on the OpenRouter key — not a
+  value this product reads. Listing it as deployment config invited exactly the
+  application-side enforcement the norm forbids. What the product *may* read is
+  budget **remaining** (`GET /api/v1/key`), which is an observation, not a control.
 
 ## Test Levels
 
