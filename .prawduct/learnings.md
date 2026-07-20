@@ -46,12 +46,21 @@ encodes (populated 2026-07-20). Walk the dependency graph and re-read each depen
 artifact for the *concept*; use grep only as the cheap first pass, never as the
 check that closes the sweep.
 
-**Structural escalation, per the learning lifecycle.** Three recurrences across two
-sessions, every one caught by the Critic and none by self-review, means writing it
-down is not working. What would actually catch it: a check that, when a
-`technical_decisions` entry gains an `AMENDED`/`SUPERSEDED`/`RETIRED` marker, lists
-the artifacts declaring a `depends_on` edge to it and requires each to be
-acknowledged. Filed rather than improvised here.
+**Structural escalation, per the learning lifecycle. The count is the argument, so
+keep it current: EIGHT recurrences across two sessions as of 2026-07-20** (entries
+1–7 below; entry 6 covers two). Every one was caught by the Critic and none by
+self-review, across at least four distinct causes — literal-text survival,
+paraphrase, excluding one's own edited files, and consuming only part of a finding's
+enumerated scope. Each correction was locally right and none prevented the next,
+which is the real signal: **the remedy class is wrong, not the remedy.** Prose
+instructions to a careful reader keep failing because the failure is not
+carelessness.
+
+What would actually catch it: a check that, when a `technical_decisions` entry gains
+an `AMENDED`/`SUPERSEDED`/`RETIRED` marker, lists the artifacts declaring a
+`depends_on` edge to it and requires each to be acknowledged. Filed as issue #8
+rather than improvised here. **It must validate graph completeness first** — see the
+unedged-findings gap below, which would otherwise be inherited as a blind spot.
 
 **Sharpest tell that this is systemic, not carelessness:** on 2026-07-20 the sweep
 failure landed in the same bundle that *added this learning*, three commits later —
@@ -94,6 +103,19 @@ is the one that was missing, and it is the cheapest of the three.
    run to `failed`") and did not match. `operational-spec.md` was worse than stale —
    it had inverted, telling the operator that a healthy waiting run was a bug.
 
+7. **2026-07-20, eighth recurrence — inside one table row.** The fix for recurrence
+   6 rewrote the third column of `architecture.md`'s curation-down row and left the
+   second column reading "any in-flight discovery run dies with it" — asserting
+   precisely what the same row's next cell denied, since this repo's vocabulary puts
+   `awaiting_approval` inside "in flight". The finding had enumerated *two* defects
+   in that row; only the grep-able one got fixed.
+
+**Refinement: a finding's enumerated defects are a checklist, and it is not done
+until every item is struck.** Recurrences 6 and 8 are the same error at different
+scales — a finding naming three files, then a finding naming two clauses. Both times
+the reviewer had already done the analysis and I consumed part of it. **The sweep
+set is never smaller than what the finding explicitly lists.**
+
 **The correction: when a Critic finding lists files, that list IS the sweep set.**
 No dependency walk is needed and no grep pattern has to be guessed — the reviewer
 already did the work and handed over the answer. Using one file from a three-file
@@ -105,9 +127,8 @@ consistent; the survivors are, by definition, the sites that say it differently.
 for the *concept's* distinctive nouns (`awaiting_approval`, `reconcil`, `non-terminal`)
 rather than for a sentence.
 
-**A second structural gap, found by the Critic on `rev-20260720T145500Z-2fcf2f8f`**
-(the review that produced recurrence 4 — named rather than left as "the same review",
-after an inserted entry silently re-anchored that phrase to the wrong one)**:** the two entries
+**A second structural gap, found by the Critic on `rev-20260720T145500Z-2fcf2f8f`
+(the review that produced recurrence 4):** the two entries
 under `artifact_manifest.findings` had *no `depends_on` edges at all*, so pass 2
 could not reach them even when run correctly — which is why the retired product-wide
 Python target survived in `platform-and-dependency-findings.md` across four
