@@ -19,22 +19,22 @@ governed_by:
   - artifact: architecture
     dispositions:
       - "the theme manifest file is the only channel from curation to display → conforms: every display chunk reads the manifest and image tree only; interactive commands ride the manifest's directive block (the recorded R-17 decision); issue #7's plane-isolation test lands in Chunk 11 and enforces it mechanically"
-      - "operation logic lives only in the service layer; MCP tools and HTTP handlers are thin bindings → conforms: Chunk 08 establishes the registry/handler split as a directory boundary before any tool exists, and every later surface chunk binds service methods only; registry generation carries no per-tool logic"
+      - "operation logic lives only in the service layer; MCP tools and HTTP handlers are thin bindings → conforms: Chunk 07 establishes the registry/handler split as a directory boundary before any tool exists, and every later surface chunk binds service methods only; registry generation carries no per-tool logic"
   - artifact: nonfunctional-requirements
     dispositions:
       - "spend ceilings are enforced by the provider, never by application code → conforms: no chunk builds an application-side ceiling; `halted_by_budget` derives from a provider 402 (Chunk 14) and budget-remaining reads `GET /api/v1/key`. The per-run search cap (also Chunk 14) is budgeting inside the norm's recorded scope note, not a ceiling"
       - "the display plane's ability to show art never depends on the curation plane being reachable → conforms: the display daemon (Chunks 12–13) reads only the manifest, the image tree, and its own store; no network call to curation exists anywhere in the display package, and the plane-isolation test guards it"
   - artifact: data-model
     dispositions:
-      - "identity is never a source URL → conforms: Artwork identity is a UUID from Chunk 08 on; source URLs live on Source/CandidateImage rows only"
-      - "a work is distinct from an image of it, at every stage → conforms: CandidateWork/CandidateImage land as separate entities in Chunk 09, before any discovery code exists; acceptance is promotion, not transformation (Chunk 17)"
-      - "per-device runtime state never lives in the catalogue → conforms: TvBinding and the last-acted-on sequence live in `display-state.sqlite` (Chunk 12); labels render display-side (Chunk 13); panel geometry is configuration both planes read, stored in neither (Chunks 03, 10, 12)"
+      - "identity is never a source URL → conforms: Artwork identity is a UUID from Chunk 07 on; source URLs live on Source/CandidateImage rows only"
+      - "a work is distinct from an image of it, at every stage → conforms: CandidateWork/CandidateImage land as separate entities in Chunk 08, before any discovery code exists; acceptance is promotion, not transformation (Chunk 17)"
+      - "per-device runtime state never lives in the catalogue → conforms: TvBinding and the last-acted-on sequence live in `display-state.sqlite` (Chunk 12); labels render display-side (Chunk 13); panel geometry is configuration both planes read, stored in neither (Chunks 02, 09, 12)"
       - "derived artifacts are regenerated, never transported → conforms: renditions carry `source_content_hash` and regenerate on staleness (Chunk 18); backup excludes the image tree (Chunk 20); candidate previews get their recorded disposable lifecycle in Chunk 17"
   - artifact: project-preferences
     dispositions:
-      - "norm-index rows (formatting, naming, imports, logging-not-print, type-annotate-on-touch, specific exceptions, no hardcoded deployment values, async-at-the-boundary, hardware behind an interface) → conforms: ruff lands in Chunk 07 and the mechanical rows migrate to lint rules as each row's Why already directs; until then the Critic carries them per the index"
-      - "no test suite (known departure, blocking for medium+ work) → conforms: pytest is established in Chunk 01, before any substantive build chunk, and every chunk ships tests alongside code"
-      - "uv for both planes, each plane with its own interpreter and its own lock → conforms: Chunk 07, gated on Chunk 05's build verification. One mechanical detail is settled at that chunk: if uv's workspace semantics force a shared lockfile, two sibling uv projects satisfy the decision's substance (per-plane interpreter + per-plane lock) and the resolution is recorded there"
+      - "norm-index rows (formatting, naming, imports, logging-not-print, type-annotate-on-touch, specific exceptions, no hardcoded deployment values, async-at-the-boundary, hardware behind an interface) → conforms: ruff lands in Chunk 06 and the mechanical rows migrate to lint rules as each row's Why already directs; until then the Critic carries them per the index"
+      - "no test suite (known departure, blocking for medium+ work) → conforms: pytest is established in Chunk 02 alongside the first code that needs it, before any substantive build chunk, and every chunk ships tests alongside code"
+      - "uv for both planes, each plane with its own interpreter and its own lock → conforms: Chunk 06, gated on Chunk 04's build verification. One mechanical detail is settled at that chunk: if uv's workspace semantics force a shared lockfile, two sibling uv projects satisfy the decision's substance (per-plane interpreter + per-plane lock) and the resolution is recorded there"
 last_validated: 2026-07-20
 ---
 
@@ -53,8 +53,8 @@ attached. The spine is deliberately evidence-first for exactly this reason.
 
 **Open assumptions / unknowns:**
 
-- [ASSUMPTION: the IT8951 stack builds under uv's PEP 517 isolation on 3.13/aarch64 | HIGH impact | Chunk 05 proves or disproves it before any workspace scaffolding exists; user can reorder]
-- [ASSUMPTION: a samsungtvws target exists that carries LS03A/B/C/D support and a fixable `delete_list` | MED impact | Chunk 06's verify step answers it; the fallback (local confirm-deletion wrapper) is scoped in issue #3]
+- [ASSUMPTION: the IT8951 stack builds under uv's PEP 517 isolation on 3.13/aarch64 | HIGH impact | Chunk 04 proves or disproves it before any workspace scaffolding exists; user can reorder]
+- [ASSUMPTION: a samsungtvws target exists that carries LS03A/B/C/D support and a fixable `delete_list` | MED impact | Chunk 05's verify step answers it; the fallback (local confirm-deletion wrapper) is scoped in issue #3]
 - [ASSUMPTION: the 2024 code keeps running the wall throughout the build; cutover to the new display plane happens at Chunk 13, and the legacy modules are deleted only at Chunk 20 | MED impact | user can override with an earlier or later cutover]
 - [ASSUMPTION: the existing sun-position brightness behaviour (`local.py`) ports into the display daemon in v1 — it runs on the wall today, so dropping it would be a regression, but the v1 scope list does not name it | LOW impact | user can defer to Later]
 - [ASSUMPTION: rotation timing is per-theme with a global fallback | LOW impact | carried from `data-model.md`; user can collapse to global]
@@ -63,24 +63,24 @@ attached. The spine is deliberately evidence-first for exactly this reason.
   designed until they resolve.
 - **One operator decision is pending and gates deployment paths:** issue #13
   (SD-card mitigation — USB/SSD storage vs SSD boot). Five minutes, needed before
-  Chunk 04 bakes paths into deployment config.
+  Chunk 03 bakes paths into deployment config.
 
-**What would raise confidence:** Chunks 05, 06, and 15 — the two hardware/build
+**What would raise confidence:** Chunks 04, 05, and 15 — the two hardware/build
 verifications and the two spikes. Each is cheap, early, and converts an assumption
 into a recorded fact.
 
 ## Status
 
-- [ ] Chunk 01: Decision-amendment acknowledgement check (issue #8)
-- [ ] Chunk 02: Untrack and rotate the TV pairing token; drop the catalogue backups (issue #4)
-- [ ] Chunk 03: Deployment values out of source (issue #5) + `art.py` defect dispositions (issue #6)
-- [ ] Chunk 04: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
-- [ ] Chunk 05: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
-- [ ] Chunk 06: Replace the samsungtvws pin, verified on hardware (issue #3)
-- [ ] Chunk 07: uv two-plane restructure, lint/test tooling, mat regression fixture (issue #11)
-- [ ] Chunk 08: Walking skeleton — catalogue core → service layer → MCP tool, end to end
-- [ ] Chunk 09: Full catalogue schema, state machines, constraints, startup reconciliation
-- [ ] Chunk 10: Manifest builder, themes, directives — `art_theme` and `art_display`
+- [ ] Chunk 01: Untrack and rotate the TV pairing token; drop the catalogue backups (issue #4)
+- [ ] Chunk 02: Deployment values out of source (issue #5) + `art.py` defect dispositions (issue #6)
+- [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
+- [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
+- [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
+- [ ] Chunk 06: uv two-plane restructure, lint/test tooling, mat regression fixture (issue #11)
+- [ ] Chunk 07: Walking skeleton — catalogue core → service layer → MCP tool, end to end
+- [ ] Chunk 08: Full catalogue schema, state machines, constraints, startup reconciliation
+- [ ] Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
+- [ ] Chunk 10: Seed the catalogue with the 41 existing works (v1 scope item)
 - [ ] Chunk 11: Contract tests — MCP evaluation harness (issue #17) and plane isolation (issue #7)
 - [ ] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics
 - [ ] Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
@@ -93,14 +93,14 @@ into a recorded fact.
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
 Context: Plan authored 2026-07-20; nothing built. Next: Chunk 01. Operator decision
-on issue #13 pending (gates Chunk 04's deployment paths).
+on issue #13 pending (gates Chunk 03's deployment paths).
 
 ## Scaffolding
 
 ### Project Initialization
 
-Chunks 01–06 run against the repo as it stands (flat 2024 modules; pytest is
-bootstrapped at the root in Chunk 01). Chunk 07 restructures:
+Chunks 01–05 run against the repo as it stands (flat 2024 modules; pytest is
+bootstrapped at the root in Chunk 02). Chunk 06 restructures:
 
 - `uv python install 3.14` on the Pi (curation interpreter; prebuilt
   `cpython-3.14-linux-aarch64-gnu`, verified available — `operational-spec.md`).
@@ -118,8 +118,8 @@ Rationale per package lives in `project-preferences.md` § Tooling,
   `3tears-mcp`, which drags NATS), 3tears core (L1 SQLite only) + 3tears-models
   (OpenRouter adapters), httpx, pillow, opencv-python-headless, scikit-image,
   numpy, pydantic, python-dotenv. All wheels on aarch64/3.14, verified 2026-07-20.
-- **display (3.13, system interpreter):** samsungtvws (target decided in Chunk 06),
-  pillow, IT8951 (pinned per Chunk 05's outcome), omni-epd, pycairo + PyGObject
+- **display (3.13, system interpreter):** samsungtvws (target decided in Chunk 05),
+  pillow, IT8951 (pinned per Chunk 04's outcome), omni-epd, pycairo + PyGObject
   (Pango label typesetting; the GTK stack lives on this plane deliberately),
   RPi.GPIO/spidev, python-dotenv.
 - **dev (both):** pytest, ruff, black (line-length 130 carried forward).
@@ -130,16 +130,16 @@ Rationale per package lives in `project-preferences.md` § Tooling,
 Per-plane `uv run pytest` from each project; `tests/` mirrors module layout
 (`project-preferences.md` § Testing). Contract tests live in `tests/contract/`,
 the norm-enforcement test in `tests/preferences/`
-(`boundary-patterns.md` § Test Levels). Chunk 07 declares both suites as
+(`boundary-patterns.md` § Test Levels). Chunk 06 declares both suites as
 `test_commands` in `project-state.yaml` so the test-evidence hook runs the real
 invocations. Ruff configured at the root; the mechanical norm-index rows migrate
-from Critic to lint rules as Chunk 07 lands them.
+from Critic to lint rules as Chunk 06 lands them.
 
 ### Scaffold Verification
 
-After Chunk 07: both plane venvs resolve from their lockfiles (display's on the
-Pi — this is what Chunk 05 de-risks); `uv run pytest` green in both; black and
-ruff run clean. After Chunk 08: a placeholder page answers on the curation port
+After Chunk 06: both plane venvs resolve from their lockfiles (display's on the
+Pi — this is what Chunk 04 de-risks); `uv run pytest` green in both; black and
+ruff run clean. After Chunk 07: a placeholder page answers on the curation port
 and a real MCP client lists the five tools.
 
 ### Verification Strategy
@@ -164,7 +164,7 @@ Beyond tests, each chunk is verified the way its consumers experience it:
 
 ```
 samsung-frame-art-loader/
-├── curation/                  # Python 3.14 plane (Chunk 07)
+├── curation/                  # Python 3.14 plane (Chunk 06)
 │   ├── pyproject.toml         #   own interpreter pin + lock
 │   └── src/curation/
 │       ├── services/          #   the ONLY home for operation logic
@@ -174,14 +174,14 @@ samsung-frame-art-loader/
 │       ├── discovery/         #   phase 1 / phase 2 engines
 │       ├── acquisition/       #   fetch, prepare, mat engine
 │       └── manifest/          #   manifest builder + exclusion reporting
-├── display/                   # Python 3.13 plane (Chunk 07)
+├── display/                   # Python 3.13 plane (Chunk 06)
 │   ├── pyproject.toml
 │   └── src/display/
 │       ├── daemon.py          #   poll → reconcile → rotate loop
 │       ├── tv/                #   samsungtvws behind an interface
 │       ├── panel/             #   e-paper + Pango label behind an interface
 │       └── state/             #   display-state.sqlite (TvBinding, sequence)
-├── tests/                     # bootstrapped Chunk 01; split per-plane in 07
+├── tests/                     # bootstrapped Chunk 02; split per-plane in 06
 ├── deploy/                    # systemd units, journald drop-in, README
 └── (2024 modules at root)     # production until Chunk 13; deleted in Chunk 20
 ```
@@ -199,49 +199,12 @@ interpreter). Persistence is reached only through the service layer.
 
 ## Build Chunks
 
-**Groundwork — evidence first, at the hardware (Chunks 01–06).** These precede
-the walking skeleton deliberately: they retire the two build-blocking unknowns on
-real hardware, close the live credential leak, and land the governance check
-whose consumer is every remaining amendment. The architecture-proving slice is
-Chunk 08.
+**Groundwork — evidence first, at the hardware (Chunks 01–05).** These precede
+the walking skeleton deliberately: they close the live credential leak first of
+all, then retire the two build-blocking unknowns on real hardware. The
+architecture-proving slice is Chunk 07.
 
-### Chunk 01: Decision-amendment acknowledgement check (issue #8)
-
-- **Description:** The sweep-failure class has thirteen recorded recurrences and
-  the author's own closing check has caught zero of them; three independent
-  surfaces have. This chunk designs and builds the mechanical check: when a
-  `technical_decisions` entry gains an AMENDED/SUPERSEDED/RETIRED marker, the
-  check enumerates the dependent artifacts and requires an explicit per-artifact
-  acknowledgement ("updated" / "checked, unaffected"). Front-loaded because its
-  consumer is every remaining amendment in this build. The design must answer
-  issue #8's acceptance list in order — graph-completeness validation first
-  (an unedged manifest node is invisible, not low-priority), the backlog as part
-  of any cited claim's sweep set (cause class 5 — no `depends_on` edge can reach
-  a GitHub issue), and an honest statement of which of the five cause classes it
-  catches, verified against all thirteen recorded recurrences.
-- **Depends on:** none
-- **Artifacts consumed:** issue #8 (the design brief, including its acceptance
-  checklist), `.prawduct/learnings.md` § "Retiring a claim is a repo-wide grep",
-  `.prawduct/project-state.yaml` → `artifact_manifest`
-- **Deliverables:** a design record (in the issue, per `/prawduct:backlog`)
-  answering the trigger, edge-model, acknowledgement-record, and
-  enforcement-surface questions; new `tools/check_amendment_acks.py` (or the
-  shape the design lands on) with graph-completeness validation; new `tests/`
-  bootstrap (pytest config + the check's own tests — the repo's first tests);
-  per-recurrence catch/no-catch table with the complementary control named for
-  any it cannot catch
-- **Tests:** unit — the check against synthetic manifests (unedged node fails
-  loudly; acknowledged and unacknowledged amendments distinguished); regression —
-  replay of the recorded recurrence shapes it claims to catch
-- **Acceptance criteria:** the check runs green on the current repo state; a
-  deliberately-injected unacknowledged amendment fails it; issue #8's per-class
-  coverage statement is recorded, not implied
-- **Done when:**
-  1. Acceptance criteria met and tests pass
-  2. `/prawduct:critic` run and blocking findings resolved
-  3. Committed and chunk marked `[x]` in Status
-
-### Chunk 02: Untrack and rotate the TV pairing token; drop the catalogue backups (issue #4)
+### Chunk 01: Untrack and rotate the TV pairing token; drop the catalogue backups (issue #4)
 
 - **Description:** Close the live credential leak in the public repo, in the
   corrected order: untrack first, then re-pair — the reverse order commits the
@@ -249,7 +212,7 @@ Chunk 08.
   because the untracking commit deletes `token_file` on the Pi's next `git pull`
   and TV auth is down until re-pairing. Also drops the three `all.json` backup
   snapshots. `all.json` itself stays tracked — it is the mat regression corpus
-  until Chunk 07 extracts the fixture.
+  until Chunk 06 extracts the fixture.
 - **Depends on:** none (hardware access required)
 - **Artifacts consumed:** `security-model.md` § Credentials and Secrets,
   issue #4
@@ -268,7 +231,7 @@ Chunk 08.
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-### Chunk 03: Deployment values out of source (issue #5) + `art.py` defect dispositions (issue #6)
+### Chunk 02: Deployment values out of source (issue #5) + `art.py` defect dispositions (issue #6)
 
 - **Description:** Hoist the three classes of hardcoded deployment value onto the
   existing dotenv path — `ART_ROOT` first (fail fast, no default), then
@@ -279,16 +242,20 @@ Chunk 08.
   triage: **dispositions recorded by this plan** — defect 1 (`art.py:366`
   `raise e` on an unbound name) is fixed here, one line, because it degrades
   diagnosis today; defects 2 and 3 (shared mutable list state, discarded
-  None-filter) die with the ArtSet/metadata replacement in Chunks 09 and 18 and
+  None-filter) die with the ArtSet/metadata replacement in Chunks 08 and 18 and
   are not fixed in legacy code; defect 4 (`art_label.py`, dead and broken) is
-  deleted in Chunk 07 after confirming no out-of-tree importer.
-- **Depends on:** Chunk 02 (the token path work lands on an untracked file)
+  deleted in Chunk 06 after confirming no out-of-tree importer.
+- **Depends on:** Chunk 01 (the token path work lands on an untracked file)
 - **Artifacts consumed:** issue #5, issue #6, `project-preferences.md` § Known
   departures, `operational-spec.md` § Configuration
 - **Deliverables:** `config.py` reads `ART_ROOT`, TV address/port, and location
   from the environment; `.env.example` extended in the existing style; README
   dev-setup section (a fresh clone runs without touching source); `art.py:366`
-  bare `raise`; issue #6 updated with the four dispositions
+  bare `raise`; issue #6 updated with the four dispositions; **the repo's first
+  `tests/` — pytest config at the root**, carrying this chunk's config tests.
+  It lands here because this is the first chunk that produces code to test, and
+  the no-test-suite departure must close before any substantive chunk; Chunk 06
+  splits the suite per plane
 - **Tests:** unit — config loading fails fast with a clear message naming `.env`
   when `ART_ROOT` is missing
 - **Acceptance criteria:** the code runs on the dev Mac and the Pi with no source
@@ -299,7 +266,7 @@ Chunk 08.
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-### Chunk 04: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
+### Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 
 - **Description:** Three small deployment items done in one hardware sitting.
   Set `SystemMaxUse=` explicitly (journald's default scales with the disk it is
@@ -325,7 +292,7 @@ Chunk 08.
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-### Chunk 05: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
+### Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 
 - **Description:** The uv-for-both-planes decision carries exactly one named
   verification item and this is it: a 2023-era `setup.py` that imports Cython at
@@ -356,7 +323,7 @@ Chunk 08.
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-### Chunk 06: Replace the samsungtvws pin, verified on hardware (issue #3)
+### Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 
 - **Description:** The display plane's rotation design binds to this library's
   verified behaviour, so the pin moves before that plane is built. Select the
@@ -368,12 +335,12 @@ Chunk 08.
   chunks with a timeout rather than buffering whole 4K files, and re-confirm the
   dual-callback registration, whose failure modes are asymmetric across TV
   generations.
-- **Depends on:** Chunk 02 (fresh pairing token in place)
+- **Depends on:** Chunk 01 (fresh pairing token in place)
 - **Artifacts consumed:** issue #3, `data-model.md` § Rotation is host-driven,
   `project-state.yaml` → `classification.foreign_apis`
 - **Foreign API:** samsungtvws
 - **Deliverables:** the pin replaced in `requirements.txt` (the legacy install
-  keeps running production; Chunk 07 carries the same target into the display
+  keeps running production; Chunk 06 carries the same target into the display
   project); confirm-deletion wrapper if upstream is still broken; verification
   notes recorded on issue #3
 - **Tests:** a scripted hardware pass against the live TV — upload, select,
@@ -388,10 +355,11 @@ Chunk 08.
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-**Foundation (Chunks 07–10).** The planes get their structure, then a thin slice
-proves the architecture, then the catalogue and the manifest land in full.
+**Foundation (Chunks 06–10).** The planes get their structure, then a thin slice
+proves the architecture, then the catalogue and the manifest land in full and
+the existing 41 works are seeded into them.
 
-### Chunk 07: uv two-plane restructure, lint/test tooling, mat regression fixture (issue #11)
+### Chunk 06: uv two-plane restructure, lint/test tooling, mat regression fixture (issue #11)
 
 - **Description:** Restructure onto the decided shape: `curation/` (3.14,
   uv-managed standalone) and `display/` (3.13, system interpreter), each with its
@@ -406,8 +374,8 @@ proves the architecture, then the catalogue and the manifest land in full.
   out-of-tree importer on the Pi. Rename the recovered `r` freeze to say what it
   is (evidence, not scratch). Legacy modules stay at the root, running
   production, per the recorded assumption.
-- **Depends on:** Chunk 05 (display's dependency set must be known to install
-  under uv before the project is stood up), Chunk 06 (the samsungtvws target is
+- **Depends on:** Chunk 04 (display's dependency set must be known to install
+  under uv before the project is stood up), Chunk 05 (the samsungtvws target is
   what the display project pins)
 - **Artifacts consumed:** `project-preferences.md` (Language & Runtime, Tooling,
   Enforcement), `operational-spec.md` § The Curation Interpreter, issue #11
@@ -427,7 +395,7 @@ proves the architecture, then the catalogue and the manifest land in full.
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-### Chunk 08: Walking skeleton — catalogue core → service layer → MCP tool, end to end
+### Chunk 07: Walking skeleton — catalogue core → service layer → MCP tool, end to end
 
 - **Description:** The thin vertical slice through the entire curation
   architecture, proving the layers connect before anything widens: a minimal
@@ -443,7 +411,7 @@ proves the architecture, then the catalogue and the manifest land in full.
   ≤2KB-description budget. The known SDK hazard is handled, not discovered:
   Starlette does not run a mounted sub-app's lifespan, so the host app must enter
   `session_manager.run()` in its own lifespan or every `/mcp` request fails.
-- **Depends on:** Chunk 07
+- **Depends on:** Chunk 06
 - **Artifacts consumed:** `architecture.md` (§ Direction, § Decision Log — the
   FastAPI decision and the mount hazard), `api-contract.md` (§ The surface,
   § Argument shape, § Error Model, § Help), `data-model.md` (the three entities),
@@ -477,7 +445,7 @@ proves the architecture, then the catalogue and the manifest land in full.
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-### Chunk 09: Full catalogue schema, state machines, constraints, startup reconciliation
+### Chunk 08: Full catalogue schema, state machines, constraints, startup reconciliation
 
 - **Description:** The rest of `data-model.md`, faithfully: Source (with
   `source_class` as the load-bearing branch point), Original, Rendition
@@ -491,7 +459,7 @@ proves the architecture, then the catalogue and the manifest land in full.
   to `interrupted` — deliberately not `awaiting_approval`, which is human-held
   state that must survive a restart — releasing ResolveRunWork coverage and
   logging one WARNING per run moved, which is the only signal a run died.
-- **Depends on:** Chunk 08
+- **Depends on:** Chunk 07
 - **Artifacts consumed:** `data-model.md` in full (entities, relationships,
   state machines, constraints 1–15)
 - **Deliverables:** the full schema in `curation/src/curation/persistence/`,
@@ -510,7 +478,7 @@ proves the architecture, then the catalogue and the manifest land in full.
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-### Chunk 10: Manifest builder, themes, directives — `art_theme` and `art_display`
+### Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
 
 - **Description:** The inter-plane contract, curation side. The manifest builder
   is the one place catalogue readiness is evaluated; membership in the manifest
@@ -526,7 +494,7 @@ proves the architecture, then the catalogue and the manifest land in full.
   `art_display` (sync/show_now/next; `status` reads the heartbeat file and
   reports honestly that none exists yet). Panel geometry enters configuration
   here for curation and is logged at startup.
-- **Depends on:** Chunk 09
+- **Depends on:** Chunk 08
 - **Artifacts consumed:** `architecture.md` (§ The theme manifest, § Readiness),
   `api-contract.md` § How `art_display` reaches the display plane,
   `boundary-patterns.md` § curation ↔ display contract,
@@ -548,6 +516,52 @@ proves the architecture, then the catalogue and the manifest land in full.
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
+### Chunk 10: Seed the catalogue with the 41 existing works (v1 scope item)
+
+- **Description:** The v1 scope commits to a "new catalogue built through
+  curation, seeded with the existing 41 artworks as worked examples"
+  (`product-brief.md` § Scope, `data-model.md` — "the 41 legacy records are
+  re-ingested through curation as new works"). This chunk owns it. Without it
+  the new catalogue has no ready work by any built path until Chunk 18, and the
+  display chunks below have nothing to put on the wall — which is why it sits
+  here rather than late: **it is what makes Chunks 12–13's cutover acceptance
+  executable.** Re-ingest, do not migrate: read `all.json` as an input file and
+  mint fresh entities through the service layer, so every catalogue invariant
+  from Chunk 08 applies to the seeded rows exactly as to discovered ones. All
+  41 records carry what this needs — `metadata` (title, artist, nationality,
+  lifespan, date, medium, dimensions, description), `raw_file`, `mat_hexrgb`,
+  and pixel dimensions — verified 2026-07-20. Originals point at the existing
+  `raw/` tree and renditions at the existing `ready/` renders, with
+  `source_content_hash` computed at ingest so Chunk 18's staleness rule governs
+  them from birth. Known defects in the legacy shape are corrected on the way
+  in, not carried: identity becomes a UUID (never the source URL),
+  `artist_details` is parsed into Artist rows, and `tv_content_id` is **not**
+  written to the catalogue — it is per-device state and belongs to the display
+  plane (it is seeded into TvBinding in Chunk 12).
+- **Depends on:** Chunk 09 (the manifest build is how seeding is proven)
+- **Artifacts consumed:** `data-model.md` (Artwork, Artist, Source, Original,
+  Rendition, MatColor; the re-ingest note), `product-brief.md` § Scope,
+  `nonfunctional-requirements.md` § Output Quality (the floor)
+- **Deliverables:** a one-shot seeding path in the curation service layer
+  (invocable, re-runnable, and idempotent — re-running must not duplicate
+  works); the 41 works in the catalogue with artists, sources, originals,
+  renditions, and mat colours; `MatColor.method` recorded as the legacy
+  hand-tuned value, never as a fresh derivation; a report of anything that did
+  not seed cleanly, per work with a reason — silence is not success
+- **Tests:** unit — `artist_details` parsing across the corpus's real shapes
+  (including the multi-line "Charles Demuth\nAmerican, 1883–1935" form);
+  identity is a UUID and no row carries a source URL as identity; no
+  `tv_content_id` reaches the catalogue; idempotence — seeding twice yields 41
+  works, not 82; integration — after seeding, a theme over all 41 builds a
+  manifest with 41 entries and an empty exclusion report
+- **Acceptance criteria:** all 41 works are in the catalogue and readiness-clean,
+  so a theme built over them produces a full manifest; the exclusion report
+  names any work that did not make it, with a reason
+- **Done when:**
+  1. Acceptance criteria met and tests pass
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
 **Contract enforcement (Chunk 11).** Pinned before the display plane and
 discovery build against these surfaces.
 
@@ -561,12 +575,12 @@ discovery build against these surfaces.
   real flows through the consolidated tools; scenarios grow with each later
   chunk. The plane-isolation test settles issue #7's design questions as this
   plan frames them: "the display plane" is the `display/` package (the boundary
-  now exists, from Chunk 07); imports are checked transitively (a direct-only
+  now exists, from Chunk 06); imports are checked transitively (a direct-only
   check is evaded by one shared helper); and the no-network-channel half bans
   HTTP client construction in display modules outright — the bright line — with
   the TV websocket explicitly exempt because talking to the TV is display's job.
   Static, so it holds whether or not curation is running, which is the point.
-- **Depends on:** Chunks 08–10 (live tools to pin), Chunk 07 (the package
+- **Depends on:** Chunks 07–09 (live tools to pin), Chunk 06 (the package
   boundary to enforce)
 - **Artifacts consumed:** `api-contract.md` § Validation and § Versioning,
   `boundary-patterns.md` § Test Levels, issues #7 and #17,
@@ -604,22 +618,31 @@ discovery build against these surfaces.
   without acting, logging one WARNING — a catalogue restore must not replay a
   stale pin. Ports the sun-position brightness behaviour. TV access sits behind
   an interface.
-- **Depends on:** Chunks 06 (verified library), 07 (display project), 10
-  (manifests to read), 11 (isolation test now guards this plane as it grows)
+- **Depends on:** Chunks 05 (verified library), 06 (display project), 09
+  (manifests to read), 10 (a seeded catalogue, so the wall has content to
+  rotate), 11 (isolation test now guards this plane as it grows)
 - **Artifacts consumed:** `architecture.md` (§ The theme manifest, § Failure
   Modes, § display component), `data-model.md` (§ Rotation is host-driven,
   TvBinding), `observability-strategy.md` § What Each Failure Looks Like
-- **Foreign API:** samsungtvws (target verified in Chunk 06)
+- **Foreign API:** samsungtvws (target verified in Chunk 05)
 - **Deliverables:** new `display/src/display/daemon.py`, new
   `display/src/display/tv/`, new `display/src/display/state/` with
   `display-state.sqlite` (TvBinding + last-acted-on sequence), structured logging
   with `work_id` correlation, resolved `ART_ROOT` and panel geometry logged at
-  startup
+  startup; **a one-shot TvBinding adoption path** seeded from the 41 legacy
+  `tv_content_id` values in `all.json` — the works are already uploaded to this
+  TV, so a fresh empty binding table would re-upload 41 4K images and orphan the
+  existing set. Adoption is verified against the TV's own list, not trusted:
+  a `tv_content_id` the TV does not report is discarded and the work re-uploads
+  normally
 - **Tests:** unit — manifest parsing, version refusal, directive
   persistence/coalescing/regression, binding state machine (TV faked at its
-  interface, built after Chunk 06's verified shapes); hardware — a live pass on
-  the Pi: theme on the wall, `next`/`show_now` land within the poll interval, a
-  deleted render file skips with a WARNING and rotation continues
+  interface, built after Chunk 05's verified shapes); TvBinding adoption —
+  a content id the TV still reports is adopted, one it does not is discarded and
+  re-uploaded, and adoption is idempotent across restarts; hardware — a live pass
+  on the Pi: theme on the wall with no mass re-upload, `next`/`show_now` land
+  within the poll interval, a deleted render file skips with a WARNING and
+  rotation continues
 - **Acceptance criteria:** the wall rotates the active theme from the new
   daemon; killing curation changes nothing about display's behaviour; a display
   restart neither re-executes the last directive nor loses its place
@@ -643,12 +666,12 @@ discovery build against these surfaces.
   `Restart=on-failure` + `MemoryMax` so a runaway acquisition cannot OOM-kill the
   display plane. Cutover: the Pi runs the two new units; `tvart.py` stops being
   the production entry point (legacy files remain until Chunk 20).
-- **Depends on:** Chunk 12; Chunk 05 (panel stack installs under uv)
+- **Depends on:** Chunk 12; Chunk 04 (panel stack installs under uv)
 - **Artifacts consumed:** `observability-strategy.md` § The Health Surface,
   `operational-spec.md` § Process Management, `nonfunctional-requirements.md`
   § Output Quality (label legibility) and Performance (15 s label budget),
   `design_decisions.accessibility_approach`
-- **Foreign API:** IT8951 / omni-epd (build verified in Chunk 05)
+- **Foreign API:** IT8951 / omni-epd (build verified in Chunk 04)
 - **Visual change:** yes — label legibility at standing distance on the real
   panel needs the operator's eyes, not a test
 - **Deliverables:** new `display/src/display/panel/` (driver behind an
@@ -676,7 +699,7 @@ core, built against the surfaces the contract tests already pin.
   full recorded lifecycle: `start` returns a handle immediately (< 2 s), `status`
   long-polls ≤ 45 s, the work-count approval gate (`awaiting_approval` when the
   configured count threshold is crossed; `approve`/`decline`), `cancel`, and the
-  `interrupted` path already reconciled by Chunk 09. Phase 1 can search the web
+  `interrupted` path already reconciled by Chunk 08. Phase 1 can search the web
   when the intent is recency-bound (issue #12) — a text-only call cannot
   enumerate works past the model's cutoff, and finding works the curator could
   not have named is the product's definition of discovery; those searches count
@@ -687,7 +710,7 @@ core, built against the surfaces the contract tests already pin.
   on every surface equally. Spend records attribute per category; a 402 lands as
   `halted_by_budget`, distinguishable in logs and tool results; budget remaining
   reads `GET /api/v1/key`. `run_id` on every log line.
-- **Depends on:** Chunks 09, 11 (harness grows discovery scenarios)
+- **Depends on:** Chunks 08, 11 (harness grows discovery scenarios)
 - **Artifacts consumed:** `product-brief.md` § Flow 2 (as amended),
   `data-model.md` (DiscoveryRun, SpendRecord), `api-contract.md`
   (§ Long-running operations, § Error Model), `nonfunctional-requirements.md`
@@ -739,8 +762,12 @@ core, built against the surfaces the contract tests already pin.
 - **Deliverables:** engine decision recorded (`project-state.yaml` open question
   resolved, `nonfunctional-requirements.md` § Cost Constraints updated); the
   derivation recorded in `data-model.md` and implemented once in the service
-  layer with the three call sites named; both recorded through the
-  amendment-acknowledgement check from Chunk 01
+  layer with the three call sites named; both decisions swept per
+  `learnings.md` § "Retiring a claim is a repo-wide grep, not a local edit" —
+  each dependent artifact acknowledged explicitly ("updated" / "checked,
+  unaffected"), never inferred. This is the plan's largest amendment burst and
+  the sweep is manual until the mechanical check ships upstream
+  (brookstalley/prawduct#136); acknowledge per artifact in the commit message
 - **Tests:** the spike measurements themselves, kept as regression tests over
   the hard-case corpus the spike assembles
 - **Acceptance criteria:** issue #18's boxes checked (real output, hard cases
@@ -835,7 +862,13 @@ core, built against the surfaces the contract tests already pin.
   `acquisition_method` (dezoomify tiles / direct / API) with the zero-byte guard
   (constraint 5), `partial_tiles` as a normal recorded outcome, and the
   **free-space guard before acquisition starts** — disk-full is the one shared
-  failure and it must be prevented, not caught. Metadata normalisation at
+  failure and it must be prevented, not caught. **The legacy `shell=True`
+  invocation of dezoomify is not ported forward**: source URLs come from web
+  discovery, which `security-model.md` establishes as attacker-influenceable, so
+  interpolating one into a shell command is a command-injection vector. This
+  chunk invokes the binary with an argv list and no shell, allowlists URL
+  schemes before fetching, and treats every museum/source URL as untrusted
+  input. Metadata normalisation at
   ingest: description markup reduced to `<i>`/`<b>` (constraint 10) so renderers
   stop re-fixing it. The mat engine: vision-model selection reasoning in LAB
   space via OpenRouter — the cheap vision model is selected here with prices
@@ -846,13 +879,16 @@ core, built against the surfaces the contract tests already pin.
   against configured panel geometry; the floor in rendered inches; **no
   upscaling, ever**; renditions carry `source_content_hash` and regenerate on
   staleness. `retry_acquisition`, `set_mat_color`, `regenerate` actions land.
-  Mat quality is judged against the 41-work fixture from Chunk 07.
+  Mat quality is judged against the 41-work fixture from Chunk 06.
 - **Depends on:** Chunk 17 (acceptance produces the work to acquire)
 - **Artifacts consumed:** `nonfunctional-requirements.md` § Output Quality (mat
   geometry, the floor), `data-model.md` (Original, Rendition, MatColor,
   constraints 4/5/10/12), `design_decisions.error_handling_approach`,
   issue #6 (defects 2/3 die here with the module replacement)
 - **Foreign API:** dezoomify (external binary) and museum image endpoints
+  <!-- Its CLI contract is unowned and unversioned: capture it at step 0 below
+       rather than inferring it from the 2024 call site. -->
+
 - **Visual change:** yes — mats over the regression corpus need the operator's
   eyes; "at least as good as 2024" is the subjective bar
 - **Deliverables:** new `curation/src/curation/acquisition/` (fetch, prepare,
@@ -861,15 +897,21 @@ core, built against the surfaces the contract tests already pin.
   vision-model choice recorded with verified pricing
 - **Tests:** unit — mat arithmetic against the recorded worked examples (42"/75"
   panels), floor classification, staleness detection, fallback recording;
-  regression — mat outputs across the 41-work fixture compared to the hand-tuned
-  corpus; integration — a small accepted work goes intent-to-ready on the dev
-  machine
+  security — the fetch path refuses a non-allowlisted URL scheme, and a source
+  URL carrying shell metacharacters reaches dezoomify as one inert argv element
+  (the test must be able to fail: assert on the argv actually passed, not on the
+  absence of a crash); regression — mat outputs across the 41-work fixture
+  compared to the hand-tuned corpus; integration — a small accepted work goes
+  intent-to-ready on the dev machine
 - **Acceptance criteria:** an accepted work acquires, gets a mat with recorded
   provenance, renders to 4K, enters the manifest, and reaches the wall; the
   operator's corpus look finds no regression
 - **Done when:**
-  0. verify-api — probe the chosen vision model through OpenRouter with a real
-     image before writing the mat client; capture the response shape
+  0. verify-api — two unowned interfaces, both probed before their client is
+     written: (a) the chosen vision model through OpenRouter with a real image,
+     capturing the response shape; (b) dezoomify's CLI contract — arguments,
+     exit codes, output layout, and partial-tile behaviour — captured from the
+     installed binary rather than inferred from the 2024 call site
   1. Acceptance criteria met and tests pass, including the corpus look
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
@@ -948,11 +990,11 @@ binds already exists and is contract-tested.
 
 ## Early Feedback Milestone
 
-**Milestone chunk:** 08
+**Milestone chunk:** 07
 **What the user can do:** point Claude Code at the server, list the five tools,
 and read the seeded catalogue through `art_catalogue` — the product's own worked
-interaction, three layers deep, before anything widens. (Chunks 02–06 already
-put the operator's hands on the hardware, but 08 is the first product
+interaction, three layers deep, before anything widens. (Chunks 01–05 already
+put the operator's hands on the hardware, but 07 is the first product
 interaction.) The wall runs on the new planes at Chunk 13.
 
 ## Governance Checkpoints
@@ -963,7 +1005,7 @@ operator's call (`PR creation: wait_for_user`); if a phase ships as its own PR,
 override that phase's last chunk to `cumulative` at that point. Chunk 20's
 cumulative review is the release-readiness gate.
 
-- **After Chunk 08** — architecture validation: the registry/service/persistence
+- **After Chunk 07** — architecture validation: the registry/service/persistence
   shape, the ASGI+MCP mount, and the thin-binding norm, reviewed before ten
   chunks build on them. (The chunk's own `final`-mode review is this checkpoint.)
 - **After Chunk 13** — mid-build trajectory review: the wall runs on the new
@@ -979,6 +1021,17 @@ cumulative review is the release-readiness gate.
 
 ## Explicitly deferred — named so nothing is silently dropped
 
+- **Issue #8 (decision-amendment acknowledgement check)** — **moved out of this
+  product, not dropped.** It was Chunk 01 of this plan. The check reads only
+  prawduct's own data model (`technical_decisions` markers, the
+  `artifact_manifest` graph), so building it here would make this repo the
+  maintainer of framework tooling and leave every other prawduct repo to
+  re-solve it. Filed upstream as `brookstalley/prawduct#136` with the full
+  thirteen-recurrence evidence and the five cause classes. **The obligation it
+  was to mechanize still binds in the meantime** — every amendment in this build
+  sweeps its dependent artifacts by hand per `learnings.md` § "Retiring a claim
+  is a repo-wide grep, not a local edit", with per-artifact acknowledgement in
+  the commit message. Chunk 15 carries the largest such burst and says so.
 - **Issue #10 (second-look shelf)** and **issue #2 (design system)** — decided
   at the pre-UI checkpoint, not silently included or dropped now.
   `security-model.md` records #10 as "filed as backlog work, not committed

@@ -48,6 +48,74 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-20: Plan revised on review — seeding chunk added, governance check moved upstream
+
+**Why:** A pre-build review of the Phase D plan against the open Critic round
+found three things worth fixing before any code, and one worth moving out of the
+product entirely.
+
+**The blocking gap (Critic R-1, with R-9 as the same defect seen from the other
+end):** the v1 scope commits in three places to a catalogue "seeded with the
+existing 41 artworks", and no chunk implemented it. That was not a bookkeeping
+miss — it made the display chunks unbuildable as written. Manifest membership
+requires readiness, the only chunk producing originals/renders/mat colours was
+18, and the cutover chunks accept on "theme on the wall" at 12–13. There was no
+product path to any wall content. **New Chunk 10** owns the re-ingest, placed
+after the manifest builder so seeding is proven by the manifest it produces.
+`all.json` was checked before scoping it: all 41 records carry metadata,
+`raw_file`, `mat_hexrgb`, and pixel dimensions, so the chunk is an ingest, not a
+re-acquisition.
+
+**A gap the Critic did not find:** all 41 records also carry `tv_content_id` —
+the works are already uploaded to this TV. A fresh empty TvBinding table at
+cutover would re-upload 41 4K images and orphan the existing set. Chunk 12 now
+carries a TvBinding adoption path, verified against the TV's own list rather
+than trusted, since a stale content id must re-upload normally.
+
+**Issue #8 moved upstream, not dropped.** The decision-amendment
+acknowledgement check was Chunk 01. It reads only prawduct's own data model
+(`technical_decisions` markers, the `artifact_manifest` graph), so building it
+here would have made this repo the maintainer of framework tooling while every
+other prawduct repo re-solved it. Filed as `brookstalley/prawduct#136` with the
+thirteen-recurrence evidence and the five cause classes; #8 is closed `dropped`
+(not `shipped` — no work landed here). **The obligation it was to mechanize
+still binds**: amendments sweep by hand per the learning, and Chunk 15 — the
+plan's largest amendment burst — says so explicitly. Chunk 01's other
+deliverable, the repo's first `tests/` bootstrap, moved to Chunk 02 rather than
+leaving with it; that is the chunk where the first testable code appears.
+
+**Renumbering:** with Chunk 01 gone and a new chunk at 10, old 02–10 shifted
+down to 01–09 and old 11–20 kept their numbers. Done as one scripted pass over
+137 reference runs, then audited — the pass missed one dependency line where a
+parenthetical broke the number run (old Chunk 12's deps), caught by a bare-number
+sweep. Roster, Status block, and every internal reference verified consistent;
+`verify-chunk-refs` and `regen-views --check` both green. Nothing external
+referenced the old numbers (no shipped chunks, no `chunks=` tags), which is why
+renumbering was safe to do now and would not have been later.
+
+**Critic R-14:** `build-plan` is now registered in `artifact_manifest` with the
+edges its own front matter declares, and the "still owed" comment is struck.
+Left unfixed, the plan — the most decision-dense artifact in the repo — stayed
+invisible to exactly the dependency walk the repo relies on.
+
+**Also fixed, being cheap and in the same place:** R-3 — the legacy dezoomify
+`shell=True` invocation is now explicitly barred from being ported forward,
+since discovery-sourced URLs are attacker-influenceable by the security model's
+own reasoning; Chunk 18 requires argv-list invocation, scheme allowlisting, and
+a test that asserts on the argv actually passed rather than on the absence of a
+crash. R-2 — Chunk 18's verify-api step covered only the vision model while the
+chunk declared dezoomify as a Foreign API too; step 0 now probes both, with
+dezoomify's CLI contract captured from the installed binary rather than inferred
+from the 2024 call site.
+
+**Deliberately not fixed now:** R-6, R-7, R-8, R-11, R-12, R-13 are design
+details that bind at the chunks that consume them (08/09/16/17), and are better
+resolved with code in hand than by another artifact pass. R-5 (stale test
+evidence) resolves itself when Chunk 02 lands the first suite. R-4 (the live
+token) is Chunk 01 and is the reason it is Chunk 01.
+
+**No product code changed.**
+
 ## 2026-07-20: Phase D — the v1 build plan authored
 
 **Why:** Every artifact question was closed and the checkpoint review's spine was

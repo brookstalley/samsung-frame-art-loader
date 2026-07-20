@@ -2135,6 +2135,16 @@ artifact_manifest:
       file_path: .prawduct/artifacts/boundary-patterns.md
       version: 1
       depends_on: [api-contract, data-model]
+    # Edges mirror build-plan.md's own `depends_on:` front matter. The plan is
+    # the most decision-dense artifact here: leaving it unedged would make every
+    # decision it rests on unreachable by a dependency walk — precisely the
+    # blind spot recorded under `findings` below.
+    - name: build-plan
+      file_path: .prawduct/artifacts/build-plan.md
+      version: 1
+      depends_on: [product-brief, data-model, architecture, api-contract,
+                   nonfunctional-requirements, security-model, operational-spec,
+                   observability-strategy, project-preferences, boundary-patterns]
   # Research findings — inputs to the artifacts above, not artifacts themselves.
   #
   # depends_on ADDED 2026-07-20 after Critic review found these entries had no
@@ -2151,9 +2161,9 @@ artifact_manifest:
       depends_on: [operational-spec, architecture, project-preferences]
     - file_path: .prawduct/artifacts/3tears-integration-findings.md
       depends_on: [architecture, operational-spec, project-preferences]
-  # Strategy-class artifacts still owed: test-specifications.md, and the build
-  # plan (Phase D). The structural-coverage advisory's named set was cleared
-  # 2026-07-20.
+  # Strategy-class artifacts still owed: test-specifications.md. The build plan
+  # (Phase D) was authored 2026-07-20 and is registered above. The
+  # structural-coverage advisory's named set was cleared 2026-07-20.
 
 # =============================================================================
 # BUILD STATE
