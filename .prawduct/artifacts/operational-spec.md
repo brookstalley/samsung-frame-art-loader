@@ -90,12 +90,24 @@ process split is for on a single box.
 Environment variables via a `.env` file per plane, honouring the existing
 Critic-enforced norm that deployment values never live in source.
 
-`ART_ROOT` is the one value both planes must agree on, which makes it the highest
-priority to hoist — already scoped that way in the v1 list. A mismatch between the
-two planes' `ART_ROOT` is a silent failure: curation writes manifests nobody reads
-and display waits forever on a file that will never appear. **Both planes log their
-resolved `ART_ROOT` at startup**, so the mismatch is one journal line away rather
-than a mystery.
+**Two values must agree across both planes**, and both are silent failures when
+they do not.
+
+`ART_ROOT` is the first, which makes it the highest priority to hoist — already
+scoped that way in the v1 list. A mismatch is a silent failure: curation writes
+manifests nobody reads and display waits forever on a file that will never appear.
+
+**Panel geometry is the second (added 2026-07-20).** The mat is specified in
+physical units and the resolution floor is a minimum size on the wall, so both
+planes need the panel's dimensions: curation to judge whether a source is adequate
+and to show the curator what a work would look like, display to render the mat. A
+mismatch is quieter than the `ART_ROOT` one and therefore worse — nothing fails,
+the mat is simply the wrong width and the review grid's warnings are computed
+against a TV that isn't there. **Nothing may hardcode a panel size**; the reference
+deployment is 42" but the product must run on any Frame.
+
+**Both planes log their resolved `ART_ROOT` and panel geometry at startup**, so
+either mismatch is one journal line away rather than a mystery.
 
 Secrets live in `.env`, never in source, never in a committed file — the
 repository is public (`security-model.md`).

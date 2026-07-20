@@ -30,13 +30,17 @@ Developer preferences for how code is written in this project. Captured during d
   See [learnings.md](../learnings.md) § Platform and dependencies.
 - **Package manager**: pip against a pinned `requirements.txt` _(inferred)_. `pyproject.toml`
   exists but carries only black config — there is no project/dependency table, so the repo is
-  not an installable package. _(target)_ Choose one dependency manager during discovery;
-  `requirements.txt` pins exact versions today, which is good and should survive whatever
-  replaces it. **Still open — but the 2026-07-20 interpreter decision changed its inputs:**
-  uv is now a required install on the Pi regardless, since it provisions curation's
-  interpreter. That makes uv the incumbent rather than a new dependency, which is an
-  argument the earlier framing did not have. Noted, not decided — the display plane
-  builds Cython against system headers and may want pip, so this stays a discovery choice.
+  not an installable package. **DECIDED 2026-07-20: uv for both planes**, structured as
+  two projects in a uv workspace so each plane carries its own interpreter and its own
+  lock. uv was already required on the Pi to provision curation's interpreter, so it is
+  the incumbent rather than a new dependency, and `uv.lock` gives real lockfiles while
+  preserving the exact pinning `requirements.txt` has today. **Named verification item:**
+  IT8951 compiles Cython from 2023-era `.pyx` sources, and a `setup.py` of that vintage
+  may not declare Cython in build-requires — which PEP 517 build isolation would then not
+  provide. This folds into the existing "must be proven early" risk on that driver
+  (`platform-and-dependency-findings.md`) rather than adding a new one. A single
+  `target-version` still cannot describe both planes; that is settled by the workspace
+  split, not by picking a number.
 
 ## Code Style
 
@@ -165,7 +169,7 @@ current state for the norm — and so nobody "fixes" the mismatch by weakening a
 | `print()` used for operational output | `ai.py`, `display.py`, others | Convert on touch. |
 | Deployment values hardcoded | `config.py` (`tv_address`, `base_folder`, lat/long) | Hoist during the config work; `ART_ROOT` first. |
 | Sparse type annotations | 6 of 13 modules have none | Annotate on touch. |
-| `pyproject.toml` declares a single `target-version = ["py312"]` for a two-plane product | `pyproject.toml` | black's `target-version` is a **floor**, so `py312` is correct for the display plane (floor 3.12) and wrong only for curation (3.14). One setting cannot describe both planes, so this needs a decision — per-plane config, or accept the lower floor product-wide — not just an edit. Reconcile alongside the dependency-manager choice. |
+| `pyproject.toml` declares a single `target-version = ["py312"]` for a two-plane product | `pyproject.toml` | black's `target-version` is a **floor**, so `py312` is correct for the display plane (floor 3.12) and wrong only for curation (3.14). Resolution path is now decided: the uv workspace split gives each plane its own `pyproject.toml`, so each carries its own target rather than one setting trying to describe both. Do it as part of the workspace restructure. |
 
 **Rule for adding a new preference:** assign a mechanism. If the preference can be expressed as "every file/function/config matches pattern X with named exceptions" → write a test. If a linter rule already exists for it → configure the linter. If it requires understanding intent → assign to Critic. Never leave a preference unassigned.
 

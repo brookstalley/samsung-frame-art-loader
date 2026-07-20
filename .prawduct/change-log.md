@@ -48,6 +48,72 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-20: Close the remaining decisions — mat geometry, resolution floor, rights, MCP resources, dependency manager
+
+**Why:** Walked the operator through every decision still blocking progress. Open
+questions went **6 → 3**, and none of the three remaining waits on them — all are
+research items that block nothing.
+
+**The mat geometry was never a filed question, and it blocked the filed one.** The
+minimum-resolution question asked for a number. Adequacy is defined against the
+artwork box, the box is defined by panel geometry and mat width — and mat geometry
+was specified *nowhere*. Worse, the 2024 code contradicts the artifact: `data-model.md`
+claims "the artwork sits inside a mat, the mat is the deliberate frame", but
+`image.thumbnail((3840,2160))` makes the mat aspect-ratio residue, so a 16:9 source
+gets **no mat at all**. The premise was aspirational and nothing implemented it.
+
+**Decided: the mat is physical.** Specified in inches with the bottom margin weighted
+larger than the top — the conservator's convention, since a true-centred image reads
+as sitting low.
+
+**Panel geometry is a deployment value, not a constant** — the operator's instruction,
+because other people will run this on other panel sizes. That lands it under the
+already-ratified "no hardcoded deployment values" norm and makes it the **second**
+value both planes must agree on after `ART_ROOT` — with a quieter failure mode, and
+therefore a worse one: nothing breaks, the mat is merely the wrong width.
+
+**So the floor is a formula, not a number** — a minimum rendered size *in inches*,
+scaling with the panel automatically. On a 42" (~105 ppi) a 12" floor is ~1260 px on
+the long edge; on a 75" (~59 ppi) the same floor is ~708 px. **Below it, nothing is
+silently dropped or silently accepted:** phase 2 won't auto-select a below-floor
+instance, the grid shows it labelled with its rendered inches, and the curator may
+take it anyway. All-below-floor lands at `resolution_status = unresolved`, which is
+already first-class — the machinery landed earlier the same day.
+
+The load-bearing detail: **a thumbnail cannot convey resolution.** 900 px and 6000 px
+look identical in a review grid, so the "a human saw the artwork" gate does not by
+itself prevent hanging a postage stamp. The rendered-inches figure is what makes that
+judgement possible at all.
+
+**`display_fit` is now derived, never stored — amending constraint 12.** A verdict
+computed at acquisition is a stored judgement about a machine the curation plane
+doesn't own, and it goes silently wrong when the TV changes. `width`/`height` stay
+stored; they're panel-independent facts. Constraint 12's real intent — policy in one
+place, not implicit in each renderer — is met by the service-layer norm ratified
+hours earlier rather than by storage. **Third application of derived-not-stored**
+after readiness and the re-search states.
+
+**No upscaling**, so `display_fit`'s `upscaled` value is removed rather than
+reserved — a declared state with no producer is the exact defect the re-search review
+flagged this morning.
+
+**Rights are display-only and gate nothing**, reframed as a provenance and
+source-quality signal rather than a legal one: a holding institution's own
+public-domain scan is usually the authoritative file. Reopen trigger recorded
+(sharing/export, or the catalogue going public). **No MCP resources in v1** — tools
+cover every read and adding resources later is purely additive. **uv for both planes**
+in a workspace, with the IT8951 Cython build under PEP 517 isolation as a named
+verification item folded into that driver's existing must-prove-early risk.
+
+**Pass 3 of the sweep rule earned itself immediately** — re-reading my own edited
+files caught `architecture.md` still asserting `ART_ROOT` was the only cross-plane
+value, plus two stale consequence lists in `project-state.yaml`. That is the pass
+whose absence caused the fourth and fifth recurrences.
+
+**Files:** `data-model.md`, `nonfunctional-requirements.md`, `architecture.md`,
+`operational-spec.md`, `api-contract.md`, `project-preferences.md`,
+`project-state.yaml`.
+
 ## 2026-07-20: Address Critic findings — all 4 blocking, plus the sweep root cause
 
 **Why:** Cumulative Critic (`rev-20260720T145500Z-2fcf2f8f`, 3 reviewers) returned

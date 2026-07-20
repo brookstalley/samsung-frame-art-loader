@@ -223,22 +223,35 @@ the art tree that rsync carries and git does not.
 | `height` | integer | required | |
 | `byte_size` | integer | required | Zero-byte files are a known failure mode; see Constraints. |
 | `content_hash` | string | required | Identifies the bytes; lets a rendition detect a stale parent. |
-| `display_fit` | enum | required | `native` \| `matted_small` \| `upscaled` \| `below_floor`. How this original can honestly be shown on a 3840x2160 canvas. |
 
-> **`display_fit` exists because the mat engine has a resolution premise.** Its
-> whole design is that the artwork sits *inside* a mat at native resolution — the
-> mat is the deliberate frame, not padding around a stretched image. A 1200px
-> press image on a 4K canvas is either a small island in a very large mat, or an
-> upscale that undermines the quality bar the engine exists to protect.
+> **`display_fit` is NOT a column — it is derived (decided 2026-07-20).** It was
+> previously stored here, computed once at acquisition. That became wrong the moment
+> panel geometry became a *deployment value* rather than a constant: whether an
+> original is adequate depends on the artwork box, the artwork box depends on the
+> panel and mat configuration, and this product must run on whatever Frame someone
+> owns. A verdict computed at acquisition is a stored judgement about a machine the
+> curation plane does not own, and it goes silently wrong the day the TV changes.
 >
-> Deriving this once at acquisition, rather than re-deciding it at every render,
-> is what lets the review grid warn the curator *before* they accept a work.
+> `width` and `height` above are panel-independent **facts** and remain stored. The
+> **verdict** is computed from `(width, height, panel geometry, mat configuration)`
+> by one service-layer function, which both the review grid and the renderer call.
 >
-> **The threshold values and the policy for `below_floor` are an open question**
-> (`project-state.yaml` → open_questions): reject outright, accept and upscale,
-> accept and mat generously, or surface it and let the curator choose per work.
-> The column is specified now because retrofitting it means re-examining every
-> acquired original.
+> **This preserves the real intent of the old constraint 12** — "keep the resolution
+> policy in one place instead of implicit in each renderer" — using the ratified
+> service-layer norm (`architecture.md` § Direction) rather than using storage to do
+> it. Same guarantee, no value that can drift. Consistent with the readiness and
+> re-search decisions: derived state cannot disagree with what it is derived from.
+>
+> **Values:** `native` (source ≥ artwork box; downscaled to fit) · `matted_small`
+> (source smaller than the box; pasted at native size, so the mat is simply larger)
+> · `below_floor` (would render smaller than the configured minimum wall size).
+>
+> **There is no `upscaled` value.** The pipeline never upscales — `image.thumbnail()`
+> already never did, and "acquisition at gallery resolution" is a product promise.
+> Upscaling is the one option that actively misrepresents quality: it converts an
+> honest "this image is small" into an apparent rendering fault. A declared state
+> with no producer is the same defect the re-search review flagged, so the value is
+> removed rather than reserved.
 
 ### Rendition
 
@@ -794,14 +807,29 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
     the month is the UTC calendar month, not the operator's local one.
     *(Amended 2026-07-20 — this constraint previously specified an application-side
     monthly sum, which is exactly the defect the norm was ratified to prevent.)*
-12. **An Original's `display_fit` is derived at acquisition, never at render
-    time.** Render paths read it; they do not recompute it. This keeps the
-    resolution policy in one place instead of implicit in each renderer.
+12. **An Original's `display_fit` is derived wherever it is needed, from a single
+    service-layer function — and is never stored.** *(Amended 2026-07-20; this
+    previously required derivation at acquisition and storage on the row.)* The
+    verdict depends on panel geometry and mat configuration, both deployment
+    values, so a stored verdict is a claim about one specific TV that no longer
+    holds when the TV changes — and nothing would report the drift. The original
+    intent, "resolution policy in one place rather than implicit in each renderer",
+    is now met by the service-layer norm (`architecture.md` § Direction): the review
+    grid and the renderer call the same function, and neither has a policy of its
+    own.
 13. **`Source.rights_status` is recorded for every source, including `unknown`.**
     Absence of a value is not permitted — "we did not check" and "we checked and
     could not tell" are different facts, and only the second is honest as
-    `unknown`. Whether rights *gate* anything is still open; recording them is
-    not.
+    `unknown`. **Rights gate nothing (decided 2026-07-20)** — the value is
+    display-only, surfaced in the review grid as a *provenance and source-quality*
+    signal rather than a legal one, because a holding institution's own
+    public-domain scan is usually the authoritative file while unknown-rights
+    images are more often downstream reproductions. Private household display keeps
+    the legal stakes genuinely low, and the corpus is deliberately in-copyright, so
+    a filter would contradict a decision already made. **Reopen if** the product
+    gains sharing or export, or the catalogue itself becomes public — those change
+    the analysis, and this is recorded so the trigger is recognisable rather than
+    rediscovered.
 14. **A CandidateWork is covered by at most one active `resolve` run at a time.**
     Coverage is recorded in **ResolveRunWork**; the constraint is enforced at
     run-creation time by checking that table — `resolve_images` refuses any work id

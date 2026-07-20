@@ -116,6 +116,26 @@ tool per action stops paying and consolidation starts.
 | `art_theme` | `list`, `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`, `help` | `activate` changes the wall immediately. |
 | `art_display` | `status`, `sync`, `show_now`, `next`, `help` | Every action goes through the theme manifest — see below. |
 
+### What the review surface must show about an image
+
+`list_images` and `get_work` carry two derived values per candidate image, both
+computed by the service layer rather than stored (`data-model.md` → Original):
+
+- **`display_fit`** — `native`, `matted_small`, or `below_floor`, computed from the
+  image's pixel dimensions against the configured panel geometry and mat width.
+- **The rendered physical size**, in inches, on the configured panel — *"would show
+  at 8.6 inches"*. This is the number a curator can actually judge. **A thumbnail
+  cannot convey resolution**: a 900 px image and a 6000 px image look identical in a
+  review grid, which is exactly why the review gate ("a human saw the artwork")
+  does not by itself protect against hanging a postage stamp.
+
+A `below_floor` image is **shown, labelled, and selectable** — never auto-selected
+by phase 2, and never hidden. The curator may take it anyway; that judgement is the
+product.
+
+**`rights_status` is returned alongside**, as a provenance and source-quality
+signal. It gates nothing (`data-model.md` constraint 13).
+
 ### How `art_display` reaches the display plane
 
 **Corrected 2026-07-20 (Critic R-17).** This tool's actions were specified before

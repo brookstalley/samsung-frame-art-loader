@@ -332,9 +332,49 @@ problem. Now that contemporary web sources are in scope, that gap is live.
 The right metric is **not** megapixels — canvas occupancy is dominated by
 aspect-ratio mismatch, not by resolution, so a tall narrow work legitimately fills
 little of a 16:9 canvas. The metric that isolates resolution is whether the render
-is a *downscale* or a *native-size paste*. Setting the floor is an open
-acquisition-pipeline decision; this section records the measurement that should
-inform it.
+is a *downscale* or a *native-size paste*.
+
+### The mat is geometric, and the floor is physical (decided 2026-07-20)
+
+**The mat is specified in physical units, not pixels or ratios.** A mat width in
+inches, with the bottom margin weighted larger than the top — the conservator's
+convention, because a true-centred image reads as sitting low. This is what
+"museum-quality mat" has to mean if it means anything; the 2024 pipeline's mat was
+aspect-ratio residue, so a 16:9 source got no mat at all.
+
+**Panel geometry is a deployment value, never a constant.** The operator's own
+panel is 42", but nothing may depend on that — other people will run this on other
+sizes, and the product must support any of them. Panel dimensions therefore join
+`ART_ROOT` as configuration both planes must agree on (`operational-spec.md`).
+
+Everything else follows arithmetically:
+
+```
+artwork box  =  canvas − mat(panel geometry, mat inches)
+
+42" 16:9  →  36.6" wide  →  ~105 ppi  →  2.5" mat = 262 px/side
+             artwork box 3316 × 1597 px  =  31.6" × 15.2" on the wall
+75" 16:9  →  65.4" wide  →   ~59 ppi  →  2.5" mat = 147 px/side
+             artwork box 3546 × 1723 px
+```
+
+**The floor is a minimum rendered size on the wall, in inches** — the same units as
+the mat, and it scales with the panel automatically. It was never going to be one
+number: a pixel threshold means different things on a 42" and a 75", and megapixels
+were already ruled out. On a 42" panel a 12" floor puts the threshold at ~1260 px on
+the long edge.
+
+**Below the floor, the work is not rejected and the image is not hidden.** Phase 2
+does not *auto-select* a below-floor instance; the review grid shows it labelled
+with its rendered physical size ("would show at 8.6 inches") and the curator may
+select it anyway. If every instance is below floor the work lands at
+`resolution_status = unresolved`, which is already a first-class outcome that may
+never be silently omitted (`data-model.md` constraint 9), and the work stays
+eligible for re-search. Nothing is silently dropped and nothing is silently
+accepted — which is the requirement, on a product whose defining constraint is that
+failure is silent.
+
+**No upscaling.** See `data-model.md` → Original.
 
 **The e-paper label must be legible at standing distance**, on a backlit-free
 16-level greyscale panel, in whatever light the room has. The 2024 implementation
@@ -351,5 +391,6 @@ one — see `design_decisions.accessibility_approach`.
 | `architecture.md` | Storage does not force a NAS; decide the curation host on availability grounds |
 | `observability-strategy.md` | Every availability target here is unobservable without detection. "Down looks like up" is the defining constraint |
 | `operational-spec.md` | Back up the catalogue; do not back up the image tree |
-| Acquisition pipeline design | The minimum-resolution floor, measured as downscale-vs-native-paste rather than megapixels |
+| Acquisition pipeline design | The minimum-resolution floor — **resolved 2026-07-20**: a minimum rendered size in inches, derived from panel geometry and mat width, both deployment values |
+| `operational-spec.md` | Panel geometry joins `ART_ROOT` as configuration both planes must agree on |
 | Build plan | The search-engine spike, with its stated comparison constraint |

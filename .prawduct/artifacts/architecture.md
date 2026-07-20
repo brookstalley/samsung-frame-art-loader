@@ -409,10 +409,18 @@ curator lives.
 **Configuration and secrets.** Environment variables with a `.env` file, per the
 existing preference that deployment values never live in source. Each plane reads
 its own config at start; a config change means a restart of that plane only.
-`ART_ROOT` is the one value both planes must agree on, which makes it the single
-most important thing to get out of source first — it is already scoped that way in
-the v1 list. API keys are curation-only; display holds no credentials except the
-TV pairing token, which is device state and lives with display.
+**Two values must agree across both planes** (2026-07-20 — this previously said
+`ART_ROOT` was the only one). `ART_ROOT` is the first and remains the single most
+important thing to get out of source, already scoped that way in the v1 list.
+**Panel geometry is the second**: the mat is specified in physical units and the
+resolution floor is a minimum size on the wall, so curation needs the panel's
+dimensions to judge a source and display needs them to render the mat. Nothing may
+hardcode a panel size — the product must run on whatever Frame someone owns. Its
+mismatch mode is quieter than `ART_ROOT`'s and therefore worse: nothing fails, the
+mat is merely wrong. See `operational-spec.md` § Configuration.
+
+API keys are curation-only; display holds no credentials except the TV pairing
+token, which is device state and lives with display.
 
 **Environment parity — the honest gap.** Curation runs unmodified on a developer
 Mac: it is a FastAPI app over a filesystem and an HTTP client. Display does not,

@@ -250,6 +250,11 @@ classification:
           corpus becomes deliberately in-copyright. Private household display
           keeps the legal stakes genuinely low, but the product should record a
           decision rather than inherit a gap.
+          BOTH DECISIONS LANDED 2026-07-20 (see technical_decisions.data_model):
+          the floor is a minimum rendered size in inches and nothing is ever
+          upscaled; rights are display-only and gate nothing. The risk factor
+          itself stands — web sources really are lower quality — but it is now a
+          managed risk rather than an unaddressed gap.
       - factor: "No PII, no regulatory exposure"
         level: low
         rationale: "Single household, no accounts, credentials only, LAN-only surface reached via overlay network. Caps the blast radius of everything above."
@@ -971,6 +976,100 @@ technical_decisions:
         - "resource_link content blocks — spec-sanctioned and token-cheap, but client support is uneven and it still costs a read per image."
       date: 2026-07-19
   data_model:
+    - decision: "The mat is specified in physical units with a weighted bottom margin; panel geometry is a DEPLOYMENT VALUE; the resolution floor is a minimum rendered size in inches; display_fit is derived, never stored; nothing is ever upscaled."
+      rationale: >
+        Decided 2026-07-20 by the operator. One decision chain, because each part
+        forced the next.
+
+        MAT GEOMETRY. Specified in inches with the bottom margin weighted larger
+        than the top — the conservator's convention, since a true-centred image
+        reads as sitting low. This is what "museum-quality mat" has to mean if it
+        means anything. It is also a real change: the 2024 pipeline calls
+        image.thumbnail((3840,2160)), so the mat is aspect-ratio RESIDUE and a 16:9
+        source gets no mat at all — which directly contradicted data-model.md's
+        stated premise that "the artwork sits inside a mat, the mat is the
+        deliberate frame". The premise was aspirational and nothing implemented it.
+
+        PANEL GEOMETRY IS A DEPLOYMENT VALUE, not a constant. The operator's panel
+        is 42" and explicitly instructed that nothing may depend on that, because
+        other people will run this on other sizes. This falls under the existing
+        ratified "no hardcoded deployment values in source" norm, and it makes panel
+        dimensions the SECOND value both planes must agree on after ART_ROOT — a
+        quieter mismatch than ART_ROOT's and therefore worse, because nothing fails:
+        the mat is simply the wrong width.
+
+        THE FLOOR IS PHYSICAL, and this is why it was never answerable as filed. The
+        question asked for a minimum resolution; adequacy is defined against the
+        artwork box, the box is defined by panel and mat, and both are per
+        deployment. So there is no single number — there is a formula, expressed in
+        the same units as the mat: a minimum rendered size on the wall. It scales
+        with the panel automatically. On a 42" (~105 ppi) a 12" floor is ~1260 px on
+        the long edge; on a 75" (~59 ppi) the same 12" floor is ~708 px.
+
+        BELOW THE FLOOR: not rejected, not hidden. Phase 2 does not auto-select a
+        below-floor instance; the review grid shows it labelled with its rendered
+        physical size and the curator may select it anyway. If every instance is
+        below floor the work lands at resolution_status='unresolved' — already
+        first-class and never silently omitted (constraint 9) — and stays eligible
+        for re-search. The instance-vs-work suppression split this rests on is the
+        Q11 distinction and the machinery landed earlier the same day, so nothing
+        new was invented. The load-bearing detail: A THUMBNAIL CANNOT CONVEY
+        RESOLUTION — 900 px and 6000 px look identical in a grid — so the "a human
+        saw the artwork" review gate does not by itself prevent hanging a postage
+        stamp. The rendered-inches figure is what makes the judgement possible.
+
+        DISPLAY_FIT IS DERIVED, NEVER STORED, which AMENDS constraint 12. A verdict
+        computed once at acquisition is a stored judgement about a machine the
+        curation plane does not own, and it goes silently wrong when the TV changes.
+        width and height stay stored — they are panel-independent facts. The old
+        constraint's real intent ("policy in one place, not implicit in each
+        renderer") is now met by the service-layer norm ratified the same day rather
+        than by storage. Third application of derived-not-stored after readiness and
+        the re-search states; it is effectively a house pattern now.
+
+        NO UPSCALING. image.thumbnail already never upscaled and "acquisition at
+        gallery resolution" is a product promise. Upscaling is the one option that
+        actively misrepresents quality — it converts an honest "this image is small"
+        into an apparent rendering fault. Consequence: display_fit's `upscaled`
+        value is REMOVED rather than reserved, since a declared state with no
+        producer is the defect the re-search review flagged hours earlier.
+      alternatives_considered:
+        - "Fixed pixel border — simplest, needs no panel dimensions, but the number is arbitrary, means something different on every panel size, and cannot be described to anyone as a mat width."
+        - "Mat proportional to the artwork — keeps large works large, but inverts framing practice: conservators give SMALL works proportionally MORE mat, so it would look wrong exactly where matting matters most."
+        - "Keep 2024 fit-to-canvas — zero regression risk on the 41-work corpus since it IS current behaviour, but a 16:9 work gets no mat, 'museum-quality mat' stays false, and the floor stays uncomputable forever."
+        - "Hard-filter below-floor images at discovery — cleanest grid, but silently discards the only existing scan of an obscure work and the curator never learns it existed."
+        - "Keep display_fit stored with the panel it assumed, so staleness is detectable — rejected as storing a cached answer plus its cache key."
+        - "Keep display_fit stored and rebuild on panel change — preserves constraint 12 literally, but adds an operational step whose omission is silent, on a product whose defining constraint is silent failure."
+        - "Conventional Lanczos upscaling — fills the box, but a 900px source at 3316px is visibly soft at wall distance and a curator cannot tell a bad source from a bad renderer."
+      date: 2026-07-20
+    - decision: "Rights metadata is display-only and gates nothing; it is surfaced as a provenance and source-quality signal."
+      rationale: >
+        Decided 2026-07-20 by the operator, closing a question raised in priority on
+        2026-07-19 when the corpus became deliberately in-copyright.
+
+        Recording was never in question — constraint 13 already requires
+        rights_status on every source including 'unknown', because "we did not
+        check" and "we checked and could not tell" are different facts. What was
+        open was whether it GATES.
+
+        It does not. Private household display keeps the legal stakes genuinely low,
+        and the operator's own framing was that this wants a recorded decision
+        rather than a compliance regime. A hard filter would also contradict a
+        decision already made, since the corpus is deliberately in-copyright.
+
+        The reframing that makes it useful anyway: rights status is a PROVENANCE
+        signal, not merely a legal one. A holding institution's own public-domain
+        scan is usually the authoritative file; unknown-rights images are more often
+        downstream reproductions. So it earns its place in the review grid on source
+        quality grounds regardless of legal posture.
+
+        REOPEN TRIGGER, recorded so it is recognisable rather than rediscovered: the
+        product gaining sharing or export, or the catalogue itself becoming public.
+        Either changes the analysis.
+      alternatives_considered:
+        - "Warn and require override on restrictive or unknown rights — creates an audit trail, but rights are populated for 5 of 41 works today so nearly every acceptance would trip a warning that means nothing actionable."
+        - "Hard filter at discovery — most conservative legally, but guts the stated product and silently hides exactly the works the curator wants."
+      date: 2026-07-20
     - decision: "The re-search is a DiscoveryRun with kind='resolve'; its three conflated situations are derived, not stored; and awaiting_better_image is reachable only via reject_image."
       rationale: >
         Decided 2026-07-20 by the operator, resolving three interacting defects the
@@ -1246,6 +1345,13 @@ technical_decisions:
           3. Rights handling stops being cosmetic. Personal display keeps the
              stakes low, but "captured and ignored" is no longer a defensible
              default when the corpus is deliberately in-copyright.
+          CONSEQUENCES 2 AND 3 WERE RESOLVED 2026-07-20; see
+          technical_decisions.data_model. Note that (2)'s stated premise — "the mat
+          engine assumes native resolution inside a mat" — was ASPIRATIONAL when
+          written: the 2024 code's image.thumbnail() makes the mat aspect-ratio
+          residue, so a 16:9 source got no mat at all. The mat geometry had to be
+          decided before the resolution floor could be, and neither was filed as a
+          question until 2026-07-20.
       date: 2026-07-19
     - decision: "Curation UI is LAN-only, reached remotely via an overlay network (Tailscale/VPN) rather than by public exposure."
       rationale: >
@@ -1720,10 +1826,16 @@ open_questions:
   # Fixing (1) largely dissolved (2) — the run row IS the missing state. Same
   # pattern as the questions that dissolved on 2026-07-19/20: the premise (that
   # three situations needed three names) was the thing to check.
-  - question: "Should the MCP surface expose resources in addition to tools?"
-    blocking: "Nothing — tools cover every current read. This is an optimisation and a UX question."
-    waiting_on: user
-    priority: low
+  # RESOLVED 2026-07-20 by the operator: "Should the MCP surface expose resources
+  # in addition to tools?" NO RESOURCES IN v1. Tools cover every read, adding
+  # resources later is purely additive and breaks no client, so deferring costs
+  # nothing while building a second concept for the same data now costs real work.
+  # The one genuine candidate — "what's on the wall right now", which resources can
+  # make subscribable and tools cannot — was declined for v1: nothing needs it, and
+  # it would require display-plane state to reach the MCP server on the curation
+  # plane, across the one-directional manifest boundary. Reopen if a client wants
+  # to BROWSE rather than call. Original analysis retained below.
+  #   waiting_on: user / priority: low
     # Claimed as carried in api-contract.md on 2026-07-19 but never actually filed;
     # caught by Critic review. The MCP spec's tools/resources split is about CONTROL
     # (who decides when something enters context), not mutability, and it never says
@@ -1775,25 +1887,35 @@ open_questions:
   #   which is source-only on Linux aarch64 and needs libcairo2-dev — and that no
   #   longer touches the curation plane, because label rendering moved to the
   #   display plane, which already has the GTK stack.
-  - question: "What is the minimum acceptable source resolution, and what happens to works below it?"
-    blocking: "The acquisition pipeline's second path, the Original entity, and the mat engine's contract."
-    waiting_on: user
-    priority: high
-    # Raised by the 2026-07-19 decision to include contemporary web sources. The
-    # mat engine assumes the artwork sits INSIDE a mat at native resolution; a
-    # 1200px press image on a 3840x2160 canvas either occupies a small island or
-    # must be upscaled. Options: reject below a floor, accept and upscale, accept
-    # and mat generously, or let the curator decide per work. This determines
-    # whether resolution is a hard filter during discovery or a review-time signal.
-  - question: "Should discovery results carry licence/rights enforcement, or is rights metadata display-only?"
-    blocking: "The CandidateImage/Source model and what the review grid must show."
-    waiting_on: user
-    priority: medium
-    # RAISED from low 2026-07-19: the corpus is now deliberately in-copyright, so
-    # "captured and ignored" is no longer a defensible default. Today `rights` is
-    # populated for 5 of 41 works and never read. Private household display keeps
-    # the stakes genuinely low — this wants a recorded decision, not a compliance
-    # regime.
+  # RESOLVED 2026-07-20 by the operator: "What is the minimum acceptable source
+  # resolution, and what happens to works below it?" Recorded in
+  # technical_decisions.data_model; artifact text in nonfunctional-requirements.md
+  # § The mat is geometric, and the floor is physical.
+  #
+  # THE QUESTION WAS UNANSWERABLE AS FILED, and finding out why was the work. It
+  # asked for a minimum resolution. Adequacy is defined against the artwork box;
+  # the box is defined by panel geometry and mat width; the operator ruled that
+  # panel geometry is a DEPLOYMENT VALUE because other people run other panel
+  # sizes. So there is no single number — there is a formula, in the same physical
+  # units as the mat: a minimum rendered size on the wall, which scales with the
+  # panel automatically.
+  #
+  # A prerequisite had to be decided first and was not filed as a question at all:
+  # the mat geometry itself was specified NOWHERE, and the 2024 code's
+  # image.thumbnail() makes the mat aspect-ratio residue — so a 16:9 source gets no
+  # mat, contradicting data-model.md's "the mat is the deliberate frame".
+  #
+  # Below the floor: not rejected, not hidden. Phase 2 does not auto-select;
+  # the grid shows it labelled with rendered inches; the curator may take it. All
+  # instances below floor => resolution_status='unresolved', already first-class.
+  # RESOLVED 2026-07-20 by the operator: "Should discovery results carry
+  # licence/rights enforcement, or is rights metadata display-only?" DISPLAY-ONLY;
+  # it gates nothing. Recorded in technical_decisions.data_model; artifact text in
+  # data-model.md constraint 13 and api-contract.md.
+  # The reframing that made it useful anyway: rights status is a PROVENANCE and
+  # source-quality signal, not merely a legal one — a holding institution's own
+  # public-domain scan is usually the authoritative file. Reopen trigger recorded:
+  # sharing/export, or the catalogue becoming public.
 
 # =============================================================================
 # USER EXPERTISE PROFILE
