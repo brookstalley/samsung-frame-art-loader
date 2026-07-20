@@ -1811,6 +1811,22 @@ build_preferences:
 health_check:
   last_full_check: null
   last_check_findings: null
+  # The session banner's project-state.yaml compaction advisory was ASSESSED AND
+  # DECLINED 2026-07-20 by the operator. Do not re-investigate before a build plan
+  # exists; the reasoning does not change until then.
+  #   * Its three specific remedies do not apply here: no completed build-plan
+  #     chunks (no build plan yet), no test-history block, and the change log is
+  #     already a separate file.
+  #   * The bulk is technical_decisions (~818 lines, ~40%). At planning stage that
+  #     rationale IS the deliverable — there is no code — so compacting it destroys
+  #     the project's output rather than trimming overhead.
+  #   * It would not have fixed the slow review that prompted it. Of the 4,058-line
+  #     branch diff, project-state.yaml contributed 1,088 lines, ALL newly added.
+  #     Compacting pre-existing content removes nothing from a diff and adds a large
+  #     deletion to it.
+  # Verified while assessing: no prawduct hook or gate parses technical_decisions
+  # (only a template comment references it), so extracting it to an artifact is
+  # structurally safe IF the file becomes a problem later. Considered and not taken.
 
 # =============================================================================
 # ARTIFACT MANIFEST
