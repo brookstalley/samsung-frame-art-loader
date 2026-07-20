@@ -25,9 +25,37 @@ neither by self-review:**
 correction *feels* complete, because the edit you made is the edit you intended. The
 claim's other homes are invisible precisely because you are not editing them.
 
-**What to do:** after writing any correction, grep for a distinctive phrase from the
-*old* claim — not the new one — across `.prawduct/` and the repo. Fix every hit or
-say why it stays. Cheap, mechanical, and it catches the whole class.
+3. **2026-07-20 — and this one escalates the rule, because the rule's own remedy was
+   followed and still failed.** The co-location decision retired "the split moves
+   gigapixel work off a Pi 4". I *did* grep the old phrasing and fixed six sites.
+   The Critic then found four more, plus the 2026-07-19 "forced" claim still alive in
+   two places it had already been amended out of once.
+
+**Why grep was not enough — the correction to this learning.** A retired claim does
+not propagate as *text*, it propagates as *paraphrase*. "Forced by a version
+conflict" had become "Forced by the Python 3.14 vs 3.13 constraint, not chosen" in
+`risk_profile` and "two planes on two machines, forced by an irreconcilable Python
+version constraint" in the classification block. Neither matches a grep for the
+original sentence. Grep finds literal survivors and is blind to exactly the
+restatements that a careful writer produces.
+
+**The unit of sweep is the DECISION, not the sentence.** When a decision changes,
+the sweep target is every artifact that depends on that decision — which
+`project-state.yaml` → `artifact_manifest.artifacts[].depends_on` now actually
+encodes (populated 2026-07-20). Walk the dependency graph and re-read each dependent
+artifact for the *concept*; use grep only as the cheap first pass, never as the
+check that closes the sweep.
+
+**Structural escalation, per the learning lifecycle.** Three recurrences across two
+sessions, every one caught by the Critic and none by self-review, means writing it
+down is not working. What would actually catch it: a check that, when a
+`technical_decisions` entry gains an `AMENDED`/`SUPERSEDED`/`RETIRED` marker, lists
+the artifacts declaring a `depends_on` edge to it and requires each to be
+acknowledged. Filed rather than improvised here.
+
+**Sharpest tell that this is systemic, not carelessness:** on 2026-07-20 the sweep
+failure landed in the same bundle that *added this learning*, three commits later —
+and one of the claims I had to retire was one I had written myself an hour earlier.
 
 **Related:** the same session produced a near-miss of the adjacent shape — an
 *unverified inference riding along with a verified claim* ("streamable HTTP is
@@ -35,6 +63,42 @@ forced" was verified; "mounted in the same ASGI application" was not, and was wr
 as though it were). Verification instincts fire on the part that looks like a
 foreign-system claim, not on what is attached to it. Principle 24 (Retrieval Over
 Generation) and the Complete Delivery principle both bear on this.
+
+## Ratifying a norm creates retroactive obligations on ARTIFACTS, not just code
+
+**When a norm is ratified, the artifacts written before it are as much in scope as
+the code — and in a planning-stage product they are the *only* thing in scope.**
+Re-derive every specification the norm now governs, before calling ratification done.
+
+**What happened, 2026-07-20.** Three norms were ratified. For each, the Retroactivity
+line read some version of *"no existing code has two planes — nothing to migrate"*,
+which was true and useless. All four blocking Critic findings that followed were
+norm-versus-predating-*artifact* conflicts:
+
+- `data-model.md` still told the display plane to resolve `Theme → ThemeMembership →
+  Artwork → TvBinding` — catalogue entities — hours after a norm was ratified saying
+  the display plane "queries no curation database".
+- `Rendition(kind='label')` still carried one panel's geometry in the catalogue,
+  which that artifact's *own* Direction norm forbids and whose cited anti-pattern is
+  the 2024 `_w648_h480` filename. Moving geometry from a filename into columns had
+  fixed the *encoding* and left the *ownership* violation intact — which is how it
+  survived a norm written to catch it.
+- `api_contract.md` exposed `art_display(show_now|next)`, unimplementable the moment
+  the manifest became the only channel.
+
+**Root cause:** "retroactivity" was read as a code-migration question, because that
+is what the word connotes and what the examples describe. In a product with zero
+production code the field reads as trivially satisfied — so the one question it
+exists to force never gets asked.
+
+**What to do:** at ratification, list the artifacts the norm governs and re-read each
+one *against* the norm. Specifications violate norms exactly the way code does, and a
+spec violation is worse: it is the instruction a builder will faithfully follow.
+
+**Related principle:** Complete Delivery — a decision whose consequences are not
+propagated is not delivered. Also `docs/norms.md` § Birth, whose three retroactivity
+outcomes (migrate / contain / grandfather) all read as code-shaped and may deserve an
+artifact-shaped fourth reading.
 
 ## Platform and dependencies
 
