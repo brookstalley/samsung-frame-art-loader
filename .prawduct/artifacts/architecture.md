@@ -164,8 +164,14 @@ is no network between planes.
 - **Purpose:** make the physical world match the manifest.
 - **Platform:** Python 3.13 venv, systemd `Restart=always`. Genuinely always-on.
 - **Owned state (sole writer):** `display-state.sqlite` — TV content-id bindings,
-  per-work upload status, panel geometry, last selected work, brightness state,
-  and the last-acted-on directive sequence (see § The theme manifest).
+  per-work upload status, last selected work, brightness state, and the
+  last-acted-on directive sequence (see § The theme manifest). **Panel geometry
+  is deliberately not listed** (corrected 2026-07-20 — it appeared here while
+  every other artifact makes it *configuration* both planes read): a copy held as
+  device state could drift from the value curation judges sources against, which
+  is exactly the quiet mismatch `operational-spec.md` § Configuration warns
+  about. Beyond `TvBinding`, this store's schema is display-internal and
+  deliberately deferred (`data-model.md` § Deliberately not modelled).
   This is the ratified data-model norm ("per-device runtime state never lives in
   the catalogue") given a process to live in.
 - **Reconciliation loop:** read manifest → ensure every listed work is uploaded to
@@ -251,6 +257,14 @@ read by display.
     every intermediate directive — turns the manifest into a command log, which is
     the channel shape the norm rejects; for a human pressing "next", latest-wins
     is also the expected behaviour | user can veto/override]`
+  - **On sequence regression, display re-baselines without acting.** A manifest
+    whose sequence is *lower* than the last-acted-on value is possible — the
+    counter lives in the catalogue, and `operational-spec.md`'s exercised restore
+    path can bring back an older one. A regression is not a directive: display
+    logs one WARNING, adopts the observed value as its new baseline, and acts
+    only on the next advance. Same posture as the unknown-major rule — when the
+    channel says something impossible, keep state and say so rather than guess.
+    This is what keeps a catalogue restore from replaying a stale pin.
 
 - **Change detection:** display polls the manifest's mtime.
 - **The poll interval is set by `next`, not by theme switching.** This is the
@@ -382,8 +396,9 @@ logged refusal and yesterday's theme still on the wall.
 
 **So the contract is not "no stability obligation".** It is: additive changes are
 free, breaking changes bump the major version, and the display plane's response to
-an unrecognised major is defined. `api-contract.md` should be amended to say that
-rather than claiming a blanket exemption.
+an unrecognised major is defined. `api-contract.md` now says exactly that
+(amended 2026-07-20) — the blanket exemption is retired there too, so this
+obligation reads as discharged, not outstanding.
 
 **Rollback** is `git checkout` plus two restarts. No data migration spans the
 planes, because no data is shared — the manifest is regenerated, never migrated.

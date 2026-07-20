@@ -137,7 +137,7 @@ only entity the curator thinks of as "a piece of art".
 | `medium` | string | nullable | e.g. "Oil and graphite on fiber board". |
 | `dimensions` | string | nullable | Physical dimensions as the source states them. |
 | `description` | text | nullable | May contain limited markup; see Constraints. |
-| `rights` | string | nullable | Rights statement as given. Display-only — see open question in `project-state.yaml`. |
+| `rights` | string | nullable | Rights statement as given. Display-only — rights gate nothing (decided 2026-07-20; constraint 13). |
 | `status` | enum | required | `accepted` \| `archived`. See State Machines. |
 | `accepted_at` | datetime | nullable | Set on creation from an accepted CandidateWork. |
 | `created_at` | datetime | auto | |
@@ -1001,3 +1001,10 @@ single interaction the product exists to make easy.
   to Art Store artwork, not user uploads. Unconfirmed against real hardware, and
   it would only ever support one active subset rather than named themes — so it
   is not a path to this product's requirements even if it works.
+- **`display-state.sqlite` beyond `TvBinding`.** The display plane's other device
+  state (last selected work, brightness state, the last-acted-on directive
+  sequence) is display-internal, never read by curation, and specified at build
+  time. Only `TvBinding` is modelled here, because it is the entity that enforces
+  the per-device Direction norm; the rest earns no catalogue-side contract.
+  Panel geometry is in neither store — it is configuration both planes read
+  (`operational-spec.md` § Configuration).

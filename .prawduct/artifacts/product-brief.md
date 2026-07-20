@@ -388,8 +388,10 @@ The separation therefore stands on its own merits:
 
 - It matches the data contract already recorded in `learnings.md` — upstream
   artifacts (`raw/`, `api-cache/`, `tile-cache/`) are expensive and
-  device-independent; derived artifacts (`ready/`, `tv-thumbs/`, `label/`) are
-  cheap and device-specific and must never be transported.
+  device-independent; derived artifacts (`ready/`, `tv-thumbs/`) are cheap and
+  device-specific and must never be transported. (`label/` belonged to this list
+  in the 2024 layout; it is retired from the prospective contract — labels render
+  on the display plane. See `boundary-patterns.md`.)
 - It makes "e-paper behind an interface" a process boundary rather than a
   convention.
 - It is what lets the display plane keep working when curation is down — the

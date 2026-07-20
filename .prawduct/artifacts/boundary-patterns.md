@@ -93,12 +93,24 @@
 - **Producer:** acquisition and rendering. **Consumer:** both planes.
 - **Contract:** **upstream artifacts** (`raw/`, `api-cache/`, `tile-cache/`) are
   expensive and device-independent and *are* transported; **derived artifacts**
-  (`ready/`, `tv-thumbs/`, `label/`) are cheap and device-specific and are
-  **regenerated, never transported**.
+  (`ready/`, `tv-thumbs/`) are cheap and device-specific and are
+  **regenerated, never transported**. (`label/` removed from this row 2026-07-20
+  — see the retirement bullet below.)
 - All stored paths are relative to `ART_ROOT`. No absolute paths in any record.
-- **Open:** candidate `preview_path` files are neither upstream nor derived under
-  this contract — they are cheap, disposable, and pre-acceptance. Their lifecycle is
-  unrecorded; see `data-model.md`.
+- Candidate `preview_path` files are a third class — neither upstream nor derived;
+  cheap, disposable, pre-acceptance. Their lifecycle **is** recorded in
+  `data-model.md`: safe to delete once their `CandidateWork` reaches a terminal
+  verdict, and deletion never touches the catalogue. **Open (narrowed
+  2026-07-20):** only *what performs* that deletion — an on-verdict hook or a
+  periodic sweep — is a build decision not yet made.
+- **`label/` is retired from this prospective contract (recorded 2026-07-20).**
+  Labels are rendered on the display plane from manifest label text; a rendered
+  label is device state, so any cache of one lives display-side, never in
+  `ART_ROOT`. Mentions of `label/` elsewhere describe the recovered 2024 layout,
+  which had no display plane. `[DECISION: no label/ directory in the prospective
+  ART_ROOT | label rendering moved to display 2026-07-20, and derived artifacts
+  are regenerated not transported, so a curation-side label cache would have no
+  writer | user can veto/override]`
 
 ### Configuration
 

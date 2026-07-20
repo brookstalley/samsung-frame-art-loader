@@ -1700,8 +1700,15 @@ design_decisions:
         * MCP tool surface — external. Tool names, argument schemas, and result
           shapes are the contract. Needs a stance on adding/removing tools,
           renaming arguments, and changing result shapes.
-        * curation↔display contract — still internal, single consumer, deployed
-          together. The original "none" reasoning still holds here.
+        * curation↔display contract — AMENDED 2026-07-20: the original "none"
+          reasoning is RETIRED for this surface. Deployed-together and
+          survives-independently cannot both hold, and independent restarts open
+          a real skew window even on one host. The manifest carries a schema
+          version; additive changes are free; display refuses an unrecognised
+          major and keeps the manifest it has. See
+          technical_decisions.architecture and api-contract.md § Overview.
+          (This rationale previously asserted the un-made decision ~950 lines
+          below the technical_decisions entry that superseded it — Critic R-9.)
       DECIDED 2026-07-19, after the reopening above. The specification offers
       nothing to conform to: SEP-1575 (tool semantic versioning, proposed
       2025-09-29) is a dormant proposal adopted into no spec revision. What the

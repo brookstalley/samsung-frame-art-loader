@@ -76,10 +76,16 @@ and forcing it through MCP would produce either awkward results or a parallel re
 path anyway. Location transparency belongs in the service layer, beneath both
 surfaces.
 
-**Only the MCP surface carries a versioning obligation.** The original
-"none — internal-only" decision still holds for the other two, and re-deriving it
-per surface is the point: a blanket policy would either over-engineer the internal
-pair or under-protect the external one.
+**Each surface carries its own obligation — re-deriving it per surface is the
+point.** The MCP surface carries the real versioning obligation. The HTTP API
+keeps the original "none — internal-only" answer. The curation↔display contract
+does **not**: its exemption was narrowed 2026-07-20 to the bounded obligation in
+the table above — additive changes free, a breaking change bumps a major that
+display refuses. *(This paragraph previously said the "none" decision "still
+holds for the other two" — corrected 2026-07-20; it contradicted the amended
+table fifty lines above it, and was one of three surviving sites of the retired
+exemption.)* A blanket policy would either over-engineer the HTTP API or
+under-protect the other two.
 
 Built on the **official `mcp` SDK** (`mcp>=1.27`), not `3tears-mcp` — that package
 would drag NATS in via `3tears-epoch`, and its RBAC-gated server has nothing to
@@ -500,8 +506,13 @@ window for strangers.
 
 ## Surface Inventory & Stability Tiers
 
-The MCP surface is the only one needing tiers; the HTTP API and the curation↔display
-contract ship with their only consumers.
+The MCP surface is the only one needing tiers. The HTTP API ships with its only
+consumer and carries no obligation. The curation↔display contract is not
+tier-less: it carries exactly one rule — additive changes free, a breaking change
+bumps the manifest's major version, and display refuses an unrecognised major and
+keeps the manifest it has. *(Corrected 2026-07-20 — this sentence previously said
+both internal surfaces "ship with their only consumers", which is the retired
+exemption's reasoning and must not be cited for the manifest contract.)*
 
 | Element | Tier | Meaning |
 |---|---|---|

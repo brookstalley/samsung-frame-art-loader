@@ -47,11 +47,13 @@ artifact for the *concept*; use grep only as the cheap first pass, never as the
 check that closes the sweep.
 
 **Structural escalation, per the learning lifecycle. The count is the argument, so
-keep it current: NINE recurrences across four sessions as of 2026-07-20** (entries
-1–8 below; entry 6 covers two). Every one was caught by the Critic and none by
-self-review, across at least five distinct causes — literal-text survival,
-paraphrase, excluding one's own edited files, consuming only part of a finding's
-enumerated scope, and a home outside the artifact graph entirely. Each correction was
+keep it current: ELEVEN recurrences across four sessions as of 2026-07-20** (entries
+1–10 below; entry 6 covers two). All but one were caught by the Critic — the
+eleventh by a requested design-checkpoint review (entry 10) — and none by the
+author's own sweep-closing check, across at least five distinct causes —
+literal-text survival, paraphrase, excluding one's own edited files, consuming
+only part of a finding's enumerated scope, and a home outside the artifact graph
+entirely. Each correction was
 locally right and none prevented the next,
 which is the real signal: **the remedy class is wrong, not the remedy.** Prose
 instructions to a careful reader keep failing because the failure is not
@@ -125,6 +127,27 @@ check built for issue #8 that walks artifacts will have this blind spot on day o
 which is a different defect from an unedged manifest node, because this home can
 never be a manifest entry at all. **When a decision or count is cited in the backlog,
 the backlog is part of its sweep set.**
+
+9. **2026-07-20, tenth recurrence — a finding's enumeration consumed partially,
+   again.** Critic finding R-19 listed five sites carrying the retired "single
+   consumer, deployed together" versioning exemption. Two were fixed; three
+   survived to the next cumulative review — `api-contract.md` twice (one flatly
+   contradicting the amended table fifty lines above it) and the `status: active`
+   `api_versioning_approach` decision record in `project-state.yaml`, the
+   canonical versioning home, still asserting the un-made decision. Exactly the
+   sub-shape of recurrences 6 and 8: **the finding's enumerated list IS the sweep
+   set**, and partial consumption is now the dominant recorded way these survive.
+
+10. **2026-07-20, eleventh recurrence — the first caught by something other than
+    the Critic.** The rights-display-only decision, swept the same day into five
+    artifacts, missed `security-model.md`, whose `## Open` section still
+    presented the settled question as open and pointed at an open-questions entry
+    that no longer exists — found by a requested design-checkpoint review. The
+    Critic then found its twin: `data-model.md`'s `rights` field row still said
+    "see open question in `project-state.yaml`", ~700 lines above that same
+    file's corrected constraint 13. `depends_on` edges existed and the dependency
+    walk still did not happen — further evidence for the mechanical check, not
+    for more care.
 
 *(This entry is itself the evidence for why the count keeps moving: the failure is
 **fractal**. Every act of propagating a claim is a fresh opportunity to miss a home,

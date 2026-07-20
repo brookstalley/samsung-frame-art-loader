@@ -48,6 +48,29 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-20: Checkpoint review landed; Critic cumulative round remediated
+
+**Why:** The operator asked for a big-picture design checkpoint before Phase D.
+The review's verdict — the design is right for the scope — landed with four
+findings, each fixed in its single home: phase 1 is search-capable (a text-only
+call cannot serve the Vision's own "recent award-winning work" example), the MCP
+review gate's enforceable claim is "the image was there to see" rather than "a
+human saw it", three directive-block semantics were pinned (monotonic sequence
+across rebuilds, persisted last-acted-on value, latest-wins coalescing, plus a
+regression re-baseline rule from Critic R-7), and `all.json` is retained as the
+mat regression fixture. Nine backlog items filed (#10–#18), #3 and #8 annotated.
+
+The Critic's cumulative round (1 blocking, 2 warnings, 8 notes) then found the
+tenth and eleventh recurrences of the sweep-failure class: three surviving sites
+of the retired "single consumer, deployed together" versioning exemption
+(api-contract twice, `api_versioning_approach` in project-state — R-19's
+enumeration partially consumed, again), and the rights decision's miss of
+`security-model.md` plus a dangling pointer in `data-model.md`. All struck;
+panel geometry's authoritative home clarified as configuration (not
+display-state); `label/` retired from the prospective ART_ROOT contract; the
+deploy/README `OnFailure=` prescription withdrawn as contradicting the recorded
+alerting decision. Tally refreshed to eleven in learnings.md and issue #8.
+
 ## 2026-07-20: Narrow the reconciliation rule, add `interrupted`, and sweep the sites the finding named
 
 **Why:** `verify-resolutions` closed all six blocking findings from the previous
