@@ -214,6 +214,52 @@ as though it were). Verification instincts fire on the part that looks like a
 foreign-system claim, not on what is attached to it. Principle 24 (Retrieval Over
 Generation) and the Complete Delivery principle both bear on this.
 
+## "Verified" must enumerate what was actually measured
+
+**When writing a verification claim, name the fields, cases, or files the check
+actually covered — never restate the thing's full shape as though the check had
+covered all of it.** A "verified <date>" stamp is a credibility marker with no
+built-in obligation to list its own scope, which is exactly how a claim broader
+than its evidence acquires one.
+
+**Worked instance (2026-07-20, found by Critic R-2).** A build chunk asserted that
+all 41 legacy records carry seven named fields, "verified 2026-07-20". Three
+fields had been measured. Measured properly: 14 of 41 had no nationality, 8 no
+lifespan, **8 no `artist_details` at all** — the field the chunk's own unit test
+was written around — and 2 each lacked medium and dimensions. The acceptance
+criterion built on it ("an empty exclusion report") was unsatisfiable by that data.
+
+**Root cause:** the sentence was written from the *data model's* field list rather
+than from the *check's* field list, and a clean result on the narrow check carried
+a feeling of confirmation across the gap. Nothing in the sentence's form forced the
+two lists to be compared.
+
+**The rule:** a verification claim states its own scope inline — "measured against
+X on <date>: A, B, C present in all N; D missing in M" — so the claim and its
+evidence cannot drift apart later. If enumerating the scope feels tedious, that is
+the tell that the scope is wider than the check. This is the authoring-side twin of
+the sweep failure above: a claim propagating past the evidence that licensed it.
+
+## After a scripted mass edit, verify with a different detection method
+
+**A check that shares its detection logic with the edit shares its blind spots.**
+Verify a scripted bulk change with a method that keys on something the edit did
+*not* key on — otherwise a clean check means only "the pattern I already thought of
+matched", not "the change is correct".
+
+**Worked instance (2026-07-20).** A chunk renumber rewrote 137 reference runs with
+one regex anchored on `Chunks?\s+` adjacency. It silently missed
+`Chunks 06 (verified library), 07 (display project), 10 …` — a parenthetical broke
+the number run, so only the first number was remapped. Any verification regex I
+would have written naturally would have anchored on the same adjacency and reported
+clean. It was caught by sweeping for **bare two-digit numbers with no `Chunk`
+prefix** — the one shape the original pass structurally could not see.
+
+**The rule:** after a bulk edit, ask "what shape could my pattern not have
+matched?" and search for *that*. Roster/invariant checks (is the set complete? do
+all references resolve to something that exists?) are good second methods because
+they test the outcome rather than the transformation.
+
 ## Ratifying a norm creates retroactive obligations on ARTIFACTS, not just code
 
 **When a norm is ratified, the artifacts written before it are as much in scope as
