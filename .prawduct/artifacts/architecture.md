@@ -74,6 +74,8 @@ result. A handler that validates, orders, or decides is the violation.
 > norm.** The one thing it does bind going forward is the registry-generated tool
 > definitions — generation must not become a place where per-tool logic accretes.
 
+## Overview & Topology
+
 **One host.** Raspberry Pi 4 Model B, 8 GB, Raspberry Pi OS Trixie, booting from
 SD card. Both processes run here. This is a **2026-07-20 change** from the
 recorded plan (curation on a desktop, NAS, or second Pi) — see Decision Log.

@@ -165,7 +165,7 @@ current state for the norm — and so nobody "fixes" the mismatch by weakening a
 | `print()` used for operational output | `ai.py`, `display.py`, others | Convert on touch. |
 | Deployment values hardcoded | `config.py` (`tv_address`, `base_folder`, lat/long) | Hoist during the config work; `ART_ROOT` first. |
 | Sparse type annotations | 6 of 13 modules have none | Annotate on touch. |
-| `pyproject.toml` declares `py312` while the platform target is 3.13 | `pyproject.toml` | Reconcile once 3.13 is actually verified on the Pi. |
+| `pyproject.toml` declares `py312` and matches **neither plane** | `pyproject.toml` | Targets are per plane (display 3.13, curation 3.14) — see the Version entry above. Reconcile alongside the dependency-manager choice; a single `target-version` cannot describe both planes, so this needs a decision, not just an edit. |
 
 **Rule for adding a new preference:** assign a mechanism. If the preference can be expressed as "every file/function/config matches pattern X with named exceptions" → write a test. If a linter rule already exists for it → configure the linter. If it requires understanding intent → assign to Critic. Never leave a preference unassigned.
 
