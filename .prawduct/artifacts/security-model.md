@@ -199,6 +199,18 @@ Two things follow that must not be traded away later:
   relaxing it is void anyway — spend is already capped by a stronger control — so
   any future proposal to skip review is trading the only protection the household
   has for a saved click.
+- **What the MCP surface can and cannot enforce, stated exactly (added
+  2026-07-20).** Returning the thumbnail inline guarantees that the *model* saw
+  the image and that it is present in the transcript at the moment of acceptance.
+  It cannot guarantee a *human* looked — rendering depends on the client, and
+  looking depends on the curator. So the gate has two strengths: the web UI
+  enforces "a human saw it"; MCP enforces "it was there to see". This is the same
+  shape as bounds 4–6 under Prompt Injection — visibility, not refusal — and is
+  recorded so the product brief's success criterion is not read as a stronger
+  guarantee than the surface can carry. A backstop is filed as backlog work, not
+  committed design: a "recently accepted over MCP" shelf in the curation UI, so
+  everything accepted agent-side gets a guaranteed second human look on the next
+  visit.
 
 ## Data Privacy
 
@@ -249,12 +261,12 @@ not an oversight.
 
 ## Open
 
-- **Licence and rights enforcement.** Whether discovery results carry rights
-  enforcement or whether rights metadata is display-only is an open question,
-  raised in priority on 2026-07-19 when the corpus became deliberately
-  in-copyright. Private household display keeps the stakes genuinely low — this
-  wants a recorded decision, not a compliance regime. Tracked in
-  `project-state.yaml` → `open_questions`.
+- **Licence and rights enforcement — no longer open; this entry had gone stale.**
+  Decided 2026-07-20: rights gate nothing. `rights_status` is a display-only
+  provenance and source-quality signal, with named reopen triggers (sharing,
+  export, or the catalogue becoming public). Decision and rationale live in
+  `data-model.md` constraint 13; this entry is corrected rather than deleted
+  because a reader of this document alone would have re-opened a settled question.
 - **Whether TV auto-update can be disabled.** Not strictly security, but it is the
   vendor-controlled capability the whole product rests on, and Samsung has already
   removed art mode from some units.

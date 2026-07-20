@@ -119,18 +119,33 @@ and runtime, and therefore the one the spend ceiling exists to bound.
 > Dalí's most famous works and is handed ten copies of the same painting to
 > approve one of has been failed by the product, even though nothing errored.
 
-- **Phase 1 — intent to works.** One cheap call resolves the intent into a set of
-  *works*: titles and artists, not images. This is where "American modernists" or
-  "Dalí's most famous" becomes an enumerable list.
+- **Phase 1 — intent to works.** A cheap, search-capable step resolves the intent
+  into a set of *works*: titles and artists, not images. This is where "American
+  modernists" or "Dalí's most famous" becomes an enumerable list.
+
+  > **Amended 2026-07-20 from "one cheap call".** A text-only call can only
+  > enumerate works the model already knows — and this Vision's first example,
+  > "recent award-winning work", is by definition past any model's cutoff. For
+  > recency-bound intents, phase 1 must be able to search the web before it can
+  > enumerate; "phase 2 verifies phase 1" does not close this gap, because it
+  > catches invented titles rather than finding works the model has never seen,
+  > and finding works the curator could not have named is this product's stated
+  > definition of discovery. Phase-1 cost becomes one call plus a handful of
+  > searches — still small, still incurred before the work count exists, so the
+  > estimate story below survives unchanged. The search-engine spike
+  > (`nonfunctional-requirements.md` § Cost Constraints) already names a
+  > recency-bound intent as a comparison case; this amendment makes explicit which
+  > phase runs that search.
 - **Phase 2 — works to instances.** Each work gets its own search across museum
   APIs and the open web, producing several candidate *image instances*. The system
   ranks them and selects one canonical instance per work, recording why.
 
 Three consequences follow from the split, and each is load-bearing:
 
-- **The cost estimate stops being a guess.** Phase 1 is one call; phase 2 costs
-  roughly one search per work. So the moment phase 1 finishes, the work count is
-  known and the phase-2 cost is *computable* rather than predicted. The estimate is
+- **The cost estimate stops being a guess.** Phase 1 costs a call and at most a
+  few searches; phase 2 costs roughly one search per work. So the moment phase 1
+  finishes, the work count is known and the phase-2 cost is *computable* rather
+  than predicted. The estimate is
   shown against a real list — "your intent resolved to 40 works, resolving images
   will cost about $X" — which is what flow 1's cost-visibility requirement actually
   needs.
@@ -276,8 +291,11 @@ API consumers. Three consequences that are easy to miss:
   its alternates available behind it. Being shown the same painting several times
   and asked to pick counts as a failed run even if every instance is individually
   good.
-- **A curator never accepts a work without having seen its image** — on any
-  surface, including an agent's.
+- **A curator never accepts a work without having been shown its image.** The web
+  UI enforces the strong form ("a human saw it"). Over MCP the enforceable form is
+  weaker — the thumbnail is present in the transcript at the moment of acceptance;
+  whether a human looked is a property of how the operator works, not something
+  the surface can guarantee (`security-model.md` § Content Appropriateness).
 - Themes are switchable from the web UI and materialise on the TV without a
   redeploy.
 - LLM spend stays under the declared monthly ceiling, and hitting the ceiling

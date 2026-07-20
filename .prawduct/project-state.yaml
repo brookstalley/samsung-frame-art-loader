@@ -2291,7 +2291,7 @@ operator_verification_required: false
 # backlog_prefixes: []
 # backlog_external_imports: []
 
-backlog_last_groomed_at: 2026-07-19
+backlog_last_groomed_at: 2026-07-20
 
 # -----------------------------------------------------------------------------
 # BACKLOG SERVICE CUTOVER (API §2.4)

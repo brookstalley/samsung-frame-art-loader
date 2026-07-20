@@ -318,7 +318,11 @@ is not polish; it is the requirement.
 **Mat colour must be at least as good as the 2024 implementation.** This is
 explicitly a subjective bar, and the 41 existing artworks with their hand-tuned
 mats are the regression corpus. A new mat engine that scores well on any metric
-while producing visibly worse mats on those 41 has failed.
+while producing visibly worse mats on those 41 has failed. The corpus's canonical
+record is `all.json` — replaced as a schema, but **retained as a test fixture**:
+it is the only place the hand-tuned mat colours exist, so repo-hygiene work
+(issue #4 untracks its *backups*) must not delete the file itself before the
+regression fixture is extracted.
 
 **Rendered size must be adequate, and the current pipeline has no floor.**
 `resize_file_with_matte` uses PIL's `image.thumbnail()`, which **never upscales** —

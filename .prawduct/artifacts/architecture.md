@@ -164,7 +164,8 @@ is no network between planes.
 - **Purpose:** make the physical world match the manifest.
 - **Platform:** Python 3.13 venv, systemd `Restart=always`. Genuinely always-on.
 - **Owned state (sole writer):** `display-state.sqlite` — TV content-id bindings,
-  per-work upload status, panel geometry, last selected work, brightness state.
+  per-work upload status, panel geometry, last selected work, brightness state,
+  and the last-acted-on directive sequence (see § The theme manifest).
   This is the ratified data-model norm ("per-device runtime state never lives in
   the catalogue") given a process to live in.
 - **Reconciliation loop:** read manifest → ensure every listed work is uploaded to
@@ -229,6 +230,27 @@ read by display.
 
   The manifest is therefore **desired display state**, not merely a list. That
   framing is what makes commands expressible without a command channel.
+
+  **Three semantics pinned before build (2026-07-20)**, because the directive is
+  the one place where desired-state and command genuinely differ and none of the
+  three follows from "it is a state file":
+
+  - **The sequence is monotonic for the life of the catalogue; a manifest rebuild
+    never resets it.** `sync` and theme switches rewrite the entry list but carry
+    the current sequence forward unchanged — only `next`/`show_now` increment it.
+    Curation owns the counter and stores it catalogue-side, which is what makes
+    this cheap to guarantee. A rebuild that reset the counter would read to
+    display as an advance (or mask a real one) and fire a phantom directive.
+  - **Display persists the last-acted-on sequence in `display-state.sqlite`.**
+    Without that, a restarted display re-observes the current manifest and cannot
+    tell "already acted" from "new directive" — it would re-execute the last jump
+    on every restart, and `Restart=always` makes restarts routine.
+  - **Rapid directives coalesce.** Two `next` calls inside one poll interval
+    advance the sequence twice but are observed once, producing one step.
+    `[DECISION: latest-wins coalescing is accepted | the alternative — replaying
+    every intermediate directive — turns the manifest into a command log, which is
+    the channel shape the norm rejects; for a human pressing "next", latest-wins
+    is also the expected behaviour | user can veto/override]`
 
 - **Change detection:** display polls the manifest's mtime.
 - **The poll interval is set by `next`, not by theme switching.** This is the
