@@ -47,11 +47,12 @@ artifact for the *concept*; use grep only as the cheap first pass, never as the
 check that closes the sweep.
 
 **Structural escalation, per the learning lifecycle. The count is the argument, so
-keep it current: EIGHT recurrences across four sessions as of 2026-07-20** (entries
-1–7 below; entry 6 covers two). Every one was caught by the Critic and none by
-self-review, across at least four distinct causes — literal-text survival,
-paraphrase, excluding one's own edited files, and consuming only part of a finding's
-enumerated scope. Each correction was locally right and none prevented the next,
+keep it current: NINE recurrences across four sessions as of 2026-07-20** (entries
+1–8 below; entry 6 covers two). Every one was caught by the Critic and none by
+self-review, across at least five distinct causes — literal-text survival,
+paraphrase, excluding one's own edited files, consuming only part of a finding's
+enumerated scope, and a home outside the artifact graph entirely. Each correction was
+locally right and none prevented the next,
 which is the real signal: **the remedy class is wrong, not the remedy.** Prose
 instructions to a careful reader keep failing because the failure is not
 carelessness.
@@ -109,6 +110,27 @@ is the one that was missing, and it is the cheapest of the three.
    precisely what the same row's next cell denied, since this repo's vocabulary puts
    `awaiting_approval` inside "in flight". The finding had enumerated *two* defects
    in that row; only the grep-able one got fixed.
+
+8. **2026-07-20, ninth recurrence — a home the graph cannot reach.** Having just
+   refreshed the recurrence tally in `learnings.md` *because the count is the
+   escalation argument*, I did not refresh it in **issue #8**, which is the artifact
+   the argument exists to support and the live home (`backlog_service_repo` is set).
+   The issue still read "three times across two sessions" and still scoped its
+   acceptance to "the three recorded violations".
+
+**The structural point, recorded here rather than only in a reflection: the backlog
+sits outside the artifact dependency graph entirely.** No sweep of `.prawduct/` can
+reach a GitHub issue, and no `depends_on` edge can ever point at one. A structural
+check built for issue #8 that walks artifacts will have this blind spot on day one —
+which is a different defect from an unedged manifest node, because this home can
+never be a manifest entry at all. **When a decision or count is cited in the backlog,
+the backlog is part of its sweep set.**
+
+*(This entry is itself the evidence for why the count keeps moving: the failure is
+**fractal**. Every act of propagating a claim is a fresh opportunity to miss a home,
+so each correction creates the conditions for the next recurrence. That is a stronger
+argument for a mechanical check than the raw tally is — a careful reader cannot
+out-attention a failure mode that regenerates at every level of the fix.)*
 
 **Refinement: a finding's enumerated defects are a checklist, and it is not done
 until every item is struck.** Recurrences 6 and 8 are the same error at different
