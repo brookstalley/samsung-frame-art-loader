@@ -497,8 +497,17 @@ product_definition:
         open_questions). Watch the retry loop: ai.py retries up to 5 times on
         malformed JSON, so a persistently bad response costs 5x.
     - item: "Web search during discovery"
-      estimated_monthly_cost: "unknown — potentially the dominant cost"
-      notes: "If discovery uses OpenRouter's `:online` variant or a separate search API, per-search fees can exceed token spend by an order of magnitude. Unresolved; see open_questions."
+      estimated_monthly_cost: "$0.03-0.25 per run; inside the ceiling"
+      notes: >
+        RESOLVED 2026-07-20 against OpenRouter documentation, replacing an
+        "unknown — potentially the dominant cost" estimate that was wrong.
+        Parallel $0.001/request, Exa $0.005, Perplexity $0.005 — each including
+        10 results. A ~20-work run makes 30-50 searches. Worst case search
+        roughly DOUBLES per-run cost rather than exceeding tokens by an order of
+        magnitude; a full run is $0.16-0.49 and $20 buys 40-125 runs.
+        Routed through OpenRouter's web plugin rather than a direct provider
+        account: cheaper ($0.005 vs Exa's $0.007 direct) and bills as OpenRouter
+        credits, so one ceiling covers tokens and search together.
     - item: "Museum APIs and image acquisition"
       estimated_monthly_cost: "$0"
       notes: "ARTIC is free and already throttled and cached. Google Arts & Culture is scraped. Bandwidth only."
@@ -929,6 +938,62 @@ technical_decisions:
         - "Strictly LAN with no remote access — simpler still, but no access while away."
       date: 2026-07-19
   operational:
+    - decision: "The hard monthly spend ceiling is an OpenRouter per-key credit limit, not application-side metering."
+      rationale: >
+        Decided 2026-07-20 by the operator, against a recommendation for a
+        belt-and-braces design (app-side soft cap plus provider hard cap). The
+        operator's answer is the better one and the recommendation was withdrawn.
+
+        OpenRouter supports an optional per-key credit limit with daily/weekly/
+        monthly reset, returning 402 when exhausted, and search-plugin fees bill as
+        OpenRouter credits — so ONE number covers tokens and search together and
+        cannot be bypassed. An application meter that fails open is
+        indistinguishable from one that works: no error, no alert, just a bill.
+        That is the same defect shape this codebase already ships in `upload_file`
+        (catches every exception, reports success anyway).
+
+        The concern that this would degrade `halted_by_budget` from a designed
+        outcome to an exception was checked and does NOT hold. A 402 is
+        unambiguous, so the outcome is cleanly derivable; `GET /api/v1/key`
+        returns `limit_remaining` as an authoritative "budget left" that cannot
+        drift from a local tally; and per-generation `cost` covers "what did this
+        run cost". The UX need survives without owning a meter that can lie.
+
+        Two residuals recorded rather than waved past: the reset is midnight UTC
+        (so "month" is the UTC calendar month, not local), and a 402 arrives
+        mid-run, so a run can halt partially — which the error model already
+        declares normal, but which makes `halted_by_budget` a state the catalogue
+        must represent, not just an error string.
+      alternatives_considered:
+        - "App-side soft cap at ~$18 plus provider hard cap at $20 — graceful halt before the ugly 402, at the cost of a second enforcement path that can itself fail open. Recommended, then withdrawn."
+        - "App-side metering only — full control of halt semantics, but the fail-closed guarantee is only as strong as our own code, which is the exact class of thing the 2024 codebase got wrong."
+      date: 2026-07-20
+    - decision: "Discovery carries a per-run search cap, separate from the monthly ceiling."
+      rationale: >
+        Decided 2026-07-20. A monthly ceiling does not bound a single runaway run,
+        and a pre-run cost estimate is not an estimate if the run can freely exceed
+        it. The cap is derived from the work count, is a deployment value (never
+        hardcoded), and hitting it is a distinguishable outcome rather than a
+        silent truncation of results.
+      alternatives_considered:
+        - "Monthly cap only — fewer knobs, but one bad intent can consume a meaningful slice of the month and the pre-run estimate becomes a guess rather than a bound."
+        - "Per-run DOLLAR cap covering tokens and searches together — more directly meaningful, but it cannot be checked before the run starts, only tripped during it."
+      date: 2026-07-20
+    - decision: "Back up the catalogue; treat the image tree as disposable."
+      rationale: >
+        Recorded 2026-07-20 while sizing capacity. This inverts the intuitive
+        backup priority and is worth stating because of that. Every source image is
+        re-fetchable from its source URL — the product already relies on this, and
+        it is the stated reason `all.json` can be replaced rather than migrated.
+        What is NOT re-fetchable is the curatorial layer: accept/reject verdicts,
+        which image instance was chosen canonical and why, hand-approved mat
+        colours, theme membership, and suppression scopes. Losing it means
+        re-running discovery, which costs real money and re-asks the curator every
+        judgement they already made. The catalogue is megabytes; the image tree is
+        gigabytes and reconstructible.
+      alternatives_considered:
+        - "Back up everything — simple, but ~10x the volume to protect the 1% that matters, and it obscures which artefact is actually irreplaceable."
+      date: 2026-07-20
     - decision: "Pin the IT8951 driver to 9f13613 or vendor it."
       rationale: "omni-epd declares it as an unpinned git dependency resolving to whatever master currently is. Builds are only reproducible today because the repo has not moved since 2023. Roughly 1,500 lines of frozen code the project depends on completely."
       alternatives_considered: ["Leave unpinned — a silent reproducibility failure waiting on an upstream commit."]
@@ -1127,15 +1192,33 @@ open_questions:
     # mat-colour therefore need different models, which is exactly what the
     # OpenRouter multi-provider decision already enables. Vision volume is one call
     # per accepted artwork, so the model choice barely moves the monthly total.
-  - question: "Does agentic discovery need paid web search, and is that inside or outside the $20 ceiling?"
-    blocking: "Whether the $20 ceiling is realistic, and what the meter must count."
-    priority: high
+  # RESOLVED 2026-07-20: "Does agentic discovery need paid web search, and is that
+  # inside or outside the $20 ceiling?" INSIDE, comfortably. Verified against
+  # OpenRouter documentation: Parallel $0.001/request, Exa $0.005, Perplexity
+  # $0.005, all including 10 results. A ~20-work run makes 30-50 searches, so
+  # search costs $0.03-0.25 against ~$0.13-0.24 of tokens. A run lands at
+  # $0.16-0.49 and $20 buys 40-125 runs a month.
+  #
+  # The original premise was WRONG and is retired: search cannot "dominate token
+  # spend by an order of magnitude" at this volume — worst case it roughly doubles
+  # per-run cost. See artifacts/nonfunctional-requirements.md § Cost Constraints.
+  #
+  # The meter question dissolved rather than being answered: search fees bill as
+  # OpenRouter credits, so token spend and search spend are ONE number under one
+  # ceiling. Routing search through OpenRouter's plugin rather than a direct Exa
+  # account is strictly better on both axes ($0.005 vs $0.007, and one meter
+  # instead of two).
+  - question: "Which search engine should discovery default to — Parallel, Exa, or Perplexity?"
+    blocking: "Nothing structural. All three are affordable; this is a result-quality decision with no evidence yet."
     waiting_on: research
-    # Token costs at the chosen models are trivially small against $20. If discovery
-    # performs real web search (OpenRouter's `:online` variant, or a separate search
-    # API), per-search fees can dominate token spend by an order of magnitude and
-    # would become the actual binding cost. The meter must count whatever is billed,
-    # not just tokens.
+    priority: medium
+    # Opened 2026-07-20 when the cost question resolved without discriminating
+    # between engines: the spread is $0.05 vs $0.25 per run, which against a $20
+    # ceiling is not decision-relevant. Choosing on price would be choosing on the
+    # one axis that does not matter. Deferred to a build-time spike, which must
+    # compare on this product's actual hard cases — resolving a named work to a
+    # specific museum page, and answering a recency-bound intent ("recent
+    # award-winning art") — not on generic search relevance.
   - question: "Does relaxing 3tears to 3.13 survive a real test run under 3.13?"
     blocking: "Merging the upstream relaxation PR. Does NOT block this product — see the answered question below."
     waiting_on: research
@@ -1323,7 +1406,41 @@ artifact_manifest:
   #   file_path: string (relative to project root)
   #   version: integer
   #   depends_on: [artifact names]
-  artifacts: []
+  #
+  # Backfilled 2026-07-20. This block sat empty through six authored artifacts —
+  # a real gap, not a deliberate omission. Keep it current as artifacts land.
+  artifacts:
+    - name: product-brief
+      file_path: .prawduct/artifacts/product-brief.md
+      version: 1
+      depends_on: []
+    - name: project-preferences
+      file_path: .prawduct/artifacts/project-preferences.md
+      version: 1
+      depends_on: []
+    - name: data-model
+      file_path: .prawduct/artifacts/data-model.md
+      version: 1
+      depends_on: [product-brief]
+    - name: nonfunctional-requirements
+      file_path: .prawduct/artifacts/nonfunctional-requirements.md
+      version: 1
+      depends_on: [product-brief]
+    - name: api-contract
+      file_path: .prawduct/artifacts/api-contract.md
+      version: 1
+      depends_on: [product-brief, data-model]
+    - name: boundary-patterns
+      file_path: .prawduct/artifacts/boundary-patterns.md
+      version: 1
+      depends_on: [api-contract, data-model]
+  # Research findings — inputs to the artifacts above, not artifacts themselves.
+  findings:
+    - file_path: .prawduct/artifacts/platform-and-dependency-findings.md
+    - file_path: .prawduct/artifacts/3tears-integration-findings.md
+  # Strategy-class artifacts still owed (structural-coverage advisory):
+  #   architecture.md, security-model.md, operational-spec.md,
+  #   observability-strategy.md, test-specifications.md
 
 # =============================================================================
 # BUILD STATE
