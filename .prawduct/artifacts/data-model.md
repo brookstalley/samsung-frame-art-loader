@@ -335,7 +335,9 @@ candidates provenance.
 | Field | Type | Constraints | Description |
 |---|---|---|---|
 | `id` | UUID | PK | |
-| `intent_text` | text | required | The curator's natural-language intent, verbatim. |
+| `kind` | enum | required | `discovery` \| `resolve`. A `resolve` run is phase 2 only — the re-search behind `resolve_images`. See below. |
+| `parent_run_id` | UUID | nullable, FK → DiscoveryRun | Set on `resolve` runs: the run that originally proposed these works. Null on `discovery` runs. |
+| `intent_text` | text | required for `kind='discovery'`, else nullable | The curator's natural-language intent, verbatim. A `resolve` run has no intent of its own — it inherits the parent's. |
 | `strategy` | text | nullable | The interpreted plan, for explaining results. |
 | `initiated_by` | enum | required | `web_ui` \| `web_ui_agent` \| `mcp_client`. Which surface started this run. |
 | `status` | enum | required | `resolving_works` \| `awaiting_approval` \| `resolving_images` \| `completed` \| `failed` \| `declined` \| `cancelled` \| `halted_by_budget`. See State Machines. |
@@ -345,6 +347,23 @@ candidates provenance.
 | `unresolved_work_count` | integer | nullable | Works from phase 1 for which no credible instance was found. **Q12.** |
 | `started_at`, `completed_at` | datetime | nullable | |
 
+> **The re-search is a run, not a side effect (decided 2026-07-20).** `resolve_images`
+> is a paid, minutes-long operation, and it previously created no row at all — so the
+> one tool the design says is the only one that spends money had no handle to poll, no
+> cancel, no cost of its own, and nothing stopping the same work ids being submitted
+> twice concurrently. Modelling it as a `DiscoveryRun` with `kind='resolve'` fixes all
+> four at once by reusing machinery that already exists, rather than inventing a
+> second, weaker handle beside it. A resolve run enters directly at
+> `resolving_images`: `resolving_works` and `awaiting_approval` are unreachable for
+> it, because phase 1 already happened on the parent.
+>
+> **`parent_run_id` is what keeps cost attributable to intent.** Spend from a
+> re-search belongs to the resolve run — that is the point of giving it a row — but
+> "what did asking for Dalí actually cost?" must still be answerable, so it rolls up
+> through the parent chain. This supersedes the earlier rule that re-search spend
+> attributes directly to the originating run; that rule existed only because there
+> was no other row to attribute it to. A `completed` parent still never reopens.
+>
 > `halted_by_budget` is a first-class terminal state, not an error. The cap fails
 > closed and the curator must be able to see that is what happened.
 >
@@ -396,7 +415,7 @@ artworks.
 | `proposed_artist` | string | nullable | |
 | `rationale` | text | required | Why the model matched this work to the intent. **Q5.** |
 | `work_dedup_key` | string | required, indexed | Normalised work identity for cross-run suppression. **Q3.** |
-| `resolution_status` | enum | required | `pending` \| `resolved` \| `unresolved`. `unresolved` ⇒ phase 2 found no credible instance. **Q12.** |
+| `resolution_status` | enum | required | `pending` \| `resolved` \| `unresolved`. Reflects the **latest** resolution attempt, whether that was the original phase 2 or a later re-search. `unresolved` ⇒ that attempt found no credible instance the curator has not already rejected. **Q12.** |
 | `verdict` | enum | required | `pending` \| `accepted` \| `rejected` \| `awaiting_better_image`. See State Machines. |
 | `rejected_reason` | text | nullable | Optional curator note. |
 | `decided_at` | datetime | nullable | |
@@ -412,6 +431,21 @@ artworks.
 > Phase 2 failing to find any credible instance is the signal that phase 1 may have
 > invented the work. Dropping it from the batch discards that signal; attaching a
 > low-confidence near-match actively launders it.
+>
+> **Redefined 2026-07-20, deliberately and with the hazard named.** It previously
+> meant "phase 2 found no credible instance" — an outcome of the original run only.
+> It now tracks the *latest* resolution attempt, which is what gives a failed
+> re-search a terminal representation without adding a verdict value for it. A work
+> in `awaiting_better_image` whose re-search comes back empty lands at
+> `unresolved`, and constraint 9 already forbids presenting it as accepted-able or
+> silently omitting it — so the dead end reports itself.
+>
+> **This only happens when every instance is rejected.** If unrejected instances
+> remain, re-search finding nothing new is not a dead end: constraint 8 selects the
+> next-best surviving instance and the work returns to `pending`. So `unresolved`
+> after a re-search means what it always meant — there is nothing here to accept.
+> The redefinition is written down rather than left implicit because a widened
+> meaning that nobody records is how the next drift starts.
 >
 > **Q3.** `work_dedup_key` is what stops discovery re-proposing declined works
 > forever. Its derivation (normalised artist + title, or a source identifier where
@@ -565,13 +599,27 @@ re-proposal is `CandidateWork.work_dedup_key` (**Q3**).
 ### DiscoveryRun
 
 ```
+kind='discovery':
+
 resolving_works ──┬──────────────────────────▶ resolving_images ──┬──▶ completed
    (phase 1)      │                                (phase 2)      ├──▶ failed
                   └──▶ awaiting_approval ──┬──▶ resolving_images  └──▶ halted_by_budget
                                            └──▶ declined
 
+kind='resolve':          (the re-search — phase 2 only)
+
+                                          resolving_images ──┬──▶ completed
+                                            (entry state)    ├──▶ failed
+                                                             └──▶ halted_by_budget
+
 any of {resolving_works, awaiting_approval, resolving_images} ──▶ cancelled
 ```
+
+A `resolve` run enters at `resolving_images` and can never reach `resolving_works`,
+`awaiting_approval`, or `declined` — phase 1 already happened on the parent, so
+there is no work list to approve or decline. Every other state behaves identically,
+which is the point of reusing the entity: `status`, `cancel`, `halted_by_budget`,
+and spend attribution all work on a re-search without a line of new machinery.
 
 `cancelled` is reachable from `resolving_works`, `awaiting_approval`, and
 `resolving_images` — a run stopped on request while it was working. It is the
@@ -609,14 +657,43 @@ of 40 works succeeded partially; it did not fail.
 pending ──┬──▶ accepted  (mints an Artwork)      │
           ├──▶ rejected  (terminal; suppresses)  │
           └──▶ awaiting_better_image ────────────┘
-                 re-search via art_discovery(resolve_images);
-                 a new instance is selected, and the work
-                 returns to `pending` for review
+               entered ONLY via art_review(reject_image)
 ```
 
-`awaiting_better_image` is **not terminal**. It returns to `pending` once phase 2
-selects a fresh instance, and it must not write `work_dedup_key` suppression —
-that is reserved for `rejected` (**Q11**).
+`awaiting_better_image` is **not terminal**. It returns to `pending` once a
+resolution attempt selects a fresh instance, and it must not write
+`work_dedup_key` suppression — that is reserved for `rejected` (**Q11**).
+
+**The three situations inside it are distinguished without storing them
+(decided 2026-07-20).** The verdict was carrying "not yet re-searched",
+"re-search running", and "re-search found nothing" as one indistinguishable
+value, so a curator could not tell a pending job from a dead end. The fix is not
+more enum values — it is to stop conflating curator *intent* with job *state*:
+
+| Situation | How it is known |
+|---|---|
+| Curator asked for better; nothing running | `awaiting_better_image`, and no active resolve run |
+| Re-search in flight | An active `DiscoveryRun` with `kind='resolve'` covering this work |
+| Re-search found nothing | `resolution_status = unresolved` — see above |
+
+`awaiting_better_image` therefore means exactly one thing: *the curator wants this
+work and the current instance is not good enough*. It is a statement of intent, and
+intent does not change when a job starts or finishes.
+
+**This follows the readiness decision rather than re-litigating it.** Storing
+"re-search running" as a verdict value would create a second truth beside the run
+row, and the two can disagree — a crashed resolve run would leave the work reading
+`resolving` forever with nothing to correct it. Derived state cannot drift from the
+thing it is derived from. See `architecture.md` § readiness.
+
+**Entry is single-path by construction (decided 2026-07-20).** `set_verdict` does
+**not** accept `awaiting_better_image`; `reject_image` is the only way in. Both
+previously reached it and only `reject_image` set `rejected_at`, so a re-search
+could legitimately return the image the curator had just rejected — the exact
+suppression failure **Q11** exists to prevent, reappearing on the instance scope.
+Narrowing the entry makes that impossible rather than defended against, and it
+matches the scope boundary the tools already have: `awaiting_better_image` is a
+judgement about the *instance*, and `set_verdict` is work-scoped.
 
 ## Constraints
 
@@ -662,6 +739,16 @@ that is reserved for `rejected` (**Q11**).
     could not tell" are different facts, and only the second is honest as
     `unknown`. Whether rights *gate* anything is still open; recording them is
     not.
+14. **A CandidateWork is covered by at most one active `resolve` run at a time.**
+    Enforced at run-creation time: `resolve_images` refuses work ids already
+    covered by a run in `resolving_images`, and names them in the refusal. Without
+    this, double-submitting the same ids spends twice for one result on the only
+    tool that spends money at all. This is the constraint the re-search had no
+    place to live in before it had a run row.
+15. **`awaiting_better_image` is reachable only through `art_review(reject_image)`.**
+    The path that sets `rejected_at` and the path that sets the verdict are the same
+    path, so instance suppression can never be skipped. `set_verdict` rejects the
+    value with an error naming `reject_image` — see `api-contract.md`.
 
 ## Rotation is host-driven, and the product owns its timing
 

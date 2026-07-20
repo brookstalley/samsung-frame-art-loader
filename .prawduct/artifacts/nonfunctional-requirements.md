@@ -256,6 +256,19 @@ freely exceed it. The cap is derived from the work count, is a deployment value
 (never hardcoded — `project-preferences.md`), and its being hit is a distinguishable
 outcome rather than a silent truncation of results.
 
+> **The cap applies per run, and re-searches are now runs (2026-07-20).** Modelling
+> `resolve_images` as a `DiscoveryRun` with `kind='resolve'` gave the re-search a
+> handle, a cancel, and its own cost — but it also means the per-run cap no longer
+> bounds a *work* across its lifetime, only each attempt at it. A curator who
+> rejects an image ten times gets ten capped runs, not one capped work.
+>
+> **That is accepted, not overlooked.** Each re-search is a deliberate human act on
+> a named set of work ids, which is a different risk shape from an agent loop
+> running away inside one run — the thing the cap exists to bound. The monthly
+> OpenRouter ceiling is what bounds the aggregate, and it cannot be multiplied by
+> creating more runs. Recorded because "per-run" quietly changed denominator here,
+> and a reader who assumed the cap bounded total re-search spend would be wrong.
+
 ### Cost visibility
 
 Every operation that spends money should report its estimated cost before it runs

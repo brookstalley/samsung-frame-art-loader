@@ -64,7 +64,11 @@ Deliberately minimal, because the topology does not need more.
 - **`run_id`** — a discovery run's correlation key, on every log line emitted
   during that run on the curation plane. This is the one place where a single user
   action fans out across minutes and many external calls, so it is the one place a
-  correlation key earns its keep.
+  correlation key earns its keep. **This covers re-searches too**, since
+  `resolve_images` creates a `DiscoveryRun` with `kind='resolve'` (2026-07-20) —
+  before that decision the product's second paid, minutes-long fan-out emitted log
+  lines with no correlation key at all. Where a resolve run's lineage matters, it is
+  `parent_run_id`, not a second field on the log line.
 - **`work_id`** — the only identifier that spans both planes. It appears in
   curation logs, in the theme manifest, and in display logs. That is sufficient to
   answer "why is this artwork behaving oddly" across the process boundary.

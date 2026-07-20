@@ -157,8 +157,38 @@ the whole gating design rests on — that exactly one tool spends. It also means
 curator can reject several images while reviewing and re-resolve them in one batch,
 rather than firing a search per click.
 
-Spend from a re-search attributes to the **originating run**, and the run does not
-reopen: a `completed` run stays completed. See `data-model.md` → SpendRecord.
+**`resolve_images` returns a run handle, exactly like `start` (decided 2026-07-20).**
+It creates a `DiscoveryRun` with `kind='resolve'` and `parent_run_id` set to the run
+that originally proposed the works, and returns immediately with its id. It is a
+paid operation that takes minutes; it previously created no row, which left the one
+tool that spends money without a handle to poll, a `cancel`, a cost of its own, or
+any guard against the same ids being submitted twice concurrently. `status`,
+`cancel`, and `spend` accept a resolve run id with no special-casing.
+
+**It refuses work ids already covered by an in-flight resolve run**, naming them in
+the error rather than silently deduplicating — a curator who double-submitted should
+find out, not be quietly corrected (`data-model.md` constraint 14).
+
+Spend from a re-search attributes to the **resolve run**, which is what having a row
+is for, and rolls up to the originating run through `parent_run_id` so "what did
+asking for Dalí cost?" stays answerable. **This supersedes the earlier rule that
+re-search spend attributed directly to the originating run** — that rule existed
+only because there was no other row to attribute it to. The originating run still
+never reopens: a `completed` run stays completed. See `data-model.md` → SpendRecord.
+
+### `set_verdict` cannot set `awaiting_better_image`
+
+Rejecting an *instance* is `reject_image`'s job, and it is the only way into
+`awaiting_better_image`. `set_verdict` accepts `accepted` and `rejected` only, and
+returns an error naming `reject_image` when asked for `awaiting_better_image`.
+
+**Both paths used to reach that state and only `reject_image` set `rejected_at`** —
+so a work sent there via `set_verdict` had no suppressed instance, and the re-search
+could legitimately hand back the image the curator had just turned down. That is the
+suppression failure **Q11** exists to prevent, reappearing on the instance scope
+instead of the work scope. One entry point makes it impossible rather than
+defended against, and it matches the boundary the tools already draw: `set_verdict`
+is work-scoped, and "this scan is not good enough" is a judgement about an instance.
 
 ### Why not split reads from writes
 
@@ -571,8 +601,6 @@ every instance found.
 Carried in `project-state.yaml` → `open_questions`; restated here so this artifact
 is self-contained:
 
-- Whether `set_verdict` should require explicit work ids rather than accepting a
-  bulk "everything pending" (see Security).
 - Whether the MCP surface should expose *resources* in addition to tools. The
   specification's split is about *control* — who decides when something enters
   context — not about mutability, and it never says read-only operations must be

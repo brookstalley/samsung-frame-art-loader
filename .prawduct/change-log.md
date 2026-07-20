@@ -48,6 +48,53 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-20: Model the re-search — a run row, derived states, one entry point
+
+**Why:** Three interacting defects the Critic raised on the one paid path, deferred
+last session rather than patched because fixing any one alone moves the ambiguity
+instead of removing it. They were right to be one question — fixing the first
+largely dissolved the second.
+
+**`resolve_images` now creates a `DiscoveryRun` with `kind='resolve'`.** It was a
+paid, minutes-long operation creating no row at all, so the one tool the design says
+is the only one that spends money had no handle to poll, no cancel, no cost of its
+own, and no guard against the same work ids being submitted twice concurrently. A
+resolve run enters directly at `resolving_images` and carries `parent_run_id`, so
+`status`, `cancel`, `spend`, and `halted_by_budget` all work on it with no new
+machinery.
+
+**No new states — the run row *was* the missing state.** `awaiting_better_image` was
+carrying "not yet re-searched", "re-search running", and "re-search found nothing"
+as one value. The fix separates curator *intent* from job *state*: the verdict now
+means only "the curator wants this work and this instance isn't good enough", which
+doesn't change when a job starts or stops. Running derives from the run row; found-
+nothing is `resolution_status = unresolved`. That follows the ratified derived-not-
+stored readiness decision instead of re-litigating it — a stored `resolving` would be
+a second truth beside the run row, and a crashed run would strand a work in it.
+
+**Cost named rather than discovered later:** `resolution_status` is redefined from
+"phase 2 found no credible instance" to "the latest attempt found none". Written down
+explicitly, because a widened meaning nobody records is how the next drift starts.
+
+**`set_verdict` no longer accepts `awaiting_better_image`.** Both paths reached it and
+only `reject_image` set `rejected_at`, so a re-search could hand back the image just
+rejected — the Q11 suppression failure reappearing on the instance scope. One entry
+point makes it impossible rather than defended against.
+
+**Swept by decision again**, and it found a dependent that names none of the changed
+terms: the **per-run search cap** in `nonfunctional-requirements.md` now bounds each
+*attempt* rather than a work's lifetime, because re-searches are runs. Accepted and
+recorded — the monthly ceiling still bounds the aggregate and can't be multiplied by
+creating runs. Also swept `observability-strategy.md`, where `run_id` now covers the
+product's second paid fan-out, which previously logged with no correlation key.
+
+**Also fixed, no pre-existing exception:** `api-contract.md` still listed the
+`set_verdict` explicit-ids question as open after it was decided on 2026-07-20 — one
+of the Critic's outstanding warnings.
+
+**Files:** `data-model.md`, `api-contract.md`, `nonfunctional-requirements.md`,
+`observability-strategy.md`, `project-state.yaml`.
+
 ## 2026-07-20: Settle the curation interpreter — uv-managed 3.14, 3tears unmodified
 
 **Why:** The interpreter question was the highest-priority open item and it gated the

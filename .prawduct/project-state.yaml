@@ -971,6 +971,66 @@ technical_decisions:
         - "resource_link content blocks — spec-sanctioned and token-cheap, but client support is uneven and it still costs a read per image."
       date: 2026-07-19
   data_model:
+    - decision: "The re-search is a DiscoveryRun with kind='resolve'; its three conflated situations are derived, not stored; and awaiting_better_image is reachable only via reject_image."
+      rationale: >
+        Decided 2026-07-20 by the operator, resolving three interacting defects the
+        Critic raised and the prior session deliberately deferred rather than
+        patching. They were one question because fixing any one alone just moves the
+        ambiguity — and in the event, fixing the first largely dissolved the second.
+
+        (1) THE RUN ROW. resolve_images was a paid, minutes-long operation creating
+        no row at all, so the one tool the design says is the only one that spends
+        money had no handle to poll, no cancel, no cost of its own, and no guard
+        against concurrent double-submission of the same work ids. It now creates a
+        DiscoveryRun with kind='resolve' and parent_run_id, entering directly at
+        resolving_images (phase 1 already happened on the parent). This reuses
+        status, cancel, spend attribution and halted_by_budget rather than inventing
+        a second, weaker handle beside them. Constraint 14 refuses work ids already
+        covered by an in-flight resolve run, naming them rather than silently
+        deduplicating.
+
+        (2) NO NEW STATES. awaiting_better_image was carrying "not yet re-searched",
+        "re-search running" and "re-search found nothing" as one value. The fix is
+        not more enum values but separating curator INTENT from job STATE:
+        awaiting_better_image now means exactly "the curator wants this work and the
+        current instance is not good enough", which does not change when a job
+        starts or ends. "Running" derives from the run row (1) made exist; "found
+        nothing" is resolution_status='unresolved', which constraint 9 already
+        forbids omitting or presenting as accepted-able.
+
+        This deliberately follows the ratified derived-not-stored readiness decision
+        rather than re-litigating it. A stored `resolving` verdict would be a second
+        truth beside the run row, and a crashed resolve run would strand a work in
+        it forever with nothing to reconcile against.
+
+        ACCEPTED COST, named rather than discovered later: resolution_status is
+        REDEFINED from "phase 2 found no credible instance" to "the latest
+        resolution attempt found none". Written into data-model.md explicitly,
+        because a widened meaning nobody records is how the next drift starts. It
+        only reaches unresolved when every instance is rejected; if unrejected
+        instances remain, constraint 8 selects the next and the work returns to
+        pending.
+
+        (3) SINGLE ENTRY POINT. set_verdict and reject_image both reached
+        awaiting_better_image and only reject_image set rejected_at — so a work sent
+        there by set_verdict had no suppressed instance and a re-search could
+        legitimately return the image just rejected. That is the Q11 suppression
+        failure reappearing on the instance scope. set_verdict no longer accepts the
+        value; reject_image is the only way in, so the path that sets the verdict and
+        the path that sets rejected_at are the same path. Impossible rather than
+        defended, and it matches the scope boundary the tools already draw.
+
+        Knock-on recorded in nonfunctional-requirements.md: the per-run search cap
+        now bounds each ATTEMPT rather than a work's lifetime, since re-searches are
+        runs. Accepted — each is a deliberate human act on named ids, a different
+        risk shape from an agent loop running away inside one run, and the monthly
+        ceiling still bounds the aggregate and cannot be multiplied by creating more
+        runs.
+      alternatives_considered:
+        - "Split into three verdicts (resolving, no_better_image) — most legible with zero derivation and no redefinition of resolution_status, but `resolving` duplicates the run row's truth and a crashed run strands the work there permanently."
+        - "Derive `running` but add a stored `no_better_image` terminal — avoids the redefinition, but uses two mechanisms for three situations and is harder to explain than either pure option."
+        - "Let set_verdict keep awaiting_better_image and set rejected_at implicitly — fixes the bug but leaves two entry points, so the next writer can reintroduce it."
+      date: 2026-07-20
     - decision: "The review gate is that a human SAW THE ARTWORK — not that a surface was withheld. Accepting is available over MCP, and any reviewing surface must show the image."
       rationale: >
         AMENDED 2026-07-19, same day, superseding "agents never auto-accept" as
@@ -1596,29 +1656,28 @@ open_questions:
   # cpython-3.14-linux-aarch64-gnu exists (python-build-standalone, via Astral),
   # verified with `uv python list --all-platforms --all-arches`. The expensive
   # option was never expensive, so the tradeoff the question posed did not exist.
-  - question: "How is the re-search after reject_image modelled — its run row, its states, and its rejection record?"
-    blocking: "The DiscoveryRun and CandidateImage state machines, and a money path that currently has no handle."
-    waiting_on: user
-    priority: high
-    # Raised 2026-07-20 by Critic review (design reviewer), and NOT fixed in the
-    # same pass — recorded rather than silently carried, because it is three
-    # related defects on the one paid path:
-    #
-    #   1. `resolve_images` is a paid, minutes-long operation that creates NO run
-    #      row. So it has no handle to poll, no cancel, no cost attribution of its
-    #      own, and nothing prevents double-submission of the same work ids — on
-    #      the one tool the design says is the only one that spends money.
-    #   2. `awaiting_better_image` is one state covering three distinct situations:
-    #      "not yet re-searched", "re-search running", and "re-search found
-    #      nothing". A curator cannot tell a pending job from a dead end, and the
-    #      third case has no terminal representation at all.
-    #   3. `set_verdict` and `reject_image` both reach `awaiting_better_image` but
-    #      only one sets `rejected_at` — so a re-search can legitimately return the
-    #      image that was just rejected, which is the suppression bug Q11 exists to
-    #      prevent, reappearing on the other scope.
-    #
-    # These interact, which is why they are one question: fixing the run row
-    # without fixing the state split just moves the ambiguity.
+  # RESOLVED 2026-07-20 by the operator: "How is the re-search after reject_image
+  # modelled — its run row, its states, and its rejection record?" All three
+  # defects, as one design. Recorded in technical_decisions.data_model; artifact
+  # text in data-model.md (DiscoveryRun, CandidateWork, constraints 14-15) and
+  # api-contract.md.
+  #
+  #   1. resolve_images creates a DiscoveryRun with kind='resolve' and
+  #      parent_run_id. Reuses status/cancel/spend/halted_by_budget rather than
+  #      inventing a second handle. Constraint 14 refuses ids already covered by an
+  #      in-flight resolve run.
+  #   2. NO new states. "Running" derives from the run row; "found nothing" is
+  #      resolution_status='unresolved', widened to mean the LATEST attempt — a
+  #      redefinition written down explicitly rather than left implicit. Follows
+  #      the ratified derived-not-stored readiness decision: a stored `resolving`
+  #      would be a second truth beside the run row and could drift.
+  #   3. set_verdict no longer accepts awaiting_better_image; reject_image is the
+  #      only entry, so rejected_at can never be skipped. Structurally impossible
+  #      rather than defended against.
+  #
+  # Fixing (1) largely dissolved (2) — the run row IS the missing state. Same
+  # pattern as the questions that dissolved on 2026-07-19/20: the premise (that
+  # three situations needed three names) was the thing to check.
   - question: "Should the MCP surface expose resources in addition to tools?"
     blocking: "Nothing — tools cover every current read. This is an optimisation and a UX question."
     waiting_on: user
