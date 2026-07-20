@@ -48,6 +48,54 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-20: Narrow the reconciliation rule, add `interrupted`, and sweep the sites the finding named
+
+**Why:** `verify-resolutions` closed all six blocking findings from the previous
+round but found the crash-lifecycle fix **over-reached**, then a further pass found
+the correction had landed in only one of the three artifacts that carried the rule.
+
+**The over-reach.** The edge was `any non-terminal ──▶ failed`, justified by "a run
+only advances while its owning process is alive." True of `resolving_works` and
+`resolving_images`; **false of `awaiting_approval`**, which advances when the
+*curator* calls `approve` — durable, human-held state that is meant to outlive a
+restart. As written, `systemctl restart` (the documented deploy step) would silently
+destroy a pending approval and the phase-1 spend behind it, and curation restarts
+constantly during development. **A rule justified by process liveness must apply only
+to the states process liveness governs.**
+
+**`interrupted` is now its own terminal state**, not a flavour of `failed`: "stopped
+underneath it" and "something broke" call for different responses — re-run versus
+investigate — which is the discriminator test already applied to `halted_by_budget`.
+`api-contract.md` carries it, since an agent that can't tell them apart will either
+retry a real fault forever or escalate a routine restart as a bug.
+
+**The terminal-state count is now unstated.** It read "four" while listing five, then
+"six" while another sentence 21 lines away still said four. A number maintained by
+hand in prose gets it wrong; the rule doesn't need the count.
+
+**The seventh recurrence, and its root cause is sharper than the previous six.** The
+finding that produced the fix **named three files**. I fixed one. My pass-3 grep used
+the literal strings from the artifact I'd edited, and `architecture.md` phrased the
+same rule differently — the paraphrase blindness pass 2 exists to catch, which I
+skipped because I believed passes 1 and 3 had covered it. `operational-spec.md` was
+worse than stale: it told the operator that a non-terminal run with no work happening
+means reconciliation is broken, which had become the exact description of a *healthy*
+run waiting on the curator.
+
+**Correction added to `learnings.md`: when a Critic finding lists files, that list
+*is* the sweep set.** No graph walk was needed — the answer was handed over and a
+third of it was used.
+
+**Also:** the observability cross-reference was made true rather than deleted;
+`resolve_images`'s operator-recovery row now distinguishes healthy-waiting from
+stranded; constraint 14's "every terminal state is written by the run's own process"
+corrected, since `interrupted` is precisely the exception; PEP 517 verification filed
+as **issue #9** rather than claimed as "tracked".
+
+**Files:** `data-model.md`, `architecture.md`, `operational-spec.md`,
+`api-contract.md`, `observability-strategy.md`, `project-preferences.md`,
+`project-state.yaml`, `learnings.md`.
+
 ## 2026-07-20: Address Critic findings — the crash lifecycle, the token order, flow 4, and a decision recorded in only one home
 
 **Why:** Cumulative Critic (`rev-20260720T160759Z-cbc0d27e`, 3 reviewers) returned

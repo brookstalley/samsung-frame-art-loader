@@ -413,11 +413,20 @@ Stack traces are for the journal, not the tool result.
 2. **Partial success must be expressible.** Partial dezoomify tile fetches are
    normal, and a run that acquires 30 of 40 works succeeded partially. An
    ok/fail binary would force one of two lies.
-3. **Never report success on a failed operation.** This is the product's existing
+3. **`interrupted` is distinguishable from `failed`, for the same reason (added
+   2026-07-20).** A run reported as `interrupted` was stopped by a curation restart
+   or OOM kill; a run reported as `failed` hit an error. **The correct caller
+   response differs** — re-run the first unchanged, investigate the second — which
+   is exactly the discriminator test this contract already applies to
+   `halted_by_budget`. An agent that cannot tell them apart will either retry a real
+   fault forever or escalate a routine deploy restart as a bug. `status` and
+   `list_runs` therefore return the terminal state itself, never a collapsed
+   ok/error flag.
+4. **Never report success on a failed operation.** This is the product's existing
    defect pattern — `upload_file` catches every exception, logs, and returns
    having recorded a null content id while the retry loop sets `success = True`.
    The contract must make that shape impossible rather than merely discouraged.
-4. **Errors are typed and specific.** A broad catch at a tool boundary needs
+5. **Errors are typed and specific.** A broad catch at a tool boundary needs
    `# prawduct:allow prawduct/broad-except -- reason`.
 
 ## Versioning

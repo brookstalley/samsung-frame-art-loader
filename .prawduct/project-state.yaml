@@ -976,6 +976,53 @@ technical_decisions:
         - "resource_link content blocks — spec-sanctioned and token-cheap, but client support is uneven and it still costs a read per image."
       date: 2026-07-19
   data_model:
+    - decision: "Curation reconciles runs left in a PROCESS-HELD state to a new terminal state `interrupted` at startup; awaiting_approval is excluded."
+      rationale: >
+        Decided 2026-07-20 after Critic review, then CORRECTED the same day after a
+        second review found the first version over-reached. Both halves are worth
+        recording because the error is instructive.
+
+        THE DEFECT. DiscoveryRun's state machine had no edge for process death:
+        every terminal state was written by the run's own process, which a crashed
+        process cannot do. Combined with constraint 14, a crash left the covered
+        works PERMANENTLY un-re-searchable, silently, on the only tool that spends
+        money. MemoryMax on the curation unit exists to cause exactly that kill and
+        a deploy is `systemctl restart`, so this was routine rather than exotic.
+
+        SELF-INFLICTED, AND THAT IS THE LESSON. The re-search decision REJECTED a
+        stored `resolving` verdict using the argument that "a crashed resolve run
+        would leave the work reading resolving forever with nothing to correct it" —
+        then moved the truth to the run row without re-asking that same question of
+        the run row. The argument was applied to the option being rejected and not
+        to the option being chosen. Two independent reviewers found it.
+
+        THE FIX: startup reconciliation. Chosen over timeouts or heartbeats because
+        a run in a process-held state only advances while its owning process lives,
+        and there is exactly one such process. If curation is starting, no
+        previously-recorded run is running — the inference is total rather than
+        heuristic, with no timer to tune and no liveness field to keep fresh.
+
+        THE CORRECTION: the first version reconciled EVERY non-terminal status,
+        justified by that same liveness argument. That argument is false for
+        `awaiting_approval`, which advances when the CURATOR calls approve — durable
+        human-held state that is supposed to outlive a restart. As first written, a
+        `systemctl restart` would have silently destroyed a pending approval and the
+        phase-1 spend behind it, and curation restarts constantly in development. A
+        rule justified by process liveness must apply only to the states process
+        liveness governs. Scope narrowed to {resolving_works, resolving_images}.
+
+        `interrupted` IS ITS OWN TERMINAL STATE, not a flavour of `failed`. "Stopped
+        underneath it" and "something broke" require different responses — re-run
+        versus investigate — which is the same discriminator test already applied to
+        halted_by_budget, and api-contract.md now carries it. Folding them together
+        would need a free-text reason field to tell them apart again, which is the
+        absorption the artifact's own terminal-state rule forbids.
+      alternatives_considered:
+        - "Reconcile every non-terminal status — the first version; rejected because awaiting_approval is human-held and a restart would destroy a pending decision plus its already-incurred phase-1 spend."
+        - "Lease/heartbeat on the run row — survives multiple curation processes, but there is only one systemd unit, so it adds a field to keep fresh in exchange for generality nothing needs."
+        - "Timeout-based expiry — no startup hook required, but the timeout is a tuning parameter that is wrong in both directions: too short kills live runs, too long leaves works blocked."
+        - "Fold interrupted into failed with a reason field — fewer states, but reintroduces the absorption the terminal-state rule forbids and makes callers parse prose to decide whether to retry."
+      date: 2026-07-20
     - decision: "The mat is specified in physical units with a weighted bottom margin; panel geometry is a DEPLOYMENT VALUE; the resolution floor is a minimum rendered size in inches; display_fit is derived, never stored; nothing is ever upscaled."
       rationale: >
         Decided 2026-07-20 by the operator. One decision chain, because each part

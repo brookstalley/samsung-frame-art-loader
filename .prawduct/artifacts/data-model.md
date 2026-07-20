@@ -728,7 +728,7 @@ heuristic — no timer to tune, no liveness field to keep fresh, and nothing tha
 be wrong.
 
 **`interrupted` is its own terminal state, not a flavour of `failed`.** The rule
-below — four terminal states describing four different things, none absorbing
+below — each terminal state describes a different thing and none may absorb
 another — applies to this one too. "The process was stopped underneath it" and
 "something broke" call for different operator responses: an interrupted run is
 simply re-run, a failed one is investigated. Folding them together would need a
@@ -749,12 +749,13 @@ and spend attribution all work on a re-search without a line of new machinery.
 terminal state behind `art_discovery(action='cancel')`; a run that spent money
 before being cancelled keeps its `actual_cost_usd`, because the spend happened.
 
-**Six terminal states describe six different things, and none may absorb
-another.** `completed` (it finished), `failed` (something broke),
-`halted_by_budget` (the cap fired), `declined` (the curator saw the work list and
-its price and said no), `cancelled` (stopped on request mid-flight), `interrupted`
-(the curation process was stopped underneath it — re-run it, do not investigate it).
-*(Said "four" while listing five before 2026-07-20; `interrupted` is the sixth.)*
+**Each terminal state describes a different thing, and none may absorb another.**
+`completed` (it finished), `failed` (something broke), `halted_by_budget` (the cap
+fired), `declined` (the curator saw the work list and its price and said no),
+`cancelled` (stopped on request mid-flight), `interrupted` (the curation process was
+stopped underneath it — re-run it, do not investigate it). *(The count is
+deliberately not stated: it read "four" while listing five, then "six" while another
+sentence still said four. A number that must be maintained in prose gets it wrong.)*
 Collapsing any
 of them makes a deliberate choice indistinguishable from a malfunction — the same
 mistake this artifact already refuses to make for `halted_by_budget`, and the same
@@ -895,10 +896,13 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
     Without this, double-submitting the same ids spends twice for one result on the
     only tool that spends money at all.
     **"Non-terminal" is safe to key on only because of startup reconciliation** (see
-    State Machines): every terminal state is written by the run's own process, so
-    without reconciliation a crash would make this constraint refuse those work ids
-    forever. The guard against double-spend must not become a permanent block —
-    which is exactly what it was before reconciliation was specified.
+    State Machines). Every terminal state *except* `interrupted` is written by the
+    run's own process — which is precisely why `interrupted` had to exist: without
+    it, a crash left no writer for the terminal state, and this constraint would
+    refuse those work ids forever. The guard against double-spend must not become a
+    permanent block, which is exactly what it was before reconciliation was
+    specified. Note a run sitting at `awaiting_approval` also holds its coverage,
+    and that is correct — it is waiting on the curator, not stranded.
 15. **`awaiting_better_image` is reachable only through `art_review(reject_image)`.**
     The path that sets `rejected_at` and the path that sets the verdict are the same
     path, so instance suppression can never be skipped. `set_verdict` rejects the

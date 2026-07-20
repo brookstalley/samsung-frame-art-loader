@@ -79,6 +79,25 @@ cheap, catches survivors; (2) walk `depends_on` and re-read dependents for the
 someone else wrote them** — catches the survivor sitting below your own edit. Pass 3
 is the one that was missing, and it is the cheapest of the three.
 
+5. **2026-07-20, sixth and seventh recurrences — the correction itself was the
+   miss.** A Critic finding named three artifacts carrying the same rule
+   (`data-model.md`, `architecture.md`, `operational-spec.md`). I edited one. My
+   pass-3 grep used the literal strings from the file I had just written;
+   `architecture.md` phrased the rule differently ("reconciles every non-terminal
+   run to `failed`") and did not match. `operational-spec.md` was worse than stale —
+   it had inverted, telling the operator that a healthy waiting run was a bug.
+
+**The correction: when a Critic finding lists files, that list IS the sweep set.**
+No dependency walk is needed and no grep pattern has to be guessed — the reviewer
+already did the work and handed over the answer. Using one file from a three-file
+finding is not a sweep failure of technique, it is not reading the finding.
+
+**And the generalisation behind passes 1–3: never let the grep pattern come from the
+text you just wrote.** Your own phrasing is the one phrasing guaranteed to be
+consistent; the survivors are, by definition, the sites that say it differently. Grep
+for the *concept's* distinctive nouns (`awaiting_approval`, `reconcil`, `non-terminal`)
+rather than for a sentence.
+
 **A second structural gap, found by the Critic on the same review:** the two entries
 under `artifact_manifest.findings` had *no `depends_on` edges at all*, so pass 2
 could not reach them even when run correctly — which is why the retired product-wide

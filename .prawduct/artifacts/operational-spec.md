@@ -177,7 +177,7 @@ Mostly automatic; the table below is what a human would do when it is not.
 | Label disagrees with the artwork | Journal for e-paper errors | The label path failed while rotation continued — by design, a panel failure never stops the TV |
 | A theme shows fewer works than expected | The manifest build's exclusion report | It names the per-work reason. This is the designed surface, not a diagnostic dead end |
 | Discovery refuses to start | `limit_remaining` on the health panel | If zero, the monthly UTC reset or a raised key limit |
-| `resolve_images` refuses work ids as "already in flight" | The named run's status | Startup reconciliation should have failed any run orphaned by a restart. If a run is still non-terminal with no work happening, reconciliation did not run — that is a bug, not an operator action |
+| `resolve_images` refuses work ids as "already in flight" | The named run's status | If `awaiting_approval`, that is **healthy** — the run is waiting for you, so approve or decline it and the ids free up. If `resolving_works` or `resolving_images` with nothing actually working, startup reconciliation should have moved it to `interrupted`; that it did not is a bug, not an operator action |
 | Acquisition fails on every work | Free disk space | The pre-acquisition guard should have caught it; if it did not, that is a bug in the guard |
 | Neither plane starts after a reboot | Both planes' resolved `ART_ROOT` in the journal | Mismatched or missing `ART_ROOT` is the likely cause |
 
