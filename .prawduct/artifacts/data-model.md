@@ -353,7 +353,7 @@ candidates provenance.
 | `intent_text` | text | required for `kind='discovery'`, else nullable | The curator's natural-language intent, verbatim. A `resolve` run has no intent of its own — it inherits the parent's. |
 | `strategy` | text | nullable | The interpreted plan, for explaining results. |
 | `initiated_by` | enum | required | `web_ui` \| `web_ui_agent` \| `mcp_client`. Which surface started this run. |
-| `status` | enum | required | `resolving_works` \| `awaiting_approval` \| `resolving_images` \| `completed` \| `failed` \| `declined` \| `cancelled` \| `halted_by_budget`. See State Machines. |
+| `status` | enum | required | `resolving_works` \| `awaiting_approval` \| `resolving_images` \| `completed` \| `failed` \| `declined` \| `cancelled` \| `halted_by_budget` \| `interrupted`. See State Machines. |
 | `estimated_cost_usd` | decimal | nullable | Phase-2 estimate, computed from the phase-1 work count. |
 | `actual_cost_usd` | decimal | nullable | Reconciled after. |
 | `approval_required` | boolean | required | Whether the resolved **work count** crossed the configured threshold (amended 2026-07-20 from "the phase-2 estimate"). Recorded per run, not re-derived — the threshold can change. |
@@ -683,13 +683,33 @@ kind='resolve':          (the re-search — phase 2 only)
 
 any of {resolving_works, awaiting_approval, resolving_images} ──▶ cancelled
 
-any non-terminal status ──▶ failed          (curation startup reconciliation)
+{resolving_works, resolving_images} ──▶ interrupted   (curation startup reconciliation)
 ```
 
-**Every non-terminal run is reconciled to `failed` when the curation plane
-starts (added 2026-07-20).** Without this, the state machine had no edge for
-*process death* — every one of its terminal states required the run's own process
-to write it, which a crashed process by definition cannot do.
+**Runs left in a PROCESS-HELD state are reconciled to `interrupted` when the
+curation plane starts (added 2026-07-20; scope corrected same day).** Without this,
+the state machine had no edge for *process death* — every one of its terminal states
+required the run's own process to write it, which a crashed process by definition
+cannot do.
+
+> **`awaiting_approval` is deliberately excluded, and getting this wrong was the
+> first version of this fix.** The justification for reconciliation is that a run
+> only advances while the process that owns it is alive — which is true of
+> `resolving_works` and `resolving_images` and **false** of `awaiting_approval`.
+> That state advances when the *curator* calls `approve`; it is durable, human-held
+> state that is *supposed* to outlive a restart. Reconciling it would let a
+> `systemctl restart` — the documented deploy step — silently destroy a pending
+> decision along with the phase-1 spend already incurred to produce it, and curation
+> is restarted constantly during development. A rule justified by process liveness
+> must apply only to states process liveness actually governs.
+>
+> Nothing else depends on the wider scope: a `resolve` run can never enter
+> `awaiting_approval`, so coverage release and constraint 14 are unaffected.
+
+Reconciliation logs one WARNING per run it moves, carrying the run id and prior
+status — see `observability-strategy.md` § What Each Failure Looks Like. That line
+is the *only* signal a run died, because the dying process cannot report its own
+death.
 
 **This was a real defect and it was self-inflicted.** The re-search decision
 rejected a stored `resolving` verdict on the grounds that "a crashed resolve run
@@ -700,16 +720,23 @@ covered works **permanently un-re-searchable**, silently, on the only tool that
 spends money. The curation unit's `MemoryMax` exists precisely to cause OOM kills,
 and a deploy is `systemctl restart` — so this is routine, not exotic.
 
-**Why startup reconciliation rather than timeouts or heartbeats:** a run only
-advances while the curation process that owns it is alive, and there is exactly one
-such process (one systemd unit). If curation is starting, no previously-recorded run
-is running, so the inference is total rather than heuristic — no timer to tune, no
-liveness field to keep fresh, and nothing that can be wrong. Reconciliation writes a
-reason so the run reads "interrupted by restart", not a generic failure, and it is
-logged (`observability-strategy.md`).
+**Why startup reconciliation rather than timeouts or heartbeats:** a run in a
+process-held state only advances while the curation process that owns it is alive,
+and there is exactly one such process (one systemd unit). If curation is starting,
+no previously-recorded run is running, so the inference is total rather than
+heuristic — no timer to tune, no liveness field to keep fresh, and nothing that can
+be wrong.
 
-`failed` is terminal, so reconciliation also releases `ResolveRunWork` coverage —
-which is what makes the works re-searchable again.
+**`interrupted` is its own terminal state, not a flavour of `failed`.** The rule
+below — four terminal states describing four different things, none absorbing
+another — applies to this one too. "The process was stopped underneath it" and
+"something broke" call for different operator responses: an interrupted run is
+simply re-run, a failed one is investigated. Folding them together would need a
+free-text reason field to tell them apart again, which is the absorption the rule
+exists to prevent.
+
+`interrupted` is terminal, so reconciliation also releases `ResolveRunWork`
+coverage — which is what makes the works re-searchable again.
 
 A `resolve` run enters at `resolving_images` and can never reach `resolving_works`,
 `awaiting_approval`, or `declined` — phase 1 already happened on the parent, so
@@ -722,10 +749,13 @@ and spend attribution all work on a re-search without a line of new machinery.
 terminal state behind `art_discovery(action='cancel')`; a run that spent money
 before being cancelled keeps its `actual_cost_usd`, because the spend happened.
 
-**Four terminal states describe four different things, and none may absorb
+**Six terminal states describe six different things, and none may absorb
 another.** `completed` (it finished), `failed` (something broke),
 `halted_by_budget` (the cap fired), `declined` (the curator saw the work list and
-its price and said no), `cancelled` (stopped on request mid-flight). Collapsing any
+its price and said no), `cancelled` (stopped on request mid-flight), `interrupted`
+(the curation process was stopped underneath it — re-run it, do not investigate it).
+*(Said "four" while listing five before 2026-07-20; `interrupted` is the sixth.)*
+Collapsing any
 of them makes a deliberate choice indistinguishable from a malfunction — the same
 mistake this artifact already refuses to make for `halted_by_budget`, and the same
 reason `api-contract.md` requires an agent to be able to tell "you are out of

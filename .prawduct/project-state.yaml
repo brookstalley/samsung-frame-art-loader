@@ -1393,7 +1393,7 @@ technical_decisions:
         "IT8951 build is unverified" risk in platform-and-dependency-findings.md
         (that one is about the interpreter version); an earlier draft claimed it
         "folds into" that risk, which the Critic correctly called an overstatement.
-        Tracked as its own item.
+        Tracked as issue #9.
       alternatives_considered:
         - "uv for curation, pip for display — lowest risk to the fragile Cython build, but two toolchains and two lockfile formats, and every deployment doc must say which is which."
         - "pip for both, uv only provisioning the interpreter — most conservative and matches the recovered 2024 venv, but no real lockfile, keeps a hand-maintained requirements.txt, and installs uv without taking most of its value."

@@ -40,7 +40,7 @@ Developer preferences for how code is written in this project. Captured during d
   provide. This is **adjacent to but distinct from** the existing "IT8951 build is
   unverified" risk in `platform-and-dependency-findings.md`, which is about the
   interpreter version rather than the build frontend; an earlier draft claimed it folded
-  into that risk, which overstated the coverage. Tracked as its own item. A single
+  into that risk, which overstated the coverage. **Tracked as issue #9.** A single
   `target-version` still cannot describe both planes; that is settled by the workspace
   split, not by picking a number.
 
