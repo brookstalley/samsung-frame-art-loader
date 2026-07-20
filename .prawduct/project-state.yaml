@@ -1258,6 +1258,48 @@ technical_decisions:
         - "Strictly LAN with no remote access — simpler still, but no access while away."
       date: 2026-07-19
   operational:
+    - decision: "RATIFIED as a binding norm: operation logic lives only in the service layer; MCP tools and HTTP handlers are thin bindings."
+      rationale: >
+        Ratified by the owner 2026-07-20, after Critic review found it was being
+        CITED as binding and Critic-enforced in four artifacts, and leaned on five
+        times in this file, with no recorded ratification anywhere — no
+        technical_decisions entry, no Direction home, no dated marker, no
+        change-log birth record. Its three peer norms all had them. The trail was
+        also circular: product-brief pointed at project-preferences, which pointed
+        nowhere, under a banner declaring every row inferred from the 2024
+        codebase — which cannot be true of a norm about a service layer and MCP
+        surface that codebase does not contain.
+
+        The norm itself was never in dispute; what was missing was the vetoable
+        decision. Now given a Direction home in architecture.md with a dated
+        marker, and the preferences row demoted to the pointer it already claimed
+        to be.
+
+        WHY IT BINDS: the product requires the MCP surface at parity with the web
+        UI, but the UI's own controls call HTTP rather than MCP. Parity therefore
+        only holds if both are bindings over one implementation. Two
+        implementations of "accept a candidate" diverge within weeks and the
+        divergence is invisible until an agent and a click produce different
+        results on the same catalogue.
+
+        ENFORCEMENT IS JUDGEMENT, NOT STRUCTURE, and this is recorded rather than
+        implied: the enforcement column says "Critic", meaning a reviewer reading
+        handlers. No test fails when logic creeps into a binding. Same gap that
+        sent the manifest-channel norm to issue #7.
+
+        RETROACTIVITY, done artifact-shaped rather than code-shaped — the specific
+        correction from the 2026-07-20 learning that a "no existing code" answer
+        self-satisfies and hides the real question. Checked against every artifact
+        specifying handler or tool behaviour: api-contract's five action-dispatch
+        tools are specified as dispatch plus formatting, with isError derived from
+        the payload rather than decided in the tool; boundary-patterns places
+        validation at the service boundary. No specified behaviour violates the
+        norm. Forward-binding consequence noted: the registry-generated tool
+        definitions must not become a place where per-tool logic accretes.
+      alternatives_considered:
+        - "Ratify but record it as unenforced — folded in instead; the enforcement gap is recorded WITH the ratification rather than as a competing option."
+        - "Demote to a tracking preference like cost visibility — rejected: four artifacts already call it binding and Critic-enforced, and the MCP/UI parity requirement would lose its only structural guarantee."
+      date: 2026-07-20
     - decision: "The curation plane's Python 3.14 is a uv-managed standalone build (`uv python install 3.14`); 3tears is NOT relaxed to 3.13."
       rationale: >
         Decided 2026-07-20 by the operator. This closes the open question opened the
@@ -1884,9 +1926,21 @@ artifact_manifest:
       version: 1
       depends_on: [api-contract, data-model]
   # Research findings — inputs to the artifacts above, not artifacts themselves.
+  #
+  # depends_on ADDED 2026-07-20 after Critic review found these entries had no
+  # edges at all. That was not cosmetic: these two documents carry the most raw
+  # decision text in the repo, and with no edges the dependency-graph sweep
+  # prescribed by the sweep learning — and the check proposed in issue #8 — could
+  # not reach them. It is why the retired product-wide Python target survived here
+  # through four recurrences while being corrected everywhere else.
+  #
+  # The edges point at what each findings file's conclusions FEED, so a decision
+  # changing one of those artifacts walks back into the findings that argued for it.
   findings:
     - file_path: .prawduct/artifacts/platform-and-dependency-findings.md
+      depends_on: [operational-spec, architecture, project-preferences]
     - file_path: .prawduct/artifacts/3tears-integration-findings.md
+      depends_on: [architecture, operational-spec, project-preferences]
   # Strategy-class artifacts still owed: test-specifications.md, and the build
   # plan (Phase D). The structural-coverage advisory's named set was cleared
   # 2026-07-20.

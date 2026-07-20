@@ -195,8 +195,9 @@ driver. Three-tier entities are of no use to it, and the shared-catalogue use ca
 that would justify them is precisely the multi-pod coherence problem the operator
 ruled out.
 
-So the split survives on its independent merits (Pi 4 performance, the
-upstream/derived data contract, availability asymmetry), and the PR is worth doing
+So the split survives on its independent merits (the display plane's
+hardware-pinned interpreter, the upstream/derived data contract, availability
+asymmetry), and the PR is worth doing
 on *its* merits — a latent portability limit plus two real defects in a framework
 the operator maintains — rather than to unblock this product.
 

@@ -57,6 +57,37 @@ acknowledged. Filed rather than improvised here.
 failure landed in the same bundle that *added this learning*, three commits later —
 and one of the claims I had to retire was one I had written myself an hour earlier.
 
+4. **2026-07-20, fourth recurrence — and this one was NOT a paraphrase problem.**
+   The re-search decision superseded "re-search spend attributes to the originating
+   run". The literal phrase survived in `data-model.md` § SpendRecord, ~180 lines
+   below the note stating the new rule, in the same file — and I had rewritten its
+   twin sentence by hand in `api-contract.md` minutes earlier.
+
+**The correction: editing a file is not sweeping it.** The sweep grep I ran was
+
+    grep -rn "<concepts>" .prawduct/artifacts/*.md | grep -v "data-model.md\|api-contract.md"
+
+I excluded the two files I was *editing*, reasoning that editing them handled them.
+That reasoning is wrong and it inverts the risk: the artifacts you edit are the ones
+most likely to contain the superseded claim, because they are the ones the decision
+is about. A 750-line artifact does not become consistent because you changed one
+section of it.
+
+**So the closing check has three passes, not two:** (1) grep the literal phrasing —
+cheap, catches survivors; (2) walk `depends_on` and re-read dependents for the
+*concept* — catches paraphrase; (3) **re-read the files you edited, in full, as if
+someone else wrote them** — catches the survivor sitting below your own edit. Pass 3
+is the one that was missing, and it is the cheapest of the three.
+
+**A second structural gap, found by the Critic on the same review:** the two entries
+under `artifact_manifest.findings` had *no `depends_on` edges at all*, so pass 2
+could not reach them even when run correctly — which is why the retired product-wide
+Python target survived in `platform-and-dependency-findings.md` across four
+corrections elsewhere. Edges added 2026-07-20. **A dependency-graph sweep is only as
+good as the graph**, and an unedged node is invisible rather than merely
+low-priority. Worth checking the graph is complete before trusting a walk of it —
+including for issue #8, whose check would have inherited the same blind spot.
+
 **Related:** the same session produced a near-miss of the adjacent shape — an
 *unverified inference riding along with a verified claim* ("streamable HTTP is
 forced" was verified; "mounted in the same ASGI application" was not, and was written
@@ -105,8 +136,12 @@ artifact-shaped fourth reading.
 See [platform-and-dependency-findings.md](artifacts/platform-and-dependency-findings.md)
 for the full record established 2026-07-19. Summary:
 
-- Target **Python 3.13** (matches Raspberry Pi OS Trixie), falling back to 3.12.
-  Verified working on 3.12; 3.13 is an open assumption until a build proves it.
+- Python version is **per plane, not one number** (corrected 2026-07-20 — the
+  product-wide "target 3.13" predates the two-plane split and kept resurfacing).
+  **Display plane: 3.13** (matches Raspberry Pi OS Trixie), falling back to 3.12;
+  verified working on 3.12, and 3.13 is an open assumption until a build proves it.
+  **Curation plane: 3.14** on a uv-managed standalone build, with `3tears`
+  unmodified.
 - Hardware is a **Pi 4 Model B**, so `RPi.GPIO` works and none of the Pi 5 /
   RP1 / `rpi-lgpio` complications apply.
 - Both display drivers are **dormant** (omni-epd 2024-11, IT8951 2023-11), and

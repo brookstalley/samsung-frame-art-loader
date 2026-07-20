@@ -48,6 +48,60 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-20: Address Critic findings — all 4 blocking, plus the sweep root cause
+
+**Why:** Cumulative Critic (`rev-20260720T145500Z-2fcf2f8f`, 3 reviewers) returned
+4 blocking / 13 warning / 13 note. **Two of the four blocking were defects I
+introduced in this session's own commits**, which is worth stating plainly.
+
+**R-10 — the coverage relation I assumed and never modelled.** I proposed the run
+row as the fix for "nothing prevents double-submission", wrote constraint 14 to
+enforce it, and never asked what data that constraint would read.
+`CandidateWork.discovery_run_id` is provenance (**Q5**) and reusing it destroys
+that; `parent_run_id` points at the originating run and a resolve run covers a
+subset. Added **`ResolveRunWork`** — a join, deliberately, not a nullable column on
+the work, because a column would be the stored-second-truth the readiness decision
+rejects and would lose earlier attempts. Constraint 14, the "in flight" derivation,
+and `status` reporting on a resolve run are all now answerable.
+
+**R-2 — the sweep failed again, and the root cause is sharper than before.** The
+sweep grep I ran *excluded the two files I was editing*, on the assumption that
+editing a file handles it. So `data-model.md` § SpendRecord kept "re-search spend
+attributes to the ORIGINATING run" — the exact rule I superseded 180 lines above it
+in the same file, and whose twin I rewrote by hand in `api-contract.md`. **Plain
+grep would have caught this; I removed it from grep's reach.** Correction recorded
+in `learnings.md`: editing a file is not sweeping it, and the largest artifacts need
+the sweep most.
+
+**R-1 — a ratified norm violated by a numbered constraint.** Constraint 11
+specified an application-side monthly spend sum driving `halted_by_budget`, which
+is precisely what the provider-enforced ceiling norm forbids — and a numbered
+constraint is what a builder implements. Rewritten to derive `halted_by_budget`
+from a 402 and read remaining budget from `limit_remaining`; `SpendRecord` restated
+as attribution and reporting only. Also fixed "calendar month" → UTC month, and
+retired the "search may dominate token spend" claim resolved on 2026-07-20.
+
+**R-3 — a norm binding four artifacts with no ratification. Now ratified by the
+owner.** "Operation logic lives only in the service layer" was cited as binding and
+Critic-enforced in four artifacts and leaned on five times in `project-state.yaml`,
+with no decision record, no Direction home, and a circular pointer trail. Given a
+Direction home in `architecture.md` with a dated marker; preferences row demoted to
+a pointer. **Retroactivity was done artifact-shaped** — the correction from last
+session's learning — and found no specified behaviour in violation.
+
+**The structural cause of the repeat drift, found by the sustainability reviewer:**
+both findings files sat under `artifact_manifest.findings` with **no `depends_on`
+edges at all**, so the dependency-graph sweep the learning prescribes — and the
+check proposed in issue #8 — could not reach the two documents carrying the most
+raw decision text. That is why the retired product-wide Python target survived there
+through four recurrences. Edges added; the stale target corrected in
+`platform-and-dependency-findings.md`, `learnings.md`, and the retired "Pi 4
+performance" rationale in `3tears-integration-findings.md`.
+
+**Files:** `data-model.md`, `api-contract.md`, `architecture.md`,
+`project-preferences.md`, `product-brief.md`, `platform-and-dependency-findings.md`,
+`3tears-integration-findings.md`, `learnings.md`, `project-state.yaml`.
+
 ## 2026-07-20: Model the re-search — a run row, derived states, one entry point
 
 **Why:** Three interacting defects the Critic raised on the one paid path, deferred

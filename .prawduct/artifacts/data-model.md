@@ -502,7 +502,9 @@ selected. Produced by phase 2.
 
 ### SpendRecord
 
-The meter behind the fail-closed cap.
+**Attribution and history — not enforcement.** This is the record of what was
+spent, on what, by which surface. It does **not** hold the ceiling and no code
+path consults it before spending.
 
 | Field | Type | Constraints | Description |
 |---|---|---|---|
@@ -514,22 +516,68 @@ The meter behind the fail-closed cap.
 | `input_tokens`, `output_tokens` | integer | nullable | Null where the unit is not tokens. |
 | `units` | integer | nullable | e.g. number of web searches. |
 | `cost_usd` | decimal | required | What was actually billed. |
-| `occurred_at` | datetime | auto, indexed | Indexed — the cap is a time-windowed sum. |
+| `occurred_at` | datetime | auto, indexed | Indexed for reporting windows. **Not** the basis of any ceiling — see below. |
 
-> **Q4.** `category` separates `web_search` because it is billed per search, not
-> per token, and may dominate token spend entirely — an unresolved open question.
-> A meter that counts only tokens cannot enforce a dollar cap.
+> **This table does not enforce the ceiling, and must never be made to.** The
+> ratified Direction norm (`nonfunctional-requirements.md`) is that *spend ceilings
+> are enforced by the provider, never by application code* — the hard cap is an
+> OpenRouter per-key credit limit that returns 402 when exhausted. A local sum that
+> fails open is indistinguishable from one that works: no error, no alert, just a
+> bill. `halted_by_budget` is therefore derived from a **402**, and "budget left"
+> is read from `GET /api/v1/key` (`limit_remaining`), never from `SUM(cost_usd)`.
 >
-> **`image_research` is re-search spend, and it attributes to the ORIGINATING run.**
-> When a curator rejects an image and asks for a better one, the resulting search
-> costs money after the run that proposed the work has already finished. That spend
-> is not orphaned and does not reopen the run: `discovery_run_id` points at the
-> original, and the run's `status` stays `completed`. Without this, the true cost of
-> a run is understated by every re-search it provokes, and the monthly cap under-counts.
+> What this table *is* for: per-run and per-surface cost attribution, the
+> after-the-fact "what did this run cost", and monthly reporting. Those are real
+> needs and none of them is enforcement.
+>
+> **Q4.** `category` separates `web_search` because it is billed per search rather
+> than per token, so a token-only breakdown would misattribute cost. The earlier
+> claim that it "may dominate token spend entirely — an unresolved open question"
+> is **retired**: resolved 2026-07-20 at $0.03–0.25 per run against $0.13–0.24 of
+> tokens, so worst case it roughly doubles a run. Search fees bill as OpenRouter
+> credits, so the provider ceiling already covers both without this table's help.
+>
+> **`image_research` is re-search spend, and it attributes to the RESOLVE run**
+> (2026-07-20). `discovery_run_id` points at the `kind='resolve'` run, which is the
+> point of giving the re-search a row of its own; cost rolls up to the original
+> intent through `DiscoveryRun.parent_run_id`. **This supersedes the earlier rule
+> that it attributed directly to the originating run** — that rule existed only
+> because there was no other row to attribute it to. Still true, and unchanged: the
+> originating run never reopens, and its `status` stays `completed`.
 >
 > The paid re-search is `art_discovery(action='resolve_images')` — deliberately not
 > a side effect of `art_review(action='reject_image')`, so that exactly one tool
 > spends. See `api-contract.md`.
+
+### ResolveRunWork
+
+Which `CandidateWork`s a `kind='resolve'` run covers. A join, nothing more.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `resolve_run_id` | UUID | FK → DiscoveryRun, required | Must reference a run with `kind='resolve'`. |
+| `candidate_work_id` | UUID | FK → CandidateWork, required | |
+| | | PK (`resolve_run_id`, `candidate_work_id`) | A work appears at most once per run. |
+
+> **This entity exists because the 2026-07-20 re-search decision was incomplete
+> without it** — caught by Critic review, not by the design that introduced the
+> gap. Modelling the re-search as a `DiscoveryRun` and deriving its state from the
+> run row silently assumed a coverage relation that nothing recorded. Two claims
+> depended on it and neither was answerable: constraint 14's double-spend guard had
+> no data to evaluate, on the only tool that spends money; and the CandidateWork
+> table's "re-search in flight ⇒ an active resolve run *covering this work*" could
+> not be computed. `art_discovery(action='status')` on a resolve run also had no way
+> to say which works it was resolving.
+>
+> **It is a join, deliberately, and not a `resolve_run_id` column on CandidateWork.**
+> A nullable column on the work would be a second copy of status living beside the
+> run row — precisely the stored-truth-that-can-drift the readiness decision
+> rejects, and it would lose the history of earlier resolve attempts. A join records
+> a *fact about the run's scope*, which does not change when the run's status does.
+>
+> Constraint 14 is enforced against this table: at creation, a resolve run is
+> refused if any requested work already appears in a `ResolveRunWork` row whose run
+> is still `resolving_images`.
 
 ### TvBinding *(display plane only)*
 
@@ -569,6 +617,14 @@ the entity that enforces the second Direction norm.
   selected one as `is_primary`, the rest retained as alternates. The
   candidate-side and catalogue-side shapes mirror each other deliberately, so
   acceptance is a promotion rather than a transformation.
+- A **DiscoveryRun** with `kind='resolve'` **covers** many **CandidateWorks**
+  (many-to-many via **ResolveRunWork**), and a work may be covered by many resolve
+  runs over its life — but by at most one *active* run at a time (constraint 14).
+  This is a different relation from the one above: `CandidateWork.discovery_run_id`
+  records which run **proposed** the work and is its provenance (**Q5**); coverage
+  records which run is **re-searching** it. Overloading provenance to mean coverage
+  would destroy the provenance, and `parent_run_id` cannot serve either, because a
+  resolve run covers a *subset* of the parent's works.
 - A **DiscoveryRun** accrues many **SpendRecords** (one-to-many).
 - A **TvBinding** references an **Artwork** across the plane boundary — by id
   only, never by foreign key, because the two planes do not share a database.
@@ -672,8 +728,8 @@ more enum values — it is to stop conflating curator *intent* with job *state*:
 
 | Situation | How it is known |
 |---|---|
-| Curator asked for better; nothing running | `awaiting_better_image`, and no active resolve run |
-| Re-search in flight | An active `DiscoveryRun` with `kind='resolve'` covering this work |
+| Curator asked for better; nothing running | `awaiting_better_image`, and no `ResolveRunWork` row for it on a run in `resolving_images` |
+| Re-search in flight | A `ResolveRunWork` row for this work whose run is in `resolving_images` |
 | Re-search found nothing | `resolution_status = unresolved` — see above |
 
 `awaiting_better_image` therefore means exactly one thing: *the curator wants this
@@ -728,9 +784,16 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
    passes description text to Pango markup, so unescaped or unexpected markup is
    a rendering failure — today `art.py` does this substitution inline at render
    time, which means every renderer must remember to.
-11. **Spend is summed over a calendar month by `occurred_at`.** When the sum
-   reaches the configured ceiling, discovery transitions to `halted_by_budget`
-   rather than degrading.
+11. **`halted_by_budget` is derived from a provider 402, never from a local sum.**
+    The ceiling is an OpenRouter per-key credit limit; no application code path
+    stands between the product and an unbounded bill (ratified Direction norm,
+    `nonfunctional-requirements.md`). `SpendRecord` is attribution and reporting
+    only. Where "budget remaining" is shown, it is read from `GET /api/v1/key`
+    (`limit_remaining`), which cannot drift from a local tally because it is the
+    authority. Reporting windows follow the provider's reset: **midnight UTC**, so
+    the month is the UTC calendar month, not the operator's local one.
+    *(Amended 2026-07-20 — this constraint previously specified an application-side
+    monthly sum, which is exactly the defect the norm was ratified to prevent.)*
 12. **An Original's `display_fit` is derived at acquisition, never at render
     time.** Render paths read it; they do not recompute it. This keeps the
     resolution policy in one place instead of implicit in each renderer.
@@ -740,11 +803,12 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
     `unknown`. Whether rights *gate* anything is still open; recording them is
     not.
 14. **A CandidateWork is covered by at most one active `resolve` run at a time.**
-    Enforced at run-creation time: `resolve_images` refuses work ids already
-    covered by a run in `resolving_images`, and names them in the refusal. Without
-    this, double-submitting the same ids spends twice for one result on the only
-    tool that spends money at all. This is the constraint the re-search had no
-    place to live in before it had a run row.
+    Coverage is recorded in **ResolveRunWork**; the constraint is enforced at
+    run-creation time by checking that table — `resolve_images` refuses any work id
+    that already appears in a `ResolveRunWork` row whose run is still
+    `resolving_images`, and names the offending ids in the refusal rather than
+    silently deduplicating. Without this, double-submitting the same ids spends
+    twice for one result on the only tool that spends money at all.
 15. **`awaiting_better_image` is reachable only through `art_review(reject_image)`.**
     The path that sets `rejected_at` and the path that sets the verdict are the same
     path, so instance suppression can never be skipped. `set_verdict` rejects the

@@ -251,8 +251,8 @@ API consumers. Three consequences that are easy to miss:
 - **Parity is structural, not aspirational.** Both the web UI's own agent and
   external clients such as Claude Code speak MCP; the UI's direct controls call
   HTTP. All of them are thin bindings over one service layer. Two implementations
-  of "accept a work" diverge within weeks, invisibly. The norm is recorded in
-  `project-preferences.md`.
+  of "accept a work" diverge within weeks, invisibly. The norm lives in
+  `architecture.md` § Direction (ratified 2026-07-20).
 
   **The in-UI agent is an MCP client rather than an in-process caller**, decided
   deliberately: either way the agent must be taught a surface, and MCP describes

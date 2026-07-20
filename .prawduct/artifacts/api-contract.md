@@ -167,7 +167,9 @@ any guard against the same ids being submitted twice concurrently. `status`,
 
 **It refuses work ids already covered by an in-flight resolve run**, naming them in
 the error rather than silently deduplicating — a curator who double-submitted should
-find out, not be quietly corrected (`data-model.md` constraint 14).
+find out, not be quietly corrected. Coverage is recorded in `ResolveRunWork`
+(`data-model.md`), which is also what lets `status` on a resolve run report *which*
+works it is resolving rather than only that it is running.
 
 Spend from a re-search attributes to the **resolve run**, which is what having a row
 is for, and rolls up to the originating run through `parent_run_id` so "what did
@@ -488,7 +490,8 @@ plus honest `readOnlyHint` / `destructiveHint`.
 
 ## Conventions
 
-**One binding norm already governs this artifact** — recorded in
+**One binding norm already governs this artifact** — `architecture.md` § Direction,
+ratified by the owner 2026-07-20, with its enforcement row in
 `project-preferences.md`:
 
 > **Operation logic lives ONLY in the service layer. MCP tools and HTTP handlers

@@ -41,7 +41,38 @@ database. Adding a second channel is a departure requiring a recorded decision.
 >
 > **Retroactivity:** No existing code has two planes. Nothing to migrate.
 
-## Overview & Topology
+<!-- Ratified by the owner 2026-07-20. Enforcement row in project-preferences.md.
+     Given a Direction home on 2026-07-20 after Critic review found it cited as
+     binding in four artifacts with no recorded ratification anywhere. -->
+
+**Operation logic lives only in the service layer.** MCP tools and HTTP handlers
+are thin bindings: they unpack arguments, call one service method, and format the
+result. A handler that validates, orders, or decides is the violation.
+
+> **Why:** The product requires the MCP surface at parity with the web UI, but the
+> UI's own controls call HTTP, not MCP. Parity is therefore only guaranteed if both
+> are bindings over a single implementation. Two implementations of "accept a
+> candidate" diverge within weeks, and the divergence is invisible until an agent
+> and a click produce different results on the same catalogue — a failure the
+> curator would experience as the product being untrustworthy rather than as a bug.
+>
+> **Status:** steady-state.
+>
+> **Enforcement is judgement, not structure.** The enforcement column says "Critic",
+> which means a reviewer reading handlers — there is no test that fails when logic
+> creeps into a binding. This is the same gap that sent the manifest-channel norm to
+> issue #7 for a real test, and it is named here rather than left for a later reader
+> to discover.
+>
+> **Retroactivity:** There is no service layer yet, so the honest code answer is
+> "nothing to migrate" — and that answer is exactly why this needs the *artifact*
+> question asked instead. Checked 2026-07-20 against every artifact that specifies
+> handler or tool behaviour: `api-contract.md`'s five action-dispatch tools are
+> specified as dispatch plus formatting, with the error model deriving `isError`
+> from the payload rather than deciding it in the tool; `boundary-patterns.md`
+> places validation at the service boundary. **No specified behaviour violates the
+> norm.** The one thing it does bind going forward is the registry-generated tool
+> definitions — generation must not become a place where per-tool logic accretes.
 
 **One host.** Raspberry Pi 4 Model B, 8 GB, Raspberry Pi OS Trixie, booting from
 SD card. Both processes run here. This is a **2026-07-20 change** from the

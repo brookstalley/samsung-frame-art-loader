@@ -13,9 +13,27 @@ upstream repositories on 2026-07-19 — it is not recalled from the original wor
   `label_file` entries in `all.json` carry `_w648_h480`, a smaller panel.
 - Samsung Frame TV, reached over the LAN.
 
-## Python target: 3.13
+## Python target: 3.13 — superseded as a product-wide decision
 
-**Decision: target Python 3.13. Fall back to 3.12 if the IT8951 build fails.**
+> **SUPERSEDED 2026-07-20. Read this section as the DISPLAY plane's target only.**
+> When it was written the product was one process, so "target 3.13" was
+> product-wide. It is not any more: the two-plane split (2026-07-19) gave the
+> curation plane its own interpreter, and **the curation plane runs Python 3.14**
+> on a uv-managed standalone build, with `3tears` left unmodified. See
+> `operational-spec.md` § The Curation Interpreter and `project-preferences.md`,
+> which records the version per plane.
+>
+> **The "3.14 was rejected" bullet below is retired and must not be cited.** Its
+> two stated risks were both checked and did not hold: aarch64 wheels for
+> opencv/scikit-image/numpy/scipy on 3.14 were verified against the PyPI JSON API
+> on 2026-07-20, and the source-built Cython concern applies to the e-paper driver,
+> which lives on the display plane and is exactly why that plane stays on 3.13.
+>
+> Everything else here — the driver-stack bounds, the Cython reasoning, the
+> unverified-build warning — still stands and still governs the display plane.
+
+**Decision (display plane): target Python 3.13. Fall back to 3.12 if the IT8951
+build fails.**
 
 Rationale:
 
