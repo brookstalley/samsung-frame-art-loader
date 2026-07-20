@@ -48,6 +48,27 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-20: Phase D — the v1 build plan authored
+
+**Why:** Every artifact question was closed and the checkpoint review's spine was
+endorsed; what remained was the plan itself. `artifacts/build-plan.md` (scope
+`v1-build`) now carries twenty dependency-ordered chunks on the evidence-first
+spine: groundwork at the hardware (issues #4, #5, #15, #16, plus the #9 and #3
+verifications) → two-plane restructure → a walking skeleton through
+catalogue/service/MCP → full catalogue and manifest → contract tests (#17, #7) →
+display plane and cutover → discovery with its two spikes (#12, #18) → UI and the
+exercised restore (#14) last. Issue #8's amendment-acknowledgement check is
+Chunk 01, per the escalation argument (thirteen recurrences, none caught by the
+author's own check). The plan declares `governed_by:` with per-norm dispositions
+for the four norm-carrying artifacts — seeded with `prawduct-hook jurisdiction`,
+curated to the artifacts that actually bind. Issue #6's four defects are
+dispositioned in the plan (fix one now, two die with the rewrite, one deleted).
+Requirements Confidence: Medium, with each named unknown tied to the early chunk
+that resolves it; the operator's #13 storage decision is flagged as the one
+pending input, gating Chunk 04.
+
+**No code changed.**
+
 ## 2026-07-20: Checkpoint review landed; Critic cumulative round remediated
 
 **Why:** The operator asked for a big-picture design checkpoint before Phase D.
