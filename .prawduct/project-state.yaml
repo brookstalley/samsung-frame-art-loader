@@ -361,8 +361,10 @@ product_definition:
         becomes computable once the work count is known; the work list IS the
         candidate count, trimmable rather than preset; and phase 2 verifies phase 1,
         because a work with no credible instance is probably invented.
-        The work list is gated for approval only when the phase-2 estimate crosses a
-        configured cost threshold.
+        The work list is gated for approval only when the WORK COUNT crosses a
+        configured threshold (amended 2026-07-20 from "the phase-2 estimate crosses
+        a configured cost threshold" — a run costs $0.16-0.49, so cost was gating
+        on the axis that does not matter; scope is what the curator judges).
       priority: must-have
     - name: "Review and accept a work with its selected image"
       description: >
@@ -1448,16 +1450,19 @@ open_questions:
     # (an agent can enumerate first), but it does mean the accepted set appears in
     # the transcript where the curator would see it. Trade: friction on the
     # legitimate "accept them all" path, which is the common case after a good run.
-  - question: "What cost threshold triggers work-list approval before phase 2?"
-    blocking: "Nothing structural — the gate is decided; only the number is open."
-    waiting_on: user
-    priority: medium
-    # The threshold gate was decided 2026-07-19: below the threshold a run goes
-    # straight from phase 1 to phase 2; above it, it stops at awaiting_approval.
-    # The number is a deployment value and must NOT be hardcoded — see the
-    # project-preferences norm on deployment values in source. Needs a real
-    # per-search cost figure to set sensibly, which is itself blocked on the
-    # paid-web-search question above.
+  # RESOLVED 2026-07-20: "What cost threshold triggers work-list approval before
+  # phase 2?" The gate triggers on WORK COUNT, not cost — the framing in the
+  # original decision was wrong and is amended.
+  #
+  # Once the cost research landed, a dollar threshold was gating on the axis that
+  # does not matter: a run costs $0.16-0.49, so any cost threshold either never
+  # fires or fires at a number too small to mean anything to a curator. What the
+  # gate is actually for is catching "you asked for Dali and I found 200 works" —
+  # a SCOPE judgement. Count is what a curator can judge at a glance; "$1.00"
+  # does not tell them the run found 200 works.
+  #
+  # The number itself remains a deployment value and must NOT be hardcoded.
+  # Setting it is a tuning exercise for first real use, not a blocking decision.
   - question: "Should the MCP surface expose resources in addition to tools?"
     blocking: "Nothing — tools cover every current read. This is an optimisation and a UX question."
     waiting_on: user

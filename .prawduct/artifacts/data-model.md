@@ -571,8 +571,15 @@ mistake this artifact already refuses to make for `halted_by_budget`, and the sa
 reason `api-contract.md` requires an agent to be able to tell "you are out of
 money" from "the fetch failed".
 
-`awaiting_approval` is entered only when the phase-2 estimate crosses the
+`awaiting_approval` is entered only when the resolved **work count** crosses the
 configured threshold; below it the run goes straight to phase 2.
+
+> **Amended 2026-07-20** from "the phase-2 estimate crosses the configured
+> threshold". The gate was originally framed on cost. Once real per-run costs were
+> measured ($0.16–0.49), a dollar threshold was gating on the axis that does not
+> matter — it either never fires, or fires at a number that means nothing to a
+> curator. The judgement the gate exists to invite is *scope*: "you asked for Dalí
+> and I found 200 works — really?" Count is what a curator can act on at a glance.
 
 `completed` covers runs where some works were `unresolved`. A run that resolved 34
 of 40 works succeeded partially; it did not fail.

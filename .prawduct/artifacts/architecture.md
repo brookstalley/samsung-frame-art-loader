@@ -17,7 +17,7 @@ crashing — not because the work is too big for one box.
 
 ## Direction
 
-<!-- PROPOSED 2026-07-20 — not ratified. Binding force is the owner's to grant. -->
+<!-- Ratified by the owner 2026-07-20. Enforcement row in project-preferences.md. -->
 
 **The theme manifest file is the only channel from curation to display.** The
 display plane reads the manifest and the image tree. It makes no network call to

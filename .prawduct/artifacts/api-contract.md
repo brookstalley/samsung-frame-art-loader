@@ -487,11 +487,19 @@ Bounds 3 and 4 are materially weaker than "cannot", and are stated as such. Boun
 in particular is a property of how the operator works, not something the system
 enforces.
 
-**One design consequence follows and is left open deliberately:** whether
-`set_verdict` should refuse a bare "accept everything pending" and require explicit
-work ids. It does not stop a determined injection — an agent can enumerate — but it
-does mean the accepted set appears in the transcript where the curator would see it.
-Tracked in `project-state.yaml` → `open_questions`.
+**One design consequence follows, DECIDED 2026-07-20: `set_verdict` requires
+explicit work ids and refuses a bare "accept everything pending."**
+
+It does not stop a determined injection — an agent can enumerate first — but that
+was never the bar. The bar is that **the accepted set appears in the transcript
+where the curator sees it.** Given the review gate's durable justification is
+content appropriateness rather than spend, the ids being visible at the moment of
+acceptance *is* the gate doing its job; an `accept_all` that leaves no record of
+what "all" was would hollow it out while looking identical in the happy path.
+
+Accepted cost: friction on the legitimate "accept them all" path, which is the
+common case after a good run. The curation UI can still offer a select-all
+affordance — it simply sends the ids, which is what a UI naturally has anyway.
 
 Worth stating plainly: the realistic worst case is a poisoned page steering
 candidate selection, burning budget, or getting an unwanted image onto the wall
