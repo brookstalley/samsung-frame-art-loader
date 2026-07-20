@@ -192,8 +192,12 @@ how well the argument holds: spend (weakest — the ceiling is $20), taste, and
 
 **4. Acquire and prepare.** Fetch at gallery resolution (tiled where the source
 requires it), extract and normalise metadata across providers, select a mat
-colour, render the 4K TV image and the e-paper label. Largely exists today in
-`art.py` and `image_utils.py`.
+colour, and render the 4K TV image. Largely exists today in `art.py` and
+`image_utils.py`. **The e-paper label is not rendered here** — corrected
+2026-07-20; label rendering belongs to the display plane, which owns the panel
+(see flow 6 and § Platform). Panel geometry in the curation catalogue is the
+violation the ratified data-model norm forbids, which is why
+`Rendition(kind='label')` was removed.
 
 **5. Organise into themes.** Group accepted works into named themes. Switching the
 active theme changes what the TV shows. Themes are the curator's unit of

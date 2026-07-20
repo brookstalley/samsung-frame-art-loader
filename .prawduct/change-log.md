@@ -48,6 +48,57 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-20: Address Critic findings — the crash lifecycle, the token order, flow 4, and a decision recorded in only one home
+
+**Why:** Cumulative Critic (`rev-20260720T160759Z-cbc0d27e`, 3 reviewers) returned
+6 blocking (4 distinct — two found independently by two reviewers each), 15 warning,
+10 note.
+
+**The security finding is the one to read.** `security-model.md` prescribed *rotate
+first, then untrack*. That order creates a **second leak**: rotating while the file
+is still tracked puts the freshly-issued token into a tracked file, and the next
+`git add -A` commits it — this session alone ran that command eight times. The old
+order was argued from *perception* ("untracking first looks like it's been dealt
+with"), which honest prose already answers. Corrected to untrack → re-pair, and
+`token_file` added to `.gitignore`.
+
+**A hazard neither reviewer raised, found by checking the runtime:** `tvart.py` opens
+`token_file` by *relative path*, and deployment is `git pull` — so the untracking
+commit **deletes the file on the Pi** and breaks TV auth until re-pair. The two steps
+must therefore happen in one sitting at the hardware, which is now recorded. The file
+is deliberately **not** untracked in this commit for that reason: doing so unilaterally
+would strand the Pi on next deploy.
+
+**The lifecycle defect was self-inflicted, and that's the lesson.** The re-search
+decision rejected a stored `resolving` verdict on the grounds that *"a crashed resolve
+run would leave the work reading `resolving` forever with nothing to correct it"* —
+then moved the truth to the run row **without re-asking that question of the run
+row**. The defect moved with it and got worse: combined with constraint 14, a crash
+left the covered works permanently un-re-searchable, silently, on the only tool that
+spends money. `MemoryMax` on the curation unit exists to cause exactly that kill, and
+a deploy is `systemctl restart` — routine, not exotic.
+
+Fixed with **startup reconciliation**: every non-terminal run becomes `failed` when
+curation starts. Chosen over timeouts or heartbeats because a run only advances while
+its owning process lives and there is exactly one such process — so the inference is
+total rather than heuristic, with no timer to tune and no liveness field to keep
+fresh. `failed` being terminal is what releases the `ResolveRunWork` coverage.
+
+**Flow 4** still had curation rendering the e-paper label in both `product-brief.md`
+and `project-state.yaml` — instructing a builder straight into the geometry-in-the-
+catalogue violation that `Rendition(kind='label')` was removed to prevent.
+
+**A decision recorded in only one of its two homes.** "uv for both planes" was written
+as DECIDED in `project-preferences.md` while `project-state.yaml` still said
+"deliberately NOT decided here", with no `technical_decisions` entry at all. Now
+recorded properly with alternatives. The claim that the PEP 517 verification item
+"folds into" the existing IT8951 risk was also an overstatement — that risk is about
+the interpreter version, not the build frontend — and is now tracked separately.
+
+**Files:** `data-model.md`, `architecture.md`, `operational-spec.md`,
+`security-model.md`, `product-brief.md`, `project-preferences.md`, `.gitignore`,
+`project-state.yaml`.
+
 ## 2026-07-20: Close the remaining decisions — mat geometry, resolution floor, rights, MCP resources, dependency manager
 
 **Why:** Walked the operator through every decision still blocking progress. Open

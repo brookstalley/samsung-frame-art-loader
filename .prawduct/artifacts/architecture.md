@@ -316,7 +316,7 @@ catalogue does not apply. What remains:
 
 | Failure | Effect on the rest | Intended behaviour |
 |---|---|---|
-| curation process down/restarting/crashed | none | Display keeps rotating the last manifest indefinitely. **This is normal operation, not degradation** — it is the norm working |
+| curation process down/restarting/crashed | none **on display**; any in-flight discovery run dies with it | Display keeps rotating the last manifest indefinitely — **normal operation, not degradation**, the norm working. But this is *not* "no effect": a run in flight is lost, and **on next start curation reconciles every non-terminal run to `failed`** (`data-model.md` → State Machines). Without that step a crash would strand the run's works as permanently un-re-searchable via constraint 14. Note `MemoryMax` on the curation unit exists to cause exactly this kill |
 | display process down | none to curation; wall freezes | TV stays in art mode holding the last work; label goes stale. systemd restarts |
 | Manifest references a missing image file | one work unshowable | Display **skips it, logs at WARNING, continues the rotation.** Never crashes, never blanks the wall. Fatal-for-one-item, per the recorded error taxonomy |
 | Manifest has an unknown major schema version | new theme not adopted | Display **keeps the previous manifest** and logs at ERROR. Refusing to guess beats rendering a misparse |

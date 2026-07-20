@@ -682,7 +682,34 @@ kind='resolve':          (the re-search — phase 2 only)
                                                              └──▶ halted_by_budget
 
 any of {resolving_works, awaiting_approval, resolving_images} ──▶ cancelled
+
+any non-terminal status ──▶ failed          (curation startup reconciliation)
 ```
+
+**Every non-terminal run is reconciled to `failed` when the curation plane
+starts (added 2026-07-20).** Without this, the state machine had no edge for
+*process death* — every one of its terminal states required the run's own process
+to write it, which a crashed process by definition cannot do.
+
+**This was a real defect and it was self-inflicted.** The re-search decision
+rejected a stored `resolving` verdict on the grounds that "a crashed resolve run
+would leave the work reading `resolving` forever with nothing to correct it" — then
+moved the truth to the run row without re-asking that question of the run row. The
+defect moved with it, and got worse: combined with constraint 14, a crash left the
+covered works **permanently un-re-searchable**, silently, on the only tool that
+spends money. The curation unit's `MemoryMax` exists precisely to cause OOM kills,
+and a deploy is `systemctl restart` — so this is routine, not exotic.
+
+**Why startup reconciliation rather than timeouts or heartbeats:** a run only
+advances while the curation process that owns it is alive, and there is exactly one
+such process (one systemd unit). If curation is starting, no previously-recorded run
+is running, so the inference is total rather than heuristic — no timer to tune, no
+liveness field to keep fresh, and nothing that can be wrong. Reconciliation writes a
+reason so the run reads "interrupted by restart", not a generic failure, and it is
+logged (`observability-strategy.md`).
+
+`failed` is terminal, so reconciliation also releases `ResolveRunWork` coverage —
+which is what makes the works re-searchable again.
 
 A `resolve` run enters at `resolving_images` and can never reach `resolving_works`,
 `awaiting_approval`, or `declined` — phase 1 already happened on the parent, so
@@ -833,10 +860,15 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
 14. **A CandidateWork is covered by at most one active `resolve` run at a time.**
     Coverage is recorded in **ResolveRunWork**; the constraint is enforced at
     run-creation time by checking that table — `resolve_images` refuses any work id
-    that already appears in a `ResolveRunWork` row whose run is still
-    `resolving_images`, and names the offending ids in the refusal rather than
-    silently deduplicating. Without this, double-submitting the same ids spends
-    twice for one result on the only tool that spends money at all.
+    appearing in a `ResolveRunWork` row whose run is in a **non-terminal** status,
+    and names the offending ids in the refusal rather than silently deduplicating.
+    Without this, double-submitting the same ids spends twice for one result on the
+    only tool that spends money at all.
+    **"Non-terminal" is safe to key on only because of startup reconciliation** (see
+    State Machines): every terminal state is written by the run's own process, so
+    without reconciliation a crash would make this constraint refuse those work ids
+    forever. The guard against double-spend must not become a permanent block —
+    which is exactly what it was before reconciliation was specified.
 15. **`awaiting_better_image` is reachable only through `art_review(reject_image)`.**
     The path that sets `rejected_at` and the path that sets the verdict are the same
     path, so instance suppression can never be skipped. `set_verdict` rejects the

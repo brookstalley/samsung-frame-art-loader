@@ -165,7 +165,7 @@ that will actually get run rather than skipped.
 | Add disk headroom | Prune `tile-cache/` and `temp/` — working space, not steady-state storage, sized by the largest single work in flight |
 | Bound the journal | `SystemMaxUse=` in `journald.conf`. **Set this explicitly** — see below |
 | Patch curation's CPython | `uv python upgrade 3.14`, then rebuild the venv and restart. **`apt upgrade` does not do this** — it patches the display plane's 3.13 only |
-| Re-pair the TV | Rotates the pairing token. **Do this before untracking `token_file`**, not after — see `security-model.md` |
+| Re-pair the TV | Rotates the pairing token. **Untrack `token_file` FIRST, then re-pair** — corrected 2026-07-20; the reverse order commits the new token. Note the untracking commit deletes the file on `git pull`, so TV auth is down until the re-pair — do both in one sitting, at the hardware. See `security-model.md` |
 
 ## Failure Recovery
 
@@ -177,6 +177,7 @@ Mostly automatic; the table below is what a human would do when it is not.
 | Label disagrees with the artwork | Journal for e-paper errors | The label path failed while rotation continued — by design, a panel failure never stops the TV |
 | A theme shows fewer works than expected | The manifest build's exclusion report | It names the per-work reason. This is the designed surface, not a diagnostic dead end |
 | Discovery refuses to start | `limit_remaining` on the health panel | If zero, the monthly UTC reset or a raised key limit |
+| `resolve_images` refuses work ids as "already in flight" | The named run's status | Startup reconciliation should have failed any run orphaned by a restart. If a run is still non-terminal with no work happening, reconciliation did not run — that is a bug, not an operator action |
 | Acquisition fails on every work | Free disk space | The pre-acquisition guard should have caught it; if it did not, that is a bug in the guard |
 | Neither plane starts after a reboot | Both planes' resolved `ART_ROOT` in the journal | Mismatched or missing `ART_ROOT` is the likely cause |
 

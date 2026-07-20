@@ -409,7 +409,7 @@ product_definition:
         withheld.
       priority: must-have
     - name: "Acquire and prepare"
-      description: "Fetch at gallery resolution (tiled where needed), extract and normalise metadata, choose a mat colour, render the 4K TV image and the e-paper label. Largely exists today in art.py / image_utils.py."
+      description: "Fetch at gallery resolution (tiled where needed), extract and normalise metadata, choose a mat colour, and render the 4K TV image. Largely exists today in art.py / image_utils.py. The e-paper LABEL is NOT rendered here — corrected 2026-07-20; it belongs to the display plane, which owns the panel. Panel geometry in the curation catalogue is what the ratified data-model norm forbids, and why Rendition(kind='label') was removed."
       priority: must-have
     - name: "Organise into themes"
       description: "Group accepted works into named themes/profiles. Switching the active theme changes what the TV shows."
@@ -1364,6 +1364,40 @@ technical_decisions:
         - "Strictly LAN with no remote access — simpler still, but no access while away."
       date: 2026-07-19
   operational:
+    - decision: "uv is the dependency manager for both planes, structured as two projects in a uv workspace."
+      rationale: >
+        Decided 2026-07-20 by the operator. Recorded here after Critic review found
+        it stated as DECIDED in project-preferences.md while this file still said it
+        was "deliberately NOT decided" — a contradiction created by recording a
+        decision in only one of its two homes.
+
+        uv was already a required install on the Pi to provision curation's
+        interpreter, so it is the incumbent rather than a new dependency. uv.lock
+        provides real lockfiles while preserving the exact pinning requirements.txt
+        has today, which project-preferences.md said should survive whatever
+        replaced it.
+
+        THE WORKSPACE SPLIT IS THE LOAD-BEARING PART. The two planes are genuinely
+        different projects — different interpreters (3.14 vs 3.13), different
+        dependency sets, and no single tool setting can describe both. Two projects
+        in a workspace gives each its own interpreter, its own lock, and its own
+        pyproject.toml, which also resolves the long-standing target-version
+        departure: black's target-version is a FLOOR, so py312 is right for display
+        and wrong for curation, and the split lets each carry its own rather than
+        forcing one number to be wrong somewhere.
+
+        NAMED VERIFICATION ITEM: IT8951 compiles Cython from 2023-era .pyx sources,
+        and a setup.py of that vintage may not declare Cython in build-requires —
+        which PEP 517 build isolation would then not provide. Under uv this is the
+        one plausible failure. It is adjacent to, but NOT the same as, the existing
+        "IT8951 build is unverified" risk in platform-and-dependency-findings.md
+        (that one is about the interpreter version); an earlier draft claimed it
+        "folds into" that risk, which the Critic correctly called an overstatement.
+        Tracked as its own item.
+      alternatives_considered:
+        - "uv for curation, pip for display — lowest risk to the fragile Cython build, but two toolchains and two lockfile formats, and every deployment doc must say which is which."
+        - "pip for both, uv only provisioning the interpreter — most conservative and matches the recovered 2024 venv, but no real lockfile, keeps a hand-maintained requirements.txt, and installs uv without taking most of its value."
+      date: 2026-07-20
     - decision: "RATIFIED as a binding norm: operation logic lives only in the service layer; MCP tools and HTTP handlers are thin bindings."
       rationale: >
         Ratified by the owner 2026-07-20, after Critic review found it was being
@@ -1442,10 +1476,10 @@ technical_decisions:
         aarch64 dependency — is on the display side. Adding anything to curation
         that needs distro C bindings is what breaks this decision.
 
-        Knock-on for a still-open preference: uv is now a required install on the Pi
-        regardless, which makes it the incumbent dependency manager rather than a
-        new dependency. Noted in project-preferences.md; deliberately NOT decided
-        here, since the display plane builds Cython against system headers.
+        Knock-on: uv is now a required install on the Pi regardless, which makes it
+        the incumbent dependency manager rather than a new dependency. This was left
+        open here and DECIDED SEPARATELY LATER THE SAME DAY — see the dependency
+        manager entry below.
       alternatives_considered:
         - "Relax 3tears to 3.13 and use the system interpreter — simplest end state, one interpreter, but needs an upstream PR merged and carries untested behavioural risk under 3.13."
         - "pyenv source build — same end state as the chosen option, but with a 30-45 minute compile per patch release. Strictly dominated once the prebuilt binary was found."

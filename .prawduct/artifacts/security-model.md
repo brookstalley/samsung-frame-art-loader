@@ -94,9 +94,36 @@ realistic worst case is someone changing what is on a television. It is recorded
 as unfixed rather than quietly downgraded because "we decided it was fine" and "we
 forgot" look identical in six months.
 
-**Order of operations when it is fixed:** rotate first (re-pair against the TV),
-*then* untrack and gitignore. Doing it in the other order leaves the live token in
-history while creating the impression it has been dealt with.
+**Order of operations — CORRECTED 2026-07-20 (Critic R-1). Untrack first, then
+rotate.** This artifact previously prescribed the reverse, and that order creates a
+*second* leak: rotating while the file is still tracked puts the freshly-issued
+token into a tracked file, where the next `git add -A` commits it. This repository
+is developed with frequent `git add -A`, so that window is not theoretical.
+
+The old order was argued from *perception* — that untracking first "creates the
+impression it has been dealt with". That concern is real but is answered by honest
+prose, which this section already carries. It is not worth a second exposure.
+
+1. **`git rm --cached token_file`, add it to `.gitignore`, commit.** Costs nothing
+   in security terms — the old token is already public in history — and guarantees
+   the replacement is never tracked.
+2. **Re-pair against the TV** (physical access required). The new token is written
+   to an untracked path and never enters git.
+
+> **Operational hazard, and it is not obvious.** `token_file` is read at runtime by
+> relative path (`tvart.py`). Because deployment is `git pull`, the commit that
+> untracks it **deletes it on the Pi**, and TV authentication breaks until step 2 is
+> done. That is acceptable only because step 2 was always required — but the two
+> steps must therefore be done in one sitting, with hardware access, not scheduled
+> apart. Sequence: untrack → deploy → re-pair on the Pi.
+>
+> The relative-path load is itself an instance of the hardcoded-deployment-value
+> departure already recorded in `project-preferences.md`; hoisting it would remove
+> this coupling.
+
+**What this does not fix:** the token remains in git history, which is public and
+cloned. Only rotation invalidates it. Untracking is hygiene for the *next* token,
+never remediation for this one.
 
 ## Prompt Injection
 

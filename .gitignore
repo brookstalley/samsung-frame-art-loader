@@ -187,3 +187,13 @@ cython_debug/
 # Backlog service export — full-fidelity cutover backup, regenerable via
 # `prawduct-hook backlog export`. Tracked copy would duplicate GitHub Issues.
 .prawduct/backlog-export/
+
+# Samsung TV pairing token. Added 2026-07-20 (Critic R-1).
+# NOTE: this entry is INERT until the file is untracked — .gitignore does not
+# affect already-tracked files, and `token_file` is tracked today (issue #4).
+# Remediation order matters and is documented in
+# .prawduct/artifacts/security-model.md: untrack FIRST, then re-pair. Rotating
+# while tracked commits the new token. Untracking deletes the file on the Pi's
+# next `git pull` (it is read by relative path), so TV auth is down until the
+# re-pair — do both in one sitting, at the hardware.
+token_file

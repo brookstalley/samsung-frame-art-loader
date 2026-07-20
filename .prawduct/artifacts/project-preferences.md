@@ -37,8 +37,10 @@ Developer preferences for how code is written in this project. Captured during d
   preserving the exact pinning `requirements.txt` has today. **Named verification item:**
   IT8951 compiles Cython from 2023-era `.pyx` sources, and a `setup.py` of that vintage
   may not declare Cython in build-requires — which PEP 517 build isolation would then not
-  provide. This folds into the existing "must be proven early" risk on that driver
-  (`platform-and-dependency-findings.md`) rather than adding a new one. A single
+  provide. This is **adjacent to but distinct from** the existing "IT8951 build is
+  unverified" risk in `platform-and-dependency-findings.md`, which is about the
+  interpreter version rather than the build frontend; an earlier draft claimed it folded
+  into that risk, which overstated the coverage. Tracked as its own item. A single
   `target-version` still cannot describe both planes; that is settled by the workspace
   split, not by picking a number.
 
