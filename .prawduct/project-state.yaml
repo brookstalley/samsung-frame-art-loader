@@ -435,7 +435,7 @@ product_definition:
   scope:
     v1:                   # Must have for initial release
       - "Verify the Frame TV art API still works on current firmware — DONE 2026-07-19, art mode confirmed working"
-      - "Two-plane split: curation plane and display plane (Python 3.13 on the Pi)"
+      - "Two-plane split: curation plane (Python 3.14, uv-managed) and display plane (Python 3.13, system interpreter), BOTH co-located on the Pi since 2026-07-20"
       - "Web UI for curation with two-phase LLM-assisted discovery, work-plus-image review, and themes"
       - "MCP tool surface covering all content management, at parity with the web UI — five action-dispatch tools on the official `mcp` SDK, over a service layer both MCP tools and HTTP handlers bind"
       - "New catalogue built by curation, seeded with the existing 41 artworks as worked examples"
