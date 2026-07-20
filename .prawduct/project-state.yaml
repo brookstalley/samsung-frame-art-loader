@@ -558,9 +558,145 @@ technical_decisions:
       rationale: "It depends on pgvector, a PostgreSQL extension — the one 3tears capability that genuinely forces infrastructure. Deferring it is what keeps the whole curation plane infrastructure-free. Revisit only if Postgres appears for another reason."
       alternatives_considered: ["Run Postgres for agent memory — rejected as disproportionate for one household."]
       date: 2026-07-19
+    - decision: "MCP transport is streamable HTTP, and the MCP server is mounted in the same ASGI application as the curation UI's HTTP API."
+      rationale: >
+        Decided 2026-07-19. The transport is effectively forced: Claude Code runs on
+        the operator's laptop while the catalogue and ART_ROOT live on the curation
+        host reached over an overlay network, and stdio requires the client to SPAWN
+        the server locally. Co-mounting is then the choice that makes the
+        thin-binding norm structurally easy — one process, both surfaces over the
+        same in-memory service layer — rather than a rule someone has to remember.
+        Cost accepted: the MCP surface goes down with the UI process, which is
+        tolerable because curation-plane downtime is already defined as invisible to
+        the household.
+      alternatives_considered:
+        - "stdio — impossible across the host boundary; the client cannot spawn a server on another machine."
+        - "Separate MCP process — needs its own path to the catalogue and reintroduces the divergence the service-layer norm exists to prevent."
+      date: 2026-07-19
+    - decision: "Five action-dispatch MCP tools with registry-generated definitions, rather than fine-grained per-operation tools."
+      rationale: >
+        Decided 2026-07-19 against three inputs: the operator's two production MCP
+        servers (cordyceps, public and in wide use, 7 tools; hallucinote, private,
+        13 tools), Anthropic's published tool-design guidance, and MCP spec revision
+        2025-11-25. Enumerating what "parity with the web UI" actually requires gave
+        ~28 operations; consolidating to five noun-shaped tools with a required
+        `action` parameter lands inside the 1-15 range Anthropic identifies as the
+        point where one-tool-per-action stops paying.
+
+        The decisive detail is that definitions are GENERATED from a registry —
+        one record per action carrying description, params, example and tips, from
+        which the wire schema, validation, help output and error messages are all
+        derived. That is what makes them provably consistent rather than consistent
+        by discipline, and it gives the service-layer norm a structural home
+        (declarative action records cannot contain logic; handlers do the work).
+
+        Consolidation is vertical only. A generic art_request(method=, path=)
+        multiplexer is the anti-pattern Anthropic's connector review rejects, and it
+        would put routing logic in the binding.
+      alternatives_considered:
+        - "Fine-grained tools, one per operation — ~28 tools; past the point where tool selection degrades, and rejected by the operator's own field experience."
+        - "Split read tools from write tools per Anthropic's Directory review criteria — not binding (this will never be listed), and the readOnlyHint auto-approve benefit it protects is retired by allowlisting the server once. The money-spending operation is isolated on its own tool instead, which is the carve-out that actually matters."
+      date: 2026-07-19
+    - decision: "The in-UI agent is an MCP client, not an in-process caller."
+      rationale: >
+        Decided 2026-07-19 by the operator. Either way the agent must be taught a
+        surface, and MCP describes itself, so the teaching is free. The stronger
+        argument is scope: making the server the unit of "an art library on a
+        system" lets one agent manage several, promoting multiple libraries from an
+        accommodate-only concern toward a design driver.
+
+        Explicitly NOT implied: routing the web UI's own direct controls through
+        MCP. Tool results are shaped for a model to read while a UI wants typed,
+        paginated, partial data. Location transparency belongs in the service layer,
+        beneath both surfaces.
+      alternatives_considered:
+        - "In-process service calls for the in-UI agent — fewer layers and no serialization, but forfeits multi-library and means the agent binds a different surface than external clients, which is the parity split MCP exists to prevent."
+      date: 2026-07-19
+    - decision: "Long-running discovery uses start-and-poll with progress notifications, not MCP Tasks."
+      rationale: >
+        Decided 2026-07-19 after verifying client behaviour rather than assuming it.
+        MCP's Tasks primitive (SEP-1686) landed in spec revision 2025-11-25 marked
+        EXPERIMENTAL, and Claude Code closed the request to support it as NOT
+        PLANNED — so declaring execution.taskSupport "required" would break the
+        product's primary client outright.
+
+        Claude Code's actual behaviour sets the shape: a call that sends no response
+        and no progress notification for 5 minutes on HTTP transport is ABORTED, and
+        a call still running after 2 minutes is auto-backgrounded (>= 2.1.212). So
+        emitting notifications/progress during phase 2 is load-bearing — it is what
+        keeps the connection alive — and the run handle must come back immediately.
+        hallucinote reaches the same conclusion independently and supplies a
+        calibrated number: a 45s status long-poll sized under a 60s tool timeout.
+      alternatives_considered:
+        - "MCP Tasks (SEP-1686) — experimental, and unsupported by the primary client; taskSupport 'optional' is declared as forward-looking, 'required' would break Claude Code."
+        - "Blocking call for the duration of the run — killed by the 5-minute idle abort."
+      date: 2026-07-19
+    - decision: "Candidate thumbnails are returned inline as MCP image content blocks, capped at 400px on the long edge."
+      rationale: >
+        Decided 2026-07-19. This DEPARTS from both of the operator's own production
+        servers, which return file paths plus a "use Read tool to view" hint and
+        never emit image blocks — so the departure is recorded rather than assumed.
+
+        The reason the established pattern does not transfer: both of those servers
+        are LOCAL (cordyceps binds 127.0.0.1, hallucinote is stdio), so a returned
+        path works because client and server share a filesystem. This product's do
+        not. A path returned by the curation host is meaningless on the laptop, and
+        it fails by returning a plausible-looking result the client cannot act on.
+
+        The requirement behind it is the review gate: its justification is content
+        appropriateness, which only a person LOOKING AT THE PICTURE can judge.
+        Budget: image cost is about (w*h)/750 tokens against Claude Code's 25,000
+        token result cap (10,000 warning), and the per-tool ceiling raise via
+        _meta anthropic/maxResultSizeChars covers TEXT ONLY. At 400px a 40-work
+        batch costs roughly 6.4k tokens.
+      alternatives_considered:
+        - "File paths plus a read hint, as in cordyceps/hallucinote — breaks across the host boundary."
+        - "HTTP URLs to the curation plane — would need one client fetch per image, i.e. 40 extra round trips for a batch."
+        - "resource_link content blocks — spec-sanctioned and token-cheap, but client support is uneven and it still costs a read per image."
+      date: 2026-07-19
   data_model:
+    - decision: "The review gate is that a human SAW THE ARTWORK — not that a surface was withheld. Accepting is available over MCP, and any reviewing surface must show the image."
+      rationale: >
+        AMENDED 2026-07-19, same day, superseding "agents never auto-accept" as
+        stated in the decision below. The two could not both hold: the product
+        brief promised that EVERY content-management operation is an MCP tool while
+        also declaring the review gate "not automatable by any surface, agent or
+        human". Accept/reject is a content-management operation.
+
+        Resolved in favour of the gate's actual content. Its durable justification
+        is content appropriateness (see the decision below, which is otherwise
+        unchanged and still correct), and the only thing that prevents inappropriate
+        work reaching a wall is a person LOOKING AT THE PICTURE. Withholding the
+        tool from agents does not achieve that; it just moves the click. Meanwhile
+        accepting on the strength of a title and a rationale — which is what a
+        text-only agent surface would permit — IS the failure the gate exists to
+        stop, and the web UI would never have allowed it.
+
+        So: art_review(action='set_verdict') exists, and the binding requirement
+        moves to the result shape — candidate listings return thumbnails. See
+        technical_decisions.technology on inline images.
+
+        HONEST COST, recorded because it voids a security bound: the api-contract's
+        prompt-injection analysis previously opened with "agents cannot auto-accept,
+        every addition stops at curator review". That is no longer true. The
+        replacement bounds are weaker and are stated as weaker — the spend cap still
+        fails closed, tool authority is still narrow, and acceptance is visible and
+        fully reversible with the curator present in the session. "Visible and
+        reversible" is a smaller claim than "cannot", and leaving the old sentence
+        in place would have let a future reader build on a stale guarantee.
+      alternatives_considered:
+        - "No verdict tool on MCP — strongest injection story, but parity gets a hole and 'every operation' becomes a lie needing rewrite."
+        - "Reject-only on MCP — asymmetric (declining can never put art on a wall); triages a batch but leaves half of parity gone and is odd to explain."
+        - "Verdict tool, text-only results — simplest and cheapest, but the curator accepts on titles alone, which is precisely the named failure."
+      date: 2026-07-19
     - decision: "Agent-initiated additions always queue as candidates; agents never auto-accept into the active collection."
       rationale: >
+        SUPERSEDED IN PART 2026-07-19 by the decision above — agents DO now hold a
+        verdict tool, so the "never auto-accept" clause no longer holds. Everything
+        below about WHY the gate exists survives intact and is the reasoning the
+        amendment was decided against; it is retained rather than rewritten because
+        the three-reason analysis is what made the correct resolution findable.
+
         Confirmed 2026-07-19, and reframed by the operator the same day in a way
         that strengthens it. "Add all of Salvador Dali's most famous works" is a
         statement that the curator WANTS this, not an expectation that it appears
@@ -613,6 +749,82 @@ technical_decisions:
     - decision: "Per-device runtime state never lives in the catalogue."
       rationale: "tv_content_id, tv_content_thumb_md5, and geometry-stamped label filenames are facts about one specific television and one specific panel, not about the artwork. Keeping them out is what lets the catalogue be plane-independent and lets derived artifacts regenerate per-device (learnings.md, Data and cache contract)."
       alternatives_considered: ["Keep them in the record as today — the defect being corrected."]
+      date: 2026-07-19
+    - decision: "A WORK is distinct from an IMAGE of it, at every stage. Discovery is two-phase: intent resolves to works, then each work is searched for image instances and one is selected as canonical."
+      rationale: >
+        Stated by the operator 2026-07-19 as a central product requirement, not an
+        implementation detail: "if I say Dali's persistence of memory, it is a
+        complete failure if I get 10 copies of it and am supposed to only check
+        approve on one."
+
+        The distinction must hold PRE-acceptance, because that is exactly where the
+        duplication appears. So Candidate splits into CandidateWork (produced by
+        phase 1) and CandidateImage (produced by phase 2), mirroring the
+        Artwork/Source shape the catalogue already had — which makes acceptance a
+        promotion rather than a transformation.
+
+        Three consequences beyond the obvious one:
+
+        1. The cost estimate stops being a guess. Phase 2 costs roughly one search
+           per work, so the moment phase 1 finishes the count is known and the
+           estimate is COMPUTED against a real list.
+        2. It resolves the target_candidate_count deferral with an option none of
+           the three recorded ones anticipated: the work list IS the count, and it
+           is trimmable rather than set in advance. Nothing is stored.
+        3. Phase 2 VERIFIES phase 1. Models invent plausible artwork titles; a work
+           with no credible instance is evidence of exactly that, so unresolved is a
+           first-class outcome rather than an absent row.
+
+        Collapse bias: aggressive, but nothing is discarded — losing instances are
+        retained as non-primary rows. That is what makes over-merging recoverable
+        and inspectable, which in turn makes biasing toward collapse safe. The
+        residual hard case (same title, same artist, genuinely different object —
+        Munch's four Screams, Monet's Haystacks) is handled by declining to collapse
+        when institution AND dimensions AND date all differ.
+      alternatives_considered:
+        - "One flat Candidate per found image, as originally modelled — the failure the operator named."
+        - "Resolve instances only after acceptance — cheaper, but the curator would approve a work without seeing what they are getting, which the review gate forbids."
+      date: 2026-07-19
+    - decision: "Review carries a third verdict — accept the work, reject the IMAGE, re-search — and suppression therefore has two scopes."
+      rationale: >
+        Decided 2026-07-19. Approving a work bundles two judgements that fail
+        independently: do I want this work, and is this image good enough. "Yes,
+        Persistence of Memory, but not that 900px poster scan" is ordinary, and an
+        accept/reject binary cannot express it.
+
+        The trap this creates is the important part. Rejecting a WORK must suppress
+        the work; rejecting an IMAGE must suppress only that image and explicitly
+        leave the work eligible. One suppression key for both means asking for a
+        better scan silently blacklists the painting — invisible until a curator
+        wonders why something they asked to keep never came back. Modelled as
+        CandidateWork.work_dedup_key versus CandidateImage.rejected_at, and stated
+        as a constraint so the two cannot be unified later by someone tidying up.
+      alternatives_considered:
+        - "Reject-and-re-add manually — puts the curator back in the position of re-issuing an intent to recover a work they already approved of."
+      date: 2026-07-19
+    - decision: "The phase-1 work list is gated for approval only when the phase-2 cost estimate crosses a configured threshold."
+      rationale: >
+        Chosen by the operator 2026-07-19 from four options. Always-gate gives the
+        strongest cost control but demands two review passes per run, cutting
+        against the recorded constraints that curation happens in short sessions and
+        must never feel like sysadmin work. Never-gate means paying to resolve images
+        for works that would have been struck from the list. The threshold keeps
+        cheap runs frictionless and stops the expensive ones.
+
+        Two consequences. DiscoveryRun gains an awaiting_approval state and a
+        DECLINED terminal state — distinct from both failed (something broke) and
+        halted_by_budget (the cap fired), because collapsing a deliberate choice
+        into a malfunction is the same mistake this model already refuses to make
+        for halted_by_budget. And approval_required is STORED per run rather than
+        re-derived, because the threshold is configuration and configuration changes;
+        a run that stopped last month must still read as having stopped.
+
+        The threshold value itself is a deployment value and must not be hardcoded —
+        see the project-preferences norm. Open question recorded.
+      alternatives_considered:
+        - "Always two gates — strongest control, worst fit for short leisure sessions."
+        - "One gate at the end — simplest, matches the committed one-batch-reviewed-as-a-grid decision, but pays for image resolution on works that would have been cut."
+        - "No gate, but phase 1 exposed as its own operation — pushes the discipline onto the caller rather than the system."
       date: 2026-07-19
   integrations:
     - decision: "Discovery searches museum/public-domain collections AND the contemporary web (gallery sites, prize announcements, artist portfolios)."
@@ -722,10 +934,10 @@ design_decisions:
   # api_versioning_approach: { scheme, deprecation_policy, stability_tiers,
   #                            status: active|deferred, rationale, revisit_trigger (if deferred), date }
   api_versioning_approach:
-    scheme: "undecided — REOPENED, was 'none — internal-only'"
-    deprecation_policy: "undecided"
-    stability_tiers: "undecided"
-    status: deferred
+    scheme: "none — no version negotiation. Tool names frozen; actions are the unit of evolution; changes additive-only."
+    deprecation_policy: "Announce, retire, annotate inline at the replacing site. No compatibility shims. Removals/renames of tools are not permitted; of actions, they are breaking and announced."
+    stability_tiers: "Tool names FROZEN. Action values, required params, descriptions STABLE. Optional params and result fields ADDITIVE."
+    status: active
     rationale: >
       SUPERSEDED 2026-07-19, same day, by its own revisit trigger firing. The
       original decision — no versioning, internal-only — was sound while every
@@ -743,13 +955,28 @@ design_decisions:
           renaming arguments, and changing result shapes.
         * curation↔display contract — still internal, single consumer, deployed
           together. The original "none" reasoning still holds here.
-    revisit_trigger: "RESOLVED — fired 2026-07-19 on the MCP requirement. Decide before the first MCP tool ships."
+      DECIDED 2026-07-19, after the reopening above. The specification offers
+      nothing to conform to: SEP-1575 (tool semantic versioning, proposed
+      2025-09-29) is a dormant proposal adopted into no spec revision. What the
+      protocol does give is notifications/tools/list_changed, which Claude Code
+      honours by refreshing automatically — and every client here is the operator's
+      own, so a breaking change means telling one person, not a migration window.
+
+      Two non-obvious rules fall out. Tool NAMES are frozen and pinned by test:
+      both of the operator's production servers learned this the hard way, and
+      cordyceps' one consolidation required follow-up sweeps through prompts,
+      guides, and a stale tool count in its own docs. And a DESCRIPTION change is
+      treated as breaking, because it alters tool-selection probability even when
+      the schema is untouched — sound reasoning rather than a measured finding, and
+      flagged as such in the artifact, but it puts descriptions under the same
+      review discipline as schemas.
+    revisit_trigger: "A consumer appears that is not deployed or configured by the operator — e.g. publishing the server for third parties, or listing it in a connector directory (whose review criteria would additionally forbid multiplexing reads and writes in one tool)."
     date: 2026-07-19
   # api_error_model_approach: { envelope (e.g. RFC-7807/problem+json), codes, status, rationale, date }
   api_error_model_approach:
-    envelope: "undecided — must be settled before the first MCP tool ships"
-    codes: "undecided"
-    status: deferred
+    envelope: "Tool results with isError: true, derived from a boolean `success` field in the payload — never JSON-RPC protocol errors, except unknown-tool. Every error carries: what was wrong, the enumerated valid set, a correct example, and a pointer to action='help'."
+    codes: "No numeric code space. Errors are self-describing strings plus structured valid_actions / required / optional / example / hint fields. A machine-readable discriminator is added only where a caller must branch — halted_by_budget being the standing example."
+    status: active
     rationale: >
       No longer safely deferrable. Agents bind to error shapes to decide whether
       to retry, escalate, or stop, so an unstable or unstructured error model is
@@ -765,7 +992,19 @@ design_decisions:
         * Partial success is normal (partial dezoomify tiles, some candidates
           acquired), so the model must express it rather than collapsing to
           ok/fail.
-    revisit_trigger: "Designing the MCP tool surface — which is now v1 scope, not later."
+      DECIDED 2026-07-19. The MCP specification supports returning execution errors
+      as tool results directly: they are meant to carry "actionable feedback that
+      language models can use to self-correct and retry", and clients SHOULD feed
+      them back to the model. Protocol errors are reserved for the one case the
+      model cannot act on — a tool that does not exist.
+
+      Two details taken from the operator's production servers rather than invented.
+      isError is DERIVED from the payload rather than set by hand, because a
+      hand-set flag drifts from the body it describes. And there is deliberately NO
+      fuzzy nearest-match ("did you mean") — neither server implements it; the
+      substitute is always to enumerate the full valid set inline, which is more
+      useful to a model than a single guess and cannot mislead.
+    revisit_trigger: "RESOLVED — the MCP tool surface was designed 2026-07-19 and the envelope decided with it."
     date: 2026-07-19
   observability_approach: >
     The defining constraint is that failure is silent by construction — the only
@@ -838,18 +1077,33 @@ open_questions:
     # risk is behavioural: asyncio internals, and pydantic/langchain annotation
     # resolution under eager (3.13) vs lazy (3.14) __annotations__. A static PEP
     # 649 reliance check found zero hits. Only a real 3.13 test run closes it.
-  - question: "What is the MCP tool surface — the operations, their granularity, and their error model?"
-    blocking: "The api-contract artifact, the versioning and error-model decisions, and the service layer's shape."
+  # RESOLVED 2026-07-19: "What is the MCP tool surface — the operations, their
+  # granularity, and their error model?" Answered in full; see
+  # artifacts/api-contract.md and technical_decisions.technology below. Five
+  # action-dispatch tools, registry-generated definitions, errors as tool results
+  # with isError derived from the payload. The framing in the original question
+  # turned out to be partly wrong: the intention-versus-CRUD trade dissolved once
+  # it was noticed that the worked example ("add all of Dali") can never be one
+  # call — phase 2 takes minutes and review needs a human.
+  - question: "Should set_verdict require explicit work ids rather than accepting a bulk 'everything pending'?"
+    blocking: "Nothing structural — the verdict tool exists either way. This is a blast-radius question."
     waiting_on: user
-    priority: high
-    # Opened 2026-07-19 by the MCP flip. The requirement is parity with the web
-    # UI "or more", and the worked example is "add all of Salvador Dali's most
-    # famous works" — an intention, not a CRUD call. So granularity is the real
-    # question: intention-shaped tools (discover_and_add, switch_theme) versus
-    # fine-grained CRUD, and where the boundary sits.
-    # Note this is deliberately NOT answered by inference — tool surfaces are
-    # contracts that external clients bind to, and guessing one into existence is
-    # the expensive kind of wrong.
+    priority: medium
+    # Opened 2026-07-19 as a consequence of putting the review gate on the MCP
+    # surface. Requiring explicit ids does not stop a determined prompt injection
+    # (an agent can enumerate first), but it does mean the accepted set appears in
+    # the transcript where the curator would see it. Trade: friction on the
+    # legitimate "accept them all" path, which is the common case after a good run.
+  - question: "What cost threshold triggers work-list approval before phase 2?"
+    blocking: "Nothing structural — the gate is decided; only the number is open."
+    waiting_on: user
+    priority: medium
+    # The threshold gate was decided 2026-07-19: below the threshold a run goes
+    # straight from phase 1 to phase 2; above it, it stops at awaiting_approval.
+    # The number is a deployment value and must NOT be hardcoded — see the
+    # project-preferences norm on deployment values in source. Needs a real
+    # per-search cost figure to set sensibly, which is itself blocked on the
+    # paid-web-search question above.
   - question: "Where does the curation plane actually run, and is it always-on?"
     blocking: "Deployment design, and whether discovery can be a background job or must be strictly foreground."
     waiting_on: user
@@ -874,7 +1128,7 @@ open_questions:
     # and mat generously, or let the curator decide per work. This determines
     # whether resolution is a hard filter during discovery or a review-time signal.
   - question: "Should discovery results carry licence/rights enforcement, or is rights metadata display-only?"
-    blocking: "The Candidate/Artwork model and what the review grid must show."
+    blocking: "The CandidateImage/Source model and what the review grid must show."
     waiting_on: user
     priority: medium
     # RAISED from low 2026-07-19: the corpus is now deliberately in-copyright, so

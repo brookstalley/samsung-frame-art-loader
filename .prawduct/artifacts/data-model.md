@@ -26,6 +26,29 @@ identity independent of where it was found. Source URLs are attributes of a
 > than migrated. The 41 legacy records are re-ingested through curation as new
 > works.
 
+**A work is distinct from an image of it, at every stage.** Every entity that
+represents "a piece of art" is a *work*; every entity that represents a file, URL,
+scan, or photograph is an *instance* of some work. The two are never collapsed into
+one row, before or after acceptance.
+
+> **Why:** *The Persistence of Memory* is one work with many instances — the MoMA
+> page, a Google Arts & Culture gigapixel scan, a Wikipedia upload, a poster shop's
+> JPEG. A model that treats each found image as a candidate presents the curator
+> with ten copies of one painting and asks them to approve one. Nothing errors; the
+> product simply fails at the thing it exists to do. The distinction has to hold
+> pre-acceptance too, because that is exactly where the duplication appears.
+>
+> **Corollary:** collapse aggressively, but never discard. Instances that lose
+> canonical selection are *retained* as non-primary rows, so an over-eager merge is
+> inspectable and reversible rather than silent. That is what makes biasing toward
+> collapse safe: the failure mode of over-merging (a work quietly represented by
+> the wrong scan) is recoverable, while the failure mode of under-merging (ten
+> cards for one painting) is the one the curator experiences.
+>
+> **Status:** steady-state.
+>
+> **Retroactivity:** Not applied to `all.json`, which is being replaced.
+
 **Per-device runtime state never lives in the catalogue.** Facts about a
 particular television, panel, or rendering geometry live in device-scoped
 entities owned by the plane that talks to that device.
@@ -60,17 +83,33 @@ to serve, elicited from the Product Brief's core flows:
 |---|----------|------|
 | Q1 | Which artworks belong to theme X, so the display plane can sync them? | 5, 6 |
 | Q2 | Which artwork is the TV showing right now, so the label panel can match it? | 6 |
-| Q3 | Has this work already been suggested and rejected, so discovery does not re-surface it? | 2, 3 |
+| Q3 | Has this **work** already been suggested and rejected, so discovery does not re-surface it? | 2, 3 |
 | Q4 | What has been spent this month, and what did this run cost? | 1, 2 |
 | Q5 | Where did this candidate come from, and why was it suggested? | 2, 3 |
 | Q6 | Can this artwork be re-acquired from scratch if every derived file is lost? | 4 |
 | Q7 | What mat colour was chosen for this work, and on what basis? | 4 |
 | Q8 | Which renditions exist for which output geometry, and are they current? | 4, 6 |
 | Q9 | Who is the artist — name, nationality, dates — for the physical label? | 4 |
+| Q10 | Which image instances were found for this work, which one was selected, and on what basis? | 2, 3 |
+| Q11 | Has this **image** been rejected for a work the curator still wants, so the re-search does not return it? | 3 |
+| Q12 | Which proposed works could not be resolved to any credible image, and are therefore suspect? | 2 |
 
 **Q3 is the one most easily missed.** Without persisted rejections, every
 discovery run re-proposes the same works the curator has already declined, and
 the product feels broken in a way no single component is responsible for.
+
+**Q11 is Q3's trap.** The two look like the same question and must not share a
+mechanism. Rejecting a *work* suppresses the work; rejecting an *image* must
+suppress only that image and explicitly leave the work eligible — otherwise asking
+for a better scan of a painting silently blacklists the painting. One suppression
+key for both is the bug, and it is invisible until a curator wonders why a work
+they asked to keep never came back.
+
+**Q12 exists because phase 2 verifies phase 1.** A model asked for an artist's
+famous works will occasionally invent a plausible title. A work for which no
+credible instance can be found is evidence of exactly that, so the run must be able
+to say "these N could not be resolved" rather than quietly returning a shorter
+list — or, worse, attaching a confident near-match.
 
 ## Entities
 
@@ -89,9 +128,16 @@ only entity the curator thinks of as "a piece of art".
 | `dimensions` | string | nullable | Physical dimensions as the source states them. |
 | `description` | text | nullable | May contain limited markup; see Constraints. |
 | `rights` | string | nullable | Rights statement as given. Display-only — see open question in `project-state.yaml`. |
-| `status` | enum | required | `candidate` \| `accepted` \| `rejected` \| `archived`. See State Machines. |
-| `accepted_at` | datetime | nullable | Set on transition to `accepted`. |
+| `status` | enum | required | `accepted` \| `archived`. See State Machines. |
+| `accepted_at` | datetime | nullable | Set on creation from an accepted CandidateWork. |
 | `created_at` | datetime | auto | |
+
+> **An Artwork only exists once accepted.** This entity previously carried
+> `candidate` and `rejected` statuses, which duplicated what `CandidateWork.verdict`
+> now owns. Two entities modelling the same lifecycle is how they drift — a work
+> `rejected` on one and `accepted` on the other is unresolvable, and nothing would
+> flag it. Pre-acceptance state lives on `CandidateWork`; the catalogue holds only
+> works that made it.
 
 ### Artist
 
@@ -128,6 +174,8 @@ may exist at several institutions, and a broken source does not break the work.
 | `acquisition_method` | enum | required | `dezoomify` \| `direct_http` \| `api`. Determines the fetch path. |
 | `rights_status` | enum | required | `public_domain` \| `in_copyright` \| `unknown`. |
 | `is_primary` | boolean | default false | Which source was actually used for the held original. |
+| `confidence` | float | nullable | Carried from `CandidateImage.confidence` at acceptance. |
+| `selection_rationale` | text | nullable | Why this source was chosen as primary. Carried from `CandidateImage`. **Q10.** |
 | `last_fetch_status` | enum | nullable | `ok` \| `partial_tiles` \| `failed`. `partial_tiles` is a normal dezoomify outcome, not an error. |
 | `last_fetched_at` | datetime | nullable | |
 
@@ -264,9 +312,11 @@ candidates provenance.
 | `intent_text` | text | required | The curator's natural-language intent, verbatim. |
 | `strategy` | text | nullable | The interpreted plan, for explaining results. |
 | `initiated_by` | enum | required | `web_ui` \| `web_ui_agent` \| `mcp_client`. Which surface started this run. |
-| `status` | enum | required | `estimating` \| `running` \| `completed` \| `failed` \| `halted_by_budget`. |
-| `estimated_cost_usd` | decimal | nullable | Shown before the run. |
+| `status` | enum | required | `resolving_works` \| `awaiting_approval` \| `resolving_images` \| `completed` \| `failed` \| `declined` \| `halted_by_budget`. See State Machines. |
+| `estimated_cost_usd` | decimal | nullable | Phase-2 estimate, computed from the phase-1 work count. |
 | `actual_cost_usd` | decimal | nullable | Reconciled after. |
+| `approval_required` | boolean | required | Whether the phase-2 estimate crossed the configured threshold. Recorded per run, not re-derived — the threshold can change. |
+| `unresolved_work_count` | integer | nullable | Works from phase 1 for which no credible instance was found. **Q12.** |
 | `started_at`, `completed_at` | datetime | nullable | |
 
 > `halted_by_budget` is a first-class terminal state, not an error. The cap fails
@@ -279,11 +329,18 @@ candidates provenance.
 > not. It also matches the "short curation sessions" constraint — the curator is
 > not held at the keyboard while discovery works.
 >
-> `target_candidate_count` is deliberately **not** modelled as a column yet: it is
-> unclear whether the curator sets it per run, whether it is a global preference,
-> or whether the agent decides based on how much matches the intent. That is a
-> design question, and guessing it into the schema now would be a lock-in without
-> a requirement behind it.
+> **`target_candidate_count` is resolved, and it is not a column.** This artifact
+> previously deferred it, listing three options: the curator sets it per run, it is
+> a global preference, or the agent decides from how much matches the intent. The
+> two-phase split produces a fourth that beats all three — **the phase-1 work list
+> *is* the count**, and it is a reviewable, trimmable list rather than a number
+> guessed in advance. Nothing needs to be stored: the count is
+> `COUNT(CandidateWork)` for the run.
+>
+> **`approval_required` is stored rather than derived** because the threshold is
+> configuration and configuration changes. A run that stopped for approval last
+> month must still read as "this stopped for approval", not as whatever the current
+> threshold would imply.
 >
 > **`initiated_by` exists because agents can now start runs.** An MCP client can
 > issue "add all of Salvador Dalí's most famous works" without the curator
@@ -298,40 +355,90 @@ candidates provenance.
 > applied to agents. Branching behaviour on this field would reintroduce the
 > parity split the MCP requirement exists to prevent.
 
-### Candidate
+### CandidateWork
 
-A work discovery proposed, and the curator's verdict on it. Distinct from
-Artwork: most candidates never become artworks.
+A *work* discovery proposed, and the curator's verdict on it. Produced by phase 1,
+before any image exists. Distinct from Artwork: most candidate works never become
+artworks.
 
 | Field | Type | Constraints | Description |
 |---|---|---|---|
 | `id` | UUID | PK | |
 | `discovery_run_id` | UUID | FK → DiscoveryRun, required | |
 | `artwork_id` | UUID | FK → Artwork, nullable | Set on acceptance. |
-| `proposed_title` | string | required | Pre-acquisition; may be wrong. |
+| `proposed_title` | string | required | As phase 1 named it; may be wrong or invented. |
 | `proposed_artist` | string | nullable | |
-| `candidate_url` | string | nullable | Where it was found. |
-| `rationale` | text | required | Why the model matched it to the intent. **Q5.** |
-| `dedup_key` | string | required, indexed | Normalised identity for cross-run dedup. **Q3.** |
-| `source_class` | enum | nullable | `institutional` \| `contemporary_web`, where determinable pre-acquisition. |
-| `estimated_max_width` | integer | nullable | Best pre-acquisition guess at available resolution. |
-| `rights_status` | enum | nullable | `public_domain` \| `in_copyright` \| `unknown`. |
-| `verdict` | enum | required | `pending` \| `accepted` \| `rejected`. |
+| `rationale` | text | required | Why the model matched this work to the intent. **Q5.** |
+| `work_dedup_key` | string | required, indexed | Normalised work identity for cross-run suppression. **Q3.** |
+| `resolution_status` | enum | required | `pending` \| `resolved` \| `unresolved`. `unresolved` ⇒ phase 2 found no credible instance. **Q12.** |
+| `verdict` | enum | required | `pending` \| `accepted` \| `rejected` \| `awaiting_better_image`. See State Machines. |
 | `rejected_reason` | text | nullable | Optional curator note. |
 | `decided_at` | datetime | nullable | |
 
-> The three nullable signal fields exist so the **review grid can show resolution
-> and rights before acceptance**, not after. Accepting a work triggers a slow,
-> possibly expensive acquisition; discovering only then that it is a 900px
-> in-copyright press photo wastes the fetch and the curator's attention. They are
-> nullable because they are estimates — some sources will not reveal available
-> resolution without fetching.
+> **`awaiting_better_image` is the verdict an accept/reject binary cannot express**
+> — "I want this work; this instance is not good enough; find another." It is not
+> an edge case, and it is not terminal: the work returns to review once a new
+> instance is selected. Modelling it as a rejection would suppress the work via
+> `work_dedup_key` and silently lose a painting the curator explicitly asked to
+> keep (**Q11**).
+>
+> **`resolution_status = unresolved` is a first-class outcome, not an absent row.**
+> Phase 2 failing to find any credible instance is the signal that phase 1 may have
+> invented the work. Dropping it from the batch discards that signal; attaching a
+> low-confidence near-match actively launders it.
+>
+> **Q3.** `work_dedup_key` is what stops discovery re-proposing declined works
+> forever. Its derivation (normalised artist + title, or a source identifier where
+> one exists) is a design decision deferred to build — but the *column* is specified
+> now, because retrofitting suppression after rejections have accumulated makes the
+> early rejections unrecoverable.
 
-> **Q3.** `dedup_key` is the field that stops discovery re-proposing declined
-> works forever. Its derivation (normalised artist + title, or a source
-> identifier where one exists) is a design decision deferred to build — but the
-> *column* is specified now because retrofitting dedup after rejections have
-> accumulated means the early rejections are unrecoverable.
+### CandidateImage
+
+One image *instance* found for a candidate work. Many per work; exactly one
+selected. Produced by phase 2.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `candidate_work_id` | UUID | FK → CandidateWork, required | |
+| `url` | string | required | Where this instance was found. |
+| `preview_url` | string | nullable | Small image for review. Source-side URL. |
+| `preview_path` | string | nullable | Cached local copy, relative to `ART_ROOT`. Review must not depend on a museum server being reachable. |
+| `provider` | string | required | e.g. `artic`, `google_arts`, `gallery_site`. Open vocabulary. |
+| `source_class` | enum | required | `institutional` \| `contemporary_web`. |
+| `estimated_width`, `estimated_height` | integer | nullable | Best pre-acquisition guess at available resolution. |
+| `rights_status` | enum | nullable | `public_domain` \| `in_copyright` \| `unknown`. |
+| `confidence` | float | required | Is this genuinely that work — not a detail crop, study, poster, or "after"? |
+| `quality_score` | float | nullable | Resolution, fidelity, rights, institutional provenance. |
+| `selection_rationale` | text | nullable | Why this instance was chosen over the others. **Q10.** |
+| `is_selected` | boolean | required | Exactly one per work at a time. |
+| `rejected_at` | datetime | nullable | Set when the curator rejects this instance; suppresses it from re-selection. **Q11.** |
+
+> **`confidence` and `quality_score` are separate because they conflict.** A
+> museum's own page is maximum confidence and may be lower resolution than a
+> gigapixel scan elsewhere. Collapsing them into one number makes the trade
+> invisible and the choice unexplainable — and `selection_rationale` is what the
+> review card shows when the curator asks *why this one*.
+>
+> Which axis dominates depends on `source_class`. For `institutional` sources many
+> instances of one work exist and canonicity is the hard problem. For
+> `contemporary_web` there is usually exactly one image and the risk is that it is
+> the wrong one — a photo of the gallery wall, or an "inspired by" — so confidence
+> carries almost all the weight.
+>
+> **`preview_path` exists because review cannot depend on the network.** The review
+> grid — in the web UI and over MCP alike — must show the picture. A source-side URL
+> alone means a curator reviewing an hour later sees broken images if a museum is
+> down or rate-limiting, and it means the MCP surface has nothing local to inline.
+>
+> **Losing instances are retained, never deleted.** They are what makes an
+> over-eager merge inspectable, they are the alternates the review card offers, and
+> on acceptance they become the work's non-primary `Source` rows — which is what
+> makes re-acquisition robust when an institution reorganises its site (**Q6**).
+>
+> **`rejected_at` is instance-scoped suppression** and must never be conflated with
+> `CandidateWork.work_dedup_key`. See **Q11**.
 
 ### SpendRecord
 
@@ -384,8 +491,13 @@ the entity that enforces the second Direction norm.
   `is_current`.
 - An **Artwork** belongs to many **Themes** and a **Theme** contains many
   **Artworks** (many-to-many via **ThemeMembership**).
-- A **DiscoveryRun** produces many **Candidates** (one-to-many). A **Candidate**
-  becomes at most one **Artwork**.
+- A **DiscoveryRun** produces many **CandidateWorks** (one-to-many). A
+  **CandidateWork** has many **CandidateImages** (one-to-many), of which at most one
+  has `is_selected`. A **CandidateWork** becomes at most one **Artwork**, and on
+  acceptance its **CandidateImages** become that Artwork's **Sources** — the
+  selected one as `is_primary`, the rest retained as alternates. The
+  candidate-side and catalogue-side shapes mirror each other deliberately, so
+  acceptance is a promotion rather than a transformation.
 - A **DiscoveryRun** accrues many **SpendRecords** (one-to-many).
 - A **TvBinding** references an **Artwork** across the plane boundary — by id
   only, never by foreign key, because the two planes do not share a database.
@@ -395,35 +507,58 @@ the entity that enforces the second Direction norm.
 ### Artwork
 
 ```
-candidate ──accept──▶ accepted ──archive──▶ archived
-    │                     ▲                     │
-    └───reject──▶ rejected└──────restore────────┘
+(created from an accepted CandidateWork)
+        │
+        ▼
+    accepted ──archive──▶ archived
+        ▲                     │
+        └──────restore────────┘
 ```
 
-- `candidate → accepted` — curator accepts; acquisition and preparation begin.
-- `candidate → rejected` — terminal for discovery purposes; the `Candidate`'s
-  `dedup_key` continues to suppress re-proposal (**Q3**).
+- Creation — a `CandidateWork` is accepted; the Artwork is minted, its
+  `CandidateImage`s become `Source`s, and acquisition and preparation begin.
 - `accepted → archived` — removed from circulation without losing the record or
   its mat history.
 - `archived → accepted` — restoration is permitted; renditions may be stale and
   are checked via `source_content_hash`.
 
+Rejection has no Artwork state: a rejected work never becomes one. Suppression of
+re-proposal is `CandidateWork.work_dedup_key` (**Q3**).
+
 ### DiscoveryRun
 
 ```
-estimating ──▶ running ──┬──▶ completed
-                         ├──▶ failed
-                         └──▶ halted_by_budget
+resolving_works ──┬──────────────────────────▶ resolving_images ──┬──▶ completed
+   (phase 1)      │                                (phase 2)      ├──▶ failed
+                  └──▶ awaiting_approval ──┬──▶ resolving_images  └──▶ halted_by_budget
+                                           └──▶ declined
 ```
 
-All three end states are terminal. `halted_by_budget` is a normal outcome.
+`awaiting_approval` is entered only when the phase-2 estimate crosses the
+configured threshold; below it the run goes straight to phase 2. `declined` is the
+curator looking at the work list and its price and saying no — a normal outcome,
+and distinct from both `failed` (something broke) and `halted_by_budget` (the cap
+fired). Collapsing any of the three into the others makes a deliberate choice
+indistinguishable from a malfunction, which is the same mistake this artifact
+already refuses to make for `halted_by_budget`.
 
-### Candidate
+`completed` covers runs where some works were `unresolved`. A run that resolved 34
+of 40 works succeeded partially; it did not fail.
+
+### CandidateWork
 
 ```
+                    ┌──────────────────────────────┐
+                    ▼                              │
 pending ──┬──▶ accepted   (creates or links an Artwork)
-          └──▶ rejected
+          ├──▶ rejected                            │
+          └──▶ awaiting_better_image ──────────────┘
+                    (re-search; new instance selected; back to review)
 ```
+
+`awaiting_better_image` is **not terminal**. It returns to `pending` once phase 2
+selects a fresh instance, and it must not write `work_dedup_key` suppression —
+that is reserved for `rejected` (**Q11**).
 
 ## Constraints
 
@@ -440,20 +575,31 @@ pending ──┬──▶ accepted   (creates or links an Artwork)
 6. **All stored paths are relative to `ART_ROOT`.** No absolute paths in any
    record. This is what makes the catalogue portable between planes and machines,
    and it is the fix for `/home/tvpi/art` having been hardcoded in `config.py`.
-7. **A rejected Candidate's `dedup_key` suppresses future proposals** unless the
-   curator explicitly reconsiders it.
-8. **`Artwork.description` may contain only `<i>` and `<b>` markup.** Sources
+7. **Suppression has two scopes and they never share a key.**
+   a. A `rejected` **CandidateWork**'s `work_dedup_key` suppresses that *work* from
+      future proposals, unless the curator explicitly reconsiders it.
+   b. A **CandidateImage** with `rejected_at` set is excluded from re-selection for
+      its work, and this must leave the work itself eligible.
+   Enforcing (b) through (a) is the failure mode: asking for a better scan would
+   blacklist the painting. **Q11.**
+8. **Exactly one CandidateImage per CandidateWork has `is_selected = true`**, while
+   the work has any unrejected instance. A work whose every instance has been
+   rejected re-enters phase 2 rather than sitting selectionless.
+9. **A CandidateWork with `resolution_status = unresolved` is never presented as
+   accepted-able**, and never silently omitted from the run's results. It is
+   reported. **Q12.**
+10. **`Artwork.description` may contain only `<i>` and `<b>` markup.** Sources
    return `<p>` and `<em>`; these are normalised at ingest. The label renderer
    passes description text to Pango markup, so unescaped or unexpected markup is
    a rendering failure — today `art.py` does this substitution inline at render
    time, which means every renderer must remember to.
-9. **Spend is summed over a calendar month by `occurred_at`.** When the sum
+11. **Spend is summed over a calendar month by `occurred_at`.** When the sum
    reaches the configured ceiling, discovery transitions to `halted_by_budget`
    rather than degrading.
-10. **An Original's `display_fit` is derived at acquisition, never at render
+12. **An Original's `display_fit` is derived at acquisition, never at render
     time.** Render paths read it; they do not recompute it. This keeps the
     resolution policy in one place instead of implicit in each renderer.
-11. **`Source.rights_status` is recorded for every source, including `unknown`.**
+13. **`Source.rights_status` is recorded for every source, including `unknown`.**
     Absence of a value is not permitted — "we did not check" and "we checked and
     could not tell" are different facts, and only the second is honest as
     `unknown`. Whether rights *gate* anything is still open; recording them is
