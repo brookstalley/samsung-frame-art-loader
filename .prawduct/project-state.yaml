@@ -189,11 +189,24 @@ classification:
           poisoned page steering candidate selection or burning budget — annoying
           and visible, not a breach.
 
-          The two structural mitigations already decided do most of the work:
-          agents cannot auto-accept (every addition stops at curator review), and
-          the spend cap fails closed. What remains is keeping tool authority
-          narrow — no filesystem, no shell, no arbitrary fetch — so the blast
-          radius stays inside the catalogue.
+          CORRECTED 2026-07-19 by Critic review. This paragraph previously read
+          "agents cannot auto-accept (every addition stops at curator review)" as
+          one of two structural mitigations. That bound was VOIDED the same day when
+          the review gate moved onto the MCP surface — see
+          technical_decisions.data_model — and leaving the sentence here while
+          correcting it in the api-contract is exactly the drift the correction was
+          supposed to prevent.
+
+          What actually bounds this now, in descending order of strength:
+            1. The spend cap fails closed. Unchanged, and the strongest.
+            2. Tool authority stays narrow — no filesystem, no shell, no arbitrary
+               fetch — so the blast radius stays inside the catalogue.
+            3. Acceptance is visible (it changes the wall) and fully reversible
+               (archive restores).
+            4. The curator is present in the session that issued the request.
+
+          Items 3 and 4 are materially weaker than "cannot", and 4 is a property of
+          how the operator works rather than something the system enforces.
       - factor: "Contemporary sources are in-copyright and low-resolution"
         level: medium
         rationale: >
@@ -286,6 +299,8 @@ product_definition:
   # Measurable success criteria. What does "this worked" look like?
   goals:
     - "A curator can go from a natural-language intent to artwork on the wall without touching the filesystem, editing JSON, or SSHing into the Pi."
+    - "A discovery run proposes each WORK exactly once, with one selected image and its alternates behind it. Being shown the same painting several times and asked to pick counts as a failed run even if every instance is individually good."
+    - "A curator never accepts a work without having seen its image — on any surface, including an agent's."
     - "Themes/groups are switchable from the web UI and materialise on the TV without a redeploy."
     - "LLM spend stays under a declared monthly ceiling, and hitting the ceiling stops discovery rather than degrading it silently."
     - "The display plane keeps showing art when the curation plane is down."
@@ -324,14 +339,34 @@ product_definition:
   # Core user flows (UI), operations (API), or pipeline stages (automation).
   # Each: { name, description, steps (optional), priority (must-have/nice-to-have) }
   core_flows:
+    # UPDATED 2026-07-19 (second planning pass) to match artifacts/product-brief.md,
+    # which declares this block as its depends_on source. Caught by Critic review
+    # after the brief was revised and this was not.
     - name: "Express curatorial intent"
-      description: "Curator states an intent in natural language in the web UI. The system interprets it into a discovery strategy and shows the estimated cost before running anything."
+      description: "Curator states an intent — artist, style, prize, period — in the web UI or through an agent. The system interprets it into a discovery strategy."
       priority: must-have
-    - name: "LLM-assisted discovery"
-      description: "An agentic search over museum APIs and the open web produces candidate works with provenance — source, licence, and why it matched the intent."
+    - name: "LLM-assisted discovery, in two phases"
+      description: >
+        Phase 1 resolves the intent to a set of WORKS (titles and artists, not
+        images). Phase 2 searches per work for image INSTANCES and selects one
+        canonical instance, recording why. The distinction is the product's central
+        requirement: ten copies of one painting presented for approval is a complete
+        failure even though nothing errors. Three consequences — the cost estimate
+        becomes computable once the work count is known; the work list IS the
+        candidate count, trimmable rather than preset; and phase 2 verifies phase 1,
+        because a work with no credible instance is probably invented.
+        The work list is gated for approval only when the phase-2 estimate crosses a
+        configured cost threshold.
       priority: must-have
-    - name: "Review and accept"
-      description: "Curator reviews candidates and accepts or rejects. Only accepted works enter the catalogue. This is the human-in-the-loop gate that bounds both cost and taste."
+    - name: "Review and accept a work with its selected image"
+      description: >
+        Curator reviews one card per WORK, showing the selected image, the alternates
+        found, and why this one was chosen. Three verdicts, not two: accept; reject
+        the work; or reject the IMAGE and re-search, which keeps the work. Suppression
+        therefore has two scopes that must never share a key. The human-in-the-loop
+        gate — its durable justification is content appropriateness, and what carries
+        it is that the reviewing surface SHOWS THE IMAGE, not that any surface is
+        withheld.
       priority: must-have
     - name: "Acquire and prepare"
       description: "Fetch at gallery resolution (tiled where needed), extract and normalise metadata, choose a mat colour, render the 4K TV image and the e-paper label. Largely exists today in art.py / image_utils.py."
@@ -340,18 +375,34 @@ product_definition:
       description: "Group accepted works into named themes/profiles. Switching the active theme changes what the TV shows."
       priority: must-have
     - name: "Display and sync"
-      description: "Display plane reconciles the active theme against what is on the TV, uploads what is missing, deletes what is orphaned, and drives the label panel from TV callbacks. Largely exists today in tvart.py."
+      description: >
+        Keep the accepted library uploaded to the TV and ROTATE THROUGH THE ACTIVE
+        THEME'S SUBSET FROM THE HOST, driving the label panel from the resulting
+        image_selected callbacks. Corrected 2026-07-19: the TV's native slideshow can
+        only be scoped to a whole category, so switching themes through it would mean
+        deleting and re-uploading every work. Host-driven rotation makes a theme
+        switch cost zero TV writes.
       priority: must-have
     - name: "Ambient adaptation"
       description: "Brightness follows sun position; art mode follows time of day. Exists today in local.py; the auto art-mode logic is currently commented out."
       priority: nice-to-have
+    - name: "Drive everything from an agent, over MCP"
+      description: >
+        Every content-management operation is available as an MCP tool, at parity
+        with the web UI. Worked example: point Claude Code at the server and say "add
+        all of Salvador Dali's most famous works". The same tools back the in-UI
+        agent, which is an MCP client rather than an in-process caller so that one
+        agent can manage art libraries on several systems. This is what flipped the
+        product to having external API consumers.
+      priority: must-have
 
   # Scope decisions.
   scope:
     v1:                   # Must have for initial release
-      - "Verify the Frame TV art API still works on current firmware (gating — do this first)"
-      - "Two-plane split: curation plane (Python 3.14) and display plane (Python 3.13 on the Pi)"
-      - "Web UI for curation with LLM-assisted discovery, review/accept, and themes"
+      - "Verify the Frame TV art API still works on current firmware — DONE 2026-07-19, art mode confirmed working"
+      - "Two-plane split: curation plane and display plane (Python 3.13 on the Pi)"
+      - "Web UI for curation with two-phase LLM-assisted discovery, work-plus-image review, and themes"
+      - "MCP tool surface covering all content management, at parity with the web UI — five action-dispatch tools on the official `mcp` SDK, over a service layer both MCP tools and HTTP handlers bind"
       - "New catalogue built by curation, seeded with the existing 41 artworks as worked examples"
       - "Hard monthly LLM spend cap that fails closed"
       - "OpenRouter multi-provider model access"
@@ -569,6 +620,11 @@ technical_decisions:
         Cost accepted: the MCP surface goes down with the UI process, which is
         tolerable because curation-plane downtime is already defined as invisible to
         the household.
+
+        SCOPE OF THIS DECISION: it commits to co-mounting in ONE ASGI application,
+        not to a particular framework. No web framework has been chosen and none is
+        implied — see open_questions. Flagged on 2026-07-19 review after this
+        decision was written as though ASGI were already settled.
       alternatives_considered:
         - "stdio — impossible across the host boundary; the client cannot spawn a server on another machine."
         - "Separate MCP process — needs its own path to the catalogue and reintroduces the divergence the service-layer norm exists to prevent."
@@ -1104,6 +1160,54 @@ open_questions:
     # project-preferences norm on deployment values in source. Needs a real
     # per-search cost figure to set sensibly, which is itself blocked on the
     # paid-web-search question above.
+  - question: "Should the MCP surface expose resources in addition to tools?"
+    blocking: "Nothing — tools cover every current read. This is an optimisation and a UX question."
+    waiting_on: user
+    priority: low
+    # Claimed as carried in api-contract.md on 2026-07-19 but never actually filed;
+    # caught by Critic review. The MCP spec's tools/resources split is about CONTROL
+    # (who decides when something enters context), not mutability, and it never says
+    # read-only operations must be resources. Anthropic's guidance says a tool is
+    # right when the result depends on parameters the model chooses — which covers
+    # every read here. A stable browsable artifact (active theme, display state)
+    # could still earn a resource later.
+  - question: "What is the single source of truth for 'this artwork is ready to display'?"
+    blocking: "The curation-to-display contract, and whether an accepted work can legally join a theme before acquisition finishes."
+    waiting_on: user
+    priority: high
+    # Raised 2026-07-19 by Critic review. Readiness is currently reconstructible only
+    # by joining six signals: an Original exists, Source.last_fetch_status is ok,
+    # display_fit is acceptable, no Rendition is stale, a MatColor is_current, and
+    # TvBinding.upload_status is uploaded. Nothing owns the conjunction. The concrete
+    # failure: an accepted-but-unacquired work is a legal ThemeMembership row, so the
+    # display plane can select an artwork it cannot render — and the display plane is
+    # the surface where failure is silent by construction.
+  - question: "Where does the display plane's rotation list live when the curation plane is down?"
+    blocking: "The curation-to-display contract, and the availability guarantee the architecture is built on."
+    waiting_on: user
+    priority: high
+    # Raised 2026-07-19 by Critic review, which caught a tension between two
+    # committed decisions. api-contract exempts the curation-to-display contract
+    # from any stability obligation as 'single consumer, deployed together' — but
+    # technical_decisions.architecture requires the display plane to keep working
+    # when curation is unavailable, and that is named as the main reason the split
+    # is a benefit rather than a cost. Deployed-together and survives-independently
+    # are not compatible without saying what the display plane caches locally and
+    # how stale it may be.
+  - question: "Which web framework serves the curation plane, and does it satisfy the co-mounted MCP + HTTP requirement?"
+    blocking: "The curation plane's first build chunk. The MCP transport decision assumes one ASGI application serving both surfaces, but names no framework."
+    waiting_on: user
+    priority: high
+    # Raised 2026-07-19 by Critic review, which caught that
+    # technical_decisions.technology commits to 'the MCP server is mounted in the
+    # same ASGI application as the curation UI's HTTP API' while no framework
+    # appears anywhere in the project and none was tracked as open. That is a
+    # presupposition, not a decision.
+    # Constraints it must satisfy: mount the official `mcp` SDK's streamable-HTTP
+    # ASGI app alongside ordinary JSON routes; support progress notifications during
+    # a multi-minute call (see the start-and-poll decision); and run on the curation
+    # plane's Python version. The adjacent 3.14 aarch64 wheel question applies here
+    # too — verify before committing, do not assume.
   - question: "Where does the curation plane actually run, and is it always-on?"
     blocking: "Deployment design, and whether discovery can be a background job or must be strictly foreground."
     waiting_on: user

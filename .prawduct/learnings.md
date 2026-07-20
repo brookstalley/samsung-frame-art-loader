@@ -19,23 +19,45 @@ for the full record established 2026-07-19. Summary:
 
 **This constraint turned out to be architecture-defining.** See below.
 
-## The Python version split is not negotiable
+## The two-plane split is a choice, not a forced constraint
+
+> **Corrected 2026-07-19.** This section previously read *"The Python version split
+> is not negotiable"* and described the split as **forced** by an irreconcilable
+> version conflict. An audit the same day proved otherwise, and the correction was
+> carried into `product-brief.md`, `project-state.yaml`, and
+> `3tears-integration-findings.md` — but not here, which left the project's
+> learnings file asserting the opposite of its own architecture decision. Caught by
+> Critic review on 2026-07-19.
+>
+> **The durable lesson is the one that generalises:** "forced by X" is a claim about
+> X, and it needs the same verification as any other foreign-system claim. Recording
+> a constraint as non-negotiable without auditing it is how a removable limit becomes
+> permanent architecture.
 
 Established 2026-07-19 during discovery; full record in
 [3tears-integration-findings.md](artifacts/3tears-integration-findings.md).
 
-Every 3tears package requires **Python >=3.14**. The e-paper driver stack is
-pinned to **3.13/3.12** for the reasons above. These cannot share an interpreter,
-which is why the product is two planes rather than one process:
+Every 3tears package declares `requires-python = ">=3.14"`, and the e-paper driver
+stack is pinned to **3.13/3.12** for the reasons above. Taken at face value these
+cannot share an interpreter. **But the audit found 3.14 is required only by 16
+mechanical source sites, with no third-party dependency imposing any floor above
+3.10** — so the constraint is removable, and "forced" is not an honest rationale.
 
-- **Curation plane** — Python 3.14. Web UI, LLM discovery, image acquisition and
-  preparation. Runs off the Pi.
+The split stands on its own merits:
+
+- **Curation plane** — Web UI, LLM discovery, image acquisition and preparation.
+  Runs off the Pi.
 - **Display plane** — Python 3.13 on the Pi 4. TV websocket and e-paper only.
 
-The split was forced by a version conflict but pays for itself three ways: it
-matches the upstream/derived data contract below, it moves gigapixel fetching and
-4K compositing off a Pi 4, and it makes "e-paper behind an interface" a process
-boundary rather than a convention.
+It survives because the display plane **does not want 3tears at all** — it needs an
+HTTP client, `samsungtvws`, PIL, and the e-paper driver, and three-tier entities are
+of no use to it. Beyond that: it matches the upstream/derived data contract below,
+it moves gigapixel fetching and 4K compositing off a Pi 4, it makes "e-paper behind
+an interface" a process boundary rather than a convention, and it is what lets the
+display plane keep working when curation is down.
+
+Relaxing 3tears to 3.13 remains worth doing on *its* merits, but it is no longer a
+dependency of this product's architecture.
 
 ## 3tears can run with zero infrastructure
 

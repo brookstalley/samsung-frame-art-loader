@@ -97,3 +97,59 @@ implement them, and inline image results are a deliberate *departure* from both 
 the operator's servers, justified by remote transport.
 
 **No code changed.** This is planning work.
+
+## 2026-07-19: Address Critic findings on the MCP-surface planning bundle
+
+**Why:** Cumulative Critic review (`rev-20260720T031744Z-b47f2ffa`, three independent
+reviewers) returned 0 blocking, 15 warnings, 11 notes. Several were defects
+introduced by the immediately preceding commit; the rest were pre-existing
+contradictions that commit walked past.
+
+**Introduced by `9ed0317` and fixed here:**
+
+- **`art_discovery(action='cancel')` had no modelled outcome.** The contract exposed
+  the action; `DiscoveryRun.status` had no `cancelled` state. Added, with all five
+  terminal states now documented as describing five different things — none may
+  absorb another.
+- **The re-search after "reject this image" had no owner.** It would have spent money
+  from `art_review`, breaking the premise the whole per-tool gating design rests on.
+  Moved to `art_discovery(action='resolve_images')`; spend attributes to the
+  originating run via a new `image_research` category, and the run does not reopen.
+- **An ASGI framework was presupposed, never chosen.** The transport decision read as
+  though ASGI were settled. Scoped the decision to co-mounting and filed the framework
+  as a high-priority open question.
+- **The `CandidateWork` state diagram contradicted its own prose** — the return edge
+  landed on `accepted` where the text says `pending`.
+- **An open question was claimed but never filed** (MCP resources).
+
+**Pre-existing, fixed rather than deferred:**
+
+- **`risk_profile` still asserted the security bound the same commit declared void.**
+  Correcting it in `api-contract.md` while leaving it standing in the risk register is
+  precisely the drift the correction existed to prevent.
+- **`product_definition` was a generation behind `product-brief.md`**, which declares
+  it as its `depends_on` source — 7 flows not 8, single-phase discovery, binary
+  verdict, TV-side reconcile. Brought into line.
+- **`learnings.md` asserted the opposite of the architecture decision** — "the Python
+  version split is not negotiable" and "forced by a version conflict", both retired by
+  the 2026-07-19 audit and corrected everywhere except there. Rewritten, with the
+  generalisable lesson recorded: *"forced by X" is a claim about X, and needs the same
+  verification as any other foreign-system claim.*
+- **`boundary-patterns.md` was still the stock template** while four real contract
+  surfaces existed. Filled — an empty version silently disarms the consumer-impact
+  check for every future chunk.
+- **The recovered systemd unit defeats a stated goal.** `Restart=always` with no
+  `RestartSec`/`StartLimit*` means a fast-crashing loader exhausts its burst in half a
+  second and sits in `failed` with no notification — the exact opposite of "a failure
+  in the unattended loader is visible without inspecting the wall". Documented in
+  `deploy/README.md`; the unit stays as-recovered on purpose.
+
+**Also recorded:** candidate preview files as a disposable third class in the cache
+contract, and three new open questions — display-readiness source of truth, where the
+display plane's rotation list lives when curation is down, and the web framework.
+
+**Still open, not fixed:** `token_file` remains tracked (issue #4). Removing it from
+the index would not remove it from history; the real fix is rotating the pairing token
+against the TV, which needs hardware access.
+
+**No code changed.**

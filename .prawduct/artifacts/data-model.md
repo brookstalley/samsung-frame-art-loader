@@ -66,6 +66,16 @@ entities owned by the plane that talks to that device.
 specific output geometry is reproducible from upstream inputs and is never
 synced between machines.
 
+> **Candidate previews are a third class, and they are disposable.**
+> `CandidateImage.preview_path` files are neither upstream (they are cheap and
+> re-fetchable) nor derived (nothing renders them from a held original — there is no
+> original yet). They exist only to make review work without depending on a museum
+> server being reachable. **They are safe to delete once their `CandidateWork`
+> reaches a terminal verdict**, and deleting them must never affect the catalogue:
+> the accepted work's imagery comes from acquisition, not from the preview. Flagged
+> 2026-07-19 by Critic review, which noted the rows are deliberately permanent while
+> the files had no recorded lifecycle at all.
+
 > **Why:** Recorded in `learnings.md` § Data and cache contract. Derived files
 > are rendered for whichever display was targeted; copying them between machines
 > produces either wrong output or a cache that cannot be trusted. Regenerating on
@@ -312,7 +322,7 @@ candidates provenance.
 | `intent_text` | text | required | The curator's natural-language intent, verbatim. |
 | `strategy` | text | nullable | The interpreted plan, for explaining results. |
 | `initiated_by` | enum | required | `web_ui` \| `web_ui_agent` \| `mcp_client`. Which surface started this run. |
-| `status` | enum | required | `resolving_works` \| `awaiting_approval` \| `resolving_images` \| `completed` \| `failed` \| `declined` \| `halted_by_budget`. See State Machines. |
+| `status` | enum | required | `resolving_works` \| `awaiting_approval` \| `resolving_images` \| `completed` \| `failed` \| `declined` \| `cancelled` \| `halted_by_budget`. See State Machines. |
 | `estimated_cost_usd` | decimal | nullable | Phase-2 estimate, computed from the phase-1 work count. |
 | `actual_cost_usd` | decimal | nullable | Reconciled after. |
 | `approval_required` | boolean | required | Whether the phase-2 estimate crossed the configured threshold. Recorded per run, not re-derived — the threshold can change. |
@@ -449,7 +459,7 @@ The meter behind the fail-closed cap.
 | `id` | UUID | PK | |
 | `discovery_run_id` | UUID | FK → DiscoveryRun, nullable | Null for non-discovery spend, e.g. mat colour. |
 | `artwork_id` | UUID | FK → Artwork, nullable | Set for per-artwork spend. |
-| `category` | enum | required | `discovery_tokens` \| `web_search` \| `mat_color_vision`. |
+| `category` | enum | required | `discovery_tokens` \| `web_search` \| `image_research` \| `mat_color_vision`. |
 | `model_id` | string | nullable | |
 | `input_tokens`, `output_tokens` | integer | nullable | Null where the unit is not tokens. |
 | `units` | integer | nullable | e.g. number of web searches. |
@@ -459,6 +469,17 @@ The meter behind the fail-closed cap.
 > **Q4.** `category` separates `web_search` because it is billed per search, not
 > per token, and may dominate token spend entirely — an unresolved open question.
 > A meter that counts only tokens cannot enforce a dollar cap.
+>
+> **`image_research` is re-search spend, and it attributes to the ORIGINATING run.**
+> When a curator rejects an image and asks for a better one, the resulting search
+> costs money after the run that proposed the work has already finished. That spend
+> is not orphaned and does not reopen the run: `discovery_run_id` points at the
+> original, and the run's `status` stays `completed`. Without this, the true cost of
+> a run is understated by every re-search it provokes, and the monthly cap under-counts.
+>
+> The paid re-search is `art_discovery(action='resolve_images')` — deliberately not
+> a side effect of `art_review(action='reject_image')`, so that exactly one tool
+> spends. See `api-contract.md`.
 
 ### TvBinding *(display plane only)*
 
@@ -532,15 +553,26 @@ resolving_works ──┬──────────────────�
    (phase 1)      │                                (phase 2)      ├──▶ failed
                   └──▶ awaiting_approval ──┬──▶ resolving_images  └──▶ halted_by_budget
                                            └──▶ declined
+
+any of {resolving_works, awaiting_approval, resolving_images} ──▶ cancelled
 ```
 
+`cancelled` is reachable from `resolving_works`, `awaiting_approval`, and
+`resolving_images` — a run stopped on request while it was working. It is the
+terminal state behind `art_discovery(action='cancel')`; a run that spent money
+before being cancelled keeps its `actual_cost_usd`, because the spend happened.
+
+**Four terminal states describe four different things, and none may absorb
+another.** `completed` (it finished), `failed` (something broke),
+`halted_by_budget` (the cap fired), `declined` (the curator saw the work list and
+its price and said no), `cancelled` (stopped on request mid-flight). Collapsing any
+of them makes a deliberate choice indistinguishable from a malfunction — the same
+mistake this artifact already refuses to make for `halted_by_budget`, and the same
+reason `api-contract.md` requires an agent to be able to tell "you are out of
+money" from "the fetch failed".
+
 `awaiting_approval` is entered only when the phase-2 estimate crosses the
-configured threshold; below it the run goes straight to phase 2. `declined` is the
-curator looking at the work list and its price and saying no — a normal outcome,
-and distinct from both `failed` (something broke) and `halted_by_budget` (the cap
-fired). Collapsing any of the three into the others makes a deliberate choice
-indistinguishable from a malfunction, which is the same mistake this artifact
-already refuses to make for `halted_by_budget`.
+configured threshold; below it the run goes straight to phase 2.
 
 `completed` covers runs where some works were `unresolved`. A run that resolved 34
 of 40 works succeeded partially; it did not fail.
@@ -548,12 +580,15 @@ of 40 works succeeded partially; it did not fail.
 ### CandidateWork
 
 ```
-                    ┌──────────────────────────────┐
-                    ▼                              │
-pending ──┬──▶ accepted   (creates or links an Artwork)
-          ├──▶ rejected                            │
-          └──▶ awaiting_better_image ──────────────┘
-                    (re-search; new instance selected; back to review)
+   ┌─────────────────────────────────────────────┐
+   │                                             │
+   ▼                                             │
+pending ──┬──▶ accepted  (mints an Artwork)      │
+          ├──▶ rejected  (terminal; suppresses)  │
+          └──▶ awaiting_better_image ────────────┘
+                 re-search via art_discovery(resolve_images);
+                 a new instance is selected, and the work
+                 returns to `pending` for review
 ```
 
 `awaiting_better_image` is **not terminal**. It returns to `pending` once phase 2

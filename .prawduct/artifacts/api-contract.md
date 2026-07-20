@@ -93,11 +93,27 @@ tool per action stops paying and consolidation starts.
 
 | Tool | Actions | Notes |
 |---|---|---|
-| `art_discovery` | `estimate`, `start`, `status`, `approve`, `decline`, `cancel`, `list_runs`, `spend`, `help` | **The only tool that spends money.** |
-| `art_review` | `list_works`, `get_work`, `list_images`, `set_canonical`, `set_verdict`, `reject_image`, `help` | Returns thumbnails; see Inputs & Outputs. |
+| `art_discovery` | `estimate`, `start`, `status`, `approve`, `decline`, `cancel`, `resolve_images`, `list_runs`, `spend`, `help` | **The only tool that spends money.** |
+| `art_review` | `list_works`, `get_work`, `list_images`, `set_canonical`, `set_verdict`, `reject_image`, `help` | Returns thumbnails; see Inputs & Outputs. Never spends. |
 | `art_catalogue` | `list`, `get`, `archive`, `restore`, `retry_acquisition`, `set_mat_color`, `regenerate`, `help` | |
 | `art_theme` | `list`, `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`, `help` | `activate` changes the wall immediately. |
 | `art_display` | `status`, `sync`, `show_now`, `next`, `help` | |
+
+### Rejecting an image does not re-search — that is a separate, paid call
+
+`art_review(action='reject_image')` marks the instance rejected and moves the work
+to `awaiting_better_image`. It does **not** go looking for a replacement.
+`art_discovery(action='resolve_images', work_ids=[...])` does, and it is the paid
+operation.
+
+**This split exists to keep the money boundary intact.** Letting `reject_image`
+trigger a search inline would put a cost inside `art_review` and break the premise
+the whole gating design rests on — that exactly one tool spends. It also means a
+curator can reject several images while reviewing and re-resolve them in one batch,
+rather than firing a search per click.
+
+Spend from a re-search attributes to the **originating run**, and the run does not
+reopen: a `completed` run stays completed. See `data-model.md` → SpendRecord.
 
 ### Why not split reads from writes
 
