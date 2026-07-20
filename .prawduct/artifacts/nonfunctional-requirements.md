@@ -95,10 +95,19 @@ latency numbers in the product, and they are inherited, not chosen.
 | Requirement | Value | Where it comes from |
 |---|---|---|
 | A discovery call returns its run handle | immediately (< 2 s) | Anything else is a blocking call, which the 5-minute idle abort kills |
-| Maximum gap between progress notifications during a run | 60 s | 5× margin under the client's 5-minute idle abort. Emitting them is load-bearing — it is what keeps the connection alive, not a UX nicety |
+| Maximum duration of any single MCP call | 45 s | The status long-poll is the only long call, and it is what keeps every call comfortably under both client thresholds. **Corrected 2026-07-20** — this row previously required progress notifications every 60 s and called them load-bearing; see the note below |
 | Status long-poll hold | ≤ 45 s | Sized under a 60 s tool timeout; the figure is `hallucinote`'s, arrived at independently |
 | Phase 1 (intent → work list) | minutes, unbudgeted | Human-triggered, and the curator has just typed an intent and expects to wait |
-| Phase 2 (per-work image search) | minutes, unbudgeted | Same, and it is the phase the progress notifications exist for |
+| Phase 2 (per-work image search) | minutes, unbudgeted | Same. It runs in the background behind the run handle, so its duration never appears as a single call |
+
+> **Progress notifications are not a latency requirement — corrected 2026-07-20.**
+> This section originally required a notification every 60 s and called the
+> mechanism load-bearing. It is neither required nor reliable:
+> `Context.report_progress` silently no-ops when the client sent no
+> `progressToken` (`mcp/server/fastmcp/server.py:1170-1173`), and with the run
+> handle returning immediately, no call is ever idle long enough to be aborted.
+> They are permitted as a nicety; nothing may depend on them. Full reasoning in
+> `api-contract.md`.
 
 **Display plane.** The label is the constraint, and the panel's own refresh
 (seconds, on 16-level greyscale e-paper) dominates any code path.
@@ -107,7 +116,7 @@ latency numbers in the product, and they are inherited, not chosen.
 |---|---|---|
 | E-paper label matches the displayed artwork, after a TV image change | within 15 s | `[ASSUMPTION: 15 s | LOW impact | user can correct]` — chosen so the label is right before a viewer who noticed the image change has walked over to read it. The panel refresh is most of it |
 | Art on the wall is correct after a display-plane restart | within 60 s | `[ASSUMPTION: 60 s | LOW impact | user can correct]` — bounds systemd restart plus reconnecting the TV websocket |
-| Image preparation on the Pi | none — moved off entirely | Decided. The Pi 4 previously ran tiled downloads, k-means over LAB arrays, and 4K compositing; the two-plane split removes all of it |
+| Image preparation on the Pi | unbudgeted, but it stays on the Pi | **Corrected 2026-07-20**, hours after this table was written. It said "moved off entirely"; the operator then decided both planes run on the Pi. Measured: largest corpus work is 49 MP (~148 MB loaded), and the colour work downsizes to 2048² first (~100 MB), against 8 GB. Comfortable. The exposure is a true 1–2 gigapixel scan — see `architecture.md` § Scaling Model |
 
 ## Scalability and Capacity
 

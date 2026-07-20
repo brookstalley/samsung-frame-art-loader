@@ -229,15 +229,38 @@ Three client facts force this, all verified rather than assumed:
    Claude Code outright. `"optional"` is safe and forward-looking; `"required"` is
    not.
 2. **Claude Code aborts a call that goes silent.** No response and no progress
-   notification for 5 minutes on HTTP transport ends the call. So the server
-   **must** emit `notifications/progress` during phase 2 — this is what keeps the
-   connection alive, not a nicety.
+   notification for 5 minutes on HTTP transport ends the call.
 3. **A call still running after 2 minutes is auto-backgrounded** by Claude Code
    (≥ 2.1.212). Start-and-poll is correct either way, and does not depend on that
    version.
 
 hallucinote reaches the same conclusion independently and supplies a calibrated
 number: its status action long-polls for 45s, sized to sit under a 60s tool timeout.
+
+> **Amended 2026-07-20 — a "must" withdrawn.** Point 2 previously continued: *"So
+> the server **must** emit `notifications/progress` during phase 2 — this is what
+> keeps the connection alive, not a nicety."* That is withdrawn on two findings from
+> reading the SDK.
+>
+> **It can silently do nothing.** `Context.report_progress` no-ops when the client
+> did not send a `progressToken` (`mcp/server/fastmcp/server.py:1170-1173`). A
+> keep-alive that depends on client behaviour we do not control, and fails
+> invisibly, cannot be the thing a design rests on.
+>
+> **It is unnecessary.** The run handle returns immediately, so the only long call
+> is the status long-poll capped at 45 s — nowhere near either threshold. Nothing
+> is ever idle long enough to need keeping alive. The start-and-poll shape was
+> already doing the whole job.
+>
+> Corroboration: neither of the operator's production servers emits progress
+> notifications at all. hallucinote backgrounds work behind a blocking `status`
+> action; cordyceps is stateless JSON with no SSE stream, so mid-call
+> server-to-client notifications are structurally impossible there. Both reached
+> polling independently.
+>
+> Progress notifications remain **permitted as a UX nicety** where a client does
+> send a token. They are not a correctness dependency, and nothing may be designed
+> as though they were.
 
 ### Partial success is the normal case
 

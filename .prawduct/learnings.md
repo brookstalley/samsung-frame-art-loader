@@ -79,16 +79,27 @@ mechanical source sites, with no third-party dependency imposing any floor above
 
 The split stands on its own merits:
 
-- **Curation plane** — Web UI, LLM discovery, image acquisition and preparation.
-  Runs off the Pi.
-- **Display plane** — Python 3.13 on the Pi 4. TV websocket and e-paper only.
+- **Curation plane** — Python 3.14. Web UI, LLM discovery, image acquisition and
+  preparation. **Runs on the Pi** (amended 2026-07-20 — previously "runs off the Pi").
+- **Display plane** — Python 3.13 on the Pi 4. TV websocket, e-paper, and label
+  rendering.
+
+**Both planes run on the same Pi 4 (8 GB), sharing `ART_ROOT` and communicating
+through exactly one file — the theme manifest.** The clause "it moves gigapixel
+fetching and 4K compositing off a Pi 4" is **retired and must not be cited**;
+nothing moved off it. That claim was also weaker than it read — the existing code
+downsizes to 2048² before the LAB/k-means work, so peak memory is a few hundred MB.
 
 It survives because the display plane **does not want 3tears at all** — it needs an
 HTTP client, `samsungtvws`, PIL, and the e-paper driver, and three-tier entities are
 of no use to it. Beyond that: it matches the upstream/derived data contract below,
-it moves gigapixel fetching and 4K compositing off a Pi 4, it makes "e-paper behind
-an interface" a process boundary rather than a convention, and it is what lets the
-display plane keep working when curation is down.
+it makes "e-paper behind an interface" a process boundary rather than a convention,
+and it is what lets the display plane keep working when curation is down.
+
+Co-location did not weaken the split, it made it cheaper: the *cost* was the
+distributed-systems tax (network contract, sync, two deployments) and a shared
+filesystem removes it, while the *benefit* — the wall staying lit through a curation
+restart — matters more on one box, not less.
 
 Relaxing 3tears to 3.13 remains worth doing on *its* merits, but it is no longer a
 dependency of this product's architecture.

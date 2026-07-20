@@ -321,14 +321,25 @@ API consumers. Three consequences that are easy to miss:
 
 ## Platform
 
-Two planes.
+Two processes, **one machine**.
 
-- **Curation plane** — a web application, deployed wherever a long-running process
-  is available (desktop, NAS, or a second Pi). Owns discovery, acquisition,
-  preparation, and the catalogue.
-- **Display plane** — a systemd daemon on a Raspberry Pi 4 Model B, driving a
+Host: Raspberry Pi 4 Model B, 8 GB, Raspberry Pi OS Trixie, SD-card boot.
+
+- **Curation plane** — a Python 3.14 FastAPI application under systemd. Owns
+  discovery, acquisition, preparation, and the catalogue. Serves the web UI, its
+  HTTP API, and the MCP endpoint from one ASGI application.
+- **Display plane** — a Python 3.13 systemd daemon (`Restart=always`), driving a
   Samsung Frame TV over LAN websocket and a Waveshare 6" HD e-paper HAT
-  (1448x1072, 16-level greyscale) over SPI.
+  (1448x1072, 16-level greyscale) over SPI. Renders the e-paper label.
+
+They share `ART_ROOT` on local disk and communicate through exactly one file — the
+theme manifest. The display plane makes no network call to curation. Topology,
+channels, and failure modes are in `architecture.md`.
+
+> **Amended 2026-07-20.** This previously read "deployed wherever a long-running
+> process is available (desktop, NAS, or a second Pi)". The operator decided both
+> planes run on the Pi. Storage was checked and does not force otherwise — 500
+> works is roughly 10 GB.
 
 **The split was originally forced by a Python version conflict. It is now a
 choice — and it survives as one.**
@@ -350,12 +361,22 @@ The separation therefore stands on its own merits:
   artifacts (`raw/`, `api-cache/`, `tile-cache/`) are expensive and
   device-independent; derived artifacts (`ready/`, `tv-thumbs/`, `label/`) are
   cheap and device-specific and must never be transported.
-- It moves tiled gigapixel fetching, k-means over LAB pixel arrays, and 4K
-  compositing off a Pi 4.
 - It makes "e-paper behind an interface" a process boundary rather than a
   convention.
 - It is what lets the display plane keep working when curation is down — the
   availability asymmetry that matters, since the household experiences only the TV.
+  Now a ratified norm (`nonfunctional-requirements.md` § Direction).
+
+> **A rationale withdrawn, 2026-07-20.** This list previously included "it moves
+> tiled gigapixel fetching, k-means over LAB pixel arrays, and 4K compositing off a
+> Pi 4." Both planes now run on the Pi, so that is false and must not be cited. It
+> was weaker than it read anyway: the existing code downsizes to 2048² before the
+> colour work, so peak memory is a few hundred MB on an 8 GB machine.
+>
+> The split survives the change comfortably. Its *cost* was the distributed-systems
+> tax, and a shared filesystem removes that; its *benefit* — the wall staying lit
+> through a curation restart — matters more on one box, because that restart now
+> happens constantly during development.
 
 Relaxing 3tears remains worth doing on *its* merits — a latent portability limit
 in a framework the operator maintains, plus two real defects the audit turned up —

@@ -446,10 +446,22 @@ product_definition:
       deliberate rather than like letterboxing.
 
   platform: >
-    Two planes. Curation: Python 3.14 web application, deployed wherever Docker
-    or a long-running process is available (desktop, NAS, or a second Pi).
-    Display: Python 3.13 systemd daemon on a Raspberry Pi 4 Model B driving a
-    Samsung Frame TV over LAN websocket and a Waveshare 6" HD e-paper HAT over SPI.
+    Two processes, ONE machine. AMENDED 2026-07-20 — previously "curation
+    deployed wherever Docker or a long-running process is available (desktop,
+    NAS, or a second Pi)". The operator decided both planes run on the Pi,
+    sharing a data directory. See technical_decisions.architecture and
+    artifacts/architecture.md.
+
+    Host: Raspberry Pi 4 Model B, 8 GB, Raspberry Pi OS Trixie, booting from SD
+    card.
+      * Curation: Python 3.14 venv, FastAPI on uvicorn, systemd unit. Serves the
+        web UI, its HTTP API, and the MCP streamable-HTTP endpoint from one ASGI
+        application.
+      * Display: Python 3.13 venv, systemd daemon (Restart=always), driving a
+        Samsung Frame TV over LAN websocket and a Waveshare 6" HD e-paper HAT
+        (1448x1072) over SPI.
+    The two planes share ART_ROOT on local disk and communicate through exactly
+    one file: the theme manifest.
 
   # Non-functional requirements, calibrated to risk.
   nonfunctional:
@@ -457,9 +469,20 @@ product_definition:
       No latency budget on curation — discovery is expected to take minutes and
       is explicitly human-triggered. The display plane must react to a TV
       image-change callback fast enough that the e-paper label is not visibly
-      stale; the panel's own refresh (seconds) dominates. Image preparation moves
-      off the Pi entirely, which is a substantial improvement over 2024 where the
-      Pi 4 ran tiled gigapixel downloads, k-means over LAB arrays, and 4K compositing.
+      stale; the panel's own refresh (seconds) dominates.
+
+      CORRECTED 2026-07-20: this previously claimed "image preparation moves off
+      the Pi entirely, which is a substantial improvement over 2024". Both planes
+      now run on the Pi, so image preparation did NOT move off it — the claim is
+      withdrawn. It was also weaker than it looked: the 2024 code already
+      downsizes to 2048x2048 before the LAB/k-means work (image_utils.py:51-57,
+      :77), so peak memory is a few hundred MB rather than the gigabytes the
+      phrase implied. On an 8 GB Pi 4 this is comfortable. The real remaining
+      exposure is a genuine 1-2 gigapixel Google Arts &amp; Culture scan, which is
+      20-40x the measured corpus maximum; see artifacts/architecture.md
+      "Scaling Model".
+      The hard latency numbers in this product are INHERITED from the MCP client,
+      not chosen — see artifacts/nonfunctional-requirements.md "Performance".
     scalability: >
       Explicitly not a goal. Design target is one household, one TV, hundreds of
       artworks. Anything that trades simplicity for scale is the wrong trade here.
@@ -542,10 +565,26 @@ technical_decisions:
         e-paper driver — three-tier entities are useless to it, and the
         shared-catalogue case that would justify them is the multi-pod coherence
         problem the operator ruled out); it matches the upstream/derived data
-        contract in learnings.md; it moves gigapixel fetching, k-means over LAB
-        arrays, and 4K compositing off a Pi 4; it makes "e-paper behind an
-        interface" a process boundary; and it is what lets the display plane keep
-        working when curation is down.
+        contract in learnings.md; it makes "e-paper behind an interface" a process
+        boundary; and it is what lets the display plane keep working when curation
+        is down.
+
+        AMENDED AGAIN 2026-07-20, second amendment. The clause "it moves gigapixel
+        fetching, k-means over LAB arrays, and 4K compositing off a Pi 4" is
+        RETIRED and must not be cited: the operator decided both planes run on the
+        Pi, sharing a data directory, so nothing moved off it. The claim was also
+        weaker than it read — the existing code downsizes to 2048x2048 before the
+        colour work, so peak memory is a few hundred MB against 8 GB.
+
+        What the co-location changes and does not change: the split's COST was the
+        distributed-systems tax (a network contract, sync, two deployments), and a
+        shared filesystem pays that down to near zero. Its BENEFIT — the display
+        plane surviving a curation restart, upgrade, or crash — matters MORE on one
+        box, not less, because the curation process gets restarted constantly
+        during development and a single-process design would blank the TV each
+        time. The split therefore got cheaper rather than less justified.
+        Accepted trade: one hardware failure domain, and the two processes now
+        compete for the Pi's resources.
       alternatives_considered:
         - "Single process on the Pi — no longer impossible once 3tears is relaxed, but rejected: it would put the whole curation stack, the LLM agent loop, and gigapixel image processing on a Pi 4, and forfeit the availability asymmetry that keeps art on the wall when curation breaks."
         - "Drop 3tears to stay single-process on 3.13 — viable, but forfeits the agent primitives the discovery work wants."
@@ -576,6 +615,94 @@ technical_decisions:
         - "TV-native slideshow — no host dependency, but theme switching means delete + re-upload of every work."
         - "TV favourites (MY-C0004) as the active set — the library author states favourites cannot be applied to user uploads on 2022+ sets (unconfirmed on real hardware), and it would support only ONE active subset, not named themes."
       date: 2026-07-19
+    - decision: "The theme manifest file is the ONLY channel from curation to display."
+      rationale: >
+        Decided 2026-07-20 once both planes landed on one host. A JSON document in
+        the shared ART_ROOT, written atomically by curation (temp file + os.replace,
+        which is atomic within a filesystem) and read by display on an mtime poll.
+        It carries a schema version, the active theme, and an ordered list of
+        entries: work id, path to the prepared 4K render, and the label FIELDS.
+        Label text crosses; label rendering does not.
+
+        This makes the availability norm structurally true rather than carefully
+        maintained — there is nothing to be unreachable. The danger it guards
+        against is the plausible second channel ("just fetch the label text live",
+        "just ask curation which work is next"), each of which would work perfectly
+        in development and in every test, because curation is up in development and
+        in every test. The fallback path is the one never exercised until it
+        matters.
+
+        Consequence: single-writer per store falls out for free. Curation owns the
+        catalogue, the image tree, and the manifest; display owns
+        display-state.sqlite (TV content ids, upload status, panel geometry). No
+        entity is written by both, so there is no coordination protocol and no
+        conflict resolution — the hard part of two-writer systems is designed out
+        rather than solved.
+      alternatives_considered:
+        - "Full local mirror on the Pi — the display plane could switch themes offline, but it is a sync problem with a conflict story and nothing asks the Pi to make curatorial decisions."
+        - "Display polls curation over HTTP and caches the last good response — self-healing in principle, but it makes display a client of curation, so the norm is satisfied only by a fallback path that never gets exercised."
+      date: 2026-07-20
+    - decision: "The e-paper label is rendered on the display plane, not on curation."
+      rationale: >
+        Decided 2026-07-20 by the operator. Panel geometry stays owned by the plane
+        that owns the panel, which is what the ratified data-model norm
+        ("per-device runtime state never lives in the catalogue") already requires —
+        and whose cited anti-pattern is the 2024 `label_file` named `_w648_h480`.
+        Text rendering is cheap; it was gigapixel compositing that did not belong
+        on a Pi, and that argument is retired anyway now that both planes share one.
+        Secondary benefit: keeps the PyGObject/Pango/cairo system stack off the
+        curation venv, where pycairo has no aarch64 wheel and would need a source
+        build against libcairo2-dev.
+      alternatives_considered:
+        - "Render on curation alongside the 4K TV image — all image production in one place, but it puts panel geometry in the catalogue and couples curation to a specific device."
+      date: 2026-07-20
+    - decision: "Readiness is manifest membership, not a stored flag."
+      rationale: >
+        Decided 2026-07-20, resolving the open question by rejecting its premise —
+        there is no single readiness. Catalogue readiness (renderable: an original
+        exists, the fetch succeeded, the render is current, a mat colour is current)
+        is curation's and is evaluated at manifest-build time in exactly one place.
+        Device readiness (uploaded to the TV) is display's and lives in its own
+        store. Neither is materialised on the work, so neither can drift.
+
+        Because the manifest is the only thing display ever sees, it cannot select
+        an unrenderable work — the recorded failure mode becomes structurally
+        impossible rather than defended against. Theme membership reverts to being
+        a purely CURATORIAL statement.
+
+        Obligation accepted, and it is not optional: the manifest build REPORTS ITS
+        EXCLUSIONS, per work and with a reason, surfaced in the curation UI. A work
+        silently in a theme but not on the wall is exactly this product's
+        characteristic failure, so the design must not trade a loud failure for a
+        quiet one.
+      alternatives_considered:
+        - "A materialised is_displayable column recomputed on input change — cheap to query, but it is derived state that drifts the first time a recompute path is missed."
+        - "A readiness state machine on the work — rigorous, but machinery for a conjunction only one caller needs."
+      date: 2026-07-20
+    - decision: "The theme manifest carries a schema version; the curation-to-display stability exemption is narrowed."
+      rationale: >
+        Decided 2026-07-20, resolving a contradiction the Critic raised on
+        2026-07-19. api-contract exempted this channel from any stability
+        obligation as "single consumer, deployed together", which is incompatible
+        with the availability norm — deployed-together and survives-independently
+        cannot both be true without saying what display holds and how stale it may
+        be.
+
+        Resolution is neither exemption nor a full compatibility regime: the
+        manifest carries a schema version, additive changes are free, breaking
+        changes bump the major, and display REFUSES a manifest whose major it does
+        not recognise, keeping the one it has and logging at ERROR.
+
+        Skew is real even co-located: the two processes restart independently, so
+        an upgrade has a window where new curation has written a manifest that old
+        display is still reading, and a reboot mid-upgrade extends that window to
+        "until someone notices". Without the version field the failure is a
+        misparse rendering wrong art or a crash loop blanking the wall; with it,
+        the failure is a logged refusal and yesterday's theme still on the wall.
+      alternatives_considered:
+        - "Keep the blanket exemption — simplest, but it leaves the contradiction standing and the failure mode undefined."
+        - "Full compatibility regime with negotiation — disproportionate for one consumer on the same host."
+      date: 2026-07-20
     - decision: "The display plane must keep functioning when the curation plane is unavailable."
       rationale: "The household experiences only the TV. Curation downtime is invisible; display downtime is a blank wall. This asymmetry is the main reason the split is a benefit rather than a cost."
       alternatives_considered: ["Display plane as a thin client that fails when the server is down — rejected; inverts the availability priority."]
@@ -668,6 +795,37 @@ technical_decisions:
         - "Fine-grained tools, one per operation — ~28 tools; past the point where tool selection degrades, and rejected by the operator's own field experience."
         - "Split read tools from write tools per Anthropic's Directory review criteria — not binding (this will never be listed), and the readOnlyHint auto-approve benefit it protects is retired by allowlisting the server once. The money-spending operation is isolated on its own tool instead, which is the carve-out that actually matters."
       date: 2026-07-19
+    - decision: "FastAPI serves the curation plane, with the MCP app co-mounted in its ASGI application."
+      rationale: >
+        Decided 2026-07-20, after establishing that NEITHER of the operator's
+        production MCP servers is a precedent — hallucinote is stdio-only
+        (FastMCP with no transport arg), and cordyceps is C# on a hand-rolled
+        System.Net.HttpListener with if/else path dispatch. So this was decided on
+        merits rather than inherited, which is worth recording because the previous
+        session's pattern was to defer to those servers' practice.
+
+        FastAPI is Starlette underneath, so the SDK's documented mounting story
+        applies verbatim, and `FastMCP.session_manager`'s own docstring names
+        "mounting multiple FastMCP servers in a single FastAPI application" as the
+        supported advanced use case. The UI API is recorded as needing typed,
+        paginated, partial data — that is pydantic response models — and pydantic
+        is already in the tree via 3tears-models/langchain, so marginal cost is
+        small. Dependency injection makes the thin-binding norm structurally easy
+        rather than a rule to remember. It is a library, not infrastructure, so it
+        does not offend the "no NATS or anything crazy" constraint.
+
+        INTEGRATION HAZARD, recorded because it is silent and total: Starlette does
+        NOT run a mounted sub-app's lifespan, so Mount("/mcp",
+        app=mcp.streamable_http_app()) fails EVERY request with "RuntimeError: Task
+        group is not initialized" unless the host app enters session_manager.run()
+        in its own lifespan (mcp/server/streamable_http_manager.py:143-144). Two
+        related constraints: session_manager raises if touched before
+        streamable_http_app() has been called, and .run() may be entered only once
+        per instance.
+      alternatives_considered:
+        - "Starlette directly — minimal dependency and the SDK already hands back Starlette apps, but it means hand-writing validation and JSON shaping that pydantic gives free, and validation logic leaks into handlers, which the service-layer norm forbids."
+        - "FastMCP.custom_route alone, with no separate web framework — fewest moving parts and no mounting hazard, but it is a minimal API registered at lowest route precedence, making the UI surface a second-class citizen of the MCP server rather than a peer."
+      date: 2026-07-20
     - decision: "The in-UI agent is an MCP client, not an in-process caller."
       rationale: >
         Decided 2026-07-19 by the operator. Either way the agent must be taught a
@@ -698,6 +856,31 @@ technical_decisions:
         keeps the connection alive — and the run handle must come back immediately.
         hallucinote reaches the same conclusion independently and supplies a
         calibrated number: a 45s status long-poll sized under a 60s tool timeout.
+
+        AMENDED 2026-07-20. Start-and-poll STANDS; the claim that progress
+        notifications are "load-bearing — it is what keeps the connection alive" is
+        WITHDRAWN, on two pieces of evidence found while reading the SDK.
+
+        First, the mechanism can silently do nothing: Context.report_progress
+        no-ops if the client did not send a progressToken
+        (mcp/server/fastmcp/server.py:1170-1173). Relying on it to prevent a
+        5-minute abort means relying on client behaviour we do not control, with a
+        failure mode invisible until the call dies.
+
+        Second, it is unnecessary. The run handle returns immediately, so the only
+        long call is the status long-poll capped at 45s — nowhere near the
+        2-minute auto-background or 5-minute idle-abort thresholds. Nothing is ever
+        idle long enough to need keeping alive.
+
+        Corroboration: NEITHER of the operator's production servers emits progress
+        notifications. hallucinote backgrounds work and exposes a blocking `status`
+        action; cordyceps is stateless JSON with no SSE stream, so server-to-client
+        notifications mid-call are structurally impossible there. Both arrived at
+        polling independently.
+
+        Progress notifications may still be emitted as a UX nicety where a client
+        does send a token. They are not a correctness dependency, and nothing may be
+        designed as though they were.
       alternatives_considered:
         - "MCP Tasks (SEP-1686) — experimental, and unsupported by the primary client; taskSupport 'optional' is declared as forward-looking, 'required' would break Claude Code."
         - "Blocking call for the duration of the run — killed by the 5-minute idle abort."
@@ -979,11 +1162,30 @@ technical_decisions:
         - "Monthly cap only — fewer knobs, but one bad intent can consume a meaningful slice of the month and the pre-run estimate becomes a guess rather than a bound."
         - "Per-run DOLLAR cap covering tokens and searches together — more directly meaningful, but it cannot be checked before the run starts, only tripped during it."
       date: 2026-07-20
-    - decision: "Back up the catalogue; treat the image tree as disposable."
+    - decision: "Back up the catalogue AND build an exercised restore path; treat the image tree as disposable."
       rationale: >
-        Recorded 2026-07-20 while sizing capacity. This inverts the intuitive
-        backup priority and is worth stating because of that. Every source image is
-        re-fetchable from its source URL — the product already relies on this, and
+        Restore added 2026-07-20 at the operator's insistence, and they are right:
+        a backup path that has never been restored from is a hope, not a backup.
+        The restore path is a first-class deliverable with an exercise step —
+        restoring onto a scratch directory and confirming the system comes up —
+        not a documented procedure nobody has run.
+
+        The design makes this unusually cheap to test. Because the image tree is
+        deliberately disposable, RESTORE IS PARTIAL BY DESIGN: drop the catalogue
+        back with an empty image tree, and the readiness design in
+        artifacts/architecture.md produces a theme manifest that excludes
+        everything unrendered, reports why, and re-acquisition refills it. The
+        system self-heals visibly rather than failing opaquely or pretending to
+        be fine. Verifying a restore therefore does not require staging gigabytes.
+
+        Urgency raised the same day: the operator confirmed the Pi boots from SD
+        card, so the one irreplaceable asset lives on the most failure-prone
+        component in the system. SQLite plus unexpected power loss on consumer
+        flash is the classic Pi corruption story.
+
+        WHY THE CATALOGUE AND NOT THE IMAGES — this inverts the intuitive backup
+        priority and is worth stating because of that. Every source image is
+        re-fetchable from its source URL; the product already relies on this, and
         it is the stated reason `all.json` can be replaced rather than migrated.
         What is NOT re-fetchable is the curatorial layer: accept/reject verdicts,
         which image instance was chosen canonical and why, hand-approved mat
@@ -993,6 +1195,7 @@ technical_decisions:
         gigabytes and reconstructible.
       alternatives_considered:
         - "Back up everything — simple, but ~10x the volume to protect the 1% that matters, and it obscures which artefact is actually irreplaceable."
+        - "Backup only, restore documented but never exercised — the default outcome, and the reason untested backups are a recurring class of incident."
       date: 2026-07-20
     - decision: "Pin the IT8951 driver to 9f13613 or vendor it."
       rationale: "omni-epd declares it as an unpinned git dependency resolving to whatever master currently is. Builds are only reproducible today because the repo has not moved since 2023. Roughly 1,500 lines of frozen code the project depends on completely."
@@ -1266,56 +1469,50 @@ open_questions:
     # right when the result depends on parameters the model chooses — which covers
     # every read here. A stable browsable artifact (active theme, display state)
     # could still earn a resource later.
-  - question: "What is the single source of truth for 'this artwork is ready to display'?"
-    blocking: "The curation-to-display contract, and whether an accepted work can legally join a theme before acquisition finishes."
-    waiting_on: user
-    priority: high
-    # Raised 2026-07-19 by Critic review. Readiness is currently reconstructible only
-    # by joining six signals: an Original exists, Source.last_fetch_status is ok,
-    # display_fit is acceptable, no Rendition is stale, a MatColor is_current, and
-    # TvBinding.upload_status is uploaded. Nothing owns the conjunction. The concrete
-    # failure: an accepted-but-unacquired work is a legal ThemeMembership row, so the
-    # display plane can select an artwork it cannot render — and the display plane is
-    # the surface where failure is silent by construction.
-  - question: "Where does the display plane's rotation list live when the curation plane is down?"
-    blocking: "The curation-to-display contract, and the availability guarantee the architecture is built on."
-    waiting_on: user
-    priority: high
-    # Raised 2026-07-19 by Critic review, which caught a tension between two
-    # committed decisions. api-contract exempts the curation-to-display contract
-    # from any stability obligation as 'single consumer, deployed together' — but
-    # technical_decisions.architecture requires the display plane to keep working
-    # when curation is unavailable, and that is named as the main reason the split
-    # is a benefit rather than a cost. Deployed-together and survives-independently
-    # are not compatible without saying what the display plane caches locally and
-    # how stale it may be.
-  - question: "Which web framework serves the curation plane, and does it satisfy the co-mounted MCP + HTTP requirement?"
-    blocking: "The curation plane's first build chunk. The MCP transport decision assumes one ASGI application serving both surfaces, but names no framework."
-    waiting_on: user
-    priority: high
-    # Raised 2026-07-19 by Critic review, which caught that
-    # technical_decisions.technology commits to 'the MCP server is mounted in the
-    # same ASGI application as the curation UI's HTTP API' while no framework
-    # appears anywhere in the project and none was tracked as open. That is a
-    # presupposition, not a decision.
-    # Constraints it must satisfy: mount the official `mcp` SDK's streamable-HTTP
-    # ASGI app alongside ordinary JSON routes; support progress notifications during
-    # a multi-minute call (see the start-and-poll decision); and run on the curation
-    # plane's Python version. The adjacent 3.14 aarch64 wheel question applies here
-    # too — verify before committing, do not assume.
-  - question: "Where does the curation plane actually run, and is it always-on?"
-    blocking: "Deployment design, and whether discovery can be a background job or must be strictly foreground."
-    waiting_on: user
-    priority: medium
-    # Desktop, NAS, and second-Pi have materially different availability profiles.
-    # A sleeping desktop is fine for on-demand curation, not for scheduled discovery.
-  - question: "Do opencv, scikit-image, and pycairo have working aarch64/current wheels on Python 3.14?"
-    blocking: "Whether the image pipeline can live on the curation plane as designed."
-    waiting_on: research
-    priority: medium
-    # platform-and-dependency-findings.md flagged lagging 3.14 wheels as a reason to
-    # avoid 3.14 on the Pi. The image pipeline moves to the 3.14 curation plane, so
-    # the same concern follows it. Cheap to verify; expensive to discover late.
+  # RESOLVED 2026-07-20, all five below, in artifacts/architecture.md.
+  #
+  # "What is the single source of truth for 'this artwork is ready to display'?"
+  #   The question contained the error. There is no single readiness, there are
+  #   TWO, and conflating them was the bug. CATALOGUE readiness (can this be
+  #   rendered?) is curation's, evaluated at manifest-build time in exactly one
+  #   place. DEVICE readiness (is it on the TV?) is display's, lives in
+  #   display-state.sqlite, and never enters the catalogue. Neither is a stored
+  #   flag, so neither can drift. Manifest membership IS catalogue readiness, and
+  #   because the manifest is the only thing display ever sees, the recorded
+  #   failure (display selecting an unrenderable work) becomes structurally
+  #   impossible rather than defended against. Theme membership stays a CURATORIAL
+  #   statement; a work may be in a theme and absent from the manifest.
+  #   Obligation accepted: the manifest build must report its exclusions per work
+  #   with reasons, or the design trades a loud failure for a silent one.
+  #
+  # "Where does the display plane's rotation list live when the curation plane is
+  # down?" In a theme manifest file in the shared ART_ROOT, written atomically by
+  #   curation (temp + os.replace) and read by display. Display makes NO network
+  #   call to curation at all. Staleness is unbounded by design: if curation is
+  #   stopped, display keeps showing the last manifest forever, which is normal
+  #   operation rather than a degraded mode.
+  #
+  # "Which web framework serves the curation plane?" FastAPI — see
+  #   technical_decisions.technology. Note that NEITHER of the operator's
+  #   production MCP servers turned out to be a precedent: hallucinote is
+  #   stdio-only, cordyceps is C# on a hand-rolled HttpListener. The question's
+  #   premise that progress notifications must be supported also dissolved; see
+  #   the amendment to the start-and-poll decision.
+  #
+  # "Where does the curation plane actually run, and is it always-on?" On the Pi,
+  #   alongside the display plane, always-on but usually idle. Operator's decision
+  #   2026-07-20. Storage was checked first and does not force otherwise (500
+  #   works is ~10 GB). Discovery can therefore be a background job.
+  #
+  # "Do opencv, scikit-image, and pycairo have working aarch64/current wheels on
+  # Python 3.14?" YES, verified against the PyPI JSON API 2026-07-20:
+  #   scikit-image 0.26.0 cp314 + manylinux aarch64; numpy 2.5.1 and scipy 1.18.0
+  #   cp314 aarch64; opencv-python-headless 5.0.0.93 ships cp37-abi3 aarch64
+  #   manylinux wheels (stable ABI, so forward-compatible to 3.14);
+  #   pydantic-core 2.47.0 cp314 aarch64. The one exception is pycairo 1.29.0,
+  #   which is source-only on Linux aarch64 and needs libcairo2-dev — and that no
+  #   longer touches the curation plane, because label rendering moved to the
+  #   display plane, which already has the GTK stack.
   - question: "What is the minimum acceptable source resolution, and what happens to works below it?"
     blocking: "The acquisition pipeline's second path, the Original entity, and the mat engine's contract."
     waiting_on: user
@@ -1426,6 +1623,10 @@ artifact_manifest:
       file_path: .prawduct/artifacts/nonfunctional-requirements.md
       version: 1
       depends_on: [product-brief]
+    - name: architecture
+      file_path: .prawduct/artifacts/architecture.md
+      version: 1
+      depends_on: [product-brief, data-model, nonfunctional-requirements]
     - name: api-contract
       file_path: .prawduct/artifacts/api-contract.md
       version: 1
