@@ -47,7 +47,7 @@ artifact for the *concept*; use grep only as the cheap first pass, never as the
 check that closes the sweep.
 
 **Structural escalation, per the learning lifecycle. The count is the argument, so
-keep it current: EIGHT recurrences across two sessions as of 2026-07-20** (entries
+keep it current: EIGHT recurrences across four sessions as of 2026-07-20** (entries
 1–7 below; entry 6 covers two). Every one was caught by the Critic and none by
 self-review, across at least four distinct causes — literal-text survival,
 paraphrase, excluding one's own edited files, and consuming only part of a finding's
