@@ -47,8 +47,8 @@ artifact for the *concept*; use grep only as the cheap first pass, never as the
 check that closes the sweep.
 
 **Structural escalation, per the learning lifecycle. The count is the argument, so
-keep it current: ELEVEN recurrences across four sessions as of 2026-07-20** (entries
-1–10 below; entry 6 covers two). All but one were caught by the Critic — the
+keep it current: THIRTEEN recurrences across four sessions as of 2026-07-20** (entries
+1–12 below; entry 6 covers two). All but one were caught by the Critic — the
 eleventh by a requested design-checkpoint review (entry 10) — and none by the
 author's own sweep-closing check, across at least five distinct causes —
 literal-text survival, paraphrase, excluding one's own edited files, consuming
@@ -148,6 +148,22 @@ the backlog is part of its sweep set.**
     file's corrected constraint 13. `depends_on` edges existed and the dependency
     walk still did not happen — further evidence for the mechanical check, not
     for more care.
+
+11. **2026-07-20, twelfth recurrence — the amendment that recorded a weaker claim
+    was itself unswept.** The review-gate criterion amendment ("having been
+    *shown* its image") landed in `product-brief.md` and `security-model.md` but
+    missed `project-state.yaml`'s goals list — the canonical criteria home — and
+    `api-contract.md`, which quoted the old wording verbatim from a file that no
+    longer contained it. Found by verify-resolutions in the very commit pair that
+    remediated recurrences 10 and 11.
+
+12. **2026-07-20, thirteenth recurrence — a finding's fourth enumerated home,
+    unconsumed.** R-8 listed four homes for the stale `label/` references; the
+    remediation swept three and annotated none in `learnings.md` § Data and cache
+    contract — the section the other three annotations *cite as the live
+    contract*. Entry 9's observation held within the same session: partial
+    consumption of an enumerated scope is the dominant way these survive, and it
+    survived the remediation performed with that entry open in the editor.
 
 *(This entry is itself the evidence for why the count keeps moving: the failure is
 **fractal**. Every act of propagating a claim is a fresh opportunity to miss a home,
@@ -326,7 +342,10 @@ transported differently:
   `tile-cache/`. Costs network fetches and real API spend to regenerate.
 - **Derived, cheap, device-specific** — `ready/`, `tv-thumbs/`, `label/`.
   Rendered for a particular target geometry (4K for the TV, 1448x1072 for the
-  e-paper).
+  e-paper). *(Annotated 2026-07-20: `label/` described the 2024 single-plane
+  layout and is retired from the prospective ART_ROOT contract — labels render on
+  the display plane, and any cache is display-side. The class rule stands;
+  `boundary-patterns.md` carries the prospective contract.)*
 
 The rule that falls out:
 

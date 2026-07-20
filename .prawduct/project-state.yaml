@@ -338,7 +338,7 @@ product_definition:
   goals:
     - "A curator can go from a natural-language intent to artwork on the wall without touching the filesystem, editing JSON, or SSHing into the Pi."
     - "A discovery run proposes each WORK exactly once, with one selected image and its alternates behind it. Being shown the same painting several times and asked to pick counts as a failed run even if every instance is individually good."
-    - "A curator never accepts a work without having seen its image — on any surface, including an agent's."
+    - "A curator never accepts a work without having been SHOWN its image. (AMENDED 2026-07-20 from 'having seen its image — on any surface, including an agent's': the web UI enforces the strong form; over MCP the enforceable form is that the thumbnail is present in the transcript at the moment of acceptance — whether a human looked is a property of how the operator works. See security-model.md § Content Appropriateness.)"
     - "Themes/groups are switchable from the web UI and materialise on the TV without a redeploy."
     - "LLM spend stays under a declared monthly ceiling, and hitting the ceiling stops discovery rather than degrading it silently."
     - "The display plane keeps showing art when the curation plane is down."

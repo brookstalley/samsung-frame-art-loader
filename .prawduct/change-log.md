@@ -69,7 +69,12 @@ enumeration partially consumed, again), and the rights decision's miss of
 panel geometry's authoritative home clarified as configuration (not
 display-state); `label/` retired from the prospective ART_ROOT contract; the
 deploy/README `OnFailure=` prescription withdrawn as contradicting the recorded
-alerting decision. Tally refreshed to eleven in learnings.md and issue #8.
+alerting decision. Tally refreshed to eleven in learnings.md and issue #8 —
+then verify-resolutions found recurrences twelve and thirteen *in the
+remediation itself* (the gate-criterion amendment unswept to project-state's
+goals and an api-contract quote; R-8's fourth enumerated home, the learnings
+data-contract section, unconsumed). Both struck same day; **final tally
+thirteen**, reconciled in learnings.md entries 11–12, this entry, and issue #8.
 
 ## 2026-07-20: Narrow the reconciliation rule, add `interrupted`, and sweep the sites the finding named
 

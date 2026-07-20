@@ -293,9 +293,12 @@ over an overlay network, so a path it returns is meaningless on the client. Wors
 it fails by returning a plausible-looking result the client cannot act on.
 
 This requirement is not a preference. `product-brief.md` makes "a curator never
-accepts a work without having seen its image" a success criterion, and the review
-gate's whole justification is content appropriateness — which only a person looking
-at the picture can judge.
+accepts a work without having been shown its image" a success criterion (amended
+2026-07-20 — over MCP the enforceable claim is that the image was present in the
+transcript; see `security-model.md` § Content Appropriateness), and the review
+gate's whole justification is content appropriateness — which only a person
+looking at the picture can judge. Inline thumbnails are what make that possible
+at all on this surface.
 
 ### Token budget
 
