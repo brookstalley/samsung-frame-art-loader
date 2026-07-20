@@ -2,6 +2,40 @@
 
 Accumulated wisdom from building this product.
 
+## Retiring a claim is a repo-wide grep, not a local edit
+
+**When you void, amend, or supersede a factual claim, grep the whole repo for it
+before calling the correction done.** Prose has no compiler, so a claim that lives in
+four artifacts stays true in three of them until someone looks.
+
+**Confirmed by recurrence — twice in two sessions, both caught by the Critic and
+neither by self-review:**
+
+1. **2026-07-19, first pass.** The architecture rationale was amended from "the split
+   was *forced* by a Python version conflict" to "the split is a *choice*" across
+   `product-brief.md`, `project-state.yaml`, and `3tears-integration-findings.md`.
+   `learnings.md` kept a section literally headed *"The Python version split is not
+   negotiable"* for a full session.
+2. **2026-07-19, second pass.** `api-contract.md` § Security spent a paragraph
+   explaining that *"agents cannot auto-accept (every addition stops at curator
+   review)"* was void and must not be left standing. `project-state.yaml` →
+   `risk_profile` was still asserting it, verbatim, in the same commit.
+
+**Root cause:** thinking in artifacts. You correct the file you are editing and the
+correction *feels* complete, because the edit you made is the edit you intended. The
+claim's other homes are invisible precisely because you are not editing them.
+
+**What to do:** after writing any correction, grep for a distinctive phrase from the
+*old* claim — not the new one — across `.prawduct/` and the repo. Fix every hit or
+say why it stays. Cheap, mechanical, and it catches the whole class.
+
+**Related:** the same session produced a near-miss of the adjacent shape — an
+*unverified inference riding along with a verified claim* ("streamable HTTP is
+forced" was verified; "mounted in the same ASGI application" was not, and was written
+as though it were). Verification instincts fire on the part that looks like a
+foreign-system claim, not on what is attached to it. Principle 24 (Retrieval Over
+Generation) and the Complete Delivery principle both bear on this.
+
 ## Platform and dependencies
 
 See [platform-and-dependency-findings.md](artifacts/platform-and-dependency-findings.md)

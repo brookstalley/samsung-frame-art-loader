@@ -169,11 +169,17 @@ classification:
           honest search returning honest results the curator would not have
           chosen. No adversary required.
 
-          Structurally mitigated: agent-initiated additions always queue as
-          candidates, so nothing reaches the wall unreviewed (see
-          technical_decisions.data_model). This factor is the primary reason that
-          gate must not be relaxed later on convenience grounds — the spend
-          argument for it is weak, this one is not.
+          CORRECTED 2026-07-19 by Critic review. This previously read "structurally
+          mitigated: agent-initiated additions always queue as candidates, so
+          nothing reaches the wall unreviewed" — voided the same day when the
+          verdict tool moved onto the MCP surface.
+
+          What mitigates it now: every reviewing surface MUST SHOW THE IMAGE, which
+          is what the gate was always really for. A curator accepting on a title and
+          a rationale alone is this factor's failure mode, not its mitigation. The
+          gate must not be relaxed later on convenience grounds — the spend argument
+          for it is weak, this one is not, and "the agent already looked at it" is
+          not a substitute for a person having looked.
       - factor: "Untrusted web content reaches an agent holding mutating, spend-incurring tools"
         level: medium
         rationale: >
@@ -786,6 +792,12 @@ technical_decisions:
         No new entity is needed — `Candidate.verdict = pending` already expresses
         this. What the model gains is provenance: a DiscoveryRun must record which
         client initiated it, so "why did 40 Dali candidates appear" is answerable.
+
+        HISTORICAL NAMES: `Candidate` was split into `CandidateWork` and
+        `CandidateImage` later the same day; the equivalent of the state named here
+        is `CandidateWork.verdict = pending`. Left unrewritten because this block is
+        retained as the reasoning the amendment above was decided against, not as a
+        description of the current model.
       alternatives_considered:
         - "Bounded auto-accept behind an explicit flag — completes the request, but changes the wall without the curator seeing it."
         - "Auto-accept into a non-active staging theme — keeps the gate while letting the agent finish; rejected as a third state duplicating what `candidate` already means."
