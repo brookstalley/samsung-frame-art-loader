@@ -282,12 +282,21 @@ green. Then the Critic's fix for a different finding repeated it exactly:
 that line also left everything green. The second one was caught by asking the same
 question of the fix that had just been asked of the code.
 
+**A third instance, one layer higher again, closed the pattern.** The binding
+echoed `offset` back in its payload so a page could be resumed from its own
+result — and the only assertion on it used `offset=0`, which is also the binding's
+own default. That assertion holds if the argument is dropped on the floor. The
+general form is sharper than "test the caller": **an assertion pinned at a value
+that is also the default proves nothing about the path that produced it.** Pick a
+value the code has to have carried.
+
 **The rule:** for any behaviour that only matters because something invokes it —
-a normaliser, a validator, a startup repair, a hook — write one test that enters
-through the caller, not through the callee. And the cheap way to know whether you
-have: **delete the call and run the suite.** If it stays green, the wiring is
-undefended. This is a different failure from the corollary above: not a claim
-wider than its check, but a check aimed at the wrong layer.
+a normaliser, a validator, a startup repair, a hook, an echoed argument — write
+one test that enters through the caller, not through the callee, and pass it a
+value no default could have produced. The cheap way to know whether you have:
+**delete the call (or hard-code the value) and run the suite.** If it stays green,
+the wiring is undefended. This is a different failure from the corollary above:
+not a claim wider than its check, but a check aimed at the wrong layer.
 
 ## After a scripted mass edit, verify with a different detection method
 
