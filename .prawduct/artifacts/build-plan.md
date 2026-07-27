@@ -194,9 +194,13 @@ ruff configs do not have — the shape that gets "fixed" by loosening the config
 to match the artifact. The second, and worse: `test_config.py`'s isolation
 fixture did not isolate. `load_dotenv` searches from `config.py`'s own directory
 rather than the cwd, so the fixture's `chdir` was inert and `override=True` let
-a real `.env` beat every value the tests set. All nine passed only on a machine
-where nobody had run the documented `cp .env.example .env` — confirmed by
-creating one, at which point all nine failed. The fixture now stubs the call.
+a real `.env` beat every value the tests set — the module was green only on a
+machine where no `.env` exists. Demonstrated by writing one with non-default
+values, at which point all nine failed. A verbatim `cp .env.example .env` is
+milder and still broken: that file ships `CURATION_HOST`/`CURATION_PORT` at
+exactly the defaults, so the loopback test survives while the port-validation
+and override tests fail. The fixture now stubs `load_dotenv`, and the suite was
+re-verified both with a `.env` present and without.
 
 ### The 3tears catalogue dependency is deferred, not dropped (2026-07-27)
 

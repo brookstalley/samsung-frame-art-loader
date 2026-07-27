@@ -42,8 +42,10 @@ ignore = [
 # The 2024 modules that still run the wall. They are deleted once both planes
 # exist, so their remaining findings are cosmetic debt with a scheduled end
 # date, and a mass restyle of doomed code would only make that diff unreadable.
-# Deliberately NOT relaxed here: F (pyflakes) and B006 — the classes that
-# produced real defects in this codebase — so those still fail the build.
+# Deliberately NOT relaxed here: B006, and all of F except F841 — the
+# unbound-name class produced real defects in this codebase, so it still fails
+# the build. F841 (assigned-but-never-used) is waived below: it is pervasive in
+# these modules and is a tidiness rule, not a correctness one.
 # `config.py` is excluded from this list: it was rewritten and is held to the
 # strict set, as is everything under `curation/` and `tests/`.
 "ai.py" = ["T20", "E501", "F841", "TRY002", "TRY201", "TRY300", "B007"]
