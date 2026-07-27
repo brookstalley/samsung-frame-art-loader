@@ -4,7 +4,8 @@ The store is a `Protocol` rather than a base class so that the layers above it
 bind to what the catalogue can be asked, not to how one file answers. Persistence
 is reached only through the service layer, so naming the contract here is what
 keeps the backing technology a local concern. The records themselves are in
-`records.py`.
+`records.py`, and `discovery.py` is the matching contract over the pipeline
+before acceptance. Both are served by one open file, which `file.py` opens.
 
 Implementations own persistence and nothing else: no validation, no derived
 values, no ordering decisions beyond a deterministic sort. Every rule about what

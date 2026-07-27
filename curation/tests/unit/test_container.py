@@ -9,9 +9,9 @@ tested behaviour still ends up doing nothing.
 
 from datetime import UTC, datetime
 
+from curation.persistence.discovery_records import InitiatedBy, RunStatus
 from curation.persistence.records import Theme
 from curation.services.catalogue import CatalogueService
-from curation.services.container import Services
 from curation.services.discovery import DiscoveryService
 
 _A_MOMENT = datetime(2026, 7, 20, 9, 30, tzinfo=UTC)
@@ -23,7 +23,7 @@ def test_the_container_carries_every_concern_a_surface_may_need(services):
     assert isinstance(services.discovery, DiscoveryService)
 
 
-def test_one_reconcile_call_reaches_the_catalogue_repair(store):
+def test_one_reconcile_call_reaches_the_catalogue_repair(store, services):
     """An entry point calls the container once; each service's repair must run.
 
     Seeded through the store rather than the service, because the state being
@@ -32,8 +32,21 @@ def test_one_reconcile_call_reaches_the_catalogue_repair(store):
     """
     store.add_theme(Theme(id="t1", name="Late night", created_at=_A_MOMENT))
     store.add_theme(Theme(id="t2", name="Daylight", created_at=_A_MOMENT))
-    services = Services.bind(catalogue=store)
 
     services.reconcile()
 
     assert services.catalogue.active_theme().name == "Late night"
+
+
+def test_one_reconcile_call_reaches_the_discovery_repair(discovery, services):
+    """The second repair, asserted through the same single call an entry point makes.
+
+    Its own tests enter through `DiscoveryService.reconcile`, and every one of
+    them passes with the container's call to it deleted — which is the shape of
+    defect this file exists for: the behaviour is fine and nothing invokes it.
+    """
+    run = discovery.start_discovery_run(intent_text="Surrealist paintings", initiated_by=InitiatedBy.MCP_CLIENT)
+
+    services.reconcile()
+
+    assert discovery.get_run(run.id).status is RunStatus.INTERRUPTED

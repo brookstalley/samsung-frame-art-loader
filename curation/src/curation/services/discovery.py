@@ -7,6 +7,13 @@ curator's verdicts. Both are reached the same way — a surface unpacks argument
 calls one method here, and formats the result — so the rules live in exactly one
 place regardless of which concern they belong to.
 
+**This is where the pipeline's rules are enforced, at write time.** Two state
+machines are closed here rather than described: a run cannot leave a terminal
+state, a resolve run cannot reach the phase-1 states it skipped, and the verdict
+`awaiting_better_image` has exactly one entry — the path that also suppresses the
+instance the curator turned down. A rule applied on the way out is a rule the
+data can already violate.
+
 **Discovery depends on the catalogue and never the other way round.** Acceptance
 is a promotion: a candidate work becomes an Artwork and its image instances
 become that work's Sources. The dependency runs in the direction the pipeline
@@ -18,14 +25,763 @@ core keeps this logic testable without an event loop.
 """
 
 import logging
+import uuid
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
+from decimal import Decimal
 
+from curation.persistence.discovery import DiscoveryStore
+from curation.persistence.discovery_records import (
+    CandidateImage,
+    CandidateWork,
+    DiscoveryRun,
+    InitiatedBy,
+    ResolutionStatus,
+    ResolveRunWork,
+    RunKind,
+    RunStatus,
+    SpendCategory,
+    SpendRecord,
+    Verdict,
+)
+from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
+from curation.services import selection
 from curation.services.catalogue import CatalogueService
+from curation.services.errors import ServiceError
+from curation.services.fields import relative_path, require_member, require_text
+from curation.services.store import store_write
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class RunResults:
+    """A run's proposed works, split by whether an image was found for them.
+
+    `unresolved` is a bucket rather than an omission. A work phase 2 could not
+    resolve is evidence that phase 1 may have invented it, so a run that quietly
+    returned a shorter list would be discarding its own most useful signal.
+    """
+
+    run: DiscoveryRun
+    resolved: Sequence[CandidateWork]
+    unresolved: Sequence[CandidateWork]
+    unattempted: Sequence[CandidateWork]
+
+
+@dataclass(frozen=True, slots=True)
+class ResolutionOutcome:
+    """What a resolution attempt concluded about one work, and whether it stuck.
+
+    `applied` is false when the curator reached a terminal verdict while the
+    attempt was running. The result is then reported rather than written: only
+    the curator's verdict is authoritative, and a background job overwriting an
+    acceptance would leave a work holding an `artwork_id` and a non-accepted
+    verdict — a combination nothing else in this model can produce or repair.
+    """
+
+    work: CandidateWork
+    resolution_status: ResolutionStatus
+    selected: CandidateImage | None
+    applied: bool
+
+
+@dataclass(frozen=True, slots=True)
+class RunCost:
+    """What a run spent on its own, and what asking for it cost altogether.
+
+    The two differ because a re-search is its own run: `direct` is what this run
+    was billed, and `total` adds every resolve run descended from it. "What did
+    asking for Dalí cost" is the second number.
+    """
+
+    direct: Decimal
+    total: Decimal
 
 
 class DiscoveryService:
     """Read and write the pre-acceptance pipeline."""
 
-    def __init__(self, catalogue: CatalogueService) -> None:
+    def __init__(self, store: DiscoveryStore, catalogue: CatalogueService) -> None:
+        self._store = store
         self._catalogue = catalogue
+
+    # -- reads: runs ----------------------------------------------------------
+
+    def get_run(self, run_id: str) -> DiscoveryRun:
+        """Return one run, or refuse if there is no such id."""
+        run = self._store.get_run(run_id)
+        if run is None:
+            raise ServiceError(f"No discovery run with id {run_id!r} exists.")
+        return run
+
+    def list_runs(self, *, status: RunStatus | None = None, kind: RunKind | None = None) -> Sequence[DiscoveryRun]:
+        """Every run, newest first, optionally narrowed to one status or kind."""
+        resolved_status = None if status is None else require_member(status, enum=RunStatus, field="status")
+        resolved_kind = None if kind is None else require_member(kind, enum=RunKind, field="kind")
+        return self._store.list_runs(status=resolved_status, kind=resolved_kind)
+
+    def run_results(self, run_id: str) -> RunResults:
+        """The run's works, with the ones nothing could be found for reported separately."""
+        run = self.get_run(run_id)
+        works = self._works_of(run)
+        return RunResults(
+            run=run,
+            resolved=[work for work in works if work.resolution_status is ResolutionStatus.RESOLVED],
+            unresolved=[work for work in works if work.resolution_status is ResolutionStatus.UNRESOLVED],
+            unattempted=[work for work in works if work.resolution_status is ResolutionStatus.PENDING],
+        )
+
+    # -- writes: a discovery run's life ---------------------------------------
+
+    def start_discovery_run(
+        self,
+        *,
+        intent_text: str,
+        initiated_by: InitiatedBy,
+        strategy: str | None = None,
+    ) -> DiscoveryRun:
+        """Begin phase 1: the curator's intent becomes a run enumerating works."""
+        run = DiscoveryRun(
+            id=str(uuid.uuid4()),
+            kind=RunKind.DISCOVERY,
+            initiated_by=require_member(initiated_by, enum=InitiatedBy, field="initiated_by"),
+            status=RunStatus.RESOLVING_WORKS,
+            approval_required=False,
+            started_at=datetime.now(UTC),
+            intent_text=require_text(intent_text, field="intent_text"),
+            strategy=strategy,
+        )
+        store_write(self._store.add_run, run)
+        return run
+
+    def finish_work_list(
+        self, run_id: str, *, approval_threshold: int, estimated_cost_usd: Decimal | None = None
+    ) -> DiscoveryRun:
+        """Close phase 1 and either stop for approval or go straight to phase 2.
+
+        The gate is on the **work count**, not on the estimate. A dollar
+        threshold gates on the axis that does not discriminate — real runs cost
+        well under a dollar — while the judgement the gate exists to invite is
+        scope: "you asked for Dalí and I found 200 works — really?". More works
+        than the threshold stops for approval; exactly the threshold does not,
+        because a limit a curator set is a number they already accepted.
+
+        Whether the gate fired is stored rather than left to be re-derived: the
+        threshold is configuration, and a run that stopped for approval last
+        month must still read that way under today's setting.
+        """
+        if approval_threshold < 0:
+            raise ServiceError(f"An approval threshold cannot be negative, got {approval_threshold}.")
+        with self._store.transaction():
+            run = self._require_status(run_id, RunStatus.RESOLVING_WORKS, doing="finish its work list")
+            required = len(self._store.list_candidate_works(run_id)) > approval_threshold
+            advanced = replace(
+                run,
+                status=RunStatus.AWAITING_APPROVAL if required else RunStatus.RESOLVING_IMAGES,
+                approval_required=required,
+                estimated_cost_usd=estimated_cost_usd,
+            )
+            store_write(self._store.update_run, advanced)
+        return advanced
+
+    def approve_run(self, run_id: str) -> DiscoveryRun:
+        """Accept the work list and its price; phase 2 may proceed."""
+        with self._store.transaction():
+            run = self._require_status(run_id, RunStatus.AWAITING_APPROVAL, doing="be approved")
+            approved = replace(run, status=RunStatus.RESOLVING_IMAGES)
+            store_write(self._store.update_run, approved)
+        return approved
+
+    def decline_run(self, run_id: str) -> DiscoveryRun:
+        """Refuse the work list. The run ends without phase 2 ever spending."""
+        with self._store.transaction():
+            run = self._require_status(run_id, RunStatus.AWAITING_APPROVAL, doing="be declined")
+            declined = self._ended(run, RunStatus.DECLINED)
+            store_write(self._store.update_run, declined)
+        return declined
+
+    def complete_run(self, run_id: str, *, actual_cost_usd: Decimal | None = None) -> DiscoveryRun:
+        """Finish phase 2. A run that resolved some works and not others still succeeded.
+
+        The unresolved count is written here rather than derived on every read,
+        because it is the run's own report of what it could not do and must not
+        change afterwards.
+        """
+        with self._store.transaction():
+            run = self._require_status(run_id, RunStatus.RESOLVING_IMAGES, doing="complete")
+            unresolved = [work for work in self._works_of(run) if work.resolution_status is ResolutionStatus.UNRESOLVED]
+            completed = self._ended(
+                run,
+                RunStatus.COMPLETED,
+                actual_cost_usd=actual_cost_usd,
+                unresolved_work_count=len(unresolved),
+            )
+            store_write(self._store.update_run, completed)
+        return completed
+
+    def fail_run(self, run_id: str, *, actual_cost_usd: Decimal | None = None) -> DiscoveryRun:
+        """End a run because something broke. Distinct from every other ending."""
+        return self._end_active(run_id, RunStatus.FAILED, doing="fail", actual_cost_usd=actual_cost_usd)
+
+    def halt_run_for_budget(self, run_id: str, *, actual_cost_usd: Decimal | None = None) -> DiscoveryRun:
+        """End a run because the provider refused to spend more.
+
+        **The caller reaches this from a provider 402 and from nothing else.**
+        The ceiling is a provider-side credit limit; there is deliberately no
+        local sum standing between the product and an unbounded bill, because a
+        local tally that fails open is indistinguishable from one that works —
+        no error, no alert, just a bill. Recording spend therefore never moves a
+        run into this state, and nothing here reads `SpendRecord` to decide it.
+        """
+        return self._end_active(run_id, RunStatus.HALTED_BY_BUDGET, doing="halt", actual_cost_usd=actual_cost_usd)
+
+    def cancel_run(self, run_id: str, *, actual_cost_usd: Decimal | None = None) -> DiscoveryRun:
+        """Stop a run on request. Money already spent stays recorded, because it was spent."""
+        return self._end_active(run_id, RunStatus.CANCELLED, doing="cancel", actual_cost_usd=actual_cost_usd)
+
+    # -- writes: the re-search ------------------------------------------------
+
+    def start_resolve_run(self, *, candidate_work_ids: Sequence[str], initiated_by: InitiatedBy) -> DiscoveryRun:
+        """Begin a re-search over works an earlier run proposed.
+
+        A resolve run enters at phase 2 and can never reach `resolving_works`,
+        `awaiting_approval` or `declined`: phase 1 already happened on the
+        parent, so there is no work list to approve or decline.
+
+        **It refuses work ids already covered by a live resolve run, and names
+        them.** Double-submitting the same ids would spend twice for one result
+        on the only operation that spends at all, and a curator who did it by
+        accident should find out rather than be quietly corrected.
+        """
+        if not candidate_work_ids:
+            raise ServiceError("A resolve run needs at least one candidate work to re-search.")
+        with self._store.transaction():
+            works = [self.get_candidate_work(work_id) for work_id in dict.fromkeys(candidate_work_ids)]
+            self._refuse_covered(works)
+            parent_ids = {work.discovery_run_id for work in works}
+            if len(parent_ids) > 1:
+                # A resolve run covers a subset of one run's works, and its parent
+                # is what keeps its spend attributable to the intent that caused
+                # it. Works from several runs have no single such intent.
+                raise ServiceError(
+                    "A resolve run covers works from one discovery run, and these come from "
+                    f"{len(parent_ids)}. Start one per originating run."
+                )
+            run = DiscoveryRun(
+                id=str(uuid.uuid4()),
+                kind=RunKind.RESOLVE,
+                initiated_by=require_member(initiated_by, enum=InitiatedBy, field="initiated_by"),
+                status=RunStatus.RESOLVING_IMAGES,
+                approval_required=False,
+                started_at=datetime.now(UTC),
+                parent_run_id=parent_ids.pop(),
+            )
+            store_write(self._store.add_run, run)
+            for work in works:
+                store_write(self._store.add_coverage, ResolveRunWork(resolve_run_id=run.id, candidate_work_id=work.id))
+        return run
+
+    def covered_works(self, resolve_run_id: str) -> Sequence[CandidateWork]:
+        """Which works a resolve run is re-searching — its scope, not its provenance."""
+        run = self.get_run(resolve_run_id)
+        if run.kind is not RunKind.RESOLVE:
+            raise ServiceError(f"Run {resolve_run_id!r} is a {run.kind} run, and only a resolve run covers works.")
+        return self._works_of(run)
+
+    # -- repair ---------------------------------------------------------------
+
+    def reconcile(self) -> None:
+        """Move runs whose process died to `interrupted`. Run once, as the plane starts.
+
+        Without this the state machine has no edge for process death: every one
+        of its other terminal states is written by the run's own process, which a
+        crashed process by definition cannot do. Combined with the double-spend
+        guard, a crash would leave the covered works permanently
+        un-re-searchable, silently, on the only operation that spends money.
+
+        A run in a process-held state only advances while the curation process
+        that owns it is alive, and there is exactly one such process. So if
+        curation is starting, no previously-recorded run is running: the
+        inference is total rather than heuristic, which is why this is startup
+        reconciliation and not a timeout to tune or a liveness field to keep
+        fresh.
+
+        One line per run, at WARNING, carrying the id and the state it was left
+        in. That line is the *only* signal a run died — silence here is not the
+        absence of a problem, it is the absence of this repair.
+        """
+        with self._store.transaction():
+            for status in (held for held in RunStatus if held.is_process_held):
+                for run in self._store.list_runs(status=status):
+                    log.warning(
+                        "Discovery run %s was left in %s by a process that did not survive; marking it interrupted. "
+                        "Re-run it; do not investigate it as a failure.",
+                        run.id,
+                        status,
+                    )
+                    # Coverage is released by the run becoming terminal, not by
+                    # deleting its rows: the join records what the run's scope
+                    # was, and that stays true after the run has ended.
+                    store_write(self._store.update_run, self._ended(run, RunStatus.INTERRUPTED))
+
+    # -- reads: proposed works ------------------------------------------------
+
+    def get_candidate_work(self, candidate_work_id: str) -> CandidateWork:
+        """Return one proposed work, or refuse if there is no such id."""
+        work = self._store.get_candidate_work(candidate_work_id)
+        if work is None:
+            raise ServiceError(f"No candidate work with id {candidate_work_id!r} exists.")
+        return work
+
+    def list_candidate_works(self, run_id: str) -> Sequence[CandidateWork]:
+        """The works a run proposed."""
+        self.get_run(run_id)
+        return self._store.list_candidate_works(run_id)
+
+    def is_work_suppressed(self, work_dedup_key: str) -> bool:
+        """Whether this work has already been proposed and declined.
+
+        Work-scoped suppression, and only work-scoped: rejecting an *image* uses
+        a different key entirely, so asking for a better scan of a painting
+        leaves the painting eligible.
+        """
+        return any(
+            work.verdict is Verdict.REJECTED
+            for work in self._store.list_candidate_works_by_dedup_key(require_text(work_dedup_key, field="work_dedup_key"))
+        )
+
+    # -- writes: proposed works -----------------------------------------------
+
+    def propose_work(
+        self,
+        *,
+        run_id: str,
+        proposed_title: str,
+        rationale: str,
+        work_dedup_key: str,
+        proposed_artist: str | None = None,
+        reconsider: bool = False,
+    ) -> CandidateWork:
+        """Record a work phase 1 proposed, unless the curator has already declined it.
+
+        `rationale` is required because a review card that cannot say *why* this
+        work matched the intent asks the curator to judge a bare title.
+
+        Suppression is refused rather than silently skipped, and `reconsider`
+        exists because the rule is "unless the curator explicitly reconsiders it"
+        — a decision they are allowed to revisit, but never by accident.
+        """
+        key = require_text(work_dedup_key, field="work_dedup_key")
+        with self._store.transaction():
+            # Kind before status: a resolve run is never in `resolving_works`, so
+            # the status refusal would reach it first and answer a question it did
+            # not ask — and this guard would be a branch nothing could enter.
+            if self.get_run(run_id).kind is not RunKind.DISCOVERY:
+                raise ServiceError(
+                    f"Run {run_id!r} is a resolve run, which re-searches works an earlier run proposed "
+                    "rather than proposing new ones."
+                )
+            self._require_status(run_id, RunStatus.RESOLVING_WORKS, doing="propose works")
+            if not reconsider and self.is_work_suppressed(key):
+                raise ServiceError(
+                    f"{proposed_title!r} has already been proposed and rejected. "
+                    "Pass reconsider=True to propose it again deliberately."
+                )
+            work = CandidateWork(
+                id=str(uuid.uuid4()),
+                discovery_run_id=run_id,
+                proposed_title=require_text(proposed_title, field="proposed_title"),
+                rationale=require_text(rationale, field="rationale"),
+                work_dedup_key=key,
+                proposed_artist=proposed_artist,
+            )
+            store_write(self._store.add_candidate_work, work)
+        return work
+
+    def set_verdict(self, candidate_work_id: str, verdict: Verdict, *, reason: str | None = None) -> CandidateWork:
+        """Record the curator's decision about a work: accepted or rejected.
+
+        **`awaiting_better_image` is refused here on purpose.** That verdict is a
+        judgement about an *instance*, and the path that sets it is the same path
+        that suppresses the instance being turned down — so the suppression can
+        never be skipped. Reaching it from here would let a re-search hand back
+        the very image the curator had just rejected.
+
+        The constraint is on the target value only, never on the source state:
+        this is available from `awaiting_better_image` too, because a curator must
+        never be blocked waiting for a background job to finish.
+        """
+        target = require_member(verdict, enum=Verdict, field="verdict")
+        if target is Verdict.AWAITING_BETTER_IMAGE:
+            raise ServiceError(
+                "A verdict of 'awaiting_better_image' is set by rejecting an image, not by set_verdict. "
+                "Use reject_image, which also suppresses the instance so a re-search cannot return it."
+            )
+        if target is Verdict.PENDING:
+            raise ServiceError("'pending' is where a work starts, not a decision. Valid verdicts are: accepted, rejected.")
+
+        with self._store.transaction():
+            work = self.get_candidate_work(candidate_work_id)
+            if work.verdict.is_terminal:
+                raise ServiceError(f"Candidate work {candidate_work_id!r} was already {work.verdict}, and that is final.")
+            if target is Verdict.ACCEPTED:
+                return self._accept(work)
+            rejected = replace(work, verdict=target, rejected_reason=reason, decided_at=datetime.now(UTC))
+            store_write(self._store.update_candidate_work, rejected)
+        return rejected
+
+    # -- reads and writes: image instances ------------------------------------
+
+    def list_candidate_images(self, candidate_work_id: str) -> Sequence[CandidateImage]:
+        """Every instance found for this work, the selected one first.
+
+        Losing instances are kept rather than deleted: they are the alternates a
+        review card offers, they make an over-eager merge inspectable, and on
+        acceptance they become the work's non-primary sources.
+        """
+        self.get_candidate_work(candidate_work_id)
+        return self._store.list_candidate_images(candidate_work_id)
+
+    def record_image(
+        self,
+        *,
+        candidate_work_id: str,
+        url: str,
+        provider: str,
+        source_class: SourceClass,
+        acquisition_method: AcquisitionMethod,
+        confidence: float,
+        preview_url: str | None = None,
+        preview_path: str | None = None,
+        estimated_width: int | None = None,
+        estimated_height: int | None = None,
+        rights_status: RightsStatus | None = None,
+        quality_score: float | None = None,
+        selection_rationale: str | None = None,
+    ) -> CandidateImage:
+        """Record one image instance found for a work.
+
+        The first surviving instance a work has becomes its selection, so a work
+        with instances is never selectionless; a later choice moves the selection
+        rather than adding a second one.
+        """
+        with self._store.transaction():
+            work = self.get_candidate_work(candidate_work_id)
+            held = self._store.list_candidate_images(work.id)
+            image = CandidateImage(
+                id=str(uuid.uuid4()),
+                candidate_work_id=work.id,
+                url=require_text(url, field="url"),
+                provider=require_text(provider, field="provider"),
+                source_class=require_member(source_class, enum=SourceClass, field="source_class"),
+                acquisition_method=require_member(acquisition_method, enum=AcquisitionMethod, field="acquisition_method"),
+                confidence=confidence,
+                is_selected=not any(other.is_selected for other in held),
+                preview_url=preview_url,
+                preview_path=None if preview_path is None else relative_path(preview_path, field="preview_path"),
+                estimated_width=estimated_width,
+                estimated_height=estimated_height,
+                rights_status=(
+                    None if rights_status is None else require_member(rights_status, enum=RightsStatus, field="rights_status")
+                ),
+                quality_score=quality_score,
+                selection_rationale=selection_rationale,
+            )
+            store_write(self._store.add_candidate_image, image)
+        return image
+
+    def select_image(self, candidate_image_id: str, *, rationale: str | None = None) -> CandidateImage:
+        """Make this instance the one that represents its work, and the only one.
+
+        A rejected instance is refused: it is excluded from re-selection for this
+        work, which is what "the curator turned this scan down" has to mean for
+        the rejection to survive the next re-search.
+        """
+        with self._store.transaction():
+            image = self._require_image(candidate_image_id)
+            if image.rejected_at is not None:
+                raise ServiceError(f"Image {candidate_image_id!r} was rejected for this work, so it cannot be selected again.")
+            chosen = self._select(image, rationale=rationale)
+        return chosen
+
+    def reject_image(self, candidate_image_id: str) -> CandidateWork:
+        """Turn down an instance and ask for a better one. The work stays wanted.
+
+        This is the only way into the `awaiting_better_image` verdict, and it is
+        the same call that sets the instance's suppression — one path, so the two
+        can never come apart. The work keeps its dedup key unsuppressed, because
+        the curator asked to keep the painting and only turned down the scan.
+
+        The selection falls through to the next surviving instance if there is
+        one, so a work with instances is never left representing itself by an
+        image its curator rejected. If nothing survives, the work has no
+        selection and re-enters phase 2 rather than sitting there.
+        """
+        with self._store.transaction():
+            image = self._require_image(candidate_image_id)
+            if image.rejected_at is not None:
+                raise ServiceError(f"Image {candidate_image_id!r} was already rejected for this work.")
+            work = self.get_candidate_work(image.candidate_work_id)
+            if work.verdict.is_terminal:
+                raise ServiceError(
+                    f"Candidate work {work.id!r} was already {work.verdict}, so its images are no longer under review."
+                )
+            store_write(
+                self._store.update_candidate_image,
+                replace(image, is_selected=False, rejected_at=datetime.now(UTC)),
+            )
+            replacement = selection.best(self._store.list_candidate_images(work.id))
+            if replacement is not None:
+                self._select(replacement, rationale=None)
+            awaiting = replace(work, verdict=Verdict.AWAITING_BETTER_IMAGE)
+            store_write(self._store.update_candidate_work, awaiting)
+        return awaiting
+
+    def record_resolution(self, candidate_work_id: str) -> ResolutionOutcome:
+        """Close a resolution attempt for one work, from the instances it now holds.
+
+        The outcome is read from the work's instances rather than asserted by the
+        caller, so "resolved" cannot disagree with whether anything is actually
+        there. A work with any surviving instance is resolved and returns to
+        review; a work whose instances are all rejected — or which never had any
+        — is `unresolved`, which is a reportable outcome and not an absent row.
+
+        A terminal verdict is never overwritten. The curator may have accepted or
+        rejected the work while the attempt was running, and only their verdict
+        is authoritative; the result is then reported and not applied.
+        """
+        with self._store.transaction():
+            work = self.get_candidate_work(candidate_work_id)
+            chosen = selection.best(self._store.list_candidate_images(work.id))
+            status = ResolutionStatus.RESOLVED if chosen is not None else ResolutionStatus.UNRESOLVED
+            if work.verdict.is_terminal:
+                return ResolutionOutcome(work=work, resolution_status=status, selected=chosen, applied=False)
+            if chosen is not None and not chosen.is_selected:
+                self._select(chosen, rationale=None)
+            settled = replace(
+                work,
+                resolution_status=status,
+                # A work the curator asked a better image for returns to review
+                # once one is on offer. It stays where it is when nothing was
+                # found, which is what makes a dead end visible rather than a
+                # silent no-op.
+                verdict=Verdict.PENDING if chosen is not None else work.verdict,
+            )
+            store_write(self._store.update_candidate_work, settled)
+        return ResolutionOutcome(work=settled, resolution_status=status, selected=chosen, applied=True)
+
+    # -- spend ----------------------------------------------------------------
+
+    def record_spend(
+        self,
+        *,
+        category: SpendCategory,
+        cost_usd: Decimal,
+        discovery_run_id: str | None = None,
+        artwork_id: str | None = None,
+        model_id: str | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        units: int | None = None,
+        at: datetime | None = None,
+    ) -> SpendRecord:
+        """Record what something cost. Attribution and history — never a ceiling.
+
+        Nothing here reads the running total, and no state changes as a result of
+        writing one. The cap is a provider-side credit limit that returns 402 when
+        exhausted, and a run reaching `halted_by_budget` does so because the
+        provider said so, not because a local sum crossed a number.
+        """
+        if cost_usd < 0:
+            raise ServiceError(f"A cost cannot be negative, got {cost_usd}.")
+        # Both references are checked here rather than left to the file's foreign
+        # keys: a caller gets "no discovery run with id ..." instead of a refusal
+        # phrased about a constraint they cannot see.
+        if discovery_run_id is not None:
+            self.get_run(discovery_run_id)
+        if artwork_id is not None:
+            self._catalogue.get_artwork(artwork_id)
+        record = SpendRecord(
+            id=str(uuid.uuid4()),
+            category=require_member(category, enum=SpendCategory, field="category"),
+            cost_usd=cost_usd,
+            occurred_at=at if at is not None else datetime.now(UTC),
+            discovery_run_id=discovery_run_id,
+            artwork_id=artwork_id,
+            model_id=model_id,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            units=units,
+        )
+        store_write(self._store.add_spend_record, record)
+        return record
+
+    def run_cost(self, run_id: str) -> RunCost:
+        """What this run was billed, and what it cost including every re-search under it.
+
+        A re-search is its own run so that it has a handle, a status and a cancel
+        of its own; the price of that is that "what did this intent cost" has to
+        add the chain back up, which is what `total` is.
+        """
+        self.get_run(run_id)
+        direct = self._spend_total(run_id)
+        return RunCost(direct=direct, total=direct + sum(self._spend_total(child) for child in self._descendants(run_id)))
+
+    def spend_in_month(self, *, year: int, month: int) -> Decimal:
+        """Everything spent in one calendar month, UTC.
+
+        The month is the **UTC** calendar month rather than the operator's local
+        one, because the provider's own credit limit resets at midnight UTC — a
+        report on a different boundary would disagree with the only figure that
+        can actually stop spending.
+        """
+        if not 1 <= month <= 12:
+            raise ServiceError(f"A month is 1 to 12, got {month}.")
+        since = datetime(year, month, 1, tzinfo=UTC)
+        until = datetime(year + (month == 12), month % 12 + 1, 1, tzinfo=UTC)
+        return sum((record.cost_usd for record in self._store.list_spend_records(since=since, until=until)), Decimal(0))
+
+    # -- internals ------------------------------------------------------------
+
+    def _accept(self, work: CandidateWork) -> CandidateWork:
+        """Mint the artwork this candidate becomes, and promote its instances.
+
+        Acceptance is the only way into the catalogue, and it is a promotion
+        rather than a transformation: every instance becomes a source, the
+        selected one primary and the rest retained as alternates. Keeping the
+        losers is what makes re-acquisition survive an institution reorganising
+        its site.
+
+        A work nothing could be found for is refused. Constraint on presentation
+        alone would not be enough — a work with no credible instance would mint an
+        artwork with no source, and so nothing to acquire and no way to answer
+        "can this be re-acquired from scratch".
+        """
+        if work.resolution_status is not ResolutionStatus.RESOLVED:
+            raise ServiceError(
+                f"Candidate work {work.id!r} is {work.resolution_status}, so there is no image to accept it on. "
+                "Re-search it with resolve_images, or reject it."
+            )
+        artwork = self._catalogue.add_artwork(title=work.proposed_title)
+        for image in self._store.list_candidate_images(work.id):
+            self._catalogue.add_source(
+                artwork_id=artwork.id,
+                url=image.url,
+                provider=image.provider,
+                source_class=image.source_class,
+                acquisition_method=image.acquisition_method,
+                # "We did not check" is not a value a source may carry: absence is
+                # refused catalogue-side, and `unknown` is the honest reading of a
+                # candidate that never established one.
+                rights_status=image.rights_status if image.rights_status is not None else RightsStatus.UNKNOWN,
+                is_primary=image.is_selected,
+                confidence=image.confidence,
+                selection_rationale=image.selection_rationale,
+            )
+        accepted = replace(work, verdict=Verdict.ACCEPTED, artwork_id=artwork.id, decided_at=datetime.now(UTC))
+        store_write(self._store.update_candidate_work, accepted)
+        return accepted
+
+    def _select(self, image: CandidateImage, *, rationale: str | None) -> CandidateImage:
+        """Make one instance the selected one, standing every other one down."""
+        for other in self._store.list_candidate_images(image.candidate_work_id):
+            if other.is_selected and other.id != image.id:
+                store_write(self._store.update_candidate_image, replace(other, is_selected=False))
+        chosen = replace(image, is_selected=True, selection_rationale=rationale or image.selection_rationale)
+        store_write(self._store.update_candidate_image, chosen)
+        return chosen
+
+    def _refuse_covered(self, works: Iterable[CandidateWork]) -> None:
+        """Refuse works a live resolve run is already re-searching, naming them.
+
+        Keying on "not terminal" is only safe because a crashed run is reconciled
+        to `interrupted` at startup. Every other terminal state is written by the
+        run's own process, so without that repair a crash would leave these ids
+        refused forever — turning a double-spend guard into a permanent block.
+        """
+        busy = [work for work in works if self._live_coverage(work.id) is not None]
+        if busy:
+            titles = ", ".join(f"{work.proposed_title!r} ({work.id})" for work in busy)
+            raise ServiceError(
+                f"A re-search is already running for {titles}. Wait for it to finish, or cancel it — "
+                "re-submitting would pay twice for one result."
+            )
+
+    def _live_coverage(self, candidate_work_id: str) -> str | None:
+        """The id of a resolve run still re-searching this work, if there is one."""
+        for coverage in self._store.list_coverage_by_work(candidate_work_id):
+            run = self._store.get_run(coverage.resolve_run_id)
+            if run is not None and not run.status.is_terminal:
+                return run.id
+        return None
+
+    def _works_of(self, run: DiscoveryRun) -> Sequence[CandidateWork]:
+        """A run's works: what it proposed, or for a re-search, what it covers.
+
+        The two relations are deliberately different. A work's
+        `discovery_run_id` is its provenance and never changes; coverage records
+        which run is re-searching it, which changes every time one does.
+        """
+        if run.kind is RunKind.DISCOVERY:
+            return self._store.list_candidate_works(run.id)
+        return [self.get_candidate_work(coverage.candidate_work_id) for coverage in self._store.list_coverage_by_run(run.id)]
+
+    def _descendants(self, run_id: str) -> list[str]:
+        """Every resolve run below this one, however deep the chain goes."""
+        found: list[str] = []
+        frontier = [run_id]
+        while frontier:
+            parent = frontier.pop()
+            children = [run.id for run in self._store.list_runs(kind=RunKind.RESOLVE) if run.parent_run_id == parent]
+            found.extend(children)
+            frontier.extend(children)
+        return found
+
+    def _spend_total(self, run_id: str) -> Decimal:
+        return sum((record.cost_usd for record in self._store.list_spend_records(run_id=run_id)), Decimal(0))
+
+    def _require_image(self, candidate_image_id: str) -> CandidateImage:
+        image = self._store.get_candidate_image(candidate_image_id)
+        if image is None:
+            raise ServiceError(f"No candidate image with id {candidate_image_id!r} exists.")
+        return image
+
+    def _require_status(self, run_id: str, expected: RunStatus, *, doing: str) -> DiscoveryRun:
+        """Refuse a transition the run is not standing on the edge of."""
+        run = self.get_run(run_id)
+        if run.status is not expected:
+            raise ServiceError(f"Run {run_id!r} is {run.status}, so it cannot {doing}; that needs a run in {expected}.")
+        return run
+
+    def _end_active(self, run_id: str, ending: RunStatus, *, doing: str, actual_cost_usd: Decimal | None) -> DiscoveryRun:
+        """End a run that is still running. A finished run stays as it finished."""
+        with self._store.transaction():
+            run = self.get_run(run_id)
+            if run.status.is_terminal:
+                raise ServiceError(f"Run {run_id!r} already ended as {run.status}, so it cannot {doing}.")
+            ended = self._ended(run, ending, actual_cost_usd=actual_cost_usd)
+            store_write(self._store.update_run, ended)
+        return ended
+
+    @staticmethod
+    def _ended(
+        run: DiscoveryRun,
+        status: RunStatus,
+        *,
+        actual_cost_usd: Decimal | None = None,
+        unresolved_work_count: int | None = None,
+    ) -> DiscoveryRun:
+        """The run as it will be stored once it has ended.
+
+        A cost already recorded is kept when the caller supplies none: a run that
+        spent money before being cancelled still spent it.
+        """
+        return replace(
+            run,
+            status=status,
+            completed_at=datetime.now(UTC),
+            actual_cost_usd=actual_cost_usd if actual_cost_usd is not None else run.actual_cost_usd,
+            unresolved_work_count=(unresolved_work_count if unresolved_work_count is not None else run.unresolved_work_count),
+        )

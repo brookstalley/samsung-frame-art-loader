@@ -9,6 +9,7 @@ showed it. So the call is asserted here, through `main()` itself.
 
 import curation.__main__ as entry_point
 from curation.config import Settings
+from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import Theme
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.services.catalogue import CatalogueService
@@ -26,7 +27,7 @@ def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch)
 
     # A catalogue as the revision before the exactly-one-active rule wrote one:
     # themes exist and none of them is active.
-    seeding = SqliteCatalogue(path)
+    seeding = SqliteCatalogue(open_catalogue_file(path))
     seeding.add_theme(Theme(id="t1", name="Late night", created_at=_a_moment()))
     seeding.add_theme(Theme(id="t2", name="Daylight", created_at=_a_moment()))
     seeding.close()
@@ -42,7 +43,7 @@ def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch)
     def capture(app, **kwargs) -> None:  # noqa: ANN001, ANN003 - uvicorn's own signature
         # Read through a second connection to the same file, so this observes what
         # a request arriving at this moment would observe.
-        observer = SqliteCatalogue(path)
+        observer = SqliteCatalogue(open_catalogue_file(path))
         try:
             active = CatalogueService(observer).active_theme()
             served.append("none" if active is None else active.name)

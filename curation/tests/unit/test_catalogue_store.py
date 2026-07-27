@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 import pytest
 
 from curation.persistence.catalogue import StorageError
+from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import (
     AcquisitionMethod,
     Artist,
@@ -118,11 +119,11 @@ def _seed(catalogue):
 
 def test_a_catalogue_survives_the_process_that_wrote_it(tmp_path):
     path = tmp_path / "catalogue.sqlite"
-    first = SqliteCatalogue(path)
+    first = SqliteCatalogue(open_catalogue_file(path))
     moment = _seed(first)
     first.close()
 
-    reopened = SqliteCatalogue(path)
+    reopened = SqliteCatalogue(open_catalogue_file(path))
     try:
         artwork = reopened.get_artwork("w1")
         assert artwork is not None
@@ -152,12 +153,12 @@ def test_an_instant_round_trips_through_the_file_as_utc(tmp_path):
     string would read back as a different moment on a machine in another zone.
     """
     path = tmp_path / "catalogue.sqlite"
-    catalogue = SqliteCatalogue(path)
+    catalogue = SqliteCatalogue(open_catalogue_file(path))
     stored = datetime(2026, 3, 14, 15, 9, 26, tzinfo=UTC)
     catalogue.add_artwork(Artwork(id="w1", title="Pi", created_at=stored))
     catalogue.close()
 
-    reopened = SqliteCatalogue(path)
+    reopened = SqliteCatalogue(open_catalogue_file(path))
     try:
         assert reopened.get_artwork("w1").created_at == stored
     finally:
@@ -267,7 +268,7 @@ def test_a_catalogue_written_by_an_earlier_revision_still_reads(tmp_path):
     path = tmp_path / "catalogue.sqlite"
     moment = _write_legacy_catalogue(path)
 
-    catalogue = SqliteCatalogue(path)
+    catalogue = SqliteCatalogue(open_catalogue_file(path))
     try:
         hopper = catalogue.get_artist("a1")
         assert (hopper.id, hopper.name, hopper.nationality) == ("a1", "Edward Hopper", "American")
@@ -311,7 +312,7 @@ def test_a_catalogue_written_by_an_earlier_revision_still_reads(tmp_path):
 
 def test_the_file_carries_the_schema_the_backup_path_expects(tmp_path):
     path = tmp_path / "catalogue.sqlite"
-    catalogue = SqliteCatalogue(path)
+    catalogue = SqliteCatalogue(open_catalogue_file(path))
     catalogue.close()
 
     connection = sqlite3.connect(path)
@@ -333,7 +334,7 @@ def test_no_table_stores_the_resolution_verdict(tmp_path):
     television changed — which is precisely how it went wrong the first time.
     """
     path = tmp_path / "catalogue.sqlite"
-    SqliteCatalogue(path).close()
+    SqliteCatalogue(open_catalogue_file(path)).close()
 
     connection = sqlite3.connect(path)
     try:
@@ -351,7 +352,7 @@ def test_a_fresh_catalogue_carries_exactly_one_directive_row(tmp_path):
     reading it fails, and the read happens on every manifest build.
     """
     path = tmp_path / "catalogue.sqlite"
-    catalogue = SqliteCatalogue(path)
+    catalogue = SqliteCatalogue(open_catalogue_file(path))
     try:
         assert catalogue.get_directive().sequence == 0
     finally:
@@ -375,7 +376,7 @@ def test_an_earlier_catalogue_gains_the_tables_it_did_not_have(tmp_path):
     path = tmp_path / "catalogue.sqlite"
     _write_legacy_catalogue(path)
 
-    catalogue = SqliteCatalogue(path)
+    catalogue = SqliteCatalogue(open_catalogue_file(path))
     try:
         # The rows the older revision wrote are untouched.
         assert catalogue.get_artwork("w1").title == "Nighthawks"
@@ -399,7 +400,7 @@ def test_the_file_itself_refuses_a_second_active_theme(tmp_path):
     the rule says exactly one — so it can only ever fire on a write the service
     layer should already have refused.
     """
-    catalogue = SqliteCatalogue(tmp_path / "catalogue.sqlite")
+    catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
     try:
         moment = datetime(2026, 7, 27, 9, 30, tzinfo=UTC)
         catalogue.add_theme(Theme(id="t1", name="Late night", created_at=moment, is_active=True))
@@ -412,7 +413,7 @@ def test_the_file_itself_refuses_a_second_active_theme(tmp_path):
 
 def test_the_file_itself_refuses_a_zero_byte_original(tmp_path):
     """A zero-length file is the 2024 pipeline's known download failure."""
-    catalogue = SqliteCatalogue(tmp_path / "catalogue.sqlite")
+    catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
     try:
         moment = datetime(2026, 7, 27, 9, 30, tzinfo=UTC)
         catalogue.add_artwork(Artwork(id="w1", title="Nighthawks", created_at=moment))
@@ -446,7 +447,7 @@ def test_the_file_itself_refuses_a_zero_byte_original(tmp_path):
 
 
 def test_the_file_itself_refuses_a_second_current_mat_colour(tmp_path):
-    catalogue = SqliteCatalogue(tmp_path / "catalogue.sqlite")
+    catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
     try:
         moment = datetime(2026, 7, 27, 9, 30, tzinfo=UTC)
         catalogue.add_artwork(Artwork(id="w1", title="Nighthawks", created_at=moment))

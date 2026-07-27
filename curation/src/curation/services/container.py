@@ -15,6 +15,7 @@ pipeline rather than a convenience of one call site.
 from dataclasses import dataclass
 
 from curation.persistence.catalogue import CatalogueStore
+from curation.persistence.discovery import DiscoveryStore
 from curation.services.catalogue import CatalogueService
 from curation.services.discovery import DiscoveryService
 
@@ -27,10 +28,10 @@ class Services:
     discovery: DiscoveryService
 
     @classmethod
-    def bind(cls, *, catalogue: CatalogueStore) -> Services:
-        """Assemble the services over an already-open store."""
+    def bind(cls, *, catalogue: CatalogueStore, discovery: DiscoveryStore) -> Services:
+        """Assemble the services over an already-open file."""
         catalogue_service = CatalogueService(catalogue)
-        return cls(catalogue=catalogue_service, discovery=DiscoveryService(catalogue_service))
+        return cls(catalogue=catalogue_service, discovery=DiscoveryService(discovery, catalogue_service))
 
     def reconcile(self) -> None:
         """Repair whatever the file on disk may predate. Run once, as the plane starts.
@@ -42,3 +43,4 @@ class Services:
         repair does not mean an entry point gaining a line.
         """
         self.catalogue.reconcile()
+        self.discovery.reconcile()

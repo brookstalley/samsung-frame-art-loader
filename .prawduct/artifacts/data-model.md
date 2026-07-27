@@ -412,7 +412,8 @@ candidates provenance.
 | `actual_cost_usd` | decimal | nullable | Reconciled after. |
 | `approval_required` | boolean | required | Whether the resolved **work count** crossed the configured threshold (amended 2026-07-20 from "the phase-2 estimate"). Recorded per run, not re-derived — the threshold can change. |
 | `unresolved_work_count` | integer | nullable | Works from phase 1 for which no credible instance was found. **Q12.** |
-| `started_at`, `completed_at` | datetime | nullable | |
+| `started_at` | datetime | required | **Narrowed from nullable 2026-07-27.** A run row is only created by starting one, and both entry states (`resolving_works` for a discovery run, `resolving_images` for a resolve run) are active — there is no state in which a row exists and the run has not started. Nullable would have made every reader handle an absence that cannot occur. |
+| `completed_at` | datetime | nullable | Written by whichever transition ends the run. On `interrupted` it records when the death was *observed* at startup, not when it happened: the process that died could not write one, and a terminal run with no end time silently drops out of any window a report asks for. |
 
 > **The re-search is a run, not a side effect (decided 2026-07-20).** `resolve_images`
 > is a paid, minutes-long operation, and it previously created no row at all — so the
@@ -534,6 +535,7 @@ selected. Produced by phase 2.
 | `preview_path` | string | nullable | Cached local copy, relative to `ART_ROOT`. Review must not depend on a museum server being reachable. |
 | `provider` | string | required | e.g. `artic`, `google_arts`, `gallery_site`. Open vocabulary. |
 | `source_class` | enum | required | `institutional` \| `contemporary_web`. |
+| `acquisition_method` | enum | required | `dezoomify` \| `direct_http` \| `api`. How the bytes are fetched. **Added 2026-07-27** — see below. |
 | `estimated_width`, `estimated_height` | integer | nullable | Best pre-acquisition guess at available resolution. |
 | `rights_status` | enum | nullable | `public_domain` \| `in_copyright` \| `unknown`. |
 | `confidence` | float | required | Is this genuinely that work — not a detail crop, study, poster, or "after"? |
@@ -566,6 +568,42 @@ selected. Produced by phase 2.
 >
 > **`rejected_at` is instance-scoped suppression** and must never be conflated with
 > `CandidateWork.work_dedup_key`. See **Q11**.
+>
+> **`acquisition_method` was added 2026-07-27, when promotion was first
+> implemented.** The Relationships section says the candidate-side and
+> catalogue-side shapes mirror each other deliberately, "so acceptance is a
+> promotion rather than a transformation" — and every field of `Source` did have a
+> counterpart here except this one, which is `NOT NULL` on the far side. So the
+> claim was very nearly true and the one exception fell on the field that says how
+> to fetch the bytes.
+>
+> The alternatives were both worse than adding the column. Deriving it at
+> acceptance from `source_class` guesses (an institution with a public API is
+> `institutional` and is not dezoomify), and a wrong guess surfaces as a
+> re-acquisition that fails at exactly the moment every derived file has already
+> been lost — the scenario **Q6** exists for. Making it nullable on `Source` would
+> weaken a catalogue-side record to accommodate a pipeline-side omission. It
+> belongs here because it is knowable only here: the search reached this instance
+> *through* a provider that offers tiles, a file, or an API, and nothing
+> downstream can recover which.
+
+### Where a candidate's fields land on acceptance
+
+Promotion is mechanical, and this table is what makes "mirror rather than
+transform" checkable rather than asserted:
+
+| `CandidateImage` | → `Source` | Note |
+|---|---|---|
+| `url`, `provider`, `source_class`, `acquisition_method`, `confidence`, `selection_rationale` | same field | Carried unchanged |
+| `rights_status` | `rights_status` | `unknown` where the candidate has none: constraint 13 forbids absence, and "we did not check" is honestly `unknown` |
+| `is_selected` | `is_primary` | The selected instance becomes the primary source; the rest are retained as alternates (**Q6**) |
+| `preview_url`, `preview_path`, `estimated_width`, `estimated_height`, `quality_score` | *(not carried)* | Pre-acceptance facts. Previews are disposable, and real dimensions come from the acquired `Original` rather than from an estimate |
+
+`CandidateWork.proposed_artist` is **not** carried into an `Artist` row here. It
+is free text that has to be parsed and matched against existing artists, which is
+the same normalisation problem as `work_dedup_key` and is settled with it; until
+then an accepted work carries no `artist_id` and the attribution is added when
+that lands.
 
 ### SpendRecord
 

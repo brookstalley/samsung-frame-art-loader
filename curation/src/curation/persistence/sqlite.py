@@ -4,11 +4,13 @@ SQLite was chosen because it has no dependency to resolve, no server to run, and
 a file that can be copied to a backup and back again — which is how this
 catalogue's restore path is meant to work.
 
-This module is the domain half of the split: it owns the schema, the mapping
-between records and rows, and the ordering and paging decisions that make a
-listing stable. Everything about connections, statements, locking and constraint
-translation lives in `durable.py`, so what remains here reads as the catalogue
-rather than as SQL plumbing.
+This module is one domain adapter over that file: it owns the catalogue's
+tables, the mapping between its records and rows, and the ordering and paging
+decisions that make a listing stable. Everything about connections, statements,
+locking and constraint translation lives in `durable.py`, and what every adapter
+does identically lives in `adapter.py` — so what remains here reads as the
+catalogue rather than as SQL plumbing. `sqlite_discovery.py` is the other
+adapter, over the same open file.
 
 Ordering is decided here rather than below because it is a product judgement, not
 a storage one: title is what a curator scans by, and id breaks ties so that the
@@ -22,15 +24,12 @@ if they could disagree — they cannot, because the index is strictly the weaker
 statement of the same rule.
 """
 
-import logging
-from collections.abc import Callable, Mapping, Sequence
-from contextlib import AbstractContextManager
-from datetime import UTC, datetime
-from pathlib import Path
+from collections.abc import Mapping, Sequence
 from typing import Any, Final
 
+from curation.persistence.adapter import BY_ID, TableAdapter, from_iso, require_datetime, to_iso
 from curation.persistence.catalogue import StorageError
-from curation.persistence.durable import OrderBy, SqliteDurableStore
+from curation.persistence.durable import OrderBy
 from curation.persistence.records import (
     AcquisitionMethod,
     Artist,
@@ -51,9 +50,7 @@ from curation.persistence.records import (
     ThemeMembership,
 )
 
-log = logging.getLogger(__name__)
-
-_SCHEMA = """
+CATALOGUE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS artists (
     id             TEXT PRIMARY KEY,
     name           TEXT NOT NULL,
@@ -182,10 +179,6 @@ CREATE TABLE IF NOT EXISTS directive (
 INSERT OR IGNORE INTO directive (id, sequence, pinned_work_id) VALUES (1, 0, NULL);
 """
 
-#: Most tables in this catalogue are keyed by a single `id`. Named once so the
-#: durable store is addressed the same way everywhere.
-_BY_ID: Final[tuple[str, ...]] = ("id",)
-
 #: The join's own key. A work appears at most once in a theme.
 _MEMBERSHIP_KEY: Final[tuple[str, ...]] = ("theme_id", "artwork_id")
 
@@ -223,43 +216,8 @@ _BY_POSITION: Final[tuple[OrderBy, ...]] = (
 )
 
 
-def _to_iso(moment: datetime | None) -> str | None:
-    """Store instants as UTC ISO-8601 text.
-
-    SQLite has no datetime type, and a naive local-time string is unreadable once
-    the machine's timezone changes under it.
-    """
-    if moment is None:
-        return None
-    return moment.astimezone(UTC).isoformat()
-
-
-def _from_iso(text: str | None) -> datetime | None:
-    if text is None:
-        return None
-    return datetime.fromisoformat(text)
-
-
-def _require_datetime(text: str | None, column: str) -> datetime:
-    moment = _from_iso(text)
-    if moment is None:
-        raise StorageError(f"Row is missing its required {column} timestamp.")
-    return moment
-
-
-class SqliteCatalogue:
-    """The catalogue, persisted to one SQLite file."""
-
-    def __init__(self, path: Path | str) -> None:
-        self._store = SqliteDurableStore(path, _SCHEMA)
-
-    # -- atomicity ------------------------------------------------------------
-
-    def transaction(self) -> AbstractContextManager[None]:
-        return self._store.transaction()
-
-    def close(self) -> None:
-        self._store.close()
+class SqliteCatalogue(TableAdapter):
+    """The catalogue's own tables, mapped to its records."""
 
     # -- artists --------------------------------------------------------------
 
@@ -278,7 +236,7 @@ class SqliteCatalogue:
         return self._get("artworks", {"id": artwork_id}, _artwork)
 
     def update_artwork(self, artwork: Artwork) -> None:
-        self._update("artworks", _BY_ID, _artwork_row(artwork), subject=f"artwork {artwork.id!r}")
+        self._update("artworks", BY_ID, _artwork_row(artwork), subject=f"artwork {artwork.id!r}")
 
     def list_artworks(self, *, status: ArtworkStatus | None, limit: int, offset: int) -> ArtworkPage:
         rows, total = self._store.select_page(
@@ -299,7 +257,7 @@ class SqliteCatalogue:
         return self._get("sources", {"id": source_id}, _source)
 
     def update_source(self, source: Source) -> None:
-        self._update("sources", _BY_ID, _source_row(source), subject=f"source {source.id!r}")
+        self._update("sources", BY_ID, _source_row(source), subject=f"source {source.id!r}")
 
     def list_sources(self, artwork_id: str) -> Sequence[Source]:
         return self._list("sources", {"artwork_id": artwork_id}, _BY_PRIMARY, _source)
@@ -316,7 +274,7 @@ class SqliteCatalogue:
         return _original(rows[0]) if rows else None
 
     def update_original(self, original: Original) -> None:
-        self._update("originals", _BY_ID, _original_row(original), subject=f"original for artwork {original.artwork_id!r}")
+        self._update("originals", BY_ID, _original_row(original), subject=f"original for artwork {original.artwork_id!r}")
 
     # -- renditions -----------------------------------------------------------
 
@@ -324,7 +282,7 @@ class SqliteCatalogue:
         self._add("renditions", _rendition_row(rendition), subject=f"rendition {rendition.id!r}")
 
     def update_rendition(self, rendition: Rendition) -> None:
-        self._update("renditions", _BY_ID, _rendition_row(rendition), subject=f"rendition {rendition.id!r}")
+        self._update("renditions", BY_ID, _rendition_row(rendition), subject=f"rendition {rendition.id!r}")
 
     def list_renditions(self, artwork_id: str) -> Sequence[Rendition]:
         return self._list("renditions", {"artwork_id": artwork_id}, _BY_GEOMETRY, _rendition)
@@ -335,7 +293,7 @@ class SqliteCatalogue:
         self._add("mat_colors", _mat_color_row(mat_color), subject=f"mat colour {mat_color.id!r}")
 
     def update_mat_color(self, mat_color: MatColor) -> None:
-        self._update("mat_colors", _BY_ID, _mat_color_row(mat_color), subject=f"mat colour {mat_color.id!r}")
+        self._update("mat_colors", BY_ID, _mat_color_row(mat_color), subject=f"mat colour {mat_color.id!r}")
 
     def list_mat_colors(self, artwork_id: str) -> Sequence[MatColor]:
         return self._list("mat_colors", {"artwork_id": artwork_id}, _BY_RECENCY, _mat_color)
@@ -349,7 +307,7 @@ class SqliteCatalogue:
         return self._get("themes", {"id": theme_id}, _theme)
 
     def update_theme(self, theme: Theme) -> None:
-        self._update("themes", _BY_ID, _theme_row(theme), subject=f"theme {theme.id!r}")
+        self._update("themes", BY_ID, _theme_row(theme), subject=f"theme {theme.id!r}")
 
     def list_themes(self) -> Sequence[Theme]:
         return self._list("themes", None, _BY_NAME, _theme)
@@ -394,62 +352,10 @@ class SqliteCatalogue:
     def set_directive(self, directive: Directive) -> None:
         self._update(
             "directive",
-            _BY_ID,
+            BY_ID,
             {**_DIRECTIVE_KEY, "sequence": directive.sequence, "pinned_work_id": directive.pinned_work_id},
             subject="the display directive",
         )
-
-    # -- internals ------------------------------------------------------------
-
-    def _add(self, table: str, row: Mapping[str, Any], *, subject: str, key: tuple[str, ...] = _BY_ID) -> None:
-        """Insert a record, refusing rather than overwriting one already there.
-
-        Adding a work that is already catalogued is a mistake to report, not an
-        edit to apply — so this is the conflict policy the catalogue's additions
-        take, and revising a record is a different operation with its own name.
-        """
-        try:
-            self._store.upsert(table, row, pk=key, on_conflict="raise")
-        except StorageError as exc:
-            # Which record was refused is knowable only here, and only this line
-            # puts it in the journal: the driver's own text for a foreign-key
-            # violation carries no id, and the message raised from here is
-            # written for whoever asked rather than for whoever is diagnosing.
-            log.warning("Refused to store %s: %s", subject, exc.reason)
-            raise StorageError(f"Could not store {subject}: {exc.reason}", reason=exc.reason) from exc
-
-    def _update(self, table: str, key: tuple[str, ...], row: Mapping[str, Any], *, subject: str) -> None:
-        """Overwrite a record that is already there, refusing to create one that is not.
-
-        The existence check and the write share a transaction so that the answer
-        cannot change between them. An update that silently inserted would turn a
-        typo'd id into a second record nobody meant to make.
-        """
-        pk = {column: row[column] for column in key}
-        with self._store.transaction():
-            if self._store.fetch_one(table, pk) is None:
-                reason = "it is not in the catalogue."
-                log.warning("Refused to update %s: %s", subject, reason)
-                raise StorageError(f"Could not update {subject}: {reason}", reason=reason)
-            try:
-                self._store.upsert(table, row, pk=key, on_conflict="update")
-            except StorageError as exc:
-                log.warning("Refused to update %s: %s", subject, exc.reason)
-                raise StorageError(f"Could not update {subject}: {exc.reason}", reason=exc.reason) from exc
-
-    def _get[R](self, table: str, pk: Mapping[str, Any], build: Callable[[Mapping[str, Any]], R]) -> R | None:
-        row = self._store.fetch_one(table, pk)
-        return None if row is None else build(row)
-
-    def _list[R](
-        self,
-        table: str,
-        filters: Mapping[str, Any] | None,
-        order_by: Sequence[OrderBy],
-        build: Callable[[Mapping[str, Any]], R],
-    ) -> Sequence[R]:
-        rows, _ = self._store.select_page(table, order_by=order_by, filters=filters)
-        return [build(row) for row in rows]
 
 
 # -- record to row ------------------------------------------------------------
@@ -478,8 +384,8 @@ def _artwork_row(artwork: Artwork) -> dict[str, Any]:
         "description": artwork.description,
         "rights": artwork.rights,
         "status": str(artwork.status),
-        "accepted_at": _to_iso(artwork.accepted_at),
-        "created_at": _to_iso(artwork.created_at),
+        "accepted_at": to_iso(artwork.accepted_at),
+        "created_at": to_iso(artwork.created_at),
     }
 
 
@@ -496,7 +402,7 @@ def _source_row(source: Source) -> dict[str, Any]:
         "confidence": source.confidence,
         "selection_rationale": source.selection_rationale,
         "last_fetch_status": None if source.last_fetch_status is None else str(source.last_fetch_status),
-        "last_fetched_at": _to_iso(source.last_fetched_at),
+        "last_fetched_at": to_iso(source.last_fetched_at),
     }
 
 
@@ -522,7 +428,7 @@ def _rendition_row(rendition: Rendition) -> dict[str, Any]:
         "target_height": rendition.target_height,
         "relative_path": rendition.relative_path,
         "source_content_hash": rendition.source_content_hash,
-        "generated_at": _to_iso(rendition.generated_at),
+        "generated_at": to_iso(rendition.generated_at),
     }
 
 
@@ -538,7 +444,7 @@ def _mat_color_row(mat_color: MatColor) -> dict[str, Any]:
         "lab_b": mat_color.lab_b,
         "reason": mat_color.reason,
         "model_id": mat_color.model_id,
-        "chosen_at": _to_iso(mat_color.chosen_at),
+        "chosen_at": to_iso(mat_color.chosen_at),
     }
 
 
@@ -548,7 +454,7 @@ def _theme_row(theme: Theme) -> dict[str, Any]:
         "name": theme.name,
         "description": theme.description,
         "is_active": int(theme.is_active),
-        "created_at": _to_iso(theme.created_at),
+        "created_at": to_iso(theme.created_at),
     }
 
 
@@ -557,7 +463,7 @@ def _membership_row(membership: ThemeMembership) -> dict[str, Any]:
         "theme_id": membership.theme_id,
         "artwork_id": membership.artwork_id,
         "position": membership.position,
-        "added_at": _to_iso(membership.added_at),
+        "added_at": to_iso(membership.added_at),
     }
 
 
@@ -580,7 +486,7 @@ def _artwork(row: Mapping[str, Any]) -> Artwork:
     return Artwork(
         id=row["id"],
         title=row["title"],
-        created_at=_require_datetime(row["created_at"], "created_at"),
+        created_at=require_datetime(row["created_at"], "created_at"),
         status=ArtworkStatus(row["status"]),
         artist_id=row["artist_id"],
         date_created=row["date_created"],
@@ -588,7 +494,7 @@ def _artwork(row: Mapping[str, Any]) -> Artwork:
         dimensions=row["dimensions"],
         description=row["description"],
         rights=row["rights"],
-        accepted_at=_from_iso(row["accepted_at"]),
+        accepted_at=from_iso(row["accepted_at"]),
     )
 
 
@@ -605,7 +511,7 @@ def _source(row: Mapping[str, Any]) -> Source:
         confidence=row["confidence"],
         selection_rationale=row["selection_rationale"],
         last_fetch_status=None if row["last_fetch_status"] is None else FetchStatus(row["last_fetch_status"]),
-        last_fetched_at=_from_iso(row["last_fetched_at"]),
+        last_fetched_at=from_iso(row["last_fetched_at"]),
     )
 
 
@@ -631,7 +537,7 @@ def _rendition(row: Mapping[str, Any]) -> Rendition:
         target_height=row["target_height"],
         relative_path=row["relative_path"],
         source_content_hash=row["source_content_hash"],
-        generated_at=_require_datetime(row["generated_at"], "generated_at"),
+        generated_at=require_datetime(row["generated_at"], "generated_at"),
     )
 
 
@@ -641,7 +547,7 @@ def _mat_color(row: Mapping[str, Any]) -> MatColor:
         artwork_id=row["artwork_id"],
         hex_rgb=row["hex_rgb"],
         method=MatMethod(row["method"]),
-        chosen_at=_require_datetime(row["chosen_at"], "chosen_at"),
+        chosen_at=require_datetime(row["chosen_at"], "chosen_at"),
         is_current=bool(row["is_current"]),
         lab_l=row["lab_l"],
         lab_a=row["lab_a"],
@@ -655,7 +561,7 @@ def _theme(row: Mapping[str, Any]) -> Theme:
     return Theme(
         id=row["id"],
         name=row["name"],
-        created_at=_require_datetime(row["created_at"], "created_at"),
+        created_at=require_datetime(row["created_at"], "created_at"),
         description=row["description"],
         is_active=bool(row["is_active"]),
     )
@@ -665,6 +571,6 @@ def _membership(row: Mapping[str, Any]) -> ThemeMembership:
     return ThemeMembership(
         theme_id=row["theme_id"],
         artwork_id=row["artwork_id"],
-        added_at=_require_datetime(row["added_at"], "added_at"),
+        added_at=require_datetime(row["added_at"], "added_at"),
         position=row["position"],
     )

@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import ArtworkStatus, MatMethod, Theme
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.services.catalogue import CatalogueService
@@ -190,14 +191,14 @@ def test_the_sequence_survives_the_process_that_advanced_it(tmp_path):
     display plane as an advance, which fires a directive nobody issued.
     """
     path = tmp_path / "catalogue.sqlite"
-    first_store = SqliteCatalogue(path)
+    first_store = SqliteCatalogue(open_catalogue_file(path))
     first = CatalogueService(first_store)
     work = first.add_artwork(title="Nighthawks")
     first.step_display()
     first.show_work_now(work.id)
     first_store.close()
 
-    reopened_store = SqliteCatalogue(path)
+    reopened_store = SqliteCatalogue(open_catalogue_file(path))
     try:
         reopened = CatalogueService(reopened_store)
         assert reopened.read_directive().sequence == 2
@@ -218,7 +219,7 @@ def _legacy_catalogue_with_no_active_theme(path):
     the store rather than through the service, because the service is exactly what
     will not produce this state any more.
     """
-    catalogue = SqliteCatalogue(path)
+    catalogue = SqliteCatalogue(open_catalogue_file(path))
     moment = datetime(2026, 7, 20, 9, 30, tzinfo=UTC)
     catalogue.add_theme(Theme(id="t-late", name="Late night", created_at=moment + timedelta(days=1)))
     catalogue.add_theme(Theme(id="t-early", name="Daylight", created_at=moment))
@@ -253,7 +254,7 @@ def test_a_catalogue_whose_themes_are_all_inactive_is_repaired_on_start(tmp_path
 
 def test_reconciling_a_healthy_catalogue_changes_nothing_and_says_nothing(tmp_path, caplog):
     """A repair that logged on every start would train the operator to ignore it."""
-    catalogue = SqliteCatalogue(tmp_path / "catalogue.sqlite")
+    catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
     try:
         service = CatalogueService(catalogue)
         first = service.add_theme(name="American Modernists")
@@ -270,7 +271,7 @@ def test_reconciling_a_healthy_catalogue_changes_nothing_and_says_nothing(tmp_pa
 
 def test_reconciling_an_empty_catalogue_is_not_a_repair(tmp_path, caplog):
     """No themes is not the forbidden state — there is nothing to be active."""
-    catalogue = SqliteCatalogue(tmp_path / "catalogue.sqlite")
+    catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
     try:
         service = CatalogueService(catalogue)
         with caplog.at_level(logging.WARNING):
@@ -302,7 +303,7 @@ def test_the_repair_reaches_the_file(tmp_path):
     CatalogueService(catalogue).reconcile()
     catalogue.close()
 
-    reopened = SqliteCatalogue(path)
+    reopened = SqliteCatalogue(open_catalogue_file(path))
     try:
         assert CatalogueService(reopened).active_theme().id == "t-early"
     finally:
