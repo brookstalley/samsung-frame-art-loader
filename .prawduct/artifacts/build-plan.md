@@ -121,6 +121,41 @@ Verified this pass, which retires the plan's largest curation-side unknown: the
 **full 3.14 dependency set resolves and imports on CPython 3.14.4** — fastapi
 0.140.6, mcp SDK, pydantic 2.13.4. The interpreter floor is real and it works.
 
+### The 3tears catalogue dependency is deferred, not dropped (2026-07-27)
+
+The plan says the catalogue sits on "3tears L1 SQLite". Investigating that
+turned up two defects that made it unusable as written, both now fixed upstream
+and awaiting review:
+
+- **[pacepace/3tears#243]** — `uuid-utils` is imported by `collections/registry.py`
+  and `cache/sqlite.py` but declared by no package. It resolves inside the 3tears
+  workspace via the shared lock, so `from threetears.core.collections import
+  BaseCollection` fails for *every* external consumer.
+- **[pacepace/3tears#244]** — `threetears.nats.__init__` eagerly imported the nine
+  submodules that reach `nats-py`/`nkeys`, so an L1-only consumer loaded the whole
+  NATS client. Decisive for this product: **`nkeys` publishes no wheels**, so the
+  Pi would source-build it while every other package in the set has a prebuilt
+  aarch64/cp314 wheel. Now lazy (PEP 562) with `nats-py` behind a `[client]` extra;
+  the Pi target resolves to 20 packages, all wheels, zero builds.
+
+**Chunk 07 does not wait on either.** The catalogue is built behind a persistence
+Protocol on stdlib `sqlite3` — the plan already requires that persistence is
+reached only through the service layer, so the backend is a swap rather than a
+rewrite. Everything Chunk 07 actually proves (service layer, registry, MCP tool,
+error envelope) is identical under either backend.
+
+**When the PRs merge**, pin a released `3tears` version and implement the
+Protocol against `BaseCollection`. Do *not* take a path dependency on the local
+`~/source/3tears` checkout — it tracks whatever branch is checked out and cannot
+build on the Pi.
+
+An open question the swap must answer: `BaseCollection` is a three-tier cache
+whose value is multi-process coherence, which `product-brief.md` § Scope rules
+out ("one household, one TV, one curation process"). The reason to adopt it
+anyway is the operator's — it is the on-ramp to agents later. That is a real
+reason, and it is a decision to make with the Protocol in hand rather than
+before.
+
 ## Scaffolding
 
 ### Project Initialization
