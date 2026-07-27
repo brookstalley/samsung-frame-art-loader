@@ -159,18 +159,28 @@ is no network between planes.
 - **Serves three surfaces from one ASGI app:** the web UI, its HTTP API, and the
   MCP streamable-HTTP endpoint. All three are thin bindings over one service layer
   (`project-preferences.md`, Critic-enforced).
-- **Internal layering, inside that plane** (established 2026-07-27, Chunks 07–08A):
+- **Internal layering, inside that plane** (established 2026-07-27):
 
   ```
   MCP tools  ·  HTTP handlers          bindings: unpack, call one method, format
         └──────────┬──────────┘
-             service layer              every rule, every transition, every derivation
-                   │                    (CatalogueStore Protocol — the only way down)
+             Services container         what a surface is handed; no surface names one service
         ┌──────────┴──────────┐
-   SqliteCatalogue                      domain adapter: schema, record↔row, ordering
-        │                               and paging — the product judgements
-   SqliteDurableStore                   generic: tables, keys, rows. Knows no artwork
+  CatalogueService   DiscoveryService   every rule, every transition, every derivation
+        │                   │           (CatalogueStore / DiscoveryStore — the only way down)
+  SqliteCatalogue    SqliteDiscovery    domain adapters: schema, record↔row, ordering
+        └──────────┬──────────┘         and paging — the product judgements
+        SqliteDurableStore              generic: tables, keys, rows. Knows no artwork
   ```
+
+  **The layer is split by concern, and the split runs all the way down.** The
+  catalogue owns works already accepted; discovery owns runs, proposals, image
+  instances, spend and verdicts. Discovery depends on the catalogue and never the
+  reverse, because acceptance is a promotion — a candidate becomes a work and its
+  instances become that work's sources. **Both adapters share one connection**,
+  which is what lets that promotion commit once or not at all; a surface takes the
+  container rather than a service, so a third concern changes the wiring and
+  nothing else.
 
   Two patterns are load-bearing enough to name here rather than leave in module
   docstrings:

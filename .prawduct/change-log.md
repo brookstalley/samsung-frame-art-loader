@@ -48,6 +48,95 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-27: The discovery pipeline — five entities, two state machines, one repair
+
+<!-- prawduct: chunks=08B | status=shipped | scope=v1-build -->
+
+**Why:** The half of `data-model.md` that 08A did not carry: everything a work
+goes through before it is accepted. Nothing could record what discovery proposed,
+what the curator decided about a work or an image, what a run cost, or what to do
+with a run whose process died — and the last of those was not a gap in coverage
+but a hole in the model, because every terminal state a run had was one its own
+process must write.
+
+**The carried finding was closed first, as its own commit.** Two reviewers
+independently called out `CatalogueService` — one class over nine entity families
+and ~740 lines, about to gain five more. `DiscoveryService` now sits beside it and
+a `Services` container binds the two; `create_app`, `dispatch` and the `Binding`
+type no longer name a single service class. The helpers both services need moved
+to where more than one entity already obeys a rule, so a candidate work and a
+catalogued work refuse an empty title in the same words because it is the same
+function. Splitting before adding meant the entity work was reviewed against the
+shape it keeps rather than tangled with a refactor.
+
+**What landed.** DiscoveryRun (both kinds, all nine statuses), CandidateWork,
+CandidateImage, SpendRecord and the ResolveRunWork join — fourteen tables in the
+catalogue file, up from nine. Constraints 7–9, 11, 14 and 15 enforced at write
+time. Both state machines closed on their illegal edges. Acceptance as promotion.
+Startup reconciliation. 405 curation tests, up from 285.
+
+**Twenty mutations, and two of them stayed green.** Every enforcement was removed
+in turn and the suite re-run — the same check that found a hole in 08A, run again
+because the previous round is not evidence about this one. Eighteen went red.
+Two did not, and both are the *same* species as 08A's: a behaviour tested one
+layer below where its wiring lives.
+
+- **The container's call to the discovery repair was referenced by no test.**
+  `DiscoveryService.reconcile()` had six tests and every one of them passed with
+  the call deleted from `Services.reconcile()`. This is 08A's constraint-10 defect
+  exactly, one chunk later, in the code written by someone who had just written
+  the learning about it.
+- **The instance ranking passed because the store's listing order agreed with
+  it.** Replacing `selection.best` with "take the first the store returned" left
+  the suite green — the store orders a review card by confidence, the ranking
+  orders by confidence, and the quality tie-break that separates them was never
+  exercised. Two policies coinciding today is not one policy.
+
+**`interrupted` had to exist before the double-spend guard could be safe.** A
+work is refused to a new resolve run while any run covering it is non-terminal.
+Every terminal state except `interrupted` is written by the run's own process — so
+without startup reconciliation, one OOM kill would refuse those work ids for the
+life of the catalogue, silently, on the only operation that spends money. The two
+features are one feature, and the test that proves it kills a run mid-re-search
+and then re-searches the work.
+
+**`awaiting_approval` is excluded from that repair, and the reason is the deploy
+step.** It advances when the *curator* approves, not when a process runs.
+Reconciling it would let `systemctl restart` destroy a pending decision along with
+the phase-1 spend already incurred to produce it, and curation is restarted
+constantly during development.
+
+**Two model gaps surfaced while implementing promotion, and were written down
+rather than settled in code.** `data-model.md` says the candidate-side and
+catalogue-side shapes mirror each other "so acceptance is a promotion rather than
+a transformation" — and every `Source` field did have a counterpart except
+`acquisition_method`, which is `NOT NULL`. So the claim was very nearly true and
+the exception fell on the field that says how to fetch the bytes; a guess there
+surfaces as a re-acquisition failing at the moment every derived file has already
+been lost. It is now carried on `CandidateImage`, where the search that found the
+instance is the only thing that knows it, and the artifact gained a field-by-field
+promotion table so "mirror rather than transform" is checkable instead of
+asserted. Separately, `DiscoveryRun.started_at` is narrowed from nullable: a row
+is only created by starting a run and both entry states are active, so nullable
+would have made every reader handle an absence that cannot occur.
+
+**Ambiguity implemented literally and named rather than quietly narrowed.**
+`api-contract.md` says rejecting an image moves the work to
+`awaiting_better_image`, unconditionally. That includes rejecting an *alternate*
+while the instance actually on offer is fine — arguably not what a curator means,
+but the narrower rule is written nowhere and inventing it here would be inventing
+a requirement. Implemented as specified, flagged for whoever revisits the review
+flow.
+
+**Artifacts brought level with the code**, since both described a service layer
+with one service in it: `architecture.md`'s internal-layering diagram (now two
+services under a container, two adapters over one connection),
+`boundary-patterns.md`'s service-layer and catalogue-schema entries (fourteen
+tables, all fifteen constraints, both state machines), and the build plan's
+project-structure comment, which still said persistence was "3tears L1
+collections" — a claim 07B retired and this is the first pass to have touched the
+line since.
+
 ## 2026-07-27: The accepted catalogue — five entities, nine rules, and the directive's home
 
 <!-- prawduct: chunks=08A | status=shipped | scope=v1-build -->

@@ -47,8 +47,11 @@
 
 ### Service layer
 
-- **Exists:** **yes**, as of 2026-07-27 — `curation/src/curation/services/`.
-  Catalogue reads and writes only; every later operation lands here.
+- **Exists:** **yes**, as of 2026-07-27 — `curation/src/curation/services/`, split
+  by concern into `CatalogueService` (works already accepted) and
+  `DiscoveryService` (everything before acceptance), bound by a `Services`
+  container that every surface takes. Discovery depends on the catalogue and never
+  the reverse. Later operations join one of the two, or add a third member.
 - **Producer:** service methods.
 - **Consumer:** **both** the MCP tool bindings and the HTTP handlers.
 - **Contract:** method signatures and return types.
@@ -85,16 +88,16 @@
 
 ### Catalogue schema
 
-- **Exists:** **partially**, as of 2026-07-27 — nine tables on stdlib `sqlite3`,
-  behind the `CatalogueStore` Protocol in `curation/src/curation/persistence/`,
-  split into a generic durable store and a domain adapter above it. Artwork,
-  Artist and Theme, plus Source, Original, Rendition, MatColor, ThemeMembership
-  and the Directive singleton. Constraints 1–6, 10, 12 and 13 are enforced at
-  write time in the service layer. **Still to come:** the five discovery-side
-  entities (DiscoveryRun, CandidateWork, CandidateImage, SpendRecord,
-  ResolveRunWork), constraints 7–9, 11, 14 and 15, both of their state machines,
-  and startup reconciliation — all specified in `data-model.md`; nothing in the
-  code claims otherwise.
+- **Exists:** **yes**, as of 2026-07-27 — fourteen tables on stdlib `sqlite3` in
+  one file, behind two Protocols in `curation/src/curation/persistence/`: the
+  `CatalogueStore` over Artwork, Artist, Theme, Source, Original, Rendition,
+  MatColor, ThemeMembership and the Directive singleton, and the `DiscoveryStore`
+  over DiscoveryRun, CandidateWork, CandidateImage, SpendRecord and the
+  ResolveRunWork join. A generic durable store sits under both adapters and is the
+  only thing that opens the file, because acceptance writes across the two halves
+  and has to commit once. All fifteen constraints, both discovery state machines
+  and startup reconciliation are enforced in the service layer. **Still to come:**
+  the per-theme rotation settings, whose only reader is the manifest builder.
 - **Producer:** the persistence layer. **Currently stdlib `sqlite3` behind a
   Protocol**, not 3tears collections — see the build plan's deferral note. The
   Protocol is what keeps that swap a one-module change.

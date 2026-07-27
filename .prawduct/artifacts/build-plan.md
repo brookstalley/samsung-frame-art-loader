@@ -84,7 +84,7 @@ numeric order below.
 - [x] Chunk 07: Walking skeleton — catalogue core → service layer → MCP tool, end to end
 - [x] Chunk 07B: The durable seam — persistence reshaped to the `DurableStore` contract
 - [x] Chunk 08A: The accepted-catalogue entities, their constraints, and `display_fit`
-- [ ] Chunk 08B: The discovery entities, both state machines, startup reconciliation
+- [x] Chunk 08B: The discovery entities, both state machines, startup reconciliation
 - [ ] Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
 - [ ] Chunk 10: Seed the catalogue with the 41 existing works (v1 scope item)
 - [ ] Chunk 11: Contract tests — MCP evaluation harness (issue #17) and plane isolation (issue #7)
@@ -116,192 +116,20 @@ assertion.
 **Chunk 08 was split into 08A and 08B on 2026-07-27** at the operator's call —
 the accepted catalogue, then the pre-acceptance pipeline — because one Critic
 round over the whole of it would read ~2,500 lines at once; see the section below
-for what each half carries. **08A landed 2026-07-27**: five entities plus the
-directive singleton take the catalogue file from three tables to nine,
-constraints 1–6, 10, 12 and 13 are enforced at write time, the Artwork state
-machine is closed, `display_fit` derives and stores nothing, and the durable
-store gained a transaction seam because three of those rules span rows.
+for what each half carries. **Both halves landed 2026-07-27.** 08A took the
+catalogue file from three tables to nine and enforced constraints 1–6, 10, 12 and
+13; 08B took it to fourteen, added constraints 7–9, 11, 14 and 15, closed both
+discovery state machines, and made startup reconciliation real — which is what
+keeps the double-spend guard from becoming a permanent block after a crash.
+Acceptance is now a promotion in the service layer: a candidate work mints an
+Artwork and its image instances become that work's Sources. The service layer is
+split by concern (`CatalogueService` / `DiscoveryService`) behind a container
+every surface takes, closing the finding 08A's review carried forward.
 
-**Next: Chunk 08B** (the discovery entities, both state machines, startup
-reconciliation). The persistence work was
-sequenced first, at the operator's direction, so those twelve are written once
-against their final shape rather than against one shape and then again — and that
-sequencing paid: two of 07B's five defects (the composite-key and nullable-column
-paths) were unreachable from today's three entities and would have shipped inside
-Chunk 08.
-
-Chunk 07B is what the "3tears swap" became once the framework was read rather than
-summarised: 3tears' L1 is an in-memory cache and it ships no SQLite durable tier, so
-the durable store is this product's own code under every configuration. 07B builds
-that store to 3tears' `DurableStore` contract and stops there — no collections, no
-entity proxies, no dependency. See § The 3tears catalogue dependency below.
-
-Deviations from the plan as written, all deliberate:
-
-- **Chunks 01–06 were collapsed into a single commit** rather than six governed
-  cycles with a Critic round each. The plan's own ceremony was on track to cost
-  more than the work; the operator called this, and it stands as the working rule
-  for mechanical chunks. Contract-setting chunks (07, 08, 09, 14, 16) keep the
-  full treatment.
-- **No token rotation.** Chunk 01 specified untrack-then-re-pair at the hardware.
-  The operator confirmed the leaked token is expired and useless, so untracking
-  was the whole job and the hardware sitting was not needed.
-- **`display/` was not created.** Chunk 06 specified both plane projects, but
-  `display/` is not needed until Chunk 12 and its dependency set is exactly what
-  Chunks 04–05 must verify on the Pi. Building it now would have meant guessing at
-  pins that hardware will decide. `curation/` alone unblocks Chunk 07.
-- **The mat regression fixture was not extracted.** It is consumed in Chunk 18;
-  `all.json` stays tracked until then and remains the corpus. Extracting it now
-  would have been inventory, not progress.
-- **Chunks 03–05 are hardware-gated**, not skipped. They need the Pi and the TV:
-  the journald cap, the IT8951 build under uv, and the samsungtvws target. None
-  of them blocks Chunk 07. They want one sitting at the hardware.
-
-Verified this pass, which retires the plan's largest curation-side unknown: the
-**full 3.14 dependency set resolves and imports on CPython 3.14.4** — fastapi
-0.140.6, mcp SDK, pydantic 2.13.4. The interpreter floor is real and it works.
-
-### Chunk 07 as built (2026-07-27)
-
-Delivered as specified; three things are worth carrying forward.
-
-**The SDK constraints were re-verified, not assumed.** The plan wrote them
-against `mcp>=1.27`; 1.28.1 is installed. All three hold verbatim — the
-`RuntimeError` on an uninitialised task group, the once-per-instance `run()`,
-and `session_manager` raising before `streamable_http_app()`. Recorded in
-`architecture.md` § Decision Log with line references.
-
-**One contract rule was retired rather than quietly broken.** "An unknown *tool*
-stays a protocol error" is not implementable on the official SDK: its
-`call_tool` handler wraps the registered function in an unconditional
-`except Exception` and converts everything to a normal error result. Retirement
-and substitute are recorded in `api-contract.md` § Error Model and
-`project-state.yaml`.
-
-**The `3tears` API/MCP question was investigated and answered no** (raised
-mid-build). No package there renders one declaration to two surfaces; what it
-has is the inverse architecture, MCP tool handlers as HTTP clients of the
-product's own REST API. Rejected with the decisive reason recorded in
-`architecture.md` § Decision Log: the HTTP API carries *no* stability
-obligation while the MCP surface carries a real one, so building MCP on HTTP
-would silently promote the UI's API to a frozen external contract.
-
-**Deliberately not built, so nothing reads as missing:** the twelve other
-entities and the fifteen write-time constraints (Chunk 08 — `Theme.is_active`
-exists as a column with no exactly-one enforcement behind it); any HTTP API
-beyond the placeholder page (Chunk 19); the `tests/preferences/` plane-isolation
-test (Chunk 11, and there is no display plane to isolate yet).
-
-**One Chunk 06 deliverable was found missing and landed here.** Both suites were
-to be declared as `test_commands` in `project-state.yaml`; they were not, and the
-omission appeared in no deviation note — so the evidence hook was silently
-falling back to a default invocation that resolves neither plane. Declared now,
-with `tests_dirs` spanning both trees.
-
-**The Critic round (`final`, the keystone override) returned 0 blocking, 21
-warnings, 9 notes.** Fifteen were fixed in the same pass and verified by two
-`verify-resolutions` delta reviews — fourteen in the first fix round, plus
-`config.py`'s missing test coverage, which closed once `test_config.py` landed.
-The remaining six are routed to the backlog, named here so none reads as
-forgotten: DNS-rebinding protection on `/mcp` (SEC-K3V9), the
-loopback-vs-overlay bind contradiction (ARC-7QN2), the silent empty-install on
-a mistyped `ART_ROOT` (REL-M5X8), the unbounded MCP session table (REL-2JH6),
-the MCP layer's direct import of the persistence package (ARC-B4TD), and a test
-for the waived broad-except path (TST-9WFC).
-
-Four defects were found independently by two reviewers each, which is what
-argued for fixing rather than routing them: the unknown-tool error's hint named
-the server (not a callable tool), so a model following the one teaching element
-that path has would make a second failing call; a one-sided range rendered "must
-be between 0 and None"; `starlette` was imported but declared by no package; and
-the catalogue filename disagreed with four artifacts, which would have pointed
-Chunk 20's backup job at a file that does not exist. Two more were structural:
-built-vs-unbuilt tool state was reconstructed from three unreconciled signals
-across two modules, now a single import-time check that Chunks 08–19 will run
-four more times; and raw `sqlite3` constraint text reached the wire, which the
-write-heavy Chunks 08 and 17 would have copied.
-
-**Both verify passes caught defects introduced by the fix rounds themselves**,
-which is the argument for running them rather than committing straight off a
-clean review. The first: the rewritten linting norm claimed a strictness the
-ruff configs do not have — the shape that gets "fixed" by loosening the config
-to match the artifact. The second, and worse: `test_config.py`'s isolation
-fixture did not isolate. `load_dotenv` searches from `config.py`'s own directory
-rather than the cwd, so the fixture's `chdir` was inert and `override=True` let
-a real `.env` beat every value the tests set — the module was green only on a
-machine where no `.env` exists. Demonstrated by writing one with non-default
-values, at which point all nine failed. A verbatim `cp .env.example .env` is
-milder and still broken: that file ships `CURATION_HOST`/`CURATION_PORT` at
-exactly the defaults, so the loopback test survives while the port-validation
-and override tests fail. The fixture now stubs `load_dotenv`, and the suite was
-re-verified both with a `.env` present and without.
-
-### The 3tears catalogue dependency is deferred, not dropped (2026-07-27)
-
-The plan says the catalogue sits on "3tears L1 SQLite". Investigating that
-turned up two defects that made it unusable as written, both now fixed upstream
-and awaiting review:
-
-- **[pacepace/3tears#243]** — `uuid-utils` is imported by `collections/registry.py`
-  and `cache/sqlite.py` but declared by no package. It resolves inside the 3tears
-  workspace via the shared lock, so `from threetears.core.collections import
-  BaseCollection` fails for *every* external consumer.
-- **[pacepace/3tears#244]** — `threetears.nats.__init__` eagerly imported the nine
-  submodules that reach `nats-py`/`nkeys`, so an L1-only consumer loaded the whole
-  NATS client. Decisive for this product: **`nkeys` publishes no wheels**, so the
-  Pi would source-build it while every other package in the set has a prebuilt
-  aarch64/cp314 wheel. Now lazy (PEP 562) with `nats-py` behind a `[client]` extra;
-  the Pi target resolves to 20 packages, all wheels, zero builds.
-
-**Chunk 07 does not wait on either.** The catalogue is built behind a persistence
-Protocol on stdlib `sqlite3` — the plan already requires that persistence is
-reached only through the service layer, so the backend is reachable from one place.
-Everything Chunk 07 actually proves (service layer, registry, MCP tool, error
-envelope) is identical under either backend.
-
-**RESOLVED 2026-07-27 — the swap was scoped to the durable tier, and the
-collection layer is deferred indefinitely rather than scheduled.** The framework
-was read before building against it, and three findings changed the shape of the
-work (detail and line references in `3tears-integration-findings.md`):
-
-- **L1 is an in-memory cache**, not a file — `cache/sqlite.py` hardcodes a `memdb`
-  URI. "L1-only SQLite", the configuration this plan named, stores nothing across a
-  restart.
-- **3tears ships no SQLite `DurableStore`** — only `SqlL3Backend` over asyncpg. The
-  durable tier is this product's own code under every 3tears configuration, so
-  adopting collections would have *added* layers above the SQLite code rather than
-  replacing it.
-- **Collections are async throughout with no query API.** Adopting them converts the
-  store, the service layer and the bindings to async — a departure from
-  `project-preferences.md`'s "async at the I/O boundary, synchronous core" — while
-  ordered, paged, counted listing still has to bypass the collection and reach the
-  durable tier directly.
-
-This also retires the recorded *reason* to adopt. The rationale on file was "the
-on-ramp to agents later", but `3tears-models` — the package the agent work actually
-wants — depends only on `media-contracts` and `observe`, never on `core`. That
-on-ramp stays open regardless of what the catalogue sits on, and is decided at
-Chunk 14.
-
-**What Chunk 07B builds instead:** the durable tier shaped to 3tears'
-`DurableStore` contract (`fetch_one` / `upsert` / `delete` / `scan`), with the
-domain store as a thin adapter above it. No `BaseCollection`, no `BaseEntity`, no
-`CollectionRegistry`, no L1 cache tier, no async conversion, and **no `3tears`
-dependency in `pyproject.toml`** — a git reference to an unreleased `develop`
-branch, which the previous plan accepted, buys nothing when no framework code is
-called. That tradeoff is now withdrawn rather than merely accepted.
-
-**The seam is synchronous, and that is a knowing gap, not an oversight.** 3tears'
-`DurableStore` methods are `async`; ours match their decomposition, naming and
-arguments but not their colour. Adopting collections later therefore needs a thin
-wrapper delegating to `asyncio.to_thread` — which blocking `sqlite3` would require
-inside an event loop in any case, so the wrapper is work the async version owes,
-not work this decision creates.
-
-**If the collection layer is ever revisited**, pin a released `3tears` that carries
-both fixes — neither is in `v0.19.4`, which was cut the day before them — and do not
-take a path dependency on the local `~/source/3tears` checkout: it tracks whatever
-branch is checked out and cannot build on the Pi.
+**The whole of `data-model.md` is now built.** What remains of the model is the
+per-theme rotation settings, whose only reader is the manifest builder in Chunk
+09, and `work_dedup_key`'s derivation, whose spike is Chunk 15 — the column and
+the suppression that reads it are in place, and the caller supplies the key.
 
 ## Scaffolding
 
@@ -379,7 +207,7 @@ samsung-frame-art-loader/
 │   ├── pyproject.toml         #   own interpreter pin + lock
 │   └── src/curation/
 │       ├── services/          #   the ONLY home for operation logic
-│       ├── persistence/       #   3tears L1 collections, catalogue schema
+│       ├── persistence/       #   catalogue schema on stdlib sqlite3, behind Protocols
 │       ├── mcp/               #   registry records + thin tool bindings
 │       ├── http/              #   thin HTTP handlers (Chunk 19)
 │       ├── discovery/         #   phase 1 / phase 2 engines
@@ -1212,9 +1040,15 @@ core, built against the surfaces the contract tests already pin.
   bare accept-everything — the accepted set must appear in the transcript), and
   returns a teaching error naming `reject_image` for `awaiting_better_image`;
   `reject_image` is the single entry to that state and always sets
-  `rejected_at`. Acceptance is promotion: mint the Artwork, CandidateImages
-  become Sources (selected → `is_primary`), Artist parsed and normalised at
-  ingest. The preview-file lifecycle decision that `boundary-patterns.md` leaves
+  `rejected_at`. **The verdict rules and the promotion itself already landed in
+  the service layer with the discovery entities** — minting the Artwork and
+  turning CandidateImages into Sources (selected → `is_primary`) — so what this
+  chunk owes is the tool surface over them **plus the one piece promotion still
+  leaves out: the artist.** `proposed_artist` is free text that has to be parsed
+  and matched against existing Artist rows, which is the same normalisation
+  problem as `work_dedup_key`; until it is done an accepted work carries no
+  `artist_id`, and **Q9 — who is the artist, for the physical label — has no
+  answer for anything discovery accepted.** The preview-file lifecycle decision that `boundary-patterns.md` leaves
   open is made here: `[DECISION: candidate previews are deleted by a periodic
   sweep over terminal-verdict CandidateWorks, not an on-verdict hook | a sweep
   is idempotent and safe to re-run after crashes, where a hook that dies with
@@ -1228,8 +1062,11 @@ core, built against the surfaces the contract tests already pin.
 - **Deliverables:** `art_review` actions live; promotion in the service layer;
   the preview sweep; harness scenarios covering the review flow with images
   asserted present in results
-- **Tests:** unit — promotion mirrors the candidate shape into the catalogue
-  shape; suppression scopes never share a key (Q3 vs Q11, both directions);
+- **Tests:** unit — the artist is parsed, matched to an existing row where one
+  fits, and reaches the accepted work (Q9 answerable for a discovered work, which
+  it is not before this chunk); promotion mirrors the candidate shape into the
+  catalogue shape end to end through the tool; suppression scopes never share a
+  key (Q3 vs Q11, both directions);
   `set_verdict` is accepted from `awaiting_better_image` (the curator is never
   blocked on a running re-search) while still refusing that value as a *target*;
   contract — every accept-capable result carries the image block; a 40-work
