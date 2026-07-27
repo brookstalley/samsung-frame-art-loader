@@ -283,12 +283,18 @@ class SqliteDurableStore:
     def _equality(self, table: str, terms: Mapping[str, Any], *, as_key: bool) -> tuple[str, tuple[Any, ...]]:
         """Render the match terms joined by AND, with the values left to bind.
 
-        A `None` means "this column is unset" and renders `IS NULL`, because SQL's
-        `= NULL` is never true: binding it would report no matching rows for a
-        column that has them. That is the same silent-wrong-answer failure the
-        whole-key rule above refuses, and most of the schema arriving next is
-        nullable, so it is worth being right about here rather than in each
-        caller.
+        In a filter, a `None` means "this column is unset" and renders `IS NULL`,
+        because SQL's `= NULL` is never true: binding it would report no matching
+        rows for a column that has them. That is the same silent-wrong-answer
+        failure the whole-key rule above refuses, and most of the schema arriving
+        next is nullable, so it is worth being right about here rather than in
+        each caller.
+
+        In a **key** (`as_key`), a `None` is refused instead. SQLite does not
+        enforce NOT NULL on a `TEXT PRIMARY KEY`, so `IS NULL` on a key column can
+        match several rows — which would put the wrong answer back on the one path
+        that promises a single one. A null is a legitimate filter value and never a
+        legitimate key value.
         """
         columns = self._validate(table, terms.keys())
         if as_key:

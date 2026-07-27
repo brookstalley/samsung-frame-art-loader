@@ -240,6 +240,30 @@ evidence cannot drift apart later. If enumerating the scope feels tedious, that 
 the tell that the scope is wider than the check. This is the authoring-side twin of
 the sweep failure above: a claim propagating past the evidence that licensed it.
 
+### The corollary: a check that ran once is not evidence the repo holds
+
+**Added 2026-07-27, third occurrence of this family in eight days.** A durable
+claim needs durable evidence. Verifying something in a throwaway script, a
+scratch worktree, or a one-off command tells *you*; it leaves the repo with a
+sentence and nothing underneath it. The next reader cannot re-run your shell
+history, and the claim is now load-bearing for decisions made without it.
+
+**Worked instance.** Chunk 07B's change-log asserted that a catalogue written by
+the pre-refactor code "was read back field-for-field by the new code, ordering
+included". That was true — measured by standing up a worktree at HEAD, writing a
+file with the old code and reading it with the new. It was still the wrong
+artifact: unreproducible, naming neither the fields compared nor how the file was
+produced. The Critic flagged the sentence, and the fix was not to soften it but to
+convert the probe into a test that freezes the previous revision's DDL and inserts
+as literals, so the on-disk contract is checked on every run.
+
+**The rule:** when a verification is worth writing down, ask whether it is worth
+*keeping* — if a future change could silently invalidate the claim, the check
+belongs in the suite, not in the transcript. Prose records that a thing was true
+once; a test records that it is still true. Two commits in a row corrected claims
+of this shape (`e379529`, then this one), which is the signal that the authoring
+habit, not the individual sentence, is what needs changing.
+
 ## After a scripted mass edit, verify with a different detection method
 
 **A check that shares its detection logic with the edit shares its blind spots.**

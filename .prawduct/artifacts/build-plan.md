@@ -683,11 +683,14 @@ the existing 41 works are seeded into them.
   `SqliteCatalogue` has never had a direct test for; a read-compatibility test
   that rebuilds a catalogue from the previous revision's frozen DDL and inserts
   and reads it back through the current adapter, so the on-disk contract is
-  evidence rather than assertion; the existing service, contract and integration
-  suites stand unchanged as the behaviour-preservation evidence
+  evidence rather than assertion; a structural test asserting that only the
+  durable store imports `sqlite3`, since a stray import elsewhere would pass every
+  behavioural test while dissolving the seam; the existing service, contract and
+  integration suites stand unchanged as the behaviour-preservation evidence
 - **Acceptance criteria:** both suites pass with no test modified; a catalogue
   written before the change is read correctly after it (same file, same schema);
-  no module outside the persistence package imports `sqlite3`
+  no module outside the durable store imports `sqlite3` — all three pinned by
+  tests rather than by inspection, so they keep holding through Chunk 08
 - **Critic mode:** chunk
 - **Done when:**
   1. Acceptance criteria met and tests pass

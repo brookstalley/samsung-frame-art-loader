@@ -77,19 +77,27 @@ framework dependency is taken, which also **withdraws** the develop-branch git
 reference the previous record had accepted: an unreleased moving branch buys
 nothing when no framework code is called.
 
-**A refactor, held to that standard:** 153 tests pass across both suites (104
-pre-existing — 92 curation, 12 root — none modified or weakened, plus 49 new).
+**A refactor, held to that standard:** 154 tests pass across both suites (104
+pre-existing — 92 curation, 12 root — none modified or weakened, plus 50 new).
+
+All three acceptance criteria are pinned by tests rather than by inspection. The
+third — that only the durable store imports `sqlite3` — became a structural test
+walking the source tree, because a stray import in a service or a binding would
+dissolve the seam while passing every behavioural test. That is the same reason
+`tests/test_repo_hygiene.py` exists, and the same reason it is worth doing now:
+Chunk 08 writes twelve entities against this package.
 
 Read-compatibility with catalogues already on disk is carried by a standing test,
 `test_a_catalogue_written_by_an_earlier_revision_still_reads`, not by prose: it
 builds a file from the previous revision's DDL and INSERT statements, frozen as
 literals so they cannot drift with the code, then reads it back through the
-current `SqliteCatalogue`. What it asserts, precisely: every column of one artist,
-one artwork and one theme, plus a second of each covering the sparse and
-all-nulls-where-allowed shapes; both `ArtworkStatus` values; a nullable instant
-present and absent; the case-insensitive title and name orderings; and one
-unpaged total. It was mutation-checked in both directions — dropping the
-case-insensitive sort and mis-mapping a single column each turn it red.
+current `SqliteCatalogue`. What it asserts, precisely: every column of one artist
+and one artwork; a second artist with all five optional columns null; a second
+artwork carrying the other `ArtworkStatus` value and the absent instant; a second
+theme carrying the false side of the integer-to-bool mapping; the case-insensitive
+title and name orderings; and one unpaged total. It was mutation-checked in both
+directions — dropping the case-insensitive sort and mis-mapping a single column
+each turn it red.
 
 **One behaviour did change, and "refactor" should not be read as covering it:** a
 refused write now logs twice rather than once, because the split put the record's
