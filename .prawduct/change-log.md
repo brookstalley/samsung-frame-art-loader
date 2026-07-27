@@ -80,12 +80,17 @@ nothing when no framework code is called.
 **A refactor, held to that standard:** 154 tests pass across both suites (104
 pre-existing — 92 curation, 12 root — none modified or weakened, plus 50 new).
 
-All three acceptance criteria are pinned by tests rather than by inspection. The
-third — that only the durable store imports `sqlite3` — became a structural test
-walking the source tree, because a stray import in a service or a binding would
-dissolve the seam while passing every behavioural test. That is the same reason
+Two of the three acceptance criteria are now pinned by a test that fails when they
+stop holding: read-compatibility with an older catalogue, and the rule that inside
+`curation/src` only the durable store imports `sqlite3` — the latter a structural
+test walking that tree, because a stray import in a service or a binding would
+dissolve the seam while passing every behavioural test. (Tests are outside its
+scope deliberately; one of them reaches for the driver to inspect a file
+directly.) That is the same reason
 `tests/test_repo_hygiene.py` exists, and the same reason it is worth doing now:
-Chunk 08 writes twelve entities against this package.
+Chunk 08 writes twelve entities against this package. The third criterion — that
+no existing test was modified — is a property of the diff rather than of a run,
+and stays evidenced by review of the change set.
 
 Read-compatibility with catalogues already on disk is carried by a standing test,
 `test_a_catalogue_written_by_an_earlier_revision_still_reads`, not by prose: it

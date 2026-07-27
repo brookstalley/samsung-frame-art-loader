@@ -689,8 +689,10 @@ the existing 41 works are seeded into them.
   integration suites stand unchanged as the behaviour-preservation evidence
 - **Acceptance criteria:** both suites pass with no test modified; a catalogue
   written before the change is read correctly after it (same file, same schema);
-  no module outside the durable store imports `sqlite3` — all three pinned by
-  tests rather than by inspection, so they keep holding through Chunk 08
+  no module under `curation/src` outside the durable store imports `sqlite3`
+  (tests may, and one does). The last two are pinned by tests so they keep holding
+  through Chunk 08; "no test modified" is a property of the diff, evidenced by
+  review of the change set
 - **Critic mode:** chunk
 - **Done when:**
   1. Acceptance criteria met and tests pass

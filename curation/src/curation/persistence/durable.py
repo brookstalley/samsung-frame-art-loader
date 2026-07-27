@@ -304,10 +304,7 @@ class SqliteDurableStore:
         for column in columns:
             value = terms[column]
             if value is None and as_key:
-                # `IS NULL` is right for a filter and wrong for a key. SQLite does
-                # not enforce NOT NULL on a TEXT primary key, so a null key
-                # component can match several rows, and addressing "one row" would
-                # return an arbitrary one — what the whole-key rule above refuses.
+                # Reason in the docstring above.
                 raise StoreMisuseError(f"Column {column!r} of {table!r}'s primary key cannot be null when addressing a row.")
             if value is None:
                 clauses.append(f'"{column}" IS NULL')
