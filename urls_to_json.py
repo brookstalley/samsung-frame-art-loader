@@ -22,7 +22,7 @@ def parse_arguments():
 
 def read_urls_from_file(input_file):
     urls = []
-    with open(input_file, "r") as file:
+    with open(input_file) as file:
         for line in file:
             urls.append(line.strip())
     return urls
@@ -35,7 +35,7 @@ def write_urls_to_json(output_file, urls):
 
 
 def add_urls_to_json(output_file, urls):
-    with open(output_file, "r") as file:
+    with open(output_file) as file:
         data = json.load(file)
 
     existing_urls = [art["url"] for art in data["art"]]

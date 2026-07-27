@@ -1,12 +1,11 @@
 import logging
-import requests
 import re
-
 
 # from libxmp import XMPFiles, consts, XMPMeta
 # from libxmp.utils import file_to_dict
-from PIL import Image, ExifTags
-from source_utils import artic_metadata_for_artwork_url, artic_json_for_api_url, google_metadata_for_artwork_url
+from PIL import ExifTags, Image
+
+from source_utils import artic_json_for_api_url, artic_metadata_for_artwork_url, google_metadata_for_artwork_url
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 

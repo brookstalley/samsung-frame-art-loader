@@ -24,7 +24,12 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
+# Anchored to the repo root. Unanchored, this pattern also matched
+# `curation/src/curation/manifest/` on a case-insensitive filesystem (macOS),
+# silently excluding the theme-manifest builder — the only channel between the
+# curation and display planes — from every commit. Caught 2026-07-27; guarded by
+# tests/test_repo_hygiene.py.
+/MANIFEST
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -188,12 +193,15 @@ cython_debug/
 # `prawduct-hook backlog export`. Tracked copy would duplicate GitHub Issues.
 .prawduct/backlog-export/
 
-# Samsung TV pairing token. Added 2026-07-20 (Critic R-1).
-# NOTE: this entry is INERT until the file is untracked — .gitignore does not
-# affect already-tracked files, and `token_file` is tracked today (issue #4).
-# Remediation order matters and is documented in
-# .prawduct/artifacts/security-model.md: untrack FIRST, then re-pair. Rotating
-# while tracked commits the new token. Untracking deletes the file on the Pi's
-# next `git pull` (it is read by relative path), so TV auth is down until the
-# re-pair — do both in one sitting, at the hardware.
+# Samsung TV pairing token. Untracked 2026-07-27 (issue #4); this entry is now
+# live. The leaked token was confirmed expired by the operator, so no re-pair
+# was needed. The token's path is now configurable (TV_TOKEN_FILE, defaulting
+# under ART_ROOT) rather than a bare relative path, so it no longer depends on
+# the process CWD or on living inside the checkout.
 token_file
+
+# Legacy catalogue snapshots (issue #4). `all.json` itself stays tracked — it is
+# the input to the Chunk 10 seeding path and the mat regression corpus.
+all.backup
+all.json.backup
+all.json.backup2

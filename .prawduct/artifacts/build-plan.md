@@ -71,12 +71,12 @@ into a recorded fact.
 
 ## Status
 
-- [ ] Chunk 01: Untrack and rotate the TV pairing token; drop the catalogue backups (issue #4)
-- [ ] Chunk 02: Deployment values out of source (issue #5) + `art.py` defect dispositions (issue #6)
-- [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
-- [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
-- [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
-- [ ] Chunk 06: uv two-plane restructure, lint/test tooling, mat regression fixture (issue #11)
+- [x] Chunk 01: Untrack the TV pairing token; drop the catalogue backups (issue #4)
+- [x] Chunk 02: Deployment values out of source (issue #5) + `art.py` defect dispositions (issue #6)
+- [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13) — **needs hardware**
+- [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9) — **needs hardware**
+- [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3) — **needs hardware**
+- [x] Chunk 06: uv restructure (curation only), lint/test tooling — *display plane deferred, mat fixture deferred*
 - [ ] Chunk 07: Walking skeleton — catalogue core → service layer → MCP tool, end to end
 - [ ] Chunk 08: Full catalogue schema, state machines, constraints, startup reconciliation
 - [ ] Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
@@ -92,8 +92,34 @@ into a recorded fact.
 - [ ] Chunk 19: Curation web UI and HTTP API
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
-Context: Plan authored 2026-07-20; nothing built. Next: Chunk 01. Operator decision
-on issue #13 pending (gates Chunk 03's deployment paths).
+Context: Plan authored 2026-07-20. Chunks 01, 02 and 06 landed 2026-07-27 in one
+pass. **Next: Chunk 07** (walking skeleton) — it is unblocked, and it is the first
+thing that tests this plan against running code.
+
+Deviations from the plan as written, all deliberate:
+
+- **Chunks 01–06 were collapsed into a single commit** rather than six governed
+  cycles with a Critic round each. The plan's own ceremony was on track to cost
+  more than the work; the operator called this, and it stands as the working rule
+  for mechanical chunks. Contract-setting chunks (07, 08, 09, 14, 16) keep the
+  full treatment.
+- **No token rotation.** Chunk 01 specified untrack-then-re-pair at the hardware.
+  The operator confirmed the leaked token is expired and useless, so untracking
+  was the whole job and the hardware sitting was not needed.
+- **`display/` was not created.** Chunk 06 specified both plane projects, but
+  `display/` is not needed until Chunk 12 and its dependency set is exactly what
+  Chunks 04–05 must verify on the Pi. Building it now would have meant guessing at
+  pins that hardware will decide. `curation/` alone unblocks Chunk 07.
+- **The mat regression fixture was not extracted.** It is consumed in Chunk 18;
+  `all.json` stays tracked until then and remains the corpus. Extracting it now
+  would have been inventory, not progress.
+- **Chunks 03–05 are hardware-gated**, not skipped. They need the Pi and the TV:
+  the journald cap, the IT8951 build under uv, and the samsungtvws target. None
+  of them blocks Chunk 07. They want one sitting at the hardware.
+
+Verified this pass, which retires the plan's largest curation-side unknown: the
+**full 3.14 dependency set resolves and imports on CPython 3.14.4** — fastapi
+0.140.6, mcp SDK, pydantic 2.13.4. The interpreter floor is real and it works.
 
 ## Scaffolding
 

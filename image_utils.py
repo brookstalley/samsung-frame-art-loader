@@ -1,21 +1,21 @@
 # import resizing from PIL
-from PIL import Image, ImageFilter, ImageChops
-
 import asyncio
-import cv2
 import logging
-import numpy as np
 import os
-import subprocess
-from colour import Color
-from skimage.transform import resize
-from scipy.spatial.distance import pdist, squareform
-import requests
 import re
+import subprocess
+import time
+
+import cv2
+import numpy as np
+import requests
+from colour import Color
+from PIL import Image, ImageChops, ImageFilter
+from skimage.transform import resize
+
+import config
 from ai import ai_mat_color
 from source_utils import artic_metadata_for_artwork_url
-import time
-import config
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 

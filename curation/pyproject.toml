@@ -1,0 +1,47 @@
+[project]
+name = "curation"
+version = "0.1.0"
+description = "Curation plane — discovery, acquisition, catalogue, and the MCP + HTTP surfaces."
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "mcp>=1.27",
+    "pydantic",
+    "httpx",
+    "python-dotenv",
+]
+
+# Deliberately not pinned yet:
+#   3tears core / 3tears-models — the operator's own framework; the dependency
+#     shape (path, git, or index) is settled when the catalogue lands.
+#   pillow, opencv-python-headless, scikit-image, numpy — acquisition and the mat
+#     engine, which arrive with that work rather than being carried unused.
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6", "black>=24"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+target-version = ["py314"]
+line-length = 130
+
+[tool.ruff]
+line-length = 130
+target-version = "py314"
+
+[tool.ruff.lint]
+# The strict set. Unlike the root project there is no legacy carve-out here:
+# this plane is new code and every one of these rules applies to all of it.
+select = ["E", "F", "I", "UP", "B", "T20", "TRY", "ANN"]
+ignore = ["TRY003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

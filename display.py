@@ -1,9 +1,10 @@
 # good info: https://github.com/jhirner/pi-frame/
 
-from art import ArtFile, ArtLabel
-from omni_epd import displayfactory, EPDNotFoundError
+from omni_epd import EPDNotFoundError, displayfactory
 from PIL import Image
+
 import config
+from art import ArtLabel
 
 
 class DisplayLabel:

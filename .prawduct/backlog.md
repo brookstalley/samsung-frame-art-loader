@@ -66,6 +66,35 @@
 
 <!-- Items available to pick up. -->
 
+- **[LEG-8H2P]** `tvart.py` "clear the uploaded files list" clears nothing — a silent no-op
+  `effort: S · impact: M · area: legacy-tv · source: builder · added: 2026-07-27 · status: open · stage: research · related: TVW-4Q7M`
+
+  Found by ruff (F841) while landing Chunks 01/02/06, in the delete-all path:
+
+      logging.info(f"Deleted {len(available_art)} uploaded images")
+      # Clear the list of uploaded filenames
+      uploaded_files = {}
+
+  The assignment binds a **local** and is discarded at function exit. The
+  persisted upload list at `config.upload_list_path` is never touched, so after
+  deleting every image from the TV the on-disk record still claims they are
+  uploaded. That is the same silent-failure class the product exists to correct —
+  nothing errors, and the state is wrong.
+
+  **Not fixed in place, deliberately.** The correct behaviour depends on the
+  upload-list lifecycle (is the file the source of truth, or is `tv_content_id`
+  on each `ArtFile`?), and the two disagree here — the loop directly above sets
+  `art_file.tv_content_id = None` on every file, which may already be the real
+  bookkeeping, making this line vestigial rather than broken. Guessing between
+  "delete the file", "write `{}` to it", and "remove the line" would be a coin
+  flip in code that gets deleted at Chunk 20.
+
+  Resolve it wherever it is cheapest: either when the TV binding moves to
+  `display-state.sqlite` (Chunk 12 supersedes this entirely — TvBinding with an
+  explicit `upload_status` is designed to make exactly this defect impossible),
+  or in ten minutes on the legacy path if it starts biting before then. Most
+  likely outcome is `closed-by: chunk-12` with no legacy fix at all.
+
 - **[CUI-WT3K]** Establish a real design system for the curation web UI (Claude design tooling, not ad-hoc styling)
   `effort: L · impact: L · area: curation-ui · source: user · added: 2026-07-19 · status: open · stage: design · refs: project-state.yaml#design_decisions`
 

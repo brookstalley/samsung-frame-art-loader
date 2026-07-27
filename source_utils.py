@@ -1,12 +1,13 @@
-import requests
-import re
-import logging
-import config
 import hashlib
-import os
 import json
+import logging
+import os
+import re
+
+import requests
 from bs4 import BeautifulSoup
 
+import config
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
@@ -34,7 +35,7 @@ async def cache_get_json_for_url(url: str):
     cache_filename = await cache_filename_for_url(url)
     if os.path.exists(cache_filename):
         logging.debug(f"Cache hit for {url}")
-        with open(cache_filename, "r") as f:
+        with open(cache_filename) as f:
             return json.load(f)
     return None
 

@@ -1,13 +1,13 @@
-from astral import LocationInfo
-from astral.sun import sun, dawn, dusk
-
-import config
-from dataclasses import dataclass
-from datetime import datetime
 import logging
 import math
-from typing import Optional
+from dataclasses import dataclass
+from datetime import datetime
+
 import tzlocal
+from astral import LocationInfo
+from astral.sun import sun
+
+import config
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
@@ -18,13 +18,13 @@ class SunInfo:
     at_datetime: datetime
     at_latitude: float
     at_longitude: float
-    noon: Optional[datetime] = (None,)
-    sunrise: Optional[datetime] = None
-    sunset: Optional[datetime] = None
-    civil_twilight_morning: Optional[datetime] = None
-    civil_twilight_evening: Optional[datetime] = None
-    solar_angle: Optional[float] = None
-    brightness: Optional[float] = None
+    noon: datetime | None = (None,)
+    sunrise: datetime | None = None
+    sunset: datetime | None = None
+    civil_twilight_morning: datetime | None = None
+    civil_twilight_evening: datetime | None = None
+    solar_angle: float | None = None
+    brightness: float | None = None
 
     def __str__(self):
         return (
@@ -51,7 +51,7 @@ def perceived_brightness(weather_condition="clear"):
     latitude = config.latitude
     longitude = config.longitude
 
-    location = LocationInfo(name="Seattle", region="United States", latitude=latitude, longitude=longitude)
+    location = LocationInfo(name=config.location_name, region=config.location_region, latitude=latitude, longitude=longitude)
     s = sun(location.observer, date=current_time, tzinfo=timezone, dawn_dusk_depression=12.0)
 
     solar_noon = s["noon"]

@@ -1,6 +1,6 @@
-import RPi.GPIO as GPIO
 import time
 
+import RPi.GPIO as GPIO
 
 CS_PIN = 8
 HRDY = 24
@@ -15,9 +15,7 @@ IT8951_TCON_SYS_RUN = 0x0001
 command_preamble = [0x60, 0x00]
 command_info = [0x03, 0x02]
 command_run = [0x00, 0x01]
-import RPi.GPIO as GPIO
 import spidev
-import time
 
 # Constants
 CS_PIN = 8

@@ -1,3 +1,64 @@
+[project]
+name = "samsung-frame-art-loader-legacy"
+version = "0.1.0"
+description = "The 2024 modules that run the wall today, plus repo-wide tool config."
+requires-python = ">=3.12"
+dependencies = ["python-dotenv"]
+
+# The legacy runtime dependency set stays in requirements.txt — that is what is
+# installed on the Pi and it is not being migrated, since these modules are
+# retired once the two planes are built. This project exists so `uv run pytest`
+# works at the root and so tool configuration has one home.
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6", "black>=24"]
+
 [tool.black]
 target-version = ["py312"]
 line-length = 130
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+extend-exclude = ["curation", "display"]
+
+[tool.ruff.lint]
+# Mechanical rows from the project-preferences norm index, migrated from the
+# Critic to lint rules so they are enforced rather than remembered:
+#   E,F  pyflakes/pycodestyle — the unbound-name class of defect
+#   I    import ordering
+#   UP   modern syntax for the pinned target
+#   B    bugbear — mutable defaults, shadowed loop vars
+#   T20  no print(); this project logs
+#   TRY  no bare `raise Exception`, no swallowed context
+select = ["E", "F", "I", "UP", "B", "T20", "TRY"]
+ignore = [
+    # f-strings in logging calls are pervasive in the 2024 modules and are not
+    # worth a mass rewrite of code scheduled for deletion.
+    "TRY400",
+    "TRY003",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The 2024 modules that still run the wall. They are deleted once both planes
+# exist, so their remaining findings are cosmetic debt with a scheduled end
+# date, and a mass restyle of doomed code would only make that diff unreadable.
+# Deliberately NOT relaxed here: F (pyflakes) and B006 — the classes that
+# produced real defects in this codebase — so those still fail the build.
+# `config.py` is excluded from this list: it was rewritten and is held to the
+# strict set, as is everything under `curation/` and `tests/`.
+"ai.py" = ["T20", "E501", "F841", "TRY002", "TRY201", "TRY300", "B007"]
+"art.py" = ["T20", "E501", "F841", "TRY002", "TRY201", "TRY300", "B007", "E402"]
+"display.py" = ["T20", "E501", "F841", "TRY002", "TRY201", "TRY300", "B007", "E402"]
+"image_utils.py" = ["T20", "E501", "F841", "TRY002", "TRY201", "TRY300", "B007"]
+"local.py" = ["T20", "E501", "F841", "TRY002", "TRY201", "TRY300", "B007"]
+"metadata.py" = ["T20", "E501", "F841", "TRY002", "TRY201", "TRY300", "B007"]
+"source_utils.py" = ["T20", "E501", "F841", "TRY002", "TRY201", "TRY300", "B007"]
+"tvart.py" = ["T20", "E501", "F841", "TRY002", "TRY201", "TRY300", "B007"]
+# Operator tools run by hand; print() is their output, not logging.
+"spi_test.py" = ["T20", "E501", "F841", "E402"]
+"remote_test.py" = ["T20", "E501", "F841"]
+"urls_to_json.py" = ["T20", "E501", "F841"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

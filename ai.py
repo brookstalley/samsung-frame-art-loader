@@ -1,11 +1,12 @@
-import os
 import base64
+import json
 from io import BytesIO
+
+from colour import Color
 from openai import OpenAI
 from PIL import Image
+
 import config
-import json
-from colour import Color
 
 mat_prompt = """I'm a curator at the museum that owns this artwork and we have rights to reproduce in all mediums. This artwork will be displayed on a 16:9 display, scaled so that there will be bars on either the sides or top and bottom. Think of these bars like the mat on a framed artwork. Suggest a mat color that will highlight the artwork. Think in LAB colorspace to align with human perception. Use best practices and color theory to produce an elegant color choice. Avoid greys if possible, and avoid having the mat seem brighter than the artwork since this will be on a LCD display. If in doubt, go darker. 
 
@@ -55,12 +56,12 @@ def ai_mat_color(image: Image) -> Color:
     my_image.save(buffered, format="PNG")
     encoded_image = base64.b64encode(buffered.getvalue()).decode("utf-8")
     # Creaet the GPT-4o request
-    prompt = f"Pick a mat color for this image. Respond only in JSON"
+    prompt = "Pick a mat color for this image. Respond only in JSON"
     client = OpenAI(api_key=config.OPENAI_KEY)
     good_result = False
     tries = 0
     while not good_result and tries < 5:
-        print(f"Getting mat color from AI")
+        print("Getting mat color from AI")
         response = client.chat.completions.create(
             model="gpt-4o",
             response_format={"type": "json_object"},
@@ -84,11 +85,11 @@ def ai_mat_color(image: Image) -> Color:
             good_result = True
         except json.JSONDecodeError:
             print(f"Bad response from AI: {response_str}")
-            print(f"Trying again")
+            print("Trying again")
             tries += 1
         except KeyError:
             print(f"Bad response from AI: {response_str}")
-            print(f"Trying again")
+            print("Trying again")
             tries += 1
     if good_result:
         # print(f"AI response: {response}")
