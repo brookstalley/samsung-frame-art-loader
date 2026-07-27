@@ -27,9 +27,19 @@ works — are decided rather than discovered.
 
 ## The Curation Interpreter — decided
 
-**Raspberry Pi OS Trixie ships Python 3.13. Nothing in this product needs 3.14
-except `3tears`, whose packages declare `requires-python = ">=3.14"`. The curation
-plane gets its 3.14 from a uv-managed standalone build: `uv python install 3.14`.**
+**Raspberry Pi OS Trixie ships Python 3.13. The curation plane gets its 3.14 from
+a uv-managed standalone build: `uv python install 3.14`.**
+
+> **Amended 2026-07-27.** The sentence above read "Nothing in this product needs
+> 3.14 except `3tears`, whose packages declare `requires-python = ">=3.14"`". The
+> catalogue takes no `3tears` core dependency at all now, so that is no longer the
+> reason. The floor rests on `3tears-models` — the operator's own model adapters,
+> which declare the same one and arrive with the discovery work — and on the
+> verified fact that the whole curation dependency set resolves and imports on
+> CPython 3.14.4. **Everything in this section that reasons about `3tears` core
+> should be read through this amendment**, including the build-versus-relax
+> analysis below, which is retained because it is why the floor is affordable, not
+> as a live dependency claim.
 
 The premise that made this a problem was wrong. It was recorded as a choice
 between a 30–45 minute pyenv compile per patch release, relaxing `3tears` to 3.13,
@@ -55,7 +65,7 @@ close because it was static. Keeping `3tears` unmodified means that risk never h
 to be taken, and the Python version pin stays intact as a rationale for the
 two-plane split rather than leaving the split on its other two legs.
 
-> **Rationale re-based 2026-07-27.** The paragraphs above reason about `3tears` *core*, which this product no longer depends on at all — the catalogue's durable tier is first-party code shaped to that framework's contract, and no framework package is imported. The 3.14 floor still stands, and the compile-cost analysis above is still the reason it is affordable, but what now *requires* it is `3tears-models` — the operator's own model adapters, which the discovery work calls and which declare the same floor — plus the verified fact that the whole curation dependency set resolves and imports on CPython 3.14.4. Nothing below should be read as a live dependency on `3tears` core.
+> **Rationale re-based 2026-07-27** (see the amendment at the head of this section). The paragraphs around this one reason about `3tears` *core*, which this product no longer depends on at all — the catalogue's durable tier is first-party code shaped to that framework's contract, and no framework package is imported. The 3.14 floor still stands, and the compile-cost analysis above is still the reason it is affordable, but what now *requires* it is `3tears-models` — the operator's own model adapters, which the discovery work calls and which declare the same floor — plus the verified fact that the whole curation dependency set resolves and imports on CPython 3.14.4. Nothing below should be read as a live dependency on `3tears` core.
 
 
 **The tradeoff this does incur:** curation's interpreter now comes from Astral's

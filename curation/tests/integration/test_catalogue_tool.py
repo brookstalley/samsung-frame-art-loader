@@ -47,7 +47,7 @@ async def test_a_truncated_listing_says_so_and_gives_the_total(server_url):
 
     assert payload["truncated"] is True
     assert payload["total"] == 3
-    assert payload["notice"] == "showing 1 of 3; raise limit or narrow with status to see the rest"
+    assert payload["notice"] == "showing 1 of 3 at limit 1; raise limit or narrow with status to see the rest"
 
 
 async def test_a_complete_listing_carries_no_truncation_notice(server_url):

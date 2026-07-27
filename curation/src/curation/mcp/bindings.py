@@ -87,7 +87,10 @@ def _truncation_notice(listing: ArtworkListing) -> str | None:
     if not listing.truncated:
         return None
     shown = len(listing.entries)
-    return f"showing {shown} of {listing.total}; raise limit or narrow with status to see the rest"
+    # The limit is named rather than merely referred to: "raise limit" is advice a
+    # caller cannot act on without knowing what it currently is, and a caller who
+    # passed none is looking at a default it never chose.
+    return f"showing {shown} of {listing.total} at limit {listing.limit}; raise limit or narrow with status to see the rest"
 
 
 def _summary(entry: ArtworkDetail) -> dict[str, Any]:
