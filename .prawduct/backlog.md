@@ -173,6 +173,121 @@
     (`tvart.py`'s dual-callback registration is correct today), so it needs a
     real-hardware verification pass, not just a green install.
 
+- **[SEC-K3V9]** DNS-rebinding protection is off on `/mcp` — no Host or Origin validation
+  `effort: M · impact: L · area: security · source: critic · added: 2026-07-27 · status: open · stage: design · related: ARC-7QN2 · refs: api-contract.md#security`
+
+  `create_app` builds `StreamableHTTPSessionManager(app=mcp_server)` with no
+  `security_settings`. mcp 1.28.1 defaults `enable_dns_rebinding_protection=False`,
+  so neither the `Host` nor the `Origin` header is validated on any request. The
+  MCP spec requires Origin validation precisely for locally-bound HTTP servers:
+  a page the operator visits can rebind to the bind address, at which point the
+  request is same-origin and CORS never applies.
+
+  Bounded today — only read actions are built and there is no auth surface — but
+  `art_discovery`, the spend-incurring tool, lands on this same endpoint in
+  Chunk 14. The blast radius grows before anything else about the endpoint does.
+
+  Fix is one constructor argument:
+  `TransportSecuritySettings(allowed_hosts=..., allowed_origins=...)` derived
+  from `Settings`. **Couples to ARC-7QN2** — the allowed-hosts list is a function
+  of what the plane binds, so decide the two together rather than in sequence.
+
+  Stage is `design` because the alternative is legitimate: accept the exposure
+  and record a dated decision in `api-contract.md § Security`, which does not
+  currently consider this vector at all. Either outcome is fine; leaving the
+  section silent is not.
+
+- **[ARC-7QN2]** The loopback default contradicts the recorded transport decision
+  `effort: M · impact: L · area: architecture · source: critic · added: 2026-07-27 · status: open · stage: design · related: SEC-K3V9 · refs: api-contract.md#transport, security-model.md#trust-boundary, architecture.md`
+
+  `config.py` defaults `CURATION_HOST` to `127.0.0.1`. But `api-contract.md
+  § Transport` chose streamable HTTP over stdio *because* the client (Claude Code
+  on the operator's laptop) reaches the curation host over an overlay network —
+  and `security-model.md § Trust Boundary` and `architecture.md:204` both repeat
+  that reasoning.
+
+  A loopback bind answers on neither the LAN nor the tailnet address. So a fresh
+  checkout, followed exactly as documented, yields a plane that no MCP client can
+  reach. The documentation and the default disagree, and the default wins
+  silently.
+
+  Two ways to close it, and the choice is the work:
+  - Bind the overlay interface by default and record the exposure decision, or
+  - Record the missing piece — a `tailscale serve` style proxy fronting loopback —
+    in `operational-spec.md`, and fix `.env.example`'s reasoning, which currently
+    reads as a flat contradiction of the security model.
+
+  Whichever is chosen sets the `allowed_hosts` list SEC-K3V9 needs, so settle
+  them in one pass.
+
+- **[REL-M5X8]** A mistyped `ART_ROOT` self-heals into an empty, healthy-looking install
+  `effort: S · impact: M · area: reliability · source: critic · added: 2026-07-27 · status: open · stage: design`
+
+  `__main__.main()` calls `settings.art_root.mkdir(parents=True, exist_ok=True)`
+  and then opens the catalogue, and `SqliteCatalogue.__init__` runs
+  `CREATE TABLE IF NOT EXISTS`. Both steps are individually reasonable; composed,
+  they mean a **typo in `ART_ROOT` creates a fresh directory, creates a fresh
+  empty catalogue, and starts cleanly**. The operator gets a working plane with
+  an empty collection instead of an error.
+
+  This lands squarely on the product's recorded "failure is silent by
+  construction" characteristic — the thing this product exists to correct.
+
+  Stage is `design` because the fix is a product-behaviour decision, not a
+  mechanical change: does first run bootstrap implicitly (and if so, how does it
+  distinguish itself from a typo — a marker file, an explicit `init` verb, a
+  non-empty-directory check), or does the plane refuse to start against a
+  directory it did not previously know about?
+
+- **[REL-2JH6]** The MCP session table is unbounded — sessions never expire
+  `effort: S · impact: M · area: reliability · source: critic · added: 2026-07-27 · status: open · stage: ready`
+
+  `StreamableHTTPSessionManager` is constructed with no `session_idle_timeout`,
+  so sessions never expire. Each one leaks an instance plus a live task for the
+  lifetime of the process.
+
+  This is an always-on plane running under a `MemoryMax` cap, so the leak has a
+  hard ceiling it will eventually reach — the failure mode is the unit getting
+  OOM-killed, not gradual slowdown. Fix is to pass an idle timeout; choosing the
+  value is the only judgement call.
+
+- **[ARC-B4TD]** The MCP layer imports the persistence package directly
+  `effort: M · impact: M · area: architecture · source: critic · added: 2026-07-27 · status: open · stage: design · refs: boundary-patterns.md`
+
+  Domain records (`Artist`, `Artwork`) and the `ArtworkStatus` wire enum are
+  homed in `curation.persistence.catalogue`. As a result `mcp/bindings.py` and
+  `mcp/tools.py` both import the persistence package — bindings to render
+  results, tools to build the status `choices`.
+
+  The recorded boundary is that persistence is reached only through the service
+  layer. This is import-level coupling rather than an actual data path (no
+  binding calls a store), so nothing is broken today; but it puts the storage
+  package in the MCP layer's import graph, which is how the boundary erodes
+  without anyone deciding to erode it.
+
+  Shape to consider: a domain module that the service layer and the surfaces
+  both depend on, leaving `persistence` free to depend on it too. Stage is
+  `design` because that is a module-layout decision with knock-on effects for
+  every surface added later, not a rename.
+
+- **[TST-9WFC]** The waived broad-except path in `dispatch()` is asserted by nothing
+  `effort: S · impact: M · area: test-coverage · source: critic · added: 2026-07-27 · status: open · stage: ready`
+
+  `server.dispatch`'s `except Exception` carries a
+  `prawduct:allow prawduct/broad-except` waiver and converts an unexpected fault
+  into a teaching failure result rather than letting it surface as a success. No
+  test exercises it.
+
+  Its sibling path — the unbound-action branch — became structurally unreachable
+  when Chunk 07's fix round added the import-time registry↔BINDINGS
+  reconciliation. That was the better fix (make the state impossible rather than
+  test for it), but it leaves the waived catch itself uncovered, and a waiver on
+  an unasserted path is exactly the combination that rots.
+
+  Test to write: force a binding to raise, then assert the envelope reports
+  `isError` **and** that no internal detail (traceback, exception text, file
+  path) reaches the wire.
+
 ## Promoted
 
 <!-- Items currently being addressed in an active build plan. /backlog pick

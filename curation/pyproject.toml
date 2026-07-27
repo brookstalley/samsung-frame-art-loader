@@ -5,6 +5,10 @@ description = "Curation plane — discovery, acquisition, catalogue, and the MCP
 requires-python = ">=3.14"
 dependencies = [
     "fastapi",
+    # Imported directly by the ASGI app for its request types. It arrives
+    # transitively via fastapi, but the declared set has to describe what the
+    # code imports — fastapi is free to change how it vendors starlette.
+    "starlette",
     "uvicorn[standard]",
     "mcp>=1.27",
     "pydantic",

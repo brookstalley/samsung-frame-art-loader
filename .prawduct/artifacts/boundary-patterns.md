@@ -4,19 +4,22 @@
      boundaries, the builder investigates consumer impact before completing
      the chunk. The Critic verifies investigation occurred. -->
 
-> **Status: specified ahead of the code.** No product code implements these
-> boundaries yet — the curation plane has not been built and the 2024 modules are
-> being replaced rather than extended. Every row below is therefore *prospective*,
-> and the **Exists** column says so honestly. It is filled in now rather than left
-> as a template because an empty version of this file silently disarms the
-> consumer-impact check for every future chunk, which is exactly what happened
+> **Status: three surfaces are real as of 2026-07-27**, the rest still
+> prospective. The walking skeleton built the MCP tool surface, the service
+> layer, and the catalogue schema end to end; the **Exists** column says which
+> is which, per row. Everything below was written ahead of the code rather than
+> left as a template, because an empty version of this file silently disarms the
+> consumer-impact check for every future chunk — which is exactly what happened
 > between 2026-07-19's two planning passes.
 
 ## Contract Surfaces
 
 ### MCP tool surface
 
-- **Exists:** no — designed, not built.
+- **Exists:** **yes**, as of 2026-07-27 — `curation/src/curation/mcp/`. All five
+  tool names are registered and served over streamable HTTP at `/mcp`;
+  `art_catalogue` answers `list` / `get` / `help`, the other four answer `help`
+  and return a teaching error for anything else.
 - **Producer:** MCP tool bindings on the curation plane.
 - **Consumer:** **External** — Claude Code, the in-UI agent, any MCP client.
 - **Contract:** tool names, `action` values, argument schemas, and result shapes.
@@ -29,7 +32,10 @@
 - **Generated, not hand-maintained.** Definitions derive from one registry record
   per action. A change to a record propagates to the wire schema, validation, `help`
   output, and error messages together; editing any of those by hand is the
-  violation.
+  violation. Records live in `curation/src/curation/mcp/tools.py`; the generators
+  in `registry.py`. `tests/contract/test_mcp_surface.py` pins the five names,
+  the 2 KB description budget, the annotations, and that every action in a
+  schema's enum also appears in the prose — the drift check.
 
 ### HTTP API (curation UI)
 
@@ -41,7 +47,8 @@
 
 ### Service layer
 
-- **Exists:** no.
+- **Exists:** **yes**, as of 2026-07-27 — `curation/src/curation/services/`.
+  Catalogue reads and writes only; every later operation lands here.
 - **Producer:** service methods.
 - **Consumer:** **both** the MCP tool bindings and the HTTP handlers.
 - **Contract:** method signatures and return types.
@@ -78,8 +85,14 @@
 
 ### Catalogue schema
 
-- **Exists:** no — specified in `data-model.md`, not implemented.
-- **Producer:** the persistence layer (3tears three-tier entities, L1/SQLite only).
+- **Exists:** **partially**, as of 2026-07-27 — Artwork, Artist and Theme on
+  stdlib `sqlite3`, behind the `CatalogueStore` Protocol in
+  `curation/src/curation/persistence/`. The remaining twelve entities and the
+  fifteen write-time constraints are specified in `data-model.md` and not yet
+  implemented; nothing in the code claims otherwise.
+- **Producer:** the persistence layer. **Currently stdlib `sqlite3` behind a
+  Protocol**, not 3tears collections — see the build plan's deferral note. The
+  Protocol is what keeps that swap a one-module change.
 - **Consumer:** services, and through them both external surfaces.
 - **Contract:** entity fields, enums, and the Constraints list in `data-model.md`.
 - **A persisted format is a lock-in decision.** The questions the data must answer
@@ -132,20 +145,28 @@
 
 ## Test Levels
 
-No test suite exists — a recorded departure in `project-preferences.md`, and
-blocking for medium+ work. Every row is a target.
+Three of the four levels exist on the curation plane as of 2026-07-27. Two
+suites run: `pytest` at the repo root for the 2024 modules, and
+`cd curation && uv run pytest` for the plane.
 
 | Level | Exists | When to Run | Location |
 |-------|--------|-------------|----------|
-| Unit | no | Every change | `tests/` mirroring module layout |
-| Integration | no | Changes crossing the service-layer boundary | `tests/integration/` |
-| Contract | no | **Any MCP tool-surface change**, including a description edit | `tests/contract/` |
+| Unit | **yes** (curation) | Every change | `curation/tests/unit/`, mirroring module layout |
+| Integration | **yes** (curation) | Changes crossing the service-layer boundary | `curation/tests/integration/` |
+| Contract | **yes** (curation) | **Any MCP tool-surface change**, including a description edit | `curation/tests/contract/` |
 | End-to-end | no | Before release | — |
 
-**The contract level is the one to build first.** The MCP surface is the only one
-with external consumers, and it is the only place where a change that looks
+**The contract level was built first**, as planned. The MCP surface is the only
+one with external consumers, and it is the only place where a change that looks
 cosmetic — rewording a description — is a real behavioural change. Both of the
 operator's production MCP servers already do the narrow version of this: cordyceps
 pins its tool names in an explicit test; hallucinote boots a real server and asserts
 `list_tools()` output against its registry, including that prose and code cannot
 drift. See `api-contract.md` → Validation.
+
+**Both the contract and integration suites boot a real uvicorn server on an
+ephemeral port and drive it with a real MCP client over HTTP.** That is not
+ceremony. An in-process ASGI transport does not run the application's lifespan,
+and the lifespan is the only thing making the mounted MCP server work — so a
+test that skipped it would pass against an application that fails every request
+in production.

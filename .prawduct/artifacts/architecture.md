@@ -534,6 +534,46 @@ a precedent — hallucinote is stdio-only, cordyceps is C# on a hand-rolled
 > exact use case as supported (`fastmcp/server.py:263-265`), but the failure mode
 > for getting it wrong is total and gives no hint about lifespans.
 
+> **Re-verified 2026-07-27 against the installed SDK, mcp 1.28.1** (the pin had
+> moved from the 1.27 this was written against). All three constraints hold
+> verbatim: `handle_request` raises `RuntimeError("Task group is not
+> initialized. Make sure to use run().")` when `_task_group is None`
+> (`streamable_http_manager.py:159-160`); `run()` guards re-entry with
+> `_has_started` under a lock; `FastMCP.session_manager` raises unless
+> `streamable_http_app()` has been called. The one addition: `streamable_http_app()`
+> sets its *own* Starlette lifespan to `self.session_manager.run()`
+> (`fastmcp/server.py:1044`), which is precisely why mounting that app under a
+> host is silent — the correct lifespan exists, mounted where nothing runs it.
+
+**2026-07-27 — The service layer stays the shared implementation; MCP is not
+built as a client of the HTTP API.** Raised as a direct question: does `3tears`
+offer an abstraction that makes shipping the API and the MCP surface one job?
+Investigated against the checkout at `0e37d8b3`. **It does not** — no package
+renders one declaration to both surfaces. `McpTool` is MCP-only and carries a
+hand-written `input_schema`; `APIRouter`/`fastapi` appears twice in the whole
+repo, in a scrape sidecar and a channels webhook test, with no shared route
+layer.
+
+What 3tears *does* have is a different answer to the same problem, and it was
+weighed on merits: `PlatformHttpClient` exists so that **MCP tool handlers call
+the product's own REST API** (`packages/mcp/.../http_client.py`, whose docstring
+gives `list_conversations` delegating to `client.get("/api/v1/admin/conversations")`
+as the worked case). Parity is real under that shape — but rejected here for
+three reasons, in ascending order of weight: an in-process loopback hop and
+double serialisation to reach code already in memory; `3tears-mcp` drags
+`3tears-epoch` and `3tears-nats`, and its mandatory default-deny
+`required_permission` is backed by a Postgres `mcp_tool_grants` table with
+nothing in this single-principal product to gate. **The decisive one is a
+stability consequence not previously recorded anywhere:** `api-contract.md`
+grants the HTTP API *no* stability obligation because it ships with its only
+consumer, while the MCP surface carries a real external one. Building MCP on
+top of HTTP would silently promote the UI's API to a frozen contract and make
+every UI-driven shape change a breaking change on an external surface. The
+service layer delivers the same single implementation one rung lower, where
+neither surface constrains the other. *Trade-off accepted:* the two bindings
+each format their own results, which is intended — tool results are shaped for
+a model, HTTP responses for a UI.
+
 **2026-07-20 — Readiness is manifest membership, not a stored flag.** Resolves the
 open question by separating catalogue readiness (curation's, evaluated at
 manifest-build time) from device readiness (display's, in its own store). Rejected:

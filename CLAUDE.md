@@ -24,3 +24,22 @@ The hardest rules (everything else is in the plugin):
 **blocks** if code changed against an active build plan with no Critic findings.
 The session-start banner shows the active version and what changed — this anchor
 stays version-free.
+
+## Dev commands
+
+Two independent projects, two interpreters, two suites. Both must pass.
+
+| | 2024 modules (repo root) | curation plane |
+|---|---|---|
+| Test | `pytest tests` | `cd curation && uv run pytest` |
+| Lint | — | `cd curation && uv run ruff check .` |
+| Format | `black .` | `cd curation && uv run black .` |
+
+Run the curation plane: `cd curation && uv run python -m curation`. It needs
+`ART_ROOT` (copy `.env.example` to `.env`); the UI placeholder answers on
+`CURATION_PORT`, and MCP clients connect to `/mcp` on the same port.
+
+The curation suite boots a real uvicorn server per test class of surface work.
+Do not replace that with an in-process ASGI transport: Starlette does not run a
+mounted sub-app's lifespan, and the lifespan is what makes the MCP mount work,
+so an in-process test would pass against an app that fails every real request.

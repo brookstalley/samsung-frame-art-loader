@@ -785,6 +785,28 @@ technical_decisions:
         is explicitly the seam for non-SQL backends, and scriob's GitL3Backend is a
         working precedent. This satisfies the operator's "no NATS or anything crazy"
         constraint while keeping the 3tears entity model.
+
+        AMENDED 2026-07-27 — still the destination, but NOT what the walking
+        skeleton was built on, and this record said otherwise for the length of
+        that build. Two defects made 3tears unconsumable from outside its own
+        workspace: uuid-utils was imported but declared by no package, and
+        threetears.nats eagerly imported the NATS client (whose nkeys dependency
+        publishes no wheels, so the Pi would source-build it). Both are fixed
+        upstream — pacepace/3tears#243 and #244, merged to develop 2026-07-27 —
+        and neither is in a release: v0.19.4 was cut the day before them.
+        The catalogue therefore ships on stdlib sqlite3 behind a CatalogueStore
+        Protocol; everything the slice proves (service layer, registry, tool
+        surface, error envelope) is identical under either backend, so the swap
+        is one module rather than a rewrite. The dependency will be taken as a
+        git reference to the develop BRANCH, at the operator's direction, rather
+        than the released version originally specified — tradeoff accepted and
+        explicit: develop re-resolves on every lock refresh, so a rebuild can
+        pull unrelated changes and the Pi is not guaranteed the same bytes as
+        the dev Mac. Revisit when a release carries both fixes. The open
+        question the swap must still answer: BaseCollection's value is
+        multi-process coherence, which product-brief.md § Scope rules out; the
+        reason to adopt it anyway is the operator's — it is the on-ramp to
+        agents later.
       alternatives_considered:
         - "Full 3tears stack with NATS + Postgres — rejected by the operator; solves multi-pod coherence problems this product does not have."
         - "No 3tears at all — viable and simplest, but forfeits shared foundation with the operator's other projects."
@@ -1739,7 +1761,7 @@ design_decisions:
     date: 2026-07-19
   # api_error_model_approach: { envelope (e.g. RFC-7807/problem+json), codes, status, rationale, date }
   api_error_model_approach:
-    envelope: "Tool results with isError: true, derived from a boolean `success` field in the payload — never JSON-RPC protocol errors, except unknown-tool. Every error carries: what was wrong, the enumerated valid set, a correct example, and a pointer to action='help'."
+    envelope: "Tool results with isError: true, derived from a boolean `success` field in the payload — never JSON-RPC protocol errors. Every error carries: what was wrong, the enumerated valid set, a correct example, and a pointer to action='help'. AMENDED 2026-07-27: the unknown-tool carve-out is retired; see rationale."
     codes: "No numeric code space. Errors are self-describing strings plus structured valid_actions / required / optional / example / hint fields. A machine-readable discriminator is added only where a caller must branch — halted_by_budget being the standing example."
     status: active
     rationale: >
@@ -1769,6 +1791,21 @@ design_decisions:
       fuzzy nearest-match ("did you mean") — neither server implements it; the
       substitute is always to enumerate the full valid set inline, which is more
       useful to a model than a single guess and cannot mislead.
+
+      AMENDED 2026-07-27, on building it. The one carve-out — "an unknown TOOL
+      stays a protocol error" — is not implementable on the official SDK and is
+      retired rather than left standing as a rule the code silently breaks. The
+      SDK's `call_tool` request handler wraps the registered function in an
+      unconditional `except Exception` and converts anything raised into a
+      normal CallToolResult(isError=True); no exception of any kind survives
+      that boundary, so a protocol error cannot be produced from where a tool
+      name is first seen. Verified twice independently: read from
+      mcp/server/lowlevel/server.py at 1.28.1, and recorded in 3tears'
+      changelog as confirmed against the live dispatch path rather than by
+      reading source. The substitute enumerates the five real tool names in the
+      error result. The carve-out's own reasoning survives it — the case is
+      unreachable in practice, because a client only calls names that
+      list_tools returned.
     revisit_trigger: "RESOLVED — the MCP tool surface was designed 2026-07-19 and the envelope decided with it."
     date: 2026-07-19
   observability_approach: >
@@ -2266,6 +2303,17 @@ coverage_required: false
 # tests_dirs: engine/tests server/tests
 #   Whitespace-separated test trees for the coverage verifier (default:
 #   `tests`). One verifier run unions discovery across all of them.
+
+# Two independent projects, two interpreters, two suites — both must pass, and
+# the hook must run the real invocations rather than its `sys.executable -m
+# pytest` default, which resolves neither. The curation plane is uv-managed on
+# its own pinned interpreter, so it is reached with `--directory` (shell
+# operators are unsupported here, and `cd` is a shell operator).
+test_commands:
+  - uv run pytest tests --junit-xml={junit_xml} -q
+  - uv run --directory curation pytest --junit-xml={junit_xml} -q
+
+tests_dirs: tests curation/tests
 
 # =============================================================================
 # OPERATOR VERIFICATION (opt-in, v1.4+)

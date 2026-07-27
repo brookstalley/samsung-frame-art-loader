@@ -53,8 +53,20 @@ Developer preferences for how code is written in this project. Captured during d
 - **Naming**: `snake_case` functions and module-level names, `PascalCase` classes
   (`ArtFile`, `ArtSet`, `DisplayLabel`, `ResizeOptions`) _(inferred — consistent across all modules)_
 - **Formatting**: black, `line-length = 130` (configured in `pyproject.toml`)
-- **Linting**: none configured _(target: adopt ruff)_ — with no linter, every mechanical
-  style norm below falls through to the Critic, which is weaker and slower than a lint rule.
+- **Linting**: ruff, configured per plane. Both select `E,F,I,UP,B,T20,TRY` at
+  `line-length = 130`. The two configs differ, and the differences are the norm:
+  - **Root** (`pyproject.toml`, excludes `curation/` and `display/`) also ignores
+    `TRY400` and `TRY003` project-wide, and carries a per-file carve-out on the
+    eleven 2024 modules waiving `T20`, `E501`, `F841`, `TRY002`, `TRY201`,
+    `TRY300`, `B007` (and `E402` on three). That carve-out has a scheduled end
+    date — those modules are deleted once both planes exist. Deliberately *not*
+    waived there: `F` and `B006`, the classes that produced real defects here.
+    `config.py` is excluded from the carve-out and held to the strict set.
+  - **Curation** (`curation/pyproject.toml`) adds `ANN`, ignores `TRY003`, and
+    turns `ANN` off under `tests/*`. No legacy carve-out: this plane is new code.
+
+  The mechanical style norms below that ruff covers are enforced by it rather than
+  by the Critic.
 - **Type annotations**: currently sparse and inconsistent — `image_utils.py` annotates 8
   return types, six modules annotate none, and `art.py` mixes bare class attributes with
   annotated `__init__` params. _(target)_ Annotate every new or touched function signature.
@@ -67,9 +79,11 @@ Developer preferences for how code is written in this project. Captured during d
 
 ## Testing
 
-- **Framework**: none — there is no test suite, no `tests/` directory, and no test runner
-  in `requirements.txt`. _(target: pytest)_
-- **Style**: _(target)_ descriptive test names stating the behaviour under test.
+- **Framework**: pytest, one suite per plane — `tests/` at the root for the 2024
+  modules, `curation/tests/` for the curation plane, each on its own interpreter.
+  Both are declared as `test_commands` in `project-state.yaml` so the evidence hook
+  runs the real invocations rather than a default that resolves neither.
+- **Style**: descriptive test names stating the behaviour under test.
 - **Coverage expectations**: _(target)_ happy path + error cases for pure logic
   (`image_utils`, `metadata` parsing, `source_utils`, the `all.json` catalogue round-trip).
   Hardware and network paths are covered behind interfaces, not by hitting a real TV.
@@ -170,8 +184,8 @@ current state for the norm — and so nobody "fixes" the mismatch by weakening a
 
 | Departure | Where | Disposition |
 |---|---|---|
-| No test suite at all | whole repo | Blocking for medium+ work. Establish pytest before the first substantive build chunk. |
-| No linter | whole repo | Adopt ruff; migrate the Critic-enforced mechanical norms above to lint rules. |
+| ~~No test suite at all~~ | ~~whole repo~~ | **Closed 2026-07-27.** pytest established per plane; both suites declared as `test_commands`. |
+| ~~No linter~~ | ~~whole repo~~ | **Closed 2026-07-27.** ruff configured at the root and in the curation plane; the mechanical norms it covers moved from Critic to lint rules. |
 | `print()` used for operational output | `ai.py`, `display.py`, others | Convert on touch. |
 | Deployment values hardcoded | `config.py` (`tv_address`, `base_folder`, lat/long) | Hoist during the config work; `ART_ROOT` first. |
 | Sparse type annotations | 6 of 13 modules have none | Annotate on touch. |

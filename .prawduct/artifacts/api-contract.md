@@ -396,10 +396,38 @@ supports this directly: execution errors are meant to "contain actionable feedba
 that language models can use to self-correct and retry", and clients SHOULD feed
 them back to the model.
 
+> **The unknown-tool exception is retired, 2026-07-27, on building it.** It is
+> not implementable on the official SDK: `Server.call_tool`'s request handler
+> wraps the registered function in an unconditional `except Exception` and
+> converts anything raised into a normal `CallToolResult(isError=True)`
+> (`mcp/server/lowlevel/server.py`, 1.28.1). No exception survives that
+> boundary, so a protocol error cannot be raised from the point a tool name is
+> first seen. Independently confirmed in `3tears`' changelog, which records the
+> same behaviour *"confirmed directly against that dispatch path, not just by
+> reading its source"* after it swallowed a graph interrupt.
+>
+> **What ships instead:** an error result naming the unknown tool and
+> enumerating the five real names — the same teach-don't-guess shape as every
+> other error here. The exception's own reasoning is what makes this cheap: a
+> client only calls names `list_tools` returned, so the case is defensive
+> rather than live. Stated as a retirement rather than quietly implemented
+> differently, because a future reader finding the old rule would otherwise
+> take the code for a bug.
+
 `isError` is **derived from the payload**, not set by hand at each call site — a
 result is an error iff its `success` field is boolean `false`. Both of the
 operator's servers do this, and the reason is that a hand-set flag drifts from the
 body it is supposed to describe.
+
+> **Implemented as the negative — "an error unless `success` is boolean `true`"
+> (2026-07-27).** The two readings agree on every payload this surface produces,
+> because the two constructors always set a boolean; they differ only on a
+> malformed payload with no `success` at all, and there the negative form fails
+> closed. That case is a defect, and reporting a defect as a success is this
+> codebase's existing failure shape — `upload_file` catches every exception,
+> records a null content id, and returns with success set. Rule 4 below forbids
+> exactly that, so the derivation obeys rule 4 rather than the letter of the
+> "iff".
 
 ### Errors teach
 

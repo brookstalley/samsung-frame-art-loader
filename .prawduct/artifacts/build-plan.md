@@ -77,7 +77,7 @@ into a recorded fact.
 - [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9) — **needs hardware**
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3) — **needs hardware**
 - [x] Chunk 06: uv restructure (curation only), lint/test tooling — *display plane deferred, mat fixture deferred*
-- [ ] Chunk 07: Walking skeleton — catalogue core → service layer → MCP tool, end to end
+- [x] Chunk 07: Walking skeleton — catalogue core → service layer → MCP tool, end to end
 - [ ] Chunk 08: Full catalogue schema, state machines, constraints, startup reconciliation
 - [ ] Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
 - [ ] Chunk 10: Seed the catalogue with the 41 existing works (v1 scope item)
@@ -93,8 +93,14 @@ into a recorded fact.
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
 Context: Plan authored 2026-07-20. Chunks 01, 02 and 06 landed 2026-07-27 in one
-pass. **Next: Chunk 07** (walking skeleton) — it is unblocked, and it is the first
-thing that tests this plan against running code.
+pass; **Chunk 07 landed the same day**, took its `final` Critic round and the
+follow-up `verify-resolutions` pass, and the architecture now runs end to end —
+a real MCP client lists five tools over HTTP and reads a seeded catalogue.
+**Next: the 3tears catalogue swap**, then **Chunk 08** (full schema, state
+machines, constraints), which widens the three entities Chunk 07 proved into the
+other twelve. The swap is sequenced first, at the operator's direction, so the
+twelve new entities are written once against their final backend rather than
+against stdlib `sqlite3` and then again.
 
 Deviations from the plan as written, all deliberate:
 
@@ -120,6 +126,68 @@ Deviations from the plan as written, all deliberate:
 Verified this pass, which retires the plan's largest curation-side unknown: the
 **full 3.14 dependency set resolves and imports on CPython 3.14.4** — fastapi
 0.140.6, mcp SDK, pydantic 2.13.4. The interpreter floor is real and it works.
+
+### Chunk 07 as built (2026-07-27)
+
+Delivered as specified; three things are worth carrying forward.
+
+**The SDK constraints were re-verified, not assumed.** The plan wrote them
+against `mcp>=1.27`; 1.28.1 is installed. All three hold verbatim — the
+`RuntimeError` on an uninitialised task group, the once-per-instance `run()`,
+and `session_manager` raising before `streamable_http_app()`. Recorded in
+`architecture.md` § Decision Log with line references.
+
+**One contract rule was retired rather than quietly broken.** "An unknown *tool*
+stays a protocol error" is not implementable on the official SDK: its
+`call_tool` handler wraps the registered function in an unconditional
+`except Exception` and converts everything to a normal error result. Retirement
+and substitute are recorded in `api-contract.md` § Error Model and
+`project-state.yaml`.
+
+**The `3tears` API/MCP question was investigated and answered no** (raised
+mid-build). No package there renders one declaration to two surfaces; what it
+has is the inverse architecture, MCP tool handlers as HTTP clients of the
+product's own REST API. Rejected with the decisive reason recorded in
+`architecture.md` § Decision Log: the HTTP API carries *no* stability
+obligation while the MCP surface carries a real one, so building MCP on HTTP
+would silently promote the UI's API to a frozen external contract.
+
+**Deliberately not built, so nothing reads as missing:** the twelve other
+entities and the fifteen write-time constraints (Chunk 08 — `Theme.is_active`
+exists as a column with no exactly-one enforcement behind it); any HTTP API
+beyond the placeholder page (Chunk 19); the `tests/preferences/` plane-isolation
+test (Chunk 11, and there is no display plane to isolate yet).
+
+**One Chunk 06 deliverable was found missing and landed here.** Both suites were
+to be declared as `test_commands` in `project-state.yaml`; they were not, and the
+omission appeared in no deviation note — so the evidence hook was silently
+falling back to a default invocation that resolves neither plane. Declared now,
+with `tests_dirs` spanning both trees.
+
+**The Critic round (`final`, the keystone override) returned 0 blocking, 21
+warnings, 9 notes.** Fourteen warnings were fixed in the same pass and verified
+by a `verify-resolutions` delta review; six are routed to the backlog, named
+here so none reads as forgotten: DNS-rebinding protection on `/mcp`, the
+loopback-vs-overlay bind contradiction, the silent empty-install on a mistyped
+`ART_ROOT`, the unbounded MCP session table, the MCP layer's direct import of
+the persistence package, and a test for the waived broad-except path.
+
+Four defects were found independently by two reviewers each, which is what
+argued for fixing rather than routing them: the unknown-tool error's hint named
+the server (not a callable tool), so a model following the one teaching element
+that path has would make a second failing call; a one-sided range rendered "must
+be between 0 and None"; `starlette` was imported but declared by no package; and
+the catalogue filename disagreed with four artifacts, which would have pointed
+Chunk 20's backup job at a file that does not exist. Two more were structural:
+built-vs-unbuilt tool state was reconstructed from three unreconciled signals
+across two modules, now a single import-time check that Chunks 08–19 will run
+four more times; and raw `sqlite3` constraint text reached the wire, which the
+write-heavy Chunks 08 and 17 would have copied.
+
+**The verify pass caught a defect introduced by the fix round itself** — the
+rewritten linting norm claimed a strictness the ruff configs do not have, which
+is the shape that gets "fixed" by loosening the config to match the artifact.
+Corrected against both files as they actually are.
 
 ### The 3tears catalogue dependency is deferred, not dropped (2026-07-27)
 

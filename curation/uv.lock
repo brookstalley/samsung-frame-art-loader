@@ -212,6 +212,7 @@ dependencies = [
     { name = "mcp" },
     { name = "pydantic" },
     { name = "python-dotenv" },
+    { name = "starlette" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -230,6 +231,7 @@ requires-dist = [
     { name = "mcp", specifier = ">=1.27" },
     { name = "pydantic" },
     { name = "python-dotenv" },
+    { name = "starlette" },
     { name = "uvicorn", extras = ["standard"] },
 ]
 
