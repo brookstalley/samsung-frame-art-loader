@@ -22,13 +22,12 @@ without an event loop.
 
 import logging
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from enum import StrEnum
 from typing import Final
 
-from curation.persistence.catalogue import CatalogueStore, StorageError
+from curation.persistence.catalogue import CatalogueStore
 from curation.persistence.records import (
     AcquisitionMethod,
     Artist,
@@ -49,7 +48,8 @@ from curation.persistence.records import (
 )
 from curation.services.display_fit import ArtworkBox, FitAssessment, assess_display_fit
 from curation.services.errors import ServiceError
-from curation.services.fields import description_markup, relative_path
+from curation.services.fields import description_markup, relative_path, require_member, require_text
+from curation.services.store import store_write
 
 log = logging.getLogger(__name__)
 
@@ -269,14 +269,14 @@ class CatalogueService:
         """Record an artist and return it with its minted identity."""
         artist = Artist(
             id=str(uuid.uuid4()),
-            name=self._require_text(name, "name"),
+            name=require_text(name, field="name"),
             nationality=nationality,
             born=born,
             died=died,
             lifespan_text=lifespan_text,
             biography=biography,
         )
-        self._write(self._store.add_artist, artist)
+        store_write(self._store.add_artist, artist)
         return artist
 
     def add_artwork(
@@ -302,7 +302,7 @@ class CatalogueService:
         now = datetime.now(UTC)
         artwork = Artwork(
             id=str(uuid.uuid4()),
-            title=self._require_text(title, "title"),
+            title=require_text(title, field="title"),
             created_at=now,
             status=ArtworkStatus.ACCEPTED,
             artist_id=artist_id,
@@ -315,7 +315,7 @@ class CatalogueService:
             rights=rights,
             accepted_at=now,
         )
-        self._write(self._store.add_artwork, artwork)
+        store_write(self._store.add_artwork, artwork)
         return artwork
 
     def archive_artwork(self, artwork_id: str) -> Artwork:
@@ -325,12 +325,12 @@ class CatalogueService:
             raise ServiceError(f"Artwork {artwork_id!r} is already archived.")
         archived = replace(artwork, status=ArtworkStatus.ARCHIVED)
         with self._store.transaction():
-            self._write(self._store.update_artwork, archived)
+            store_write(self._store.update_artwork, archived)
             # A pin naming a work that is out of circulation is an instruction
             # the display plane can never carry out, so archiving withdraws it.
             directive = self._store.get_directive()
             if directive.pinned_work_id == artwork_id:
-                self._write(self._store.set_directive, replace(directive, pinned_work_id=None))
+                store_write(self._store.set_directive, replace(directive, pinned_work_id=None))
         return archived
 
     def restore_artwork(self, artwork_id: str) -> Artwork:
@@ -344,7 +344,7 @@ class CatalogueService:
         if artwork.status is ArtworkStatus.ACCEPTED:
             raise ServiceError(f"Artwork {artwork_id!r} is not archived.")
         restored = replace(artwork, status=ArtworkStatus.ACCEPTED)
-        self._write(self._store.update_artwork, restored)
+        store_write(self._store.update_artwork, restored)
         return restored
 
     # -- writes: sources ------------------------------------------------------
@@ -373,11 +373,11 @@ class CatalogueService:
         source = Source(
             id=str(uuid.uuid4()),
             artwork_id=artwork_id,
-            url=self._require_text(url, "url"),
-            provider=self._require_text(provider, "provider"),
-            source_class=self._require_member(source_class, SourceClass, "source_class"),
-            acquisition_method=self._require_member(acquisition_method, AcquisitionMethod, "acquisition_method"),
-            rights_status=self._require_member(rights_status, RightsStatus, "rights_status"),
+            url=require_text(url, field="url"),
+            provider=require_text(provider, field="provider"),
+            source_class=require_member(source_class, enum=SourceClass, field="source_class"),
+            acquisition_method=require_member(acquisition_method, enum=AcquisitionMethod, field="acquisition_method"),
+            rights_status=require_member(rights_status, enum=RightsStatus, field="rights_status"),
             is_primary=is_primary,
             confidence=confidence,
             selection_rationale=selection_rationale,
@@ -385,7 +385,7 @@ class CatalogueService:
         with self._store.transaction():
             if is_primary:
                 self._demote_primary_sources(artwork_id)
-            self._write(self._store.add_source, source)
+            store_write(self._store.add_source, source)
         return source
 
     def set_primary_source(self, source_id: str) -> Source:
@@ -400,7 +400,7 @@ class CatalogueService:
         promoted = replace(source, is_primary=True)
         with self._store.transaction():
             self._demote_primary_sources(source.artwork_id)
-            self._write(self._store.update_source, promoted)
+            store_write(self._store.update_source, promoted)
         return promoted
 
     def record_fetch(self, source_id: str, *, status: FetchStatus, at: datetime | None = None) -> Source:
@@ -414,10 +414,10 @@ class CatalogueService:
             raise ServiceError(f"No source with id {source_id!r} is in the catalogue.")
         updated = replace(
             source,
-            last_fetch_status=self._require_member(status, FetchStatus, "status"),
+            last_fetch_status=require_member(status, enum=FetchStatus, field="status"),
             last_fetched_at=at if at is not None else datetime.now(UTC),
         )
-        self._write(self._store.update_source, updated)
+        store_write(self._store.update_source, updated)
         return updated
 
     # -- writes: originals and renditions -------------------------------------
@@ -464,12 +464,12 @@ class CatalogueService:
                 width=width,
                 height=height,
                 byte_size=byte_size,
-                content_hash=self._require_text(content_hash, "content_hash"),
+                content_hash=require_text(content_hash, field="content_hash"),
             )
             if held is None:
-                self._write(self._store.add_original, original)
+                store_write(self._store.add_original, original)
             else:
-                self._write(self._store.update_original, original)
+                store_write(self._store.update_original, original)
         return original
 
     def record_rendition(
@@ -496,7 +496,7 @@ class CatalogueService:
             original = self._store.get_original(artwork_id)
             if original is None:
                 raise ServiceError(f"Artwork {artwork_id!r} has no acquired original to render from.")
-            resolved_kind = self._require_member(kind, RenditionKind, "kind")
+            resolved_kind = require_member(kind, enum=RenditionKind, field="kind")
             existing = next(
                 (
                     candidate
@@ -518,9 +518,9 @@ class CatalogueService:
                 generated_at=datetime.now(UTC),
             )
             if existing is None:
-                self._write(self._store.add_rendition, rendition)
+                store_write(self._store.add_rendition, rendition)
             else:
-                self._write(self._store.update_rendition, rendition)
+                store_write(self._store.update_rendition, rendition)
         return rendition
 
     # -- writes: the mat ------------------------------------------------------
@@ -549,7 +549,7 @@ class CatalogueService:
             id=str(uuid.uuid4()),
             artwork_id=artwork_id,
             hex_rgb=self._require_hex(hex_rgb),
-            method=self._require_member(method, MatMethod, "method"),
+            method=require_member(method, enum=MatMethod, field="method"),
             chosen_at=datetime.now(UTC),
             is_current=True,
             lab_l=lab_l,
@@ -562,8 +562,8 @@ class CatalogueService:
             for previous in self._store.list_mat_colors(artwork_id):
                 if previous.is_current:
                     superseded = replace(previous, is_current=False)
-                    self._write(self._store.update_mat_color, superseded)
-            self._write(self._store.add_mat_color, mat_color)
+                    store_write(self._store.update_mat_color, superseded)
+            store_write(self._store.add_mat_color, mat_color)
         return mat_color
 
     # -- writes: themes and membership ----------------------------------------
@@ -581,12 +581,12 @@ class CatalogueService:
         with self._store.transaction():
             theme = Theme(
                 id=str(uuid.uuid4()),
-                name=self._require_text(name, "name"),
+                name=require_text(name, field="name"),
                 created_at=datetime.now(UTC),
                 description=description,
                 is_active=not any(existing.is_active for existing in self._store.list_themes()),
             )
-            self._write(self._store.add_theme, theme)
+            store_write(self._store.add_theme, theme)
         return theme
 
     def activate_theme(self, theme_id: str) -> Theme:
@@ -597,8 +597,8 @@ class CatalogueService:
             for other in self._store.list_themes():
                 if other.is_active and other.id != theme_id:
                     stood_down = replace(other, is_active=False)
-                    self._write(self._store.update_theme, stood_down)
-            self._write(self._store.update_theme, activated)
+                    store_write(self._store.update_theme, stood_down)
+            store_write(self._store.update_theme, activated)
         return activated
 
     def add_to_theme(self, *, theme_id: str, artwork_id: str, position: int | None = None) -> ThemeMembership:
@@ -611,7 +611,7 @@ class CatalogueService:
             added_at=datetime.now(UTC),
             position=self._require_position(position),
         )
-        self._write(self._store.add_membership, membership)
+        store_write(self._store.add_membership, membership)
         return membership
 
     def move_in_theme(self, *, theme_id: str, artwork_id: str, position: int | None) -> ThemeMembership:
@@ -620,14 +620,14 @@ class CatalogueService:
         if membership is None:
             raise ServiceError(f"Artwork {artwork_id!r} is not in theme {theme_id!r}.")
         moved = replace(membership, position=self._require_position(position))
-        self._write(self._store.update_membership, moved)
+        store_write(self._store.update_membership, moved)
         return moved
 
     def remove_from_theme(self, *, theme_id: str, artwork_id: str) -> None:
         """Take a work out of a theme. The work itself is untouched."""
         if self._store.get_membership(theme_id, artwork_id) is None:
             raise ServiceError(f"Artwork {artwork_id!r} is not in theme {theme_id!r}.")
-        self._write(self._store.remove_membership, theme_id, artwork_id)
+        store_write(self._store.remove_membership, theme_id, artwork_id)
 
     # -- repair -----------------------------------------------------------------
 
@@ -663,7 +663,7 @@ class CatalogueService:
                 len(themes),
                 promoted.name,
             )
-            self._write(self._store.update_theme, replace(promoted, is_active=True))
+            store_write(self._store.update_theme, replace(promoted, is_active=True))
 
     # -- writes: the display directive ----------------------------------------
 
@@ -696,7 +696,7 @@ class CatalogueService:
         with self._store.transaction():
             current = self._store.get_directive()
             advanced = Directive(sequence=current.sequence + 1, pinned_work_id=pinned_work_id)
-            self._write(self._store.set_directive, advanced)
+            store_write(self._store.set_directive, advanced)
         return advanced
 
     def _demote_primary_sources(self, artwork_id: str) -> None:
@@ -704,7 +704,7 @@ class CatalogueService:
         for other in self._store.list_sources(artwork_id):
             if other.is_primary:
                 demoted = replace(other, is_primary=False)
-                self._write(self._store.update_source, demoted)
+                store_write(self._store.update_source, demoted)
 
     def _require_artwork(self, artwork_id: str) -> Artwork:
         artwork = self._store.get_artwork(artwork_id)
@@ -730,28 +730,6 @@ class CatalogueService:
             raise ServiceError(f"Unknown status {status!r}. Valid values are: {valid}.") from exc
 
     @staticmethod
-    def _require_member[E: StrEnum](value: object, enum: type[E], field: str) -> E:
-        """Accept the enum member or its string value, and nothing else.
-
-        Callers reach this layer from a tool or an HTTP handler, where every
-        value started as text — so the string form has to work — but an unknown
-        one has to fail here rather than reach a column as a value nothing can
-        read back.
-        """
-        try:
-            return enum(value)
-        except ValueError as exc:
-            valid = ", ".join(sorted(member.value for member in enum))
-            raise ServiceError(f"Unknown {field} {value!r}. Valid values are: {valid}.") from exc
-
-    @staticmethod
-    def _require_text(value: str, field: str) -> str:
-        text = value.strip()
-        if not text:
-            raise ServiceError(f"{field} cannot be empty.")
-        return text
-
-    @staticmethod
     def _require_hex(value: str) -> str:
         text = value.strip().lower()
         if len(text) != 7 or not text.startswith("#") or any(character not in "0123456789abcdef" for character in text[1:]):
@@ -763,17 +741,3 @@ class CatalogueService:
         if position is not None and position < 0:
             raise ServiceError(f"A position cannot be negative, got {position}.")
         return position
-
-    @staticmethod
-    def _write[**P](operation: Callable[P, None], *args: P.args, **kwargs: P.kwargs) -> None:
-        """Run a store write, reporting a refusal in the service's own terms.
-
-        The store speaks in constraint violations; callers above this layer
-        should never have to know that the catalogue happens to be SQL. The
-        arguments are passed through rather than closed over so that a write
-        inside a loop cannot capture the wrong iteration's record.
-        """
-        try:
-            operation(*args, **kwargs)
-        except StorageError as exc:
-            raise ServiceError(str(exc)) from exc

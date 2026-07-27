@@ -7,7 +7,7 @@ import uvicorn
 from curation.app import create_app
 from curation.config import Settings
 from curation.persistence.sqlite import SqliteCatalogue
-from curation.services.catalogue import CatalogueService
+from curation.services.container import Services
 
 
 def main() -> None:
@@ -20,13 +20,13 @@ def main() -> None:
     settings.art_root.mkdir(parents=True, exist_ok=True)
     store = SqliteCatalogue(settings.catalogue_path)
     try:
-        service = CatalogueService(store)
+        services = Services.bind(catalogue=store)
         # The catalogue file outlives any single version of this code, so rules
         # added since it was written are brought to it here rather than assumed
         # of it. Before serving, because a surface must not answer from a
         # catalogue still in a state its own rules forbid.
-        service.reconcile()
-        uvicorn.run(create_app(service), host=settings.host, port=settings.port)
+        services.reconcile()
+        uvicorn.run(create_app(services), host=settings.host, port=settings.port)
     finally:
         store.close()
 

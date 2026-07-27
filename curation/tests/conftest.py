@@ -18,6 +18,7 @@ import uvicorn
 from curation.app import create_app
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.services.catalogue import CatalogueService
+from curation.services.container import Services
 
 _SEEDED_TITLES = ("I Saw the Figure 5 in Gold", "Nighthawks", "The Persistence of Memory")
 
@@ -37,8 +38,14 @@ def store(tmp_path) -> Iterator[SqliteCatalogue]:
 
 
 @pytest.fixture
-def service(store: SqliteCatalogue) -> CatalogueService:
-    return CatalogueService(store)
+def services(store: SqliteCatalogue) -> Services:
+    """Every service, wired the way the entry point wires them."""
+    return Services.bind(catalogue=store)
+
+
+@pytest.fixture
+def service(services: Services) -> CatalogueService:
+    return services.catalogue
 
 
 @pytest.fixture
@@ -58,9 +65,9 @@ def seeded_service(service: CatalogueService) -> CatalogueService:
 
 
 @pytest.fixture
-def server_url(seeded_service: CatalogueService) -> Iterator[str]:
+def server_url(services: Services, seeded_service: CatalogueService) -> Iterator[str]:
     """A real HTTP server on an ephemeral port, serving the real application."""
-    app = create_app(seeded_service)
+    app = create_app(services)
     config = uvicorn.Config(app, host="127.0.0.1", port=_free_port(), log_level="warning")
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)

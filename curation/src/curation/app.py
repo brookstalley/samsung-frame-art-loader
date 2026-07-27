@@ -29,7 +29,7 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.types import Receive, Scope, Send
 
 from curation.mcp.server import build_server
-from curation.services.catalogue import CatalogueService
+from curation.services.container import Services
 
 log = logging.getLogger(__name__)
 
@@ -49,14 +49,14 @@ _PLACEHOLDER_PAGE: Final[str] = """<!doctype html>
 """
 
 
-def create_app(service: CatalogueService) -> FastAPI:
-    """Build the application around an already-constructed service.
+def create_app(services: Services) -> FastAPI:
+    """Build the application around already-constructed services.
 
-    The service is injected rather than assembled here so that a test can run
-    the real application against a scratch catalogue, and so that nothing at
-    import time touches the filesystem.
+    They are injected rather than assembled here so that a test can run the real
+    application against a scratch catalogue, and so that nothing at import time
+    touches the filesystem.
     """
-    mcp_server = build_server(service)
+    mcp_server = build_server(services)
     session_manager = StreamableHTTPSessionManager(app=mcp_server)
 
     @asynccontextmanager

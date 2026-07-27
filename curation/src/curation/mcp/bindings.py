@@ -20,14 +20,17 @@ from curation.mcp.envelope import ok
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
 from curation.persistence.records import Artist, Artwork
-from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing, CatalogueService
+from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing
+from curation.services.container import Services
 
-#: A bound action: validated arguments in, a result payload out.
-Binding = Callable[[CatalogueService, Mapping[str, Any]], dict[str, Any]]
+#: A bound action: validated arguments in, a result payload out. Every binding
+#: takes the whole container rather than the one service it happens to need, so
+#: an action moving between concerns is not also a change to the dispatcher.
+Binding = Callable[[Services, Mapping[str, Any]], dict[str, Any]]
 
 
-def _list_artworks(service: CatalogueService, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    listing = service.list_artworks(
+def _list_artworks(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    listing = services.catalogue.list_artworks(
         status=arguments.get("status"),
         limit=arguments.get("limit"),
         offset=arguments.get("offset", 0),
@@ -45,8 +48,8 @@ def _list_artworks(service: CatalogueService, arguments: Mapping[str, Any]) -> d
     )
 
 
-def _get_artwork(service: CatalogueService, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    return ok(artwork=_full(service.get_artwork(arguments["artwork_id"])))
+def _get_artwork(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    return ok(artwork=_full(services.catalogue.get_artwork(arguments["artwork_id"])))
 
 
 #: Every built action, keyed by tool and action name. A tool absent from here

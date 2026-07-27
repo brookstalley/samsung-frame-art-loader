@@ -21,7 +21,7 @@ from curation.mcp.bindings import BINDINGS
 from curation.mcp.envelope import failure, ok, to_call_tool_result
 from curation.mcp.registry import HELP_ACTION, ArgumentError
 from curation.mcp.tools import TOOLS, TOOLS_BY_NAME
-from curation.services.catalogue import CatalogueService
+from curation.services.container import Services
 from curation.services.errors import ServiceError
 
 log = logging.getLogger(__name__)
@@ -72,7 +72,7 @@ def tool_definitions() -> list[types.Tool]:
     ]
 
 
-def dispatch(service: CatalogueService, tool_name: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
+def dispatch(services: Services, tool_name: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
     """Resolve one tool call to a result payload.
 
     Returns a payload rather than a wire result so that the envelope's
@@ -119,7 +119,7 @@ def dispatch(service: CatalogueService, tool_name: str, arguments: Mapping[str, 
         )
 
     try:
-        return binding(service, validated)
+        return binding(services, validated)
     except ServiceError as exc:
         return failure(str(exc), tool=tool.name, example=action.example)
     except Exception:  # prawduct:allow prawduct/broad-except -- tool boundary: a fault must surface as failure, never success
@@ -134,8 +134,8 @@ def dispatch(service: CatalogueService, tool_name: str, arguments: Mapping[str, 
         )
 
 
-def build_server(service: CatalogueService) -> Server:
-    """Wire the registry and the service onto an MCP server."""
+def build_server(services: Services) -> Server:
+    """Wire the registry and the services onto an MCP server."""
     server: Server = Server(SERVER_NAME, version=_server_version(), instructions=INSTRUCTIONS)
 
     @server.list_tools()
@@ -148,6 +148,6 @@ def build_server(service: CatalogueService) -> Server:
     # does not teach.
     @server.call_tool(validate_input=False)
     async def _call_tool(name: str, arguments: dict[str, Any]) -> types.CallToolResult:
-        return to_call_tool_result(dispatch(service, name, arguments))
+        return to_call_tool_result(dispatch(services, name, arguments))
 
     return server

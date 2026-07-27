@@ -1,10 +1,13 @@
 """Turning caller input into a storable field, for the fields several entities share.
 
-Two rules live here because more than one entity has to obey them and a copy per
-entity is a copy that drifts.
+These rules live here because more than one entity has to obey them and a copy
+per entity is a copy that drifts. That holds across services as well as across
+entities: a candidate work and a catalogued work both refuse an empty title, and
+they refuse it in the same words.
 """
 
 import re
+from enum import StrEnum
 from html import escape
 from html.parser import HTMLParser
 from pathlib import PurePosixPath
@@ -30,6 +33,32 @@ _BREAKING: Final[frozenset[str]] = frozenset({"p", "br", "div"})
 _DISCARDED: Final[frozenset[str]] = frozenset({"script", "style"})
 
 _BLANK_LINES: Final[re.Pattern[str]] = re.compile(r"\n{3,}")
+
+
+def require_text(value: str, *, field: str) -> str:
+    """Accept text with something in it, and nothing else.
+
+    Whitespace is stripped first, so a field holding only spaces is refused
+    rather than stored as a value that reads as present and displays as absent.
+    """
+    text = value.strip()
+    if not text:
+        raise ServiceError(f"{field} cannot be empty.")
+    return text
+
+
+def require_member[E: StrEnum](value: object, *, enum: type[E], field: str) -> E:
+    """Accept the enum member or its string value, and nothing else.
+
+    Callers reach the service layer from a tool or an HTTP handler, where every
+    value started as text — so the string form has to work — but an unknown one
+    has to fail here rather than reach a column as a value nothing can read back.
+    """
+    try:
+        return enum(value)
+    except ValueError as exc:
+        valid = ", ".join(sorted(member.value for member in enum))
+        raise ServiceError(f"Unknown {field} {value!r}. Valid values are: {valid}.") from exc
 
 
 def relative_path(value: str, *, field: str) -> str:
