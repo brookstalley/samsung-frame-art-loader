@@ -56,12 +56,17 @@ Developer preferences for how code is written in this project. Captured during d
 - **Linting**: ruff, configured per plane. Both select `E,F,I,UP,B,T20,TRY` at
   `line-length = 130`. The two configs differ, and the differences are the norm:
   - **Root** (`pyproject.toml`, excludes `curation/` and `display/`) also ignores
-    `TRY400` and `TRY003` project-wide, and carries a per-file carve-out on the
-    eleven 2024 modules waiving `T20`, `E501`, `F841`, `TRY002`, `TRY201`,
-    `TRY300`, `B007` (and `E402` on three). That carve-out has a scheduled end
-    date — those modules are deleted once both planes exist. Deliberately *not*
-    waived there: `F` and `B006`, the classes that produced real defects here.
-    `config.py` is excluded from the carve-out and held to the strict set.
+    `TRY400` and `TRY003` project-wide, and carries a per-file carve-out over
+    eleven files with a scheduled end date — they are deleted once both planes
+    exist. Eight are 2024 wall modules waiving `T20`, `E501`, `F841`, `TRY002`,
+    `TRY201`, `TRY300`, `B007` (plus `E402` on `art.py` and `display.py`); three
+    are hand-run operator tools (`spi_test.py`, `remote_test.py`,
+    `urls_to_json.py`) waiving only `T20`, `E501`, `F841` and — on `spi_test.py`
+    — `E402`, because `print()` is their output rather than logging. Within that
+    carve-out the deliberate holds are `B006` and all of `F` **except `F841`**
+    (the unused-binding rule, waived everywhere in it); the unbound-name class
+    that produced real defects here still fails the build. `config.py` is
+    excluded from the carve-out and held to the strict set.
   - **Curation** (`curation/pyproject.toml`) adds `ANN`, ignores `TRY003`, and
     turns `ANN` off under `tests/*`. No legacy carve-out: this plane is new code.
 

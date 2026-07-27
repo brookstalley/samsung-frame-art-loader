@@ -12,12 +12,20 @@ from curation.config import CATALOGUE_FILENAME, DEFAULT_HOST, DEFAULT_PORT, Conf
 
 
 @pytest.fixture(autouse=True)
-def _clean_env(monkeypatch, tmp_path):
-    # `from_env` calls load_dotenv, which would otherwise let a real .env on
-    # the developer's machine decide what these tests see.
+def _clean_env(monkeypatch):
+    """Resolve from this process's environment and nothing else.
+
+    `from_env` calls `load_dotenv(override=True)` with no path, and dotenv
+    searches from `config.py`'s own directory upward — never the cwd — so
+    chdir'ing to a scratch directory isolates nothing. With `override=True` a
+    real `.env` beats every value set here, and the documented setup step
+    (`cp .env.example .env`) creates exactly that file: without this stub the
+    whole module is green only on a machine where nobody has followed the
+    README.
+    """
+    monkeypatch.setattr("curation.config.load_dotenv", lambda **_: False)
     for name in ("ART_ROOT", "CURATION_HOST", "CURATION_PORT"):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.chdir(tmp_path)
 
 
 def test_a_missing_art_root_fails_fast_and_names_the_file_to_fix():
@@ -45,11 +53,16 @@ def test_the_catalogue_is_anchored_under_art_root(monkeypatch, tmp_path):
 
 
 def test_the_defaults_bind_loopback_on_the_protocol_port(monkeypatch, tmp_path):
+    # Asserted against literals, not against the constants themselves — that
+    # form agrees with whatever value they are changed to. Widening the bind
+    # to a non-loopback address is a deliberate exposure decision, and this
+    # should fail when someone makes it quietly.
     monkeypatch.setenv("ART_ROOT", str(tmp_path))
 
     settings = Settings.from_env()
 
-    assert (settings.host, settings.port) == (DEFAULT_HOST, DEFAULT_PORT)
+    assert (settings.host, settings.port) == ("127.0.0.1", 8770)
+    assert (DEFAULT_HOST, DEFAULT_PORT) == ("127.0.0.1", 8770)
 
 
 def test_a_non_numeric_port_is_rejected_with_the_offending_value(monkeypatch, tmp_path):

@@ -165,12 +165,15 @@ falling back to a default invocation that resolves neither plane. Declared now,
 with `tests_dirs` spanning both trees.
 
 **The Critic round (`final`, the keystone override) returned 0 blocking, 21
-warnings, 9 notes.** Fourteen warnings were fixed in the same pass and verified
-by a `verify-resolutions` delta review; six are routed to the backlog, named
-here so none reads as forgotten: DNS-rebinding protection on `/mcp`, the
-loopback-vs-overlay bind contradiction, the silent empty-install on a mistyped
-`ART_ROOT`, the unbounded MCP session table, the MCP layer's direct import of
-the persistence package, and a test for the waived broad-except path.
+warnings, 9 notes.** Fifteen were fixed in the same pass and verified by two
+`verify-resolutions` delta reviews — fourteen in the first fix round, plus
+`config.py`'s missing test coverage, which closed once `test_config.py` landed.
+The remaining six are routed to the backlog, named here so none reads as
+forgotten: DNS-rebinding protection on `/mcp` (SEC-K3V9), the
+loopback-vs-overlay bind contradiction (ARC-7QN2), the silent empty-install on
+a mistyped `ART_ROOT` (REL-M5X8), the unbounded MCP session table (REL-2JH6),
+the MCP layer's direct import of the persistence package (ARC-B4TD), and a test
+for the waived broad-except path (TST-9WFC).
 
 Four defects were found independently by two reviewers each, which is what
 argued for fixing rather than routing them: the unknown-tool error's hint named
@@ -184,10 +187,16 @@ across two modules, now a single import-time check that Chunks 08–19 will run
 four more times; and raw `sqlite3` constraint text reached the wire, which the
 write-heavy Chunks 08 and 17 would have copied.
 
-**The verify pass caught a defect introduced by the fix round itself** — the
-rewritten linting norm claimed a strictness the ruff configs do not have, which
-is the shape that gets "fixed" by loosening the config to match the artifact.
-Corrected against both files as they actually are.
+**Both verify passes caught defects introduced by the fix rounds themselves**,
+which is the argument for running them rather than committing straight off a
+clean review. The first: the rewritten linting norm claimed a strictness the
+ruff configs do not have — the shape that gets "fixed" by loosening the config
+to match the artifact. The second, and worse: `test_config.py`'s isolation
+fixture did not isolate. `load_dotenv` searches from `config.py`'s own directory
+rather than the cwd, so the fixture's `chdir` was inert and `override=True` let
+a real `.env` beat every value the tests set. All nine passed only on a machine
+where nobody had run the documented `cp .env.example .env` — confirmed by
+creating one, at which point all nine failed. The fixture now stubs the call.
 
 ### The 3tears catalogue dependency is deferred, not dropped (2026-07-27)
 

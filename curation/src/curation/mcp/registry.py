@@ -33,7 +33,12 @@ _JSON_TYPES: Final[Mapping[str, type | tuple[type, ...]]] = {
 
 
 class RegistryError(RuntimeError):
-    """The registry itself is malformed. Raised at import, never at runtime."""
+    """The registry itself is malformed — a defect in this package, not a caller error.
+
+    Raised at import for the structural checks, and from a generator asked to
+    describe a record that cannot be described. Never raised in response to
+    anything a caller sent: those are `ArgumentError`.
+    """
 
 
 @dataclass(frozen=True, slots=True)
