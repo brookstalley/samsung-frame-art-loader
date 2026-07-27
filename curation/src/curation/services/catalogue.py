@@ -20,6 +20,7 @@ well under a millisecond, and a synchronous core keeps this logic testable
 without an event loop.
 """
 
+import logging
 import uuid
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
@@ -49,6 +50,8 @@ from curation.persistence.records import (
 from curation.services.display_fit import ArtworkBox, FitAssessment, assess_display_fit
 from curation.services.errors import ServiceError
 from curation.services.fields import description_markup, relative_path
+
+log = logging.getLogger(__name__)
 
 #: How many works a listing returns when the caller does not say.
 DEFAULT_LIST_LIMIT: Final[int] = 25
@@ -568,9 +571,12 @@ class CatalogueService:
     def add_theme(self, *, name: str, description: str | None = None) -> Theme:
         """Record a theme and return it.
 
-        The first theme is active, because a catalogue that has themes and no
-        active one leaves the display plane with no sync target at all — and
-        nothing would report that as a problem.
+        A theme arrives active when no other theme currently is, because a
+        catalogue that has themes and no active one leaves the display plane with
+        no sync target at all — and nothing would report that as a problem. The
+        condition is "none is active" rather than "there are none", so that a
+        catalogue which somehow reached that state is repaired by the next
+        addition rather than staying broken until someone notices.
         """
         with self._store.transaction():
             theme = Theme(
@@ -578,7 +584,7 @@ class CatalogueService:
                 name=self._require_text(name, "name"),
                 created_at=datetime.now(UTC),
                 description=description,
-                is_active=not self._store.list_themes(),
+                is_active=not any(existing.is_active for existing in self._store.list_themes()),
             )
             self._write(self._store.add_theme, theme)
         return theme
@@ -623,6 +629,42 @@ class CatalogueService:
             raise ServiceError(f"Artwork {artwork_id!r} is not in theme {theme_id!r}.")
         self._write(self._store.remove_membership, theme_id, artwork_id)
 
+    # -- repair -----------------------------------------------------------------
+
+    def reconcile(self) -> None:
+        """Repair rules a catalogue on disk may predate. Run once, as the plane starts.
+
+        A catalogue file outlives any single version of this code, so a rule added
+        after a file was written has to be brought to that file rather than
+        assumed of it. Exactly one theme active is such a rule: an earlier
+        revision created every theme inactive and offered no way to activate one,
+        so a catalogue from then holds themes with none active — the state the
+        rule forbids, and precisely the one where the display plane has no sync
+        target while nothing reports a problem.
+
+        No ordinary write repairs it. The index the file carries states only "at
+        most one", which that state satisfies; and while adding a theme now
+        promotes one when none is active, a catalogue nobody adds to would stay
+        broken indefinitely.
+
+        The repair is logged at WARNING because it is a silent condition being
+        corrected: nothing else would ever say the catalogue had been in it.
+        """
+        with self._store.transaction():
+            themes = self._store.list_themes()
+            if not themes or any(theme.is_active for theme in themes):
+                return
+            # The oldest theme, so the choice is the same on every machine that
+            # opens the same file rather than whichever the listing happened to
+            # put first.
+            promoted = min(themes, key=lambda theme: (theme.created_at, theme.id))
+            log.warning(
+                "Catalogue held %d theme(s) with none active, which leaves the display plane no sync target; activated %r.",
+                len(themes),
+                promoted.name,
+            )
+            self._write(self._store.update_theme, replace(promoted, is_active=True))
+
     # -- writes: the display directive ----------------------------------------
 
     def step_display(self) -> Directive:
@@ -663,10 +705,6 @@ class CatalogueService:
             if other.is_primary:
                 demoted = replace(other, is_primary=False)
                 self._write(self._store.update_source, demoted)
-
-    def _detail(self, artwork_id: str) -> ArtworkDetail:
-        artwork = self._require_artwork(artwork_id)
-        return ArtworkDetail(artwork=artwork, artist=self._resolve_artist(artwork.artist_id, {}))
 
     def _require_artwork(self, artwork_id: str) -> Artwork:
         artwork = self._store.get_artwork(artwork_id)

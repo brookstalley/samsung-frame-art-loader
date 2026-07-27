@@ -110,16 +110,21 @@ prose, which this section already carries. It is not worth a second exposure.
 2. **Re-pair against the TV** (physical access required). The new token is written
    to an untracked path and never enters git.
 
-> **Operational hazard, and it is not obvious.** `token_file` is read at runtime by
-> relative path (`tvart.py`). Because deployment is `git pull`, the commit that
-> untracks it **deletes it on the Pi**, and TV authentication breaks until step 2 is
-> done. That is acceptable only because step 2 was always required — but the two
-> steps must therefore be done in one sitting, with hardware access, not scheduled
-> apart. Sequence: untrack → deploy → re-pair on the Pi.
+> **The operational hazard this note described is gone (2026-07-27), and the
+> remediation sequence it prescribed must not be followed.** It read: `token_file`
+> is read at runtime by relative path (`tvart.py`), so because deployment is
+> `git pull`, the commit that untracks it **deletes it on the Pi** — meaning untrack
+> and re-pair had to be done in one sitting, with hardware access.
 >
-> The relative-path load is itself an instance of the hardcoded-deployment-value
-> departure already recorded in `project-preferences.md`; hoisting it would remove
-> this coupling.
+> That coupling was removed by the config hoist: the token now resolves under
+> `ART_ROOT` (`config.tv_token_file`, passed explicitly at both call sites in
+> `tvart.py`), which is outside the checkout. Untracking it therefore does not
+> delete it on the Pi, and the two steps are independent. **An operator following
+> the old sequence would be scheduling hardware access for a problem that no longer
+> exists** — which is why this is corrected here rather than quietly deleted.
+>
+> The relative-path load was itself an instance of the hardcoded-deployment-value
+> departure recorded in `project-preferences.md`. That departure is closed.
 
 **What this does not fix:** the token remains in git history, which is public and
 cloned. Only rotation invalidates it. Untracking is hygiene for the *next* token,

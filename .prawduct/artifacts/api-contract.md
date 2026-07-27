@@ -159,6 +159,11 @@ display plane a command; it writes desired state, and display converges on it.**
 | `show_now(work_id)` | Increments the manifest's directive `sequence` and sets `pinned_work_id` | Jumps to that work, then continues rotating from there |
 | `next` | Increments the directive `sequence` with no pin | Steps to the next work in the list |
 
+`show_now` **refuses an archived work** rather than pinning one, and archiving the
+pinned work withdraws the pin without advancing the sequence. Both rules and their
+reasoning live in `data-model.md` § Directive and are deliberately not restated
+here; what this table owes is that a caller sees a refusal, not a silent no-op.
+
 Two consequences worth stating because they surprise:
 
 - **These actions are not synchronous confirmations.** They return "the directive
@@ -705,13 +710,15 @@ accuracy, tool-call count, token consumption, and error rate — and it explicit
 names workflow-versus-atomic granularity and namespacing as things to *test* rather
 than deduce.
 
-This matters more here than usual, because the repo currently has **no test suite at
-all** (recorded as a known departure in `project-preferences.md`, and blocking for
-medium+ work). An MCP evaluation harness is a strong candidate for the first testing
-investment: it is simultaneously a contract test for the tool surface — the thing
-that catches the description-drift problem the Versioning section flags — and the
-only way to know whether this consolidation is right *for this product* rather than
-in general.
+*(Amended 2026-07-27. This paragraph read "the repo currently has **no test suite at
+all**"; that departure was closed the same day, two suites now run, and the sentence
+had become false.)* What is still outstanding on top of those suites is an **MCP
+evaluation harness** — a different thing from the contract tests that now exist. The
+contract tests assert the surface's shape; the harness would assert that a model can
+actually *use* it, which is the only way to know whether this consolidation is right
+*for this product* rather than in general, and the thing that catches the
+description-drift problem the Versioning section flags. Filed as issue #17 and
+scheduled.
 
 Both production servers already do the narrower version of this. cordyceps pins its
 tool names in a test; hallucinote boots a real server and asserts `list_tools()`

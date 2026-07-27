@@ -85,11 +85,16 @@
 
 ### Catalogue schema
 
-- **Exists:** **partially**, as of 2026-07-27 — Artwork, Artist and Theme on
-  stdlib `sqlite3`, behind the `CatalogueStore` Protocol in
-  `curation/src/curation/persistence/`. The remaining twelve entities and the
-  fifteen write-time constraints are specified in `data-model.md` and not yet
-  implemented; nothing in the code claims otherwise.
+- **Exists:** **partially**, as of 2026-07-27 — nine tables on stdlib `sqlite3`,
+  behind the `CatalogueStore` Protocol in `curation/src/curation/persistence/`,
+  split into a generic durable store and a domain adapter above it. Artwork,
+  Artist and Theme, plus Source, Original, Rendition, MatColor, ThemeMembership
+  and the Directive singleton. Constraints 1–6, 10, 12 and 13 are enforced at
+  write time in the service layer. **Still to come:** the five discovery-side
+  entities (DiscoveryRun, CandidateWork, CandidateImage, SpendRecord,
+  ResolveRunWork), constraints 7–9, 11, 14 and 15, both of their state machines,
+  and startup reconciliation — all specified in `data-model.md`; nothing in the
+  code claims otherwise.
 - **Producer:** the persistence layer. **Currently stdlib `sqlite3` behind a
   Protocol**, not 3tears collections — see the build plan's deferral note. The
   Protocol is what keeps that swap a one-module change.
@@ -127,11 +132,15 @@
 
 ### Configuration
 
-- **Exists:** partially, and badly — `config.py` hardcodes the TV address, art root,
-  and coordinates.
+- **Exists:** **yes**, as of 2026-07-27 — every deployment value reads from `.env`
+  in both planes. _(This read "partially, and badly — `config.py` hardcodes the TV
+  address, art root, and coordinates"; the same bundle that wrote that hoisted all
+  three.)_
 - **Producer:** environment / config file. **Consumer:** both planes.
-- **Contract:** no hardcoded deployment values in source (Critic-enforced norm).
-  `ART_ROOT` is the first to hoist.
+- **Contract:** no hardcoded deployment values in source. Now mechanically
+  enforced rather than Critic-enforced:
+  `tests/test_config.py::test_no_source_file_carries_a_deployment_value` fails on
+  any of the hoisted values reappearing in a module.
 - Values known to belong here: `ART_ROOT`, TV address, coordinates, the **phase-2
   approval work-count threshold** (added 2026-07-19 as a cost threshold; amended
   2026-07-20 to count — see `data-model.md`), and the **per-run search cap**

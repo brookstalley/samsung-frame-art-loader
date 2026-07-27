@@ -821,7 +821,7 @@ technical_decisions:
         and is decided at Chunk 14.
 
         What is built instead (Chunk 07B): a first-party durable store matching
-        the DurableStore decomposition, naming and argument shape
+        the DurableStore decomposition and naming
         (fetch_one/upsert/delete/scan keyed by table + pk mapping), with
         SqliteCatalogue as the domain adapter above it. No BaseCollection, no
         BaseEntity, no CollectionRegistry, no L1 cache tier, no async
@@ -1549,6 +1549,14 @@ technical_decisions:
       date: 2026-07-20
     - decision: "The curation plane's Python 3.14 is a uv-managed standalone build (`uv python install 3.14`); 3tears is NOT relaxed to 3.13."
       rationale: >
+        RE-BASED 2026-07-27: the catalogue takes no 3tears core dependency at all,
+        so "3tears is not relaxed" is no longer this product's question — it is an
+        upstream one. The 3.14 floor stands, now resting on 3tears-models (same
+        declared floor, arrives with the discovery work) and on the verified fact
+        that the whole curation dependency set resolves and imports on CPython
+        3.14.4. The build-vs-relax analysis below is retained as the reason the
+        floor is affordable, not as a live dependency claim.
+
         Decided 2026-07-20 by the operator. This closes the open question opened the
         same day by the co-location decision.
 
@@ -1919,9 +1927,9 @@ open_questions:
     blocking: "Merging the upstream relaxation PR. NOTHING in this product — see below."
     waiting_on: research
     priority: low
-    # NOW FULLY OFF THIS PRODUCT'S PATH as of the 2026-07-20 interpreter decision:
-    # curation runs a uv-managed 3.14 and 3tears is not relaxed, so this product
-    # never exercises 3tears under 3.13. Retained as an upstream 3tears concern
+    # NOW FULLY OFF THIS PRODUCT'S PATH, and doubly so as of 2026-07-27: curation
+    # runs a uv-managed 3.14, and the catalogue takes no 3tears core dependency at
+    # all, so this product never exercises 3tears under any interpreter. Retained as an upstream 3tears concern
     # only. Avoiding this untested risk was part of why the decision went the way
     # it did.
     # The only gap left by the 2026-07-19 audit, which was static (syntax and

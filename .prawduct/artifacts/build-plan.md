@@ -454,7 +454,12 @@ architecture-proving slice is Chunk 07.
   `raise e` on an unbound name) is fixed here, one line, because it degrades
   diagnosis today; defects 2 and 3 (shared mutable list state, discarded
   None-filter) die with the ArtSet/metadata replacement in Chunks 08 and 18 and
-  are not fixed in legacy code; defect 4 (`art_label.py`, dead and broken) is
+  are not fixed in legacy code — **amended 2026-07-27: defect 2 was fixed after
+  all, because the ruff configuration adopted in the same chunk selects `B006`
+  and deliberately does not waive it for `art.py`, so the mutable default
+  argument fails the build. Defect 3's disposition stands unchanged.** Recorded
+  here rather than left implicit: the plan otherwise states something false about
+  the code, and a later reader would believe defect 2 is still live; defect 4 (`art_label.py`, dead and broken) is
   deleted in Chunk 06 after confirming no out-of-tree importer.
 - **Depends on:** Chunk 01 (the token path work lands on an untracked file)
 - **Artifacts consumed:** issue #5, issue #6, `project-preferences.md` § Known
@@ -669,9 +674,13 @@ the existing 41 works are seeded into them.
   twelve entities Chunk 08 adds are written once, against their final shape. Below:
   a generic, table-oriented durable store owning the connection, the lock, the
   schema, and constraint-refusal translation, exposing `fetch_one` / `upsert` /
-  `delete` / `scan` keyed by table plus a primary-key mapping — the decomposition,
-  naming and argument shape of 3tears' `DurableStore` protocol, so that a later
-  collection layer is an adapter rather than a rewrite. Above: `SqliteCatalogue`
+  `delete` / `scan` keyed by table plus a primary-key mapping — the decomposition
+  and naming of 3tears' `DurableStore` protocol, so that a later collection layer
+  is an adapter rather than a rewrite. The **argument lists are a subset**, not a
+  match: the divergences (sync methods, no `conn` transaction handle, no `cas`
+  fence, a required rather than optional `pk`) are enumerated in the module
+  itself, because a parity claim wider than the code is how the next reader is
+  misled about what can be swapped. Above: `SqliteCatalogue`
   as the domain adapter, mapping records to rows and owning ordering, paging and
   totals. This is a refactor: no existing test changes, and no change to what any
   caller receives. The one deliberate exception is the journal — a refused write
@@ -774,6 +783,14 @@ surface was reviewed on its own.
   survive a restart — releasing ResolveRunWork coverage and logging one WARNING
   per run moved, which is the only signal a run died.
 - **Depends on:** Chunk 08A
+- **First task, carried from 08A's Critic round:** **split `CatalogueService`
+  before adding to it.** It is one class over nine entity families and ~740 lines;
+  this chunk adds five more families, and two reviewers independently called the
+  split out. The seam that has been waiting for a second concern is here — a
+  `DiscoveryService` alongside the catalogue one, both bound by a small container
+  the surfaces take, so `create_app` and the MCP bindings stop naming a single
+  service class. Do it first, as its own commit, so the entity work lands against
+  the shape it will keep.
 - **Artifacts consumed:** `data-model.md` (entities DiscoveryRun, CandidateWork,
   CandidateImage, SpendRecord, ResolveRunWork; both state machines; constraints
   7–9, 11, 14, 15), `api-contract.md` § `set_verdict` cannot set

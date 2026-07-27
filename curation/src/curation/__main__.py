@@ -20,7 +20,13 @@ def main() -> None:
     settings.art_root.mkdir(parents=True, exist_ok=True)
     store = SqliteCatalogue(settings.catalogue_path)
     try:
-        uvicorn.run(create_app(CatalogueService(store)), host=settings.host, port=settings.port)
+        service = CatalogueService(store)
+        # The catalogue file outlives any single version of this code, so rules
+        # added since it was written are brought to it here rather than assumed
+        # of it. Before serving, because a surface must not answer from a
+        # catalogue still in a state its own rules forbid.
+        service.reconcile()
+        uvicorn.run(create_app(service), host=settings.host, port=settings.port)
     finally:
         store.close()
 

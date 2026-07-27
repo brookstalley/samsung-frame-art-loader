@@ -50,6 +50,33 @@ def test_the_pipeline_never_upscales():
     assert (assessment.rendered_width, assessment.rendered_height) == (900, 600)
 
 
+def test_a_source_that_exactly_fills_the_box_is_native_not_matted_small():
+    """The equality boundary, pinned from both sides.
+
+    Nothing is downscaled at exactly the box size, but nothing is *smaller* than
+    the box either, and the mat that results is the configured one rather than a
+    wider one. Reporting a deficiency that is not there would put a warning on the
+    review card for the best possible acquisition.
+    """
+    exact = assess_display_fit(width=3316, height=1597, box=_FORTY_TWO_INCH)
+    assert exact.fit is DisplayFit.NATIVE
+    assert (exact.rendered_width, exact.rendered_height) == (3316, 1597)
+
+    # One pixel short in either direction and the mat really does grow.
+    assert assess_display_fit(width=3315, height=1597, box=_FORTY_TWO_INCH).fit is DisplayFit.MATTED_SMALL
+    assert assess_display_fit(width=3316, height=1596, box=_FORTY_TWO_INCH).fit is DisplayFit.MATTED_SMALL
+
+
+def test_a_downscaled_source_is_native_even_where_the_mat_grows():
+    """Aspect-ratio residue is not a resolution deficiency.
+
+    This source is wider than the box and shorter than it, so it downscales and
+    still leaves vertical space. That space is the shape of the work, not a
+    shortage of pixels, which is exactly why occupancy is the wrong metric.
+    """
+    assert assess_display_fit(width=4000, height=1000, box=_FORTY_TWO_INCH).fit is DisplayFit.NATIVE
+
+
 def test_a_small_web_image_lands_below_the_floor():
     assessment = assess_display_fit(width=800, height=600, box=_FORTY_TWO_INCH)
 

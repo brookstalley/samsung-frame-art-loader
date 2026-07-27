@@ -252,6 +252,24 @@ the display plane are separate processes on separate Python versions.
 
 ## Consequence for this product
 
+> **SUPERSEDED 2026-07-27 — read this before the analysis below.** The product
+> answered "no" to the question this section poses, and then **declined the
+> three-tier entities as well**. The catalogue's durable tier is first-party
+> SQLite *shaped to* `DurableStore`'s decomposition and naming, with no framework
+> package imported: reading the framework showed that its L1 is a named in-memory
+> database, that it ships no SQLite durable backend (so the tier that persists is
+> this product's own code under every configuration), and that its collections are
+> async throughout with no query API — which would convert three layers to async
+> against a ratified norm. So "required, not optional" below is **retired**: what
+> was required was *a durable SQLite tier*, not that framework's entities over one.
+> `3tears-models` is unaffected and still arrives with the discovery work; it
+> depends on `media-contracts` and `observe`, never on core. Recorded in
+> `architecture.md` § Decision Log, `project-state.yaml` →
+> `technical_decisions.technology`, and `curation/pyproject.toml`.
+>
+> The analysis below is retained because it is what produced that answer, and
+> because § Answer 2 is still a live input. It is not a live recommendation.
+
 The decision collapses to one question: **do you want 3tears agent memory?**
 
 - **No** → zero infrastructure. Three-tier entities over a SQLite `DurableStore` L3

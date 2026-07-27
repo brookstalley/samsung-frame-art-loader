@@ -105,9 +105,17 @@ def assess_display_fit(*, width: int, height: int, box: ArtworkBox) -> FitAssess
     rendered_height = max(1, round(height * scale))
     long_edge_inches = max(rendered_width, rendered_height) / box.pixels_per_inch
 
+    # The metric that isolates resolution is whether the render is a downscale or
+    # a native-size paste — canvas occupancy is not, being dominated by
+    # aspect-ratio mismatch. The second clause is the equality boundary: a source
+    # that exactly fills the box is not downscaled, but it is not *smaller* than
+    # the box either, and the mat it gets is the configured one rather than a
+    # wider one. Calling that matted_small would report a deficiency that is not
+    # there.
+    fills_the_box = width >= box.width and height >= box.height
     if long_edge_inches < box.floor_inches:
         fit = DisplayFit.BELOW_FLOOR
-    elif scale < 1:
+    elif scale < 1 or fills_the_box:
         fit = DisplayFit.NATIVE
     else:
         fit = DisplayFit.MATTED_SMALL

@@ -58,6 +58,7 @@ def test_no_package_directory_is_gitignored():
         if root.exists():
             candidates.extend(p for p in root.rglob("*") if p.is_dir() and p.name != "__pycache__")
 
+    assert candidates, "expected to find package directories; has the layout moved?"
     ignored = _ignored(candidates)
     assert not ignored, "these package directories would never be committed:\n" + "\n".join(ignored)
 

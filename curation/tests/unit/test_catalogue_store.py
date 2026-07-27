@@ -14,7 +14,22 @@ answer on purpose rather than discover from a file that no longer loads.
 import sqlite3
 from datetime import UTC, datetime
 
-from curation.persistence.records import Artist, Artwork, ArtworkStatus, Theme
+import pytest
+
+from curation.persistence.catalogue import StorageError
+from curation.persistence.records import (
+    AcquisitionMethod,
+    Artist,
+    Artwork,
+    ArtworkStatus,
+    MatColor,
+    MatMethod,
+    Original,
+    RightsStatus,
+    Source,
+    SourceClass,
+    Theme,
+)
 from curation.persistence.sqlite import SqliteCatalogue
 
 _EXPECTED_SCHEMA = {
@@ -228,7 +243,12 @@ def _write_legacy_catalogue(path):
             _LEGACY_ARTWORK_INSERT,
             ("w2", "chop suey", "a2", None, None, None, None, None, "archived", None, moment),
         )
-        connection.execute(_LEGACY_THEME_INSERT, ("t1", "Late night", "After hours", 1, moment))
+        # Both inactive, because that is the only shape the earlier revision could
+        # produce: its `add_theme` took no `is_active` argument and it shipped no
+        # way to activate one. A fixture writing an active theme here would be
+        # testing a file that never existed, and would hide the one real
+        # consequence — a catalogue that upgrades with no active theme at all.
+        connection.execute(_LEGACY_THEME_INSERT, ("t1", "Late night", "After hours", 0, moment))
         connection.execute(_LEGACY_THEME_INSERT, ("t2", "daylight", None, 0, moment))
         connection.commit()
     finally:
@@ -276,7 +296,7 @@ def test_a_catalogue_written_by_an_earlier_revision_still_reads(tmp_path):
         assert archived.accepted_at is None
 
         theme = catalogue.get_theme("t1")
-        assert (theme.name, theme.description, theme.is_active, theme.created_at) == ("Late night", "After hours", True, moment)
+        assert (theme.name, theme.description, theme.is_active, theme.created_at) == ("Late night", "After hours", False, moment)
         assert catalogue.get_theme("t2").is_active is False
 
         # Ordering is case-insensitive by title, so the lowercase entry leads.
@@ -359,7 +379,7 @@ def test_an_earlier_catalogue_gains_the_tables_it_did_not_have(tmp_path):
     try:
         # The rows the older revision wrote are untouched.
         assert catalogue.get_artwork("w1").title == "Nighthawks"
-        assert catalogue.get_theme("t1").is_active is True
+        assert catalogue.get_theme("t1").is_active is False
         # And the entities it never knew about are addressable.
         assert catalogue.get_directive().sequence == 0
         assert catalogue.list_sources("w1") == []
@@ -367,5 +387,74 @@ def test_an_earlier_catalogue_gains_the_tables_it_did_not_have(tmp_path):
         assert catalogue.list_renditions("w1") == []
         assert catalogue.list_mat_colors("w1") == []
         assert catalogue.list_memberships("t1") == []
+    finally:
+        catalogue.close()
+
+
+def test_the_file_itself_refuses_a_second_active_theme(tmp_path):
+    """The rule is the service layer's; this is what catches a path that forgets it.
+
+    Enforcement in two places would be a defect if they could disagree. They
+    cannot: the index states strictly less than the rule does — at most one, where
+    the rule says exactly one — so it can only ever fire on a write the service
+    layer should already have refused.
+    """
+    catalogue = SqliteCatalogue(tmp_path / "catalogue.sqlite")
+    try:
+        moment = datetime(2026, 7, 27, 9, 30, tzinfo=UTC)
+        catalogue.add_theme(Theme(id="t1", name="Late night", created_at=moment, is_active=True))
+
+        with pytest.raises(StorageError, match="already in the catalogue"):
+            catalogue.add_theme(Theme(id="t2", name="Daylight", created_at=moment, is_active=True))
+    finally:
+        catalogue.close()
+
+
+def test_the_file_itself_refuses_a_zero_byte_original(tmp_path):
+    """A zero-length file is the 2024 pipeline's known download failure."""
+    catalogue = SqliteCatalogue(tmp_path / "catalogue.sqlite")
+    try:
+        moment = datetime(2026, 7, 27, 9, 30, tzinfo=UTC)
+        catalogue.add_artwork(Artwork(id="w1", title="Nighthawks", created_at=moment))
+        catalogue.add_source(
+            Source(
+                id="s1",
+                artwork_id="w1",
+                url="https://museum.example/1",
+                provider="artic",
+                source_class=SourceClass.INSTITUTIONAL,
+                acquisition_method=AcquisitionMethod.DEZOOMIFY,
+                rights_status=RightsStatus.PUBLIC_DOMAIN,
+            )
+        )
+
+        with pytest.raises(StorageError, match="does not allow"):
+            catalogue.add_original(
+                Original(
+                    id="o1",
+                    artwork_id="w1",
+                    source_id="s1",
+                    relative_path="originals/w1.tif",
+                    width=100,
+                    height=100,
+                    byte_size=0,
+                    content_hash="sha256:aaa",
+                )
+            )
+    finally:
+        catalogue.close()
+
+
+def test_the_file_itself_refuses_a_second_current_mat_colour(tmp_path):
+    catalogue = SqliteCatalogue(tmp_path / "catalogue.sqlite")
+    try:
+        moment = datetime(2026, 7, 27, 9, 30, tzinfo=UTC)
+        catalogue.add_artwork(Artwork(id="w1", title="Nighthawks", created_at=moment))
+        catalogue.add_mat_color(MatColor(id="m1", artwork_id="w1", hex_rgb="#27285b", method=MatMethod.MANUAL, chosen_at=moment))
+
+        with pytest.raises(StorageError, match="already in the catalogue"):
+            catalogue.add_mat_color(
+                MatColor(id="m2", artwork_id="w1", hex_rgb="#1a1a1a", method=MatMethod.MANUAL, chosen_at=moment)
+            )
     finally:
         catalogue.close()

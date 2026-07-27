@@ -86,8 +86,16 @@ def test_no_source_file_carries_a_deployment_value(monkeypatch):
 
     # The previously-hardcoded values, plus the shape of any absolute home path.
     forbidden = re.compile(r"10\.23\.17\.77|/home/tvpi|/Users/brookstalley|47\.606|-122\.332")
+    # Anchored to this file rather than to the working directory: a glob rooted
+    # at "." matches nothing when pytest is invoked from elsewhere, and a guard
+    # whose whole value is that it cannot be quietly satisfied must not have a
+    # green path through checking zero files.
+    repository_root = pathlib.Path(__file__).resolve().parent.parent
+    modules = sorted(repository_root.glob("*.py"))
+    assert modules, f"expected the 2024 modules at {repository_root}; has the layout moved?"
+
     offenders = []
-    for path in pathlib.Path(".").glob("*.py"):
+    for path in modules:
         for number, line in enumerate(path.read_text().splitlines(), start=1):
             stripped = line.strip()
             if stripped.startswith("#"):

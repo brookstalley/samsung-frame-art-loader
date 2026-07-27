@@ -18,15 +18,19 @@ Developer preferences for how code is written in this project. Captured during d
   - **Display plane: 3.13**, floor 3.12. Raspberry Pi OS Trixie ships 3.13, and the
     IT8951 e-paper driver compiles Cython from 2023 sources targeting 3.13/3.12.
     This is the plane whose version is pinned by hardware.
-  - **Curation plane: 3.14**, **settled 2026-07-20** — required by nothing except
-    `3tears`, whose `requires-python = ">=3.14"` the 2026-07-19 audit found
-    removable in 16 mechanical sites, but which is now kept unmodified. Provisioned
+  - **Curation plane: 3.14**, **settled 2026-07-20; rationale re-based 2026-07-27** —
+    this read "required by nothing except `3tears`", and the catalogue no longer
+    depends on `3tears` core at all. What holds the floor now is `3tears-models`,
+    the operator's own model adapters that the discovery work calls and which
+    declare the same floor — plus the verified fact that the whole curation
+    dependency set resolves and imports on CPython 3.14.4. Provisioned
     as a uv-managed standalone build (`uv python install 3.14`), not compiled: a
     prebuilt `cpython-3.14-linux-aarch64-gnu` exists, so the "30–45 minute source
     build per patch release" that made this an open question was never the real
     price. See `operational-spec.md` § The Curation Interpreter.
-  - `pyproject.toml` still declares `target-version = ["py312"]` and matches
-    neither plane.
+  - _(Resolved 2026-07-27: this said `pyproject.toml` "still declares
+    `target-version = ["py312"]` and matches neither plane". The sibling-project
+    split gave each plane its own.)_
   See [learnings.md](../learnings.md) § Platform and dependencies.
 - **Package manager**: pip against a pinned `requirements.txt` _(inferred)_. `pyproject.toml`
   exists but carries only black config — there is no project/dependency table, so the repo is
@@ -128,18 +132,23 @@ Developer preferences for how code is written in this project. Captured during d
     dependencies, not pure-Python wheels.
   - `openai` (`ai.py`) — mat-colour selection, currently calling `gpt-4o`. Real per-call spend.
   - `dezoomify` (external binary, configured in `config.py`) — tiled high-res image fetch.
-- **Dev commands**: `python tvart.py [--flags]` is the entry point. There is no test, lint,
-  or format command wired up. _(target)_ Establish `pytest`, `ruff check`, `black .`.
+- **Dev commands**: `python tvart.py [--flags]` is the entry point for the 2024 modules.
+  **Established 2026-07-27** and current: `pytest tests` / `ruff check .` / `black .` at the
+  root, and `uv run pytest` / `uv run ruff check .` / `uv run black .` in `curation/`.
+  _(This read "There is no test, lint, or format command wired up"; both departures were
+  closed the same day.)_
 - **`requirements.txt` vs `r`**: `requirements.txt` is the hand-maintained direct-dependency
   list (18 entries). `r` is an extensionless **`pip freeze` capture from the Pi's venv** (60
   entries) — it is the only record of the full transitive set that actually ran, including
   four git-sourced packages absent from `requirements.txt`: `IT8951` (pinned to `9f13613`),
   `omni_epd`, `waveshare-epd`, and the `inky`/`spidev`/`RPi.GPIO` hardware stack. Treat it as
   a recovered lockfile, not scratch — it is evidence, and it should be renamed to say so.
-- **Configuration**: split — secrets via `.env` → `config.py` (`OPENAI_KEY`, `EPD_TYPE`),
-  everything else hardcoded as module constants in `config.py` including the TV's IP address,
-  the art root `/home/tvpi/art`, and geographic coordinates. _(target)_ Hoist deployment-
-  specific values (starting with `ART_ROOT`) out of source; see learnings § Data and cache contract.
+- **Configuration**: everything deployment-specific reads from `.env`. **Hoisted 2026-07-27**
+  — the TV's address and port, the art root, and the geographic coordinates all left source
+  along with the secrets that were already there, and a test now fails on any of them
+  reappearing. _(This read "everything else hardcoded as module constants in `config.py`
+  including the TV's IP address, the art root `/home/tvpi/art`, and geographic coordinates",
+  which the same chunk that hoisted them made false.)_ See learnings § Data and cache contract.
 
 ## Workflow
 
@@ -171,14 +180,15 @@ This per-preference table is the product's **norm index** (`/prawduct:methodolog
 | Preference / norm | Mechanism | Enforcement artifact | Audit home | Why |
 |---|---|---|---|---|
 | black formatting, line-length 130 | Linter | `pyproject.toml` `[tool.black]` | janitor | Already configured; removes formatting from review entirely. |
-| snake_case functions, PascalCase classes | Critic | — | janitor | No linter configured yet; promote to a ruff `N` rule once ruff lands. |
-| Strict stdlib / third-party / local import grouping | Critic | — | janitor | Promote to ruff `I` (isort) once ruff lands — mechanical, shouldn't cost review attention. |
-| `logging` only; `print()` reserved for deliberate CLI output | Critic | — | janitor | This runs unattended on a Pi under systemd; `print()` output has no level and no timestamp, so failures are invisible in the journal. |
-| Type-annotate every new or touched function signature | Critic | — | janitor | Annotating on touch converts a 2,216-line untyped codebase incrementally, without a stop-the-world typing pass. Promote to a mypy/ruff gate once the ratio is high enough to be worth failing on. |
-| Catch specific exceptions; broad catch needs `# prawduct:allow prawduct/broad-except -- reason` | Critic | — | advisory | A swallowed exception in an unattended loader shows up as "the TV just stopped changing", with nothing in the log to say why. |
-| No hardcoded deployment values in source (IP, art root, coordinates) | Critic | — | janitor | The same code runs on the Pi and on a dev Mac; a hardcoded `/home/tvpi/art` means the dev path is a source edit, which is how config drift starts. |
+| snake_case functions, PascalCase classes | Critic | — | janitor | Ruff landed 2026-07-27 and `N` was **deliberately not selected**: the 2024 modules would fail it in bulk on names that are load-bearing at call sites, and a rule that has to be waived everywhere teaches people to waive rules. Stays with the Critic; revisit when the legacy modules are retired. |
+| Strict stdlib / third-party / local import grouping | Linter | ruff `I`, both `pyproject.toml`s | janitor | Mechanical; it should not cost review attention, and since 2026-07-27 it does not. |
+| `logging` only; `print()` reserved for deliberate CLI output | Linter | ruff `T20`, both `pyproject.toml`s (per-file carve-out for the legacy CLI entry points) | janitor | This runs unattended on a Pi under systemd; `print()` output has no level and no timestamp, so failures are invisible in the journal. |
+| Type-annotate every new or touched function signature | Linter (new code) + Critic (legacy) | ruff `ANN` in `curation/pyproject.toml`; not selected at the root | janitor | Split deliberately 2026-07-27: the curation plane is all new code and is held to the rule mechanically, while annotating on touch converts the 2,216-line untyped legacy tree incrementally rather than by a stop-the-world pass. Promote the root when the ratio is high enough to be worth failing on. |
+| Catch specific exceptions; broad catch needs `# prawduct:allow prawduct/broad-except -- reason` | Critic + linter | ruff `B`/`TRY`, both `pyproject.toml`s | advisory | A swallowed exception in an unattended loader shows up as "the TV just stopped changing", with nothing in the log to say why. |
+| No hardcoded deployment values in source (IP, art root, coordinates) | Test | `tests/test_config.py::test_no_source_file_carries_a_deployment_value` | advisory | The same code runs on the Pi and on a dev Mac; a hardcoded `/home/tvpi/art` means the dev path is a source edit, which is how config drift starts. |
 | Async at the I/O boundary, synchronous core | Critic | — | janitor | `samsungtvws` forces async at the TV edge only. Letting it spread makes the image and metadata logic untestable without an event loop. |
 | Hardware + network access sits behind an interface | Critic | — | janitor | Both display drivers are dormant upstream and one is unpinned; an interface keeps a frozen 2023 driver from dictating the project's Python version (learnings § Platform and dependencies). |
+| No secret ever reaches a log line | Critic | — | advisory | Added 2026-07-27; it was stated in `security-model.md` and had no row here, so nothing assigned it a mechanism and nothing looked for it. The repository is public and the journal is read over someone's shoulder during a failure — which is exactly when logging is turned up. Judgment-required: the violation is usually a whole object logged for context whose repr happens to include a token, not a literal secret in a format string. |
 | **Operation logic lives ONLY in the service layer; MCP tools and HTTP handlers are thin bindings** — norm lives in `architecture.md` § Direction | Critic | — | janitor | Ratified by the owner 2026-07-20. Judgment-required: a handler that validates, orders, or decides is the violation; one that unpacks arguments, calls a single service method, and formats the result is the norm. Rationale and retroactivity check live with the norm. |
 | **Spend ceilings are provider-enforced, never application-enforced** — norm lives in `nonfunctional-requirements.md` § Direction | Critic | — | janitor | An application meter that fails open is indistinguishable from one that works — no error, no alert, just a bill. This codebase has already shipped that exact defect shape (`upload_file` reports success on failure). Judgment-required: the violation is "this code path is the only thing stopping the bill", which no pattern match can see. |
 | **The display plane never requires the curation plane to be reachable** — norm lives in `nonfunctional-requirements.md` § Direction | Critic | — | janitor | The availability asymmetry is the entire structural justification for the two-plane split; a display plane that phones home has paid the split's costs and kept none of its benefit. Judgment-required: a new call to the curation host is only a violation depending on whether rotation can proceed without it. |
@@ -194,9 +204,9 @@ current state for the norm — and so nobody "fixes" the mismatch by weakening a
 | ~~No test suite at all~~ | ~~whole repo~~ | **Closed 2026-07-27.** pytest established per plane; both suites declared as `test_commands`. |
 | ~~No linter~~ | ~~whole repo~~ | **Closed 2026-07-27.** ruff configured at the root and in the curation plane; the mechanical norms it covers moved from Critic to lint rules. |
 | `print()` used for operational output | `ai.py`, `display.py`, others | Convert on touch. |
-| Deployment values hardcoded | `config.py` (`tv_address`, `base_folder`, lat/long) | Hoist during the config work; `ART_ROOT` first. |
+| ~~Deployment values hardcoded~~ | ~~`config.py` (`tv_address`, `base_folder`, lat/long)~~ | **Closed 2026-07-27.** All three hoisted to `.env`; `tests/test_config.py` fails on any of them returning to source. |
 | Sparse type annotations | 6 of 13 modules have none | Annotate on touch. |
-| `pyproject.toml` declares a single `target-version = ["py312"]` for a two-plane product | `pyproject.toml` | black's `target-version` is a **floor**, so `py312` is correct for the display plane (floor 3.12) and wrong only for curation (3.14). Resolution path is now decided: the uv workspace split gives each plane its own `pyproject.toml`, so each carries its own target rather than one setting trying to describe both. Do it as part of the workspace restructure. |
+| ~~`pyproject.toml` declares a single `target-version = ["py312"]` for a two-plane product~~ | ~~`pyproject.toml`~~ | **Closed 2026-07-27.** The sibling-project split gave each plane its own `pyproject.toml`, so each carries its own target rather than one setting trying to describe both. |
 
 **Rule for adding a new preference:** assign a mechanism. If the preference can be expressed as "every file/function/config matches pattern X with named exceptions" → write a test. If a linter rule already exists for it → configure the linter. If it requires understanding intent → assign to Critic. Never leave a preference unassigned.
 

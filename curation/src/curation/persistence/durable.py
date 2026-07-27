@@ -30,8 +30,9 @@ nobody reads a promise here that the code does not carry.
   would delegate through `asyncio.to_thread` — which blocking `sqlite3` requires
   inside an event loop in any case, so that wrapper is work the async colour owes
   rather than work this divergence creates.
-- Every framework method takes `conn`, a backend-specific transaction handle, so
-  that several writes commit together against a pooled connection. This store has
+- `fetch_one`, `upsert` and `delete` take `conn` there — a backend-specific
+  transaction handle, so that several writes commit together against a pooled
+  connection. (`scan` does not; it is read-only and unordered.) This store has
   exactly one connection, so the handle would name the only thing it could ever
   name: `transaction()` below is the same capability with the handle left
   implicit, and it is what a rule spanning rows is applied inside.
@@ -197,6 +198,11 @@ class SqliteDurableStore:
             try:
                 yield
             except BaseException:
+                # Deliberately wider than `Exception`, and it swallows nothing:
+                # the group is abandoned and the same exception continues. A
+                # `KeyboardInterrupt` or a generator being closed early leaves
+                # the body just as surely as an error does, and leaving half a
+                # rule applied is the one outcome this block exists to prevent.
                 self._connection.rollback()
                 raise
             else:

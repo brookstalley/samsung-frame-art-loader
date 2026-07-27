@@ -68,8 +68,19 @@ on its own.
 ThemeMembership — plus the Directive singleton, taking the catalogue file from
 three tables to nine. The Artwork state machine (`archive`/`restore`, both
 illegal edges refused). Constraints 1–6, 10, 12 and 13, each enforced at write
-time in the service layer and each with at least one test that fails without its
-enforcement. `display_fit` as one service-layer function that stores nothing.
+time in the service layer. `display_fit` as one service-layer function that
+stores nothing.
+
+**"Each constraint has a test that fails without it" was checked rather than
+claimed, and the check found a hole.** Every one of the nine enforcements was
+removed in turn and the suite re-run. Eight went red immediately. Constraint 10
+did not: `description_markup` had thorough tests of its own, and nothing asserted
+that `add_artwork` ever *called* it — so deleting the call from the service left
+the suite entirely green. A normaliser nothing calls is the same defect as no
+normaliser, and it looks identical from the normaliser's unit tests. Two tests
+now cover the wiring, and the mutation re-run confirms they fail without it. This
+is the previous cycle's learning applied forward: a claim about what the tests
+pin is worth as much as the run that establishes it.
 
 **Persistence gained a transaction seam, and it is conformance rather than
 divergence.** Three of the rules span rows — exactly one theme active, exactly
@@ -130,9 +141,58 @@ physical label as visible text. Unknown tags are unwrapped and their text kept �
 right for `<span>`, wrong for code. Fixed, with tests for both the closed and the
 unclosed case.
 
-**262 tests pass across both suites** (250 curation, 12 root), up from 154. Ruff
+**288 tests pass across both suites** (276 curation, 12 root), up from 154. Ruff
 and black clean. The real server was launched against a scratch `ART_ROOT` and
-wrote a catalogue carrying all nine tables and its seeded directive row.
+wrote a catalogue carrying all nine tables and its seeded directive row — verified
+by reading the file the server itself wrote, not one a test wrote.
+
+**The Critic ran `cumulative` over the whole branch: 0 blocking, 17 warnings, 10
+notes.** It found one real defect in this chunk's own work, fixed here: **a
+catalogue written before 08A upgrades into a permanent violation of the rule 08A
+added.** The earlier revision created every theme inactive and shipped no way to
+activate one, so such a file holds themes with none active — and nothing repaired
+it, because the index the file carries states only "at most one", which zero
+satisfies. `CatalogueService.reconcile()` now runs as the plane starts, promotes
+the oldest theme, and logs one WARNING, because a silent condition being corrected
+should say so. The read-compatibility fixture was complicit and is corrected too:
+it wrote an *active* theme, a row shape the earlier revision could not produce, so
+the only shape that actually exists on disk was the one nothing tested.
+
+Also closed from that round, in this chunk's own code: `_detail` was dead and
+byte-identical to `get_artwork`; an original exactly the size of the artwork box
+was reported `matted_small` where both the data model and the enum's own docstring
+call that `native`, now pinned from both sides; `pydantic` and `httpx` were
+declared with no consumer in a manifest that states twice that the declared set
+describes what the code imports; and `architecture.md` gained the two structural
+patterns this bundle established — the persistence seam and the generated action
+surface — plus the Decision Log entry the durable-tier answer had earned
+everywhere except there.
+
+**Ten of the seventeen warnings were one defect: artifacts describing the repo as
+it was before this branch changed it.** Two still asserted the repo has no test
+suite, in the bundle that established two. `project-preferences.md` — the norm
+index, where staleness decides whether a rule is enforced by a linter or by a
+human — still said "once ruff lands" for rows ruff now covers, still described the
+pre-hoist `config.py`, and had no row at all for "no secret ever reaches a log
+line". `security-model.md` still told an operator to schedule hardware access for
+a coupling this branch removed. All swept, each with the retired sentence quoted
+so the correction is legible rather than invisible.
+
+That cluster is the repo's own escalated learning recurring inside the bundle that
+recorded it — *"retiring a claim is a repo-wide grep, not a local edit"*. Two of
+this chunk's own corrections were the same shape: the 07B parity claim was fixed
+in the module but left standing in the canonical decision record and the build
+plan, and the correction itself said "every framework method takes `conn`" when
+`scan` does not.
+
+**One warning is recorded rather than resolved.** Seven backlog items were filed
+into `.prawduct/backlog.md` after `project-state.yaml` declared it frozen and
+repointed the live backlog at GitHub Issues, so the tooling cannot see them — two
+of them, a mistyped `ART_ROOT` bootstrapping a healthy-looking empty install and
+the missing Origin validation on `/mcp`, have no live tracking home at all.
+Re-filing them means creating issues on a public repository, which is the
+operator's call; the file now carries a note naming all seven so nothing is lost
+while that decision is pending.
 
 ## 2026-07-27: The durable seam — persistence split, and the 3tears swap answered
 

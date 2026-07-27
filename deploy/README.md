@@ -3,9 +3,21 @@
 `samsung-frame-art-loader.service` runs the loader as a persistent daemon on the
 Raspberry Pi driving the Frame TV.
 
+**Before the unit is enabled, the checkout needs its environment file.** Since
+2026-07-27 `config.py` raises at import unless `ART_ROOT`, `TV_ADDRESS`,
+`LATITUDE`, `LONGITUDE` and `LOCATION_NAME` all resolve — deliberately, so that a
+missing deployment value stops the process instead of quietly running against a
+plausible-looking default. `load_dotenv` resolves `.env` next to `config.py`, so
+it must sit in the directory the unit uses as its `WorkingDirectory`.
+
+    cp .env.example .env      # then fill it in
     sudo cp deploy/samsung-frame-art-loader.service /etc/systemd/system/
     sudo systemctl daemon-reload
     sudo systemctl enable --now samsung-frame-art-loader
+
+Skipping the first line does not produce a warning. It produces an import-time
+failure on every start, and — by this unit's own `Restart=always` defaults,
+analysed below — a permanently `failed` unit within half a second, silently.
 
 ## Provenance
 
@@ -22,6 +34,12 @@ it is deployed again:
   extension directory that happened to be in the shell environment when the unit
   was written.
 - `User=tvpi`.
+- **No `EnvironmentFile=`, and the code now requires one.** The unit predates the
+  2026-07-27 config hoist and passes no environment through, so it depends
+  entirely on a `.env` sitting in `WorkingDirectory`. Either declare
+  `EnvironmentFile=` explicitly — which makes the dependency visible in the unit
+  rather than implied by a library's search path — or record that the `.env`
+  placement is the contract.
 - `After=network.target`, which does not guarantee the network is actually up.
   `network-online.target` is the correct dependency for a service that talks to
   the TV on startup.

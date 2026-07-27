@@ -1,5 +1,29 @@
 # Backlog — Samsung Frame Art Loader
 
+> ## ⚠ SEVEN ITEMS WERE FILED HERE AFTER THIS FILE WAS FROZEN (found 2026-07-27)
+>
+> `project-state.yaml` records a 2026-07-19 cutover: the live backlog is **GitHub
+> Issues** (`backlog_service_repo`), and this file is frozen history — "do not edit
+> it, and do not read it as current state". Two later commits edited it anyway:
+> `ba007cd` added **LEG-8H2P**, and `4508cd3` added **SEC-K3V9, ARC-7QN2, REL-M5X8,
+> REL-2JH6, ARC-B4TD** and **TST-9WFC**. Six of those are Critic warnings the build
+> plan says were "routed to the backlog" — routed, by the repo's own rule, into a
+> file the tooling has been told not to read. They are invisible to
+> `prawduct-hook backlog`, to `/prawduct:backlog pick`, and to the session briefing.
+>
+> **Two of them have no live tracking home at all and are worth reading now:**
+> **REL-M5X8** — a mistyped `ART_ROOT` bootstraps a fresh, empty, healthy-looking
+> catalogue and starts cleanly, which is this product's own defining failure shape;
+> and **SEC-K3V9** — no Host/Origin validation on `/mcp`, whose blast radius grows
+> when the only money-spending tool lands.
+>
+> **This note does not resolve it.** Re-filing them means creating public issues on
+> the operator's repository, which is theirs to authorise; the alternative is
+> unsetting `backlog_service_repo` and recording the reversal as a decision. Until
+> one of those happens the seven items are recorded here, findable by this note, and
+> not silently lost — which is the part that could be fixed without asking.
+
+
 <!-- Structured backlog (Prawduct v1.7+). Managed with the `/backlog` skill:
      /backlog            summary + menu
      /backlog pick       what to work on next (filters + natural language)

@@ -159,6 +159,34 @@ is no network between planes.
 - **Serves three surfaces from one ASGI app:** the web UI, its HTTP API, and the
   MCP streamable-HTTP endpoint. All three are thin bindings over one service layer
   (`project-preferences.md`, Critic-enforced).
+- **Internal layering, inside that plane** (established 2026-07-27, Chunks 07–08A):
+
+  ```
+  MCP tools  ·  HTTP handlers          bindings: unpack, call one method, format
+        └──────────┬──────────┘
+             service layer              every rule, every transition, every derivation
+                   │                    (CatalogueStore Protocol — the only way down)
+        ┌──────────┴──────────┐
+   SqliteCatalogue                      domain adapter: schema, record↔row, ordering
+        │                               and paging — the product judgements
+   SqliteDurableStore                   generic: tables, keys, rows. Knows no artwork
+  ```
+
+  Two patterns are load-bearing enough to name here rather than leave in module
+  docstrings:
+
+  - **The persistence seam is split by schema knowledge, and its lower half is
+    shaped to a foreign contract on purpose.** `SqliteDurableStore` matches the
+    decomposition and naming of the `DurableStore` protocol in the operator's own
+    three-tier framework, so that adopting that framework's collection layer later
+    is an adapter over this class rather than a rewrite of it — while importing
+    none of it, because a dependency is not worth taking to call no code. This is
+    what the whole 3tears question resolved to; see the Decision Log below.
+  - **The action surface is generated from one record per action.** The wire
+    schema, argument validation, the `help` text and the error messages all derive
+    from a single registry entry, so a tool cannot declare one thing and do
+    another. Generation carries no per-tool logic — that would be the
+    thin-binding norm's stated failure mode arriving by a side door.
 - **Must never:** talk to the TV, talk to the e-paper panel, know the **e-paper
   panel's** geometry, or know TV content ids. Every device fact belongs to display.
   Note the TV panel's *physical* geometry is not a device fact in this sense and
@@ -489,6 +517,22 @@ faked end-to-end. This is already recorded as the reason "verify the TV still
 works" is a gating item rather than a routine test.
 
 ## Decision Log
+
+**2026-07-27 — The catalogue's durable tier is first-party code shaped to the
+`DurableStore` contract, and no framework dependency is taken.** The recorded plan
+was to adopt the operator's three-tier framework for the catalogue. Reading it
+before building against it retired the plan's target configuration and its stated
+reason at once: its L1 tier is a *named in-memory* database, so an "L1-only SQLite"
+catalogue persists nothing across a restart; it ships no SQLite durable backend, so
+the tier that actually persists is this product's own code under every
+configuration; and its collections are async throughout with no query API, which
+would convert three layers to async against the ratified "async at the I/O
+boundary, synchronous core". *Trade-off accepted:* the compatibility is structural
+rather than enforced — nothing fails if the foreign protocol changes, and the
+divergences (sync methods, no `conn` handle, no `cas` fence) are enumerated in
+`persistence/durable.py` rather than asserted as parity. *Consequence:* the
+"on-ramp to the framework's agents" rationale is retired and must not be cited;
+`3tears-models` depends on neither this contract nor that framework's core.
 
 **2026-07-20 — Both planes run on the Raspberry Pi, sharing a data directory.**
 Reverses the recorded plan that curation would run on a desktop, NAS, or second Pi.

@@ -208,9 +208,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
-    { name = "httpx" },
     { name = "mcp" },
-    { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "starlette" },
     { name = "uvicorn", extra = ["standard"] },
@@ -227,9 +225,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi" },
-    { name = "httpx" },
     { name = "mcp", specifier = ">=1.27" },
-    { name = "pydantic" },
     { name = "python-dotenv" },
     { name = "starlette" },
     { name = "uvicorn", extras = ["standard"] },

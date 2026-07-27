@@ -329,8 +329,11 @@ for the full record established 2026-07-19. Summary:
   product-wide "target 3.13" predates the two-plane split and kept resurfacing).
   **Display plane: 3.13** (matches Raspberry Pi OS Trixie), falling back to 3.12;
   verified working on 3.12, and 3.13 is an open assumption until a build proves it.
-  **Curation plane: 3.14** on a uv-managed standalone build, with `3tears`
-  unmodified.
+  **Curation plane: 3.14** on a uv-managed standalone build. _(Re-based
+  2026-07-27: this said "with `3tears` unmodified". The catalogue takes no
+  `3tears` core dependency at all now; the floor rests on `3tears-models`, which
+  declares the same one, and on the whole dependency set having been verified to
+  resolve and import on CPython 3.14.4.)_
 - Hardware is a **Pi 4 Model B**, so `RPi.GPIO` works and none of the Pi 5 /
   RP1 / `rpi-lgpio` complications apply.
 - Both display drivers are **dormant** (omni-epd 2024-11, IT8951 2023-11), and

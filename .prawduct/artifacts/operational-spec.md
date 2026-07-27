@@ -55,6 +55,9 @@ close because it was static. Keeping `3tears` unmodified means that risk never h
 to be taken, and the Python version pin stays intact as a rationale for the
 two-plane split rather than leaving the split on its other two legs.
 
+> **Rationale re-based 2026-07-27.** The paragraphs above reason about `3tears` *core*, which this product no longer depends on at all — the catalogue's durable tier is first-party code shaped to that framework's contract, and no framework package is imported. The 3.14 floor still stands, and the compile-cost analysis above is still the reason it is affordable, but what now *requires* it is `3tears-models` — the operator's own model adapters, which the discovery work calls and which declare the same floor — plus the verified fact that the whole curation dependency set resolves and imports on CPython 3.14.4. Nothing below should be read as a live dependency on `3tears` core.
+
+
 **The tradeoff this does incur:** curation's interpreter now comes from Astral's
 distribution channel rather than Debian's, so CPython security fixes arrive via
 `uv python upgrade`, not `apt upgrade`. That is a real patching obligation and it is
@@ -217,6 +220,10 @@ capability the entire product rests on is controlled by a vendor who has withdra
 it before, and auto-update could do it here. Worth establishing whether TV
 auto-update can be disabled.
 
-**Third risk: no test suite exists.** Zero tests across 2,216 lines, and the plane-
-isolation test that enforces a ratified norm is filed but unbuilt (issue #7).
-Recorded as a departure in `project-preferences.md`; blocking for medium+ work.
+**Third risk: the norms with no mechanical enforcement.** *(Re-scoped 2026-07-27.
+This read "no test suite exists — zero tests across 2,216 lines"; that departure was
+closed the same day and both planes now have suites, so the risk is no longer
+absence of testing but the specific norms nothing yet checks.)* The **plane-isolation
+test** that enforces a ratified Direction norm is still filed and unbuilt (issue #7),
+and the service-layer norm's own enforcement column says "Critic" — a reviewer
+reading handlers, with no test that fails when logic creeps into a binding.

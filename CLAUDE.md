@@ -32,7 +32,7 @@ Two independent projects, two interpreters, two suites. Both must pass.
 | | 2024 modules (repo root) | curation plane |
 |---|---|---|
 | Test | `pytest tests` | `cd curation && uv run pytest` |
-| Lint | — | `cd curation && uv run ruff check .` |
+| Lint | `ruff check .` | `cd curation && uv run ruff check .` |
 | Format | `black .` | `cd curation && uv run black .` |
 
 Run the curation plane: `cd curation && uv run python -m curation`. It needs

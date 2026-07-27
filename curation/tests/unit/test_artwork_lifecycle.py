@@ -10,9 +10,12 @@ work that has been taken out of circulation is an instruction the display plane
 can never carry out.
 """
 
+import logging
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
-from curation.persistence.records import ArtworkStatus, MatMethod
+from curation.persistence.records import ArtworkStatus, MatMethod, Theme
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.services.catalogue import CatalogueService
 from curation.services.errors import ServiceError
@@ -202,3 +205,105 @@ def test_the_sequence_survives_the_process_that_advanced_it(tmp_path):
         assert reopened.step_display().sequence == 3
     finally:
         reopened_store.close()
+
+
+# -- repairing a catalogue that predates a rule --------------------------------
+
+
+def _legacy_catalogue_with_no_active_theme(path):
+    """A catalogue as the revision before the exactly-one-active rule wrote one.
+
+    That revision's `add_theme` took no `is_active` argument and it shipped no way
+    to activate a theme, so every theme it ever wrote was inactive. Built through
+    the store rather than through the service, because the service is exactly what
+    will not produce this state any more.
+    """
+    catalogue = SqliteCatalogue(path)
+    moment = datetime(2026, 7, 20, 9, 30, tzinfo=UTC)
+    catalogue.add_theme(Theme(id="t-late", name="Late night", created_at=moment + timedelta(days=1)))
+    catalogue.add_theme(Theme(id="t-early", name="Daylight", created_at=moment))
+    return catalogue
+
+
+def test_a_catalogue_whose_themes_are_all_inactive_is_repaired_on_start(tmp_path, caplog):
+    """The rule postdates files already on disk, so it has to be brought to them.
+
+    Nothing else repairs this: the index the file carries says only "at most one",
+    which zero satisfies, and a catalogue nobody adds a theme to would stay in the
+    forbidden state indefinitely — with the display plane given no sync target and
+    nothing reporting it.
+    """
+    catalogue = _legacy_catalogue_with_no_active_theme(tmp_path / "catalogue.sqlite")
+    try:
+        service = CatalogueService(catalogue)
+        assert service.active_theme() is None
+
+        with caplog.at_level(logging.WARNING):
+            service.reconcile()
+
+        # The oldest theme, so every machine opening the same file makes the same
+        # choice rather than following whatever the listing happened to return.
+        assert service.active_theme().id == "t-early"
+        assert [theme.is_active for theme in service.list_themes()].count(True) == 1
+        assert "none active" in caplog.text
+        assert "Daylight" in caplog.text
+    finally:
+        catalogue.close()
+
+
+def test_reconciling_a_healthy_catalogue_changes_nothing_and_says_nothing(tmp_path, caplog):
+    """A repair that logged on every start would train the operator to ignore it."""
+    catalogue = SqliteCatalogue(tmp_path / "catalogue.sqlite")
+    try:
+        service = CatalogueService(catalogue)
+        first = service.add_theme(name="American Modernists")
+        service.add_theme(name="Surrealists")
+
+        with caplog.at_level(logging.WARNING):
+            service.reconcile()
+
+        assert service.active_theme().id == first.id
+        assert caplog.text == ""
+    finally:
+        catalogue.close()
+
+
+def test_reconciling_an_empty_catalogue_is_not_a_repair(tmp_path, caplog):
+    """No themes is not the forbidden state — there is nothing to be active."""
+    catalogue = SqliteCatalogue(tmp_path / "catalogue.sqlite")
+    try:
+        service = CatalogueService(catalogue)
+        with caplog.at_level(logging.WARNING):
+            service.reconcile()
+
+        assert service.active_theme() is None
+        assert caplog.text == ""
+    finally:
+        catalogue.close()
+
+
+def test_adding_a_theme_to_a_catalogue_with_none_active_promotes_it(tmp_path):
+    """The condition is "none is active", not "there are none", so this repairs too."""
+    catalogue = _legacy_catalogue_with_no_active_theme(tmp_path / "catalogue.sqlite")
+    try:
+        service = CatalogueService(catalogue)
+
+        added = service.add_theme(name="Precisionists")
+
+        assert added.is_active is True
+        assert [theme.is_active for theme in service.list_themes()].count(True) == 1
+    finally:
+        catalogue.close()
+
+
+def test_the_repair_reaches_the_file(tmp_path):
+    path = tmp_path / "catalogue.sqlite"
+    catalogue = _legacy_catalogue_with_no_active_theme(path)
+    CatalogueService(catalogue).reconcile()
+    catalogue.close()
+
+    reopened = SqliteCatalogue(path)
+    try:
+        assert CatalogueService(reopened).active_theme().id == "t-early"
+    finally:
+        reopened.close()

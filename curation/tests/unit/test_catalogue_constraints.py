@@ -11,10 +11,15 @@ stops explaining itself the moment somebody wonders whether the mechanism is
 still wanted.
 """
 
+from datetime import UTC, datetime
+
 import pytest
 
+from curation.persistence.catalogue import StorageError
 from curation.persistence.records import (
     AcquisitionMethod,
+    ArtworkStatus,
+    FetchStatus,
     MatMethod,
     RenditionKind,
     RightsStatus,
@@ -128,6 +133,14 @@ def test_two_works_each_keep_their_own_current_mat_colour(service):
 
     assert service.current_mat_color(first.id) is not None
     assert service.current_mat_color(second.id) is not None
+
+
+def test_a_mat_colour_is_stored_in_one_case_however_it_was_written(service):
+    """Two spellings of one colour would read as two different choices."""
+    work = _work(service)
+    service.record_mat_color(artwork_id=work.id, hex_rgb="#27285B", method=MatMethod.MANUAL)
+
+    assert service.current_mat_color(work.id).hex_rgb == "#27285b"
 
 
 def test_a_mat_colour_that_is_not_a_hex_triplet_is_refused(service):
@@ -323,6 +336,33 @@ def test_a_stored_path_is_normalised_rather_than_kept_as_written(service):
     assert stored.relative_path == "originals/w1.tif"
 
 
+# -- 10. A description carries only the markup the label renderer can take -----
+#
+# The normaliser itself is exercised in `test_fields.py`. What these check is that
+# a work actually goes through it on the way in — a normaliser nothing calls is
+# the same defect as no normaliser, and the unit tests for the normaliser look
+# identical either way.
+
+
+def test_a_work_is_stored_with_its_description_already_normalised(service):
+    work = service.add_artwork(
+        title="Nighthawks",
+        description="<p>A diner. Oil &amp; light, <em>famously</em> lonely.</p><script>alert(1)</script>",
+    )
+
+    stored = service.get_artwork(work.id).artwork.description
+
+    assert stored == "A diner. Oil &amp; light, <i>famously</i> lonely."
+    assert "<em>" not in stored
+    assert "alert" not in stored
+
+
+def test_a_description_that_normalises_away_is_stored_as_absent(service):
+    work = service.add_artwork(title="Nighthawks", description="<p>  </p>")
+
+    assert service.get_artwork(work.id).artwork.description is None
+
+
 # -- 13. Rights status is recorded for every source ----------------------------
 #
 # "We did not check" and "we checked and could not tell" are different facts and
@@ -365,3 +405,149 @@ def test_rights_gate_nothing(service):
 
     assert service.get_original(work.id) is not None
     assert service.list_sources(work.id)[0].is_primary is True
+
+
+# -- what this layer deliberately does not filter -------------------------------
+
+
+def test_a_theme_still_lists_a_work_that_has_been_archived(service):
+    """Membership and readiness are different questions, answered in different places.
+
+    Archiving takes a work out of circulation, and an archived work leaves the
+    theme manifest — but that exclusion is evaluated where readiness is, at
+    manifest-build time. Filtering here as well would put the same rule in two
+    places, and the caller can already see the status it would filter on.
+    """
+    work = _work(service)
+    theme = service.add_theme(name="Hopper")
+    service.add_to_theme(theme_id=theme.id, artwork_id=work.id)
+
+    service.archive_artwork(work.id)
+
+    listed = service.theme_works(theme.id)
+    assert [entry.artwork.id for entry in listed] == [work.id]
+    assert listed[0].artwork.status is ArtworkStatus.ARCHIVED
+
+
+def test_a_fetch_outcome_is_recorded_against_the_source_it_came_from(service):
+    """`partial_tiles` is a normal dezoomify outcome, not an error.
+
+    A tile server dropping a few tiles still yields a usable master image, so the
+    status has three values rather than a boolean — and a source that has never
+    been fetched is a fourth thing again, which is why it starts unset.
+    """
+    work = _work(service)
+    source = _source(service, work.id)
+    assert source.last_fetch_status is None
+    assert source.last_fetched_at is None
+
+    moment = datetime(2026, 7, 27, 9, 30, tzinfo=UTC)
+    updated = service.record_fetch(source.id, status=FetchStatus.PARTIAL_TILES, at=moment)
+
+    assert updated.last_fetch_status is FetchStatus.PARTIAL_TILES
+    assert updated.last_fetched_at == moment
+    assert service.list_sources(work.id)[0].last_fetch_status is FetchStatus.PARTIAL_TILES
+
+
+def test_recording_a_fetch_against_an_unknown_source_is_refused(service):
+    with pytest.raises(ServiceError, match="No source with id 'nope'"):
+        service.record_fetch("nope", status=FetchStatus.OK)
+
+
+def test_an_unknown_fetch_outcome_names_the_ones_that_are_valid(service):
+    work = _work(service)
+    source = _source(service, work.id)
+
+    with pytest.raises(ServiceError, match="failed, ok, partial_tiles"):
+        service.record_fetch(source.id, status="timeout")
+
+
+def test_a_work_can_be_returned_to_unplaced_in_a_theme(service):
+    """Null position means "the curator has said nothing", which is a real state."""
+    first = _work(service, "Nighthawks")
+    second = _work(service, "Chop Suey")
+    theme = service.add_theme(name="Hopper")
+    service.add_to_theme(theme_id=theme.id, artwork_id=first.id, position=1)
+    service.add_to_theme(theme_id=theme.id, artwork_id=second.id, position=2)
+
+    service.move_in_theme(theme_id=theme.id, artwork_id=first.id, position=None)
+
+    assert [entry.artwork.title for entry in service.theme_works(theme.id)] == ["Chop Suey", "Nighthawks"]
+
+
+def test_a_negative_position_is_refused(service):
+    work = _work(service)
+    theme = service.add_theme(name="Hopper")
+
+    with pytest.raises(ServiceError, match="position cannot be negative"):
+        service.add_to_theme(theme_id=theme.id, artwork_id=work.id, position=-1)
+
+
+def test_placing_a_work_in_a_theme_twice_is_refused(service):
+    work = _work(service)
+    theme = service.add_theme(name="Hopper")
+    service.add_to_theme(theme_id=theme.id, artwork_id=work.id)
+
+    with pytest.raises(ServiceError, match="Could not store"):
+        service.add_to_theme(theme_id=theme.id, artwork_id=work.id)
+
+
+def test_moving_or_removing_a_work_that_is_not_in_the_theme_is_refused(service):
+    work = _work(service)
+    theme = service.add_theme(name="Hopper")
+
+    with pytest.raises(ServiceError, match="is not in theme"):
+        service.move_in_theme(theme_id=theme.id, artwork_id=work.id, position=1)
+    with pytest.raises(ServiceError, match="is not in theme"):
+        service.remove_from_theme(theme_id=theme.id, artwork_id=work.id)
+
+
+# -- the rules that span rows are applied whole or not at all -------------------
+
+
+def test_a_failed_promotion_leaves_the_previous_primary_in_place(service, store, monkeypatch):
+    """Clear-then-set, interrupted between its halves, must not lose the "then".
+
+    Without a transaction around the pair this leaves the work with no primary
+    source at all — a state the rule forbids, reached by a write that reported an
+    error, so nothing downstream would know to look.
+    """
+    work = _work(service)
+    held = _source(service, work.id, url="https://museum.example/1", is_primary=True)
+
+    def refuse(_source_record):
+        raise StorageError("the disk gave up")
+
+    monkeypatch.setattr(store, "add_source", refuse)
+
+    with pytest.raises(ServiceError):
+        _source(service, work.id, url="https://other.example/2", is_primary=True)
+
+    assert [source.id for source in service.list_sources(work.id) if source.is_primary] == [held.id]
+
+
+def test_a_failed_mat_choice_leaves_the_previous_one_current(service, store, monkeypatch):
+    work = _work(service)
+    held = service.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)
+
+    def refuse(_mat_color):
+        raise StorageError("the disk gave up")
+
+    monkeypatch.setattr(store, "add_mat_color", refuse)
+
+    with pytest.raises(ServiceError):
+        service.record_mat_color(artwork_id=work.id, hex_rgb="#1a1a1a", method=MatMethod.MANUAL)
+
+    assert service.current_mat_color(work.id).id == held.id
+    assert len(service.mat_color_history(work.id)) == 1
+
+
+def test_two_works_each_keep_their_own_primary_source(service):
+    """The rule is per work; promoting one work's source must not demote another's."""
+    first = _work(service, "Nighthawks")
+    second = _work(service, "Chop Suey")
+    first_primary = _source(service, first.id, url="https://a.example/1", is_primary=True)
+    second_primary = _source(service, second.id, url="https://b.example/2", is_primary=True)
+
+    assert [source.id for source in service.list_sources(first.id) if source.is_primary] == [first_primary.id]
+    assert [source.id for source in service.list_sources(second.id) if source.is_primary] == [second_primary.id]
