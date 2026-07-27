@@ -1,0 +1,204 @@
+"""The Artwork state machine, and the display directive that rides alongside it.
+
+An artwork has exactly two states and four edges, two of which are refusals. It
+never carries a pending or rejected state: everything before acceptance is a
+candidate, which is a separate entity with its own verdict, so there is no second
+lifecycle here to drift out of step with that one.
+
+The directive is tested with the lifecycle because the two meet: a pin naming a
+work that has been taken out of circulation is an instruction the display plane
+can never carry out.
+"""
+
+import pytest
+
+from curation.persistence.records import ArtworkStatus, MatMethod
+from curation.persistence.sqlite import SqliteCatalogue
+from curation.services.catalogue import CatalogueService
+from curation.services.errors import ServiceError
+
+
+def test_a_work_can_be_taken_out_of_circulation_and_brought_back(service):
+    work = service.add_artwork(title="Nighthawks")
+
+    archived = service.archive_artwork(work.id)
+    assert archived.status is ArtworkStatus.ARCHIVED
+    assert service.get_artwork(work.id).artwork.status is ArtworkStatus.ARCHIVED
+
+    restored = service.restore_artwork(work.id)
+    assert restored.status is ArtworkStatus.ACCEPTED
+    assert service.get_artwork(work.id).artwork.status is ArtworkStatus.ACCEPTED
+
+
+def test_archiving_an_archived_work_is_refused_rather_than_ignored(service):
+    work = service.add_artwork(title="Nighthawks")
+    service.archive_artwork(work.id)
+
+    with pytest.raises(ServiceError, match="already archived"):
+        service.archive_artwork(work.id)
+
+
+def test_restoring_a_work_that_was_never_archived_is_refused(service):
+    work = service.add_artwork(title="Nighthawks")
+
+    with pytest.raises(ServiceError, match="not archived"):
+        service.restore_artwork(work.id)
+
+
+def test_archiving_an_unknown_work_names_the_id_it_could_not_find(service):
+    with pytest.raises(ServiceError, match="No artwork with id 'nope'"):
+        service.archive_artwork("nope")
+
+
+def test_archiving_keeps_the_record_and_its_mat_history(service):
+    """Archiving is removal from circulation, not deletion — that is the whole point.
+
+    The mat colours are the expensive part: each one cost a model call, and the
+    hand-tuned ones are this product's quality corpus.
+    """
+    work = service.add_artwork(title="Nighthawks")
+    service.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)
+    service.record_mat_color(artwork_id=work.id, hex_rgb="#1a1a1a", method=MatMethod.MANUAL)
+
+    service.archive_artwork(work.id)
+
+    assert len(service.mat_color_history(work.id)) == 2
+    assert service.current_mat_color(work.id).hex_rgb == "#1a1a1a"
+
+
+def test_an_archived_work_moves_between_the_status_listings(service):
+    work = service.add_artwork(title="Nighthawks")
+    service.archive_artwork(work.id)
+
+    assert service.list_artworks(status="accepted").total == 0
+    assert service.list_artworks(status="archived").total == 1
+    # "The whole catalogue" still means both.
+    assert service.list_artworks().total == 1
+
+
+# -- the display directive -----------------------------------------------------
+
+
+def test_a_fresh_catalogue_has_a_directive_at_the_start(service):
+    directive = service.read_directive()
+
+    assert (directive.sequence, directive.pinned_work_id) == (0, None)
+
+
+def test_stepping_on_advances_the_sequence_and_carries_no_pin(service):
+    first = service.step_display()
+    second = service.step_display()
+
+    assert (first.sequence, second.sequence) == (1, 2)
+    assert second.pinned_work_id is None
+
+
+def test_showing_a_work_now_advances_the_sequence_and_pins_it(service):
+    work = service.add_artwork(title="Nighthawks")
+
+    directive = service.show_work_now(work.id)
+
+    assert directive.sequence == 1
+    assert directive.pinned_work_id == work.id
+
+
+def test_stepping_on_clears_a_standing_pin(service):
+    """A step that left the pin in place would read as "jump there again"."""
+    work = service.add_artwork(title="Nighthawks")
+    service.show_work_now(work.id)
+
+    directive = service.step_display()
+
+    assert directive.sequence == 2
+    assert directive.pinned_work_id is None
+
+
+def test_archiving_the_pinned_work_withdraws_the_pin(service):
+    work = service.add_artwork(title="Nighthawks")
+    service.show_work_now(work.id)
+
+    service.archive_artwork(work.id)
+
+    assert service.read_directive().pinned_work_id is None
+
+
+def test_withdrawing_a_pin_does_not_advance_the_sequence(service):
+    """The display plane acts every time the number goes up.
+
+    Archiving a work is not an instruction to it, so an advance here would fire a
+    directive nobody issued — and the work it would step to is unrelated to the
+    one that was archived.
+    """
+    work = service.add_artwork(title="Nighthawks")
+    service.show_work_now(work.id)
+    before = service.read_directive().sequence
+
+    service.archive_artwork(work.id)
+
+    assert service.read_directive().sequence == before
+
+
+def test_archiving_some_other_work_leaves_the_pin_alone(service):
+    pinned = service.add_artwork(title="Nighthawks")
+    other = service.add_artwork(title="Chop Suey")
+    service.show_work_now(pinned.id)
+
+    service.archive_artwork(other.id)
+
+    assert service.read_directive().pinned_work_id == pinned.id
+
+
+def test_an_archived_work_cannot_be_pinned(service):
+    work = service.add_artwork(title="Nighthawks")
+    service.archive_artwork(work.id)
+
+    with pytest.raises(ServiceError, match="out of circulation"):
+        service.show_work_now(work.id)
+
+
+def test_pinning_an_unknown_work_is_refused(service):
+    with pytest.raises(ServiceError, match="No artwork with id 'nope'"):
+        service.show_work_now("nope")
+
+
+def test_theme_activity_never_touches_the_sequence(service):
+    """Only `next` and `show_now` advance it; a theme switch rewrites the list.
+
+    A switch that advanced the counter would look to the display plane exactly
+    like a curator pressing "next" at the same moment.
+    """
+    service.step_display()
+    before = service.read_directive()
+
+    first = service.add_theme(name="American Modernists")
+    second = service.add_theme(name="Surrealists")
+    service.activate_theme(second.id)
+    work = service.add_artwork(title="Nighthawks")
+    service.add_to_theme(theme_id=first.id, artwork_id=work.id)
+
+    assert service.read_directive() == before
+
+
+def test_the_sequence_survives_the_process_that_advanced_it(tmp_path):
+    """Monotonic for the life of the catalogue, not for the life of the process.
+
+    The counter is stored catalogue-side precisely so that a restart — which
+    `Restart=always` makes routine — cannot reset it. A reset reads to the
+    display plane as an advance, which fires a directive nobody issued.
+    """
+    path = tmp_path / "catalogue.sqlite"
+    first_store = SqliteCatalogue(path)
+    first = CatalogueService(first_store)
+    work = first.add_artwork(title="Nighthawks")
+    first.step_display()
+    first.show_work_now(work.id)
+    first_store.close()
+
+    reopened_store = SqliteCatalogue(path)
+    try:
+        reopened = CatalogueService(reopened_store)
+        assert reopened.read_directive().sequence == 2
+        assert reopened.read_directive().pinned_work_id == work.id
+        assert reopened.step_display().sequence == 3
+    finally:
+        reopened_store.close()

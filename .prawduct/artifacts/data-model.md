@@ -306,6 +306,14 @@ regenerating it costs money.
 | `method` | enum | required | `vision_model` \| `dominant_color_fallback` \| `manual`. |
 | `model_id` | string | nullable | e.g. the OpenRouter model slug. Which model chose it. |
 | `is_current` | boolean | required | Superseded choices are retained, not overwritten. |
+| `chosen_at` | datetime | auto | When this choice was made. **Added 2026-07-27 at build.** |
+
+> **`chosen_at` was a gap this artifact's own purpose exposed.** The field list
+> had no timestamp, while the paragraph below required the history to be
+> reviewable and reversible — and "which colour did the new model replace" has no
+> answer in a set of rows with no order. Every sibling entity already carries its
+> instant (`Source.last_fetched_at`, `Rendition.generated_at`,
+> `Artwork.created_at`); this one was simply missed.
 
 > **Q7.** History is kept deliberately: mat quality is the product's subjective
 > quality bar, the 41 hand-tuned legacy colours are the regression corpus, and
@@ -339,6 +347,52 @@ Join entity. Explicit rather than implicit so ordering can be curated.
 | `added_at` | datetime | auto | |
 
 > **Q1.**
+
+### Directive
+
+The standing instruction to the display plane. **Exactly one row, always** — a
+singleton, seeded when the catalogue file is created so that no caller ever has
+to make it.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `sequence` | integer | required | Monotonically increasing for the life of the catalogue. The display plane acts once each time it observes this go up. |
+| `pinned_work_id` | UUID | FK → Artwork, nullable | The work an advance points at. Null means the advance is a plain step. |
+
+> **This entity was added 2026-07-27, at build, to close a gap this artifact had
+> left open.** `architecture.md` § The theme manifest pins the directive sequence
+> as *catalogue-side* — "curation owns the counter and stores it catalogue-side,
+> which is what makes this cheap to guarantee" — and `operational-spec.md`'s
+> exercised restore path restores it along with everything else, so it is part of
+> the persisted format whether or not it was modelled. It had no entity here, and
+> an unmodelled part of a persisted format is one the next chunk invents
+> implicitly, in whatever shape that chunk happens to need.
+>
+> **Why it is not a column on Theme.** The sequence has to survive theme
+> switching — a switch rewrites the manifest's entry list and carries the counter
+> forward unchanged. A per-theme counter would reset on every switch, and a reset
+> reads to the display plane as an advance (or masks a real one), firing a
+> directive nobody issued.
+>
+> **When the pin is cleared** *(settled 2026-07-27; previously unstated)*. The pin
+> is not standing state that persists until replaced, and it is not cleared by
+> everything either. Exactly two things clear it:
+>
+> - **A `next` directive**, which supersedes it. A step that left the pin in place
+>   would be read as "jump to that work again" rather than "move on", so the two
+>   cannot both be in force.
+> - **Archiving the pinned work**, which makes it unsatisfiable — an archived work
+>   is out of circulation, so a pin naming one is an instruction that can never be
+>   carried out. This withdrawal **does not advance the sequence**: archiving is
+>   not an instruction to the display plane, and an advance here would fire a
+>   directive nobody issued, stepping the wall to an unrelated work.
+>
+> Nothing else clears it. In particular a manifest rebuild carries both the
+> sequence and the pin forward, because the display plane acts only on an advance
+> and a pin sitting behind an unchanged sequence is inert.
+>
+> For the same reason, `show_now` **refuses an archived work** rather than pinning
+> one and relying on the manifest to filter it out later.
 
 ### DiscoveryRun
 
@@ -639,6 +693,9 @@ the entity that enforces the second Direction norm.
   would destroy the provenance, and `parent_run_id` cannot serve either, because a
   resolve run covers a *subset* of the parent's works.
 - A **DiscoveryRun** accrues many **SpendRecords** (one-to-many).
+- The **Directive** singleton may reference one **Artwork** as its pin. It belongs
+  to the catalogue rather than to any Theme, so that switching themes carries the
+  sequence forward instead of resetting it.
 - A **TvBinding** references an **Artwork** across the plane boundary — by id
   only, never by foreign key, because the two planes do not share a database.
 
@@ -658,7 +715,9 @@ the entity that enforces the second Direction norm.
 - Creation — a `CandidateWork` is accepted; the Artwork is minted, its
   `CandidateImage`s become `Source`s, and acquisition and preparation begin.
 - `accepted → archived` — removed from circulation without losing the record or
-  its mat history.
+  its mat history. If the work is the **Directive**'s pin, archiving withdraws
+  the pin; that rule and its reasoning live with the Directive entity and are
+  deliberately not restated here.
 - `archived → accepted` — restoration is permitted; renditions may be stale and
   are checked via `source_content_hash`.
 

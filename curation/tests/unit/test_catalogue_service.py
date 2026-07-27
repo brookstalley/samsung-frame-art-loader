@@ -2,7 +2,7 @@
 
 import pytest
 
-from curation.persistence.catalogue import ArtworkStatus
+from curation.persistence.records import ArtworkStatus
 from curation.services.errors import ServiceError
 
 
@@ -118,8 +118,18 @@ def test_two_themes_cannot_share_a_name(service):
         service.add_theme(name="American Modernists")
 
 
-def test_a_theme_starts_inactive(service):
-    assert service.add_theme(name="American Modernists").is_active is False
+def test_the_first_theme_is_active(service):
+    """This assertion used to read `is_active is False`, and the inversion is deliberate.
+
+    `Theme.is_active` arrived as a column with no enforcement behind it, and the
+    old assertion described exactly that. The rule that governs it has since been
+    implemented — exactly one theme is active, so the display plane's sync target
+    is never a guess — and it says the opposite: a catalogue holding themes with
+    none of them active gives the display plane nothing to sync, and nothing
+    would report that as a problem. The rest of the rule is exercised in
+    `test_catalogue_constraints.py`.
+    """
+    assert service.add_theme(name="American Modernists").is_active is True
 
 
 def _by_title(service, title):

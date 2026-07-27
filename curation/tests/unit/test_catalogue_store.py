@@ -14,7 +14,7 @@ answer on purpose rather than discover from a file that no longer loads.
 import sqlite3
 from datetime import UTC, datetime
 
-from curation.persistence.catalogue import Artist, Artwork, ArtworkStatus, Theme
+from curation.persistence.records import Artist, Artwork, ArtworkStatus, Theme
 from curation.persistence.sqlite import SqliteCatalogue
 
 _EXPECTED_SCHEMA = {
@@ -33,7 +33,54 @@ _EXPECTED_SCHEMA = {
         "created_at",
     },
     "themes": {"id", "name", "description", "is_active", "created_at"},
+    "sources": {
+        "id",
+        "artwork_id",
+        "url",
+        "provider",
+        "source_class",
+        "acquisition_method",
+        "rights_status",
+        "is_primary",
+        "confidence",
+        "selection_rationale",
+        "last_fetch_status",
+        "last_fetched_at",
+    },
+    "originals": {"id", "artwork_id", "source_id", "relative_path", "width", "height", "byte_size", "content_hash"},
+    "renditions": {
+        "id",
+        "artwork_id",
+        "kind",
+        "target_width",
+        "target_height",
+        "relative_path",
+        "source_content_hash",
+        "generated_at",
+    },
+    "mat_colors": {
+        "id",
+        "artwork_id",
+        "hex_rgb",
+        "method",
+        "is_current",
+        "lab_l",
+        "lab_a",
+        "lab_b",
+        "reason",
+        "model_id",
+        "chosen_at",
+    },
+    "theme_memberships": {"theme_id", "artwork_id", "position", "added_at"},
+    "directive": {"id", "sequence", "pinned_work_id"},
 }
+
+#: Columns no table may grow. `display_fit` was one once, computed at acquisition
+#: and stored on the original; it became wrong the moment panel geometry turned
+#: into a deployment value, because a stored verdict is a claim about one
+#: particular television. It is derived now, and nothing reports the drift if a
+#: later change quietly puts it back.
+_FORBIDDEN_COLUMNS = {"display_fit"}
 
 
 def _seed(catalogue):
@@ -255,3 +302,70 @@ def test_the_file_carries_the_schema_the_backup_path_expects(tmp_path):
             assert {row[1] for row in connection.execute(f"PRAGMA table_info({table})")} == columns
     finally:
         connection.close()
+
+
+def test_no_table_stores_the_resolution_verdict(tmp_path):
+    """Constraint 12, checked against the file rather than against the code.
+
+    The verdict depends on panel geometry and mat configuration, both deployment
+    values this plane does not own. A column would be a stored judgement about
+    one specific television, and it would go silently wrong the day the
+    television changed — which is precisely how it went wrong the first time.
+    """
+    path = tmp_path / "catalogue.sqlite"
+    SqliteCatalogue(path).close()
+
+    connection = sqlite3.connect(path)
+    try:
+        for table in (row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")):
+            columns = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+            assert not columns & _FORBIDDEN_COLUMNS, f"{table} stores a value that must be derived"
+    finally:
+        connection.close()
+
+
+def test_a_fresh_catalogue_carries_exactly_one_directive_row(tmp_path):
+    """The row is seeded by the schema, so no caller ever has to create it.
+
+    A directive that had to be created on first use would have a window in which
+    reading it fails, and the read happens on every manifest build.
+    """
+    path = tmp_path / "catalogue.sqlite"
+    catalogue = SqliteCatalogue(path)
+    try:
+        assert catalogue.get_directive().sequence == 0
+    finally:
+        catalogue.close()
+
+    connection = sqlite3.connect(path)
+    try:
+        assert connection.execute("SELECT COUNT(*) FROM directive").fetchone()[0] == 1
+    finally:
+        connection.close()
+
+
+def test_an_earlier_catalogue_gains_the_tables_it_did_not_have(tmp_path):
+    """Opening an older file adds the new tables without disturbing its rows.
+
+    Every entity added since that revision lives in a table of its own, so the
+    file grows rather than changing shape — which is why this is an open rather
+    than a migration. The first change that widens a table the file already has
+    will not have that luxury, and this test is what will say so.
+    """
+    path = tmp_path / "catalogue.sqlite"
+    _write_legacy_catalogue(path)
+
+    catalogue = SqliteCatalogue(path)
+    try:
+        # The rows the older revision wrote are untouched.
+        assert catalogue.get_artwork("w1").title == "Nighthawks"
+        assert catalogue.get_theme("t1").is_active is True
+        # And the entities it never knew about are addressable.
+        assert catalogue.get_directive().sequence == 0
+        assert catalogue.list_sources("w1") == []
+        assert catalogue.get_original("w1") is None
+        assert catalogue.list_renditions("w1") == []
+        assert catalogue.list_mat_colors("w1") == []
+        assert catalogue.list_memberships("t1") == []
+    finally:
+        catalogue.close()

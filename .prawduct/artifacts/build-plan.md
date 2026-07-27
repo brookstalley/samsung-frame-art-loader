@@ -83,7 +83,8 @@ numeric order below.
 - [x] Chunk 06: uv restructure (curation only), lint/test tooling — *display plane deferred, mat fixture deferred*
 - [x] Chunk 07: Walking skeleton — catalogue core → service layer → MCP tool, end to end
 - [x] Chunk 07B: The durable seam — persistence reshaped to the `DurableStore` contract
-- [ ] Chunk 08: Full catalogue schema, state machines, constraints, startup reconciliation
+- [x] Chunk 08A: The accepted-catalogue entities, their constraints, and `display_fit`
+- [ ] Chunk 08B: The discovery entities, both state machines, startup reconciliation
 - [ ] Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
 - [ ] Chunk 10: Seed the catalogue with the 41 existing works (v1 scope item)
 - [ ] Chunk 11: Contract tests — MCP evaluation harness (issue #17) and plane isolation (issue #7)
@@ -112,8 +113,17 @@ store and a domain adapter, the 3tears question is answered and closed, and the
 on-disk catalogue format is now pinned by a read-compatibility test rather than by
 assertion.
 
-**Next: Chunk 08** (full schema, state machines, constraints), which widens the
-three entities Chunk 07 proved into the other twelve. The persistence work was
+**Chunk 08 was split into 08A and 08B on 2026-07-27** at the operator's call —
+the accepted catalogue, then the pre-acceptance pipeline — because one Critic
+round over the whole of it would read ~2,500 lines at once; see the section below
+for what each half carries. **08A landed 2026-07-27**: five entities plus the
+directive singleton take the catalogue file from three tables to nine,
+constraints 1–6, 10, 12 and 13 are enforced at write time, the Artwork state
+machine is closed, `display_fit` derives and stores nothing, and the durable
+store gained a transaction seam because three of those rules span rows.
+
+**Next: Chunk 08B** (the discovery entities, both state machines, startup
+reconciliation). The persistence work was
 sequenced first, at the operator's direction, so those twelve are written once
 against their final shape rather than against one shape and then again — and that
 sequencing paid: two of 07B's five defects (the composite-key and nullable-column
@@ -699,37 +709,85 @@ the existing 41 works are seeded into them.
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-### Chunk 08: Full catalogue schema, state machines, constraints, startup reconciliation
+### Chunk 08 was split into 08A and 08B (2026-07-27)
 
-- **Description:** The rest of `data-model.md`, faithfully: Source (with
-  `source_class` as the load-bearing branch point), Original, Rendition
-  (`tv_display`/`thumbnail` only — no `label` kind), MatColor with history,
-  ThemeMembership, DiscoveryRun (both kinds, all nine statuses), CandidateWork,
-  CandidateImage, SpendRecord (attribution only — it enforces nothing),
-  ResolveRunWork. All fifteen constraints enforced at write time in the service
-  layer, including the two-scope suppression rule (Q11) and the
-  single-entry-point rule for `awaiting_better_image` (constraint 15). Startup
-  reconciliation moves process-held runs (`resolving_works`, `resolving_images`)
-  to `interrupted` — deliberately not `awaiting_approval`, which is human-held
-  state that must survive a restart — releasing ResolveRunWork coverage and
-  logging one WARNING per run moved, which is the only signal a run died.
-- **Depends on:** Chunk 07
-- **Artifacts consumed:** `data-model.md` in full (entities, relationships,
-  state machines, constraints 1–15)
+Chunk 08 as authored was the whole of `data-model.md` beyond the three entities
+Chunk 07 proved: eleven entities, fifteen constraints, three state machines and
+startup reconciliation — an estimated ~2,500 lines with tests. That is a single
+Critic round over a diff large enough that review quality degrades
+(`methodology/building.md` § Session Scope Discipline), on the most
+contract-setting chunk in the plan. The operator chose the split. Nothing is
+descoped: every entity, constraint, state machine and acceptance question below
+appears in exactly one of the two halves, and the split line is the one the model
+already draws — the accepted catalogue versus the pre-acceptance pipeline.
+
+The 07/07B precedent is the evidence: two of that split's five defects were
+unreachable from the smaller surface and were found only because the smaller
+surface was reviewed on its own.
+
+### Chunk 08A: The accepted-catalogue entities, their constraints, and `display_fit`
+
+- **Description:** Everything `data-model.md` says about a work that has already
+  been accepted: Source (with `source_class` as the load-bearing branch point),
+  Original, Rendition (`tv_display`/`thumbnail` only — no `label` kind), MatColor
+  with history, ThemeMembership. The Artwork state machine (`archive`/`restore`).
+  Constraints 1–6, 10, 12 and 13 enforced at write time in the service layer.
+  Multi-row constraints (one active Theme, one current MatColor, one primary
+  Source) need a transaction seam on the durable store, which lands here — the
+  matched framework contract threads a `conn` handle through every method for
+  exactly this reason, so a seam is conformance, not divergence.
+- **Depends on:** Chunk 07B
+- **Artifacts consumed:** `data-model.md` (entities Source, Original, Rendition,
+  MatColor, ThemeMembership; Artwork state machine; constraints 1–6, 10, 12, 13),
+  `architecture.md` § The theme manifest
 - **Carried finding:** the curation-side directive sequence counter is pinned as
   catalogue-side by `architecture.md` but has no modelled home, and a catalogue
   restore restores it — so it is part of the persisted format. Give it one here
   (a settings/singleton row or equivalent) rather than letting Chunk 09 invent it
   implicitly; `pinned_work_id`'s clearing rule is unstated and settles here too
-- **Deliverables:** the full schema in `curation/src/curation/persistence/`,
-  service-layer operations and transitions, reconciliation on startup,
-  `display_fit` as the single service-layer derivation (never stored)
-- **Tests:** unit per constraint (each of the fifteen has at least one test that
-  fails without its enforcement); state-machine transition coverage including the
-  illegal edges (`set_verdict` refusing `awaiting_better_image`, resolve runs
-  never reaching phase-1 states); reconciliation — a seeded process-held run is
-  moved, an `awaiting_approval` run is not, coverage is released
-- **Acceptance criteria:** the schema answers Q1–Q12 from
+- **Deliverables:** the accepted-catalogue schema in
+  `curation/src/curation/persistence/`, its service-layer operations and the
+  Artwork transitions, `display_fit` as the single service-layer derivation
+  (never stored), the directive-sequence settings row
+- **Tests:** unit per constraint (each of 1–6, 10, 12, 13 has at least one test
+  that fails without its enforcement); the Artwork transitions including the
+  illegal edges; the durable transaction seam rolls back a partial multi-row write
+- **Acceptance criteria:** the schema answers Q1, Q2, Q6, Q7, Q8 and Q9 from
+  `data-model.md` § What this data must answer, demonstrated by a test per
+  question
+- **Done when:**
+  1. Acceptance criteria met and tests pass
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+### Chunk 08B: The discovery entities, both state machines, startup reconciliation
+
+- **Description:** Everything `data-model.md` says about the pipeline before
+  acceptance: DiscoveryRun (both kinds, all nine statuses), CandidateWork,
+  CandidateImage, SpendRecord (attribution only — it enforces nothing),
+  ResolveRunWork. The DiscoveryRun and CandidateWork state machines. Constraints
+  7–9, 11, 14 and 15 enforced at write time in the service layer, including the
+  two-scope suppression rule (Q11) and the single-entry-point rule for
+  `awaiting_better_image` (constraint 15). Startup reconciliation moves
+  process-held runs (`resolving_works`, `resolving_images`) to `interrupted` —
+  deliberately not `awaiting_approval`, which is human-held state that must
+  survive a restart — releasing ResolveRunWork coverage and logging one WARNING
+  per run moved, which is the only signal a run died.
+- **Depends on:** Chunk 08A
+- **Artifacts consumed:** `data-model.md` (entities DiscoveryRun, CandidateWork,
+  CandidateImage, SpendRecord, ResolveRunWork; both state machines; constraints
+  7–9, 11, 14, 15), `api-contract.md` § `set_verdict` cannot set
+  `awaiting_better_image`
+- **Deliverables:** the discovery-side schema, its service-layer operations and
+  transitions, acceptance as promotion (CandidateImages become Sources),
+  reconciliation on startup
+- **Tests:** unit per constraint (each of 7–9, 11, 14, 15 has at least one test
+  that fails without its enforcement); state-machine transition coverage
+  including the illegal edges (`set_verdict` refusing `awaiting_better_image`,
+  resolve runs never reaching phase-1 states); reconciliation — a seeded
+  process-held run is moved, an `awaiting_approval` run is not, coverage is
+  released
+- **Acceptance criteria:** the schema answers Q3, Q4, Q5, Q10, Q11 and Q12 from
   `data-model.md` § What this data must answer, demonstrated by a test per
   question
 - **Done when:**
@@ -758,6 +816,15 @@ the existing 41 works are seeded into them.
 - **Carried finding:** archiving a work has no specified effect on manifest
   membership, and `security-model.md` bound 4 depends on it having one. Settle it
   here, where readiness is evaluated: an archived work leaves the manifest.
+- **Carried from 08A:** `Theme.rotation_interval_seconds` and `Theme.shuffle` are
+  specified in `data-model.md` and are **not yet in the schema**. They exist to be
+  written into the manifest's rotation settings, and nothing reads them until this
+  builder does — but adding them is the **first change that widens a table an
+  existing catalogue file already has**, so it needs a migration rather than an
+  appended column. `CREATE TABLE IF NOT EXISTS` silently does nothing to a table
+  that exists, so an old file would read back a `KeyError` on the new column
+  rather than an error anyone could act on. The frozen-DDL compatibility test in
+  `tests/unit/test_catalogue_store.py` is what will fail first.
 - **Artifacts consumed:** `architecture.md` (§ The theme manifest, § Readiness),
   `api-contract.md` § How `art_display` reaches the display plane,
   `boundary-patterns.md` § curation ↔ display contract,

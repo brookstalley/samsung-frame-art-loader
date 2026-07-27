@@ -19,7 +19,7 @@ from typing import Any, Final
 from curation.mcp.envelope import ok
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
-from curation.persistence.catalogue import Artist, Artwork
+from curation.persistence.records import Artist, Artwork
 from curation.services.catalogue import ArtworkDetail, ArtworkListing, CatalogueService
 
 #: A bound action: validated arguments in, a result payload out.

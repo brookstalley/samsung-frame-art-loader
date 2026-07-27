@@ -516,3 +516,150 @@ def test_the_known_schema_is_read_from_the_file_not_from_the_ddl_just_run(tmp_pa
             reopened.scan("things", {"colour": "red"})
     finally:
         reopened.close()
+
+
+# -- transactions --------------------------------------------------------------
+#
+# Several catalogue rules span rows and are applied as a clear-then-set pair. A
+# pair that can be observed half-applied is a pair that can leave the catalogue in
+# the state the rule forbids, so what these pin is not "writes are fast" but
+# "there is no moment at which only one half happened".
+
+
+def test_writes_grouped_in_a_transaction_are_all_present_afterwards(store):
+    with store.transaction():
+        _thing(store, "t1", "First")
+        _thing(store, "t2", "Second")
+
+    assert {row["id"] for row in store.scan("things")} == {"t1", "t2"}
+
+
+def test_a_transaction_that_raises_keeps_none_of_its_writes(store):
+    _thing(store, "t0", "Already there")
+
+    with pytest.raises(RuntimeError, match="halfway"):
+        with store.transaction():
+            _thing(store, "t1", "First")
+            raise RuntimeError("something went wrong halfway")
+
+    # The write before the failure is gone; the write from before the block is not.
+    assert {row["id"] for row in store.scan("things")} == {"t0"}
+
+
+def test_a_write_inside_a_transaction_is_readable_inside_it(store):
+    """A service operation has to be able to read back what it just wrote.
+
+    Clear-then-set is written as a read, a decision and a write, so a transaction
+    that hid its own writes from its own reads would make the pattern it exists
+    to support impossible to express.
+    """
+    with store.transaction():
+        _thing(store, "t1", "First")
+        assert store.fetch_one("things", {"id": "t1"}) is not None
+        assert len(store.scan("things")) == 1
+
+
+def test_a_nested_transaction_lives_or_dies_with_the_outer_one(store):
+    with pytest.raises(RuntimeError, match="outer"):
+        with store.transaction():
+            with store.transaction():
+                _thing(store, "inner", "Written inside the nested block")
+            _thing(store, "outer", "Written after it")
+            raise RuntimeError("the outer block failed")
+
+    # The nested block completing did not commit anything on its own.
+    assert store.scan("things") == []
+
+
+def test_a_nested_transaction_that_completes_commits_with_the_outer_one(store):
+    with store.transaction():
+        with store.transaction():
+            _thing(store, "inner", "Written inside the nested block")
+        _thing(store, "outer", "Written after it")
+
+    assert {row["id"] for row in store.scan("things")} == {"inner", "outer"}
+
+
+def test_a_refused_write_inside_a_transaction_does_not_discard_the_rest(store):
+    """One statement failing is not the group failing.
+
+    A caller that catches a refusal and carries on is making a decision; rolling
+    the group back underneath it would silently undo writes it still believes in.
+    Only leaving the block by exception abandons the group.
+    """
+    with store.transaction():
+        _thing(store, "t1", "First")
+        with pytest.raises(StorageError):
+            _thing(store, "t1", "The same id again")
+        _thing(store, "t2", "Second")
+
+    assert {row["id"] for row in store.scan("things")} == {"t1", "t2"}
+
+
+def test_a_transaction_survives_the_process_that_opened_it(tmp_path):
+    """Committing means reaching the file, not merely leaving the block."""
+    path = tmp_path / "store.sqlite"
+    first = SqliteDurableStore(path, _SCHEMA)
+    with first.transaction():
+        _thing(first, "t1", "First")
+        _thing(first, "t2", "Second")
+    first.close()
+
+    reopened = SqliteDurableStore(path, _SCHEMA)
+    try:
+        assert {row["id"] for row in reopened.scan("things")} == {"t1", "t2"}
+    finally:
+        reopened.close()
+
+
+def test_a_rolled_back_transaction_never_reached_the_file(tmp_path):
+    path = tmp_path / "store.sqlite"
+    first = SqliteDurableStore(path, _SCHEMA)
+    with pytest.raises(RuntimeError):
+        with first.transaction():
+            _thing(first, "t1", "First")
+            raise RuntimeError("abandoned")
+    first.close()
+
+    reopened = SqliteDurableStore(path, _SCHEMA)
+    try:
+        assert reopened.scan("things") == []
+    finally:
+        reopened.close()
+
+
+# -- ordering additions --------------------------------------------------------
+
+
+def test_rows_with_no_value_sort_after_the_ones_that_have_one(store):
+    _placement(store, "t1", "a", 2)
+    _placement(store, "t2", "b", None)
+    _placement(store, "t3", "c", 1)
+
+    rows, _ = store.select_page(
+        "placements",
+        order_by=(OrderBy("position", nulls_last=True), OrderBy("shelf")),
+    )
+
+    assert [row["shelf"] for row in rows] == ["c", "a", "b"]
+
+
+def test_ordering_can_run_the_other_way(store):
+    _placement(store, "t1", "a", 1)
+    _placement(store, "t2", "b", 3)
+    _placement(store, "t3", "c", 2)
+
+    rows, _ = store.select_page("placements", order_by=(OrderBy("position", descending=True),))
+
+    assert [row["shelf"] for row in rows] == ["b", "c", "a"]
+
+
+def test_unset_values_still_sort_last_when_the_order_is_reversed(store):
+    """The null test is not itself reversed, or the flags would fight each other."""
+    _placement(store, "t1", "a", 1)
+    _placement(store, "t2", "b", None)
+    _placement(store, "t3", "c", 2)
+
+    rows, _ = store.select_page("placements", order_by=(OrderBy("position", nulls_last=True, descending=True),))
+
+    assert [row["shelf"] for row in rows] == ["c", "a", "b"]

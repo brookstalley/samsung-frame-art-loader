@@ -13,19 +13,35 @@ reusable across tables, not across products — worth knowing before lifting it
 somewhere else.
 
 **Why this exact shape.** `fetch_one` / `upsert` / `delete` / `scan`, keyed by a
-table name plus a column-to-value primary-key mapping, is the decomposition,
-naming and argument shape of the `DurableStore` protocol in the three-tier
-framework this operator maintains (`pacepace/3tears`, `core/backends/protocol.py`).
-Matching it deliberately means that adopting that framework's collection layer
-later is an adapter over this class rather than a rewrite of it. Nothing here
-imports the framework: the contract is matched structurally, and a dependency is
-not worth taking to call no code.
+table name plus a column-to-value primary-key mapping, is the decomposition and
+naming of the `DurableStore` protocol in the three-tier framework this operator
+maintains (`pacepace/3tears`, `core/backends/protocol.py`). Matching it
+deliberately means that adopting that framework's collection layer later is an
+adapter over this class rather than a rewrite of it. Nothing here imports the
+framework: the contract is matched structurally, and a dependency is not worth
+taking to call no code.
 
-**One knowing divergence.** The framework's methods are `async`; these are not,
-because this product's ratified shape is async at the I/O boundary over a
-synchronous core. An adapter would delegate through `asyncio.to_thread` — which
-blocking `sqlite3` requires inside an event loop in any case, so that wrapper is
-work the async colour owes rather than work this divergence creates.
+**Where the signatures differ, and why each.** The match is of decomposition and
+naming; the argument lists are a subset, which is worth stating precisely so that
+nobody reads a promise here that the code does not carry.
+
+- The framework's methods are `async`; these are not, because this product's
+  ratified shape is async at the I/O boundary over a synchronous core. An adapter
+  would delegate through `asyncio.to_thread` — which blocking `sqlite3` requires
+  inside an event loop in any case, so that wrapper is work the async colour owes
+  rather than work this divergence creates.
+- Every framework method takes `conn`, a backend-specific transaction handle, so
+  that several writes commit together against a pooled connection. This store has
+  exactly one connection, so the handle would name the only thing it could ever
+  name: `transaction()` below is the same capability with the handle left
+  implicit, and it is what a rule spanning rows is applied inside.
+- `upsert` also takes `cas`, an optimistic-lock fence against a row's previous
+  `date_updated`. Nothing here has that column, and a single-writer process on a
+  serialised connection has no concurrent modification to lose — so the parameter
+  would be one that could only ever be passed `None`.
+- `pk` is required here and optional there, because the framework permits a
+  backend that already knows a table's key; this one takes it and then checks it
+  against the key the file actually declares.
 
 **`select_page` is deliberately outside the matched contract.** That framework's
 structured contract has no ordered, paged, counted read, and its collection layer
@@ -44,17 +60,21 @@ name is a bug whose message names internals and must not be repeated to whoever
 made the request.
 
 **Concurrency.** One connection is opened with `check_same_thread=False` and every
-statement runs under a single lock. The server accepts requests on an event loop
-thread while tests and startup code touch the store from another, so the connection
-genuinely crosses threads; the lock is what makes that safe rather than
-usually-safe. Queries are sub-millisecond point lookups against a household-sized
-catalogue, so serialising them costs nothing worth measuring.
+statement runs under a single reentrant lock. The server accepts requests on an
+event loop thread while tests and startup code touch the store from another, so
+the connection genuinely crosses threads; the lock is what makes that safe rather
+than usually-safe. Queries are sub-millisecond point lookups against a
+household-sized catalogue, so serialising them costs nothing worth measuring — and
+a transaction holds the lock for its whole body, which is what lets the one
+connection carry a multi-statement group without another thread writing into the
+middle of it.
 """
 
 import logging
 import sqlite3
 import threading
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Literal, get_args
@@ -96,6 +116,13 @@ class OrderBy:
     #: SQLite's NOCASE folds ASCII only, which is the collation the catalogue file
     #: already carries.
     ignore_case: bool = False
+    #: Sort rows whose value is unset after the rest. SQLite puts them first by
+    #: default, which is wrong wherever the column means "the curator said where
+    #: this goes": the entries nobody ordered would lead the ones somebody did.
+    nulls_last: bool = False
+    #: Largest or truest first. What "newest first" and "the primary one first"
+    #: both need, and neither is expressible by choosing a different column.
+    descending: bool = False
 
 
 def _refusal(exc: sqlite3.IntegrityError) -> str:
@@ -112,6 +139,8 @@ def _refusal(exc: sqlite3.IntegrityError) -> str:
         return "it refers to a record that is not in the catalogue."
     if "not null" in text:
         return "a required field was empty."
+    if "check" in text:
+        return "a field held a value the catalogue does not allow."
     return "the catalogue refused the write."
 
 
@@ -119,7 +148,12 @@ class SqliteDurableStore:
     """One SQLite file, addressed as tables of rows."""
 
     def __init__(self, path: Path | str, schema: str) -> None:
-        self._lock = threading.Lock()
+        # Reentrant because `transaction()` holds it across a body that calls
+        # back into the store's own methods, each of which takes it again.
+        self._lock = threading.RLock()
+        #: How many `transaction()` blocks are open. Non-zero means a write must
+        #: leave committing to the outermost one.
+        self._depth = 0
         self._connection = sqlite3.connect(str(path), check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
         with self._lock:
@@ -129,6 +163,46 @@ class SqliteDurableStore:
             self._connection.executescript(schema)
             self._connection.commit()
             self._columns = self._read_schema()
+
+    # -- atomicity ------------------------------------------------------------
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """Commit every write in the body together, or none of them.
+
+        A rule that spans rows — exactly one theme active, exactly one mat colour
+        current — is applied as a clear-then-set pair, and a pair interrupted
+        between its halves leaves the catalogue in the state the rule forbids.
+        Wrapping the pair here is what makes "it cannot be observed half-applied"
+        true rather than likely.
+
+        The lock is held for the whole body. That is deliberate: one connection
+        cannot carry two interleaved statement groups, so another thread writing
+        into the middle would silently join this transaction and be rolled back
+        with it. Serialising costs nothing at this catalogue's size, and the
+        alternative is a wrong answer rather than a slow one.
+
+        Nesting joins the outer group, so a service operation assembled from
+        other service operations still commits exactly once.
+        """
+        with self._lock:
+            if self._depth:
+                self._depth += 1
+                try:
+                    yield
+                finally:
+                    self._depth -= 1
+                return
+            self._depth = 1
+            try:
+                yield
+            except BaseException:
+                self._connection.rollback()
+                raise
+            else:
+                self._connection.commit()
+            finally:
+                self._depth = 0
 
     # -- the matched contract -------------------------------------------------
 
@@ -209,7 +283,7 @@ class SqliteDurableStore:
         where, values = self._equality(table, filters or {}, as_key=False)
         clause = "" if not where else f" WHERE {where}"
         self._validate(table, [term.column for term in order_by])
-        ordering = ", ".join(f'"{term.column}"' + (" COLLATE NOCASE" if term.ignore_case else "") for term in order_by)
+        ordering = ", ".join(self._order_term(term) for term in order_by)
         # SQLite will not take OFFSET without LIMIT, and -1 is its "no limit".
         # Spelling that out beats letting a caller's offset fall on the floor.
         if limit is None and not offset:
@@ -314,6 +388,21 @@ class SqliteDurableStore:
         return " AND ".join(clauses), tuple(values)
 
     @staticmethod
+    def _order_term(term: OrderBy) -> str:
+        """Render one sort term.
+
+        Unset values sort last as `"col" IS NULL, "col"` rather than as SQLite's
+        own `NULLS LAST`, which arrived in 3.30 (2019). The expression is
+        equivalent, is composed here from an already-validated column name rather
+        than from anything a caller wrote, and cannot make the ordering depend on
+        which SQLite the host happens to ship.
+        """
+        rendered = f'"{term.column}"' + (" COLLATE NOCASE" if term.ignore_case else "") + (" DESC" if term.descending else "")
+        # The null test stays ascending whichever way the values run: false sorts
+        # before true, so the rows that have a value come first either way.
+        return f'"{term.column}" IS NULL, {rendered}' if term.nulls_last else rendered
+
+    @staticmethod
     def _conflict_clause(columns: Sequence[str], pk: Sequence[str], on_conflict: ConflictPolicy) -> str:
         """The ON CONFLICT tail for `ignore` and `update`."""
         target = ", ".join(f'"{column}"' for column in pk)
@@ -327,16 +416,32 @@ class SqliteDurableStore:
         return f" ON CONFLICT ({target}) DO UPDATE SET {', '.join(assignments)}"
 
     def _write(self, statement: str, values: tuple[Any, ...], *, table: str) -> int:
-        try:
-            with self._lock, self._connection:
-                return int(self._connection.execute(statement, values).rowcount)
-        except sqlite3.IntegrityError as exc:
-            # The driver's own text names tables and columns, and a message raised
-            # here travels to the tool surface intact. Translate it to the reason
-            # in the catalogue's own terms and keep the SQL detail in the journal,
-            # where diagnosis happens. The table has to be logged explicitly:
-            # sqlite3's text for a foreign-key violation is exactly "FOREIGN KEY
-            # constraint failed", naming neither table nor column nor value.
-            reason = _refusal(exc)
-            log.warning("Refused a write to %s: %s", table, exc)
-            raise StorageError(reason, reason=reason) from exc
+        """Run one statement, committing it unless a transaction owns that decision.
+
+        Inside `transaction()` the commit and the rollback both belong to the
+        outermost block — committing here would publish half of a rule that spans
+        rows, and rolling back here would discard writes the caller made before
+        this one and still believes in.
+        """
+        with self._lock:
+            try:
+                rowcount = int(self._connection.execute(statement, values).rowcount)
+            except sqlite3.IntegrityError as exc:
+                if not self._depth:
+                    # A failed statement writes nothing, but sqlite3 has already
+                    # opened an implicit transaction around it; leaving that open
+                    # would hold the file's write lock until the next commit.
+                    self._connection.rollback()
+                # The driver's own text names tables and columns, and a message
+                # raised here travels to the tool surface intact. Translate it to
+                # the reason in the catalogue's own terms and keep the SQL detail
+                # in the journal, where diagnosis happens. The table has to be
+                # logged explicitly: sqlite3's text for a foreign-key violation is
+                # exactly "FOREIGN KEY constraint failed", naming neither table nor
+                # column nor value.
+                reason = _refusal(exc)
+                log.warning("Refused a write to %s: %s", table, exc)
+                raise StorageError(reason, reason=reason) from exc
+            if not self._depth:
+                self._connection.commit()
+            return rowcount

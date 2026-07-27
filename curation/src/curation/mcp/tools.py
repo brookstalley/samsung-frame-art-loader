@@ -22,7 +22,7 @@ service method answers it, and the service method does the work.
 from typing import Final
 
 from curation.mcp.registry import Action, Param, ToolRecord
-from curation.persistence.catalogue import ArtworkStatus
+from curation.persistence.records import ArtworkStatus
 from curation.services.catalogue import MAX_LIST_LIMIT
 
 _UNBUILT = "Not available yet: this tool answers action='help' and returns an error naming that for anything else."

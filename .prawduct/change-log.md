@@ -48,6 +48,92 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-27: The accepted catalogue — five entities, nine rules, and the directive's home
+
+<!-- prawduct: chunks=08A | status=shipped | scope=v1-build -->
+
+**Why:** Chunk 08 as authored was the whole of `data-model.md` beyond the three
+entities Chunk 07 proved — eleven entities, fifteen constraints, three state
+machines and startup reconciliation, an estimated ~2,500 lines. That is one
+Critic round over a diff large enough that review quality degrades, on the most
+contract-setting chunk in the plan. **The operator chose to split it**, and the
+line is the one the model already draws: the accepted catalogue here, the
+pre-acceptance pipeline in 08B. Nothing is descoped — every entity, constraint,
+state machine and acceptance question appears in exactly one half. The 07/07B
+precedent is the evidence: two of that split's five defects were unreachable from
+the smaller surface and were found only because the smaller surface was reviewed
+on its own.
+
+**What landed.** Five entities — Source, Original, Rendition, MatColor,
+ThemeMembership — plus the Directive singleton, taking the catalogue file from
+three tables to nine. The Artwork state machine (`archive`/`restore`, both
+illegal edges refused). Constraints 1–6, 10, 12 and 13, each enforced at write
+time in the service layer and each with at least one test that fails without its
+enforcement. `display_fit` as one service-layer function that stores nothing.
+
+**Persistence gained a transaction seam, and it is conformance rather than
+divergence.** Three of the rules span rows — exactly one theme active, exactly
+one mat colour current, at most one primary source — and each is applied as a
+clear-then-set pair. A pair interruptible between its halves leaves the catalogue
+in the state the rule forbids: no active theme at all, and so no sync target for
+the display plane. The matched framework contract threads a `conn` transaction
+handle through every method for exactly this reason; this store has one
+connection, so `transaction()` is the same capability with the handle implicit.
+
+**A correction to what the previous entry claimed.** That entry said the durable
+store matched the framework protocol's "decomposition, naming and argument
+shape". The first two hold; the third does not, and did not when it was written —
+the framework's signatures also carry `conn` and `cas`, and its `pk` is optional
+where this one requires it. The module docstring now enumerates each difference
+and why it is taken, instead of asserting a parity the code does not carry. This
+is the fourth round in a row where the defect was a sentence claiming slightly
+more than the thing it described.
+
+**The carried finding is closed where it was raised.** The directive sequence was
+pinned as catalogue-side by `architecture.md`, is restored by the exercised
+restore path, and had no entity in `data-model.md` — an unmodelled part of a
+persisted format is one the next chunk invents implicitly. It now has one, with
+its singleton row seeded by the schema so no caller ever creates it. The pin's
+clearing rule, which the finding also named as unstated, is settled and recorded:
+`next` supersedes it, archiving the pinned work withdraws it **without advancing
+the sequence**, and nothing else clears it — an advance on archive would fire a
+directive nobody issued.
+
+**Two gaps in `data-model.md` were found by implementing it and are now fixed
+there, not just in code.** `MatColor` had no timestamp while the paragraph beneath
+it required the history to be reviewable and reversible; "which colour did the new
+model replace" has no answer in a set of rows with no order. And the Directive
+entity above. Both are marked in the artifact as added at build.
+
+**One test's assertion was inverted, deliberately.**
+`test_a_theme_starts_inactive` asserted that a new theme is inactive. That
+described `Theme.is_active` as it shipped in Chunk 07 — a column the build plan
+explicitly recorded as having "no exactly-one enforcement behind it", deferred to
+this chunk. Constraint 1 now governs it and says the opposite: a catalogue holding
+themes with none active gives the display plane nothing to sync, and nothing
+reports it. The test is renamed, keeps its location, and carries the reasoning for
+the inversion in its own docstring.
+
+**Two Theme columns were deliberately not added.** `rotation_interval_seconds`
+and `shuffle` exist in the data model and are consumed by the theme manifest,
+which Chunk 09 builds. Adding them here would be the first change that widens a
+table an existing catalogue file already has — a migration to write rather than a
+column to append quietly — and nothing reads them until that builder exists. They
+land in Chunk 09 with the migration they need; a test asserts the current file
+gains new *tables* on open, and says in its docstring that the next widening will
+not have that luxury.
+
+**Product verification found a defect the tests had not.** Driving a real
+catalogue on disk showed the description normaliser dropping a `<script>` tag but
+keeping its contents, so a scraped page's script source would have reached the
+physical label as visible text. Unknown tags are unwrapped and their text kept —
+right for `<span>`, wrong for code. Fixed, with tests for both the closed and the
+unclosed case.
+
+**262 tests pass across both suites** (250 curation, 12 root), up from 154. Ruff
+and black clean. The real server was launched against a scratch `ART_ROOT` and
+wrote a catalogue carrying all nine tables and its seeded directive row.
+
 ## 2026-07-27: The durable seam — persistence split, and the 3tears swap answered
 
 <!-- prawduct: chunks=07B | status=shipped | scope=v1-build -->
