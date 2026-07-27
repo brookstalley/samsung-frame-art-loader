@@ -16,9 +16,15 @@ dependencies = [
     "python-dotenv",
 ]
 
+# 3tears core is deliberately absent and is not expected. The catalogue's durable
+# tier is first-party code matching that framework's DurableStore contract
+# structurally, so no framework code is imported and there is nothing to resolve;
+# its L1 tier is an in-memory cache that would not have persisted the catalogue
+# anyway. Recorded in full at project-state.yaml -> technical_decisions.technology.
+#
 # Deliberately not pinned yet:
-#   3tears core / 3tears-models — the operator's own framework; the dependency
-#     shape (path, git, or index) is settled when the catalogue lands.
+#   3tears-models — the operator's own multi-provider model adapters, which need
+#     none of the above; it arrives with the discovery work that calls it.
 #   pillow, opencv-python-headless, scikit-image, numpy — acquisition and the mat
 #     engine, which arrive with that work rather than being carried unused.
 

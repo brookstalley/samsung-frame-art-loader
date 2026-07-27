@@ -1,10 +1,9 @@
 """The catalogue's records and the persistence contract over them.
 
-The store is a `Protocol` rather than a base class because the backing
-technology is expected to change: today it is stdlib `sqlite3`, and the
-three-tier collection store it is destined for is not yet consumable. Naming
-the contract here means that swap touches one implementation module and
-nothing above it.
+The store is a `Protocol` rather than a base class so that the layers above it
+bind to what the catalogue can be asked, not to how one file answers. Persistence
+is reached only through the service layer, so naming the contract here is what
+keeps the backing technology a local concern.
 
 The records are plain frozen dataclasses. They carry no persistence
 behaviour — no `save()`, no lazy relationship loading — so that a service
@@ -143,4 +142,30 @@ class CatalogueStore(Protocol):
 
 
 class StorageError(RuntimeError):
-    """A write the store refused, such as a duplicate id or a missing artist."""
+    """The store could not do what was asked, in terms fit to show whoever asked.
+
+    Usually a refused write — a duplicate id, a missing artist — and also a read
+    of a row the catalogue cannot represent, such as one missing a timestamp its
+    record requires. Both are conditions the caller did nothing wrong to cause and
+    can be told about plainly, which is the line this type draws; a call that is
+    itself malformed is a `StoreMisuseError` instead.
+
+    `reason` is the refusal on its own — "it is already in the catalogue." — kept
+    separate from the message so a layer that knows what was being stored can say
+    so without re-deriving why the store said no.
+    """
+
+    def __init__(self, message: str, *, reason: str | None = None) -> None:
+        super().__init__(message)
+        self.reason = reason if reason is not None else message
+
+
+class StoreMisuseError(RuntimeError):
+    """A call the store could not make sense of — an unknown table, column or key.
+
+    Deliberately **not** a `StorageError`. That type means the store refused a
+    write a caller could reasonably have attempted, and its message is written to
+    be shown to whoever asked. This one means the calling code is wrong, and its
+    message names internal identifiers — so it must never be translated into
+    something a curator or a model reads as advice about their request.
+    """

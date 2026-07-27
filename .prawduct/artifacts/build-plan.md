@@ -71,13 +71,18 @@ into a recorded fact.
 
 ## Status
 
+This list is in **build order, not numeric order**. The three hardware-gated
+chunks sit at the end because the tooling takes the first unchecked box as the
+current chunk, and a blocked chunk parked ahead of active work silently hands its
+`Critic mode:` and `Type:` to every chunk after it. They are blocked, not
+deprioritised, and their numbers are unchanged; their detailed sections stay in
+numeric order below.
+
 - [x] Chunk 01: Untrack the TV pairing token; drop the catalogue backups (issue #4)
 - [x] Chunk 02: Deployment values out of source (issue #5) + `art.py` defect dispositions (issue #6)
-- [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13) — **needs hardware**
-- [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9) — **needs hardware**
-- [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3) — **needs hardware**
 - [x] Chunk 06: uv restructure (curation only), lint/test tooling — *display plane deferred, mat fixture deferred*
 - [x] Chunk 07: Walking skeleton — catalogue core → service layer → MCP tool, end to end
+- [x] Chunk 07B: The durable seam — persistence reshaped to the `DurableStore` contract
 - [ ] Chunk 08: Full catalogue schema, state machines, constraints, startup reconciliation
 - [ ] Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
 - [ ] Chunk 10: Seed the catalogue with the 41 existing works (v1 scope item)
@@ -92,15 +97,34 @@ into a recorded fact.
 - [ ] Chunk 19: Curation web UI and HTTP API
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
+Blocked on hardware — unblock these the moment the Pi and panel are on the bench:
+
+- [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13) — **needs hardware**
+- [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9) — **needs hardware**
+- [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3) — **needs hardware**
+
 Context: Plan authored 2026-07-20. Chunks 01, 02 and 06 landed 2026-07-27 in one
 pass; **Chunk 07 landed the same day**, took its `final` Critic round and the
 follow-up `verify-resolutions` pass, and the architecture now runs end to end —
 a real MCP client lists five tools over HTTP and reads a seeded catalogue.
-**Next: the 3tears catalogue swap**, then **Chunk 08** (full schema, state
-machines, constraints), which widens the three entities Chunk 07 proved into the
-other twelve. The swap is sequenced first, at the operator's direction, so the
-twelve new entities are written once against their final backend rather than
-against stdlib `sqlite3` and then again.
+**Chunk 07B landed 2026-07-27** — persistence is split into a generic durable
+store and a domain adapter, the 3tears question is answered and closed, and the
+on-disk catalogue format is now pinned by a read-compatibility test rather than by
+assertion.
+
+**Next: Chunk 08** (full schema, state machines, constraints), which widens the
+three entities Chunk 07 proved into the other twelve. The persistence work was
+sequenced first, at the operator's direction, so those twelve are written once
+against their final shape rather than against one shape and then again — and that
+sequencing paid: two of 07B's five defects (the composite-key and nullable-column
+paths) were unreachable from today's three entities and would have shipped inside
+Chunk 08.
+
+Chunk 07B is what the "3tears swap" became once the framework was read rather than
+summarised: 3tears' L1 is an in-memory cache and it ships no SQLite durable tier, so
+the durable store is this product's own code under every configuration. 07B builds
+that store to 3tears' `DurableStore` contract and stops there — no collections, no
+entity proxies, no dependency. See § The 3tears catalogue dependency below.
 
 Deviations from the plan as written, all deliberate:
 
@@ -221,21 +245,53 @@ and awaiting review:
 
 **Chunk 07 does not wait on either.** The catalogue is built behind a persistence
 Protocol on stdlib `sqlite3` — the plan already requires that persistence is
-reached only through the service layer, so the backend is a swap rather than a
-rewrite. Everything Chunk 07 actually proves (service layer, registry, MCP tool,
-error envelope) is identical under either backend.
+reached only through the service layer, so the backend is reachable from one place.
+Everything Chunk 07 actually proves (service layer, registry, MCP tool, error
+envelope) is identical under either backend.
 
-**When the PRs merge**, pin a released `3tears` version and implement the
-Protocol against `BaseCollection`. Do *not* take a path dependency on the local
-`~/source/3tears` checkout — it tracks whatever branch is checked out and cannot
-build on the Pi.
+**RESOLVED 2026-07-27 — the swap was scoped to the durable tier, and the
+collection layer is deferred indefinitely rather than scheduled.** The framework
+was read before building against it, and three findings changed the shape of the
+work (detail and line references in `3tears-integration-findings.md`):
 
-An open question the swap must answer: `BaseCollection` is a three-tier cache
-whose value is multi-process coherence, which `product-brief.md` § Scope rules
-out ("one household, one TV, one curation process"). The reason to adopt it
-anyway is the operator's — it is the on-ramp to agents later. That is a real
-reason, and it is a decision to make with the Protocol in hand rather than
-before.
+- **L1 is an in-memory cache**, not a file — `cache/sqlite.py` hardcodes a `memdb`
+  URI. "L1-only SQLite", the configuration this plan named, stores nothing across a
+  restart.
+- **3tears ships no SQLite `DurableStore`** — only `SqlL3Backend` over asyncpg. The
+  durable tier is this product's own code under every 3tears configuration, so
+  adopting collections would have *added* layers above the SQLite code rather than
+  replacing it.
+- **Collections are async throughout with no query API.** Adopting them converts the
+  store, the service layer and the bindings to async — a departure from
+  `project-preferences.md`'s "async at the I/O boundary, synchronous core" — while
+  ordered, paged, counted listing still has to bypass the collection and reach the
+  durable tier directly.
+
+This also retires the recorded *reason* to adopt. The rationale on file was "the
+on-ramp to agents later", but `3tears-models` — the package the agent work actually
+wants — depends only on `media-contracts` and `observe`, never on `core`. That
+on-ramp stays open regardless of what the catalogue sits on, and is decided at
+Chunk 14.
+
+**What Chunk 07B builds instead:** the durable tier shaped to 3tears'
+`DurableStore` contract (`fetch_one` / `upsert` / `delete` / `scan`), with the
+domain store as a thin adapter above it. No `BaseCollection`, no `BaseEntity`, no
+`CollectionRegistry`, no L1 cache tier, no async conversion, and **no `3tears`
+dependency in `pyproject.toml`** — a git reference to an unreleased `develop`
+branch, which the previous plan accepted, buys nothing when no framework code is
+called. That tradeoff is now withdrawn rather than merely accepted.
+
+**The seam is synchronous, and that is a knowing gap, not an oversight.** 3tears'
+`DurableStore` methods are `async`; ours match their decomposition, naming and
+arguments but not their colour. Adopting collections later therefore needs a thin
+wrapper delegating to `asyncio.to_thread` — which blocking `sqlite3` would require
+inside an event loop in any case, so the wrapper is work the async version owes,
+not work this decision creates.
+
+**If the collection layer is ever revisited**, pin a released `3tears` that carries
+both fixes — neither is in `v0.19.4`, which was cut the day before them — and do not
+take a path dependency on the local `~/source/3tears` checkout: it tracks whatever
+branch is checked out and cannot build on the Pi.
 
 ## Scaffolding
 
@@ -257,9 +313,12 @@ Rationale per package lives in `project-preferences.md` § Tooling,
 `3tears-integration-findings.md`, and `platform-and-dependency-findings.md`.
 
 - **curation (3.14):** fastapi, uvicorn, `mcp>=1.27` (official SDK — decided over
-  `3tears-mcp`, which drags NATS), 3tears core (L1 SQLite only) + 3tears-models
-  (OpenRouter adapters), httpx, pillow, opencv-python-headless, scikit-image,
-  numpy, pydantic, python-dotenv. All wheels on aarch64/3.14, verified 2026-07-20.
+  `3tears-mcp`, which drags NATS), 3tears-models (OpenRouter adapters, arriving with
+  Chunk 14), httpx, pillow, opencv-python-headless, scikit-image, numpy, pydantic,
+  python-dotenv. All wheels on aarch64/3.14, verified 2026-07-20. *(Amended
+  2026-07-27: 3tears **core** is no longer in this set — the catalogue's durable
+  tier is first-party code shaped to the framework's `DurableStore` contract, so
+  no framework code is imported. See § The 3tears catalogue dependency.)*
 - **display (3.13, system interpreter):** samsungtvws (target decided in Chunk 05),
   pillow, IT8951 (pinned per Chunk 04's outcome), omni-epd, pycairo + PyGObject
   (Pango label typesetting; the GTK stack lives on this plane deliberately),
@@ -548,7 +607,7 @@ the existing 41 works are seeded into them.
 
 - **Description:** The thin vertical slice through the entire curation
   architecture, proving the layers connect before anything widens: a minimal
-  catalogue (Artwork, Artist, Theme on 3tears L1 SQLite) → a service layer that
+  catalogue (Artwork, Artist, Theme on SQLite) → a service layer that
   owns all logic → the registry → one generated tool (`art_catalogue`, actions
   `list`/`get`/`help`) served over streamable HTTP from the same ASGI app as a
   placeholder UI route. This chunk lands the project-wide concepts everything
@@ -590,6 +649,47 @@ the existing 41 works are seeded into them.
   0. verify-api — re-confirm the mount/lifespan behaviour and
      `session_manager` constraints against the installed SDK version (they were
      verified from source at design time; the pin may have moved)
+  1. Acceptance criteria met and tests pass
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+### Chunk 07B: The durable seam — persistence reshaped to the `DurableStore` contract
+
+- **Description:** Split the catalogue's persistence into two layers so that the
+  twelve entities Chunk 08 adds are written once, against their final shape. Below:
+  a generic, table-oriented durable store owning the connection, the lock, the
+  schema, and constraint-refusal translation, exposing `fetch_one` / `upsert` /
+  `delete` / `scan` keyed by table plus a primary-key mapping — the decomposition,
+  naming and argument shape of 3tears' `DurableStore` protocol, so that a later
+  collection layer is an adapter rather than a rewrite. Above: `SqliteCatalogue`
+  as the domain adapter, mapping records to rows and owning ordering, paging and
+  totals. This is a refactor: no existing test changes, and no change to what any
+  caller receives. The one deliberate exception is the journal — a refused write
+  logs from both layers, so that the record's identity and the SQL cause are each
+  recorded by the layer that can see them.
+- **Depends on:** Chunk 07
+- **Artifacts consumed:** `3tears-integration-findings.md` (§ Answer 2 — the
+  contract being matched and why it is worth matching), `architecture.md` § Data
+  Ownership (single writer per store), `project-preferences.md` (async at the I/O
+  boundary, synchronous core)
+- **Foreign API:** none — 3tears' `DurableStore` is matched structurally and
+  **not imported**; no dependency is added
+- **Deliverables:** new `curation/src/curation/persistence/durable.py`;
+  `curation/src/curation/persistence/sqlite.py` reduced to the domain adapter; the ordered-page read
+  named as sitting deliberately outside the matched contract, because 3tears'
+  contract has no ordered paging and its collection layer never will
+- **Tests:** unit — the durable store's own contract, including the
+  insert-versus-upsert conflict modes and the constraint-refusal translation that
+  `SqliteCatalogue` has never had a direct test for; a read-compatibility test
+  that rebuilds a catalogue from the previous revision's frozen DDL and inserts
+  and reads it back through the current adapter, so the on-disk contract is
+  evidence rather than assertion; the existing service, contract and integration
+  suites stand unchanged as the behaviour-preservation evidence
+- **Acceptance criteria:** both suites pass with no test modified; a catalogue
+  written before the change is read correctly after it (same file, same schema);
+  no module outside the persistence package imports `sqlite3`
+- **Critic mode:** chunk
+- **Done when:**
   1. Acceptance criteria met and tests pass
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status

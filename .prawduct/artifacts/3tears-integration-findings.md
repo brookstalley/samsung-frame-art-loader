@@ -33,6 +33,18 @@ degraded accident.
 **Conclusion:** L1 SQLite alone is a valid configuration. No NATS, no Postgres, no
 Docker.
 
+**AMENDED 2026-07-27 — valid, but not *durable*, and this section read as though it
+were.** Everything above is accurate about *tiers being optional*; none of it is
+about persistence. `cache/sqlite.py:104` opens `file:/{db_name}?vfs=memdb` — a named
+**in-memory** database, as that module's own docstring states ("L1 cache backend
+using SQLite named in-memory database"). L1 is a cache, not a store: an L1-only
+collection holds the catalogue in RAM and loses it when the process exits. There is
+no file-backed mode and no path option — the URI is hardcoded.
+
+Durability therefore comes only from the L3 tier described in Answer 2. The
+parenthetical at the end of this document — "(optionally a SQLite `DurableStore`
+L3)" — was carrying that entire load, and "optionally" was wrong.
+
 ## Answer 2: the L3 durable tier is pluggable, and there is a working precedent
 
 `backends/protocol.py` deliberately separates two levels:
@@ -47,6 +59,28 @@ Docker.
 **That is not theoretical.** scriob already ships one:
 `scriob/server/src/scriob_server/content/git_l3.py`. A SQLite- or file-backed
 `DurableStore` for this project is a well-trodden path, not new ground.
+
+**Made explicit 2026-07-27:** 3tears itself ships **no** SQLite `DurableStore`. The
+only implementation in the tree is `backends/sql.py` (`SqlL3Backend`, asyncpg over
+Postgres). "Pluggable" here means *we write the plug* — which is what makes the
+durable tier this product's own code under every 3tears configuration, and what
+makes shaping it to `fetch_one`/`upsert`/`delete`/`scan` worth doing whether or not
+the collection layer is ever adopted.
+
+Two further constraints found the same day, both bearing on how much of 3tears a
+consumer can take incrementally:
+
+- **Collections have no query API.** `BaseCollection` is entity-by-primary-key
+  (`get`/`save_entity`/`delete`/`ensure`/`__getitem__`/`__contains__`). Ordered,
+  paged, counted listing has no home in it; `DurableStore.scan` takes equality
+  filters with no ordering, paging, or total. Any listing path goes to the durable
+  tier directly, under every configuration.
+- **The collection API is async throughout, and the `*_sync` methods are
+  L1-cache-only** — `get_field_sync`/`get_row_sync` return `MISSING`/`None` when L1
+  is absent rather than reading through to L3 (`collections/base.py:339-395`).
+  Adopting collections is therefore an async conversion of every caller above the
+  store, which `project-preferences.md`'s "async at the I/O boundary, synchronous
+  core" norm makes a recorded departure rather than a detail.
 
 ## Answer 3: agent memory is the exception — it requires Postgres
 
@@ -220,9 +254,10 @@ the display plane are separate processes on separate Python versions.
 
 The decision collapses to one question: **do you want 3tears agent memory?**
 
-- **No** → zero infrastructure. Three-tier entities on L1 SQLite (optionally a
-  SQLite `DurableStore` L3), plus `3tears-models` for OpenRouter multi-provider
-  access. No Docker, no Postgres, no NATS.
+- **No** → zero infrastructure. Three-tier entities over a SQLite `DurableStore` L3
+  — **required, not optional**: L1 is an in-memory cache, so it is the L3 that makes
+  the catalogue survive a restart — plus `3tears-models` for OpenRouter
+  multi-provider access. No Docker, no Postgres, no NATS.
 - **Yes** → one Postgres instance, which then makes a Postgres L3 free since it is
   already running.
 

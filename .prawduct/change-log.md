@@ -48,6 +48,116 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-27: The durable seam — persistence split, and the 3tears swap answered
+
+<!-- prawduct: chunks=07B | status=shipped | scope=v1-build -->
+
+**Why:** Chunk 08 widens the catalogue from three entities to fifteen. Whatever
+shape the persistence layer has when that starts is the shape twelve new entities
+get written against, so the backend question had to be settled first.
+
+**The 3tears swap was scoped down to the durable tier, and the collection layer is
+now deferred indefinitely rather than scheduled.** Reading the framework before
+building against it retired the plan's target configuration and its stated reason
+at once: L1 is a *named in-memory* database, so "L1-only SQLite" persists nothing
+across a restart; 3tears ships no SQLite `DurableStore` (only asyncpg), so the
+durable tier is this product's own code under every configuration; and collections
+are async throughout with no query API, so adopting them converts three layers to
+async — against the ratified "async at the I/O boundary, synchronous core" — while
+listing still has to bypass the collection. The recorded reason to adopt anyway,
+"the on-ramp to agents later", does not survive either: `3tears-models` depends
+only on `media-contracts` and `observe`, never on `core`.
+
+**What landed instead.** `persistence/durable.py` is a generic store — tables,
+keys, rows — matching the `DurableStore` decomposition, naming and argument shape
+so a future collection layer is an adapter rather than a rewrite. `sqlite.py` is
+now the domain adapter above it, owning the schema, the record mapping, and the
+ordering and paging that are product judgements rather than storage ones. No
+framework dependency is taken, which also **withdraws** the develop-branch git
+reference the previous record had accepted: an unreleased moving branch buys
+nothing when no framework code is called.
+
+**A refactor, held to that standard:** 153 tests pass across both suites (104
+pre-existing — 92 curation, 12 root — none modified or weakened, plus 49 new).
+
+Read-compatibility with catalogues already on disk is carried by a standing test,
+`test_a_catalogue_written_by_an_earlier_revision_still_reads`, not by prose: it
+builds a file from the previous revision's DDL and INSERT statements, frozen as
+literals so they cannot drift with the code, then reads it back through the
+current `SqliteCatalogue`. What it asserts, precisely: every column of one artist,
+one artwork and one theme, plus a second of each covering the sparse and
+all-nulls-where-allowed shapes; both `ArtworkStatus` values; a nullable instant
+present and absent; the case-insensitive title and name orderings; and one
+unpaged total. It was mutation-checked in both directions — dropping the
+case-insensitive sort and mis-mapping a single column each turn it red.
+
+**One behaviour did change, and "refactor" should not be read as covering it:** a
+refused write now logs twice rather than once, because the split put the record's
+identity and the SQL cause in different layers — `durable.py` journals the table
+and the driver text, `sqlite.py` journals which record was refused. That is the
+answer to a prior review's finding that the refusal line no longer named the
+record; the message returned to the caller is unchanged.
+
+**Five defects surfaced, all in code paths the split newly exposed** — four by
+writing the tests the old code never had, the fifth by probing the new store
+during review: a partial composite key answered `fetch_one`
+with whichever row sorted first rather than refusing; an `ON CONFLICT` target that
+is not the table's real key would have made `update` insert duplicates; `offset`
+without `limit` was silently discarded, because SQLite takes no OFFSET without a
+LIMIT; requiring the whole key on a *plain insert* was over-strict, since that
+path reaches no key at all; and filtering for an unset column rendered `= NULL`,
+which is never true in SQL, so a scan for "the rows with no artist" answered
+"none" whether or not any existed. The constraint-refusal translation — which
+decides whether a duplicate id and a missing artist read differently to a curator
+— had never had a direct test in any form.
+
+Four of the five are the same failure in different clothes: **an answer that is
+wrong but shaped like a right one**, which no caller can detect. That is the class
+this layer now refuses by construction, and it is why the split was worth doing
+before twelve more entities were written onto it — the nullable-column bug was
+unreachable from today's three entities and would have shipped inside Chunk 08.
+
+The null fix then had to be **scoped to filters only**, which review caught before
+it landed: the same rendering helper serves the key paths, and `IS NULL` on a key
+column reintroduces exactly the failure it had just removed — SQLite does not
+enforce NOT NULL on a `TEXT PRIMARY KEY`, so a null key component can match
+several rows and `fetch_one` would return an arbitrary one. A null is a legitimate
+filter value and an illegitimate key value; the store now says so explicitly.
+
+**Found while verifying, and fixed here:** the change-log carried no tagged entries
+at all, so `prawduct-hook regen-views` unchecked chunks 01, 02, 06 and 07 in the
+build plan's derived Status block. The chunks below backfill that evidence.
+
+## 2026-07-27: Chunk 07 — the walking skeleton, end to end
+
+<!-- prawduct: chunks=07 | status=shipped | scope=v1-build -->
+
+**Why:** Prove the layers connect — catalogue core, service layer, registry,
+generated MCP tool over streamable HTTP — before anything widens onto them.
+
+Landed across `4508cd3`, `bfafb70` and `e379529`. A real MCP client lists five
+tools over HTTP and reads a seeded catalogue. The `final` Critic round returned 0
+blocking, 21 warnings, 9 notes; fifteen were fixed in the same pass and verified by
+two `verify-resolutions` deltas, and six were routed to the backlog. One contract
+rule was retired rather than quietly broken — "an unknown *tool* stays a protocol
+error" is not implementable on the official SDK, whose `call_tool` handler converts
+every exception to a normal error result.
+
+## 2026-07-27: Chunks 01, 02 and 06 — hygiene, deployment values, and the curation plane
+
+<!-- prawduct: chunks=01,02,06 | status=shipped | scope=v1-build -->
+
+**Why:** Clear the security and configuration debt blocking a build, and stand up
+the plane Chunk 07 needs.
+
+Landed in `ba007cd`. Collapsed into a single commit rather than six governed cycles
+at the operator's direction — the ceremony was on track to cost more than the work,
+and that stands as the working rule for mechanical chunks while contract-setting
+ones keep the full treatment. Three deliberate deviations are recorded in the build
+plan: no token rotation (the leaked token is expired), no `display/` project (not
+needed until Chunk 12, and its dependency set is what Chunks 04–05 must verify on
+hardware), and no mat regression fixture (consumed in Chunk 18).
+
 ## 2026-07-20: Last blocking finding closed; remaining warnings routed to their chunks
 
 **Why:** R-10 was the last blocker and the only one needing an operator decision.

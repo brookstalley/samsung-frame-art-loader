@@ -388,6 +388,20 @@ Also 2026-07-19, verified by reading the source — not assumed:
 > No → zero infrastructure. Yes → Postgres. Nothing in between buys anything,
 > because NATS only earns its keep across multiple pods.
 
+**Corrected 2026-07-27 — "zero infrastructure" is true and was read as "zero
+work".** L1 is a *named in-memory* SQLite database (`cache/sqlite.py` hardcodes a
+`memdb` URI), and 3tears ships no SQLite `DurableStore` — only asyncpg. So the
+tier that actually persists anything is always one you write yourself. The bullets
+above are accurate about *infrastructure*; none of them was ever about *durability*,
+and the gap between those two words survived three artifacts for a week.
+
+**The general form, which is the reusable part:** "no infrastructure required" and
+"no code required" are different claims, and a framework's optional-tier
+documentation answers the first while sounding like it answers the second. When a
+dependency is adopted for a capability, name the capability and find the code that
+provides it — the absence of a shipped implementation is invisible in exactly the
+material that advertises the seam.
+
 ## Data and cache contract
 
 Established 2026-07-19. The `art/` tree is not one thing, and the two halves are

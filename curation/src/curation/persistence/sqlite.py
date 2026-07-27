@@ -1,25 +1,25 @@
-"""A `CatalogueStore` on stdlib `sqlite3`.
+"""A `CatalogueStore` over a SQLite file.
 
-Chosen because it has no dependency to resolve, no server to run, and a file
-that can be copied to a backup and back again — which is how this catalogue's
-restore path is meant to work. It sits behind `CatalogueStore` so that
-replacing it later is one module, not a sweep.
+SQLite was chosen because it has no dependency to resolve, no server to run, and
+a file that can be copied to a backup and back again — which is how this
+catalogue's restore path is meant to work.
 
-**Concurrency.** One connection is opened with `check_same_thread=False` and
-every statement runs under a single lock. The server accepts requests on an
-event loop thread while tests and startup code touch the store from another,
-so the connection genuinely crosses threads; the lock is what makes that safe
-rather than usually-safe. Queries here are sub-millisecond point lookups
-against a household-sized catalogue, so serialising them costs nothing worth
-measuring.
+This module is the domain half of the split: it owns the schema, the mapping
+between records and rows, and the ordering and paging decisions that make a
+listing stable. Everything about connections, statements, locking and constraint
+translation lives in `durable.py`, so what remains here reads as the catalogue
+rather than as SQL plumbing.
+
+Ordering is decided here rather than below because it is a product judgement, not
+a storage one: title is what a curator scans by, and id breaks ties so that the
+same page request never comes back in a different order.
 """
 
 import logging
-import sqlite3
-import threading
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, Final
 
 from curation.persistence.catalogue import (
     Artist,
@@ -29,6 +29,9 @@ from curation.persistence.catalogue import (
     StorageError,
     Theme,
 )
+from curation.persistence.durable import OrderBy, SqliteDurableStore
+
+log = logging.getLogger(__name__)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS artists (
@@ -66,32 +69,20 @@ CREATE TABLE IF NOT EXISTS themes (
 );
 """
 
+#: Every table in this catalogue is keyed by a single `id`. Named once so the
+#: durable store is addressed the same way everywhere.
+_BY_ID: Final[tuple[str, ...]] = ("id",)
 
-log = logging.getLogger(__name__)
-
-
-def _refusal(exc: sqlite3.IntegrityError) -> str:
-    """Why the store said no, in the catalogue's terms rather than SQL's.
-
-    Falls back to a generic phrase rather than the driver text: an unrecognised
-    constraint is still not something a caller should be reading table names
-    out of.
-    """
-    text = str(exc).lower()
-    if "unique" in text or "primary key" in text:
-        return "it is already in the catalogue."
-    if "foreign key" in text:
-        return "it refers to a record that is not in the catalogue."
-    if "not null" in text:
-        return "a required field was empty."
-    return "the catalogue refused the write."
+#: What a curator scans by, then a tie-break that makes paging repeatable.
+_BY_TITLE: Final[tuple[OrderBy, ...]] = (OrderBy("title", ignore_case=True), OrderBy("id"))
+_BY_NAME: Final[tuple[OrderBy, ...]] = (OrderBy("name", ignore_case=True), OrderBy("id"))
 
 
 def _to_iso(moment: datetime | None) -> str | None:
     """Store instants as UTC ISO-8601 text.
 
-    SQLite has no datetime type, and a naive local-time string is unreadable
-    once the machine's timezone changes under it.
+    SQLite has no datetime type, and a naive local-time string is unreadable once
+    the machine's timezone changes under it.
     """
     if moment is None:
         return None
@@ -115,124 +106,113 @@ class SqliteCatalogue:
     """The catalogue, persisted to one SQLite file."""
 
     def __init__(self, path: Path | str) -> None:
-        self._lock = threading.Lock()
-        self._connection = sqlite3.connect(str(path), check_same_thread=False)
-        self._connection.row_factory = sqlite3.Row
-        with self._lock:
-            # Foreign keys are off by default in SQLite, which would let an
-            # artwork keep pointing at an artist that was never written.
-            self._connection.execute("PRAGMA foreign_keys = ON")
-            self._connection.executescript(_SCHEMA)
-            self._connection.commit()
+        self._store = SqliteDurableStore(path, _SCHEMA)
 
     # -- artists --------------------------------------------------------------
 
     def add_artist(self, artist: Artist) -> None:
-        self._insert(
-            "INSERT INTO artists (id, name, nationality, born, died, lifespan_text, biography)" " VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                artist.id,
-                artist.name,
-                artist.nationality,
-                artist.born,
-                artist.died,
-                artist.lifespan_text,
-                artist.biography,
-            ),
+        self._add(
+            "artists",
+            {
+                "id": artist.id,
+                "name": artist.name,
+                "nationality": artist.nationality,
+                "born": artist.born,
+                "died": artist.died,
+                "lifespan_text": artist.lifespan_text,
+                "biography": artist.biography,
+            },
             subject=f"artist {artist.id!r}",
         )
 
     def get_artist(self, artist_id: str) -> Artist | None:
-        row = self._fetch_one("SELECT * FROM artists WHERE id = ?", (artist_id,))
+        row = self._store.fetch_one("artists", {"id": artist_id})
         return None if row is None else self._artist(row)
 
     # -- artworks -------------------------------------------------------------
 
     def add_artwork(self, artwork: Artwork) -> None:
-        self._insert(
-            "INSERT INTO artworks"
-            " (id, title, artist_id, date_created, medium, dimensions, description, rights,"
-            "  status, accepted_at, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                artwork.id,
-                artwork.title,
-                artwork.artist_id,
-                artwork.date_created,
-                artwork.medium,
-                artwork.dimensions,
-                artwork.description,
-                artwork.rights,
-                str(artwork.status),
-                _to_iso(artwork.accepted_at),
-                _to_iso(artwork.created_at),
-            ),
+        self._add(
+            "artworks",
+            {
+                "id": artwork.id,
+                "title": artwork.title,
+                "artist_id": artwork.artist_id,
+                "date_created": artwork.date_created,
+                "medium": artwork.medium,
+                "dimensions": artwork.dimensions,
+                "description": artwork.description,
+                "rights": artwork.rights,
+                "status": str(artwork.status),
+                "accepted_at": _to_iso(artwork.accepted_at),
+                "created_at": _to_iso(artwork.created_at),
+            },
             subject=f"artwork {artwork.id!r}",
         )
 
     def get_artwork(self, artwork_id: str) -> Artwork | None:
-        row = self._fetch_one("SELECT * FROM artworks WHERE id = ?", (artwork_id,))
+        row = self._store.fetch_one("artworks", {"id": artwork_id})
         return None if row is None else self._artwork(row)
 
     def list_artworks(self, *, status: ArtworkStatus | None, limit: int, offset: int) -> ArtworkPage:
-        where = "" if status is None else " WHERE status = :status"
-        parameters: dict[str, object] = {"limit": limit, "offset": offset}
-        if status is not None:
-            parameters["status"] = str(status)
-        with self._lock:
-            total = self._connection.execute(f"SELECT COUNT(*) FROM artworks{where}", parameters).fetchone()[0]
-            # Title is what a curator scans by; id breaks ties so the same page
-            # request never comes back in a different order.
-            rows = self._connection.execute(
-                f"SELECT * FROM artworks{where} ORDER BY title COLLATE NOCASE, id LIMIT :limit OFFSET :offset",
-                parameters,
-            ).fetchall()
+        rows, total = self._store.select_page(
+            "artworks",
+            order_by=_BY_TITLE,
+            filters=None if status is None else {"status": str(status)},
+            limit=limit,
+            offset=offset,
+        )
         return ArtworkPage(artworks=[self._artwork(row) for row in rows], total=total)
 
     # -- themes ---------------------------------------------------------------
 
     def add_theme(self, theme: Theme) -> None:
-        self._insert(
-            "INSERT INTO themes (id, name, description, is_active, created_at) VALUES (?, ?, ?, ?, ?)",
-            (theme.id, theme.name, theme.description, int(theme.is_active), _to_iso(theme.created_at)),
+        self._add(
+            "themes",
+            {
+                "id": theme.id,
+                "name": theme.name,
+                "description": theme.description,
+                "is_active": int(theme.is_active),
+                "created_at": _to_iso(theme.created_at),
+            },
             subject=f"theme {theme.id!r}",
         )
 
     def get_theme(self, theme_id: str) -> Theme | None:
-        row = self._fetch_one("SELECT * FROM themes WHERE id = ?", (theme_id,))
+        row = self._store.fetch_one("themes", {"id": theme_id})
         return None if row is None else self._theme(row)
 
     def list_themes(self) -> Sequence[Theme]:
-        with self._lock:
-            rows = self._connection.execute("SELECT * FROM themes ORDER BY name COLLATE NOCASE, id").fetchall()
+        rows, _ = self._store.select_page("themes", order_by=_BY_NAME)
         return [self._theme(row) for row in rows]
 
     # -- lifecycle ------------------------------------------------------------
 
     def close(self) -> None:
-        with self._lock:
-            self._connection.close()
+        self._store.close()
 
     # -- internals ------------------------------------------------------------
 
-    def _insert(self, statement: str, values: tuple[object, ...], *, subject: str) -> None:
-        try:
-            with self._lock, self._connection:
-                self._connection.execute(statement, values)
-        except sqlite3.IntegrityError as exc:
-            # The driver's own text names tables and columns, and the message
-            # travels intact to the tool surface. Translate it to the reason in
-            # the catalogue's own terms and keep the SQL detail in the journal,
-            # where diagnosis happens.
-            log.warning("Refused to store %s: %s", subject, exc)
-            raise StorageError(f"Could not store {subject}: {_refusal(exc)}") from exc
+    def _add(self, table: str, row: Mapping[str, Any], *, subject: str) -> None:
+        """Insert a record, refusing rather than overwriting one already there.
 
-    def _fetch_one(self, statement: str, values: tuple[object, ...]) -> sqlite3.Row | None:
-        with self._lock:
-            return self._connection.execute(statement, values).fetchone()
+        Adding a work that is already catalogued is a mistake to report, not an
+        edit to apply — so this is the conflict policy the catalogue's additions
+        take, and revising a record is a different operation with its own name.
+        """
+        try:
+            self._store.upsert(table, row, pk=_BY_ID, on_conflict="raise")
+        except StorageError as exc:
+            # Which record was refused is knowable only here, and only this line
+            # puts it in the journal: the driver's own text for a foreign-key
+            # violation carries no id, and the message raised from here is
+            # written for whoever asked rather than for whoever is diagnosing.
+            log.warning("Refused to store %s: %s", subject, exc.reason)
+            raise StorageError(f"Could not store {subject}: {exc.reason}", reason=exc.reason) from exc
 
     @staticmethod
-    def _artist(row: sqlite3.Row) -> Artist:
+    def _artist(row: Mapping[str, Any]) -> Artist:
         return Artist(
             id=row["id"],
             name=row["name"],
@@ -244,7 +224,7 @@ class SqliteCatalogue:
         )
 
     @staticmethod
-    def _artwork(row: sqlite3.Row) -> Artwork:
+    def _artwork(row: Mapping[str, Any]) -> Artwork:
         return Artwork(
             id=row["id"],
             title=row["title"],
@@ -260,7 +240,7 @@ class SqliteCatalogue:
         )
 
     @staticmethod
-    def _theme(row: sqlite3.Row) -> Theme:
+    def _theme(row: Mapping[str, Any]) -> Theme:
         return Theme(
             id=row["id"],
             name=row["name"],

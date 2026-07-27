@@ -775,7 +775,7 @@ technical_decisions:
       alternatives_considered: ["Display plane as a thin client that fails when the server is down — rejected; inverts the availability priority."]
       date: 2026-07-19
   technology:
-    - decision: "Use 3tears three-tier entities in an L1-only (SQLite) configuration, with no NATS and no Postgres."
+    - decision: "Build the catalogue's durable tier as first-party SQLite shaped to 3tears' DurableStore contract; do not adopt 3tears collections, and take no 3tears core dependency."
       rationale: >
         Verified against the source rather than assumed (artifacts/3tears-integration-findings.md):
         CollectionRegistry initialises all three tiers to None and injects only what
@@ -796,19 +796,46 @@ technical_decisions:
         and neither is in a release: v0.19.4 was cut the day before them.
         The catalogue therefore ships on stdlib sqlite3 behind a CatalogueStore
         Protocol; everything the slice proves (service layer, registry, tool
-        surface, error envelope) is identical under either backend, so the swap
-        is one module rather than a rewrite. The dependency will be taken as a
-        git reference to the develop BRANCH, at the operator's direction, rather
-        than the released version originally specified — tradeoff accepted and
-        explicit: develop re-resolves on every lock refresh, so a rebuild can
-        pull unrelated changes and the Pi is not guaranteed the same bytes as
-        the dev Mac. Revisit when a release carries both fixes. The open
-        question the swap must still answer: BaseCollection's value is
-        multi-process coherence, which product-brief.md § Scope rules out; the
-        reason to adopt it anyway is the operator's — it is the on-ramp to
-        agents later.
+        surface, error envelope) is identical under either backend.
+
+        SUPERSEDED 2026-07-27, and the heading above is the amended decision.
+        Reading the framework before building against it retired both the plan's
+        target configuration and its stated reason:
+
+        (1) L1 is an in-memory cache. cache/sqlite.py hardcodes
+        file:/{db_name}?vfs=memdb, so the "L1-only SQLite" configuration this
+        decision named holds the catalogue in RAM and loses it on restart.
+        (2) 3tears ships no SQLite DurableStore — only SqlL3Backend over
+        asyncpg — so the durable tier is this product's own code under EVERY
+        3tears configuration. Adopting collections would add layers above the
+        SQLite code, not replace it.
+        (3) Collections are async throughout (the *_sync methods read L1 only
+        and never pull through to L3), so adopting them converts store, service
+        and bindings to async — a departure from the ratified "async at the I/O
+        boundary, synchronous core" preference — while ordered, paged, counted
+        listing still bypasses the collection entirely, because BaseCollection
+        has no query API.
+        (4) The recorded reason to adopt — "the on-ramp to agents later" — does
+        not hold: 3tears-models depends only on media-contracts and observe,
+        never on core. That on-ramp is unaffected by what the catalogue sits on
+        and is decided at Chunk 14.
+
+        What is built instead (Chunk 07B): a first-party durable store matching
+        the DurableStore decomposition, naming and argument shape
+        (fetch_one/upsert/delete/scan keyed by table + pk mapping), with
+        SqliteCatalogue as the domain adapter above it. No BaseCollection, no
+        BaseEntity, no CollectionRegistry, no L1 cache tier, no async
+        conversion, and NO 3tears dependency — which also withdraws, rather
+        than merely accepts, the develop-branch git reference the previous
+        record signed up for: an unreleased moving branch buys nothing when no
+        framework code is imported. Known gap, stated rather than discovered
+        later: our methods are synchronous where the contract is async, so a
+        future collection layer needs an asyncio.to_thread wrapper — which
+        blocking sqlite3 would require in an event loop regardless.
       alternatives_considered:
         - "Full 3tears stack with NATS + Postgres — rejected by the operator; solves multi-pod coherence problems this product does not have."
+        - "Adopt BaseCollection over a first-party SQLite DurableStore — rejected 2026-07-27; costs an async conversion of three layers and reverses the inert-records design, to gain a cache tier whose value (multi-process coherence) product-brief.md § Scope rules out."
+        - "Defer all persistence work and build Chunk 08 first — rejected; the twelve new entities would be written against a shape known to be changing."
         - "No 3tears at all — viable and simplest, but forfeits shared foundation with the operator's other projects."
       date: 2026-07-19
     - decision: "Use 3tears-models for LLM access, routed through OpenRouter."
@@ -2254,7 +2281,10 @@ views_enabled: true
 # Scope rollups — derived view, populated by regen-views when views_enabled is
 # true. Lists chunks (and releases) shipped under each scope rollup tag.
 # Do not hand-edit — overwritten on next regen.
-scope_rollups: {}
+scope_rollups:
+  v1-build:
+    chunks: ["01", "02", "06", "07", "07B"]
+    releases: []
 
 # =============================================================================
 # COVERAGE EVIDENCE (opt-in, v1.4+)
@@ -2340,7 +2370,7 @@ operator_verification_required: false
 # design_decisions.api_versioning_approach. Unset/absent = undecided. Recording
 # "none-internal-only" resolves it; this is NOT a mandate to version.
 #
-# api_versioning_decided:
+api_versioning_decided: "none — no version negotiation. MCP tool names frozen, actions additive-only; mirrors design_decisions.api_versioning_approach (recorded 2026-07-19, status active)."
 
 # =============================================================================
 # BACKLOG (structured backlog resolution conditions, v1.7+)
