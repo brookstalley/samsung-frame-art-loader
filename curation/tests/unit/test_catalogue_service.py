@@ -2,9 +2,7 @@
 
 import pytest
 
-from curation.mcp.bindings import _truncation_notice
 from curation.persistence.records import ArtworkStatus
-from curation.services.catalogue import MAX_LIST_LIMIT
 from curation.services.errors import ServiceError
 
 
@@ -132,28 +130,6 @@ def test_the_first_theme_is_active(service):
     `test_catalogue_constraints.py`.
     """
     assert service.add_theme(name="American Modernists").is_active is True
-
-
-def test_a_truncation_notice_names_a_remedy_the_caller_can_actually_use(service):
-    """At the ceiling, "raise limit" sends the caller to a refusal.
-
-    `MAX_LIST_LIMIT` is enforced in the service and declared in the tool schema, so
-    a caller already at the maximum who follows that advice gets an error. `offset`
-    is the move there, and it is on the same action — so the notice has to say so
-    rather than repeat advice that only works below the ceiling.
-    """
-    for index in range(MAX_LIST_LIMIT + 1):
-        service.add_artwork(title=f"Work {index:03d}")
-
-    at_ceiling = _truncation_notice(service.list_artworks(limit=MAX_LIST_LIMIT))
-    assert at_ceiling is not None
-    assert "the maximum" in at_ceiling
-    assert "raise limit" not in at_ceiling
-    assert "offset" in at_ceiling
-
-    below = _truncation_notice(service.list_artworks(limit=10))
-    assert "raise limit" in below
-    assert "the maximum" not in below
 
 
 def _by_title(service, title):

@@ -36,6 +36,10 @@ def _list_artworks(service: CatalogueService, arguments: Mapping[str, Any]) -> d
         artworks=[_summary(entry) for entry in listing.entries],
         count=len(listing.entries),
         total=listing.total,
+        # Echoed so a page describes its own place in the set: a caller told to
+        # page with `offset` needs to know which one produced this.
+        limit=listing.limit,
+        offset=listing.offset,
         truncated=listing.truncated,
         notice=_truncation_notice(listing),
     )
@@ -86,17 +90,23 @@ def _truncation_notice(listing: ArtworkListing) -> str | None:
     """
     if not listing.truncated:
         return None
-    shown = len(listing.entries)
     # The limit is named rather than merely referred to: "raise limit" is advice a
     # caller cannot act on without knowing what it currently is, and a caller who
     # passed none is looking at a default it never chose. At the ceiling the advice
     # changes, because telling someone to raise a number that is already the
     # maximum sends them to a refusal — `offset` is the move there, and it is on
     # the same action.
+    #
+    # The position is reported rather than only the count, for the same reason: a
+    # message that steers a caller to `offset` and then reads identically at every
+    # offset gives them no way to see that paging moved.
+    first = listing.offset + 1
+    last = listing.offset + len(listing.entries)
     remedy = "page with offset" if listing.limit >= MAX_LIST_LIMIT else "raise limit or page with offset"
     ceiling = ", the maximum" if listing.limit >= MAX_LIST_LIMIT else ""
     return (
-        f"showing {shown} of {listing.total} at limit {listing.limit}{ceiling}; {remedy}, or narrow with status to see the rest"
+        f"showing {first}-{last} of {listing.total} at limit {listing.limit}{ceiling}; "
+        f"{remedy}, or narrow with status to see the rest"
     )
 
 
