@@ -53,6 +53,27 @@ async def test_a_truncated_listing_says_so_and_gives_the_total(server_url):
     )
 
 
+async def test_paging_with_offset_works_through_the_tool_and_the_page_says_where_it_is(server_url):
+    """The one hop the notice steers a model into, exercised end to end.
+
+    Asserting the echoed `offset` at zero proves nothing: zero is also the
+    binding's default, so that assertion holds even if the argument were dropped
+    on the floor. This passes a non-zero one through the real surface and checks
+    it comes back — and that the page reports a different position than the first,
+    which is the whole reason it reports one.
+    """
+    payload, _ = await call(server_url, "art_catalogue", action="list", limit=1, offset=1)
+
+    assert (payload["limit"], payload["offset"]) == (1, 1)
+    assert payload["truncated"] is True
+    assert payload["count"] == 1
+    assert payload["notice"].startswith("showing 2-2 of 3")
+    # A different work from the one the first page held, so the offset reached the
+    # query rather than only the payload.
+    first_page, _ = await call(server_url, "art_catalogue", action="list", limit=1)
+    assert payload["artworks"][0]["artwork_id"] != first_page["artworks"][0]["artwork_id"]
+
+
 async def test_a_complete_listing_carries_no_truncation_notice(server_url):
     payload, _ = await call(server_url, "art_catalogue", action="list")
 

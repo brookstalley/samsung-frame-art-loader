@@ -141,7 +141,7 @@ physical label as visible text. Unknown tags are unwrapped and their text kept �
 right for `<span>`, wrong for code. Fixed, with tests for both the closed and the
 unclosed case.
 
-**294 tests pass across both suites** (282 curation, 12 root), up from 154. Ruff
+**295 tests pass across both suites** (283 curation, 12 root), up from 154. Ruff
 and black clean. The real server was launched against a scratch `ART_ROOT` and
 wrote a catalogue carrying all nine tables and its seeded directive row — verified
 by reading the file the server itself wrote, not one a test wrote.
@@ -219,6 +219,15 @@ file, whose docstring declares it independent of any surface, moved to a
 enforced, and its tests living in a file that disclaims it is how that boundary
 stops being legible. Nothing covered a truncated page at a non-zero offset; four
 tests do now.
+
+**A fifth pass found the same lesson a third time, one layer higher.** The
+payload's new `offset` echo was asserted only at zero — which is also the
+binding's own default, so the assertion held even if the argument were dropped on
+the floor, and nothing anywhere passed a non-zero offset through the MCP surface.
+That is the affordance the notice now steers a model into, and it was the one hop
+never exercised. One integration call at `limit=1, offset=1` closes it, verified
+against both mutations: dropping the argument and hard-coding the echo each turn
+it red.
 
 **One warning is recorded rather than resolved.** Seven backlog items were filed
 into `.prawduct/backlog.md` after `project-state.yaml` declared it frozen and
