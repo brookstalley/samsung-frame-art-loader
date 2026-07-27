@@ -141,7 +141,7 @@ physical label as visible text. Unknown tags are unwrapped and their text kept �
 right for `<span>`, wrong for code. Fixed, with tests for both the closed and the
 unclosed case.
 
-**289 tests pass across both suites** (277 curation, 12 root), up from 154. Ruff
+**290 tests pass across both suites** (278 curation, 12 root), up from 154. Ruff
 and black clean. The real server was launched against a scratch `ART_ROOT` and
 wrote a catalogue carrying all nine tables and its seeded directive row — verified
 by reading the file the server itself wrote, not one a test wrote.
@@ -198,6 +198,14 @@ advice a caller cannot act on without knowing what the limit currently is; and
 `operational-spec.md` still opened its section with the retired 3.14 thesis in
 bold, with the correction twenty-five lines below it and worded as though the
 stale text were underneath.
+
+**A third pass returned 0 blocking, 0 warning, 1 note, and the note found a real
+edge the reworded message had sharpened.** Naming the limit made "raise limit"
+concrete — and therefore wrong at the ceiling, where `MAX_LIST_LIMIT` is enforced
+in both the service and the tool schema, so a caller at 100 was being told by name
+to raise a number that returns an error. The notice now says "the maximum" and
+points at `offset`, which is on the same action and does work. Pinned from both
+sides of the ceiling.
 
 **One warning is recorded rather than resolved.** Seven backlog items were filed
 into `.prawduct/backlog.md` after `project-state.yaml` declared it frozen and

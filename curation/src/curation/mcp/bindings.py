@@ -20,7 +20,7 @@ from curation.mcp.envelope import ok
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
 from curation.persistence.records import Artist, Artwork
-from curation.services.catalogue import ArtworkDetail, ArtworkListing, CatalogueService
+from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing, CatalogueService
 
 #: A bound action: validated arguments in, a result payload out.
 Binding = Callable[[CatalogueService, Mapping[str, Any]], dict[str, Any]]
@@ -89,8 +89,15 @@ def _truncation_notice(listing: ArtworkListing) -> str | None:
     shown = len(listing.entries)
     # The limit is named rather than merely referred to: "raise limit" is advice a
     # caller cannot act on without knowing what it currently is, and a caller who
-    # passed none is looking at a default it never chose.
-    return f"showing {shown} of {listing.total} at limit {listing.limit}; raise limit or narrow with status to see the rest"
+    # passed none is looking at a default it never chose. At the ceiling the advice
+    # changes, because telling someone to raise a number that is already the
+    # maximum sends them to a refusal — `offset` is the move there, and it is on
+    # the same action.
+    remedy = "page with offset" if listing.limit >= MAX_LIST_LIMIT else "raise limit or page with offset"
+    ceiling = ", the maximum" if listing.limit >= MAX_LIST_LIMIT else ""
+    return (
+        f"showing {shown} of {listing.total} at limit {listing.limit}{ceiling}; {remedy}, or narrow with status to see the rest"
+    )
 
 
 def _summary(entry: ArtworkDetail) -> dict[str, Any]:

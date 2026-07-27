@@ -264,6 +264,31 @@ once; a test records that it is still true. Two commits in a row corrected claim
 of this shape (`e379529`, then this one), which is the signal that the authoring
 habit, not the individual sentence, is what needs changing.
 
+### The second corollary: a test one layer below the wiring passes when the wiring is gone
+
+**Added 2026-07-27, found twice in one chunk.** A unit test proves a function
+behaves. It does not prove anything *calls* it — and from that test's own output
+the two cases are indistinguishable. So a component can be thoroughly tested and
+entirely unwired, with a green suite either way, which is the exact silent-failure
+shape this product exists to avoid.
+
+**Two worked instances, in the same afternoon.** Chunk 08A's change-log claimed
+"each constraint has a test that fails without its enforcement". Checking it —
+removing each of nine enforcements in turn and re-running — showed eight going red
+and one not: the description normaliser had thorough tests of its own, and nothing
+asserted `add_artwork` ever called it, so deleting the call left the suite entirely
+green. Then the Critic's fix for a different finding repeated it exactly:
+`reconcile()` got five tests and its call site in `main()` got none, so deleting
+that line also left everything green. The second one was caught by asking the same
+question of the fix that had just been asked of the code.
+
+**The rule:** for any behaviour that only matters because something invokes it —
+a normaliser, a validator, a startup repair, a hook — write one test that enters
+through the caller, not through the callee. And the cheap way to know whether you
+have: **delete the call and run the suite.** If it stays green, the wiring is
+undefended. This is a different failure from the corollary above: not a claim
+wider than its check, but a check aimed at the wrong layer.
+
 ## After a scripted mass edit, verify with a different detection method
 
 **A check that shares its detection logic with the edit shares its blind spots.**
