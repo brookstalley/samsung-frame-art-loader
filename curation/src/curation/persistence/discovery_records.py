@@ -151,7 +151,11 @@ class Verdict(StrEnum):
         leave a work holding an `artwork_id` and a non-accepted verdict, which
         nothing else in this model can produce or repair.
         """
-        return self in {Verdict.ACCEPTED, Verdict.REJECTED}
+        return self in _DECIDED
+
+
+#: The verdicts that are the curator's final word. See `Verdict.is_terminal`.
+_DECIDED = frozenset({Verdict.ACCEPTED, Verdict.REJECTED})
 
 
 class SpendCategory(StrEnum):

@@ -65,9 +65,12 @@ class RunResults:
     """
 
     run: DiscoveryRun
+    #: Named for the `resolution_status` values they hold, rather than for
+    #: near-synonyms: a bucket called something the model does not say is a
+    #: second vocabulary for the same three facts.
     resolved: Sequence[CandidateWork]
     unresolved: Sequence[CandidateWork]
-    unattempted: Sequence[CandidateWork]
+    pending: Sequence[CandidateWork]
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,7 +133,7 @@ class DiscoveryService:
             run=run,
             resolved=[work for work in works if work.resolution_status is ResolutionStatus.RESOLVED],
             unresolved=[work for work in works if work.resolution_status is ResolutionStatus.UNRESOLVED],
-            unattempted=[work for work in works if work.resolution_status is ResolutionStatus.PENDING],
+            pending=[work for work in works if work.resolution_status is ResolutionStatus.PENDING],
         )
 
     # -- writes: a discovery run's life ---------------------------------------

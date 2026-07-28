@@ -385,7 +385,7 @@ def test_an_unattempted_work_is_neither_resolved_nor_unresolved(discovery, run, 
 
     results = discovery.run_results(run.id)
 
-    assert [entry.id for entry in results.unattempted] == [work.id]
+    assert [entry.id for entry in results.pending] == [work.id]
     assert results.resolved == [] and results.unresolved == []
     assert work.resolution_status is ResolutionStatus.PENDING
 
