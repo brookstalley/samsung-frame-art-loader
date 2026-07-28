@@ -398,3 +398,26 @@ def test_spend_against_an_artwork_that_does_not_exist_is_refused(discovery):
             artwork_id="not-an-artwork",
             at=datetime(2026, 7, 27, tzinfo=UTC),
         )
+
+
+def test_rejecting_an_alternate_leaves_the_standing_selection_alone(discovery, propose, add_image):
+    """Constraint 8 asks for exactly one selection, not for the highest-ranked one.
+
+    A curator who chose the canonical instance and then pruned an alternate did
+    not ask for their choice to be revisited, and the revision would be silent —
+    the rejected image is not the one that changed.
+    """
+    work = propose()
+    modest = add_image(work, url="https://museum.example/plate", confidence=0.4)
+    # A survivor that outranks the choice, so re-ranking would visibly move the
+    # selection rather than land back on it.
+    add_image(work, url="https://gigapixel.example/scan", confidence=0.99)
+    pruned = add_image(work, url="https://poster.example/print", confidence=0.7)
+    discovery.select_image(modest.id, rationale="The holding museum's own plate.")
+
+    discovery.reject_image(pruned.id)
+
+    images = {image.id: image for image in discovery.list_candidate_images(work.id)}
+    assert images[modest.id].is_selected is True
+    assert images[modest.id].selection_rationale == "The holding museum's own plate."
+    assert [image.id for image in images.values() if image.is_selected] == [modest.id]

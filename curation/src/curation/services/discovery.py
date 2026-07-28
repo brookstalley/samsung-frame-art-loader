@@ -514,10 +514,11 @@ class DiscoveryService:
         can never come apart. The work keeps its dedup key unsuppressed, because
         the curator asked to keep the painting and only turned down the scan.
 
-        The selection falls through to the next surviving instance if there is
-        one, so a work with instances is never left representing itself by an
-        image its curator rejected. If nothing survives, the work has no
-        selection and re-enters phase 2 rather than sitting there.
+        If the instance rejected was the one representing the work, the selection
+        falls through to the next survivor, so a work is never left representing
+        itself by an image its curator turned down. If it was an alternate, the
+        standing selection is left exactly where it was. If nothing survives, the
+        work holds no selection and re-enters phase 2 rather than sitting there.
         """
         with self._store.transaction():
             image = self._require_image(candidate_image_id)
@@ -532,9 +533,15 @@ class DiscoveryService:
                 self._store.update_candidate_image,
                 replace(image, is_selected=False, rejected_at=datetime.now(UTC)),
             )
-            replacement = selection.best(self._store.list_candidate_images(work.id))
-            if replacement is not None:
-                self._select(replacement, rationale=None)
+            # Only a vacancy is filled. Rejecting an alternate while the instance
+            # actually on offer still stands must not move the selection —
+            # a curator who chose the canonical instance did not ask for that,
+            # and the move would be silent.
+            survivors = self._store.list_candidate_images(work.id)
+            if not any(other.is_selected for other in survivors):
+                replacement = selection.best(survivors)
+                if replacement is not None:
+                    self._select(replacement, rationale=None)
             awaiting = replace(work, verdict=Verdict.AWAITING_BETTER_IMAGE)
             store_write(self._store.update_candidate_work, awaiting)
         return awaiting
