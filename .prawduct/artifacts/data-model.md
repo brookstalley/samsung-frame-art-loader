@@ -1018,8 +1018,16 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
     it, a crash left no writer for the terminal state, and this constraint would
     refuse those work ids forever. The guard against double-spend must not become a
     permanent block, which is exactly what it was before reconciliation was
-    specified. Note a run sitting at `awaiting_approval` also holds its coverage,
-    and that is correct — it is waiting on the curator, not stranded.
+    specified.
+    *(Corrected 2026-07-27, when this was first implemented.)* This constraint
+    previously added: "Note a run sitting at `awaiting_approval` also holds its
+    coverage, and that is correct." **It cannot.** Coverage rows name a
+    `kind='resolve'` run, and the State Machines section says in as many words
+    that a resolve run can never reach `awaiting_approval` — the reconciliation
+    note above even relies on that fact to argue coverage release is unaffected.
+    So the two halves of this artifact disagreed, and the dead half had reached
+    `operational-spec.md` as a remedy telling an operator to approve a run that
+    cannot exist. A live coverage-holding run is always `resolving_images`.
 15. **`awaiting_better_image` is reachable only through `art_review(reject_image)`.**
     The path that sets `rejected_at` and the path that sets the verdict are the same
     path, so instance suppression can never be skipped. `set_verdict` rejects the

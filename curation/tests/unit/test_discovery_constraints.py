@@ -421,3 +421,20 @@ def test_rejecting_an_alternate_leaves_the_standing_selection_alone(discovery, p
     assert images[modest.id].is_selected is True
     assert images[modest.id].selection_rationale == "The holding museum's own plate."
     assert [image.id for image in images.values() if image.is_selected] == [modest.id]
+
+
+def test_a_run_waiting_for_the_curator_holds_no_coverage_to_release(discovery, run, propose):
+    """Only a resolve run covers works, and a resolve run never awaits approval.
+
+    So "the ids are held by a run awaiting approval" describes a state this model
+    cannot reach — which matters because it was written down as an operator
+    remedy, and a remedy for an impossible state is a wrong instruction to a human
+    trying to unstick something real.
+    """
+    work = propose()
+    discovery.finish_work_list(run.id, approval_threshold=0)
+    assert discovery.get_run(run.id).status is RunStatus.AWAITING_APPROVAL
+
+    resolve = discovery.start_resolve_run(candidate_work_ids=[work.id], initiated_by=InitiatedBy.WEB_UI)
+
+    assert resolve.status is RunStatus.RESOLVING_IMAGES
