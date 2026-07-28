@@ -128,6 +128,48 @@ but the narrower rule is written nowhere and inventing it here would be inventin
 a requirement. Implemented as specified, flagged for whoever revisits the review
 flow.
 
+**The cumulative round: 2 blocking, 9 warnings, 7 notes over 104 files.** Both
+blocking findings were bookkeeping rather than code — a build-plan path missing
+its `curation/` prefix, so the one mechanical pointer handed to whoever widens the
+`themes` table resolved to nothing; and Chunk 06's "`r` renamed" deliverable,
+never done and, unlike that chunk's three other shortfalls, never recorded. The
+file is now `deploy/pi-freeze-2024.txt` and says what it is.
+
+**One warning was against shipped behaviour and it was mine.** `fail_run` and
+`halt_run_for_budget` refused only terminal states, so both were reachable from
+`awaiting_approval` — and a test of mine was asserting one of the undrawn edges.
+Resolved in both directions: phase 1 makes model calls and searches the web, so it
+really can break and really can be refused credit, and `data-model.md` now draws
+those endings from both working states; they are refused where nothing is
+executing. `cancelled` stays available everywhere active, because wanting a run
+gone is not declining it.
+
+**The store was speaking one domain's language on both error paths.** `durable.py`
+answered "it is already in the catalogue" for every table — including, after this
+chunk, for a `CandidateWork`, which is precisely *not* in the catalogue, in a
+message that reaches whoever asked. The rationale for that wording was written
+when the store held one domain and was not revisited when it gained a second. A
+layer that cannot see which table it refused must not name one.
+
+**Two more retired claims that outlived their amendment**, both the shape
+`learnings.md` already records as a repo-wide grep obligation: the 3tears
+withdrawal was swept through the dependency lists but not through
+`observability-strategy.md`, which still named `3tears-observe` as the source of
+curation's structured logging — so the artifact calling structured logs the
+primary signal rested on a package no manifest carries, and the log shape had no
+owning chunk. It has one now. And `envelope.py` still opened with the "iff
+`success` is false" reading its own `is_error()` does not implement.
+
+**Deferred deliberately, and recorded rather than quietly dropped:**
+`CatalogueService` is still 743 lines over nine entity families — 08B added a
+sibling rather than decomposing it, which is what the carried task asked for and
+not what it was worried about. Extracting the theme and display concern is now
+Chunk 09's first task, landing immediately before the chunk that grows it, which
+is the sequencing that just worked here. The MCP session table gained an idle
+timeout (it had none, on an always-on unit with a `MemoryMax` cap). Three
+findings about backlog routing need the operator: they turn on creating issues on
+a public repository.
+
 **Artifacts brought level with the code**, since both described a service layer
 with one service in it: `architecture.md`'s internal-layering diagram (now two
 services under a container, two adapters over one connection),

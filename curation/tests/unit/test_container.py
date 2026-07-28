@@ -9,6 +9,7 @@ tested behaviour still ends up doing nothing.
 
 from datetime import UTC, datetime
 
+from curation.app import MCP_PATH, MCP_SESSION_IDLE_TIMEOUT_SECONDS, create_app
 from curation.persistence.discovery_records import InitiatedBy, RunStatus
 from curation.persistence.records import Theme
 from curation.services.catalogue import CatalogueService
@@ -50,3 +51,22 @@ def test_one_reconcile_call_reaches_the_discovery_repair(discovery, services):
     services.reconcile()
 
     assert discovery.get_run(run.id).status is RunStatus.INTERRUPTED
+
+
+def test_the_mcp_surface_reaps_sessions_it_stops_hearing_from(services):
+    """Sessions with no expiry are a growing collection with no lifecycle.
+
+    Each holds an instance and a live task for the life of the process, on an
+    always-on plane whose unit sets `MemoryMax` — so the failure mode is an
+    OOM-killed unit, not a slow leak. Asserted through `create_app` because the
+    value only does anything if the application actually passes it.
+    """
+    app = create_app(services)
+
+    managers = [
+        route.app.__closure__[0].cell_contents
+        for route in app.routes
+        if getattr(route, "path", None) == MCP_PATH and getattr(route, "app", None) is not None
+    ]
+    assert managers, "the MCP mount was not found, so this assertion would pass vacuously"
+    assert managers[0].session_idle_timeout == MCP_SESSION_IDLE_TIMEOUT_SECONDS

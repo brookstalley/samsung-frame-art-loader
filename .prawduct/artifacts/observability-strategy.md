@@ -32,11 +32,28 @@ reader should not conclude these were forgotten.
 | Distributed tracing | No | Two processes with no request/response between them. There is no distributed call to trace |
 | Uptime monitoring (external) | No | Follows from the operator's alerting decision below |
 
-`3tears-observe` is available on the curation plane and carries structured logging
-plus OpenTelemetry at no infrastructure cost. **Take the structured logging; leave
-the OTel export unconfigured** — an exporter with no collector is machinery
-pretending to be observability. The display plane does not depend on 3tears at all
-and uses stdlib `logging` with the same structured shape.
+**Both planes use stdlib `logging`, and neither takes a dependency for it.**
+
+> **Corrected 2026-07-27.** This section previously said "`3tears-observe` is
+> available on the curation plane and carries structured logging plus
+> OpenTelemetry at no infrastructure cost — take the structured logging". The
+> 2026-07-27 technology amendment withdrew every 3tears dependency, and nothing
+> replaced this claim: `curation/pyproject.toml` does not declare the package, its
+> explicit "deliberately not pinned yet" list does not mention it, and the plane
+> ships stdlib logging. So the artifact naming structured logs as the primary
+> signal rested on a package no manifest carries. The withdrawal was swept through
+> the dependency lists and not through here, which is the repo's own recorded
+> obligation — retiring a claim is a repo-wide grep, not a local edit.
+
+**Curation currently emits plain lines** — `__main__.py` configures
+`"%(asctime)s %(levelname)s %(name)s %(message)s"` — which is enough while the
+only records are startup, refusals and reconciliation, and is *not* enough once a
+discovery run needs `run_id` on every line it produces (the per-run correlation
+this strategy already requires). **Giving curation a structured shape is
+therefore owed by the chunk that first needs it, which is discovery phase 1**, and
+it is named there rather than left as a property nobody owns. Whatever shape is
+chosen, the OTel question does not reopen: an exporter with no collector is
+machinery pretending to be observability.
 
 ## Two Defects to Fix, Not Inherit
 

@@ -256,14 +256,25 @@ architecture-proving slice is Chunk 07.
 - **Artifacts consumed:** `security-model.md` § Credentials and Secrets,
   issue #4
 - **Deliverables:** `token_file`, `all.backup`, `all.json.backup`,
-  `all.json.backup2` untracked (`--cached` only) and gitignored; TV re-paired so
-  the published token no longer authenticates; the history-rewrite decision
+  `all.json.backup2` untracked (`--cached` only) and gitignored; ~~TV re-paired so
+  the published token no longer authenticates~~ — **not done, and not needed: the
+  operator confirmed the leaked token had already expired, so it authenticates
+  nothing and there is no live credential to rotate**; the history-rewrite decision
   recorded explicitly (recommendation: no — rotation kills the credential, and a
   public-repo force-push buys nothing further)
-- **Tests:** none (repo-state change); verification is behavioural
+- **Tests:** none (repo-state change); `tests/test_repo_hygiene.py` guards the
+  untracking from here on
 - **Acceptance criteria:** all four files absent from `git ls-files`, present in
-  the working tree; display connects to the TV on real hardware with the fresh
-  token; `git status` clean afterwards
+  the working tree; ~~display connects to the TV on real hardware with the fresh
+  token~~ — **dropped with the re-pairing above**; `git status` clean afterwards
+
+> **Deviation recorded 2026-07-27**, after Critic review found this section still
+> asserting a hardware deliverable the chunk did not perform while its three
+> siblings each carried their own. The Status line's title was shortened to
+> "Untrack" when the chunk landed and the change-log named the deviation, but a
+> builder or auditor reads *this* section — where it said the criterion was met.
+> The hardware chunks (03, 04, 05) remain blocked, and none of them depends on
+> this one having re-paired.
 - **Type:** cleanup
 - **Done when:**
   1. Acceptance criteria met on the Pi
@@ -289,6 +300,18 @@ architecture-proving slice is Chunk 07.
   here rather than left implicit: the plan otherwise states something false about
   the code, and a later reader would believe defect 2 is still live; defect 4 (`art_label.py`, dead and broken) is
   deleted in Chunk 06 after confirming no out-of-tree importer.
+  **A fifth defect gets its disposition here, added 2026-07-27:** `tvart.py`'s
+  `upload_file` catches every exception, logs it, and returns with
+  `remote_filename` still `None`, so the caller records a null content id as an
+  uploaded file. It was never in issue #6's four, so nothing scheduled it — while
+  the codebase cites it *by name* in two places as the motivating example for
+  never reporting success on a failed operation (`envelope.py`'s docstring and
+  `observability-strategy.md` § Two Defects to Fix, Not Inherit). **Disposition:
+  dies with the 2024 modules at Chunk 20, not fixed in legacy code.** The
+  reasoning is the same as defect 3's — the replacement is already designed and
+  records `upload_status` explicitly for exactly this reason (`data-model.md` →
+  TvBinding) — and it is written down so the defect is not rediscovered as a
+  surprise by someone who finds it cited as a lesson and assumes it was fixed.
 - **Depends on:** Chunk 01 (the token path work lands on an untracked file)
 - **Artifacts consumed:** issue #5, issue #6, `project-preferences.md` § Known
   departures, `operational-spec.md` § Configuration
@@ -643,6 +666,18 @@ surface was reviewed on its own.
 
 ### Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
 
+- **First task, carried from 08B's Critic round:** **extract the theme and
+  display concern out of `CatalogueService` before adding to it.** 08B split the
+  service layer by adding `DiscoveryService` beside it, which is what the 08A
+  finding asked for and is *not* what it was worried about: `CatalogueService` lost
+  36 lines and still stands at ~743 over nine entity families, and three of the
+  five tool nouns resolve into it. This chunk is the one that grows it — theme
+  create/update/delete/reorder, display sync/show_now/next, and the manifest
+  builder all land there otherwise. The container exists for exactly this, so a
+  third service is cheap now and more expensive every chunk after. Do it first, as
+  its own commit, the way 08B did — and update `architecture.md`'s
+  internal-layering diagram in the same change, since it currently names two
+  services.
 - **Description:** The inter-plane contract, curation side. The manifest builder
   is the one place catalogue readiness is evaluated; membership in the manifest
   IS readiness, and **the build reports its exclusions per work with reasons — a
@@ -907,7 +942,13 @@ core, built against the surfaces the contract tests already pin.
   (computable from the work count), the actual after (provider-reported cost),
   on every surface equally. Spend records attribute per category; a 402 lands as
   `halted_by_budget`, distinguishable in logs and tool results; budget remaining
-  reads `GET /api/v1/key`. `run_id` on every log line.
+  reads `GET /api/v1/key`. `run_id` on every log line — **which is where
+  curation's structured log shape is owed.** The plane ships plain formatted lines
+  today, which is enough for startup, refusals and reconciliation and is not
+  enough for per-run correlation; `observability-strategy.md` names this chunk as
+  the owner rather than leaving the shape a property nobody holds (the artifact
+  previously took it from `3tears-observe`, withdrawn with every other 3tears
+  dependency on 2026-07-27).
 - **Depends on:** Chunks 08, 11 (harness grows discovery scenarios)
 - **Artifacts consumed:** `product-brief.md` § Flow 2 (as amended),
   `data-model.md` (DiscoveryRun, SpendRecord), `api-contract.md`

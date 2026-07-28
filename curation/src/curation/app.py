@@ -37,6 +37,18 @@ log = logging.getLogger(__name__)
 #: config carries this URL.
 MCP_PATH: Final[str] = "/mcp"
 
+#: How long an MCP session may sit idle before the server reaps it.
+#:
+#: Without a value here sessions never expire, and each one holds an instance and
+#: a live task for the life of the process. That is a growing collection with no
+#: lifecycle on an always-on plane whose systemd unit sets `MemoryMax`, so the
+#: failure is an OOM-killed unit rather than a gradual slowdown — and the unit
+#: restarting is exactly the event startup reconciliation exists to clean up
+#: after. Half an hour is generous for a human-paced review session (the longest
+#: designed wait is a 45-second long-poll) and short enough that a client which
+#: simply went away does not hold anything until the next restart.
+MCP_SESSION_IDLE_TIMEOUT_SECONDS: Final[float] = 1800.0
+
 _PLACEHOLDER_PAGE: Final[str] = """<!doctype html>
 <title>Curation</title>
 <style>
@@ -57,7 +69,10 @@ def create_app(services: Services) -> FastAPI:
     touches the filesystem.
     """
     mcp_server = build_server(services)
-    session_manager = StreamableHTTPSessionManager(app=mcp_server)
+    session_manager = StreamableHTTPSessionManager(
+        app=mcp_server,
+        session_idle_timeout=MCP_SESSION_IDLE_TIMEOUT_SECONDS,
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:

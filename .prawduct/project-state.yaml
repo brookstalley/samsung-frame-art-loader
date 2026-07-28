@@ -1854,8 +1854,10 @@ design_decisions:
     print() is used for operational output throughout, which produces journal
     lines with no level and no timestamp. LLM spend is an observability signal
     here, not just a cost control — the hard cap cannot fail closed without
-    metering. 3tears-observe is available and carries structured logging plus
-    OpenTelemetry, at no infrastructure cost.
+    metering. Both planes use stdlib logging and take no dependency for it
+    (corrected 2026-07-27: this previously named 3tears-observe, withdrawn with
+    every other 3tears dependency that day). Curation's structured shape is owed
+    by the chunk that first needs per-run correlation.
   infrastructure_dependencies: >
     Deliberately near-zero. Curation plane: SQLite on local disk; no database
     server, no message broker, no container orchestration (see technical_decisions
