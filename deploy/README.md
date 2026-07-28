@@ -63,3 +63,11 @@ it is deployed again:
   attributed by executable path. Compounded by the code's use of `print()` for
   operational output, which produces journal entries with no level and no
   timestamp — recorded as a known departure in `project-preferences.md`.
+
+## What `pi-freeze-2024.txt` is
+
+A `pip freeze` of the environment the 2024 loader was running on the Pi, captured
+during the 2026-07-19 archaeology. **Nothing installs from it.** It is kept as
+evidence of which versions the recovered code actually ran against — the frozen
+`samsungtvws` in it is what dictated that plane's interpreter, and the record is
+what makes that traceable rather than remembered.

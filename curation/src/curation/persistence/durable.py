@@ -5,12 +5,18 @@ store addressed as tables, primary keys and rows, which holds no artwork, artist
 or theme concept. `sqlite.py` is the upper half — the domain adapter that maps
 records to rows and owns ordering, paging and totals.
 
-The split is by *schema* knowledge, not by vocabulary: this module shares the
-package's two error types and phrases a refusal in the catalogue's words ("it is
-already in the catalogue"), because the reason a write was refused has to reach a
-curator intact and only this layer can see which constraint fired. So it is
-reusable across tables, not across products — worth knowing before lifting it
-somewhere else.
+The split is by *schema* knowledge: this module shares the package's two error
+types and phrases a refusal in plain words ("it is already stored"), because the
+reason a write was refused has to reach a curator intact and only this layer can
+see which constraint fired.
+
+**Those words are deliberately domain-neutral, and that is a correction.** They
+said "already in the catalogue" while this store held one domain; two adapters now
+sit over it, and a refused `CandidateWork` insert answered "it is already in the
+catalogue" about a record that is precisely *not* in the catalogue — acceptance is
+what puts one there. A layer that cannot see which table it refused must not
+name one. Whichever adapter caught the refusal is the layer that knows the
+subject, and it is the one that says so.
 
 **Why this exact shape.** `fetch_one` / `upsert` / `delete` / `scan`, keyed by a
 table name plus a column-to-value primary-key mapping, is the decomposition and
@@ -127,7 +133,7 @@ class OrderBy:
 
 
 def _refusal(exc: sqlite3.IntegrityError) -> str:
-    """Why the store said no, in the catalogue's terms rather than SQL's.
+    """Why the store said no, in plain terms rather than SQL's.
 
     Falls back to a generic phrase rather than the driver text: an unrecognised
     constraint is still not something a caller should be reading table names out
@@ -135,14 +141,14 @@ def _refusal(exc: sqlite3.IntegrityError) -> str:
     """
     text = str(exc).lower()
     if "unique" in text or "primary key" in text:
-        return "it is already in the catalogue."
+        return "it is already stored."
     if "foreign key" in text:
-        return "it refers to a record that is not in the catalogue."
+        return "it refers to a record that is not stored."
     if "not null" in text:
         return "a required field was empty."
     if "check" in text:
-        return "a field held a value the catalogue does not allow."
-    return "the catalogue refused the write."
+        return "a field held a value the store does not allow."
+    return "the store refused the write."
 
 
 class SqliteDurableStore:
@@ -440,7 +446,7 @@ class SqliteDurableStore:
                     self._connection.rollback()
                 # The driver's own text names tables and columns, and a message
                 # raised here travels to the tool surface intact. Translate it to
-                # the reason in the catalogue's own terms and keep the SQL detail
+                # the reason into plain terms and keep the SQL detail
                 # in the journal, where diagnosis happens. The table has to be
                 # logged explicitly: sqlite3's text for a foreign-key violation is
                 # exactly "FOREIGN KEY constraint failed", naming neither table nor

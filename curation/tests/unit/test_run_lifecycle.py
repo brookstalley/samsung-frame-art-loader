@@ -331,3 +331,35 @@ def test_a_catalogue_with_nothing_to_repair_is_repaired_silently(discovery, capl
         discovery.reconcile()
 
     assert [record for record in caplog.records if record.levelno == logging.WARNING] == []
+
+
+@pytest.mark.parametrize("ending", ["fail_run", "halt_run_for_budget"])
+def test_a_run_waiting_for_the_curator_cannot_break_or_be_halted(discovery, run, propose, ending):
+    """Nothing is executing there, so neither ending describes something that happened.
+
+    Both are things that happen to a run *while it works*. Leaving them reachable
+    from `awaiting_approval` would put two edges in the machine that the model
+    does not draw — the state the artifact already had to correct once for
+    `awaiting_better_image`.
+    """
+    propose()
+    discovery.finish_work_list(run.id, approval_threshold=0)
+
+    with pytest.raises(ServiceError, match="nothing is running"):
+        getattr(discovery, ending)(run.id)
+
+
+@pytest.mark.parametrize(
+    ("ending", "expected"), [("fail_run", RunStatus.FAILED), ("halt_run_for_budget", RunStatus.HALTED_BY_BUDGET)]
+)
+def test_phase_one_can_break_and_can_be_refused_by_the_provider(discovery, run, ending, expected):
+    """Phase 1 makes model calls and can search the web, so it spends and it can fail.
+
+    Drawing these only from phase 2 would leave the run that actually broke with
+    no ending that says so, which is the absorption the six terminal states exist
+    to prevent.
+    """
+    ended = getattr(discovery, ending)(run.id)
+
+    assert ended.status is expected
+    assert ended.completed_at is not None

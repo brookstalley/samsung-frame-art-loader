@@ -423,7 +423,8 @@ the existing 41 works are seeded into them.
   `nonfunctional-requirements.md` § Output Quality at the fixture as the corpus's
   canonical record. Delete `art_label.py` (issue #6 defect 4) after confirming no
   out-of-tree importer on the Pi. Rename the recovered `r` freeze to say what it
-  is (evidence, not scratch). Legacy modules stay at the root, running
+  is (evidence, not scratch) — landed 2026-07-27 as `deploy/pi-freeze-2024.txt`,
+  after Chunk 06 shipped without it. Legacy modules stay at the root, running
   production, per the recorded assumption.
 - **Depends on:** Chunk 04 (display's dependency set must be known to install
   under uv before the project is stood up), Chunk 05 (the samsungtvws target is
@@ -669,7 +670,7 @@ surface was reviewed on its own.
   appended column. `CREATE TABLE IF NOT EXISTS` silently does nothing to a table
   that exists, so an old file would read back a `KeyError` on the new column
   rather than an error anyone could act on. The frozen-DDL compatibility test in
-  `tests/unit/test_catalogue_store.py` is what will fail first.
+  `curation/tests/unit/test_catalogue_store.py` is what will fail first.
 - **Artifacts consumed:** `architecture.md` (§ The theme manifest, § Readiness),
   `api-contract.md` § How `art_display` reaches the display plane,
   `boundary-patterns.md` § curation ↔ display contract,

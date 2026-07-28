@@ -295,7 +295,7 @@ def test_the_file_itself_refuses_a_second_selected_instance(discovery_store):
     discovery_store.add_candidate_work(_work())
     discovery_store.add_candidate_image(_image(is_selected=True))
 
-    with pytest.raises(StorageError, match="already in the catalogue"):
+    with pytest.raises(StorageError, match="already stored"):
         discovery_store.add_candidate_image(_image(id="i2", url="https://other.example/1", is_selected=True))
 
 
@@ -305,12 +305,12 @@ def test_a_work_is_covered_at_most_once_by_one_resolve_run(discovery_store):
     discovery_store.add_candidate_work(_work())
     discovery_store.add_coverage(ResolveRunWork(resolve_run_id="r2", candidate_work_id="c1"))
 
-    with pytest.raises(StorageError, match="already in the catalogue"):
+    with pytest.raises(StorageError, match="already stored"):
         discovery_store.add_coverage(ResolveRunWork(resolve_run_id="r2", candidate_work_id="c1"))
 
 
 def test_a_candidate_cannot_belong_to_a_run_that_does_not_exist(discovery_store):
-    with pytest.raises(StorageError, match="not in the catalogue"):
+    with pytest.raises(StorageError, match="not stored"):
         discovery_store.add_candidate_work(_work(discovery_run_id="no-such-run"))
 
 
@@ -329,3 +329,21 @@ def test_runs_read_newest_first_because_a_run_list_is_a_history(discovery_store)
     discovery_store.add_run(_run(id="newer", started_at=_FINISHED))
 
     assert [run.id for run in discovery_store.list_runs()] == ["newer", "older"]
+
+
+def test_a_refusal_about_a_candidate_does_not_call_it_a_catalogue_record(discovery_store):
+    """The store cannot see which table it refused, so it must not name one.
+
+    A candidate work is precisely *not* in the catalogue — acceptance is what puts
+    one there, and that distinction is the model's spine. A refusal reading "it is
+    already in the catalogue" travels through `ServiceError` to whoever asked and
+    tells them the opposite of what the model says.
+    """
+    discovery_store.add_run(_run())
+    discovery_store.add_candidate_work(_work())
+
+    with pytest.raises(StorageError) as refused:
+        discovery_store.add_candidate_work(_work())
+
+    assert "catalogue" not in str(refused.value)
+    assert "candidate work" in str(refused.value)

@@ -225,8 +225,14 @@ class DiscoveryService:
         return completed
 
     def fail_run(self, run_id: str, *, actual_cost_usd: Decimal | None = None) -> DiscoveryRun:
-        """End a run because something broke. Distinct from every other ending."""
-        return self._end_active(run_id, RunStatus.FAILED, doing="fail", actual_cost_usd=actual_cost_usd)
+        """End a run because something broke. Distinct from every other ending.
+
+        Only a run whose process is working on it can break, which is why this is
+        refused from `awaiting_approval`: nothing is executing there, and a run
+        that "failed" while waiting for a curator would be describing something
+        that did not happen.
+        """
+        return self._end_active(run_id, RunStatus.FAILED, doing="fail", actual_cost_usd=actual_cost_usd, from_working=True)
 
     def halt_run_for_budget(self, run_id: str, *, actual_cost_usd: Decimal | None = None) -> DiscoveryRun:
         """End a run because the provider refused to spend more.
@@ -237,11 +243,23 @@ class DiscoveryService:
         local tally that fails open is indistinguishable from one that works —
         no error, no alert, just a bill. Recording spend therefore never moves a
         run into this state, and nothing here reads `SpendRecord` to decide it.
+
+        Refused from `awaiting_approval` for the same reason failure is: a run
+        parked for the curator is not spending, so it cannot be the one the
+        provider refused. Phase 1 *can* be — it makes model calls and can search
+        the web — so this is reachable from both working states, not only phase 2.
         """
-        return self._end_active(run_id, RunStatus.HALTED_BY_BUDGET, doing="halt", actual_cost_usd=actual_cost_usd)
+        return self._end_active(
+            run_id, RunStatus.HALTED_BY_BUDGET, doing="halt", actual_cost_usd=actual_cost_usd, from_working=True
+        )
 
     def cancel_run(self, run_id: str, *, actual_cost_usd: Decimal | None = None) -> DiscoveryRun:
-        """Stop a run on request. Money already spent stays recorded, because it was spent."""
+        """Stop a run on request, from wherever it is. Money already spent stays recorded.
+
+        Available from every active state, including `awaiting_approval` — a
+        curator looking at a work list may simply want the run gone, and that is
+        a different thing from declining it.
+        """
         return self._end_active(run_id, RunStatus.CANCELLED, doing="cancel", actual_cost_usd=actual_cost_usd)
 
     # -- writes: the re-search ------------------------------------------------
@@ -649,6 +667,11 @@ class DiscoveryService:
         """
         if not 1 <= month <= 12:
             raise ServiceError(f"A month is 1 to 12, got {month}.")
+        # The year is bounded too, so that the only input this method cannot
+        # phrase a refusal for stops being the one that reaches a caller as a bare
+        # stdlib ValueError through a tool boundary's "failed unexpectedly".
+        if not datetime.min.year <= year < datetime.max.year:
+            raise ServiceError(f"A year is {datetime.min.year} to {datetime.max.year - 1}, got {year}.")
         since = datetime(year, month, 1, tzinfo=UTC)
         until = datetime(year + (month == 12), month % 12 + 1, 1, tzinfo=UTC)
         return sum((record.cost_usd for record in self._store.list_spend_records(since=since, until=until)), Decimal(0))
@@ -765,12 +788,32 @@ class DiscoveryService:
             raise ServiceError(f"Run {run_id!r} is {run.status}, so it cannot {doing}; that needs a run in {expected}.")
         return run
 
-    def _end_active(self, run_id: str, ending: RunStatus, *, doing: str, actual_cost_usd: Decimal | None) -> DiscoveryRun:
-        """End a run that is still running. A finished run stays as it finished."""
+    def _end_active(
+        self,
+        run_id: str,
+        ending: RunStatus,
+        *,
+        doing: str,
+        actual_cost_usd: Decimal | None,
+        from_working: bool = False,
+    ) -> DiscoveryRun:
+        """End a run that is still running. A finished run stays as it finished.
+
+        `from_working` narrows the ending to the states a process actually holds.
+        Breaking and being refused by the provider are both things that happen to
+        a run *while it works*; offering them from `awaiting_approval` would leave
+        two edges reachable that the state machine does not draw, and a state
+        machine with edges nobody modelled is one nobody can reason about.
+        """
         with self._store.transaction():
             run = self.get_run(run_id)
             if run.status.is_terminal:
                 raise ServiceError(f"Run {run_id!r} already ended as {run.status}, so it cannot {doing}.")
+            if from_working and not run.status.is_process_held:
+                raise ServiceError(
+                    f"Run {run_id!r} is {run.status}, so nothing is running that could {doing}; "
+                    "approve, decline, or cancel it instead."
+                )
             ended = self._ended(run, ending, actual_cost_usd=actual_cost_usd)
             store_write(self._store.update_run, ended)
         return ended

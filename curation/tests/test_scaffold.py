@@ -32,13 +32,13 @@ def test_the_package_layout_imports():
         assert module.__doc__
 
 
-def test_the_mcp_sdk_exposes_the_server_surface_the_plan_assumes():
-    """Chunk 07 mounts a streamable-HTTP MCP server inside the FastAPI app.
+def test_the_mcp_sdk_exposes_the_server_surface_the_app_drives_itself():
+    """The curation app mounts a streamable-HTTP MCP server inside FastAPI.
 
     The known hazard is that Starlette does not run a mounted sub-app's
     lifespan, so the host app must drive `session_manager.run()` itself. That
-    only works if these names exist — pin them now so an SDK bump that moves
-    them fails here rather than at request time.
+    only works if these names exist — pinned here so an SDK bump that moves
+    them fails on this line rather than on every request.
     """
     from mcp.server.lowlevel import Server
     from mcp.server.streamable_http_manager import StreamableHTTPSessionManager

@@ -99,7 +99,7 @@ def test_a_row_cannot_be_addressed_without_a_key(store):
 def test_raise_refuses_a_key_that_is_already_present(store):
     _thing(store, "t1", "Kettle")
 
-    with pytest.raises(StorageError, match="already in the catalogue"):
+    with pytest.raises(StorageError, match="already stored"):
         _thing(store, "t1", "Teapot")
 
     # And the refusal left the stored row alone.
@@ -158,7 +158,7 @@ def test_a_missing_parent_is_reported_as_a_missing_record_not_a_foreign_key(stor
     with pytest.raises(StorageError) as caught:
         _thing(store, "t1", "Kettle", maker_id="ghost")
 
-    assert "refers to a record that is not in the catalogue" in str(caught.value)
+    assert "refers to a record that is not stored" in str(caught.value)
 
 
 def test_an_empty_required_field_is_reported_as_such(store):
@@ -184,7 +184,7 @@ def test_a_refusal_carries_the_bare_reason_for_a_caller_that_knows_the_subject(s
     with pytest.raises(StorageError) as caught:
         _thing(store, "t1", "Teapot")
 
-    assert caught.value.reason == "it is already in the catalogue."
+    assert caught.value.reason == "it is already stored."
 
 
 # -- deleting -----------------------------------------------------------------
@@ -397,7 +397,7 @@ def test_a_conflict_target_that_is_not_the_real_key_is_refused(store):
 def test_a_repeated_composite_key_is_refused(store):
     _placement(store, "t1", "top", 1)
 
-    with pytest.raises(StorageError, match="already in the catalogue"):
+    with pytest.raises(StorageError, match="already stored"):
         _placement(store, "t1", "top", 9)
 
 

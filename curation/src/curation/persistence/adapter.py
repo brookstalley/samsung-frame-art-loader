@@ -127,7 +127,7 @@ class TableAdapter:
         pk = {column: row[column] for column in key}
         with self._store.transaction():
             if self._store.fetch_one(table, pk) is None:
-                reason = "it is not in the catalogue."
+                reason = "it is not stored."
                 log.warning("Refused to update %s: %s", subject, reason)
                 raise StorageError(f"Could not update {subject}: {reason}", reason=reason)
             try:

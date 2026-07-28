@@ -767,21 +767,37 @@ re-proposal is `CandidateWork.work_dedup_key` (**Q3**).
 ```
 kind='discovery':
 
-resolving_works ──┬──────────────────────────▶ resolving_images ──┬──▶ completed
-   (phase 1)      │                                (phase 2)      ├──▶ failed
-                  └──▶ awaiting_approval ──┬──▶ resolving_images  └──▶ halted_by_budget
+resolving_works ──┬──────────────────────────▶ resolving_images ──▶ completed
+   (phase 1)      │                                (phase 2)
+                  └──▶ awaiting_approval ──┬──▶ resolving_images
                                            └──▶ declined
 
 kind='resolve':          (the re-search — phase 2 only)
 
-                                          resolving_images ──┬──▶ completed
-                                            (entry state)    ├──▶ failed
-                                                             └──▶ halted_by_budget
+                                          resolving_images ──▶ completed
+                                            (entry state)
+
+{resolving_works, resolving_images} ──┬──▶ failed
+                                      ├──▶ halted_by_budget
+                                      └──▶ interrupted   (curation startup reconciliation)
 
 any of {resolving_works, awaiting_approval, resolving_images} ──▶ cancelled
-
-{resolving_works, resolving_images} ──▶ interrupted   (curation startup reconciliation)
 ```
+
+**`failed` and `halted_by_budget` are drawn from both working states, not only
+from phase 2 (corrected 2026-07-27, when the machine was first implemented).**
+Phase 1 makes model calls and can search the web, so it both spends and can
+break; drawing these only from `resolving_images` left the run that actually
+broke during phase 1 with no ending that says so. They are refused from
+`awaiting_approval`, which is the other half of the same rule: nothing is
+executing there, so neither ending would be describing something that happened.
+`cancelled` stays available from all three, because a curator looking at a work
+list may simply want the run gone — which is a different act from declining it.
+
+The three groupings above are not cosmetic. **A run can end by breaking, by being
+refused credit, or by having its process stopped exactly when it is the process
+doing the work** — which is why those three share a source set, and why
+`awaiting_approval` is in none of them.
 
 **Runs left in a PROCESS-HELD state are reconciled to `interrupted` when the
 curation plane starts (added 2026-07-20; scope corrected same day).** Without this,

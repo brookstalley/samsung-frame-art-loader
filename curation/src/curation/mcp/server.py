@@ -107,9 +107,13 @@ def dispatch(services: Services, tool_name: str, arguments: Mapping[str, Any]) -
 
     binding = BINDINGS.get((tool.name, action.name))
     if binding is None:
-        # A registry record with no binding: the surface would answer a call it
-        # cannot serve. Reported rather than raised, so one unbound action does
-        # not take the whole tool down.
+        # Unreachable today, and kept deliberately. `bindings.py` refuses at
+        # import to let a declared action go unbound, so a mismatch stops the
+        # process before it serves anything — which is the right failure for a
+        # defect the whole surface shares. This branch is what stands behind that
+        # check if the registry ever becomes something assembled at runtime, and
+        # it fails the one call rather than the process. Untested on purpose:
+        # a test would have to defeat the import check to reach it.
         log.error("No binding for %s(action=%r); the registry and bindings disagree.", tool.name, action.name)
         return failure(
             f"{tool.name}(action={action.name!r}) is declared but not wired up. This is a defect, not a usage error.",

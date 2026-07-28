@@ -1,7 +1,9 @@
 """The result envelope, and the one rule that keeps it honest.
 
 **`isError` is derived from the payload, never set by hand.** A result is an
-error if and only if its `success` field is boolean `false`. A flag set
+error **unless** its `success` field is boolean `true` — the negative, matching
+`is_error()` below. The two readings differ on exactly one payload, the one with
+no `success` key at all, and only the negative fails closed on it. A flag set
 separately at each call site drifts from the body it is supposed to describe,
 and the drift is invisible: the payload says the operation failed and the
 protocol says it succeeded, so a model believes the wrong one. Deriving it

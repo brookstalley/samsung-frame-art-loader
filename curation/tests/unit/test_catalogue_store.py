@@ -405,7 +405,7 @@ def test_the_file_itself_refuses_a_second_active_theme(tmp_path):
         moment = datetime(2026, 7, 27, 9, 30, tzinfo=UTC)
         catalogue.add_theme(Theme(id="t1", name="Late night", created_at=moment, is_active=True))
 
-        with pytest.raises(StorageError, match="already in the catalogue"):
+        with pytest.raises(StorageError, match="already stored"):
             catalogue.add_theme(Theme(id="t2", name="Daylight", created_at=moment, is_active=True))
     finally:
         catalogue.close()
@@ -453,7 +453,7 @@ def test_the_file_itself_refuses_a_second_current_mat_colour(tmp_path):
         catalogue.add_artwork(Artwork(id="w1", title="Nighthawks", created_at=moment))
         catalogue.add_mat_color(MatColor(id="m1", artwork_id="w1", hex_rgb="#27285b", method=MatMethod.MANUAL, chosen_at=moment))
 
-        with pytest.raises(StorageError, match="already in the catalogue"):
+        with pytest.raises(StorageError, match="already stored"):
             catalogue.add_mat_color(
                 MatColor(id="m2", artwork_id="w1", hex_rgb="#1a1a1a", method=MatMethod.MANUAL, chosen_at=moment)
             )
