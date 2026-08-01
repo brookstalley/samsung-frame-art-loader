@@ -318,8 +318,10 @@ API consumers. Three consequences that are easy to miss:
 - **MCP tool surface covering all content management, at parity with the web UI** —
   on the official `mcp` SDK, with a service layer that both MCP tools and the
   UI's HTTP handlers bind over
-- New catalogue built through curation, seeded with the existing 41 artworks as
-  worked examples
+- New catalogue built through curation, seeded with the existing corpus as worked
+  examples — 41 records in `all.json` describing 40 distinct works, two of them
+  the same painting under one URL *(counted 2026-08-01; this said "41 artworks",
+  which counted records)*
 - Hard monthly LLM spend cap (USD 20) that fails closed
 - OpenRouter multi-provider model access, with a separate cheap vision model for
   mat-colour selection

@@ -91,7 +91,7 @@ current chunk, and a blocked chunk ahead of active work silently hands its
 - [x] Chunk 08A: The accepted-catalogue entities, their constraints, and `display_fit`
 - [x] Chunk 08B: The discovery entities, both state machines, startup reconciliation
 - [x] Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
-- [ ] Chunk 10: Seed the catalogue with the 41 existing works (v1 scope item)
+- [x] Chunk 10: Seed the catalogue with the existing corpus (v1 scope item)
 - [ ] Chunk 10B: The first browser surface — catalogue, themes, manifest, health
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
@@ -781,7 +781,7 @@ surface was reviewed on its own.
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-### Chunk 10: Seed the catalogue with the 41 existing works (v1 scope item)
+### Chunk 10: Seed the catalogue with the existing corpus (v1 scope item)
 
 - **Description:** The v1 scope commits to a "new catalogue built through
   curation, seeded with the existing 41 artworks as worked examples"
@@ -792,19 +792,45 @@ surface was reviewed on its own.
   here rather than late: **it is what makes Chunks 12–13's cutover acceptance
   executable.** Re-ingest, do not migrate: read `all.json` as an input file and
   mint fresh entities through the service layer, so every catalogue invariant
-  from Chunk 08 applies to the seeded rows exactly as to discovered ones. **The corpus
-  is complete on identity and incomplete on the label** — measured against the
-  tracked `all.json` on 2026-07-20, not assumed: all 41 carry `title`, `artist`,
-  `date_created`, `raw_file`, `mat_hexrgb`, and pixel dimensions, but **14 of 41
-  have no nationality, 8 have no lifespan, 8 carry no `artist_details` at all,
-  and 2 each lack medium and physical dimensions.** That shapes the work: Artist
-  parsing cannot assume `artist_details` exists and must fall back to the flat
-  `artist` field; the label must render legibly with nationality and dates absent
+  from Chunk 08 applies to the seeded rows exactly as to discovered ones.
+
+  **The index holds 41 records describing 40 works** *(measured 2026-08-01;
+  the 2026-07-20 pass counted records and called them works)*. Two records are
+  one painting — same URL, same master file, same title, differing only in
+  `mat_hexrgb` (`#433735` and `#1c1818`). Seeding both would put one painting in
+  the catalogue twice, which is what a minted identity exists to prevent, so they
+  collapse to one work. *(Operator decision 2026-08-01: the later record in file
+  order wins and the earlier colour is **dropped**, not retained as superseded
+  history — the report names the discarded value so the choice stays visible.)*
+  This also reconciles the "41 records but 46 files in `raw/`" note in learnings:
+  40 referenced files plus 6 unreferenced ones.
+
+  **The corpus is complete on identity and incomplete on the label** — measured
+  against the tracked `all.json`, not assumed. All 41 records carry `title`,
+  `artist`, `date_created`, `raw_file`, `mat_hexrgb` and pixel dimensions. The
+  gaps, **counted per work after parsing** *(corrected 2026-08-01 — the previous
+  figures mixed units in one sentence: nationality and `artist_details` were per
+  record, "8 have no lifespan" was per distinct artist)*: 8 of 41 records carry
+  no `artist_details` at all, and the index's own parse leaves 14 works with no
+  nationality. Reading the source's words rather than that parse recovers nine of
+  those, leaving **5 works with no nationality, 9 with no birth year, and 2 each
+  lacking medium and physical dimensions — different pairs, overlapping in one
+  work.** A missing *death* year is not a gap: two of these artists are alive.
+
+  That shapes the work: Artist parsing cannot assume `artist_details` exists and
+  must fall back to the flat `artist` field, which for one record carries the
+  whole clause; the label must render legibly with nationality and dates absent
   (data-model Q9 wants them, so a partial label is a real outcome, not an error);
-  and the 2 works without physical dimensions can get neither mat geometry nor a
-  floor classification — they seed with dimensions null and are reported, which is
-  the same unknown-dimensions case `data-model.md`'s `display_fit` note still owes
-  a rule. **Backfilling from the source URL is out of scope here** — these works
+  and the 2 works without physical dimensions **seed with dimensions null, are
+  reported, and still reach the wall.** *(Corrected 2026-08-01: this said they
+  "can get neither mat geometry nor a floor classification", and Chunk 09's built
+  code says otherwise — `assess_display_fit` judges an original's **pixel** size
+  against a box built from panel geometry and a mat width in inches, and reads
+  nothing about the artwork's physical size. It also called this "the same
+  unknown-dimensions case `data-model.md`'s `display_fit` note still owes a rule";
+  that note owes no such rule. Physical dimensions are label text.)*
+
+  **Backfilling from the source URL is out of scope here** — these works
   are re-fetchable, and completing them is discovery's job, not seeding's.
   Originals point at the existing masters, and renditions at the existing
   renders, in the deployed image tree under ART_ROOT — the raw and ready
@@ -819,27 +845,36 @@ surface was reviewed on its own.
 - **Artifacts consumed:** `data-model.md` (Artwork, Artist, Source, Original,
   Rendition, MatColor; the re-ingest note), `product-brief.md` § Scope,
   `nonfunctional-requirements.md` § Output Quality (the floor)
-- **Deliverables:** a one-shot seeding path in the curation service layer
+- **Deliverables:** a one-shot seeding path driving the curation service layer
   (invocable, re-runnable, and idempotent — re-running must not duplicate
-  works); the 41 works in the catalogue with artists, sources, originals,
-  renditions, and mat colours; `MatColor.method` recorded as the legacy
-  hand-tuned value, never as a fresh derivation; a report of anything that did
-  not seed cleanly, per work with a reason — silence is not success
+  works, and must fill in whatever the tree did not hold last time, so the
+  report names a problem the tool can also fix); the 40 works in the catalogue
+  with artists, sources, originals, renditions, and mat colours; `MatColor.method`
+  recorded as the legacy hand-tuned value, never as a fresh derivation; a report
+  of anything that did not seed cleanly, per work with a reason — silence is not
+  success
 - **Tests:** unit — `artist_details` parsing across the corpus's real shapes
-  (the multi-line "Charles Demuth\nAmerican, 1883–1935" form, **and the 8
-  records carrying no `artist_details` at all**, which must fall back to the
-  flat `artist` field rather than fail); a work with no physical dimensions
-  seeds with nulls and is reported, never silently given a default size;
-  identity is a UUID and no row carries a source URL as identity; no
-  `tv_content_id` reaches the catalogue; idempotence — seeding twice yields 41
-  works, not 82; integration — after seeding, a theme over all 41 builds a
-  manifest whose entries and exclusions together account for all 41, with the
-  2 dimensionless works excluded by name and reason
-- **Acceptance criteria:** all 41 works are in the catalogue; a theme built over
-  them produces a manifest whose exclusions are exactly the works with a named,
-  understood cause, never a silent drop; every work with incomplete label
-  metadata is listed in the seed report, so the gap is visible now rather than
-  discovered at the wall
+  (the multi-line "Charles Demuth\nAmerican, 1883–1935" form, the parenthetical
+  form the index's own parser silently dropped, **and the 8 records carrying no
+  `artist_details` at all**, which must fall back to the flat `artist` field
+  rather than fail); a work with no physical dimensions seeds with nulls and is
+  reported, never silently given a default size; identity is a UUID and no row
+  carries a source URL as identity; no `tv_content_id` reaches the catalogue;
+  idempotence — seeding twice yields 40 works, not 80, and does not grow the mat
+  history by a row per run; integration — after seeding, a theme over all 40
+  builds a manifest whose entries and exclusions together account for all 40,
+  and a work whose render is missing from the tree is excluded by name and reason
+  *(corrected 2026-08-01: this required the 2 dimensionless works to be the
+  excluded ones, which contradicts the readiness rule Chunk 09 built — that rule
+  asks for an original, a mat and a current render, and reads nothing about
+  physical dimensions. Excluding them would take two works off the wall that are
+  showing today.)*
+- **Acceptance criteria:** all 41 records are accounted for — 40 works in the
+  catalogue plus the one collapsed duplicate, named in the report with the mat
+  colour it dropped; a theme built over them produces a manifest whose exclusions
+  are exactly the works with a named, understood cause, never a silent drop;
+  every work with incomplete label metadata is listed in the seed report, so the
+  gap is visible now rather than discovered at the wall
 - **Done when:**
   1. Acceptance criteria met and tests pass
   2. `/prawduct:critic` run and blocking findings resolved

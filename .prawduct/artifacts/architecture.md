@@ -159,6 +159,15 @@ is no network between planes.
 - **Serves three surfaces from one ASGI app:** the web UI, its HTTP API, and the
   MCP streamable-HTTP endpoint. All three are thin bindings over one service layer
   (`project-preferences.md`, Critic-enforced).
+- **A fourth binding is not a surface:** `curation/seed/` is a hand-run command
+  that reads the 2024 index and mints its works through `CatalogueService`. It is
+  bound by the same rule for the same reason — it enforces no catalogue
+  constraint of its own, so a work that arrived from the old index obeys exactly
+  what a work that arrived from discovery does. What it *does* own is how to read
+  one particular outside file, and what to say about a record that would not seed
+  cleanly. It takes the catalogue service alone rather than the container: it
+  writes no discovery state and no directive, so it needs neither the services
+  that own them nor the startup reconciliation that repairs them.
 - **Internal layering, inside that plane** (established 2026-07-27):
 
   ```

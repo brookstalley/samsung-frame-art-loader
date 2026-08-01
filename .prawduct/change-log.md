@@ -48,6 +48,66 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-01: The wall's own works, re-ingested — and the index read closely enough to argue with
+
+<!-- prawduct: chunks=10 | status=shipped | scope=v1-build -->
+
+**Why:** The v1 scope commits to seeding the new catalogue with the corpus the wall
+is already running. Until this landed, no built path put a ready work in the
+catalogue before Chunk 18, so the display chunks had nothing to put on a screen —
+this is what makes their cutover acceptance executable.
+
+**Counting the corpus changed the chunk.** The plan said 41 works; the index holds
+41 records describing **40**. Two are the same painting — same URL, same master,
+same title — differing only in the mat colour someone chose for it. Seeding both
+would have put one painting in the catalogue twice, which is the thing a minted
+identity exists to prevent. They collapse to one work; the operator's call was that
+the later record wins and the earlier colour is dropped rather than kept as
+superseded history, so the report names the discarded value. This also settles the
+"41 records but 46 files in `raw/`" note that had sat unreconciled in learnings: 40
+referenced masters plus 6 unreferenced files.
+
+**The index's own parse of its artists is wrong often enough to distrust.** It
+carries both the source's words (`artist_details`) and its reading of them, and the
+two disagree: Brancusi's stored death year is 1952 where the source text says 1957.
+Its parser only understood the newline form, so every parenthetical one — "Georgia
+O'Keeffe (American, 1887–1986)" — yielded no nationality at all, as did "American,
+born 1930". Reading the words instead and falling back to the stored fields
+recovers nine of the fourteen missing nationalities. One record has no
+`artist_details` at all and hides the whole clause in the artist's name; the year
+is what tells that from an alternate name, so "Juan Gris (Spanish, 1887–1927)"
+parses and "Mark Rothko (Marcus Rothkowitz)" is left alone.
+
+**Three artifact claims did not survive contact with the code Chunk 09 built.** The
+plan required the two works without physical dimensions to be *excluded* from the
+manifest; the readiness rule asks for an original, a mat and a current render and
+reads nothing about physical size, and `assess_display_fit` judges an original's
+**pixel** size against a box built from panel geometry and a mat width in inches.
+Excluding them would have taken two works off the wall that are showing today. The
+plan also said those works "can get neither mat geometry nor a floor
+classification" (both false) and pointed at an unknown-dimensions rule
+`data-model.md` was said to owe (it owes none). Corrected in place, each with what
+it said before.
+
+**A measurement in the plan mixed units in a single sentence** — nationality and
+`artist_details` counted per record, "8 have no lifespan" counted per distinct
+artist. Recounted per work, and a missing *death* year deliberately earns no report
+line: two of these artists are alive, and a report that lists complete works is one
+people stop reading.
+
+**Everything the catalogue records about a file is measured from the file.** Sizes
+come from the JPEG frame header rather than from the index's copy of them, read
+with the standard library — so no image dependency arrives a chunk early. The
+reader was checked against all 41 masters: every measurement matched what the index
+recorded.
+
+**Running it found the bug the tests could not.** Every test one layer down wired
+the service itself, so the command handing a *store* where a *service* belongs
+stayed green all the way to the first real invocation. That is now covered by tests
+that run the command, and the fix was verified by putting the defect back. Against
+the real corpus: 40 works from 41 records, 40 masters hashed and measured, and a
+second run creating nothing — no duplicate work, no second mat row.
+
 ## 2026-07-31: A theme reaches the wall, and says what did not come with it
 
 <!-- prawduct: chunks=09 | status=shipped | scope=v1-build -->

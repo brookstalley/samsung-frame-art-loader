@@ -8,6 +8,7 @@ application that fails every request in production.
 """
 
 import socket
+import struct
 import threading
 import time
 import uuid
@@ -179,6 +180,51 @@ def server_url(services: Services, seeded_service: CatalogueService) -> Iterator
     finally:
         server.should_exit = True
         thread.join(timeout=20)
+
+
+def jpeg_bytes(width: int = 6000, height: int = 4000) -> bytes:
+    """A JPEG segment stream stating `width` x `height`, valid as far as it goes.
+
+    Deliberately not a decodable image. The seeder reads segment headers and
+    never decodes one, so a real frame header behind the segments that normally
+    precede it exercises the whole of what it does — in particular the
+    length-skipping, which a reader can get wrong by a byte and still appear to
+    work.
+
+    The reader was separately checked against the 41 masters of the real corpus
+    on 2026-08-01: every one of its measurements matched the size the 2024 index
+    recorded for that file.
+    """
+    identification = b"JFIF\x00\x01\x02\x00\x00\x01\x00\x01\x00\x00"
+    quantisation = bytes([0]) + bytes(range(1, 65))
+    frame = bytes([8]) + struct.pack(">HH", height, width) + bytes([1, 1, 0x11, 0])
+    return b"".join(
+        [
+            b"\xff\xd8",
+            b"\xff\xe0",
+            struct.pack(">H", len(identification) + 2),
+            identification,
+            b"\xff\xdb",
+            struct.pack(">H", len(quantisation) + 2),
+            quantisation,
+            b"\xff\xc0",
+            struct.pack(">H", len(frame) + 2),
+            frame,
+            b"\xff\xd9",
+        ]
+    )
+
+
+@pytest.fixture
+def jpeg():
+    """Write a JPEG of a given size to a path, making its directory as needed."""
+
+    def _write(path, *, width=6000, height=4000):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(jpeg_bytes(width, height))
+        return path
+
+    return _write
 
 
 def _free_port() -> int:
