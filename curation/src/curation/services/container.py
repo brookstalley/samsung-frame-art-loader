@@ -22,7 +22,7 @@ from curation.persistence.catalogue import CatalogueStore
 from curation.persistence.discovery import DiscoveryStore
 from curation.services.catalogue import CatalogueService
 from curation.services.discovery import DiscoveryService
-from curation.services.display import DisplayService
+from curation.services.display import DisplayService, WallSettings
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,13 +34,13 @@ class Services:
     display: DisplayService
 
     @classmethod
-    def bind(cls, *, catalogue: CatalogueStore, discovery: DiscoveryStore) -> Services:
+    def bind(cls, *, catalogue: CatalogueStore, discovery: DiscoveryStore, wall: WallSettings) -> Services:
         """Assemble the services over an already-open file."""
         catalogue_service = CatalogueService(catalogue)
         return cls(
             catalogue=catalogue_service,
             discovery=DiscoveryService(discovery, catalogue_service),
-            display=DisplayService(catalogue, catalogue_service),
+            display=DisplayService(catalogue, catalogue_service, wall),
         )
 
     def reconcile(self) -> None:

@@ -161,6 +161,10 @@ class CatalogueStore(Protocol):
         """Return every theme in a stable order."""
         ...
 
+    def remove_theme(self, theme_id: str) -> None:
+        """Delete a theme. Its membership rows must already be gone."""
+        ...
+
     # -- theme membership -----------------------------------------------------
 
     def add_membership(self, membership: ThemeMembership) -> None:

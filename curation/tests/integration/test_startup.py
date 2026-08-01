@@ -8,12 +8,21 @@ showed it. So the call is asserted here, through `main()` itself.
 """
 
 import curation.__main__ as entry_point
-from curation.config import Settings
+from curation.config import (
+    DEFAULT_ROTATION_INTERVAL_SECONDS,
+    DEFAULT_ROTATION_SHUFFLE,
+    DEFAULT_TV_PANEL_DIAGONAL_INCHES,
+    DEFAULT_TV_PANEL_HEIGHT_PX,
+    DEFAULT_TV_PANEL_WIDTH_PX,
+    Settings,
+)
+from curation.manifest.builder import MANIFEST_FILENAME
+from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import Theme
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.services.catalogue import CatalogueService
-from curation.services.display import DisplayService
+from curation.services.display import DisplayService, WallSettings
 
 
 def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch):
@@ -36,7 +45,21 @@ def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch)
     monkeypatch.setattr(
         Settings,
         "from_env",
-        classmethod(lambda cls: cls(art_root=art_root, catalogue_path=path, host="127.0.0.1", port=0)),
+        classmethod(
+            lambda cls: cls(
+                art_root=art_root,
+                catalogue_path=path,
+                manifest_path=art_root / MANIFEST_FILENAME,
+                heartbeat_path=art_root / HEARTBEAT_FILENAME,
+                host="127.0.0.1",
+                port=0,
+                rotation_interval_seconds=DEFAULT_ROTATION_INTERVAL_SECONDS,
+                rotation_shuffle=DEFAULT_ROTATION_SHUFFLE,
+                tv_panel_width_px=DEFAULT_TV_PANEL_WIDTH_PX,
+                tv_panel_height_px=DEFAULT_TV_PANEL_HEIGHT_PX,
+                tv_panel_diagonal_inches=DEFAULT_TV_PANEL_DIAGONAL_INCHES,
+            )
+        ),
     )
 
     served: list[str] = []
@@ -46,7 +69,16 @@ def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch)
         # a request arriving at this moment would observe.
         observer = SqliteCatalogue(open_catalogue_file(path))
         try:
-            active = DisplayService(observer, CatalogueService(observer)).active_theme()
+            active = DisplayService(
+                observer,
+                CatalogueService(observer),
+                WallSettings(
+                    manifest_path=art_root / MANIFEST_FILENAME,
+                    heartbeat_path=art_root / HEARTBEAT_FILENAME,
+                    rotation_interval_seconds=180,
+                    shuffle=True,
+                ),
+            ).active_theme()
             served.append("none" if active is None else active.name)
         finally:
             observer.close()

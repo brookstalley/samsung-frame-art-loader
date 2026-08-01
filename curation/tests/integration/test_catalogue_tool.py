@@ -104,7 +104,7 @@ async def test_help_works_without_arguments_and_without_the_catalogue(server_url
 
 
 async def test_help_is_available_on_a_tool_whose_actions_are_not_built(server_url):
-    payload, errored = await call(server_url, "art_theme", action="help")
+    payload, errored = await call(server_url, "art_review", action="help")
 
     assert errored is False
     assert payload["available"] is False
@@ -167,7 +167,7 @@ async def test_an_unknown_work_is_reported_as_a_failure_never_an_empty_success(s
 
 
 async def test_an_unbuilt_tool_refuses_its_action_and_says_what_it_does_answer(server_url):
-    payload, errored = await call(server_url, "art_theme", action="create")
+    payload, errored = await call(server_url, "art_review", action="set_verdict")
 
     assert errored is True
     assert "not available yet" in payload["error"]

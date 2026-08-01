@@ -9,7 +9,7 @@ import pytest
 from curation.mcp import registry
 from curation.mcp.bindings import BINDINGS
 from curation.mcp.registry import HELP_ACTION, Action, ArgumentError, Param, RegistryError, ToolRecord
-from curation.mcp.tools import ART_CATALOGUE, ART_THEME, TOOLS
+from curation.mcp.tools import ART_CATALOGUE, ART_REVIEW, TOOLS
 
 
 def _tool(**overrides) -> ToolRecord:
@@ -59,7 +59,7 @@ def test_the_description_lists_every_action():
 
 
 def test_an_unbuilt_tool_says_so_in_its_description():
-    assert "Not available yet" in registry.description(ART_THEME)
+    assert "Not available yet" in registry.description(ART_REVIEW)
 
 
 def test_help_reports_required_and_optional_parameters_separately():
@@ -161,9 +161,9 @@ def test_an_unknown_action_quotes_it_back_without_guessing_a_correction():
 
 def test_an_unbuilt_tool_refuses_every_action_but_help():
     with pytest.raises(ArgumentError, match="not available yet"):
-        registry.resolve_action(ART_THEME, {"action": "create"})
+        registry.resolve_action(ART_REVIEW, {"action": "set_verdict"})
 
-    assert registry.resolve_action(ART_THEME, {"action": "help"}).name == "help"
+    assert registry.resolve_action(ART_REVIEW, {"action": "help"}).name == "help"
 
 
 def test_a_missing_required_parameter_is_named():

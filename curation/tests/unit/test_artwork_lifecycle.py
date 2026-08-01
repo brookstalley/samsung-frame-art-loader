@@ -15,12 +15,28 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from curation.manifest.builder import MANIFEST_FILENAME
+from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import ArtworkStatus, MatMethod, Theme
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.services.catalogue import CatalogueService
-from curation.services.display import DisplayService
+from curation.services.display import DisplayService, WallSettings
 from curation.services.errors import ServiceError
+
+
+def _display(store, tmp_path, *, catalogue=None):
+    """A display service over an explicitly opened store, wired as the entry point wires one."""
+    return DisplayService(
+        store,
+        catalogue or CatalogueService(store),
+        WallSettings(
+            manifest_path=tmp_path / MANIFEST_FILENAME,
+            heartbeat_path=tmp_path / HEARTBEAT_FILENAME,
+            rotation_interval_seconds=180,
+            shuffle=True,
+        ),
+    )
 
 
 def test_a_work_can_be_taken_out_of_circulation_and_brought_back(service):
@@ -194,7 +210,7 @@ def test_the_sequence_survives_the_process_that_advanced_it(tmp_path):
     path = tmp_path / "catalogue.sqlite"
     first_store = SqliteCatalogue(open_catalogue_file(path))
     first_catalogue = CatalogueService(first_store)
-    first = DisplayService(first_store, first_catalogue)
+    first = _display(first_store, tmp_path, catalogue=first_catalogue)
     work = first_catalogue.add_artwork(title="Nighthawks")
     first.step_display()
     first.show_work_now(work.id)
@@ -202,7 +218,7 @@ def test_the_sequence_survives_the_process_that_advanced_it(tmp_path):
 
     reopened_store = SqliteCatalogue(open_catalogue_file(path))
     try:
-        reopened = DisplayService(reopened_store, CatalogueService(reopened_store))
+        reopened = _display(reopened_store, tmp_path)
         assert reopened.read_directive().sequence == 2
         assert reopened.read_directive().pinned_work_id == work.id
         assert reopened.step_display().sequence == 3
@@ -238,7 +254,7 @@ def test_a_catalogue_whose_themes_are_all_inactive_is_repaired_on_start(tmp_path
     """
     catalogue = _legacy_catalogue_with_no_active_theme(tmp_path / "catalogue.sqlite")
     try:
-        display = DisplayService(catalogue, CatalogueService(catalogue))
+        display = _display(catalogue, tmp_path)
         assert display.active_theme() is None
 
         with caplog.at_level(logging.WARNING):
@@ -258,7 +274,7 @@ def test_reconciling_a_healthy_catalogue_changes_nothing_and_says_nothing(tmp_pa
     """A repair that logged on every start would train the operator to ignore it."""
     catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
     try:
-        display = DisplayService(catalogue, CatalogueService(catalogue))
+        display = _display(catalogue, tmp_path)
         first = display.add_theme(name="American Modernists")
         display.add_theme(name="Surrealists")
 
@@ -275,7 +291,7 @@ def test_reconciling_an_empty_catalogue_is_not_a_repair(tmp_path, caplog):
     """No themes is not the forbidden state — there is nothing to be active."""
     catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
     try:
-        display = DisplayService(catalogue, CatalogueService(catalogue))
+        display = _display(catalogue, tmp_path)
         with caplog.at_level(logging.WARNING):
             display.reconcile()
 
@@ -289,7 +305,7 @@ def test_adding_a_theme_to_a_catalogue_with_none_active_promotes_it(tmp_path):
     """The condition is "none is active", not "there are none", so this repairs too."""
     catalogue = _legacy_catalogue_with_no_active_theme(tmp_path / "catalogue.sqlite")
     try:
-        display = DisplayService(catalogue, CatalogueService(catalogue))
+        display = _display(catalogue, tmp_path)
 
         added = display.add_theme(name="Precisionists")
 
@@ -302,11 +318,11 @@ def test_adding_a_theme_to_a_catalogue_with_none_active_promotes_it(tmp_path):
 def test_the_repair_reaches_the_file(tmp_path):
     path = tmp_path / "catalogue.sqlite"
     catalogue = _legacy_catalogue_with_no_active_theme(path)
-    DisplayService(catalogue, CatalogueService(catalogue)).reconcile()
+    _display(catalogue, tmp_path).reconcile()
     catalogue.close()
 
     reopened = SqliteCatalogue(open_catalogue_file(path))
     try:
-        assert DisplayService(reopened, CatalogueService(reopened)).active_theme().id == "t-early"
+        assert _display(reopened, tmp_path).active_theme().id == "t-early"
     finally:
         reopened.close()

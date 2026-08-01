@@ -90,7 +90,7 @@ current chunk, and a blocked chunk ahead of active work silently hands its
 - [x] Chunk 07B: The durable seam — persistence reshaped to the `DurableStore` contract
 - [x] Chunk 08A: The accepted-catalogue entities, their constraints, and `display_fit`
 - [x] Chunk 08B: The discovery entities, both state machines, startup reconciliation
-- [ ] Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
+- [x] Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
 - [ ] Chunk 10: Seed the catalogue with the 41 existing works (v1 scope item)
 - [ ] Chunk 10B: The first browser surface — catalogue, themes, manifest, health
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
@@ -133,6 +133,27 @@ every surface takes, closing the finding 08A's review carried forward.
 per-theme rotation settings, whose only reader is the manifest builder in Chunk
 09, and `work_dedup_key`'s derivation, whose spike is Chunk 15 — the column and
 the suppression that reads it are in place, and the caller supplies the key.
+
+**Chunk 09 landed 2026-07-31.** The service layer is three concerns now, not two:
+the theme/directive/manifest half came out of `CatalogueService` first, as its own
+commit, before anything was added to it. The manifest builder is real — atomic
+temp-and-rename, schema major 1, rotation settings with a deployment fallback, the
+directive block carried forward unchanged — and it **reports its exclusions**, per
+work with a reason, which is the half of the readiness design that a list-only
+builder would have silently dropped. `art_theme` and `art_display` are live over
+MCP with all thirteen actions between them.
+
+Three things were settled at build that the artifacts had left open, each recorded
+where the rule lives rather than only in code: **the global rotation default** is
+deployment config at 180s/shuffle, carried forward from what the 2024 wall runs
+today; **"the fetch succeeded" is not a separate readiness check**, because holding
+an original is what a succeeded fetch produces and the other reading would take a
+work off the wall for a failed *re*-acquisition; and **activating a theme
+publishes it**, which the api-contract already said ("changes the wall
+immediately") and the first implementation did not do.
+
+The durable store also gained a real widening step, because the rotation columns
+were the first change to a table that files on disk already carry.
 
 **Re-sequenced 2026-07-31 — two operator decisions.**
 
@@ -784,8 +805,10 @@ surface was reviewed on its own.
   floor classification — they seed with dimensions null and are reported, which is
   the same unknown-dimensions case `data-model.md`'s `display_fit` note still owes
   a rule. **Backfilling from the source URL is out of scope here** — these works
-  are re-fetchable, and completing them is discovery's job, not seeding's. Originals point at the existing
-  `raw/` tree and renditions at the existing `ready/` renders, with
+  are re-fetchable, and completing them is discovery's job, not seeding's.
+  Originals point at the existing masters, and renditions at the existing
+  renders, in the deployed image tree under ART_ROOT — the raw and ready
+  directories on the Pi, which are not part of this checkout — with
   `source_content_hash` computed at ingest so Chunk 18's staleness rule governs
   them from birth. Known defects in the legacy shape are corrected on the way
   in, not carried: identity becomes a UUID (never the source URL),

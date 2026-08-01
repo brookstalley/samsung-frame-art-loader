@@ -16,12 +16,14 @@ from collections.abc import Callable, Mapping
 from datetime import datetime
 from typing import Any, Final
 
+from curation.manifest.builder import ManifestBuild
 from curation.mcp.envelope import ok
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
-from curation.persistence.records import Artist, Artwork
+from curation.persistence.records import Artist, Artwork, Directive, Theme
 from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing
 from curation.services.container import Services
+from curation.services.display import UNSET
 
 #: A bound action: validated arguments in, a result payload out. Every binding
 #: takes the whole container rather than the one service it happens to need, so
@@ -52,11 +54,142 @@ def _get_artwork(services: Services, arguments: Mapping[str, Any]) -> dict[str, 
     return ok(artwork=_full(services.catalogue.get_artwork(arguments["artwork_id"])))
 
 
+def _list_themes(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    themes = services.display.list_themes()
+    return ok(themes=[_theme_fields(theme) for theme in themes], count=len(themes))
+
+
+def _get_theme(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    theme_id = arguments["theme_id"]
+    return ok(
+        theme=_theme_fields(services.display.get_theme(theme_id)),
+        works=[_summary(entry) for entry in services.display.theme_works(theme_id)],
+    )
+
+
+def _create_theme(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    theme = services.display.add_theme(name=arguments["name"], description=arguments.get("description"))
+    return ok(theme=_theme_fields(theme))
+
+
+def _update_theme(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    # `UNSET` for anything the caller did not name, so updating one field does
+    # not clear the others — null is a meaningful value for all three.
+    theme = services.display.update_theme(
+        arguments["theme_id"],
+        name=arguments.get("name"),
+        description=arguments.get("description", UNSET),
+        rotation_interval_seconds=arguments.get("rotation_interval_seconds", UNSET),
+        shuffle=arguments.get("shuffle", UNSET),
+    )
+    return ok(theme=_theme_fields(theme))
+
+
+def _delete_theme(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    services.display.delete_theme(arguments["theme_id"])
+    return ok(deleted=arguments["theme_id"])
+
+
+def _add_to_theme(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    membership = services.display.add_to_theme(
+        theme_id=arguments["theme_id"],
+        artwork_id=arguments["artwork_id"],
+        position=arguments.get("position"),
+    )
+    return ok(theme_id=membership.theme_id, artwork_id=membership.artwork_id, position=membership.position)
+
+
+def _remove_from_theme(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    services.display.remove_from_theme(theme_id=arguments["theme_id"], artwork_id=arguments["artwork_id"])
+    return ok(theme_id=arguments["theme_id"], removed=arguments["artwork_id"])
+
+
+def _reorder_in_theme(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    membership = services.display.move_in_theme(
+        theme_id=arguments["theme_id"],
+        artwork_id=arguments["artwork_id"],
+        position=arguments.get("position"),
+    )
+    return ok(theme_id=membership.theme_id, artwork_id=membership.artwork_id, position=membership.position)
+
+
+def _activate_theme(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    # Activating publishes, so this answers with the same shape as `sync` — the
+    # caller needs to know how much of the theme actually reached the wall.
+    return _built(services.display.activate_theme(arguments["theme_id"]))
+
+
+def _wall_status(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    reading = services.display.wall_status()
+    return ok(
+        observation=reading.describe(),
+        display_plane_has_reported=not reading.absent,
+        reported_at=_moment(reading.reported_at),
+        age_seconds=reading.age_seconds,
+        problem=reading.problem,
+        reported=reading.contents,
+    )
+
+
+def _sync(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    return _built(services.display.sync(arguments.get("theme_id")))
+
+
+def _built(build: ManifestBuild) -> dict[str, Any]:
+    """What a manifest build looks like to a caller. Shared by `sync` and `activate`.
+
+    One shape for both, because they answer the same question — what is on the
+    wall now, and what is not — and two shapes would let a caller learn the
+    exclusions from one path and not the other.
+    """
+    return ok(
+        theme=_theme_fields(build.theme),
+        on_the_wall=[{"artwork_id": entry.work_id, "title": entry.label["title"]} for entry in build.entries],
+        # Never omitted when empty: a caller that saw this key only sometimes
+        # would learn to read its absence as "everything is fine", which is
+        # exactly the silence the exclusion report exists to break.
+        not_displayable=[
+            {
+                "artwork_id": exclusion.work_id,
+                "title": exclusion.title,
+                "reason": str(exclusion.reason),
+                "detail": exclusion.detail,
+            }
+            for exclusion in build.exclusions
+        ],
+        considered=build.considered,
+        rotation={"interval_seconds": build.rotation_interval_seconds, "shuffle": build.shuffle},
+        notice=_sync_notice(build),
+    )
+
+
+def _show_now(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    directive = services.display.show_work_now(arguments["artwork_id"])
+    return ok(**_directive_fields(directive))
+
+
+def _next(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    return ok(**_directive_fields(services.display.step_display()))
+
+
 #: Every built action, keyed by tool and action name. A tool absent from here
 #: answers `help` and nothing else, which is what its registry record says.
 BINDINGS: Final[Mapping[tuple[str, str], Binding]] = {
     ("art_catalogue", "list"): _list_artworks,
     ("art_catalogue", "get"): _get_artwork,
+    ("art_theme", "list"): _list_themes,
+    ("art_theme", "get"): _get_theme,
+    ("art_theme", "create"): _create_theme,
+    ("art_theme", "update"): _update_theme,
+    ("art_theme", "delete"): _delete_theme,
+    ("art_theme", "add"): _add_to_theme,
+    ("art_theme", "remove"): _remove_from_theme,
+    ("art_theme", "reorder"): _reorder_in_theme,
+    ("art_theme", "activate"): _activate_theme,
+    ("art_display", "status"): _wall_status,
+    ("art_display", "sync"): _sync,
+    ("art_display", "show_now"): _show_now,
+    ("art_display", "next"): _next,
 }
 
 
@@ -164,3 +297,44 @@ def _artist_fields(artist: Artist) -> dict[str, Any]:
 
 def _moment(value: datetime | None) -> str | None:
     return None if value is None else value.isoformat()
+
+
+def _theme_fields(theme: Theme) -> dict[str, Any]:
+    return {
+        "theme_id": theme.id,
+        "name": theme.name,
+        "description": theme.description,
+        "is_active": theme.is_active,
+        # Null means "inherit the deployment default" rather than "unset", so it
+        # is reported as it is stored rather than resolved to a number that would
+        # read as a choice the curator made.
+        "rotation_interval_seconds": theme.rotation_interval_seconds,
+        "shuffle": theme.shuffle,
+        "created_at": _moment(theme.created_at),
+    }
+
+
+def _directive_fields(directive: Directive) -> dict[str, Any]:
+    return {
+        "sequence": directive.sequence,
+        "pinned_work_id": directive.pinned_work_id,
+        # The contract's own words. This action cannot observe the television, so
+        # a result implying it had changed would be asserting something curation
+        # has no way to know.
+        "notice": "The directive is written. The wall converges within about a second; this is not a confirmation it has.",
+    }
+
+
+def _sync_notice(build: ManifestBuild) -> str:
+    """Say how much of the theme actually reached the wall.
+
+    Stated on every sync, including the clean one. A message that appeared only
+    when something was wrong would train a reader to skim past its absence, and
+    "12 of 12" is the sentence that makes "9 of 12" legible.
+    """
+    if not build.exclusions:
+        return f"All {build.considered} works in this theme are on the wall."
+    return (
+        f"{len(build.entries)} of {build.considered} works in this theme are on the wall; "
+        f"{len(build.exclusions)} are not currently displayable — see not_displayable for each one and why."
+    )

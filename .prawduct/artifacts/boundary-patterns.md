@@ -65,7 +65,12 @@
 
 ### curation ↔ display contract
 
-- **Exists:** no — designed 2026-07-20, not implemented.
+- **Exists:** **the producing half does**, as of 2026-07-31 — curation writes
+  `theme-manifest.json` into `ART_ROOT` (schema major 1), atomically, with the
+  rotation settings and directive block the design calls for. **The consuming
+  half does not:** the display plane arrives at Chunk 12, so nothing reads this
+  file yet. Curation also *reads* the reverse-direction heartbeat and reports
+  honestly that none exists, which is the true state until Chunk 13.
 - **Producer:** curation plane. **Consumer:** display plane. **Same machine.**
 - **Contract:** the **theme manifest** — a versioned JSON document written
   atomically (temp + `os.replace`) into the shared `ART_ROOT` and polled by display

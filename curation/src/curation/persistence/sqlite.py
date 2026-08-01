@@ -317,6 +317,9 @@ class SqliteCatalogue(TableAdapter):
     def list_themes(self) -> Sequence[Theme]:
         return self._list("themes", None, _BY_NAME, _theme)
 
+    def remove_theme(self, theme_id: str) -> None:
+        self._store.delete("themes", {"id": theme_id})
+
     # -- theme membership -----------------------------------------------------
 
     def add_membership(self, membership: ThemeMembership) -> None:

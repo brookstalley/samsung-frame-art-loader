@@ -397,6 +397,25 @@ per work and with a reason, and the curation UI surfaces "3 works in this theme 
 not currently displayable, because …". A manifest builder that only returns a list
 is an incomplete implementation of this design.
 
+**The five exclusion causes, as built (2026-07-31).** `archived`, `no_original`,
+`no_mat_color`, `no_rendition`, `stale_rendition`. Each is a distinct thing a
+curator would do something different about, which is the test for whether a cause
+earns its own name.
+
+> **"The fetch succeeded" is deliberately not a sixth check** *(settled at build;
+> the four-signal sentence above reads as though it were).* Holding an original is
+> what a succeeded fetch produces, so the condition is already carried by
+> `no_original`. Read instead as "the *most recent* fetch attempt succeeded", it
+> would take a work off the wall because a later re-acquisition failed while a
+> perfectly good original and a current render were still held — a regression
+> wearing a safety check's clothes. The signal is a conjunct of readiness, not an
+> independent test of it.
+
+**Archiving removes a work from the manifest and leaves it in the theme.**
+Membership is curatorial and readiness is technical, so archiving moves one and
+not the other; the work reappears on the wall if it is restored, with no
+membership to rebuild.
+
 ### Consistency
 
 Eventually consistent, with unbounded staleness by design. Display picks up a new

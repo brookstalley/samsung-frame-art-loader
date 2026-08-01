@@ -1083,6 +1083,19 @@ rotation timing becomes this product's data rather than the TV's setting.
 > a single global setting | LOW impact | user can collapse to global]` — it costs
 > two nullable columns and lets a contemplative theme breathe while a busy one
 > moves, but no stated requirement demands it.
+>
+> **Where "the global default" lives** *(settled 2026-07-31, at build; this
+> artifact named the fallback without saying what supplied it).* It is deployment
+> configuration — `ROTATION_INTERVAL_SECONDS` and `ROTATION_SHUFFLE` — defaulting
+> to **180 seconds on shuffle**, which is what the 2024 plane runs the wall at
+> today. The values are carried forward rather than chosen: the cutover at Chunk
+> 13 replaces the machinery, and a wall that silently changed pace on the same
+> day would be a regression nobody asked for.
+>
+> Null is therefore "inherit", never "unset". The distinction is load-bearing in
+> two places: the row mapping keeps null as null rather than coercing it, and a
+> partial update to a theme leaves an unnamed field alone rather than clearing
+> it — otherwise renaming a theme would silently reset its pace.
 
 ### Why this is nearly free here
 

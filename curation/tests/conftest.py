@@ -17,6 +17,9 @@ import pytest
 import uvicorn
 
 from curation.app import create_app
+from curation.config import DEFAULT_ROTATION_INTERVAL_SECONDS, DEFAULT_ROTATION_SHUFFLE
+from curation.manifest.builder import MANIFEST_FILENAME
+from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 from curation.persistence.discovery_records import DiscoveryRun, InitiatedBy
 from curation.persistence.durable import SqliteDurableStore
 from curation.persistence.file import open_catalogue_file
@@ -26,7 +29,7 @@ from curation.persistence.sqlite_discovery import SqliteDiscovery
 from curation.services.catalogue import CatalogueService
 from curation.services.container import Services
 from curation.services.discovery import DiscoveryService
-from curation.services.display import DisplayService
+from curation.services.display import DisplayService, WallSettings
 
 _SEEDED_TITLES = ("I Saw the Figure 5 in Gold", "Nighthawks", "The Persistence of Memory")
 
@@ -56,9 +59,20 @@ def discovery_store(catalogue_file: SqliteDurableStore) -> SqliteDiscovery:
 
 
 @pytest.fixture
-def services(store: SqliteCatalogue, discovery_store: SqliteDiscovery) -> Services:
+def wall(tmp_path) -> WallSettings:
+    """A manifest destination of this test's own, and the shipped rotation defaults."""
+    return WallSettings(
+        manifest_path=tmp_path / MANIFEST_FILENAME,
+        heartbeat_path=tmp_path / HEARTBEAT_FILENAME,
+        rotation_interval_seconds=DEFAULT_ROTATION_INTERVAL_SECONDS,
+        shuffle=DEFAULT_ROTATION_SHUFFLE,
+    )
+
+
+@pytest.fixture
+def services(store: SqliteCatalogue, discovery_store: SqliteDiscovery, wall: WallSettings) -> Services:
     """Every service, wired the way the entry point wires them."""
-    return Services.bind(catalogue=store, discovery=discovery_store)
+    return Services.bind(catalogue=store, discovery=discovery_store, wall=wall)
 
 
 @pytest.fixture
