@@ -21,6 +21,8 @@ from pathlib import Path
 import pytest
 
 from curation.http.pages import STATIC_DIR
+from curation.persistence.records import ArtworkStatus
+from curation.services.display_fit import DisplayFit
 
 #: Normal text. Nothing on this surface is large enough to claim the 3:1 relief
 #: AA gives text at 18.66px bold or 24px regular, so every pair is held to 4.5.
@@ -166,8 +168,24 @@ def test_every_state_a_badge_can_carry_has_a_block_of_its_own():
     An archived work and a below-floor work are unrelated judgements — one is
     catalogue status, the other is display fit — so a colour change intended for
     one must not silently reach the other.
+
+    **The list is derived from the enums, not written out here.** A hardcoded
+    tuple is complete on the day it is typed and cannot fail in the direction
+    this test exists to catch: a state added to the client with no block of its
+    own leaves the tuple untouched and the suite green, because the guard's scope
+    would be the tuple rather than what the client can emit. Both enums are
+    closed by their own docstrings, so growing one is exactly the event that
+    should turn this red.
     """
-    for state in ("native", "matted_small", "below_floor", "unknown", "archived"):
+    #: `accepted` is excluded because `statusBadge` returns null for it — the
+    #: absence of a badge is how the ordinary case is shown. `unknown` is the
+    #: client's own state for a work with no fit verdict and belongs to no enum,
+    #: which is why it is the one literal here.
+    states = [str(fit) for fit in DisplayFit]
+    states += [str(status) for status in ArtworkStatus if status is not ArtworkStatus.ACCEPTED]
+    states += ["unknown"]
+
+    for state in states:
         assert f".badge-{state}" in COMPONENT_RULES, f"the {state} badge has no block of its own"
 
 

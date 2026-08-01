@@ -8,12 +8,14 @@ Entries older than 2026-07-31 still keep their evidence inline in `learnings.md`
 That is the shape the record linter asks them to leave, and moving them is its own
 piece of work rather than a side effect of adding a rule — tracked as issue #26.
 
-## A worked example with two cases checks itself, and nobody runs it
+## When an artifact works a rule on two cases, derive the rule from one and check the other
 
-An artifact that illustrates a rule twice has stated the rule three times: once in
-prose and once per case. Deriving the rule from one case and evaluating the other
-is a free consistency check on the specification — and it is not a check anyone
-performs, because a worked example reads as evidence rather than as a claim.
+An artifact that illustrates a rule twice has stated it three times: once in prose
+and once per case. Deriving the rule from one case and evaluating the other is a
+free consistency check on the specification — and it is not a check anyone runs,
+because a worked example reads as evidence rather than as a claim. So a
+specification error can sit in one for months, cited as authority by whoever has
+to build against it.
 
 **Worked instance (2026-08-01).** `nonfunctional-requirements.md` § "The mat is
 geometric, and the floor is physical" specifies the mat in inches with "the bottom
@@ -118,6 +120,17 @@ sufficient one.
 Both were found by taking the `test-evidence record` prompt literally — "name the
 change that would flip it, and confirm the fixture REACHES the subject" — rather
 than by review.
+
+**Third recurrence, same day, in the commit that added the rule below.** A new
+test asserted that every state a badge can carry has a CSS block of its own — and
+iterated a **hardcoded tuple of the five states that existed**. The tuple was
+complete when typed, so the test was correct and useless in the one direction it
+existed to guard: a sixth state added to the client leaves the tuple untouched and
+the suite green. Deriving the list from `DisplayFit` and `ArtworkStatus`, both
+closed enums, is one line, and planting a sixth verdict now turns it red. Caught
+by the Critic, which is the tell that reading the rule is not the same as applying
+it — I wrote "assert the scope as well as the finding" and shipped a guard whose
+scope was a literal, in the same commit.
 
 **What generalises: a guard's effective scope is invisible in its result.** Green
 means "nothing was found in whatever I looked at", and the size of *whatever I
