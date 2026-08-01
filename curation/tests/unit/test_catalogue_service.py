@@ -104,21 +104,21 @@ def test_a_blank_title_is_refused_rather_than_stored(service):
         service.add_artwork(title="   ")
 
 
-def test_themes_round_trip(service):
-    theme = service.add_theme(name="American Modernists", description="Precisionists and their neighbours")
+def test_themes_round_trip(display):
+    theme = display.add_theme(name="American Modernists", description="Precisionists and their neighbours")
 
-    assert service.get_theme(theme.id) == theme
-    assert [existing.name for existing in service.list_themes()] == ["American Modernists"]
+    assert display.get_theme(theme.id) == theme
+    assert [existing.name for existing in display.list_themes()] == ["American Modernists"]
 
 
-def test_two_themes_cannot_share_a_name(service):
-    service.add_theme(name="American Modernists")
+def test_two_themes_cannot_share_a_name(display):
+    display.add_theme(name="American Modernists")
 
     with pytest.raises(ServiceError, match="Could not store theme"):
-        service.add_theme(name="American Modernists")
+        display.add_theme(name="American Modernists")
 
 
-def test_the_first_theme_is_active(service):
+def test_the_first_theme_is_active(display):
     """This assertion used to read `is_active is False`, and the inversion is deliberate.
 
     `Theme.is_active` arrived as a column with no enforcement behind it, and the
@@ -129,7 +129,7 @@ def test_the_first_theme_is_active(service):
     would report that as a problem. The rest of the rule is exercised in
     `test_catalogue_constraints.py`.
     """
-    assert service.add_theme(name="American Modernists").is_active is True
+    assert display.add_theme(name="American Modernists").is_active is True
 
 
 def _by_title(service, title):

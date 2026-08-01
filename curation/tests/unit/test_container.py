@@ -14,6 +14,7 @@ from curation.persistence.discovery_records import InitiatedBy, RunStatus
 from curation.persistence.records import Theme
 from curation.services.catalogue import CatalogueService
 from curation.services.discovery import DiscoveryService
+from curation.services.display import DisplayService
 
 _A_MOMENT = datetime(2026, 7, 20, 9, 30, tzinfo=UTC)
 
@@ -22,9 +23,10 @@ def test_the_container_carries_every_concern_a_surface_may_need(services):
     """A surface takes this, so a concern missing from it is a concern no surface can reach."""
     assert isinstance(services.catalogue, CatalogueService)
     assert isinstance(services.discovery, DiscoveryService)
+    assert isinstance(services.display, DisplayService)
 
 
-def test_one_reconcile_call_reaches_the_catalogue_repair(store, services):
+def test_one_reconcile_call_reaches_the_display_repair(store, services):
     """An entry point calls the container once; each service's repair must run.
 
     Seeded through the store rather than the service, because the state being
@@ -36,7 +38,7 @@ def test_one_reconcile_call_reaches_the_catalogue_repair(store, services):
 
     services.reconcile()
 
-    assert services.catalogue.active_theme().name == "Late night"
+    assert services.display.active_theme().name == "Late night"
 
 
 def test_one_reconcile_call_reaches_the_discovery_repair(discovery, services):

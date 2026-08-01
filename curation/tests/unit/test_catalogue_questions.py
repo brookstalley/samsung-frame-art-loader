@@ -25,42 +25,42 @@ from curation.services.display_fit import ArtworkBox, DisplayFit
 _BOX = ArtworkBox(width=3316, height=1597, pixels_per_inch=105.0, floor_inches=12.0)
 
 
-def test_q1_which_works_belong_to_a_theme_so_the_display_plane_can_sync_them(service):
+def test_q1_which_works_belong_to_a_theme_so_the_display_plane_can_sync_them(service, display):
     hopper = service.add_artist(name="Edward Hopper", nationality="American", born=1882, died=1967)
     nighthawks = service.add_artwork(title="Nighthawks", artist_id=hopper.id)
     chop_suey = service.add_artwork(title="Chop Suey", artist_id=hopper.id)
     unplaced = service.add_artwork(title="Automat", artist_id=hopper.id)
-    theme = service.add_theme(name="Hopper")
+    theme = display.add_theme(name="Hopper")
 
     # Two placed deliberately out of insertion order, one left unplaced.
-    service.add_to_theme(theme_id=theme.id, artwork_id=nighthawks.id, position=2)
-    service.add_to_theme(theme_id=theme.id, artwork_id=chop_suey.id, position=1)
-    service.add_to_theme(theme_id=theme.id, artwork_id=unplaced.id)
+    display.add_to_theme(theme_id=theme.id, artwork_id=nighthawks.id, position=2)
+    display.add_to_theme(theme_id=theme.id, artwork_id=chop_suey.id, position=1)
+    display.add_to_theme(theme_id=theme.id, artwork_id=unplaced.id)
 
-    ordered = service.theme_works(theme.id)
+    ordered = display.theme_works(theme.id)
 
     assert [entry.artwork.title for entry in ordered] == ["Chop Suey", "Nighthawks", "Automat"]
     # Attribution comes with it, because deciding what goes on the wall turns on it.
     assert all(entry.artist.name == "Edward Hopper" for entry in ordered)
 
 
-def test_q1_a_work_can_be_moved_and_removed_without_touching_the_work_itself(service):
+def test_q1_a_work_can_be_moved_and_removed_without_touching_the_work_itself(service, display):
     first = service.add_artwork(title="Nighthawks")
     second = service.add_artwork(title="Chop Suey")
-    theme = service.add_theme(name="Hopper")
-    service.add_to_theme(theme_id=theme.id, artwork_id=first.id, position=1)
-    service.add_to_theme(theme_id=theme.id, artwork_id=second.id, position=2)
+    theme = display.add_theme(name="Hopper")
+    display.add_to_theme(theme_id=theme.id, artwork_id=first.id, position=1)
+    display.add_to_theme(theme_id=theme.id, artwork_id=second.id, position=2)
 
-    service.move_in_theme(theme_id=theme.id, artwork_id=second.id, position=0)
-    assert [entry.artwork.title for entry in service.theme_works(theme.id)] == ["Chop Suey", "Nighthawks"]
+    display.move_in_theme(theme_id=theme.id, artwork_id=second.id, position=0)
+    assert [entry.artwork.title for entry in display.theme_works(theme.id)] == ["Chop Suey", "Nighthawks"]
 
-    service.remove_from_theme(theme_id=theme.id, artwork_id=second.id)
-    assert [entry.artwork.title for entry in service.theme_works(theme.id)] == ["Nighthawks"]
+    display.remove_from_theme(theme_id=theme.id, artwork_id=second.id)
+    assert [entry.artwork.title for entry in display.theme_works(theme.id)] == ["Nighthawks"]
     # The work is still in the catalogue; only its membership went.
     assert service.get_artwork(second.id).artwork.title == "Chop Suey"
 
 
-def test_q2_which_work_the_wall_is_on_so_the_label_can_match_it(service):
+def test_q2_which_work_the_wall_is_on_so_the_label_can_match_it(service, display):
     """The catalogue's half of the answer: the active theme, its order, and the pin.
 
     The display plane owns which entry it has reached; what it needs from here is
@@ -76,13 +76,13 @@ def test_q2_which_work_the_wall_is_on_so_the_label_can_match_it(service):
         medium="Oil, graphite, ink and gold leaf on paperboard",
         dimensions="90.2 x 76.2 cm",
     )
-    theme = service.add_theme(name="American Modernists")
-    service.add_to_theme(theme_id=theme.id, artwork_id=figure_five.id, position=1)
+    theme = display.add_theme(name="American Modernists")
+    display.add_to_theme(theme_id=theme.id, artwork_id=figure_five.id, position=1)
 
-    service.show_work_now(figure_five.id)
+    display.show_work_now(figure_five.id)
 
-    assert service.active_theme().id == theme.id
-    directive = service.read_directive()
+    assert display.active_theme().id == theme.id
+    directive = display.read_directive()
     assert directive.pinned_work_id == figure_five.id
 
     # Every field the physical label renders is reachable from that id.

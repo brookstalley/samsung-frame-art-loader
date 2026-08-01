@@ -26,6 +26,7 @@ from curation.persistence.sqlite_discovery import SqliteDiscovery
 from curation.services.catalogue import CatalogueService
 from curation.services.container import Services
 from curation.services.discovery import DiscoveryService
+from curation.services.display import DisplayService
 
 _SEEDED_TITLES = ("I Saw the Figure 5 in Gold", "Nighthawks", "The Persistence of Memory")
 
@@ -68,6 +69,11 @@ def service(services: Services) -> CatalogueService:
 @pytest.fixture
 def discovery(services: Services) -> DiscoveryService:
     return services.discovery
+
+
+@pytest.fixture
+def display(services: Services) -> DisplayService:
+    return services.display
 
 
 @pytest.fixture

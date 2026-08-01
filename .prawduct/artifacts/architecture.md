@@ -162,25 +162,39 @@ is no network between planes.
 - **Internal layering, inside that plane** (established 2026-07-27):
 
   ```
-  MCP tools  ·  HTTP handlers          bindings: unpack, call one method, format
-        └──────────┬──────────┘
-             Services container         what a surface is handed; no surface names one service
-        ┌──────────┴──────────┐
-  CatalogueService   DiscoveryService   every rule, every transition, every derivation
-        │                   │           (CatalogueStore / DiscoveryStore — the only way down)
-  SqliteCatalogue    SqliteDiscovery    domain adapters: schema, record↔row, ordering
-        └──────────┬──────────┘         and paging — the product judgements
-        SqliteDurableStore              generic: tables, keys, rows. Knows no artwork
+  MCP tools  ·  HTTP handlers                    bindings: unpack, call one method, format
+        └──────────────┬──────────────┘
+                 Services container               what a surface is handed; no surface names one service
+        ┌──────────────┼──────────────┐
+  DiscoveryService     │      DisplayService      every rule, every transition, every derivation
+        │              │              │           (both hold CatalogueService; it holds neither)
+        │       CatalogueService      │
+        │              │              │
+  SqliteDiscovery  SqliteCatalogue ───┘           domain adapters: schema, record↔row, ordering
+        └──────────────┬──────────────┘           and paging — the product judgements
+              SqliteDurableStore                  generic: tables, keys, rows. Knows no artwork
   ```
 
   **The layer is split by concern, and the split runs all the way down.** The
   catalogue owns works already accepted; discovery owns runs, proposals, image
-  instances, spend and verdicts. Discovery depends on the catalogue and never the
-  reverse, because acceptance is a promotion — a candidate becomes a work and its
-  instances become that work's sources. **Both adapters share one connection**,
-  which is what lets that promotion commit once or not at all; a surface takes the
-  container rather than a service, so a third concern changes the wiring and
-  nothing else.
+  instances, spend and verdicts; display owns themes, the standing directive, and
+  the manifest built from them. **Both discovery and display depend on the
+  catalogue and neither is depended on by it** — acceptance is a promotion *into*
+  the catalogue (a candidate becomes a work and its instances become that work's
+  sources), and a theme is a grouping *of* catalogue works. Display reads the
+  catalogue through `CatalogueService` and the theme/membership/directive tables
+  through `CatalogueStore`, which is the same file: the manifest has to be built
+  and the directive advanced in one consistent read.
+
+  **One write crosses the concern line, deliberately.** Archiving a work nulls a
+  directive pin naming it, from `CatalogueService`. The line it respects is
+  *integrity* versus *semantics*: clearing an unsatisfiable reference in the
+  transaction that creates it, never advancing the sequence. Every rule about what
+  an advance means lives in `DisplayService`, unduplicated.
+
+  **Both adapters share one connection**, which is what lets the promotion commit
+  once or not at all; a surface takes the container rather than a service, so a
+  fourth concern changes the wiring and nothing else.
 
   Two patterns are load-bearing enough to name here rather than leave in module
   docstrings:

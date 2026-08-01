@@ -13,6 +13,7 @@ from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import Theme
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.services.catalogue import CatalogueService
+from curation.services.display import DisplayService
 
 
 def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch):
@@ -45,7 +46,7 @@ def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch)
         # a request arriving at this moment would observe.
         observer = SqliteCatalogue(open_catalogue_file(path))
         try:
-            active = CatalogueService(observer).active_theme()
+            active = DisplayService(observer, CatalogueService(observer)).active_theme()
             served.append("none" if active is None else active.name)
         finally:
             observer.close()

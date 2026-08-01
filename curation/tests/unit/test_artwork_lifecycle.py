@@ -19,6 +19,7 @@ from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import ArtworkStatus, MatMethod, Theme
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.services.catalogue import CatalogueService
+from curation.services.display import DisplayService
 from curation.services.errors import ServiceError
 
 
@@ -83,50 +84,50 @@ def test_an_archived_work_moves_between_the_status_listings(service):
 # -- the display directive -----------------------------------------------------
 
 
-def test_a_fresh_catalogue_has_a_directive_at_the_start(service):
-    directive = service.read_directive()
+def test_a_fresh_catalogue_has_a_directive_at_the_start(display):
+    directive = display.read_directive()
 
     assert (directive.sequence, directive.pinned_work_id) == (0, None)
 
 
-def test_stepping_on_advances_the_sequence_and_carries_no_pin(service):
-    first = service.step_display()
-    second = service.step_display()
+def test_stepping_on_advances_the_sequence_and_carries_no_pin(display):
+    first = display.step_display()
+    second = display.step_display()
 
     assert (first.sequence, second.sequence) == (1, 2)
     assert second.pinned_work_id is None
 
 
-def test_showing_a_work_now_advances_the_sequence_and_pins_it(service):
+def test_showing_a_work_now_advances_the_sequence_and_pins_it(service, display):
     work = service.add_artwork(title="Nighthawks")
 
-    directive = service.show_work_now(work.id)
+    directive = display.show_work_now(work.id)
 
     assert directive.sequence == 1
     assert directive.pinned_work_id == work.id
 
 
-def test_stepping_on_clears_a_standing_pin(service):
+def test_stepping_on_clears_a_standing_pin(service, display):
     """A step that left the pin in place would read as "jump there again"."""
     work = service.add_artwork(title="Nighthawks")
-    service.show_work_now(work.id)
+    display.show_work_now(work.id)
 
-    directive = service.step_display()
+    directive = display.step_display()
 
     assert directive.sequence == 2
     assert directive.pinned_work_id is None
 
 
-def test_archiving_the_pinned_work_withdraws_the_pin(service):
+def test_archiving_the_pinned_work_withdraws_the_pin(service, display):
     work = service.add_artwork(title="Nighthawks")
-    service.show_work_now(work.id)
+    display.show_work_now(work.id)
 
     service.archive_artwork(work.id)
 
-    assert service.read_directive().pinned_work_id is None
+    assert display.read_directive().pinned_work_id is None
 
 
-def test_withdrawing_a_pin_does_not_advance_the_sequence(service):
+def test_withdrawing_a_pin_does_not_advance_the_sequence(service, display):
     """The display plane acts every time the number goes up.
 
     Archiving a work is not an instruction to it, so an advance here would fire a
@@ -134,53 +135,53 @@ def test_withdrawing_a_pin_does_not_advance_the_sequence(service):
     one that was archived.
     """
     work = service.add_artwork(title="Nighthawks")
-    service.show_work_now(work.id)
-    before = service.read_directive().sequence
+    display.show_work_now(work.id)
+    before = display.read_directive().sequence
 
     service.archive_artwork(work.id)
 
-    assert service.read_directive().sequence == before
+    assert display.read_directive().sequence == before
 
 
-def test_archiving_some_other_work_leaves_the_pin_alone(service):
+def test_archiving_some_other_work_leaves_the_pin_alone(service, display):
     pinned = service.add_artwork(title="Nighthawks")
     other = service.add_artwork(title="Chop Suey")
-    service.show_work_now(pinned.id)
+    display.show_work_now(pinned.id)
 
     service.archive_artwork(other.id)
 
-    assert service.read_directive().pinned_work_id == pinned.id
+    assert display.read_directive().pinned_work_id == pinned.id
 
 
-def test_an_archived_work_cannot_be_pinned(service):
+def test_an_archived_work_cannot_be_pinned(service, display):
     work = service.add_artwork(title="Nighthawks")
     service.archive_artwork(work.id)
 
     with pytest.raises(ServiceError, match="out of circulation"):
-        service.show_work_now(work.id)
+        display.show_work_now(work.id)
 
 
-def test_pinning_an_unknown_work_is_refused(service):
+def test_pinning_an_unknown_work_is_refused(display):
     with pytest.raises(ServiceError, match="No artwork with id 'nope'"):
-        service.show_work_now("nope")
+        display.show_work_now("nope")
 
 
-def test_theme_activity_never_touches_the_sequence(service):
+def test_theme_activity_never_touches_the_sequence(service, display):
     """Only `next` and `show_now` advance it; a theme switch rewrites the list.
 
     A switch that advanced the counter would look to the display plane exactly
     like a curator pressing "next" at the same moment.
     """
-    service.step_display()
-    before = service.read_directive()
+    display.step_display()
+    before = display.read_directive()
 
-    first = service.add_theme(name="American Modernists")
-    second = service.add_theme(name="Surrealists")
-    service.activate_theme(second.id)
+    first = display.add_theme(name="American Modernists")
+    second = display.add_theme(name="Surrealists")
+    display.activate_theme(second.id)
     work = service.add_artwork(title="Nighthawks")
-    service.add_to_theme(theme_id=first.id, artwork_id=work.id)
+    display.add_to_theme(theme_id=first.id, artwork_id=work.id)
 
-    assert service.read_directive() == before
+    assert display.read_directive() == before
 
 
 def test_the_sequence_survives_the_process_that_advanced_it(tmp_path):
@@ -192,15 +193,16 @@ def test_the_sequence_survives_the_process_that_advanced_it(tmp_path):
     """
     path = tmp_path / "catalogue.sqlite"
     first_store = SqliteCatalogue(open_catalogue_file(path))
-    first = CatalogueService(first_store)
-    work = first.add_artwork(title="Nighthawks")
+    first_catalogue = CatalogueService(first_store)
+    first = DisplayService(first_store, first_catalogue)
+    work = first_catalogue.add_artwork(title="Nighthawks")
     first.step_display()
     first.show_work_now(work.id)
     first_store.close()
 
     reopened_store = SqliteCatalogue(open_catalogue_file(path))
     try:
-        reopened = CatalogueService(reopened_store)
+        reopened = DisplayService(reopened_store, CatalogueService(reopened_store))
         assert reopened.read_directive().sequence == 2
         assert reopened.read_directive().pinned_work_id == work.id
         assert reopened.step_display().sequence == 3
@@ -236,16 +238,16 @@ def test_a_catalogue_whose_themes_are_all_inactive_is_repaired_on_start(tmp_path
     """
     catalogue = _legacy_catalogue_with_no_active_theme(tmp_path / "catalogue.sqlite")
     try:
-        service = CatalogueService(catalogue)
-        assert service.active_theme() is None
+        display = DisplayService(catalogue, CatalogueService(catalogue))
+        assert display.active_theme() is None
 
         with caplog.at_level(logging.WARNING):
-            service.reconcile()
+            display.reconcile()
 
         # The oldest theme, so every machine opening the same file makes the same
         # choice rather than following whatever the listing happened to return.
-        assert service.active_theme().id == "t-early"
-        assert [theme.is_active for theme in service.list_themes()].count(True) == 1
+        assert display.active_theme().id == "t-early"
+        assert [theme.is_active for theme in display.list_themes()].count(True) == 1
         assert "none active" in caplog.text
         assert "Daylight" in caplog.text
     finally:
@@ -256,14 +258,14 @@ def test_reconciling_a_healthy_catalogue_changes_nothing_and_says_nothing(tmp_pa
     """A repair that logged on every start would train the operator to ignore it."""
     catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
     try:
-        service = CatalogueService(catalogue)
-        first = service.add_theme(name="American Modernists")
-        service.add_theme(name="Surrealists")
+        display = DisplayService(catalogue, CatalogueService(catalogue))
+        first = display.add_theme(name="American Modernists")
+        display.add_theme(name="Surrealists")
 
         with caplog.at_level(logging.WARNING):
-            service.reconcile()
+            display.reconcile()
 
-        assert service.active_theme().id == first.id
+        assert display.active_theme().id == first.id
         assert caplog.text == ""
     finally:
         catalogue.close()
@@ -273,11 +275,11 @@ def test_reconciling_an_empty_catalogue_is_not_a_repair(tmp_path, caplog):
     """No themes is not the forbidden state — there is nothing to be active."""
     catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
     try:
-        service = CatalogueService(catalogue)
+        display = DisplayService(catalogue, CatalogueService(catalogue))
         with caplog.at_level(logging.WARNING):
-            service.reconcile()
+            display.reconcile()
 
-        assert service.active_theme() is None
+        assert display.active_theme() is None
         assert caplog.text == ""
     finally:
         catalogue.close()
@@ -287,12 +289,12 @@ def test_adding_a_theme_to_a_catalogue_with_none_active_promotes_it(tmp_path):
     """The condition is "none is active", not "there are none", so this repairs too."""
     catalogue = _legacy_catalogue_with_no_active_theme(tmp_path / "catalogue.sqlite")
     try:
-        service = CatalogueService(catalogue)
+        display = DisplayService(catalogue, CatalogueService(catalogue))
 
-        added = service.add_theme(name="Precisionists")
+        added = display.add_theme(name="Precisionists")
 
         assert added.is_active is True
-        assert [theme.is_active for theme in service.list_themes()].count(True) == 1
+        assert [theme.is_active for theme in display.list_themes()].count(True) == 1
     finally:
         catalogue.close()
 
@@ -300,11 +302,11 @@ def test_adding_a_theme_to_a_catalogue_with_none_active_promotes_it(tmp_path):
 def test_the_repair_reaches_the_file(tmp_path):
     path = tmp_path / "catalogue.sqlite"
     catalogue = _legacy_catalogue_with_no_active_theme(path)
-    CatalogueService(catalogue).reconcile()
+    DisplayService(catalogue, CatalogueService(catalogue)).reconcile()
     catalogue.close()
 
     reopened = SqliteCatalogue(open_catalogue_file(path))
     try:
-        assert CatalogueService(reopened).active_theme().id == "t-early"
+        assert DisplayService(reopened, CatalogueService(reopened)).active_theme().id == "t-early"
     finally:
         reopened.close()

@@ -62,47 +62,47 @@ def _original(service, artwork_id, source_id, *, content_hash="sha256:aaa", byte
 # none, and its target is a guess.
 
 
-def test_the_first_theme_is_active_because_a_catalogue_with_none_has_no_sync_target(service):
-    assert service.add_theme(name="American Modernists").is_active is True
+def test_the_first_theme_is_active_because_a_catalogue_with_none_has_no_sync_target(display):
+    assert display.add_theme(name="American Modernists").is_active is True
 
 
-def test_a_second_theme_does_not_displace_the_active_one_by_arriving(service):
-    first = service.add_theme(name="American Modernists")
-    second = service.add_theme(name="Surrealists")
+def test_a_second_theme_does_not_displace_the_active_one_by_arriving(display):
+    first = display.add_theme(name="American Modernists")
+    second = display.add_theme(name="Surrealists")
 
-    assert service.get_theme(first.id).is_active is True
+    assert display.get_theme(first.id).is_active is True
     assert second.is_active is False
 
 
-def test_activating_a_theme_stands_the_previous_one_down(service):
-    first = service.add_theme(name="American Modernists")
-    second = service.add_theme(name="Surrealists")
+def test_activating_a_theme_stands_the_previous_one_down(display):
+    first = display.add_theme(name="American Modernists")
+    second = display.add_theme(name="Surrealists")
 
-    service.activate_theme(second.id)
+    display.activate_theme(second.id)
 
-    assert service.get_theme(first.id).is_active is False
-    assert service.get_theme(second.id).is_active is True
-    assert [theme.is_active for theme in service.list_themes()].count(True) == 1
-
-
-def test_activating_the_already_active_theme_leaves_exactly_one_active(service):
-    only = service.add_theme(name="American Modernists")
-
-    service.activate_theme(only.id)
-
-    assert [theme.is_active for theme in service.list_themes()] == [True]
+    assert display.get_theme(first.id).is_active is False
+    assert display.get_theme(second.id).is_active is True
+    assert [theme.is_active for theme in display.list_themes()].count(True) == 1
 
 
-def test_the_active_theme_is_the_one_reported_as_active(service):
-    service.add_theme(name="American Modernists")
-    second = service.add_theme(name="Surrealists")
-    service.activate_theme(second.id)
+def test_activating_the_already_active_theme_leaves_exactly_one_active(display):
+    only = display.add_theme(name="American Modernists")
 
-    assert service.active_theme().id == second.id
+    display.activate_theme(only.id)
+
+    assert [theme.is_active for theme in display.list_themes()] == [True]
 
 
-def test_a_catalogue_with_no_themes_has_no_active_one(service):
-    assert service.active_theme() is None
+def test_the_active_theme_is_the_one_reported_as_active(display):
+    display.add_theme(name="American Modernists")
+    second = display.add_theme(name="Surrealists")
+    display.activate_theme(second.id)
+
+    assert display.active_theme().id == second.id
+
+
+def test_a_catalogue_with_no_themes_has_no_active_one(display):
+    assert display.active_theme() is None
 
 
 # -- 2. Exactly one mat colour per work is current ----------------------------
@@ -410,7 +410,7 @@ def test_rights_gate_nothing(service):
 # -- what this layer deliberately does not filter -------------------------------
 
 
-def test_a_theme_still_lists_a_work_that_has_been_archived(service):
+def test_a_theme_still_lists_a_work_that_has_been_archived(service, display):
     """Membership and readiness are different questions, answered in different places.
 
     Archiving takes a work out of circulation, and an archived work leaves the
@@ -419,12 +419,12 @@ def test_a_theme_still_lists_a_work_that_has_been_archived(service):
     places, and the caller can already see the status it would filter on.
     """
     work = _work(service)
-    theme = service.add_theme(name="Hopper")
-    service.add_to_theme(theme_id=theme.id, artwork_id=work.id)
+    theme = display.add_theme(name="Hopper")
+    display.add_to_theme(theme_id=theme.id, artwork_id=work.id)
 
     service.archive_artwork(work.id)
 
-    listed = service.theme_works(theme.id)
+    listed = display.theme_works(theme.id)
     assert [entry.artwork.id for entry in listed] == [work.id]
     assert listed[0].artwork.status is ArtworkStatus.ARCHIVED
 
@@ -462,44 +462,44 @@ def test_an_unknown_fetch_outcome_names_the_ones_that_are_valid(service):
         service.record_fetch(source.id, status="timeout")
 
 
-def test_a_work_can_be_returned_to_unplaced_in_a_theme(service):
+def test_a_work_can_be_returned_to_unplaced_in_a_theme(service, display):
     """Null position means "the curator has said nothing", which is a real state."""
     first = _work(service, "Nighthawks")
     second = _work(service, "Chop Suey")
-    theme = service.add_theme(name="Hopper")
-    service.add_to_theme(theme_id=theme.id, artwork_id=first.id, position=1)
-    service.add_to_theme(theme_id=theme.id, artwork_id=second.id, position=2)
+    theme = display.add_theme(name="Hopper")
+    display.add_to_theme(theme_id=theme.id, artwork_id=first.id, position=1)
+    display.add_to_theme(theme_id=theme.id, artwork_id=second.id, position=2)
 
-    service.move_in_theme(theme_id=theme.id, artwork_id=first.id, position=None)
+    display.move_in_theme(theme_id=theme.id, artwork_id=first.id, position=None)
 
-    assert [entry.artwork.title for entry in service.theme_works(theme.id)] == ["Chop Suey", "Nighthawks"]
+    assert [entry.artwork.title for entry in display.theme_works(theme.id)] == ["Chop Suey", "Nighthawks"]
 
 
-def test_a_negative_position_is_refused(service):
+def test_a_negative_position_is_refused(service, display):
     work = _work(service)
-    theme = service.add_theme(name="Hopper")
+    theme = display.add_theme(name="Hopper")
 
     with pytest.raises(ServiceError, match="position cannot be negative"):
-        service.add_to_theme(theme_id=theme.id, artwork_id=work.id, position=-1)
+        display.add_to_theme(theme_id=theme.id, artwork_id=work.id, position=-1)
 
 
-def test_placing_a_work_in_a_theme_twice_is_refused(service):
+def test_placing_a_work_in_a_theme_twice_is_refused(service, display):
     work = _work(service)
-    theme = service.add_theme(name="Hopper")
-    service.add_to_theme(theme_id=theme.id, artwork_id=work.id)
+    theme = display.add_theme(name="Hopper")
+    display.add_to_theme(theme_id=theme.id, artwork_id=work.id)
 
     with pytest.raises(ServiceError, match="Could not store"):
-        service.add_to_theme(theme_id=theme.id, artwork_id=work.id)
+        display.add_to_theme(theme_id=theme.id, artwork_id=work.id)
 
 
-def test_moving_or_removing_a_work_that_is_not_in_the_theme_is_refused(service):
+def test_moving_or_removing_a_work_that_is_not_in_the_theme_is_refused(service, display):
     work = _work(service)
-    theme = service.add_theme(name="Hopper")
+    theme = display.add_theme(name="Hopper")
 
     with pytest.raises(ServiceError, match="is not in theme"):
-        service.move_in_theme(theme_id=theme.id, artwork_id=work.id, position=1)
+        display.move_in_theme(theme_id=theme.id, artwork_id=work.id, position=1)
     with pytest.raises(ServiceError, match="is not in theme"):
-        service.remove_from_theme(theme_id=theme.id, artwork_id=work.id)
+        display.remove_from_theme(theme_id=theme.id, artwork_id=work.id)
 
 
 # -- the rules that span rows are applied whole or not at all -------------------

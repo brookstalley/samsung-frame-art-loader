@@ -10,10 +10,13 @@ rather than as a bug.
 **This is also where the catalogue's rules are enforced, at write time.** A rule
 applied on the way out instead of on the way in is a rule the data can already
 violate, and the violation is then permanent. Rules that span rows — exactly one
-theme active, exactly one mat colour current, at most one primary source — are
-applied inside a store transaction as a clear-then-set pair, because a pair that
-can be interrupted between its halves leaves the catalogue in the state the rule
-forbids.
+mat colour current, at most one primary source — are applied inside a store
+transaction as a clear-then-set pair, because a pair that can be interrupted
+between its halves leaves the catalogue in the state the rule forbids.
+
+Works, artists, sources, originals, renditions and mat colours live here. Themes,
+the standing directive and the manifest built from them live in `display.py`,
+which holds this service; nothing here holds that one.
 
 Methods are synchronous. The store is a local file answering point lookups in
 well under a millisecond, and a synchronous core keeps this logic testable
@@ -33,7 +36,6 @@ from curation.persistence.records import (
     Artist,
     Artwork,
     ArtworkStatus,
-    Directive,
     FetchStatus,
     MatColor,
     MatMethod,
@@ -43,8 +45,6 @@ from curation.persistence.records import (
     RightsStatus,
     Source,
     SourceClass,
-    Theme,
-    ThemeMembership,
 )
 from curation.services.display_fit import ArtworkBox, FitAssessment, assess_display_fit
 from curation.services.errors import ServiceError
@@ -205,54 +205,19 @@ class CatalogueService:
                 return mat_color
         return None
 
-    # -- reads: themes --------------------------------------------------------
+    def resolve_details(self, artwork_ids: Sequence[str]) -> Sequence[ArtworkDetail]:
+        """Return these works in the order given, each with its artist resolved.
 
-    def list_themes(self) -> Sequence[Theme]:
-        """Return every theme."""
-        return self._store.list_themes()
-
-    def get_theme(self, theme_id: str) -> Theme:
-        """Return one theme."""
-        theme = self._store.get_theme(theme_id)
-        if theme is None:
-            raise ServiceError(f"No theme with id {theme_id!r} is in the catalogue.")
-        return theme
-
-    def active_theme(self) -> Theme | None:
-        """The theme the wall is showing, or None while the catalogue has no themes."""
-        for theme in self._store.list_themes():
-            if theme.is_active:
-                return theme
-        return None
-
-    def theme_works(self, theme_id: str) -> Sequence[ArtworkDetail]:
-        """The theme's works in curated order, each with its artist resolved.
-
-        Ordered because the entries carry a curator's placement; the ones nobody
-        placed follow the ones somebody did. Artists come along because a theme
-        listing is read to decide what goes on the wall, and attribution is the
-        first thing that decision turns on.
+        One artist lookup per distinct artist rather than per work: a theme is
+        typically many works by few artists, and the caller is building a list to
+        put on a wall rather than reading one record.
         """
-        self.get_theme(theme_id)
         artists: dict[str, Artist | None] = {}
         entries: list[ArtworkDetail] = []
-        for membership in self._store.list_memberships(theme_id):
-            artwork = self._store.get_artwork(membership.artwork_id)
-            if artwork is None:
-                # A membership row cannot outlive its work: the foreign key
-                # forbids it. Reaching here means the file was edited by
-                # something other than this code.
-                raise ServiceError(
-                    f"Theme {theme_id!r} refers to artwork {membership.artwork_id!r}, which is not in the catalogue."
-                )
+        for artwork_id in artwork_ids:
+            artwork = self._require_artwork(artwork_id)
             entries.append(ArtworkDetail(artwork=artwork, artist=self._resolve_artist(artwork.artist_id, artists)))
         return entries
-
-    # -- reads: the display directive -----------------------------------------
-
-    def read_directive(self) -> Directive:
-        """The standing instruction to the display plane."""
-        return self._store.get_directive()
 
     # -- writes: artists and works --------------------------------------------
 
@@ -328,6 +293,15 @@ class CatalogueService:
             store_write(self._store.update_artwork, archived)
             # A pin naming a work that is out of circulation is an instruction
             # the display plane can never carry out, so archiving withdraws it.
+            #
+            # This is the one directive write outside the service that owns the
+            # directive, and the line it respects is integrity versus semantics:
+            # clearing an unsatisfiable reference in the same transaction that
+            # creates it, exactly as a dangling reference anywhere else would be.
+            # It deliberately does NOT advance the sequence — archiving is not an
+            # instruction to the display plane, and an advance would step the wall
+            # to an unrelated work. Every rule about what an advance *means* lives
+            # in the display service; none of them is duplicated here.
             directive = self._store.get_directive()
             if directive.pinned_work_id == artwork_id:
                 store_write(self._store.set_directive, replace(directive, pinned_work_id=None))
@@ -566,138 +540,7 @@ class CatalogueService:
             store_write(self._store.add_mat_color, mat_color)
         return mat_color
 
-    # -- writes: themes and membership ----------------------------------------
-
-    def add_theme(self, *, name: str, description: str | None = None) -> Theme:
-        """Record a theme and return it.
-
-        A theme arrives active when no other theme currently is, because a
-        catalogue that has themes and no active one leaves the display plane with
-        no sync target at all — and nothing would report that as a problem. The
-        condition is "none is active" rather than "there are none", so that a
-        catalogue which somehow reached that state is repaired by the next
-        addition rather than staying broken until someone notices.
-        """
-        with self._store.transaction():
-            theme = Theme(
-                id=str(uuid.uuid4()),
-                name=require_text(name, field="name"),
-                created_at=datetime.now(UTC),
-                description=description,
-                is_active=not any(existing.is_active for existing in self._store.list_themes()),
-            )
-            store_write(self._store.add_theme, theme)
-        return theme
-
-    def activate_theme(self, theme_id: str) -> Theme:
-        """Make this the theme the wall shows, and the only one."""
-        theme = self.get_theme(theme_id)
-        activated = replace(theme, is_active=True)
-        with self._store.transaction():
-            for other in self._store.list_themes():
-                if other.is_active and other.id != theme_id:
-                    stood_down = replace(other, is_active=False)
-                    store_write(self._store.update_theme, stood_down)
-            store_write(self._store.update_theme, activated)
-        return activated
-
-    def add_to_theme(self, *, theme_id: str, artwork_id: str, position: int | None = None) -> ThemeMembership:
-        """Place a work in a theme, optionally at a curated position."""
-        self.get_theme(theme_id)
-        self._require_artwork(artwork_id)
-        membership = ThemeMembership(
-            theme_id=theme_id,
-            artwork_id=artwork_id,
-            added_at=datetime.now(UTC),
-            position=self._require_position(position),
-        )
-        store_write(self._store.add_membership, membership)
-        return membership
-
-    def move_in_theme(self, *, theme_id: str, artwork_id: str, position: int | None) -> ThemeMembership:
-        """Change where a work sits in a theme, or return it to unplaced."""
-        membership = self._store.get_membership(theme_id, artwork_id)
-        if membership is None:
-            raise ServiceError(f"Artwork {artwork_id!r} is not in theme {theme_id!r}.")
-        moved = replace(membership, position=self._require_position(position))
-        store_write(self._store.update_membership, moved)
-        return moved
-
-    def remove_from_theme(self, *, theme_id: str, artwork_id: str) -> None:
-        """Take a work out of a theme. The work itself is untouched."""
-        if self._store.get_membership(theme_id, artwork_id) is None:
-            raise ServiceError(f"Artwork {artwork_id!r} is not in theme {theme_id!r}.")
-        store_write(self._store.remove_membership, theme_id, artwork_id)
-
-    # -- repair -----------------------------------------------------------------
-
-    def reconcile(self) -> None:
-        """Repair rules a catalogue on disk may predate. Run once, as the plane starts.
-
-        A catalogue file outlives any single version of this code, so a rule added
-        after a file was written has to be brought to that file rather than
-        assumed of it. Exactly one theme active is such a rule: an earlier
-        revision created every theme inactive and offered no way to activate one,
-        so a catalogue from then holds themes with none active — the state the
-        rule forbids, and precisely the one where the display plane has no sync
-        target while nothing reports a problem.
-
-        No ordinary write repairs it. The index the file carries states only "at
-        most one", which that state satisfies; and while adding a theme now
-        promotes one when none is active, a catalogue nobody adds to would stay
-        broken indefinitely.
-
-        The repair is logged at WARNING because it is a silent condition being
-        corrected: nothing else would ever say the catalogue had been in it.
-        """
-        with self._store.transaction():
-            themes = self._store.list_themes()
-            if not themes or any(theme.is_active for theme in themes):
-                return
-            # The oldest theme, so the choice is the same on every machine that
-            # opens the same file rather than whichever the listing happened to
-            # put first.
-            promoted = min(themes, key=lambda theme: (theme.created_at, theme.id))
-            log.warning(
-                "Catalogue held %d theme(s) with none active, which leaves the display plane no sync target; activated %r.",
-                len(themes),
-                promoted.name,
-            )
-            store_write(self._store.update_theme, replace(promoted, is_active=True))
-
-    # -- writes: the display directive ----------------------------------------
-
-    def step_display(self) -> Directive:
-        """Tell the display plane to move to the next work.
-
-        The step clears any standing pin. A sequence that advanced while a pin
-        was still set would read as "jump to that work again" rather than as
-        "move on", so the two directives cannot both be in force.
-        """
-        return self._advance(pinned_work_id=None)
-
-    def show_work_now(self, artwork_id: str) -> Directive:
-        """Tell the display plane to jump to this work and carry on from there."""
-        artwork = self._require_artwork(artwork_id)
-        if artwork.status is ArtworkStatus.ARCHIVED:
-            raise ServiceError(f"Artwork {artwork_id!r} is archived, so it is out of circulation and cannot be shown.")
-        return self._advance(pinned_work_id=artwork_id)
-
     # -- internals ------------------------------------------------------------
-
-    def _advance(self, *, pinned_work_id: str | None) -> Directive:
-        """Move the directive on by one.
-
-        The counter only ever increases, for the life of the catalogue. The
-        display plane acts each time it sees the number go up, so a counter that
-        reset — on a manifest rebuild, on a theme switch — would fire a directive
-        nobody issued.
-        """
-        with self._store.transaction():
-            current = self._store.get_directive()
-            advanced = Directive(sequence=current.sequence + 1, pinned_work_id=pinned_work_id)
-            store_write(self._store.set_directive, advanced)
-        return advanced
 
     def _demote_primary_sources(self, artwork_id: str) -> None:
         """Clear whichever source currently claims to have produced the original."""
@@ -735,9 +578,3 @@ class CatalogueService:
         if len(text) != 7 or not text.startswith("#") or any(character not in "0123456789abcdef" for character in text[1:]):
             raise ServiceError(f"A mat colour must be a hex triplet like '#27285b', got {value!r}.")
         return text
-
-    @staticmethod
-    def _require_position(position: int | None) -> int | None:
-        if position is not None and position < 0:
-            raise ServiceError(f"A position cannot be negative, got {position}.")
-        return position

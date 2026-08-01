@@ -48,10 +48,12 @@
 ### Service layer
 
 - **Exists:** **yes**, as of 2026-07-27 — `curation/src/curation/services/`, split
-  by concern into `CatalogueService` (works already accepted) and
-  `DiscoveryService` (everything before acceptance), bound by a `Services`
-  container that every surface takes. Discovery depends on the catalogue and never
-  the reverse. Later operations join one of the two, or add a third member.
+  by concern into `CatalogueService` (works already accepted), `DiscoveryService`
+  (everything before acceptance) and, since 2026-07-31, `DisplayService` (themes,
+  the standing directive, and the manifest built from them), bound by a `Services`
+  container that every surface takes. Discovery and display each depend on the
+  catalogue and neither is depended on by it. Later operations join one of the
+  three, or add a fourth member.
 - **Producer:** service methods.
 - **Consumer:** **both** the MCP tool bindings and the HTTP handlers.
 - **Contract:** method signatures and return types.
