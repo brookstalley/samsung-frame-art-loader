@@ -88,7 +88,8 @@ _DETAIL: Final[dict[SeedNote, str]] = {
         "Its television render at {path} could not be read as a JPEG, so its size could not be measured."
     ),
     SeedNote.RENDITION_STALE: (
-        "Its television render at {path} was made from an earlier master and needs regenerating before it reaches the wall."
+        "Its television render at {path} was made from an earlier master, so it stays off the wall until the renderer "
+        "replaces it — seeding will not adopt a render it did not record, because it cannot tell which master made one."
     ),
     SeedNote.DUPLICATE_RECORD_DISCARDED: (
         "The index describes this work {count} times; the last was taken and the earlier mat colour {discarded} was dropped."

@@ -299,12 +299,15 @@ architecture-proving slice is Chunk 07.
 
 ### Chunk 01: Untrack the TV pairing token; drop the catalogue backups (issue #4)
 
-- **Description:** Close the live credential leak in the public repo, in the
-  corrected order: untrack first, then re-pair — the reverse order commits the
-  fresh token (`security-model.md` § Credentials). One sitting, at the hardware,
-  because the untracking commit deletes `token_file` on the Pi's next `git pull`
-  and TV auth is down until re-pairing. Also drops the three `all.json` backup
-  snapshots. `all.json` itself stays tracked — it is the mat regression corpus
+- **Description:** Close the credential leak in the public repo, in the corrected
+  order: untrack first, then re-pair — the reverse order commits the fresh token
+  (`security-model.md` § Credentials). *(Two things this said are withdrawn, both
+  as of 2026-07-27: the "one sitting, at the hardware" coupling is gone — the
+  config hoist moved the token under `ART_ROOT`, outside the checkout, so the
+  untracking commit does **not** delete it on the Pi's next `git pull`; and the
+  re-pair was not needed at all, the operator having confirmed the leaked token
+  already expired. See the Deliverables below and `security-model.md`.)* Also
+  drops the three `all.json` backup snapshots. `all.json` itself stays tracked — it is the mat regression corpus
   until Chunk 06 extracts the fixture.
 - **Depends on:** none (hardware access required)
 - **Artifacts consumed:** `security-model.md` § Credentials and Secrets,

@@ -14,8 +14,13 @@ inline, which the record linter flags; moving them is tracked as issue #26.
 before calling the correction done.** Prose has no compiler, so a claim that lives in
 four artifacts stays true in three of them until someone looks.
 
-**Confirmed by recurrence — twice in two sessions, both caught by the Critic and
-neither by self-review:**
+**Confirmed by recurrence, and the list below has only ever grown.** Nearly every
+entry was caught by a Critic round or a later verification pass rather than by the
+self-review that immediately preceded it — which is the rule's real content: this
+failure is invisible from inside the edit that causes it. *(The preamble here once
+read "twice in two sessions" while thirteen numbered entries sat under it. Stating
+the count made this entry an instance of its own neighbour, "prefer an invariant to
+a tally"; it now states the shape instead, which cannot go stale.)*
 
 1. **2026-07-19, first pass.** The architecture rationale was amended from "the split
    was *forced* by a Python version conflict" to "the split is a *choice*" across
@@ -178,6 +183,18 @@ the backlog is part of its sweep set.**
     consumption of an enumerated scope is the dominant way these survive, and it
     survived the remediation performed with that entry open in the editor.
 
+13. **2026-08-01, fourteenth recurrence — the finding's file list read as the
+    scope.** A Critic finding named two artifacts still reporting the TV pairing
+    token as an unremediated leak, closed in July. Both were fixed and the
+    disposition recorded. The verify pass then found a third home
+    (`project-state.yaml`'s `classification` block — what briefings and security
+    reviews read as *current state*) and a fourth (`build-plan.md` Chunk 01, still
+    carrying a `git pull`-deletes-the-token hazard `security-model.md` had already
+    withdrawn). **A finding's `files:` list is a sample, not an inventory** — it
+    names where the reviewer looked, and the reviewer was reading a diff. The
+    remedy is unchanged and takes seconds: grep the concept's distinctive noun
+    (`token_file`) across the repo, not the two paths handed to you.
+
 *(This entry is itself the evidence for why the count keeps moving: the failure is
 **fractal**. Every act of propagating a claim is a fresh opportunity to miss a home,
 so each correction creates the conditions for the next recurrence. That is a stronger
@@ -323,6 +340,10 @@ prefix** — the one shape the original pass structurally could not see.
 matched?" and search for *that*. Roster/invariant checks (is the set complete? do
 all references resolve to something that exists?) are good second methods because
 they test the outcome rather than the transformation.
+
+## An idempotence test that holds the inputs still tests the wrong half
+
+## Adding code to a repo means asking which guards were scoped to the old shape
 
 ## Prose that ships to a caller is behaviour, and needs a test aimed at it
 

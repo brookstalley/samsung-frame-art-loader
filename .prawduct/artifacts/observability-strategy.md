@@ -110,9 +110,19 @@ between planes.
 
 The display plane writes a small status document to the shared directory on a
 regular interval, using the same atomic write-and-rename discipline as the
-manifest. It carries: timestamp, the manifest version currently loaded, the work
-currently displayed, TV connectivity state, e-paper state, and the last error if
-any.
+manifest. It carries: the moment it was written, the manifest version currently
+loaded, the work currently displayed, TV connectivity state, e-paper state, and
+the last error if any.
+
+**Two names in it are a contract, not a suggestion, because the reader is already
+built** (`curation/manifest/heartbeat.py`): the file is `display-heartbeat.json`
+under `ART_ROOT`, and the timestamp key is **`reported_at`**, an ISO-8601 instant.
+The reader treats any other spelling as an unreadable heartbeat and says so — so a
+writer that calls the field `timestamp` produces a plane that looks *down* to
+curation while running perfectly. That is this product's defining failure mode
+manufactured by the mechanism built to detect it, which is why the key is named
+here rather than left to the writer. Everything else in the document is the
+writer's to shape: the reader hands the whole object through untouched.
 
 > `[DECISION: display writes a heartbeat file rather than curation reading
 > display-state.sqlite directly | a file keeps the planes' schemas decoupled and

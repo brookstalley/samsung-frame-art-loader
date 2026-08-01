@@ -83,8 +83,10 @@ classification:
       categories: [credentials]
       regulatory: []
       # No PII, no regulatory surface. Holds an OpenRouter/LLM API key (real
-      # spend) and the Samsung TV pairing token. `token_file` is currently
-      # committed to git — flagged for removal.
+      # spend) and the Samsung TV pairing token. `token_file` was untracked and
+      # gitignored 2026-07-27 (ba007cd) and the leaked token was confirmed already
+      # expired, so nothing live remains in history; the token now resolves under
+      # ART_ROOT, outside the checkout.
     # Multiple processes or services communicating at runtime. topology: monolith-with-workers|client-server|microservices|pipeline
     multi_process_distributed:
       topology: shared-filesystem-pipeline

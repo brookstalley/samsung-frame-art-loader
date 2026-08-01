@@ -120,6 +120,36 @@ def test_choosing_a_mat_colour_supersedes_the_previous_choice_without_deleting_i
     assert service.current_mat_color(work.id).id == second.id
 
 
+def test_re_choosing_the_colour_already_in_force_records_nothing(service):
+    """A row saying nothing changed answers nothing and hides every real change.
+
+    Anything that runs repeatedly — a re-seed, a re-render — would otherwise grow
+    the history by a row per work per run.
+    """
+    work = service.add_artwork(title="Nighthawks")
+    first = service.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)
+    again = service.record_mat_color(artwork_id=work.id, hex_rgb="#27285B", method=MatMethod.VISION_MODEL)
+
+    assert again.id == first.id
+    assert len(service.mat_color_history(work.id)) == 1
+
+
+def test_the_same_colour_arrived_at_differently_is_a_new_choice(service):
+    """How a colour was reached is the fact this column exists to keep.
+
+    The 2024 pipeline silently substituted a darkened dominant colour whenever the
+    vision model failed, so a hand-quality choice and a mechanical one were
+    indistinguishable in the data. Comparing only the hex would restore exactly that.
+    """
+    work = service.add_artwork(title="Nighthawks")
+    service.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.DOMINANT_COLOR_FALLBACK)
+    service.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)
+
+    history = service.mat_color_history(work.id)
+    assert [mat.method for mat in history] == [MatMethod.VISION_MODEL, MatMethod.DOMINANT_COLOR_FALLBACK]
+    assert service.current_mat_color(work.id).method is MatMethod.VISION_MODEL
+
+
 def test_a_work_with_no_mat_colour_has_no_current_one(service):
     assert service.current_mat_color(_work(service).id) is None
 
