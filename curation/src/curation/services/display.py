@@ -294,10 +294,14 @@ class DisplayService:
         which is the silence the exclusion report exists to break, arriving
         through the one path that did not consult readiness.
 
-        This does not remove the display plane's own obligation. Readiness can
-        change between the pin being written and the manifest being read, so an
-        unsatisfiable pin is still reachable and Chunk 12 defines what display
-        does with one. This closes the case a curator can be told about now.
+        **It checks readiness, not theme membership**, so it does not remove the
+        display plane's own obligation. A perfectly displayable work that is
+        simply not in the active theme can still be pinned, and the manifest will
+        not carry it — that is available on every call rather than a timing
+        window. The membership check belongs to the plane that has to resolve the
+        pin rather than the one writing it: display logs one WARNING and carries
+        on rotating, by the same posture as a missing render file. What this
+        closes is the case a curator can be told about now.
         """
         excluded = assess(self._gather(artwork_id))
         if excluded is not None:

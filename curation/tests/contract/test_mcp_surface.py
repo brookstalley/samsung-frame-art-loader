@@ -11,7 +11,7 @@ import pytest
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from curation.manifest.builder import ExclusionReason
+from curation.manifest.builder import ExclusionReason, assess
 from curation.mcp.registry import DESCRIPTION_BUDGET_BYTES
 from curation.mcp.tools import ART_DISPLAY, TOOLS
 from curation.services.errors import ServiceError
@@ -120,13 +120,27 @@ async def test_every_description_lists_the_actions_the_schema_allows(tools):
 #: refuse for. Deliberately not the whole sentence: the tip summarises, and
 #: pinning it verbatim would make every wording improvement a failure. What must
 #: hold is that no cause is missing from the tip altogether.
+#:
+#: **Every token must be distinct, and that is asserted below.** Two reasons
+#: sharing one word silently satisfies the row for whichever is not actually named
+#: — the first version of this table gave both rendition reasons "render", so a
+#: stale render went unmentioned in the tip while this guard reported it covered.
 _SHOW_NOW_TIP_PREPARES_FOR = {
     ExclusionReason.ARCHIVED: "archived",
     ExclusionReason.NO_ORIGINAL: "master image",
     ExclusionReason.NO_MAT_COLOR: "mat colour",
-    ExclusionReason.NO_RENDITION: "render",
-    ExclusionReason.STALE_RENDITION: "render",
+    ExclusionReason.NO_RENDITION: "television render",
+    # A stale render is present rather than missing, so "render" alone does not
+    # describe it and would be satisfied by the row above.
+    ExclusionReason.STALE_RENDITION: "earlier acquisition",
 }
+
+
+def _exclusion_for(display, work):
+    """What the readiness rule actually says about this work."""
+    excluded = assess(display._gather(work.id))
+    assert excluded is not None, "this work is displayable, so the row it stands for is untested"
+    return excluded
 
 
 def _show_now_tips() -> str:
@@ -142,6 +156,11 @@ def test_every_reason_show_now_can_refuse_for_is_named_in_its_tip():
     """
     missing = [reason for reason in ExclusionReason if reason not in _SHOW_NOW_TIP_PREPARES_FOR]
     assert not missing, f"exclusion reasons with no entry in this table: {missing}"
+
+    tokens = list(_SHOW_NOW_TIP_PREPARES_FOR.values())
+    assert len(set(tokens)) == len(
+        tokens
+    ), f"two reasons share a token in this table, which makes one row pass on the other's word: {tokens}"
 
     tips = _show_now_tips()
     for reason, expected in _SHOW_NOW_TIP_PREPARES_FOR.items():
@@ -160,27 +179,39 @@ def test_each_documented_refusal_is_one_the_service_actually_raises(display, rea
     """The other half: the tip must not promise a refusal the code does not make.
 
     Driving the real service rather than reading the table above, so this pins
-    tip text to behaviour rather than to itself.
+    tip text to behaviour rather than to itself. The state is asserted through
+    `assess` — the reason, not a noun in the message — because two reasons can
+    share a word and then this proves nothing about which one fired.
     """
     work = ready_work(**unready)
+
+    excluded = _exclusion_for(display, work)
+    assert excluded.reason is reason, "the fixture did not reach the state this row is about"
 
     with pytest.raises(ServiceError) as refused:
         display.show_work_now(work.id)
 
-    assert _SHOW_NOW_TIP_PREPARES_FOR[reason] in str(refused.value).lower()
+    # The tip promises the refusal uses the same words sync uses for an
+    # excluded work. That is the claim under test, not a shared noun.
+    assert excluded.detail in str(refused.value)
 
 
 def test_an_archived_work_is_refused_in_the_words_the_tip_uses(service, display, ready_work):
     work = ready_work()
     service.archive_artwork(work.id)
 
+    excluded = _exclusion_for(display, work)
+    assert excluded.reason is ExclusionReason.ARCHIVED
+
     with pytest.raises(ServiceError) as refused:
         display.show_work_now(work.id)
 
+    assert excluded.detail in str(refused.value)
     assert "archived" in str(refused.value).lower()
 
 
 def test_a_stale_render_is_refused_in_the_words_the_tip_uses(service, display, ready_work):
+    """Re-acquiring leaves the previous render in place, and it is no longer of this image."""
     work = ready_work()
     source = service.list_sources(work.id)[0]
     service.record_original(
@@ -193,7 +224,13 @@ def test_a_stale_render_is_refused_in_the_words_the_tip_uses(service, display, r
         content_hash="a-later-acquisition",
     )
 
+    # On the reason, not on "render": NO_RENDITION's message says "rendered" too,
+    # so a noun match would pass on the wrong exclusion entirely.
+    excluded = _exclusion_for(display, work)
+    assert excluded.reason is ExclusionReason.STALE_RENDITION
+
     with pytest.raises(ServiceError) as refused:
         display.show_work_now(work.id)
 
-    assert "render" in str(refused.value).lower()
+    assert excluded.detail in str(refused.value)
+    assert "earlier acquisition" in str(refused.value).lower()
