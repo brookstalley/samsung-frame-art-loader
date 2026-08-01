@@ -151,6 +151,34 @@ def _refusal(exc: sqlite3.IntegrityError) -> str:
     return "the store refused the write."
 
 
+def _describe(connection: sqlite3.Connection) -> dict[str, dict[str, sqlite3.Row]]:
+    """Every table's columns, as the database itself reports them."""
+    tables = connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+    described: dict[str, dict[str, sqlite3.Row]] = {}
+    for table in tables:
+        info = connection.execute(f'PRAGMA table_info("{table["name"]}")').fetchall()
+        described[table["name"]] = {column["name"]: column for column in info}
+    return described
+
+
+def _column_declaration(column: sqlite3.Row) -> str:
+    """Rebuild one column's DDL from what `PRAGMA table_info` reports of it.
+
+    Enough of a declaration for `ADD COLUMN` and no more: type, nullability and
+    default. A primary key, a foreign key or a check cannot be added to an
+    existing column by this route in SQLite, so reconstructing them here would
+    write a promise the statement does not keep.
+    """
+    parts = [f'"{column["name"]}"']
+    if column["type"]:
+        parts.append(column["type"])
+    if column["notnull"]:
+        parts.append("NOT NULL")
+    if column["dflt_value"] is not None:
+        parts.append(f"DEFAULT {column['dflt_value']}")
+    return " ".join(parts)
+
+
 class SqliteDurableStore:
     """One SQLite file, addressed as tables of rows."""
 
@@ -168,6 +196,7 @@ class SqliteDurableStore:
             # keep pointing at a parent that was never written.
             self._connection.execute("PRAGMA foreign_keys = ON")
             self._connection.executescript(schema)
+            self._widen_existing_tables(schema)
             self._connection.commit()
             self._columns = self._read_schema()
 
@@ -317,6 +346,61 @@ class SqliteDurableStore:
             self._connection.close()
 
     # -- internals ------------------------------------------------------------
+
+    def _widen_existing_tables(self, schema: str) -> None:
+        """Add columns the declared schema has and the file on disk does not.
+
+        `CREATE TABLE IF NOT EXISTS` does nothing whatsoever to a table that
+        already exists, so a column added to the DDL never reaches a file written
+        before it. What that produces is not a loud failure: the adapter writes
+        the new column, `_validate` refuses it by name, and the refusal reads as a
+        code defect rather than as a file predating the column. A file outlives
+        any single version of this code, so closing that gap is this layer's job.
+
+        The intended shape is learned by running the same DDL against an empty
+        in-memory database and reading it back — SQLite parses the schema, not
+        this module, so the two can never disagree about what the DDL meant.
+
+        **Only additions.** `ALTER TABLE ADD COLUMN` is the one schema change
+        SQLite applies in place and the only one that cannot lose data. A column
+        that changed type is reported and left alone, because SQLite's types are
+        affinities and a rename-copy-swap is a migration to write deliberately
+        rather than to infer here. A `NOT NULL` addition with no default is
+        refused outright: SQLite cannot add one to a table with rows, so applying
+        it would half-migrate the file.
+        """
+        intended = sqlite3.connect(":memory:")
+        try:
+            intended.row_factory = sqlite3.Row
+            intended.executescript(schema)
+            wanted = _describe(intended)
+        finally:
+            intended.close()
+
+        actual = _describe(self._connection)
+        for table, columns in wanted.items():
+            present = actual.get(table)
+            if present is None:
+                # Created by the executescript above; nothing to widen.
+                continue
+            for name, column in columns.items():
+                if name in present:
+                    if column["type"].strip().upper() != present[name]["type"].strip().upper():
+                        log.warning(
+                            "Table %r column %r is %s in this file and %s in the declared schema; leaving it as it is.",
+                            table,
+                            name,
+                            present[name]["type"] or "untyped",
+                            column["type"] or "untyped",
+                        )
+                    continue
+                if column["notnull"] and column["dflt_value"] is None:
+                    raise StoreMisuseError(
+                        f"Cannot add column {name!r} to existing table {table!r}: it is NOT NULL with no default, "
+                        "which SQLite cannot add to a table that already has rows. This needs a written migration."
+                    )
+                self._connection.execute(f'ALTER TABLE "{table}" ADD COLUMN {_column_declaration(column)}')
+                log.info("Added column %r to table %r, which this catalogue file predated.", name, table)
 
     def _read_schema(self) -> dict[str, _TableInfo]:
         """What each table actually has, read from the open file.

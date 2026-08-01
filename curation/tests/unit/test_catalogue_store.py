@@ -12,11 +12,13 @@ answer on purpose rather than discover from a file that no longer loads.
 """
 
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
 
-from curation.persistence.catalogue import StorageError
+from curation.persistence.catalogue import StorageError, StoreMisuseError
+from curation.persistence.durable import SqliteDurableStore
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import (
     AcquisitionMethod,
@@ -48,7 +50,10 @@ _EXPECTED_SCHEMA = {
         "accepted_at",
         "created_at",
     },
-    "themes": {"id", "name", "description", "is_active", "created_at"},
+    # Widened 2026-07-31 with the per-theme rotation settings. This was the first
+    # change to a table files already on disk carried, so it is also what the
+    # store's column-widening step exists for.
+    "themes": {"id", "name", "description", "is_active", "created_at", "rotation_interval_seconds", "shuffle"},
     "sources": {
         "id",
         "artwork_id",
@@ -368,10 +373,9 @@ def test_a_fresh_catalogue_carries_exactly_one_directive_row(tmp_path):
 def test_an_earlier_catalogue_gains_the_tables_it_did_not_have(tmp_path):
     """Opening an older file adds the new tables without disturbing its rows.
 
-    Every entity added since that revision lives in a table of its own, so the
-    file grows rather than changing shape — which is why this is an open rather
-    than a migration. The first change that widens a table the file already has
-    will not have that luxury, and this test is what will say so.
+    Every entity added up to that point lived in a table of its own, so the file
+    grew rather than changing shape. The rotation settings below were the first
+    change that did not have that luxury.
     """
     path = tmp_path / "catalogue.sqlite"
     _write_legacy_catalogue(path)
@@ -390,6 +394,74 @@ def test_an_earlier_catalogue_gains_the_tables_it_did_not_have(tmp_path):
         assert catalogue.list_memberships("t1") == []
     finally:
         catalogue.close()
+
+
+def test_an_earlier_catalogue_gains_columns_added_to_a_table_it_already_had(tmp_path):
+    """The rotation settings widened `themes`, which the frozen DDL above created.
+
+    `CREATE TABLE IF NOT EXISTS` does nothing at all to a table that exists, so
+    without a widening step the new columns would never reach this file. The
+    failure that causes is quiet in the worst way: reads keep working, and the
+    first *write* of a theme is refused for naming a column the file lacks —
+    which reads as a code defect rather than as a file predating the column.
+    """
+    path = tmp_path / "catalogue.sqlite"
+    _write_legacy_catalogue(path)
+
+    catalogue = SqliteCatalogue(open_catalogue_file(path))
+    try:
+        # The theme the older revision wrote reads back, and its rotation
+        # settings are null — "inherit the global default", which is the correct
+        # answer for a theme written before the fields existed.
+        stored = catalogue.get_theme("t1")
+        assert stored.rotation_interval_seconds is None
+        assert stored.shuffle is None
+
+        # And the file now accepts a write that names them. Values no default
+        # could produce, so a column silently dropped on the way down would show.
+        catalogue.update_theme(replace(stored, rotation_interval_seconds=930, shuffle=True))
+        reread = catalogue.get_theme("t1")
+        assert reread.rotation_interval_seconds == 930
+        assert reread.shuffle is True
+    finally:
+        catalogue.close()
+
+
+def test_widening_survives_the_process_that_did_it(tmp_path):
+    """A migration held only in the connection that ran it would repeat forever."""
+    path = tmp_path / "catalogue.sqlite"
+    _write_legacy_catalogue(path)
+
+    first = SqliteCatalogue(open_catalogue_file(path))
+    first.update_theme(replace(first.get_theme("t1"), rotation_interval_seconds=930))
+    first.close()
+
+    reopened = SqliteCatalogue(open_catalogue_file(path))
+    try:
+        assert reopened.get_theme("t1").rotation_interval_seconds == 930
+    finally:
+        reopened.close()
+
+
+def test_a_not_null_column_with_no_default_is_refused_rather_than_half_applied(tmp_path):
+    """SQLite cannot add one to a table with rows, so the honest answer is to say so.
+
+    Guarding the boundary of what this widening can do. Applying the additions it
+    can and falling over on the one it cannot would leave a half-migrated file,
+    which is worse than an open that refuses and names the reason.
+    """
+    path = tmp_path / "catalogue.sqlite"
+    connection = sqlite3.connect(path)
+    try:
+        connection.executescript("CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY);")
+        connection.execute("INSERT INTO notes (id) VALUES ('n1')")
+        connection.commit()
+    finally:
+        connection.close()
+
+    widened = "CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, body TEXT NOT NULL);"
+    with pytest.raises(StoreMisuseError, match="NOT NULL with no default"):
+        SqliteDurableStore(path, widened)
 
 
 def test_the_file_itself_refuses_a_second_active_theme(tmp_path):

@@ -260,12 +260,11 @@ class ThemeMembership:
 class Theme:
     """A curator's grouping of works, and the unit the wall rotates through.
 
-    The per-theme rotation settings the data model also gives this entity —
-    interval and shuffle — are not here yet. They exist to be written into the
-    theme manifest, which is what drives the display timer, and nothing reads
-    them until that builder exists. Adding them now would be the first change
-    that widens a table an existing catalogue file already has, which is a
-    migration to write rather than a column to append quietly.
+    Rotation is host-driven — the TV's own slideshow can only be scoped to a
+    whole category, so timing is this product's data rather than the television's
+    setting. It is per-theme so that a contemplative theme can breathe while a
+    busy one moves; null on either field means "inherit the global default",
+    which is why neither is required.
     """
 
     id: str
@@ -273,6 +272,8 @@ class Theme:
     created_at: datetime
     description: str | None = None
     is_active: bool = False
+    rotation_interval_seconds: int | None = None
+    shuffle: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)

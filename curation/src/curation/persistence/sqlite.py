@@ -77,12 +77,17 @@ CREATE TABLE IF NOT EXISTS artworks (
 
 CREATE INDEX IF NOT EXISTS artworks_by_status ON artworks(status);
 
+-- `rotation_interval_seconds` and `shuffle` are nullable because null means
+-- "inherit the global default" rather than "unset": a theme that has never
+-- expressed a pace is a normal theme, not an incomplete one.
 CREATE TABLE IF NOT EXISTS themes (
-    id           TEXT PRIMARY KEY,
-    name         TEXT NOT NULL UNIQUE,
-    description  TEXT,
-    is_active    INTEGER NOT NULL,
-    created_at   TEXT NOT NULL
+    id                        TEXT PRIMARY KEY,
+    name                      TEXT NOT NULL UNIQUE,
+    description               TEXT,
+    is_active                 INTEGER NOT NULL,
+    created_at                TEXT NOT NULL,
+    rotation_interval_seconds INTEGER,
+    shuffle                   INTEGER
 );
 
 -- The display plane's sync target has to be unambiguous, so no two themes may
@@ -455,6 +460,11 @@ def _theme_row(theme: Theme) -> dict[str, Any]:
         "description": theme.description,
         "is_active": int(theme.is_active),
         "created_at": to_iso(theme.created_at),
+        "rotation_interval_seconds": theme.rotation_interval_seconds,
+        # None survives as null — "inherit the global default" — where int(None)
+        # would raise and bool(None) would silently write a decision the curator
+        # never made.
+        "shuffle": None if theme.shuffle is None else int(theme.shuffle),
     }
 
 
@@ -564,6 +574,8 @@ def _theme(row: Mapping[str, Any]) -> Theme:
         created_at=require_datetime(row["created_at"], "created_at"),
         description=row["description"],
         is_active=bool(row["is_active"]),
+        rotation_interval_seconds=row["rotation_interval_seconds"],
+        shuffle=None if row["shuffle"] is None else bool(row["shuffle"]),
     )
 
 
