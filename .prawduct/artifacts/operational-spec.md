@@ -100,8 +100,18 @@ process split is for on a single box.
 
 ## Configuration
 
-Environment variables via a `.env` file per plane, honouring the existing
-Critic-enforced norm that deployment values never live in source.
+Environment variables via **one `.env` at the repository root, read by both
+planes**, honouring the existing norm that deployment values never live in source.
+
+*(Settled 2026-08-01: this said "a `.env` file per plane", and what exists is one
+shared root file — `.env.example` carries both planes' values, and
+`curation/config.py`'s bare `load_dotenv()` resolves it by walking up from the
+module rather than from the working directory. One file is also the right answer
+rather than merely the built one: the two values that **must** agree across planes
+are `ART_ROOT` and the panel geometry, and two files are precisely how they come
+to disagree. This matters before the systemd units are written — a per-plane
+`.env` dropped beside a unit's `WorkingDirectory` is not the file the curation
+plane reads, so it would be edited and have no effect.)*
 
 **Two values must agree across both planes**, and both are silent failures when
 they do not.
@@ -186,7 +196,7 @@ that will actually get run rather than skipped.
 | Add disk headroom | Prune `tile-cache/` and `temp/` — working space, not steady-state storage, sized by the largest single work in flight |
 | Bound the journal | `SystemMaxUse=` in `journald.conf`. **Set this explicitly** — see below |
 | Patch curation's CPython | `uv python upgrade 3.14`, then rebuild the venv and restart. **`apt upgrade` does not do this** — it patches the display plane's 3.13 only |
-| Re-pair the TV | Rotates the pairing token. **Untrack `token_file` FIRST, then re-pair** — corrected 2026-07-20; the reverse order commits the new token. Note the untracking commit deletes the file on `git pull`, so TV auth is down until the re-pair — do both in one sitting, at the hardware. See `security-model.md` |
+| Re-pair the TV | Rotates the pairing token. Nothing to untrack first — `token_file` was untracked 2026-07-27 and the token now resolves under `ART_ROOT`, outside the checkout, so a `git pull` no longer deletes it and re-pairing needs no repo work at all. Just re-pair at the hardware. *(Updated 2026-08-01: this row still ordered an untracking step that is done, and carried a `git pull` hazard `security-model.md` withdrew on 2026-07-27.)* See `security-model.md` |
 
 ## Failure Recovery
 

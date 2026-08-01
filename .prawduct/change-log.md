@@ -123,7 +123,8 @@ of `CatalogueService` before the chunk that grows it; `DisplayService` now owns
 themes, membership, the standing directive and the manifest. Both it and
 `DiscoveryService` hold the catalogue and neither is held by it: acceptance is a
 promotion *into* the catalogue, a theme is a grouping *of* catalogue works. The
-suite is the evidence that nothing changed — 413 tests before, 413 after, with
+suite is the evidence that nothing changed — every test that ran before ran after,
+none added and none removed, with
 assertions untouched.
 
 **What landed.** The manifest builder: atomic temp-and-rename, schema major 1,

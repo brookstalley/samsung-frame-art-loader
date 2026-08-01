@@ -802,8 +802,9 @@ surface was reviewed on its own.
   collapse to one work. *(Operator decision 2026-08-01: the later record in file
   order wins and the earlier colour is **dropped**, not retained as superseded
   history — the report names the discarded value so the choice stays visible.)*
-  This also reconciles the "41 records but 46 files in `raw/`" note in learnings:
-  40 referenced files plus 6 unreferenced ones.
+  This also reconciles the "41 records but 46 files in the master tree" note in
+  learnings: 40 referenced files plus 6 unreferenced ones, under $ART_ROOT on the
+  Pi rather than anywhere in this checkout.
 
   **The corpus is complete on identity and incomplete on the label** — measured
   against the tracked `all.json`, not assumed. All 41 records carry `title`,

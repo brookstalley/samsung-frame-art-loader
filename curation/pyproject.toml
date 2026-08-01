@@ -13,7 +13,14 @@ dependencies = [
     # transitively via fastapi, but the declared set has to describe what the
     # code imports — fastapi is free to change how it vendors starlette.
     "starlette",
-    "uvicorn[standard]",
+    # Plain, not `[standard]`. That extra pulls httptools, uvloop, watchfiles,
+    # websockets and pyyaml — none imported by any module here, and the same
+    # ground on which pydantic and httpx were kept out below. It also carried a
+    # reload watcher this plane never starts and a websocket implementation the
+    # MCP transport does not use, while silently deciding the HTTP parser for an
+    # always-on-but-idle plane on a Pi. Dropped 2026-08-01; add it back with the
+    # named component and the measurement that wanted it.
+    "uvicorn",
     "mcp>=1.27",
     "python-dotenv",
 ]

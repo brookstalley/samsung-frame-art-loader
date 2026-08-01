@@ -71,8 +71,15 @@ janitor one.
 **`print()` is used for operational output throughout** (`ai.py`, `display.py`,
 others), producing journal lines with no level and no timestamp. Under systemd
 that means failures are present in the journal but unfilterable and unsortable —
-technically logged, practically invisible. Already a Critic-enforced preference;
-converted on touch.
+technically logged, practically invisible. *(Restated 2026-08-01: this said
+"Critic-enforced preference; converted on touch", and both halves changed on
+2026-07-27. It is now a **linter** rule — ruff `T20` in both `pyproject.toml`s —
+and its disposition for the eight legacy modules is a **dated waiver, not
+convert-on-touch**: they die with the 2024 modules at Chunk 20, because
+convert-on-touch had no mechanism behind it and all eight were touched without a
+single call being converted. Do not convert them against that waiver, and do not
+report their survival as a defect. The authority is `project-preferences.md`'s
+`T20` row.)*
 
 ## Correlation
 

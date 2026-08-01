@@ -17,9 +17,14 @@
 ### MCP tool surface
 
 - **Exists:** **yes**, as of 2026-07-27 — `curation/src/curation/mcp/`. All five
-  tool names are registered and served over streamable HTTP at `/mcp`;
-  `art_catalogue` answers `list` / `get` / `help`, the other four answer `help`
-  and return a teaching error for anything else.
+  tool names are registered and served over streamable HTTP at `/mcp`. Three now
+  carry real actions — `art_catalogue` (`list`, `get`), `art_theme` (`list`,
+  `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`) and
+  `art_display` (`status`, `sync`, `show_now`, `next`) — each alongside `help`.
+  Only `art_discovery` and `art_review` still answer `help` and return a teaching
+  error for anything else. **Read this as a live external surface, not a
+  placeholder:** an action added to any of the three is an addition to something
+  clients already call. `tools.py` is the roster; this row is a summary of it.
 - **Producer:** MCP tool bindings on the curation plane.
 - **Consumer:** **External** — Claude Code, the in-UI agent, any MCP client.
 - **Contract:** tool names, `action` values, argument schemas, and result shapes.
@@ -103,8 +108,12 @@
   ResolveRunWork join. A generic durable store sits under both adapters and is the
   only thing that opens the file, because acceptance writes across the two halves
   and has to commit once. All fifteen constraints, both discovery state machines
-  and startup reconciliation are enforced in the service layer. **Still to come:**
-  the per-theme rotation settings, whose only reader is the manifest builder.
+  and startup reconciliation are enforced in the service layer. The per-theme
+  rotation settings landed with the manifest builder that reads them, and were the
+  first change to a table that files on disk already carried — the durable store's
+  column-widening step exists because of them. **Still to come:**
+  `work_dedup_key`'s derivation, whose spike is scheduled; the column and the
+  suppression that reads it are in place and the caller supplies the key.
 - **Producer:** the persistence layer. **Currently stdlib `sqlite3` behind a
   Protocol**, not 3tears collections — see the build plan's deferral note. The
   Protocol is what keeps that swap a one-module change.

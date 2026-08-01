@@ -137,7 +137,7 @@ class ManifestBuild:
 def assess(inputs: WorkInputs) -> Exclusion | None:
     """Judge one work's catalogue readiness. `None` means it reaches the wall.
 
-    **"The fetch succeeded" is deliberately not a fifth check.** Holding an
+    **"The fetch succeeded" is deliberately not a sixth check.** Holding an
     original is what a succeeded fetch produces, so the condition is already
     carried by `NO_ORIGINAL`. Reading it as "the *last* fetch attempt succeeded"
     would take a work off the wall because a later re-acquisition failed while a

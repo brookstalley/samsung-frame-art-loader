@@ -65,6 +65,7 @@ class SeedNote(StrEnum):
     ORIGINAL_UNREADABLE = "original_unreadable"
     RENDITION_FILE_ABSENT = "rendition_file_absent"
     RENDITION_UNREADABLE = "rendition_unreadable"
+    RENDITION_STALE = "rendition_stale"
     DUPLICATE_RECORD_DISCARDED = "duplicate_record_discarded"
 
 
@@ -85,6 +86,9 @@ _DETAIL: Final[dict[SeedNote, str]] = {
     ),
     SeedNote.RENDITION_UNREADABLE: (
         "Its television render at {path} could not be read as a JPEG, so its size could not be measured."
+    ),
+    SeedNote.RENDITION_STALE: (
+        "Its television render at {path} was made from an earlier master and needs regenerating before it reaches the wall."
     ),
     SeedNote.DUPLICATE_RECORD_DISCARDED: (
         "The index describes this work {count} times; the last was taken and the earlier mat colour {discarded} was dropped."
@@ -345,6 +349,18 @@ def _attach_images(record: LegacyRecord, *, work_id: str, catalogue: CatalogueSe
     # is stamped with the hash of whatever master the work actually has.
     if catalogue.get_original(work_id) is None:
         return notes
+
+    # **A render already recorded is never recorded again.** Recording stamps it
+    # with the master's *current* hash, so re-recording one made from an earlier
+    # master would declare a superseded acquisition current — and the staleness
+    # rule that keeps it off the wall could then never fire for any work a seed
+    # run had touched. Leaving it alone lets it read stale, which is what it is.
+    held = [view for view in catalogue.list_renditions(work_id) if view.rendition.kind is RenditionKind.TV_DISPLAY]
+    if held:
+        if any(view.stale for view in held):
+            notes.append(_note(SeedNote.RENDITION_STALE, path=record.ready_path))
+        return notes
+
     catalogue.record_rendition(
         artwork_id=work_id,
         kind=RenditionKind.TV_DISPLAY,
@@ -356,15 +372,11 @@ def _attach_images(record: LegacyRecord, *, work_id: str, catalogue: CatalogueSe
 
 
 def _attach_mat(record: LegacyRecord, *, work_id: str, catalogue: CatalogueService) -> None:
-    """Record the mat colour, unless the work already carries exactly it.
+    """Record the mat colour the index carried.
 
-    Recording unconditionally would supersede the current choice with an
-    identical one on every run, so a catalogue's mat history would grow by a row
-    per work per run and record nothing.
+    Re-recording what is already in force is the service's own no-op, so a
+    second run of the same index leaves the history exactly where it was.
     """
-    current = catalogue.current_mat_color(work_id)
-    if current is not None and current.hex_rgb == record.mat_hex.strip().lower():
-        return
     catalogue.record_mat_color(artwork_id=work_id, hex_rgb=record.mat_hex, method=MatMethod.MANUAL, reason=MAT_REASON)
 
 

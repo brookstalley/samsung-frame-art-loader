@@ -304,6 +304,10 @@ class CatalogueService:
             # in the display service; none of them is duplicated here.
             directive = self._store.get_directive()
             if directive.pinned_work_id == artwork_id:
+                # Said out loud: a standing instruction disappearing is exactly the
+                # kind of silent state change that turns into "the wall stopped
+                # doing what I told it" with nothing to read back.
+                log.info("archiving %s withdrew the standing pin naming it", artwork_id)
                 store_write(self._store.set_directive, replace(directive, pinned_work_id=None))
         return archived
 
@@ -517,13 +521,27 @@ class CatalogueService:
         2024 pipeline silently substituted a darkened dominant colour whenever
         the vision model failed, so a hand-quality choice and a mechanical one
         looked identical in the data.
+
+        **Re-choosing what is already in force is a no-op, not a new row.** The
+        history exists so that "the new model picked a worse colour" is
+        answerable and reversible, and a row recording that nothing changed
+        answers nothing while making every real change harder to find. Anything
+        that runs repeatedly — a re-seed, a re-render — would otherwise grow the
+        history by a row per work per run. `method` is part of what "the same
+        choice" means: the same hex arrived at by a vision model rather than by
+        hand is a different fact about the colour, and worth keeping.
         """
         self._require_artwork(artwork_id)
+        resolved_hex = self._require_hex(hex_rgb)
+        resolved_method = require_member(method, enum=MatMethod, field="method")
+        current = self.current_mat_color(artwork_id)
+        if current is not None and current.hex_rgb == resolved_hex and current.method is resolved_method:
+            return current
         mat_color = MatColor(
             id=str(uuid.uuid4()),
             artwork_id=artwork_id,
-            hex_rgb=self._require_hex(hex_rgb),
-            method=require_member(method, enum=MatMethod, field="method"),
+            hex_rgb=resolved_hex,
+            method=resolved_method,
             chosen_at=datetime.now(UTC),
             is_current=True,
             lab_l=lab_l,

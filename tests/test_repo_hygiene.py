@@ -14,7 +14,11 @@ rather than vigilance.
 import pathlib
 import subprocess
 
-SOURCE_TREES = ("curation/src", "display/src", "tests")
+#: Every tree whose absence from a fresh clone would matter. `curation/tests`
+#: carries almost all of the curation plane's coverage, and a tree the guard does
+#: not walk is exactly the tree this guard was built for: the suite stays green
+#: locally while the clone and the Pi quietly lose it.
+SOURCE_TREES = ("curation/src", "curation/tests", "display/src", "tests")
 
 
 def _ignored(paths: list[pathlib.Path]) -> list[str]:

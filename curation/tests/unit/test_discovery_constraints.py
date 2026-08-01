@@ -189,6 +189,29 @@ def test_a_work_no_attempt_has_been_made_for_cannot_be_accepted(discovery, propo
         discovery.set_verdict(work.id, Verdict.ACCEPTED)
 
 
+def test_a_work_whose_only_image_was_turned_down_cannot_be_accepted(discovery, resolved_work):
+    """`resolution_status` still reads `resolved` here — only a re-search recomputes it.
+
+    Accepting on that would mint an artwork whose sole source is the scan its
+    curator turned down, with no primary source naming what produced the original,
+    because the rejection stood the selection down.
+    """
+    work = resolved_work()
+    discovery.reject_image(discovery.list_candidate_images(work.id)[0].id)
+
+    with pytest.raises(ServiceError, match="no image to accept it on"):
+        discovery.set_verdict(work.id, Verdict.ACCEPTED)
+
+
+def test_a_work_with_one_surviving_image_can_still_be_accepted(discovery, resolved_work, add_image):
+    """The guard is about there being something left, not about nothing having been rejected."""
+    work = resolved_work()
+    add_image(work)
+    discovery.reject_image(discovery.list_candidate_images(work.id)[0].id)
+
+    assert discovery.set_verdict(work.id, Verdict.ACCEPTED).verdict is Verdict.ACCEPTED
+
+
 def test_an_unresolved_work_can_still_be_rejected(discovery, propose):
     """It is unacceptable, not undecidable — a curator may close it out."""
     work = propose("A Work That Does Not Exist")

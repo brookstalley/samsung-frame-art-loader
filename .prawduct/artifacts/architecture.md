@@ -355,7 +355,7 @@ read by display.
 | `theme-manifest.json` | curation | display |
 | image tree (`raw/`, `ready/`, …) | curation | display |
 | `display-state.sqlite` | display | display |
-| `display-status.json` (heartbeat) | display | curation |
+| `display-heartbeat.json` (heartbeat) | display | curation |
 
 There is no entity written by both planes, so there is no coordination protocol,
 no conflict resolution, and no distributed-transaction problem. That is the payoff

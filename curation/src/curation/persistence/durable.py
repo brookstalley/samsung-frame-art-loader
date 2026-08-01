@@ -368,6 +368,17 @@ class SqliteDurableStore:
         rather than to infer here. A `NOT NULL` addition with no default is
         refused outright: SQLite cannot add one to a table with rows, so applying
         it would half-migrate the file.
+
+        **A third case is neither applied nor reported, and it is silent: a
+        `CHECK` or `UNIQUE` clause added to a column of a table that already
+        exists.** The comparison below is built from `PRAGMA table_info`, which
+        states a column's name, type, nullability and default and says nothing
+        about its constraints — so a constraint added later binds new files and
+        not old ones, with nothing to read back. Standing invariants are
+        deliberately carried by partial unique *indexes* instead, because
+        `CREATE UNIQUE INDEX IF NOT EXISTS` does reach an existing file; a
+        constraint that has to hold on every file belongs there rather than in a
+        column clause, and one added to a column needs a written migration.
         """
         intended = sqlite3.connect(":memory:")
         try:

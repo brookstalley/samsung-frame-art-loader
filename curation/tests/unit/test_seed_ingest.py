@@ -186,6 +186,32 @@ class TestSeedingTwice:
         assert [mat.hex_rgb for mat in history] == ["#1c1818", "#433735"]
         assert service.current_mat_color(first.works[0].work_id).hex_rgb == "#1c1818"
 
+    def test_a_replaced_master_leaves_its_old_render_reading_stale(self, service, record, tree, jpeg):
+        """Re-stamping here would declare a superseded acquisition current, and the
+        rule that keeps it off the wall could then never fire for a seeded work."""
+        entry = record()
+        root = tree(entry)
+        first = seed([entry], service, root)
+        work_id = first.works[0].work_id
+
+        jpeg(root / entry.raw_path, width=7000, height=5000)
+        second = seed([entry], service, root)
+
+        assert [view.stale for view in service.list_renditions(work_id)] == [True]
+        assert SeedNote.RENDITION_STALE in {item.note for item in second.works[0].notes}
+
+    def test_a_stale_render_keeps_the_moment_it_was_actually_made(self, service, record, tree, jpeg):
+        """Re-recording would move `generated_at` to now and claim a regeneration that did not happen."""
+        entry = record()
+        root = tree(entry)
+        first = seed([entry], service, root)
+        made_at = service.list_renditions(first.works[0].work_id)[0].rendition.generated_at
+
+        jpeg(root / entry.raw_path, width=7000, height=5000)
+        seed([entry], service, root)
+
+        assert service.list_renditions(first.works[0].work_id)[0].rendition.generated_at == made_at
+
     def test_a_render_that_arrives_later_is_picked_up(self, service, record, tree, jpeg):
         """The report names a missing render; putting the file there and re-running has to fix it."""
         entry = record()

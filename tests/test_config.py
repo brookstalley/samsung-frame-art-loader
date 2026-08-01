@@ -91,8 +91,18 @@ def test_no_source_file_carries_a_deployment_value(monkeypatch):
     # whose whole value is that it cannot be quietly satisfied must not have a
     # green path through checking zero files.
     repository_root = pathlib.Path(__file__).resolve().parent.parent
+    # Both planes, not just the 2024 modules at the root. The curation plane is
+    # precisely the code that has to run unchanged on the Pi and on a dev Mac
+    # once the legacy modules are retired, and this test is the enforcement
+    # artifact `project-preferences.md` names for that norm — so a plane it never
+    # walks is a norm nobody is checking.
     modules = sorted(repository_root.glob("*.py"))
+    for plane in ("curation/src", "display/src"):
+        modules.extend(sorted((repository_root / plane).rglob("*.py")))
     assert modules, f"expected the 2024 modules at {repository_root}; has the layout moved?"
+    assert any("curation/src" in str(path) for path in modules), (
+        f"expected the curation plane under {repository_root}/curation/src; has the layout moved?"
+    )
 
     offenders = []
     for path in modules:

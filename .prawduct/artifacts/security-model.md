@@ -76,23 +76,30 @@ fixture, or in a log line that could be pasted into an issue.** Deployment value
 already have a Critic-enforced norm keeping them out of source
 (`project-preferences.md`); secrets are the same rule with a worse failure mode.
 
-### `token_file` is a live, unremediated leak
+### `token_file` was a leak, and it is closed — 2026-07-27
 
-The Samsung TV pairing token has been committed since `e825276` and is tracked
-today. Issue #4 covers it.
+**Status: remediated.** The Samsung TV pairing token had been committed since
+`e825276`. It was untracked and gitignored in `ba007cd` (issue #4, closed), and
+the operator confirmed **the leaked token had already expired**, so the re-pair
+that rotation would normally require was not needed. Both halves matter: untracking
+alone would not have closed it.
 
-**Untracking it does not fix it.** The token remains in git history, and that
-history is public and cloned. **The remediation for a leaked credential is
-rotation, not deletion** — the token must be invalidated by re-pairing against the
-TV, which requires physical access to the hardware. Until that happens the leak is
-live, and no amount of `.gitignore` work changes that.
+**The residue is honest and permanent.** The expired token is still in git history,
+which is public and cloned. That is not fixable by any future commit and does not
+need to be: an expired LAN-scoped token authenticates nothing.
+
+**The rule this leaves behind, which still binds.** The remediation for a leaked
+credential is *rotation*, not deletion — the sequence below is the one to follow
+if a **live** token is ever committed again. It is kept because the reasoning is
+what makes the next incident cheap, not because this incident is open.
 
 **Honest severity: low, and deliberately not inflated.** The token is LAN-scoped
 — an attacker needs to already be on the household network to use it, and an
 attacker already on the household LAN can reach the TV's pairing flow anyway. The
-realistic worst case is someone changing what is on a television. It is recorded
-as unfixed rather than quietly downgraded because "we decided it was fine" and "we
-forgot" look identical in six months.
+realistic worst case was someone changing what is on a television. While it was
+open it was recorded as unfixed rather than quietly downgraded, because "we decided
+it was fine" and "we forgot" look identical in six months — and it is now recorded
+as closed with the evidence, for the same reason.
 
 **Order of operations — CORRECTED 2026-07-20 (Critic R-1). Untrack first, then
 rotate.** This artifact previously prescribed the reverse, and that order creates a
@@ -106,9 +113,10 @@ prose, which this section already carries. It is not worth a second exposure.
 
 1. **`git rm --cached token_file`, add it to `.gitignore`, commit.** Costs nothing
    in security terms — the old token is already public in history — and guarantees
-   the replacement is never tracked.
+   the replacement is never tracked. *(Done 2026-07-27.)*
 2. **Re-pair against the TV** (physical access required). The new token is written
-   to an untracked path and never enters git.
+   to an untracked path and never enters git. *(Not needed for this incident: the
+   leaked token was confirmed already expired. Required for any live one.)*
 
 > **The operational hazard this note described is gone (2026-07-27), and the
 > remediation sequence it prescribed must not be followed.** It read: `token_file`

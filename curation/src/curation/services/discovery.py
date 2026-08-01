@@ -692,13 +692,22 @@ class DiscoveryService:
         artwork with no source, and so nothing to acquire and no way to answer
         "can this be re-acquired from scratch".
         """
-        if work.resolution_status is not ResolutionStatus.RESOLVED:
+        # Asked of the images rather than of `resolution_status`, which answers a
+        # different question: only a resolution attempt recomputes that column, so
+        # turning down the last surviving instance leaves it reading `resolved`
+        # until the next re-search. Accepting on it would mint a work whose sole
+        # source is the scan its curator turned down — and with no primary source
+        # naming which one produced the original, because the rejection stood the
+        # selection down.
+        images = self._store.list_candidate_images(work.id)
+        if not [image for image in images if image.rejected_at is None]:
+            cause = "every instance found for it has been rejected" if images else f"it is {work.resolution_status}"
             raise ServiceError(
-                f"Candidate work {work.id!r} is {work.resolution_status}, so there is no image to accept it on. "
+                f"Candidate work {work.id!r}: {cause}, so there is no image to accept it on. "
                 "Re-search it with resolve_images, or reject it."
             )
         artwork = self._catalogue.add_artwork(title=work.proposed_title)
-        for image in self._store.list_candidate_images(work.id):
+        for image in images:
             self._catalogue.add_source(
                 artwork_id=artwork.id,
                 url=image.url,
