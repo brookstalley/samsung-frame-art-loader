@@ -8,6 +8,44 @@ Entries older than 2026-07-31 still keep their evidence inline in `learnings.md`
 That is the shape the record linter asks them to leave, and moving them is its own
 piece of work rather than a side effect of adding a rule — tracked as issue #26.
 
+## A worked example with two cases checks itself, and nobody runs it
+
+An artifact that illustrates a rule twice has stated the rule three times: once in
+prose and once per case. Deriving the rule from one case and evaluating the other
+is a free consistency check on the specification — and it is not a check anyone
+performs, because a worked example reads as evidence rather than as a claim.
+
+**Worked instance (2026-08-01).** `nonfunctional-requirements.md` § "The mat is
+geometric, and the floor is physical" specifies the mat in inches with "the bottom
+margin weighted larger than the top", and works the geometry twice — a 42" panel
+and a 75" one. It gives no weighting factor, which is why this surfaced at all: a
+box height cannot be computed from a direction, so the number had to come from
+somewhere. Reading it back out of the 42" row gives 1.15, and that row then
+reproduces exactly, to the pixel, including the rounding order (whole-pixel mat
+first, bottom derived from the rounded top — carrying fractions to the end moves
+the answer). Applying the same 1.15 to the 75" row gives 3546 x 1844 where the
+artifact says 3546 x 1723. Its width matches and its height does not; 1723
+implies a bottom weighting of 1.97.
+
+**So at most one of the two rows was ever right, and the table had sat there since
+July looking like arithmetic somebody had done.** It was cited as the
+specification of an unbuilt component, which is the worst case: the next builder
+follows it faithfully.
+
+**Two things this is not.** It is not "check the maths" — the arithmetic in each
+row is individually plausible and the error is only visible *across* rows. And it
+is not caught by the sweep rules elsewhere in this file: nothing was amended, so
+there was no decision to propagate and no claim to retire.
+
+**The check, and it costs minutes:** when an artifact demonstrates a rule on more
+than one case, derive the rule from one and evaluate the others against it. Where
+the rule is arithmetic, do it in code and leave the code behind as a test keyed on
+the artifact's own published figures — this table is now computed by
+`Settings.tv_artwork_box` and pinned by `curation/tests/unit/test_config.py`, so
+the artifact and the implementation can no longer drift apart in silence. A single
+worked example has no such property and is worth correspondingly less; two is a
+constraint.
+
 ## An idempotence test that holds the inputs still tests the wrong half
 
 Re-running is only interesting because something may have changed since the last run; a test that re-runs over identical inputs proves the cheap half and leaves the reason for re-running uncovered.
@@ -57,6 +95,37 @@ rather than vigilance.
 literals and globs (`glob(`, `rglob(`, `parent.parent`, tuple-of-trees constants)
 and ask of each whether it reaches the new code. Then prove it — plant the exact
 violation the guard names in a file under the new tree and watch it fail.
+
+**Second recurrence, 2026-08-01, and it widens the rule: a guard can narrow
+itself.** The first two instances narrowed because the repo grew around a scope
+written earlier. These two narrowed on their own, with no repo change involved,
+which means "check the guards when you add a tree" is a necessary habit and not a
+sufficient one.
+
+- A new test refused any colour written outside the stylesheet's token blocks. It
+  cut those blocks out with two non-greedy regexes, and **the second one ate
+  three quarters of the file**: the `:root` pattern removed the dark scheme's
+  *nested* `:root` as well as the top-level one, leaving that media query with a
+  single closing brace, so the pattern hunting for `}` `}` ran on to the end of
+  the stylesheet. Every component rule went unscanned. Planting a literal
+  `#ff0000` in a rule reported clean.
+- A new test asserted that a failed thumbnail write leaves no partial file. Its
+  fixture fed the encoder a file that is not an image — so `Image.open` raised
+  *before* `save` had created anything, and the test passed with the cleanup
+  deleted outright. **The fixture could not reach the guard the test was named
+  after.**
+
+Both were found by taking the `test-evidence record` prompt literally — "name the
+change that would flip it, and confirm the fixture REACHES the subject" — rather
+than by review.
+
+**What generalises: a guard's effective scope is invisible in its result.** Green
+means "nothing was found in whatever I looked at", and the size of *whatever I
+looked at* is exactly the thing no assertion states. So when a check computes its
+own scope — a regex strip, a glob, a file list, a fixture that has to reach a
+branch — assert the scope as well as the finding. The colour check now asserts
+that what it scanned is more than half the stylesheet and contains six named
+selectors; that second assertion is what makes the first one mean anything.
 
 ## Prose that ships to a caller is behaviour, and needs a test aimed at it
 

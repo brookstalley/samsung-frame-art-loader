@@ -341,6 +341,13 @@ matched?" and search for *that*. Roster/invariant checks (is the set complete? d
 all references resolve to something that exists?) are good second methods because
 they test the outcome rather than the transformation.
 
+## A worked example with two cases checks itself, and nobody runs it
+
+**When an artifact demonstrates a rule on more than one case, derive the rule from
+one case and evaluate the others against it.** The example reads as evidence, so
+nobody treats it as a claim — and a specification error can sit in one for months,
+cited as authority by the chunk that has to build against it.
+
 ## An idempotence test that holds the inputs still tests the wrong half
 
 ## Adding code to a repo means asking which guards were scoped to the old shape

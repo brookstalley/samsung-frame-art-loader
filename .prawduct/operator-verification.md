@@ -42,10 +42,12 @@ worth seeing with both states in it.
    margins are a real cost and a different aspect box would trade differently.
 2. **The serif for work titles** against a sans for chrome. Intended as a museum
    label; it may read as fussy at grid size.
-3. **The badge row on each card** — fit verdict and image source. Two badges per
-   card is a lot of furniture under a picture. They are there because a thumbnail
-   cannot convey resolution, so "would show at 15.2 inches" is the number a
-   curator actually judges by.
+3. **The badge row on each card** — fit verdict and image source, plus a third
+   on an archived work. Two or three badges is a lot of furniture under a
+   picture. They are there because a thumbnail cannot convey resolution, so
+   "would show at 15.2 inches" is the number a curator actually judges by, and
+   because an archived work that looked identical to a live one would be the kind
+   of silence this product exists to refuse.
 4. **`no_rendition` and the other reasons appear as the raw domain words**, with
    the sentence beside them. Deliberate: the tool surface returns the same words,
    so a curator and an agent share one vocabulary. It reads slightly machine-y.

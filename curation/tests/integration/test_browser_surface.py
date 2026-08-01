@@ -414,6 +414,35 @@ class TestThumbnailRevalidation:
         assert response.status_code == 200
         assert response.content != b""
 
+    def test_a_wildcard_validator_matches_whatever_is_held(self, http, hold):
+        """`*` matches any current representation, per RFC 9110.
+
+        By the time the route answers, the file exists — so there is a current
+        representation and the answer is 304. Tested because the first version of
+        this helper documented the case and did not implement it.
+        """
+        artwork = hold("Automat")
+        http.get(f"/api/works/{artwork.id}/thumbnail")
+
+        response = http.get(f"/api/works/{artwork.id}/thumbnail", headers={"If-None-Match": "*"})
+        assert response.status_code == 304
+        assert response.content == b""
+
+    def test_a_weak_validator_matches_the_strong_tag_it_was_derived_from(self, http, hold):
+        """A conditional GET performs a weak comparison, so `W/"x"` and `"x"` are one tag."""
+        artwork = hold("Automat")
+        etag = http.get(f"/api/works/{artwork.id}/thumbnail").headers["etag"]
+
+        response = http.get(f"/api/works/{artwork.id}/thumbnail", headers={"If-None-Match": f"W/{etag}"})
+        assert response.status_code == 304
+
+    def test_an_unrelated_validator_gets_the_image(self, http, hold):
+        """The negative case, so the three above are not passing for the wrong reason."""
+        artwork = hold("Automat")
+        response = http.get(f"/api/works/{artwork.id}/thumbnail", headers={"If-None-Match": '"not-this-one"'})
+        assert response.status_code == 200
+        assert response.content.startswith(b"\xff\xd8")
+
     def test_a_browser_offering_several_validators_still_matches(self, http, hold):
         """A client that has seen two versions of a URL sends both tags."""
         artwork = hold("Automat")

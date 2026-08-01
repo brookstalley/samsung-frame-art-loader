@@ -334,6 +334,17 @@ h2 {
   color: var(--text-muted);
 }
 
+/* Catalogue status is a different axis from display fit, and it gets its own
+   block rather than borrowing `below_floor`'s. Sharing one would have made an
+   archived work and a too-small work paint identically, and would have made a
+   later change to one of them silently change the other. */
+.badge-archived {
+  border-style: solid;
+  border-width: 2px;
+  background: var(--surface-0);
+  font-weight: 600;
+}
+
 /* -- tables ---------------------------------------------------------------- */
 
 table {

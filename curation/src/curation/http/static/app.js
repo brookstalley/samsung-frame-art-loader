@@ -146,7 +146,10 @@ function sourceBadge(work) {
  * work that is on the wall. */
 function statusBadge(work) {
   if (work.status === "accepted") return null;
-  return el("span", { class: "badge badge-below_floor" }, [
+  // Its own class, not `below_floor`'s: catalogue status and display fit are
+  // unrelated axes, and sharing a class would make an archived work and a
+  // too-small work paint identically.
+  return el("span", { class: "badge badge-archived" }, [
     el("span", { class: "glyph", text: "⊘", "aria-hidden": true }),
     el("span", { text: work.status }),
   ]);

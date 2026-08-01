@@ -208,22 +208,35 @@ def get_thumbnail(request: Request, artwork_id: str) -> Response:
     headers = {"Cache-Control": THUMBNAIL_CACHE_CONTROL}
     response = FileResponse(path, media_type="image/jpeg", headers=headers, stat_result=path.stat())
     etag = response.headers.get("etag")
-    if etag is not None and etag in _etags(request.headers.get("if-none-match")):
+    if etag is not None and _matches(request.headers.get("if-none-match"), etag):
         return Response(status_code=304, headers={**headers, "ETag": etag})
     return response
 
 
-def _etags(header: str | None) -> frozenset[str]:
-    """The tags in an `If-None-Match` header.
+def _matches(header: str | None, etag: str) -> bool:
+    """Whether an `If-None-Match` header already covers this thumbnail.
 
-    A list, not a single value: a browser that has seen two versions of a URL may
-    send both, and comparing the raw header against one tag would then miss a
-    match it was given. `*` matches anything the server holds.
+    Three cases, all of them real rather than defensive:
+
+    * **A list of tags.** A client that has seen two versions of a URL may offer
+      both, so comparing the raw header against one tag would miss a match it was
+      handed.
+    * **`*`.** RFC 9110 makes it match any current representation. By the time
+      this is asked the file exists — `thumbnail()` returned its path — so there
+      is one, and the answer is yes.
+    * **The weak marker.** `W/"abc"` and `"abc"` are the same tag for a weak
+      comparison, which is what a conditional GET performs.
+
+    Stated as three cases because the previous version described the `*` one in
+    its docstring and did not implement it — which is exactly the defect the
+    conditional check above exists to fix, one function later.
     """
     if not header:
-        return frozenset()
-    candidates = {tag.strip().removeprefix("W/") for tag in header.split(",")}
-    return frozenset(candidates)
+        return False
+    offered = {tag.strip() for tag in header.split(",")}
+    if "*" in offered:
+        return True
+    return etag in {tag.removeprefix("W/") for tag in offered}
 
 
 # -- shaping ------------------------------------------------------------------

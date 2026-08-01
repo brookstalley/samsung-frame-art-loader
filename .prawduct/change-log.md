@@ -91,7 +91,10 @@ the masters run to 47 megapixels and 40 MB. The downscaled copies are recorded a
 `RenditionKind.THUMBNAIL`, which had been in the data model since the catalogue was
 designed with nothing producing it, so they inherit the staleness rule that already
 governs the television render instead of needing a second one. A replaced master
-therefore regenerates the thumbnail rather than serving the previous acquisition.
+therefore regenerates the thumbnail rather than serving the previous acquisition —
+and because that is only affordable if revalidating is cheap, the route answers a
+conditional request with an empty 304 rather than the 1.28 MB below. `FileResponse`
+sets an `ETag` and never reads one, so that comparison is the handler's own.
 They live in a new `thumbs/`, deliberately **not** `tv-thumbs/` — that directory
 holds images downloaded from the television keyed by `tv_content_id`, per-device
 state of exactly the class this catalogue was rebuilt to keep out.
@@ -108,12 +111,33 @@ because "AA verified" is exactly the sentence that is true the day it is written
 false three edits later. Colour is never the sole carrier of state: every badge
 pairs a distinct glyph with a distinct word.
 
+**Resolving the review's own findings changed the surface further**, and the
+record says so rather than describing the first version of it. The client now
+pages the catalogue to the end instead of stopping at the API's 100-work cap —
+which mattered because the theme picker shared that cap, so work 101 could not be
+put in a theme at all and nothing said why. An archived work carries a badge of
+its own, since the catalogue lists accepted and archived together and a card that
+showed no difference was the same silence one screen earlier. A thumbnail that
+fails to load falls back to the reason rather than a blank tile, and navigating
+moves focus into the new view, without which the surface is not keyboard-navigable
+at all.
+
 **Running it found what the tests could not**, for the second chunk running. Two
 defects were visible in the first screenshot and in no test: `replaceChildren`
 coerces a null to the string "null" and printed the word on the page, and every
 image tile silently returned to the shape of its own picture because a replaced
 child at `height: 100%` inside a box sized by `aspect-ratio` is circular and the
 browser resolves it by letting the content win.
+
+**The verify pass then caught the same defect class inside the fix for it.**
+R-4's remedy added an `If-None-Match` helper whose docstring described `*`
+handling it did not implement — a false comment, one function after the one a
+false comment had just been found in. Implemented and tested rather than deleted
+from the docstring. Two notes were also taken: the archived badge was borrowing
+the below-floor verdict's CSS class, so two unrelated states painted identically
+and would have drifted together; and the client's new paging loop is control flow
+no suite executes, which is filed as #30 rather than accepted, because Chunk 19
+adds five more stateful screens and several of them spend money.
 
 **One divergence was introduced and caught during the build.** Writing the browser's
 "3 of 6 works are on the wall" sentence created a second hand-written version of the

@@ -160,6 +160,17 @@ def test_the_rules_that_check_was_run_against_are_most_of_the_stylesheet():
         assert selector in COMPONENT_RULES, f"{selector} is not in the text the colour check reads"
 
 
+def test_every_state_a_badge_can_carry_has_a_block_of_its_own():
+    """Two states sharing a class paint identically and drift together.
+
+    An archived work and a below-floor work are unrelated judgements — one is
+    catalogue status, the other is display fit — so a colour change intended for
+    one must not silently reach the other.
+    """
+    for state in ("native", "matted_small", "below_floor", "unknown", "archived"):
+        assert f".badge-{state}" in COMPONENT_RULES, f"the {state} badge has no block of its own"
+
+
 def test_the_stylesheet_the_test_read_is_the_one_the_server_serves():
     """Guards against this file quietly checking a stylesheet nothing sends.
 
