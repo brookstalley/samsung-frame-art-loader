@@ -1,6 +1,12 @@
 # Learnings
 
-Accumulated wisdom from building this product.
+Accumulated wisdom from building this product. Each `## ` heading states a rule.
+
+**Evidence lives in `learnings-detail.md`, under the identical heading** — the
+worked instances, the recurrence tallies, and what actually happened. A heading
+here with no body under it is not an entry that lost its evidence; it is one whose
+evidence is in that file. Entries written before 2026-07-31 still carry theirs
+inline, which the record linter flags; moving them is tracked as issue #26.
 
 ## Retiring a claim is a repo-wide grep, not a local edit
 

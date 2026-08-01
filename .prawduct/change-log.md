@@ -48,6 +48,68 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-07-31: A theme reaches the wall, and says what did not come with it
+
+<!-- prawduct: chunks=09 | status=shipped | scope=v1-build -->
+
+**Why:** The inter-plane contract's producing half. Curation had a full data model
+and no way to tell the display plane anything, so nothing the catalogue held could
+reach a television. This chunk builds the manifest that will carry it, the theme
+operations that shape it, and the directive that steers it.
+
+**The carried finding was closed first, as its own commit** — the third time that
+pattern has paid. 08B's review asked for the theme and display concern to come out
+of `CatalogueService` before the chunk that grows it; `DisplayService` now owns
+themes, membership, the standing directive and the manifest. Both it and
+`DiscoveryService` hold the catalogue and neither is held by it: acceptance is a
+promotion *into* the catalogue, a theme is a grouping *of* catalogue works. The
+suite is the evidence that nothing changed — 413 tests before, 413 after, with
+assertions untouched.
+
+**What landed.** The manifest builder: atomic temp-and-rename, schema major 1,
+rotation settings with a deployment fallback, label text but never label geometry,
+and the directive block carried forward unchanged so a rebuild never reads as an
+advance. `art_theme` and `art_display` live with thirteen actions. The TV panel's
+physical geometry — never the e-paper panel's — enters configuration and is logged
+at startup with the resolved `ART_ROOT`.
+
+**The half that matters is the exclusion report.** Membership in the manifest *is*
+catalogue readiness, which is what makes "the wall selects a work it cannot render"
+structurally impossible; the price is that a work can sit in a theme and never
+appear. So the build names every work it left out, with a cause a curator can act
+on. A builder returning only a list would have passed every count assertion in the
+suite and still been an incomplete implementation of the design.
+
+**Three things the artifacts had left open, settled where the rule lives.** The
+global rotation default is deployment config at 180s on shuffle, carried forward
+from what the 2024 wall runs today rather than chosen. "The fetch succeeded" is not
+a separate readiness check, because holding an original is what a succeeded fetch
+produces — the other reading would take a work off the wall for a failed
+*re*-acquisition. And activating a theme publishes it, which `api-contract.md`
+already said and the first implementation did not do.
+
+**The store gained a real widening step.** The rotation columns were the first
+change to a table that files on disk already carry, and `CREATE TABLE IF NOT
+EXISTS` does nothing at all to a table that exists. The intended shape is learned
+by running the same DDL against an in-memory database, so SQLite parses the schema
+rather than this code. Only additions; a `NOT NULL` addition with no default is
+refused outright rather than half-applied.
+
+**Four review rounds, and the last two were about prose that ships.** Two tool tips
+described behaviour the service no longer had — `activate` said it did not publish,
+`show_now` said only archived works were refused — and neither was visible to a
+contract suite that pinned names, schemas and descriptions but never tip text. The
+second fix is the recurrence rather than the instance: a table keyed on
+`ExclusionReason` now asserts every cause is named in the tip and that its tokens
+are distinct, and the service is driven to prove each documented refusal is one the
+code actually makes. The first version of that guard shared a word between two
+reasons and was green for a case it did not cover, which the next round caught.
+
+`show_now` also widened to refuse any work that could not reach the wall, not only
+an archived one: pinning an unrendered work wrote a directive naming something the
+manifest does not carry, answered "the directive is written", and the wall never
+moved.
+
 ## 2026-07-27: The discovery pipeline — five entities, two state machines, one repair
 
 <!-- prawduct: chunks=08B | status=shipped | scope=v1-build -->

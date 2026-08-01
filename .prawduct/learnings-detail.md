@@ -6,7 +6,7 @@ carries the rule, this carries what happened.
 
 Entries older than 2026-07-31 still keep their evidence inline in `learnings.md`.
 That is the shape the record linter asks them to leave, and moving them is its own
-piece of work rather than a side effect of adding a rule.
+piece of work rather than a side effect of adding a rule — tracked as issue #26.
 
 ## Prose that ships to a caller is behaviour, and needs a test aimed at it
 

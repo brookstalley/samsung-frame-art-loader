@@ -2293,7 +2293,7 @@ views_enabled: true
 # Do not hand-edit — overwritten on next regen.
 scope_rollups:
   v1-build:
-    chunks: ["01", "02", "06", "07", "07B", "08A", "08B"]
+    chunks: ["01", "02", "06", "07", "07B", "08A", "08B", "09"]
     releases: []
 
 # =============================================================================
