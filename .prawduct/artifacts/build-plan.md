@@ -953,14 +953,17 @@ discovery build against these surfaces.
   (manifests to read), 10 (a seeded catalogue, so the wall has content to
   rotate), 11 (isolation test now guards this plane as it grows)
 - **Carried from Chunk 09 — what an unsatisfiable pin does.** `show_now` refuses
-  an *archived* work, which `data-model.md` specifies. It does **not** refuse a
-  work that is simply absent from the active theme's manifest, because nothing
-  specifies that and inventing a membership rule at the writing end would be
-  designing display's behaviour from the wrong plane. So a pin naming a work the
-  manifest does not carry is reachable, and this chunk is where it is answered:
-  display should log one WARNING and continue rotating rather than stall or
-  crash, by the same posture as a missing render file. Settle it here and say so
-  in `api-contract.md` § How `art_display` reaches the display plane.
+  any work that is not *displayable* (widened at build 2026-07-31; see
+  `api-contract.md`). It does **not** check *theme membership*, so a perfectly
+  ready work that is simply not in the active theme can be pinned and the
+  manifest's `entries` will not contain it. **That is the default path, not a
+  rare race** — it is available on every call, and Chunk 09's own
+  `test_the_directive_reaches_the_manifest` demonstrates it. The membership check
+  was deliberately not added at the writing end, because only the display plane
+  can decide what to do with a pin it cannot resolve. Answer it here: log one
+  WARNING and continue rotating rather than stall or crash, by the same posture as
+  a missing render file. Then say so in `api-contract.md` § How `art_display`
+  reaches the display plane.
 - **Artifacts consumed:** `architecture.md` (§ The theme manifest, § Failure
   Modes, § display component), `data-model.md` (§ Rotation is host-driven,
   TvBinding), `observability-strategy.md` § What Each Failure Looks Like

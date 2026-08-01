@@ -175,9 +175,17 @@ to break, arriving through the one action that did not consult readiness. So the
 refusal applies the whole readiness rule and returns the same sentence the
 manifest build would have given, which tells the curator what to fix.
 
-This does not discharge the display plane's obligation. Readiness can change
-between a pin being written and the manifest being read, so an unsatisfiable pin
-is still reachable; Chunk 12 defines what display does with one.
+**This does not discharge the display plane's obligation, and the residual is the
+default path rather than a rare race.** `show_now` checks *readiness*, not theme
+membership: a perfectly displayable work that simply is not in the active theme
+can be pinned, and the manifest's `entries` will not contain it. That is available
+on every call, not a timing window. (Readiness changing between the pin and the
+read is a second, rarer route to the same state.)
+
+The membership check is deliberately **not** added here: only the display plane
+can decide what to do with a pin it cannot resolve, and choosing at the writing
+end would design that behaviour from the wrong plane. Chunk 12 settles it — log
+one WARNING and carry on rotating, by the same posture as a missing render file.
 
 Two consequences worth stating because they surprise:
 

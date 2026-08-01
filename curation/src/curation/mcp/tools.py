@@ -277,7 +277,9 @@ ART_DISPLAY: Final = ToolRecord(
             example="art_display(action='show_now', artwork_id='<an artwork_id>')",
             params=(Param(name="artwork_id", type="string", description="The work to jump to.", required=True),),
             tips=(
-                "An archived work is refused rather than pinned, because it is out of circulation.",
+                "Any work that could not reach the wall is refused rather than pinned — archived, "
+                "or missing its master image, mat colour or television render. The refusal names "
+                "which, in the same words art_display(action='sync') uses for an excluded work.",
                 "This writes the directive; it does not confirm the television changed.",
             ),
         ),

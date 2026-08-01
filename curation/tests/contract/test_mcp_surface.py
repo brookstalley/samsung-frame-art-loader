@@ -11,8 +11,10 @@ import pytest
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+from curation.manifest.builder import ExclusionReason
 from curation.mcp.registry import DESCRIPTION_BUDGET_BYTES
-from curation.mcp.tools import TOOLS
+from curation.mcp.tools import ART_DISPLAY, TOOLS
+from curation.services.errors import ServiceError
 
 #: A regression here silently renames the entire MCP tool surface for every
 #: client. Tool names are a frozen contract: never renamed, never removed.
@@ -104,3 +106,94 @@ async def test_every_description_lists_the_actions_the_schema_allows(tools):
     for name, tool in tools.items():
         for action in tool.inputSchema["properties"]["action"]["enum"]:
             assert action in tool.description, f"{name} description omits {action!r}"
+
+
+# -- a tip is contract text, and must not describe a narrower rule than the code --
+#
+# Two tips in two consecutive review rounds claimed behaviour the service did not
+# have: `activate` said it did not publish when it does, and `show_now` said only
+# archived works were refused after the refusal widened. Both were invisible to
+# the assertions above, which pin schema and description but never tip text — and
+# the tip is the sentence a model reads before deciding whether to call.
+
+#: The word a caller reading the tip would recognise, per cause `show_now` can
+#: refuse for. Deliberately not the whole sentence: the tip summarises, and
+#: pinning it verbatim would make every wording improvement a failure. What must
+#: hold is that no cause is missing from the tip altogether.
+_SHOW_NOW_TIP_PREPARES_FOR = {
+    ExclusionReason.ARCHIVED: "archived",
+    ExclusionReason.NO_ORIGINAL: "master image",
+    ExclusionReason.NO_MAT_COLOR: "mat colour",
+    ExclusionReason.NO_RENDITION: "render",
+    ExclusionReason.STALE_RENDITION: "render",
+}
+
+
+def _show_now_tips() -> str:
+    action = next(entry for entry in ART_DISPLAY.actions if entry.name == "show_now")
+    return " ".join(action.tips).lower()
+
+
+def test_every_reason_show_now_can_refuse_for_is_named_in_its_tip():
+    """A new exclusion cause must not silently outrun the text that documents it.
+
+    This fails the moment someone adds a sixth `ExclusionReason`, which is the
+    point: readiness widened once already and the tip did not follow.
+    """
+    missing = [reason for reason in ExclusionReason if reason not in _SHOW_NOW_TIP_PREPARES_FOR]
+    assert not missing, f"exclusion reasons with no entry in this table: {missing}"
+
+    tips = _show_now_tips()
+    for reason, expected in _SHOW_NOW_TIP_PREPARES_FOR.items():
+        assert expected in tips, f"the show_now tip does not prepare a caller for {reason.value!r}"
+
+
+@pytest.mark.parametrize(
+    ("reason", "unready"),
+    [
+        (ExclusionReason.NO_ORIGINAL, {"original": False}),
+        (ExclusionReason.NO_MAT_COLOR, {"mat": False}),
+        (ExclusionReason.NO_RENDITION, {"rendition": False}),
+    ],
+)
+def test_each_documented_refusal_is_one_the_service_actually_raises(display, ready_work, reason, unready):
+    """The other half: the tip must not promise a refusal the code does not make.
+
+    Driving the real service rather than reading the table above, so this pins
+    tip text to behaviour rather than to itself.
+    """
+    work = ready_work(**unready)
+
+    with pytest.raises(ServiceError) as refused:
+        display.show_work_now(work.id)
+
+    assert _SHOW_NOW_TIP_PREPARES_FOR[reason] in str(refused.value).lower()
+
+
+def test_an_archived_work_is_refused_in_the_words_the_tip_uses(service, display, ready_work):
+    work = ready_work()
+    service.archive_artwork(work.id)
+
+    with pytest.raises(ServiceError) as refused:
+        display.show_work_now(work.id)
+
+    assert "archived" in str(refused.value).lower()
+
+
+def test_a_stale_render_is_refused_in_the_words_the_tip_uses(service, display, ready_work):
+    work = ready_work()
+    source = service.list_sources(work.id)[0]
+    service.record_original(
+        artwork_id=work.id,
+        source_id=source.id,
+        path=f"raw/{work.id}.tif",
+        width=6000,
+        height=4000,
+        byte_size=90_000_000,
+        content_hash="a-later-acquisition",
+    )
+
+    with pytest.raises(ServiceError) as refused:
+        display.show_work_now(work.id)
+
+    assert "render" in str(refused.value).lower()
