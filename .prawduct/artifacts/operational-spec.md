@@ -129,6 +129,16 @@ Panel geometry was briefly listed as a second shared value; it is not, because
   wall, so curation needs it to judge whether a source is adequate, to show the
   curator what a work would look like, and to compose the mat. Display receives the
   `tv_display` rendition with the mat already in it and never needs the TV's size.
+
+  *(**Three values joined it on 2026-08-01** and are curation-only for the same
+  reason: `MAT_WIDTH_INCHES`, `MAT_BOTTOM_WEIGHT` and `RESOLUTION_FLOOR_INCHES`.
+  Panel geometry alone does not fix the artwork box — the mat has to be
+  subtracted from it — so until these were configurable the box could not be
+  constructed at all, and the readiness verdict that depends on it had been built
+  and tested with no production caller. Each defaults to the reference
+  deployment's figure, and the resolved box is logged at startup beside the panel
+  it came from, because a wrong mat is otherwise visible only as works being
+  labelled oddly in the review grid.)*
 - **E-paper panel geometry** (1448×1072) — **display only**, for label typesetting.
 
 Because neither is shared, neither can drift between planes. A wrong TV size is

@@ -133,6 +133,34 @@ class ManifestBuild:
         """Every member the theme offered. Entries plus exclusions account for all of them."""
         return len(self.entries) + len(self.exclusions)
 
+    def summarise(self) -> str:
+        """One sentence saying how much of the theme reached the wall.
+
+        **It lives on the build rather than on either surface.** Both the tool
+        result and the browser response state this same fact, and two
+        hand-written sentences drift — a caller told "9 of 12" by one surface and
+        "all 12" by the other has no way to tell which is lying. Formatting may
+        differ per surface; what is *claimed* may not.
+
+        Stated on the clean build too, deliberately. A message that appeared only
+        when something was wrong would train a reader to skim past its absence,
+        and "12 of 12" is the sentence that makes "9 of 12" legible.
+
+        **It stops at the counts and does not tell the reader where to look.**
+        Each surface knows what it put in front of whoever is reading — a field
+        name in a tool result, a table on a page — and this cannot. An earlier
+        version ended "each for the reason given", which left the tool result
+        saying the same thing twice once its own pointer was appended.
+        """
+        if self.considered == 0:
+            return "This theme holds no works yet, so nothing is on the wall."
+        if not self.exclusions:
+            return f"All {self.considered} works in this theme are on the wall."
+        return (
+            f"{len(self.entries)} of {self.considered} works in this theme are on the wall; "
+            f"{len(self.exclusions)} are not currently displayable."
+        )
+
 
 def assess(inputs: WorkInputs) -> Exclusion | None:
     """Judge one work's catalogue readiness. `None` means it reaches the wall.

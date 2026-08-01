@@ -259,7 +259,13 @@ async def test_activating_publishes_exactly_the_readiness_filtered_theme(server_
     assert [entry["artwork_id"] for entry in payload["on_the_wall"]] == [ready]
     assert len(payload["not_displayable"]) == 2
     assert payload["considered"] == 3
-    assert "1 of 3" in payload["notice"]
+    # Exact-match, not a substring: this sentence is the only place a caller is
+    # told how much of the theme is missing, and a substring assertion is blind
+    # to exactly the drift that matters — a clause added, dropped, or doubled.
+    assert payload["notice"] == (
+        "1 of 3 works in this theme are on the wall; 2 are not currently displayable. "
+        "See not_displayable for each one and why."
+    )
 
     # And the file the display plane reads carries exactly that one work.
     document = json.loads(wall.manifest_path.read_text())
@@ -362,7 +368,10 @@ async def test_sync_names_every_work_that_will_not_be_on_the_wall(server_url):
     assert payload["considered"] == 3
     assert {entry["reason"] for entry in payload["not_displayable"]} == {"no_original"}
     assert {entry["title"] for entry in payload["not_displayable"]} == set(works)
-    assert "3 are not currently displayable" in payload["notice"]
+    assert payload["notice"] == (
+        "0 of 3 works in this theme are on the wall; 3 are not currently displayable. "
+        "See not_displayable for each one and why."
+    )
 
 
 async def test_an_empty_theme_syncs_and_says_so_rather_than_failing(server_url):
@@ -374,6 +383,12 @@ async def test_an_empty_theme_syncs_and_says_so_rather_than_failing(server_url):
     assert payload["on_the_wall"] == []
     assert payload["not_displayable"] == []
     assert payload["considered"] == 0
+    # The sentence this test's own name promises. Without it the empty case is
+    # the one branch of the notice nothing reads — and it is the branch that
+    # used to say "All 0 works in this theme are on the wall."
+    assert payload["notice"] == "This theme holds no works yet, so nothing is on the wall."
+    # No pointer at a field that is empty: there is nothing to look at.
+    assert "not_displayable" not in payload["notice"]
 
 
 async def test_sync_reports_the_pace_the_wall_will_run_at(server_url):
@@ -429,6 +444,28 @@ async def test_the_directive_reaches_the_manifest(server_url, wall, ready_work):
     directive = json.loads(wall.manifest_path.read_text())["directive"]
     assert directive["sequence"] == 1
     assert directive["pinned_work_id"] == work.id
+
+
+async def test_a_theme_with_nothing_missing_says_so_in_full(server_url, service, ready_work):
+    """The clean branch of the notice, which nothing else reads.
+
+    It exists precisely so that "12 of 12" is what makes "9 of 12" legible — a
+    message that appeared only on trouble would train a reader to take its
+    absence as reassurance. Pinned exact-match, and asserted to carry no pointer
+    at an empty field.
+    """
+    theme_id = await _a_theme(server_url)
+    for title in ("Automat", "Chop Suey"):
+        work = ready_work(title)
+        await call(server_url, "art_theme", action="add", theme_id=theme_id, artwork_id=work.id)
+
+    payload, errored = await call(server_url, "art_display", action="sync", theme_id=theme_id)
+
+    assert errored is False
+    assert payload["not_displayable"] == []
+    assert payload["considered"] == 2
+    assert payload["notice"] == "All 2 works in this theme are on the wall."
+    assert "not_displayable" not in payload["notice"]
 
 
 async def test_syncing_twice_does_not_advance_the_sequence(server_url, wall):

@@ -23,13 +23,16 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Final
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.types import Receive, Scope, Send
 
+from curation.http import api, pages
 from curation.mcp.server import build_server
 from curation.services.container import Services
+from curation.services.errors import ServiceError
 
 log = logging.getLogger(__name__)
 
@@ -49,16 +52,8 @@ MCP_PATH: Final[str] = "/mcp"
 #: simply went away does not hold anything until the next restart.
 MCP_SESSION_IDLE_TIMEOUT_SECONDS: Final[float] = 1800.0
 
-_PLACEHOLDER_PAGE: Final[str] = """<!doctype html>
-<title>Curation</title>
-<style>
-  body { font: 16px/1.6 system-ui, sans-serif; margin: 4rem auto; max-width: 34rem; padding: 0 1rem; }
-  code { background: #eee; padding: 0.1rem 0.3rem; border-radius: 3px; }
-</style>
-<h1>Curation</h1>
-<p>The curation plane is running. The browser interface is not built yet.</p>
-<p>The MCP server is live at <code>/mcp</code>; point a client there.</p>
-"""
+#: Where the client's stylesheet and script are served from.
+STATIC_PATH: Final[str] = "/static"
 
 
 def create_app(services: Services) -> FastAPI:
@@ -85,14 +80,31 @@ def create_app(services: Services) -> FastAPI:
         description="Curation plane for the Samsung Frame art loader.",
         lifespan=lifespan,
     )
+    # Read by the HTTP handlers off application state. The services are built
+    # once, at startup, over one open catalogue file — a per-request dependency
+    # would advertise a lifetime they do not have.
+    app.state.services = services
 
     async def handle_mcp(scope: Scope, receive: Receive, send: Send) -> None:
         await session_manager.handle_request(scope, receive, send)
 
     app.mount(MCP_PATH, handle_mcp)
 
-    @app.get("/", response_class=HTMLResponse)
-    async def index() -> str:
-        return _PLACEHOLDER_PAGE
+    @app.exception_handler(ServiceError)
+    async def refused(_: Request, error: ServiceError) -> JSONResponse:
+        """Turn a refused operation into the one error shape this surface returns.
+
+        Registered here rather than caught per handler, which is what keeps every
+        handler to unpack-call-format. The service layer raises a single type by
+        design, so a per-error status table would be this surface inventing a
+        taxonomy the layer below it does not have — and the message is already
+        written to be shown to whoever asked.
+        """
+        log.info("refused: %s", error)
+        return api.service_error_response(str(error))
+
+    app.include_router(api.router)
+    app.include_router(pages.router)
+    app.mount(STATIC_PATH, StaticFiles(directory=pages.STATIC_DIR), name="static")
 
     return app

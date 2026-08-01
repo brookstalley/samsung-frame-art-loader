@@ -254,3 +254,84 @@ def test_a_larger_panel_of_the_same_resolution_has_fewer_pixels_per_inch(monkeyp
     monkeypatch.setenv("TV_PANEL_DIAGONAL_INCHES", "84")
 
     assert Settings.from_env().tv_pixels_per_inch == pytest.approx(52.45, abs=0.01)
+
+
+def test_the_artwork_box_reproduces_the_reference_panels_worked_example(monkeypatch, tmp_path):
+    """The 42" 4K Frame, as `nonfunctional-requirements.md` works it out.
+
+    That artifact's table is the specification of this arithmetic, so the table
+    and the code are pinned to each other here — the alternative is two
+    statements of one rule, drifting.
+    """
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    box = Settings.from_env().tv_artwork_box
+
+    assert (box.width, box.height) == (3316, 1597)
+    assert box.width / box.pixels_per_inch == pytest.approx(31.6, abs=0.05)
+    assert box.height / box.pixels_per_inch == pytest.approx(15.2, abs=0.05)
+
+
+def test_the_same_mat_in_inches_gives_a_bigger_box_on_a_bigger_panel(monkeypatch, tmp_path):
+    """The whole point of specifying the mat physically: it scales with the panel.
+
+    The 75" row of the same table. A pixel mat would take the same bite out of
+    both canvases and mean something different on each wall.
+    """
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv("TV_PANEL_DIAGONAL_INCHES", "75")
+    box = Settings.from_env().tv_artwork_box
+
+    assert (box.width, box.height) == (3546, 1844)
+    assert box.width / box.pixels_per_inch == pytest.approx(60.4, abs=0.05)
+
+
+def test_the_bottom_margin_is_deeper_than_the_top(monkeypatch, tmp_path):
+    """A true-centred image reads as sitting low, so the vertical mat is not symmetric.
+
+    Asserted as the *relationship* rather than as two numbers: the box is
+    shorter than a four-equal-sides mat would leave it, by exactly the extra the
+    weighting adds.
+    """
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv("MAT_BOTTOM_WEIGHT", "1.5")
+    settings = Settings.from_env()
+    box = settings.tv_artwork_box
+
+    top = round(settings.mat_width_inches * settings.tv_pixels_per_inch)
+    assert box.width == 3840 - 2 * top
+    assert box.height == 2160 - top - round(top * 1.5)
+    assert box.height < 2160 - 2 * top, "the bottom margin is not deeper than the top"
+
+
+def test_a_mat_wider_than_the_panel_leaves_a_box_rather_than_a_negative_one(monkeypatch, tmp_path):
+    """A misconfiguration should not produce geometry that crashes the fit rule.
+
+    `assess_display_fit` refuses a box with a non-positive side, so an absurd mat
+    must clamp to something it can refuse *about* rather than something it
+    refuses to even describe.
+    """
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv("MAT_WIDTH_INCHES", "40")
+    box = Settings.from_env().tv_artwork_box
+
+    assert box.width >= 1
+    assert box.height >= 1
+
+
+def test_the_floor_reaches_the_box_that_is_judged_against_it(monkeypatch, tmp_path):
+    """A configured floor nothing carried would be a setting with no effect."""
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv("RESOLUTION_FLOOR_INCHES", "18.5")
+
+    assert Settings.from_env().tv_artwork_box.floor_inches == 18.5
+
+
+def test_the_thumbnail_cache_sits_inside_the_art_root(monkeypatch, tmp_path):
+    """Every stored path is relative to ART_ROOT, so a cache outside it is unstorable."""
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    settings = Settings.from_env()
+
+    assert settings.thumbnails_path.is_relative_to(settings.art_root)
+    # Not `tv-thumbs/`, which holds images downloaded from the television keyed
+    # by its own content ids — per-device state this catalogue excludes.
+    assert settings.thumbnails_path.name != "tv-thumbs"

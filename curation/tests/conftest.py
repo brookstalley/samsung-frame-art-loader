@@ -16,9 +16,23 @@ from collections.abc import Iterator
 
 import pytest
 import uvicorn
+from PIL import Image
 
 from curation.app import create_app
-from curation.config import DEFAULT_ROTATION_INTERVAL_SECONDS, DEFAULT_ROTATION_SHUFFLE
+from curation.config import (
+    CATALOGUE_FILENAME,
+    DEFAULT_HOST,
+    DEFAULT_MAT_BOTTOM_WEIGHT,
+    DEFAULT_MAT_WIDTH_INCHES,
+    DEFAULT_PORT,
+    DEFAULT_RESOLUTION_FLOOR_INCHES,
+    DEFAULT_ROTATION_INTERVAL_SECONDS,
+    DEFAULT_ROTATION_SHUFFLE,
+    DEFAULT_TV_PANEL_DIAGONAL_INCHES,
+    DEFAULT_TV_PANEL_HEIGHT_PX,
+    DEFAULT_TV_PANEL_WIDTH_PX,
+    Settings,
+)
 from curation.manifest.builder import MANIFEST_FILENAME
 from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 from curation.persistence.discovery_records import DiscoveryRun, InitiatedBy
@@ -37,6 +51,7 @@ from curation.services.catalogue import CatalogueService
 from curation.services.container import Services
 from curation.services.discovery import DiscoveryService
 from curation.services.display import DisplayService, WallSettings
+from curation.services.thumbnails import ThumbnailService, ThumbnailSettings
 
 _SEEDED_TITLES = ("I Saw the Figure 5 in Gold", "Nighthawks", "The Persistence of Memory")
 
@@ -66,20 +81,73 @@ def discovery_store(catalogue_file: SqliteDurableStore) -> SqliteDiscovery:
 
 
 @pytest.fixture
-def wall(tmp_path) -> WallSettings:
-    """A manifest destination of this test's own, and the shipped rotation defaults."""
-    return WallSettings(
+def settings(tmp_path) -> Settings:
+    """The deployment values a test runs against, over a scratch art tree.
+
+    Constructed rather than read from the environment: `Settings.from_env` loads
+    `.env` with override, so a test that went through it would run against
+    whatever the developer's machine happens to hold — and would pass or fail
+    depending on it. Every value is the shipped default, so a test's geometry is
+    the geometry a fresh deployment gets.
+    """
+    return Settings(
+        art_root=tmp_path,
+        catalogue_path=tmp_path / CATALOGUE_FILENAME,
         manifest_path=tmp_path / MANIFEST_FILENAME,
         heartbeat_path=tmp_path / HEARTBEAT_FILENAME,
+        host=DEFAULT_HOST,
+        port=DEFAULT_PORT,
         rotation_interval_seconds=DEFAULT_ROTATION_INTERVAL_SECONDS,
-        shuffle=DEFAULT_ROTATION_SHUFFLE,
+        rotation_shuffle=DEFAULT_ROTATION_SHUFFLE,
+        tv_panel_width_px=DEFAULT_TV_PANEL_WIDTH_PX,
+        tv_panel_height_px=DEFAULT_TV_PANEL_HEIGHT_PX,
+        tv_panel_diagonal_inches=DEFAULT_TV_PANEL_DIAGONAL_INCHES,
+        mat_width_inches=DEFAULT_MAT_WIDTH_INCHES,
+        mat_bottom_weight=DEFAULT_MAT_BOTTOM_WEIGHT,
+        resolution_floor_inches=DEFAULT_RESOLUTION_FLOOR_INCHES,
     )
 
 
 @pytest.fixture
-def services(store: SqliteCatalogue, discovery_store: SqliteDiscovery, wall: WallSettings) -> Services:
+def wall(settings: Settings) -> WallSettings:
+    """A manifest destination of this test's own, and the shipped rotation defaults."""
+    return WallSettings(
+        manifest_path=settings.manifest_path,
+        heartbeat_path=settings.heartbeat_path,
+        rotation_interval_seconds=settings.rotation_interval_seconds,
+        shuffle=settings.rotation_shuffle,
+    )
+
+
+@pytest.fixture
+def thumbnail_settings(settings: Settings) -> ThumbnailSettings:
+    """A thumbnail cache inside this test's own art tree."""
+    return ThumbnailSettings(art_root=settings.art_root, directory=settings.thumbnails_path)
+
+
+@pytest.fixture
+def services(
+    store: SqliteCatalogue,
+    discovery_store: SqliteDiscovery,
+    wall: WallSettings,
+    thumbnail_settings: ThumbnailSettings,
+    settings: Settings,
+) -> Services:
     """Every service, wired the way the entry point wires them."""
-    return Services.bind(catalogue=store, discovery=discovery_store, wall=wall)
+    return Services.bind(
+        catalogue=store,
+        discovery=discovery_store,
+        wall=wall,
+        thumbnails=thumbnail_settings,
+        # Derived by the same property the entry point calls, so a test never
+        # asserts against a box a real deployment would not produce.
+        artwork_box=settings.tv_artwork_box,
+    )
+
+
+@pytest.fixture
+def thumbnails(services: Services) -> ThumbnailService:
+    return services.thumbnails
 
 
 @pytest.fixture
@@ -222,6 +290,24 @@ def jpeg():
     def _write(path, *, width=6000, height=4000):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(jpeg_bytes(width, height))
+        return path
+
+    return _write
+
+
+@pytest.fixture
+def decodable_jpeg():
+    """Write a JPEG that can actually be opened and resized.
+
+    Distinct from `jpeg`, which writes valid segment headers around no image
+    data. That is the right fixture for a reader that only measures, and the
+    wrong one for anything that decodes: a thumbnail made from it would fail, and
+    the failure would be the fixture's rather than the code's.
+    """
+
+    def _write(path, *, width=1600, height=1200, color=(88, 72, 140)):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (width, height), color).save(path, format="JPEG", quality=90)
         return path
 
     return _write

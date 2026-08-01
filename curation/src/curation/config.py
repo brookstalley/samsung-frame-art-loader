@@ -20,11 +20,16 @@ from dotenv import load_dotenv
 
 from curation.manifest.builder import MANIFEST_FILENAME
 from curation.manifest.heartbeat import HEARTBEAT_FILENAME
+from curation.services.display_fit import ArtworkBox
 
 #: The catalogue's filename under `ART_ROOT`. Not configurable: both planes
 #: and the backup path need to agree on where the catalogue is, and a setting
 #: is just a way for them to stop agreeing.
 CATALOGUE_FILENAME: Final[str] = "catalogue.sqlite"
+
+#: Where thumbnails are cached under `ART_ROOT`. Derived and device-independent:
+#: regenerated on whatever machine needs them, never copied between machines.
+THUMBNAILS_DIRNAME: Final[str] = "thumbs"
 
 DEFAULT_HOST: Final[str] = "127.0.0.1"
 DEFAULT_PORT: Final[int] = 8770
@@ -43,6 +48,20 @@ DEFAULT_ROTATION_SHUFFLE: Final[bool] = True
 DEFAULT_TV_PANEL_WIDTH_PX: Final[int] = 3840
 DEFAULT_TV_PANEL_HEIGHT_PX: Final[int] = 2160
 DEFAULT_TV_PANEL_DIAGONAL_INCHES: Final[float] = 42.0
+
+#: The mat's width on the sides and top, in inches on the wall. Physical units
+#: rather than pixels or a ratio, so it means the same thing on any panel.
+DEFAULT_MAT_WIDTH_INCHES: Final[float] = 2.5
+
+#: How much deeper the bottom margin is than the top. A true-centred image reads
+#: as sitting low, so conservators weight the bottom — the convention this
+#: product's mat is specified against.
+DEFAULT_MAT_BOTTOM_WEIGHT: Final[float] = 1.15
+
+#: The smallest a work may render along its long edge, in inches on the wall,
+#: before it is labelled as below the floor. Below-floor works are shown and
+#: remain selectable; the floor is a warning, never a filter.
+DEFAULT_RESOLUTION_FLOOR_INCHES: Final[float] = 12.0
 
 
 class ConfigError(RuntimeError):
@@ -68,6 +87,21 @@ class Settings:
     tv_panel_width_px: int
     tv_panel_height_px: int
     tv_panel_diagonal_inches: float
+    #: The mat's geometry, in inches on the wall, and the floor judged against it.
+    mat_width_inches: float
+    mat_bottom_weight: float
+    resolution_floor_inches: float
+
+    @property
+    def thumbnails_path(self) -> Path:
+        """Where the browser surface's thumbnails are cached.
+
+        Derived and device-independent, so it is regenerated rather than
+        transported. Deliberately **not** `tv-thumbs/`, which holds images
+        downloaded from the television keyed by its own content ids — per-device
+        television state, the class this catalogue exists to keep out.
+        """
+        return self.art_root / THUMBNAILS_DIRNAME
 
     @property
     def tv_pixels_per_inch(self) -> float:
@@ -79,6 +113,35 @@ class Settings:
         """
         diagonal_px = (self.tv_panel_width_px**2 + self.tv_panel_height_px**2) ** 0.5
         return diagonal_px / self.tv_panel_diagonal_inches
+
+    @property
+    def tv_artwork_box(self) -> ArtworkBox:
+        """The region of the television canvas an artwork is rendered into.
+
+        Composed here because every input is a deployment value: the panel, the
+        mat in inches, and the floor. The bottom margin is deeper than the top,
+        so the vertical mat is not twice the horizontal one — a work judged
+        against a four-equal-sides approximation would be reported as larger on
+        the wall than it will actually appear.
+
+        **The mat is rounded to whole pixels before anything is subtracted, and
+        the bottom margin is derived from that rounded top.** A mat is drawn in
+        pixels, so this is the arithmetic the compositor will do; carrying
+        fractions through and rounding at the end gives a box a pixel or two
+        different from the one that ends up on the panel. On the reference 42"
+        4K Frame it reproduces `nonfunctional-requirements.md`'s own worked
+        example exactly — 262 px of mat, a 3316 x 1597 box — which is the
+        strongest available evidence that the default bottom weighting matches
+        what that example was drawn from.
+        """
+        top_mat_px = round(self.mat_width_inches * self.tv_pixels_per_inch)
+        bottom_mat_px = round(top_mat_px * self.mat_bottom_weight)
+        return ArtworkBox(
+            width=max(1, self.tv_panel_width_px - 2 * top_mat_px),
+            height=max(1, self.tv_panel_height_px - top_mat_px - bottom_mat_px),
+            pixels_per_inch=self.tv_pixels_per_inch,
+            floor_inches=self.resolution_floor_inches,
+        )
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -104,6 +167,9 @@ class Settings:
             tv_panel_width_px=_positive_int("TV_PANEL_WIDTH_PX", DEFAULT_TV_PANEL_WIDTH_PX),
             tv_panel_height_px=_positive_int("TV_PANEL_HEIGHT_PX", DEFAULT_TV_PANEL_HEIGHT_PX),
             tv_panel_diagonal_inches=_positive_float("TV_PANEL_DIAGONAL_INCHES", DEFAULT_TV_PANEL_DIAGONAL_INCHES),
+            mat_width_inches=_positive_float("MAT_WIDTH_INCHES", DEFAULT_MAT_WIDTH_INCHES),
+            mat_bottom_weight=_positive_float("MAT_BOTTOM_WEIGHT", DEFAULT_MAT_BOTTOM_WEIGHT),
+            resolution_floor_inches=_positive_float("RESOLUTION_FLOOR_INCHES", DEFAULT_RESOLUTION_FLOOR_INCHES),
         )
 
 

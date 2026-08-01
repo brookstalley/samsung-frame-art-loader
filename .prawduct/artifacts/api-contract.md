@@ -591,6 +591,40 @@ exemption's reasoning and must not be cited for the manifest contract.)*
 | Result fields | **Additive** | Readers tolerate unknown keys. |
 | Tool and action descriptions | **Stable** | Changing one is a behavioural change; see Versioning. |
 
+### The HTTP surface, as built 2026-08-01
+
+Recorded so "carries no obligation" is not read as "is undocumented". These
+routes exist and are exercised end to end against a booted server by
+`curation/tests/integration/test_browser_surface.py`; nothing outside this
+repository may bind to them, and they may be reshaped in any commit that reshapes
+the client with them.
+
+| Route | What it is |
+|---|---|
+| `GET /`, `/works`, `/themes`, `/manifest`, `/health` | The client shell. Listed rather than globbed, so a mistyped `/api/...` 404s instead of returning HTML a client parses as JSON. |
+| `GET /static/app.css`, `/static/app.js` | The client. One stylesheet, one script, no build step. |
+| `GET /api/works` | A page of works, each with its fit verdict and image state. |
+| `GET /api/works/{id}` | One work with sources, renditions and mat history. |
+| `GET /api/works/{id}/thumbnail` | A downscaled copy, generated on first ask and revalidated thereafter. |
+| `GET /api/themes`, `GET /api/themes/{id}` | Themes, and one theme's works in curated order. |
+| `POST /api/themes` | Record a theme. |
+| `POST`/`DELETE /api/themes/{id}/works[/{work_id}]`, `POST .../position` | Membership and order. Each returns the resulting order, so the surface repaints from the response. |
+| `POST /api/themes/{id}/activate` | Change the wall. Returns the manifest that was published, exclusions included. |
+| `GET /api/manifest` | What a theme *would* put on the wall, evaluated without writing. |
+| `GET /api/health` | The heartbeat reading, and this deployment's resolved artwork box. |
+
+**One error shape, one status.** Every refusal is `400` with `{"error": "..."}`.
+The service layer raises a single exception type by design, so a per-error status
+table here would be this surface inventing a taxonomy the layer below it does not
+have — and the message is already written to be shown to whoever asked.
+
+**Deliberately absent, so the omissions are not read as oversights:** no theme
+update or delete route — the first surface covers create, add, remove, reorder
+and activate, and renaming a theme was not among the things a curator needed to
+do from a browser before they could build one and hang it. Nothing here writes an
+artwork, a source, an original or a mat either; those belong to acquisition,
+which is not built.
+
 **Annotations are mandatory on every tool**, because their defaults are worst-case:
 omit them and MCP assumes `destructiveHint: true` and `openWorldHint: true`, which
 costs the operator a confirmation prompt on every call. Each tool declares `title`

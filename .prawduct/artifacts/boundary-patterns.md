@@ -130,9 +130,9 @@
 - **Producer:** acquisition and rendering. **Consumer:** both planes.
 - **Contract:** **upstream artifacts** (`raw/`, `api-cache/`, `tile-cache/`) are
   expensive and device-independent and *are* transported; **derived artifacts**
-  (`ready/`, `tv-thumbs/`) are cheap and device-specific and are
-  **regenerated, never transported**. (`label/` removed from this row 2026-07-20
-  — see the retirement bullet below.)
+  (`ready/`, `thumbs/`, `tv-thumbs/`) are cheap and are **regenerated, never
+  transported**. (`label/` removed from this row 2026-07-20 — see the retirement
+  bullet below. `thumbs/` added 2026-08-01 — see the bullet below it.)
 - All stored paths are relative to `ART_ROOT`. No absolute paths in any record.
 - Candidate `preview_path` files are a third class — neither upstream nor derived;
   cheap, disposable, pre-acceptance. Their lifecycle **is** recorded in
@@ -148,6 +148,25 @@
   ART_ROOT | label rendering moved to display 2026-07-20, and derived artifacts
   are regenerated not transported, so a curation-side label cache would have no
   writer | user can veto/override]`
+- **`thumbs/` joins the contract (added 2026-08-01), and it is deliberately not
+  `tv-thumbs/`.** The browser surface serves downscaled copies of held works —
+  the masters run to 47 megapixels and the television renditions are 4K, so a
+  grid of the real files is not a page. Written by curation, read by curation,
+  regenerated on whatever machine is serving. **`tv-thumbs/` was the obvious
+  place and is the wrong one:** the 2024 tree uses it for images *downloaded
+  from the television*, keyed by `tv_content_id`, which is per-device television
+  state — the class this catalogue was redesigned to keep out, and the same
+  reasoning that retired `label/`. It stays in the row above because the display
+  plane may still want it; nothing in curation writes or reads it.
+  `[DECISION: curation's thumbnail cache is thumbs/, not tv-thumbs/ | tv-thumbs/
+  holds per-device TV state and reusing it would re-import the identity defect
+  the catalogue was rebuilt to remove | user can veto/override]`
+- Each derived directory is device-specific in a different way, which is worth
+  stating because the row above reads as if they were alike: `ready/` and
+  `tv-thumbs/` are specific to the *television*, while `thumbs/` is specific to
+  nothing — a thumbnail is a thumbnail. It is regenerated rather than
+  transported because it is cheap and disposable, not because it would be wrong
+  elsewhere.
 
 ### Configuration
 

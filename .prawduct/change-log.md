@@ -48,6 +48,80 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-01: A browser can see the collection, build a theme, and read why a work is not on the wall
+
+<!-- prawduct: chunks=10B | status=shipped | scope=v1-build -->
+
+**Why:** Eleven chunks of catalogue, themes and manifests had no human surface. This
+is the first one — `/` and `/api/*` over the services that already exist, rather
+than waiting for the ones that do not. It takes the catalogue/theme/health third of
+the full UI's scope and leaves the discovery two-thirds where they are, because
+every one of those binds a service built later.
+
+**The UI checkpoint was held first, and it found something.** Issue #2 was disposed
+as tokens-now and component-inventory-deferred: its acceptance list asks for
+components covering the candidate review grid and intent entry, and neither screen
+is specified, which is why its own stage is `design`. Issue #10 was deferred, and
+that one is forced rather than chosen — the second-look shelf shows works accepted
+over MCP, `art_review` is declared and unbuilt, so a shelf built now would be a
+surface with no producer. The third checkpoint question — does the UI scope still
+match the built product — is what surfaced the defect below.
+
+**`assess_display_fit` had no production caller, and could not have had one.** It
+was built with tests in the manifest chunk; the review grid is specified to show its
+verdict and the rendered size in inches. Nothing anywhere constructed the
+`ArtworkBox` it takes, because the box needs a mat width and a resolution floor and
+neither had ever reached the deployment surface — `nonfunctional-requirements.md`
+specified both in physical units and `Settings` carried neither. Three values joined
+`.env` (`MAT_WIDTH_INCHES`, `MAT_BOTTOM_WEIGHT`, `RESOLUTION_FLOOR_INCHES`), and the
+resolved box is logged at startup beside the panel it came from.
+
+**The mat's bottom weighting had never been given a number**, only a direction —
+"weighted larger than the top". A box height cannot be computed from a direction, so
+it had to be settled: 1.15, which is the factor that reproduces that artifact's own
+42" worked example exactly (262 px of mat, a 3316 x 1597 box). Checking it against
+the 75" row showed **that row is wrong** — its height implies a 1.97 weighting, so
+at most one of the two could ever have been right. Corrected to 3546 x 1844, and
+both rows are now asserted by tests rather than being arithmetic done once by hand.
+The rounding order turned out to be part of the rule and is now stated: whole-pixel
+mat first, bottom derived from the rounded top.
+
+**Thumbnails are renditions, not a cache.** A grid of the real files is not a page —
+the masters run to 47 megapixels and 40 MB. The downscaled copies are recorded as
+`RenditionKind.THUMBNAIL`, which had been in the data model since the catalogue was
+designed with nothing producing it, so they inherit the staleness rule that already
+governs the television render instead of needing a second one. A replaced master
+therefore regenerates the thumbnail rather than serving the previous acquisition.
+They live in a new `thumbs/`, deliberately **not** `tv-thumbs/` — that directory
+holds images downloaded from the television keyed by `tv_content_id`, per-device
+state of exactly the class this catalogue was rebuilt to keep out.
+
+**Pillow arrives a chunk early**, named rather than slipped in. It was already this
+plane's declared image dependency; nothing in the standard library decodes a JPEG.
+Measured on the real corpus: 40 thumbnails in 6.6 s cold, 0.23 s warm, 1.28 MB
+against ~1.2 GB of masters.
+
+**The accessibility baseline is enforced, not claimed.** A test reads the real token
+values out of the served stylesheet and computes every text and control pair in both
+colour schemes against AA, and refuses any colour written outside the token blocks —
+because "AA verified" is exactly the sentence that is true the day it is written and
+false three edits later. Colour is never the sole carrier of state: every badge
+pairs a distinct glyph with a distinct word.
+
+**Running it found what the tests could not**, for the second chunk running. Two
+defects were visible in the first screenshot and in no test: `replaceChildren`
+coerces a null to the string "null" and printed the word on the page, and every
+image tile silently returned to the shape of its own picture because a replaced
+child at `height: 100%` inside a box sized by `aspect-ratio` is circular and the
+browser resolves it by letting the content win.
+
+**One divergence was introduced and caught during the build.** Writing the browser's
+"3 of 6 works are on the wall" sentence created a second hand-written version of the
+tool surface's. Both now come from `ManifestBuild.summarise()`; only the pointer at
+`not_displayable`, which is meaningless outside a tool result, stayed at the surface.
+The shared version also fixed a case neither had: an empty theme previously read
+"All 0 works in this theme are on the wall."
+
 ## 2026-08-01: The wall's own works, re-ingested — and the index read closely enough to argue with
 
 <!-- prawduct: chunks=10 | status=shipped | scope=v1-build -->

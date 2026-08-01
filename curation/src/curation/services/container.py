@@ -23,6 +23,9 @@ from curation.persistence.discovery import DiscoveryStore
 from curation.services.catalogue import CatalogueService
 from curation.services.discovery import DiscoveryService
 from curation.services.display import DisplayService, WallSettings
+from curation.services.display_fit import ArtworkBox
+from curation.services.survey import SurveyService
+from curation.services.thumbnails import ThumbnailService, ThumbnailSettings
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,15 +35,33 @@ class Services:
     catalogue: CatalogueService
     discovery: DiscoveryService
     display: DisplayService
+    thumbnails: ThumbnailService
+    #: Works composed the way a surface showing them to a human needs them. It is
+    #: its own concern rather than a method on the catalogue because it spans
+    #: three of them, and because both surfaces need the identical composition —
+    #: which is the same reason the service layer exists at all.
+    survey: SurveyService
 
     @classmethod
-    def bind(cls, *, catalogue: CatalogueStore, discovery: DiscoveryStore, wall: WallSettings) -> Services:
+    def bind(
+        cls,
+        *,
+        catalogue: CatalogueStore,
+        discovery: DiscoveryStore,
+        wall: WallSettings,
+        thumbnails: ThumbnailSettings,
+        artwork_box: ArtworkBox,
+    ) -> Services:
         """Assemble the services over an already-open file."""
         catalogue_service = CatalogueService(catalogue)
+        display_service = DisplayService(catalogue, catalogue_service, wall)
+        thumbnail_service = ThumbnailService(catalogue_service, thumbnails)
         return cls(
             catalogue=catalogue_service,
             discovery=DiscoveryService(discovery, catalogue_service),
-            display=DisplayService(catalogue, catalogue_service, wall),
+            display=display_service,
+            thumbnails=thumbnail_service,
+            survey=SurveyService(catalogue_service, display_service, thumbnail_service, artwork_box),
         )
 
     def reconcile(self) -> None:

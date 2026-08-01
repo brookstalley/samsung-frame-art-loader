@@ -9,6 +9,9 @@ showed it. So the call is asserted here, through `main()` itself.
 
 import curation.__main__ as entry_point
 from curation.config import (
+    DEFAULT_MAT_BOTTOM_WEIGHT,
+    DEFAULT_MAT_WIDTH_INCHES,
+    DEFAULT_RESOLUTION_FLOOR_INCHES,
     DEFAULT_ROTATION_INTERVAL_SECONDS,
     DEFAULT_ROTATION_SHUFFLE,
     DEFAULT_TV_PANEL_DIAGONAL_INCHES,
@@ -58,6 +61,9 @@ def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch)
                 tv_panel_width_px=DEFAULT_TV_PANEL_WIDTH_PX,
                 tv_panel_height_px=DEFAULT_TV_PANEL_HEIGHT_PX,
                 tv_panel_diagonal_inches=DEFAULT_TV_PANEL_DIAGONAL_INCHES,
+                mat_width_inches=DEFAULT_MAT_WIDTH_INCHES,
+                mat_bottom_weight=DEFAULT_MAT_BOTTOM_WEIGHT,
+                resolution_floor_inches=DEFAULT_RESOLUTION_FLOOR_INCHES,
             )
         ),
     )
@@ -125,6 +131,10 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
                 tv_panel_width_px=1920,
                 tv_panel_height_px=1080,
                 tv_panel_diagonal_inches=55.0,
+                # Likewise the mat and the floor, for the same reason.
+                mat_width_inches=3.0,
+                mat_bottom_weight=2.0,
+                resolution_floor_inches=7.5,
             )
         ),
     )
@@ -141,6 +151,14 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
     assert "40.1 px per inch" in logged
     assert "rotation=931s" in logged
     assert "shuffle=False" in logged
+    # The derived artwork box as well as its inputs. A wrong mat or floor is
+    # otherwise visible only as works being labelled oddly in the grid, which
+    # reads as a catalogue problem rather than a configuration one. 3" of mat at
+    # 40.05 px per inch is 120 px, taken twice horizontally and 1+2.0 times
+    # vertically: 1920-240 by 1080-360.
+    assert "artwork_box=1680x720px" in logged
+    assert 'mat=3.00" (bottom x2.00)' in logged
+    assert 'floor=7.5"' in logged
     # The e-paper panel belongs to the display plane, and this one must hold no
     # fact about it.
     assert "1448" not in logged and "1072" not in logged

@@ -944,6 +944,44 @@ technical_decisions:
         - "Starlette directly — minimal dependency and the SDK already hands back Starlette apps, but it means hand-writing validation and JSON shaping that pydantic gives free, and validation logic leaks into handlers, which the service-layer norm forbids."
         - "FastMCP.custom_route alone, with no separate web framework — fewest moving parts and no mounting hazard, but it is a minimal API registered at lowest route precedence, making the UI surface a second-class citizen of the MCP server rather than a peer."
       date: 2026-07-20
+    - decision: "The browser UI is a static client over the /api/* JSON surface — no server-side rendering, no template engine, no build step."
+      rationale: >
+        Decided 2026-08-01, building the first browser surface. The alternative
+        was server-rendered pages, which reads as simpler and is not: it leaves
+        /api/* either unused or carrying a second shape of every read, which is
+        the exact divergence the shared service layer exists to prevent,
+        reappearing one layer up. architecture.md had already drawn the UI and
+        its HTTP API as distinct things; this makes the API the UI's only source
+        rather than a parallel one.
+
+        It also collapses the dependency question. A template engine would have
+        been a new dependency whose job is escaping, on a surface whose data
+        comes from museum sites this product does not control; a client that sets
+        text with textContent gets that property from the DOM instead. Pydantic
+        arrives here as the FastAPI decision above anticipated ("typed,
+        paginated, partial data"), and nothing else does.
+
+        No framework and no bundler: a Node toolchain on a Raspberry Pi,
+        maintained for a single-operator tool on a private network, buys nothing
+        a curator can see. The cost accepted is that the surface requires
+        JavaScript, which is not a real cost for one operator with a modern
+        browser but would be if this were ever public — and it is LAN-only by a
+        recorded security decision, so it will not be.
+      alternatives_considered:
+        - "Server-rendered pages with Jinja2 — no client-side code and works without JavaScript, but /api/* then has no consumer and every read grows a second shape, and it adds a dependency whose main job (escaping) the DOM already does."
+        - "A framework (React/Svelte) with a build step — better ergonomics for the discovery screens still to come, but it puts a Node toolchain on the Pi and a build artifact in the deploy path for a four-section tool."
+      date: 2026-08-01
+    - decision: "Pillow arrives with the browser surface rather than with the mat engine, solely to make thumbnails."
+      rationale: >
+        Decided 2026-08-01. It was already the declared image dependency for this
+        plane's acquisition work, so what changed is its arrival, not the
+        dependency set. Forced rather than chosen: the seeded masters run to 47
+        megapixels and 40 MB, the television renditions are 4K, and nothing in
+        the standard library decodes a JPEG — seed/images.py reads only the SOF
+        header for dimensions precisely because measuring needed no decoder, and
+        downscaling does. Measured on the real corpus: 40 thumbnails in 6.6 s
+        cold and 0.23 s warm, 1.28 MB total against ~1.2 GB of masters.
+      date: 2026-08-01
     - decision: "The in-UI agent is an MCP client, not an in-process caller."
       rationale: >
         Decided 2026-07-19 by the operator. Either way the agent must be taught a
@@ -1691,8 +1729,47 @@ technical_decisions:
 # Each: { decision, rationale, date }
 
 design_decisions:
-  information_architecture: []
-  interaction_patterns: []
+  information_architecture:
+    - decision: >
+        The curation UI is four sections and one detail view: Works (the grid),
+        Themes, On the wall (the active theme's manifest with its exclusions),
+        and Health. A work opens into a detail view in place.
+      rationale: >
+        Decided 2026-08-01, at the UI checkpoint, against the operations that
+        exist rather than against the whole product. These four are what a
+        curator can actually do once a catalogue is seeded and themes are
+        buildable. The discovery half of the interface — intent entry, the run
+        view, the approval gate, cost display, and a review grid with alternates
+        behind each card — is NOT missing from this list by oversight; every one
+        of those binds a service not yet built, and each arrives with its
+        service.
+
+        "On the wall" is a section rather than a panel on Themes because it
+        answers a different question. Themes asks what a curator has assembled;
+        On the wall asks what the display plane was actually asked to show, and
+        the gap between those two is the product's most important disclosure.
+      date: 2026-08-01
+  interaction_patterns:
+    - decision: >
+        State is carried by a glyph and a word before it is carried by colour;
+        the wall's manifest always shows its exclusions section, including when
+        it is empty; refusals are announced through a live region rather than
+        only shown.
+      rationale: >
+        Decided 2026-08-01. The first is the accessibility constraint below,
+        applied: every badge (fit verdict, image source, theme active, rendition
+        staleness) pairs a distinct glyph with a distinct word, so it survives
+        greyscale, colour blindness, and a room with the lights down.
+
+        The second is the same rule that governs the tool surface's
+        `not_displayable` key and the sync notice: a section that appeared only
+        when something was wrong would train a reader to take its absence as
+        "everything is fine". On a product whose defining failure mode is
+        silence, an empty "Not showing (0)" is the point.
+
+        The third exists because a failure a curator learns about by noticing a
+        colour is a failure that gets missed.
+      date: 2026-08-01
   accessibility_approach: >
     Two surfaces with completely different accessibility profiles, and the
     important one is physical.
@@ -1872,9 +1949,35 @@ design_decisions:
     they need either real hardware or an accepted gap, which is what makes the
     "verify the TV still works" item gating rather than routine.
   visual_direction: >
-    Deferred to design; see product_identity.visual_preferences for the one hard
-    constraint (no chrome on the TV output). The curation UI has no precedent in
-    this repo — the 2024 product had no visual surface at all.
+    RESOLVED 2026-08-01 for the curation UI, at the UI checkpoint. Still deferred
+    for the TV output, which carries the one hard constraint recorded in
+    product_identity.visual_preferences (no chrome, no overlay, no branding) and
+    for the e-paper label, which is a legibility problem rather than a visual
+    direction.
+
+    A token layer, not a component inventory. Colour, type scale, spacing,
+    radius and elevation are defined in one stylesheet as custom properties;
+    light and dark are both authored, dark as an override of light. That is the
+    half of issue #2 that could be decided against a real screen. The half that
+    could not — a component inventory covering the candidate review grid and
+    intent entry — was NOT guessed at, because those screens' services do not
+    exist. #2 stays open at stage `design` for exactly that remainder.
+
+    Museum, not gadget, made concrete: near-neutral surfaces with a slight warm
+    cast (a gallery wall, not a screen), a serif for work titles and a system
+    sans for chrome, crisp 2-4px radii, and elevation barely present so a card
+    reads as paper rather than as UI. One accent — a desaturated ink blue —
+    because this is an image-review tool whose whole job is judging colour, and
+    nothing but the pictures may carry a strong hue.
+
+    ENFORCED, not asserted: every text pair clears WCAG AA 4.5:1 and every
+    control boundary clears 3:1, in both schemes, checked by a test that reads
+    the real token values out of the stylesheet
+    (curation/tests/unit/test_design_tokens.py). The same test refuses any colour
+    written outside the token blocks, since a literal in a component rule is a
+    colour nothing can check. A decorative rule between a card and the page is
+    deliberately NOT held to the 3:1 control floor — WCAG 1.4.11 does not govern
+    it, and holding it there would draw a hard line around every picture.
 
 # =============================================================================
 # OPEN QUESTIONS
@@ -2295,7 +2398,7 @@ views_enabled: true
 # Do not hand-edit — overwritten on next regen.
 scope_rollups:
   v1-build:
-    chunks: ["01", "02", "06", "07", "07B", "08A", "08B", "09", "10"]
+    chunks: ["01", "02", "06", "07", "07B", "08A", "08B", "09", "10", "10B"]
     releases: []
 
 # =============================================================================

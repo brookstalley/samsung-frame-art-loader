@@ -92,7 +92,7 @@ current chunk, and a blocked chunk ahead of active work silently hands its
 - [x] Chunk 08B: The discovery entities, both state machines, startup reconciliation
 - [x] Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
 - [x] Chunk 10: Seed the catalogue with the existing corpus (v1 scope item)
-- [ ] Chunk 10B: The first browser surface — catalogue, themes, manifest, health
+- [x] Chunk 10B: The first browser surface — catalogue, themes, manifest, health
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
@@ -908,6 +908,50 @@ surface was reviewed on its own.
 - **Depends on:** Chunk 09 (themes and the manifest with its exclusion report),
   Chunk 10 (41 works with images on disk — a UI over an empty catalogue proves
   nothing), and the UI checkpoint, which moves here from before Chunk 19
+
+**Four things this chunk had to settle before it could be built, recorded here
+because each changes an artifact rather than only this chunk's code.**
+
+*The artwork box needs two deployment values that were specified and never
+surfaced.* `nonfunctional-requirements.md` § "The mat is geometric, and the floor
+is physical" fixes the mat in inches and the floor as a minimum rendered size in
+inches, and `Settings` carries neither — so `assess_display_fit`, built in Chunk
+09 with tests, has **no production caller**, because nothing can construct the
+`ArtworkBox` it takes. `MAT_WIDTH_INCHES` and `RESOLUTION_FLOOR_INCHES` join the
+deployment surface here, defaulting to the reference panel's 2.5" and 12" — the
+figures that artifact's own worked example uses. This is the chunk that first
+needs the verdict, which is why it is the chunk that wires it.
+
+*Pillow moves from Chunk 18 to here.* Thumbnail serving is a named deliverable
+and the seeded renditions are 4K files; nothing in the standard library decodes
+a JPEG, and `curation/src/curation/seed/images.py` reads only the SOF header for
+dimensions precisely because it needed no decoder. Pillow was already the declared
+acquisition/mat-engine dependency for this plane, so what changes is its arrival,
+not the dependency set. Named rather than slipped in, by the same rule that made
+`uvicorn`-not-`[standard]` a recorded decision.
+
+*Thumbnails get a new derived directory in the image tree, named `thumbs`, and
+the existing `tv-thumbs` is annotated rather than reused.* Both are directories
+under `ART_ROOT` at runtime rather than anything in this checkout, which is why
+they are named here without a path — the full contract, and the only normative
+statement of it, is the `ART_ROOT` filesystem row in `boundary-patterns.md`. In
+the 2024 tree, `tv-thumbs` holds images **downloaded from the television**, keyed
+by `tv_content_id` — per-device TV state, which is exactly the class this
+catalogue excluded by design; putting curation's own thumbnails there would
+re-import the thing the model rejects. The new one is a derived,
+device-independent cache and joins that contract as one, and the `tv-thumbs`
+entry there is annotated the way the retired `label` entry was on 2026-07-20, for
+the identical reason.
+
+*The browser surface is the `/api/*` JSON API plus a client that renders it, not
+server-rendered templates.* `architecture.md` already draws the UI and its HTTP
+API as separate things and `project-state.yaml`'s FastAPI decision names "typed,
+paginated, partial data — that is pydantic response models" as what the framework
+was chosen for. Server-rendering the pages would leave `/api/*` either unused or
+carrying a second shape of every read, which is the divergence the shared service
+layer exists to prevent, one layer up. Pydantic is declared here, as that decision
+anticipated ("the typed response models … arrive with the HTTP API"). No template
+engine, no build step, no framework: the client is one stylesheet and one script.
 - **Artifacts consumed:** `architecture.md` (§ Serves three surfaces from one ASGI
   app, § the internal-layering diagram), `api-contract.md` (§ the HTTP surface
   carries no stability obligation; § operation logic lives ONLY in the service
@@ -1463,6 +1507,39 @@ cumulative review is the release-readiness gate.
   scope still matches what the built product needs. It runs once, before the first
   surface exists — Chunk 19 inherits its dispositions rather than re-opening them,
   except for a #2 revisit that was explicitly deferred to it.
+
+  **Held 2026-08-01. Three dispositions, all recorded on the issues themselves.**
+
+  *Issue #2 — tokens now, component inventory deferred to Chunk 19.* The issue's
+  own sequencing question was system-first versus extract-from-the-first-screen,
+  and neither answer is available whole: its acceptance list asks for components
+  covering the candidate review grid and intent entry, and both of those screens
+  belong to chunks whose services do not exist — which is why the issue's own
+  stage is `design` rather than `ready`, with `information_architecture` and
+  `interaction_patterns` still empty. So the half that can be decided against a
+  real screen is decided now and the half that cannot is not guessed at. **In
+  scope here:** the token layer (colour, type scale, spacing, radius, elevation),
+  light and dark handling, AA contrast verified against the token set, and the
+  non-colour state indicator — every decision that ad-hoc CSS would otherwise
+  make silently and that a later screen would then inherit. **Not in scope:** a
+  component inventory for screens that are not specified. #2 stays open at
+  `design`; its revisit is the deferral this checkpoint was allowed to make.
+
+  *Issue #10 — deferred to Chunk 19, and the deferral is forced rather than
+  chosen.* The shelf shows works accepted **over MCP** awaiting a human look.
+  `art_review` is declared in the tool registry and unbuilt (`_UNBUILT`), so no
+  work can be accepted over MCP at all; a shelf built now would be a surface with
+  no producer, which is the defect shape this repo has already recorded twice
+  (`display_fit.upscaled`, `Rendition(kind='label')`). It becomes buildable when
+  acceptance does, in Chunk 17.
+
+  *UI scope still matches what the product needs* — with one correction the
+  checkpoint exists to catch. Chunk 10B's grid is specified to carry `display_fit`
+  and rendered-inches labels, and **`assess_display_fit` has no production caller
+  today**: nothing anywhere constructs an `ArtworkBox`, because the mat width and
+  the resolution floor were specified in `nonfunctional-requirements.md` as
+  deployment values and never added to the deployment surface. That is settled in
+  the chunk entry rather than here.
 - **After Chunk 20** — the cumulative review, per the chunk's `cumulative-final`
   type.
 

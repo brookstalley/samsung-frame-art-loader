@@ -350,6 +350,19 @@ convention, because a true-centred image reads as sitting low. This is what
 "museum-quality mat" has to mean if it means anything; the 2024 pipeline's mat was
 aspect-ratio residue, so a 16:9 source got no mat at all.
 
+*(**The weighting was stated without a number until 2026-08-01**, when the first
+surface to judge a work against the artwork box needed a box height and so had to
+have one. It is now a deployment value,
+`MAT_BOTTOM_WEIGHT`, defaulting to **1.15** — the bottom margin is 1.15x the top.
+That figure is not invented: it is the one that reproduces the 42" worked example
+below exactly, which is the best available evidence of what that example was
+drawn from. The rounding order is part of the rule, because it moves the answer
+by a pixel or two — the mat is rounded to whole pixels first and the bottom is
+derived from that rounded top, which is the arithmetic a compositor drawing in
+pixels will do. **Open for the operator to overrule**: 1.15 is a subtle
+weighting, and a more pronounced one is a matter of taste rather than of
+correctness.)*
+
 **Panel geometry is a deployment value, never a constant.** The operator's own
 panel is 42", but nothing may depend on that — other people will run this on other
 sizes, and the product must support any of them. Panel dimensions therefore join
@@ -360,11 +373,20 @@ Everything else follows arithmetically:
 ```
 artwork box  =  canvas − mat(panel geometry, mat inches)
 
-42" 16:9  →  36.6" wide  →  ~105 ppi  →  2.5" mat = 262 px/side
+42" 16:9  →  36.6" wide  →  ~105 ppi  →  2.5" mat = 262 px top and sides,
+                                                     301 px bottom (x1.15)
              artwork box 3316 × 1597 px  =  31.6" × 15.2" on the wall
-75" 16:9  →  65.4" wide  →   ~59 ppi  →  2.5" mat = 147 px/side
-             artwork box 3546 × 1723 px
+75" 16:9  →  65.4" wide  →   ~59 ppi  →  2.5" mat = 147 px top and sides,
+                                                     169 px bottom (x1.15)
+             artwork box 3546 × 1844 px  =  60.4" × 31.4" on the wall
 ```
+
+*(**Corrected 2026-08-01.** The 75" row read `3546 × 1723`, which no single
+bottom weighting produces: 1723 implies a bottom margin 1.97x the top while the
+42" row implies 1.15x, so at most one of the two could ever have been right. Both
+rows above are now computed by `Settings.tv_artwork_box` and asserted against
+these exact figures in `curation/tests/unit/test_config.py`, so this table has a
+mechanism behind it rather than being arithmetic done once by hand.)*
 
 **The floor is a minimum rendered size on the wall, in inches** — the same units as
 the mat, and it scales with the panel automatically. It was never going to be one

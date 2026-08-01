@@ -23,6 +23,15 @@ dependencies = [
     "uvicorn",
     "mcp>=1.27",
     "python-dotenv",
+    # The typed response models the HTTP API returns. It resolves transitively
+    # via mcp, but this code imports it directly now, and the rule below cuts
+    # both ways: what the code imports belongs in this list.
+    "pydantic",
+    # Thumbnails. Arrived ahead of the acquisition work below because a grid of
+    # 4K renditions is not a page and nothing in the standard library decodes a
+    # JPEG — `seed/images.py` reads the SOF header for dimensions precisely
+    # because that needed no decoder, and downscaling does.
+    "pillow",
 ]
 
 # 3tears core is deliberately absent and is not expected. The catalogue's durable
@@ -34,18 +43,17 @@ dependencies = [
 # Deliberately not pinned yet:
 #   3tears-models — the operator's own multi-provider model adapters, which need
 #     none of the above; it arrives with the discovery work that calls it.
-#   pillow, opencv-python-headless, scikit-image, numpy — acquisition and the mat
-#     engine, which arrive with that work rather than being carried unused.
-#   pydantic — the typed response models the FastAPI decision turns on, which
-#     arrive with the HTTP API. It resolves transitively via mcp today, but
-#     nothing here imports it, and the rule above cuts both ways: a package this
-#     code does not import does not belong in this list either.
+#   opencv-python-headless, scikit-image, numpy — acquisition and the mat engine,
+#     which arrive with that work rather than being carried unused. Pillow was in
+#     this group until the browser surface needed to downscale a 4K rendition.
 #   httpx — the inverse of the starlette case above. The mcp *client* uses it, so
 #     the contract tests exercise it through that library; no first-party module
 #     imports it, so declaring it would claim a dependency the code does not have.
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6", "black>=24"]
+# httpx is declared here and not above on purpose: the browser-surface tests
+# import it directly to drive a booted server, and no first-party module does.
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6", "black>=24", "httpx"]
 
 [build-system]
 requires = ["hatchling"]

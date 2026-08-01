@@ -159,6 +159,14 @@ is no network between planes.
 - **Serves three surfaces from one ASGI app:** the web UI, its HTTP API, and the
   MCP streamable-HTTP endpoint. All three are thin bindings over one service layer
   (`project-preferences.md`, Critic-enforced).
+
+  *(Built 2026-08-01, and the first two turned out to be **one** surface rather
+  than two. The UI is a static shell plus a script that reads `/api/*`; there is
+  no server-side rendering and no template engine. Server-rendered pages would
+  have left the HTTP API either unused or carrying a second shape of every read —
+  the divergence the shared service layer exists to prevent, reappearing one
+  layer up. No framework and no build step: a Node toolchain on the Pi buys
+  nothing a single operator on a private network can see.)*
 - **A fourth binding is not a surface:** `curation/seed/` is a hand-run command
   that reads the 2024 index and mints its works through `CatalogueService`. It is
   bound by the same rule for the same reason — it enforces no catalogue
@@ -171,18 +179,29 @@ is no network between planes.
 - **Internal layering, inside that plane** (established 2026-07-27):
 
   ```
-  MCP tools  ·  HTTP handlers                    bindings: unpack, call one method, format
-        └──────────────┬──────────────┘
-                 Services container               what a surface is handed; no surface names one service
-        ┌──────────────┼──────────────┐
-  DiscoveryService     │      DisplayService      every rule, every transition, every derivation
-        │              │              │           (both hold CatalogueService; it holds neither)
-        │       CatalogueService      │
-        │              │              │
-  SqliteDiscovery  SqliteCatalogue ───┘           domain adapters: schema, record↔row, ordering
+  MCP tools  ·  HTTP handlers  ·  browser client   bindings: unpack, call one method, format
+        └──────────────┬──────────────┘            (the client renders JSON and decides nothing)
+                 Services container                what a surface is handed; no surface names one service
+   ┌────────────┬──────┴───────┬────────────┐
+  Discovery     │           Display      SurveyService   every rule, transition and derivation
+  Service       │           Service           │          (all three hold CatalogueService;
+        │       │              │        ThumbnailService   it holds none of them)
+        │       └── CatalogueService ─────────┘
+        │              │
+  SqliteDiscovery  SqliteCatalogue                domain adapters: schema, record↔row, ordering
         └──────────────┬──────────────┘           and paging — the product judgements
               SqliteDurableStore                  generic: tables, keys, rows. Knows no artwork
   ```
+
+  **Two services were added on 2026-08-01, with the first browser surface.**
+  `ThumbnailService` produces the downscaled copies that make a forty-card grid a
+  page, recording each as a `RenditionKind.THUMBNAIL` so the cache is catalogued
+  rather than loose on disk and inherits the staleness rule already governing the
+  television render. `SurveyService` composes a work with the two derived facts a
+  human-facing surface needs beside it — how large it would render on this
+  deployment's wall, and which held image it would be shown — because
+  `api-contract.md` requires that same pairing of `art_review`, and a composition
+  written once at each surface is the divergence this layer exists to prevent.
 
   **The layer is split by concern, and the split runs all the way down.** The
   catalogue owns works already accepted; discovery owns runs, proposals, image

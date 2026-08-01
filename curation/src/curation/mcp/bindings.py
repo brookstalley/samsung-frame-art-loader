@@ -326,15 +326,14 @@ def _directive_fields(directive: Directive) -> dict[str, Any]:
 
 
 def _sync_notice(build: ManifestBuild) -> str:
-    """Say how much of the theme actually reached the wall.
+    """How much of the theme reached the wall, plus the pointer this surface can give.
 
-    Stated on every sync, including the clean one. A message that appeared only
-    when something was wrong would train a reader to skim past its absence, and
-    "12 of 12" is the sentence that makes "9 of 12" legible.
+    The counts come from the build itself, so this surface and the browser one
+    cannot disagree about them. Only the field name is this surface's own — a
+    model reading a tool result has `not_displayable` in front of it, and naming
+    it is worth a clause that would be meaningless anywhere else.
     """
+    summary = build.summarise()
     if not build.exclusions:
-        return f"All {build.considered} works in this theme are on the wall."
-    return (
-        f"{len(build.entries)} of {build.considered} works in this theme are on the wall; "
-        f"{len(build.exclusions)} are not currently displayable — see not_displayable for each one and why."
-    )
+        return summary
+    return f"{summary} See not_displayable for each one and why."

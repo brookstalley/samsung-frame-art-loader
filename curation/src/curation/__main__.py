@@ -11,6 +11,7 @@ from curation.persistence.sqlite import SqliteCatalogue
 from curation.persistence.sqlite_discovery import SqliteDiscovery
 from curation.services.container import Services
 from curation.services.display import WallSettings
+from curation.services.thumbnails import ThumbnailSettings
 
 
 def main() -> None:
@@ -22,6 +23,7 @@ def main() -> None:
     # The resolved root and this plane's own panel, on one line, so a
     # misconfiguration is a journal read rather than a mystery. The television's
     # panel — never the e-paper one, which belongs to the display plane.
+    box = settings.tv_artwork_box
     log.info(
         'art_root=%s manifest=%s tv_panel=%dx%dpx/%.1f" (%.1f px per inch) rotation=%ds shuffle=%s',
         settings.art_root,
@@ -32,6 +34,17 @@ def main() -> None:
         settings.tv_pixels_per_inch,
         settings.rotation_interval_seconds,
         settings.rotation_shuffle,
+    )
+    # The derived geometry as well as its inputs: whether a work is judged large
+    # enough for the wall depends on this box, and a wrong mat or floor is
+    # otherwise only visible as works being labelled oddly in the grid.
+    log.info(
+        'artwork_box=%dx%dpx mat=%.2f" (bottom x%.2f) floor=%.1f"',
+        box.width,
+        box.height,
+        settings.mat_width_inches,
+        settings.mat_bottom_weight,
+        settings.resolution_floor_inches,
     )
 
     settings.art_root.mkdir(parents=True, exist_ok=True)
@@ -49,6 +62,8 @@ def main() -> None:
                 rotation_interval_seconds=settings.rotation_interval_seconds,
                 shuffle=settings.rotation_shuffle,
             ),
+            thumbnails=ThumbnailSettings(art_root=settings.art_root, directory=settings.thumbnails_path),
+            artwork_box=box,
         )
         # The catalogue file outlives any single version of this code, so rules
         # added since it was written are brought to it here rather than assumed
