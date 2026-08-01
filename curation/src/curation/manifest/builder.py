@@ -181,7 +181,12 @@ def entry_for(inputs: WorkInputs) -> ManifestEntry:
     e-paper panel's geometry belongs to the plane that owns that panel, so what
     goes here is the words and nothing about how they are set.
     """
-    assert inputs.tv_rendition is not None, "entry_for is only called for works `assess` passed"
+    if inputs.tv_rendition is None:
+        # Raised rather than asserted: `assert` disappears under -O, and what it
+        # would have caught is a caller that skipped `assess` — which would put a
+        # work with no render into the manifest and take the wall down to a
+        # missing file rather than to a named exclusion.
+        raise ValueError(f"Work {inputs.artwork.id!r} has no television render; call assess before entry_for.")
     artist = inputs.artist
     return ManifestEntry(
         work_id=inputs.artwork.id,

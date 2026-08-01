@@ -240,6 +240,13 @@ class DisplayService:
         which means a curator deleting what is on the wall gets *some* other
         theme on it without having chosen one. Deleting the last theme is allowed
         — no themes at all is a normal empty state, not the forbidden one.
+
+        **Deleting the last theme deliberately does not rewrite the manifest.**
+        The wall keeps showing what it was showing, which is the same posture as
+        curation being stopped entirely: the display plane runs off the last
+        manifest indefinitely, and that is normal operation rather than
+        degradation. Publishing an empty manifest instead would blank the wall as
+        a side effect of tidying up the catalogue.
         """
         theme = self.get_theme(theme_id)
         if theme.is_active and len(self._store.list_themes()) > 1:

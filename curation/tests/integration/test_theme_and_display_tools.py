@@ -292,6 +292,26 @@ async def test_a_theme_that_is_not_on_the_wall_can_be_deleted(server_url):
     assert [theme["name"] for theme in listed["themes"]] == ["American Modernists"]
 
 
+async def test_deleting_the_last_theme_leaves_the_wall_showing_what_it_had(server_url, wall):
+    """Tidying the catalogue must not blank the wall as a side effect.
+
+    Same posture as curation being stopped entirely: the display plane runs off
+    the last manifest indefinitely, which is normal operation rather than
+    degradation. Publishing an empty manifest here would be this plane reaching
+    over and turning the art off.
+    """
+    theme_id = await _a_theme(server_url)
+    await call(server_url, "art_display", action="sync", theme_id=theme_id)
+    before = wall.manifest_path.read_text()
+
+    payload, errored = await call(server_url, "art_theme", action="delete", theme_id=theme_id)
+
+    assert errored is False
+    listed, _ = await call(server_url, "art_theme", action="list")
+    assert listed["themes"] == []
+    assert wall.manifest_path.read_text() == before
+
+
 async def test_deleting_a_theme_with_works_in_it_leaves_the_works_alone(server_url, seeded_titles):
     await _a_theme(server_url, name="American Modernists")
     spare = await _a_theme(server_url, name="Surrealists")

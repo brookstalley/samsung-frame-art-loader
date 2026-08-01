@@ -441,6 +441,20 @@ def test_the_manifest_directory_is_created_if_it_does_not_exist(tmp_path):
 # -- refusals ---------------------------------------------------------------------
 
 
+def test_an_unrendered_work_cannot_be_made_into_an_entry(service):
+    """The guard on the one path that would put a broken entry in the manifest.
+
+    `assess` is what keeps this unreachable; the raise is what makes a caller
+    that skipped it fail loudly here rather than take the wall down to a missing
+    file later.
+    """
+    work = service.add_artwork(title="Nighthawks")
+    inputs = builder.WorkInputs(artwork=work, artist=None, original=None, tv_rendition=None, mat_color=None)
+
+    with pytest.raises(ValueError, match="no television render"):
+        builder.entry_for(inputs)
+
+
 def test_building_with_no_active_theme_is_refused_rather_than_writing_an_empty_manifest(display):
     """An empty manifest would read as "show nothing", which is not what "no theme yet" means."""
     with pytest.raises(ServiceError, match="No theme is active"):
