@@ -14,7 +14,7 @@ import pytest
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.seed.__main__ import main, render
-from curation.seed.ingest import SeedNote, SeedNoteEntry, SeedReport, SeededWork
+from curation.seed.ingest import SeededWork, SeedNote, SeedNoteEntry, SeedReport
 from curation.services.catalogue import CatalogueService
 
 

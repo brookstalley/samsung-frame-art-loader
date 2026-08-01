@@ -205,3 +205,6 @@ token_file
 all.backup
 all.json.backup
 all.json.backup2
+
+# Prawduct session files
+.prawduct/.handoff-notes.md

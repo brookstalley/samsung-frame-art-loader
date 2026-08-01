@@ -97,6 +97,11 @@ class TestArtistDetails:
         parsed = parse("Constantin Brancusi", "Constantin Brancusi\nFrench, born Romania, 1876–1957", born=1876, died=1952)
         assert parsed.died == 1957
 
+    def test_they_beat_it_on_the_nationality_too(self):
+        """The two agree everywhere in the corpus today, so only a test states which wins."""
+        parsed = parse("Someone", "Someone\nDutch, 1872–1944", nationality="Belgian")
+        assert parsed.nationality == "Dutch"
+
 
 class TestWithoutArtistDetails:
     """Eight records carry no `artist_details` line at all."""
