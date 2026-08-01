@@ -71,12 +71,17 @@ into a recorded fact.
 
 ## Status
 
-This list is in **build order, not numeric order**. The three hardware-gated
-chunks sit at the end because the tooling takes the first unchecked box as the
-current chunk, and a blocked chunk parked ahead of active work silently hands its
-`Critic mode:` and `Type:` to every chunk after it. They are blocked, not
-deprioritised, and their numbers are unchanged; their detailed sections stay in
-numeric order below.
+This list is in **build order, not numeric order** — chunk numbers are stable
+identities, and their detailed sections stay in numeric order below. The list was
+re-ordered on 2026-07-31; the two changes and why are recorded in the Context
+block under "Re-sequenced 2026-07-31".
+
+The hardware-gated chunks are **no longer blocked** — the Pi and panel are on the
+bench as of 2026-07-31 — so they take their place in build order rather than
+sitting at the end. The reason they were parked there still holds for anything
+that becomes blocked later: the tooling takes the first unchecked box as the
+current chunk, and a blocked chunk ahead of active work silently hands its
+`Critic mode:` and `Type:` to every chunk after it.
 
 - [x] Chunk 01: Untrack the TV pairing token; drop the catalogue backups (issue #4)
 - [x] Chunk 02: Deployment values out of source (issue #5) + `art.py` defect dispositions (issue #6)
@@ -87,6 +92,10 @@ numeric order below.
 - [x] Chunk 08B: The discovery entities, both state machines, startup reconciliation
 - [ ] Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
 - [ ] Chunk 10: Seed the catalogue with the 41 existing works (v1 scope item)
+- [ ] Chunk 10B: The first browser surface — catalogue, themes, manifest, health
+- [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
+- [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
+- [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [ ] Chunk 11: Contract tests — MCP evaluation harness (issue #17) and plane isolation (issue #7)
 - [ ] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics
 - [ ] Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
@@ -95,14 +104,8 @@ numeric order below.
 - [ ] Chunk 16: Discovery phase 2 — works to instances, resolve runs
 - [ ] Chunk 17: Review and acceptance — `art_review`, thumbnails inline, promotion
 - [ ] Chunk 18: Acquisition and preparation — fetch, metadata, mat engine, 4K render
-- [ ] Chunk 19: Curation web UI and HTTP API
+- [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
-
-Blocked on hardware — unblock these the moment the Pi and panel are on the bench:
-
-- [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13) — **needs hardware**
-- [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9) — **needs hardware**
-- [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3) — **needs hardware**
 
 Context: Plan authored 2026-07-20. Chunks 01, 02 and 06 landed 2026-07-27 in one
 pass; **Chunk 07 landed the same day**, took its `final` Critic round and the
@@ -130,6 +133,36 @@ every surface takes, closing the finding 08A's review carried forward.
 per-theme rotation settings, whose only reader is the manifest builder in Chunk
 09, and `work_dedup_key`'s derivation, whose spike is Chunk 15 — the column and
 the suppression that reads it are in place, and the caller supplies the key.
+
+**Re-sequenced 2026-07-31 — two operator decisions.**
+
+*First: the hardware chunks are unblocked.* The Pi and panel are on the bench, so
+03, 04 and 05 move from the blocked list into build order. They keep their numbers
+and their specs; only their position changed. They sit after 10B because 09 and 10
+are on every path to anything visible, and before 11–13 because 05 verifies the
+library Chunk 12 is written against and 04 verifies the panel stack Chunk 13 needs
+— both are assumptions in Requirements Confidence above, and each converts to a
+recorded fact cheaply. **If bench access turns out to be time-limited, pull 04 and
+05 ahead of 09** — that is a live reordering, not a re-plan, and it is the
+operator's call.
+
+*Second: a first browser surface lands at 10B instead of waiting for Chunk 19.*
+The reason the whole UI sat at position 19 was that it binds every operation, and
+most operations did not exist. After Chunk 10 that is no longer true for a real
+subset: 41 seeded works with images on disk, themes, and a manifest with reasoned
+exclusions. **10B is a re-sequencing of scope Chunk 19 already specifies, not new
+scope** — it takes the catalogue/theme/health third of 19's list and leaves the
+discovery two-thirds (intent entry, run view, approval gate, cost display, the
+review grid with alternates) where they are, because the services behind them
+arrive in 14–18. Chunk 19 keeps its number and builds onto 10B's surface rather
+than standing one up.
+
+The cost is named rather than discovered: the **UI checkpoint moves from "before
+Chunk 19" to "before 10B"**, so issues #2 (design system) and #10 (second-look
+shelf) come due earlier, and every chunk from 14 on now has a UI surface it may
+need to extend. The benefit is that the product becomes usable by a human eleven
+chunks earlier, and each later chunk's UI is reviewed as it lands instead of all
+at once.
 
 ## Scaffolding
 
@@ -789,6 +822,54 @@ surface was reviewed on its own.
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
+### Chunk 10B: The first browser surface — catalogue, themes, manifest, health
+
+- **Description:** The `/` and `/api/*` surfaces `architecture.md` has always
+  drawn, built now over the services that exist rather than waiting for the ones
+  that do not. **This is Chunk 19's scope, split — not new scope.** It takes the
+  catalogue/theme/health third of 19's list and leaves the discovery two-thirds
+  where they are. Scope: the work grid, image-forward, one card per work, with
+  `display_fit` and rendered-inches labels and non-colour state indicators per the
+  accessibility decision; a work detail view (metadata, artists, sources,
+  renditions); themes (create, add/remove, reorder, activate); the manifest view —
+  what the active theme's manifest contains and **every exclusion with its reason**,
+  which is Chunk 09's exclusion report reaching a human for the first time; and the
+  health panel, stating heartbeat age in absolute terms and reporting honestly that
+  no heartbeat file exists yet, since the display plane arrives at Chunk 13.
+  Thumbnail serving is a deliverable, not an assumption: the seeded renditions are
+  4K files, and a grid of 41 of them is not a page. WCAG 2.1 AA baseline; UI chrome
+  never competes with artwork for contrast.
+- **Out of scope, deliberately, and named so it is not read as dropped:** intent
+  entry and its estimate, the run view, the approval gate, cost display, and the
+  review grid with alternates behind each card. Every one of those binds a service
+  built in Chunks 14–18. They stay in Chunk 19.
+- **Depends on:** Chunk 09 (themes and the manifest with its exclusion report),
+  Chunk 10 (41 works with images on disk — a UI over an empty catalogue proves
+  nothing), and the UI checkpoint, which moves here from before Chunk 19
+- **Artifacts consumed:** `architecture.md` (§ Serves three surfaces from one ASGI
+  app, § the internal-layering diagram), `api-contract.md` (§ the HTTP surface
+  carries no stability obligation; § operation logic lives ONLY in the service
+  layer), `security-model.md` (LAN-only, no authentication — the single-principal
+  position is deliberate and already recorded),
+  `design_decisions.accessibility_approach`
+- **Visual change:** yes — the first human-facing surface this product has had
+- **Deliverables:** real handlers in `curation/src/curation/http/` (thin bindings:
+  unpack, call one service method, format), the pages above, a thumbnail path
+- **Tests:** integration — every handler is dispatch + formatting over an existing
+  service method, so the service-layer norm holds by construction; the flows
+  exercised through the real HTTP surface against a booted server, per the suite's
+  existing rule that surface work runs against real uvicorn, not an in-process
+  transport
+- **Acceptance criteria:** from a browser, touching no filesystem, no JSON and no
+  SSH, a curator can see all 41 works with their images, build a theme, activate
+  it, and read exactly why any work is absent from the resulting manifest; the
+  health panel states observations with ages, never verdicts, and says plainly that
+  the display plane is not running yet
+- **Done when:**
+  1. Acceptance criteria met and tests pass, plus the operator's look
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
 **Contract enforcement (Chunk 11).** Pinned before the display plane and
 discovery build against these surfaces.
 
@@ -1201,23 +1282,26 @@ binds already exists and is contract-tested.
 > state that `observability-strategy.md`'s failure table maps failures onto.
 > Either the panel surfaces them or that table has no reader.
 
-### Chunk 19: Curation web UI and HTTP API
+### Chunk 19: Curation web UI and HTTP API — the discovery half
 
-- **Description:** The browser surface, as thin HTTP bindings over the same
-  service layer (typed, paginated, partial data — the recorded reason the UI
-  does not ride MCP). Scope: intent entry with the estimate at the point of
-  decision; the run view (status, work list trimming, approval gate, costs
-  before and after); the review grid (image-forward, one card per work,
-  alternates behind it, `display_fit` and rendered-inches labels, non-colour
-  state indicators per the accessibility decision); themes (create, order,
-  activate); and the health panel — heartbeat age in absolute terms (never a
-  green dot), `limit_remaining`, manifest exclusions with reasons, backup age
-  (fed by Chunk 20). WCAG 2.1 AA baseline; UI chrome never competes with
-  artwork for contrast. The pre-UI governance checkpoint (below) disposes
-  issues #2 (design system) and #10 (MCP second-look shelf) before this chunk
-  starts — neither is silently included nor silently dropped.
-- **Depends on:** Chunks 14–18 (every operation it binds), 13 (heartbeat to
-  display); the pre-UI checkpoint
+- **Description:** The rest of the browser surface, built **onto Chunk 10B's**
+  rather than standing one up: same thin HTTP bindings over the same service layer
+  (typed, paginated, partial data — the recorded reason the UI does not ride MCP),
+  same design decisions, same accessibility baseline. What 10B could not build
+  because the services did not exist yet: intent entry with the estimate at the
+  point of decision; the run view (status, work list trimming, approval gate, costs
+  before and after); and the review grid (image-forward, one card per work,
+  **alternates behind it** — 10B's grid shows accepted works only, with no
+  alternates to stack). It also completes the health panel 10B started, adding
+  `limit_remaining` and backup age (fed by Chunk 20).
+  **What 10B already delivered — the work grid, work detail, themes, the manifest
+  view with its exclusion reasons, and heartbeat age — is not rebuilt here.**
+  The pre-UI governance checkpoint disposed issues #2 (design system) and #10 (MCP
+  second-look shelf) before 10B; if #2 was settled as one-off CSS with a recorded
+  revisit, this is the chunk that revisits it, since it is where the surface stops
+  being small.
+- **Depends on:** Chunk 10B (the surface it extends), Chunks 14–18 (every
+  operation it newly binds), 13 (heartbeat to display)
 - **Artifacts consumed:** `product-brief.md` (§ Identity, flows 1/3/5),
   `design_decisions.accessibility_approach`,
   `observability-strategy.md` § The Health Surface, `api-contract.md` (the HTTP
@@ -1298,10 +1382,13 @@ cumulative review is the release-readiness gate.
   planes; verify the norms held under real hardware (plane isolation green,
   manifest the only channel, no false success anywhere in the journal), and that
   the cutover left nothing load-bearing in the legacy modules.
-- **Before Chunk 19** — the UI checkpoint: dispose issue #2 (design system now,
-  or accept one-off CSS with a recorded revisit) and issue #10 (second-look
-  shelf in scope or explicitly deferred); confirm the UI scope above still
-  matches what the built product needs.
+- **Before Chunk 10B** — the UI checkpoint, moved here from before Chunk 19 on
+  2026-07-31 when the first browser surface was re-sequenced forward: dispose
+  issue #2 (design system now, or accept one-off CSS with a recorded revisit) and
+  issue #10 (second-look shelf in scope or explicitly deferred); confirm the UI
+  scope still matches what the built product needs. It runs once, before the first
+  surface exists — Chunk 19 inherits its dispositions rather than re-opening them,
+  except for a #2 revisit that was explicitly deferred to it.
 - **After Chunk 20** — the cumulative review, per the chunk's `cumulative-final`
   type.
 
@@ -1319,7 +1406,8 @@ cumulative review is the release-readiness gate.
   is a repo-wide grep, not a local edit", with per-artifact acknowledgement in
   the commit message. Chunk 15 carries the largest such burst and says so.
 - **Issue #10 (second-look shelf)** and **issue #2 (design system)** — decided
-  at the pre-UI checkpoint, not silently included or dropped now.
+  at the pre-UI checkpoint (now before Chunk 10B), not silently included or
+  dropped now.
   `security-model.md` records #10 as "filed as backlog work, not committed
   design".
 - **Ambient adaptation beyond the ported brightness loop** (auto art-mode
