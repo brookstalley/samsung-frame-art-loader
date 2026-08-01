@@ -404,13 +404,13 @@ async def test_next_writes_a_directive_and_does_not_claim_the_wall_changed(serve
     assert "not a confirmation" in payload["notice"]
 
 
-async def test_show_now_pins_the_work_and_the_sequence_advances_once_per_call(server_url):
-    works = await _the_works(server_url)
+async def test_show_now_pins_the_work_and_the_sequence_advances_once_per_call(server_url, ready_work):
+    work = ready_work("Automat")
 
-    first, _ = await call(server_url, "art_display", action="show_now", artwork_id=works["Nighthawks"])
+    first, _ = await call(server_url, "art_display", action="show_now", artwork_id=work.id)
     second, _ = await call(server_url, "art_display", action="next")
 
-    assert first["pinned_work_id"] == works["Nighthawks"]
+    assert first["pinned_work_id"] == work.id
     assert first["sequence"] == 1
     # A step supersedes the pin: an advance with the pin still set would read as
     # "jump there again" rather than "move on".
@@ -418,17 +418,17 @@ async def test_show_now_pins_the_work_and_the_sequence_advances_once_per_call(se
     assert second["pinned_work_id"] is None
 
 
-async def test_the_directive_reaches_the_manifest(server_url, wall):
+async def test_the_directive_reaches_the_manifest(server_url, wall, ready_work):
     """The one hop that makes a directive real: it has to be in the file display polls."""
     theme_id = await _a_theme(server_url)
-    works = await _the_works(server_url)
-    await call(server_url, "art_display", action="show_now", artwork_id=works["Nighthawks"])
+    work = ready_work("Automat")
+    await call(server_url, "art_display", action="show_now", artwork_id=work.id)
 
     await call(server_url, "art_display", action="sync", theme_id=theme_id)
 
     directive = json.loads(wall.manifest_path.read_text())["directive"]
     assert directive["sequence"] == 1
-    assert directive["pinned_work_id"] == works["Nighthawks"]
+    assert directive["pinned_work_id"] == work.id
 
 
 async def test_syncing_twice_does_not_advance_the_sequence(server_url, wall):

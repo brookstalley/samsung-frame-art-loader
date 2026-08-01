@@ -94,3 +94,53 @@ def _a_moment():
     from datetime import UTC, datetime
 
     return datetime(2026, 7, 20, 9, 30, tzinfo=UTC)
+
+
+def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monkeypatch, caplog):
+    """A misconfiguration should be one journal line away rather than a mystery.
+
+    The operational spec requires each plane to log its resolved `ART_ROOT` and
+    its own panel geometry at startup. Asserted through `main()` because a log
+    line nothing emits reads exactly like one nobody looked for — and the derived
+    pixel density is what the mat and the resolution floor are computed from, so
+    a wrong panel is silent until the art comes out the wrong size.
+    """
+    art_root = tmp_path / "art"
+    art_root.mkdir()
+    monkeypatch.setattr(
+        Settings,
+        "from_env",
+        classmethod(
+            lambda cls: cls(
+                art_root=art_root,
+                catalogue_path=art_root / "catalogue.sqlite",
+                manifest_path=art_root / MANIFEST_FILENAME,
+                heartbeat_path=art_root / HEARTBEAT_FILENAME,
+                host="127.0.0.1",
+                port=0,
+                rotation_interval_seconds=931,
+                rotation_shuffle=False,
+                # A panel no default could produce, so a line built from the
+                # constants rather than the resolved settings would show.
+                tv_panel_width_px=1920,
+                tv_panel_height_px=1080,
+                tv_panel_diagonal_inches=55.0,
+            )
+        ),
+    )
+    monkeypatch.setattr(entry_point.uvicorn, "run", lambda app, **kwargs: None)
+
+    with caplog.at_level("INFO"):
+        entry_point.main()
+
+    logged = caplog.text
+    assert str(art_root) in logged
+    assert "1920x1080px/55.0" in logged
+    # 1920x1080 measures 2202.9 pixels corner to corner; over 55 inches that is
+    # 40.1 per inch. Derived, so this also pins that the derivation ran.
+    assert "40.1 px per inch" in logged
+    assert "rotation=931s" in logged
+    assert "shuffle=False" in logged
+    # The e-paper panel belongs to the display plane, and this one must hold no
+    # fact about it.
+    assert "1448" not in logged and "1072" not in logged

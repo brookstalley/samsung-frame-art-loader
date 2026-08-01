@@ -159,10 +159,25 @@ display plane a command; it writes desired state, and display converges on it.**
 | `show_now(work_id)` | Increments the manifest's directive `sequence` and sets `pinned_work_id` | Jumps to that work, then continues rotating from there |
 | `next` | Increments the directive `sequence` with no pin | Steps to the next work in the list |
 
-`show_now` **refuses an archived work** rather than pinning one, and archiving the
-pinned work withdraws the pin without advancing the sequence. Both rules and their
-reasoning live in `data-model.md` § Directive and are deliberately not restated
-here; what this table owes is that a caller sees a refusal, not a silent no-op.
+`show_now` **refuses any work that could not reach the wall**, rather than pinning
+one, and archiving the pinned work withdraws the pin without advancing the
+sequence. Both rules and their reasoning live in `data-model.md` § Directive and
+are deliberately not restated here; what this table owes is that a caller sees a
+refusal, not a silent no-op.
+
+**Widened from "refuses an archived work" 2026-07-31.** Archiving is what
+`data-model.md` specifies, but the neighbouring causes fail identically from the
+curator's side: a work with no original, no render, a stale render or no current
+mat colour is equally unshowable, and pinning one wrote a directive naming
+something the manifest does not carry. The caller was answered "the directive is
+written" and the wall never moved — the exact silence the exclusion report exists
+to break, arriving through the one action that did not consult readiness. So the
+refusal applies the whole readiness rule and returns the same sentence the
+manifest build would have given, which tells the curator what to fix.
+
+This does not discharge the display plane's obligation. Readiness can change
+between a pin being written and the manifest being read, so an unsatisfiable pin
+is still reachable; Chunk 12 defines what display does with one.
 
 Two consequences worth stating because they surprise:
 

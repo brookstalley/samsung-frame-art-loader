@@ -23,7 +23,13 @@ from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 from curation.persistence.discovery_records import DiscoveryRun, InitiatedBy
 from curation.persistence.durable import SqliteDurableStore
 from curation.persistence.file import open_catalogue_file
-from curation.persistence.records import AcquisitionMethod, SourceClass
+from curation.persistence.records import (
+    AcquisitionMethod,
+    MatMethod,
+    RenditionKind,
+    RightsStatus,
+    SourceClass,
+)
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.persistence.sqlite_discovery import SqliteDiscovery
 from curation.services.catalogue import CatalogueService
@@ -88,6 +94,52 @@ def discovery(services: Services) -> DiscoveryService:
 @pytest.fixture
 def display(services: Services) -> DisplayService:
     return services.display
+
+
+@pytest.fixture
+def ready_work(service: CatalogueService):
+    """A work with everything catalogue readiness asks for, and nothing more.
+
+    A factory rather than a fixture row: the readiness tests each remove exactly
+    one of the four requirements, and the missing one is the point. It lives here
+    rather than beside them because anything that puts a work on the wall — a
+    manifest entry, a directive pin — needs a work that can actually be shown.
+    """
+
+    def _ready(title="Nighthawks", *, artist_id=None, original=True, rendition=True, mat=True, content_hash="hash-1"):
+        work = service.add_artwork(title=title, artist_id=artist_id, date_created="1942", medium="Oil on canvas")
+        source = service.add_source(
+            artwork_id=work.id,
+            url=f"https://museum.example/{work.id}",
+            provider="artic",
+            source_class=SourceClass.INSTITUTIONAL,
+            acquisition_method=AcquisitionMethod.DEZOOMIFY,
+            rights_status=RightsStatus.PUBLIC_DOMAIN,
+            is_primary=True,
+        )
+        if original:
+            service.record_original(
+                artwork_id=work.id,
+                source_id=source.id,
+                path=f"raw/{work.id}.tif",
+                width=6000,
+                height=4000,
+                byte_size=90_000_000,
+                content_hash=content_hash,
+            )
+        if mat:
+            service.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)
+        if rendition and original:
+            service.record_rendition(
+                artwork_id=work.id,
+                kind=RenditionKind.TV_DISPLAY,
+                target_width=3840,
+                target_height=2160,
+                path=f"ready/{work.id}.jpg",
+            )
+        return work
+
+    return _ready
 
 
 @pytest.fixture

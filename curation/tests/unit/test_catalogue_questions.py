@@ -20,6 +20,37 @@ from curation.persistence.records import (
 )
 from curation.services.display_fit import ArtworkBox, DisplayFit
 
+
+def _make_showable(service, work):
+    """Give a work everything readiness asks for, so the wall will accept a pin on it."""
+    source = service.add_source(
+        artwork_id=work.id,
+        url="https://museum.example/figure-five",
+        provider="artic",
+        source_class=SourceClass.INSTITUTIONAL,
+        acquisition_method=AcquisitionMethod.DEZOOMIFY,
+        rights_status=RightsStatus.PUBLIC_DOMAIN,
+        is_primary=True,
+    )
+    service.record_original(
+        artwork_id=work.id,
+        source_id=source.id,
+        path="raw/figure-five.tif",
+        width=6000,
+        height=4000,
+        byte_size=90_000_000,
+        content_hash="hash-1",
+    )
+    service.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)
+    service.record_rendition(
+        artwork_id=work.id,
+        kind=RenditionKind.TV_DISPLAY,
+        target_width=3840,
+        target_height=2160,
+        path="ready/figure-five.jpg",
+    )
+
+
 #: The reference 42" deployment's artwork box, as worked out in the
 #: non-functional requirements.
 _BOX = ArtworkBox(width=3316, height=1597, pixels_per_inch=105.0, floor_inches=12.0)
@@ -76,6 +107,7 @@ def test_q2_which_work_the_wall_is_on_so_the_label_can_match_it(service, display
         medium="Oil, graphite, ink and gold leaf on paperboard",
         dimensions="90.2 x 76.2 cm",
     )
+    _make_showable(service, figure_five)
     theme = display.add_theme(name="American Modernists")
     display.add_to_theme(theme_id=theme.id, artwork_id=figure_five.id, position=1)
 

@@ -391,6 +391,13 @@ to make it.
 > sequence and the pin forward, because the display plane acts only on an advance
 > and a pin sitting behind an unchanged sequence is inert.
 >
+> **Widened at build, 2026-07-31:** the refusal below now covers every work that
+> could not reach the wall, not only archived ones — a work with no original, no
+> render, a stale render or no current mat colour is unshowable in exactly the
+> same way, and pinning one produced a written directive and a wall that never
+> moved. The reasoning and the residual display-side obligation are in
+> `api-contract.md` § How `art_display` reaches the display plane.
+>
 > For the same reason, `show_now` **refuses an archived work** rather than pinning
 > one and relying on the manifest to filter it out later.
 

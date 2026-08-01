@@ -297,7 +297,7 @@ the walking skeleton deliberately: they close the live credential leak first of
 all, then retire the two build-blocking unknowns on real hardware. The
 architecture-proving slice is Chunk 07.
 
-### Chunk 01: Untrack and rotate the TV pairing token; drop the catalogue backups (issue #4)
+### Chunk 01: Untrack the TV pairing token; drop the catalogue backups (issue #4)
 
 - **Description:** Close the live credential leak in the public repo, in the
   corrected order: untrack first, then re-pair — the reverse order commits the

@@ -20,57 +20,9 @@ from curation.manifest.builder import (
     write_atomically,
 )
 from curation.persistence.records import (
-    AcquisitionMethod,
-    MatMethod,
     RenditionKind,
-    RightsStatus,
-    SourceClass,
 )
 from curation.services.errors import ServiceError
-
-
-@pytest.fixture
-def ready_work(service):
-    """A work with everything catalogue readiness asks for, and nothing more.
-
-    A factory rather than a fixture row: nearly every test here removes exactly
-    one of the four requirements, and the one that is missing is the point.
-    """
-
-    def _ready(title="Nighthawks", *, artist_id=None, original=True, rendition=True, mat=True, content_hash="hash-1"):
-        work = service.add_artwork(title=title, artist_id=artist_id, date_created="1942", medium="Oil on canvas")
-        source = service.add_source(
-            artwork_id=work.id,
-            url=f"https://museum.example/{work.id}",
-            provider="artic",
-            source_class=SourceClass.INSTITUTIONAL,
-            acquisition_method=AcquisitionMethod.DEZOOMIFY,
-            rights_status=RightsStatus.PUBLIC_DOMAIN,
-            is_primary=True,
-        )
-        if original:
-            service.record_original(
-                artwork_id=work.id,
-                source_id=source.id,
-                path=f"raw/{work.id}.tif",
-                width=6000,
-                height=4000,
-                byte_size=90_000_000,
-                content_hash=content_hash,
-            )
-        if mat:
-            service.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)
-        if rendition and original:
-            service.record_rendition(
-                artwork_id=work.id,
-                kind=RenditionKind.TV_DISPLAY,
-                target_width=3840,
-                target_height=2160,
-                path=f"ready/{work.id}.jpg",
-            )
-        return work
-
-    return _ready
 
 
 @pytest.fixture
@@ -439,6 +391,41 @@ def test_the_manifest_directory_is_created_if_it_does_not_exist(tmp_path):
 
 
 # -- refusals ---------------------------------------------------------------------
+
+
+def test_pinning_a_work_that_cannot_reach_the_wall_is_refused_with_its_reason(display, ready_work):
+    """The one path that could write a directive nothing can carry out.
+
+    Answering "the directive is written" and then never moving the wall is the
+    silence the exclusion report exists to break — arriving through the action
+    that did not consult readiness. The refusal carries the same sentence the
+    manifest build would have given, so the curator learns what to fix.
+    """
+    work = ready_work(rendition=False)
+
+    with pytest.raises(ServiceError, match="has a master image but has not been rendered"):
+        display.show_work_now(work.id)
+
+    # And nothing was written: a refused directive must not move the counter.
+    assert display.read_directive().sequence == 0
+    assert display.read_directive().pinned_work_id is None
+
+
+def test_a_work_becomes_pinnable_once_it_is_displayable(display, service, ready_work):
+    """The refusal is a state, not a verdict about the work."""
+    work = ready_work(rendition=False)
+    with pytest.raises(ServiceError):
+        display.show_work_now(work.id)
+
+    service.record_rendition(
+        artwork_id=work.id,
+        kind=RenditionKind.TV_DISPLAY,
+        target_width=3840,
+        target_height=2160,
+        path=f"ready/{work.id}.jpg",
+    )
+
+    assert display.show_work_now(work.id).pinned_work_id == work.id
 
 
 def test_an_unrendered_work_cannot_be_made_into_an_entry(service):

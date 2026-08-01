@@ -39,7 +39,7 @@ from curation.manifest.builder import (
 )
 from curation.manifest.heartbeat import HeartbeatReading
 from curation.persistence.catalogue import CatalogueStore
-from curation.persistence.records import ArtworkStatus, Directive, MatColor, Theme, ThemeMembership
+from curation.persistence.records import Directive, Theme, ThemeMembership
 from curation.services.catalogue import ArtworkDetail, CatalogueService
 from curation.services.errors import ServiceError
 from curation.services.fields import require_text
@@ -283,10 +283,25 @@ class DisplayService:
         return self._advance(pinned_work_id=None)
 
     def show_work_now(self, artwork_id: str) -> Directive:
-        """Tell the display plane to jump to this work and carry on from there."""
-        artwork = self._catalogue.get_artwork(artwork_id).artwork
-        if artwork.status is ArtworkStatus.ARCHIVED:
-            raise ServiceError(f"Artwork {artwork_id!r} is archived, so it is out of circulation and cannot be shown.")
+        """Tell the display plane to jump to this work and carry on from there.
+
+        **Refused if the work is not displayable**, with the same reason the
+        manifest build would have given. `data-model.md` specifies the refusal
+        for an archived work; this applies the whole readiness rule, because the
+        neighbouring cases fail identically from the curator's side. Pinning a
+        work with no render writes a directive naming something the manifest does
+        not carry, answers "the directive is written", and the wall never moves —
+        which is the silence the exclusion report exists to break, arriving
+        through the one path that did not consult readiness.
+
+        This does not remove the display plane's own obligation. Readiness can
+        change between the pin being written and the manifest being read, so an
+        unsatisfiable pin is still reachable and Chunk 12 defines what display
+        does with one. This closes the case a curator can be told about now.
+        """
+        excluded = assess(self._gather(artwork_id))
+        if excluded is not None:
+            raise ServiceError(f"Artwork {artwork_id!r} cannot be shown on the wall: {excluded.detail}")
         return self._advance(pinned_work_id=artwork_id)
 
     # -- the manifest ---------------------------------------------------------
@@ -422,15 +437,15 @@ class DisplayService:
             artwork=detail.artwork,
             artist=detail.artist,
             original=self._store.get_original(artwork_id),
+            # Straight to the store, because `CatalogueService.list_renditions`
+            # returns a `RenditionView` and the readiness rule judges the record.
             tv_rendition=tv_rendition_of(self._store.list_renditions(artwork_id)),
-            mat_color=self._current_mat_color(artwork_id),
+            # Through the catalogue service, because it already owns what
+            # "current" means. A second copy of that rule here would decide
+            # manifest membership while the first decided everything else, and
+            # only one of them would be updated when the rule changed.
+            mat_color=self._catalogue.current_mat_color(artwork_id),
         )
-
-    def _current_mat_color(self, artwork_id: str) -> MatColor | None:
-        for mat_color in self._store.list_mat_colors(artwork_id):
-            if mat_color.is_current:
-                return mat_color
-        return None
 
     @staticmethod
     def _require_position(position: int | None) -> int | None:

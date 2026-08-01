@@ -226,8 +226,11 @@ ART_THEME: Final = ToolRecord(
             example="art_theme(action='activate', theme_id='<a theme_id>')",
             params=(_THEME_ID,),
             tips=(
-                "This changes which theme is active. It does not itself rewrite the manifest — "
-                "call art_display(action='sync') to publish it to the wall.",
+                "This publishes the theme: it rewrites the manifest, so the wall converges on it "
+                "within about a second. No separate sync is needed.",
+                "The result names every member that will NOT be on the wall and why, exactly as "
+                "art_display(action='sync') does — a theme can be half-displayable.",
+                "Switching costs no television writes: the whole library stays on the TV and " "rotation is driven from here.",
             ),
         ),
     ),

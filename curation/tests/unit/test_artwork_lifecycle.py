@@ -18,11 +18,51 @@ import pytest
 from curation.manifest.builder import MANIFEST_FILENAME
 from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 from curation.persistence.file import open_catalogue_file
-from curation.persistence.records import ArtworkStatus, MatMethod, Theme
+from curation.persistence.records import (
+    AcquisitionMethod,
+    ArtworkStatus,
+    MatMethod,
+    RenditionKind,
+    RightsStatus,
+    SourceClass,
+    Theme,
+)
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.services.catalogue import CatalogueService
 from curation.services.display import DisplayService, WallSettings
 from curation.services.errors import ServiceError
+
+
+def _a_showable_work(catalogue):
+    """A work the directive will accept a pin on — one that could reach the wall."""
+    work = catalogue.add_artwork(title="Nighthawks")
+    source = catalogue.add_source(
+        artwork_id=work.id,
+        url="https://museum.example/nighthawks",
+        provider="artic",
+        source_class=SourceClass.INSTITUTIONAL,
+        acquisition_method=AcquisitionMethod.DEZOOMIFY,
+        rights_status=RightsStatus.PUBLIC_DOMAIN,
+        is_primary=True,
+    )
+    catalogue.record_original(
+        artwork_id=work.id,
+        source_id=source.id,
+        path="raw/nighthawks.tif",
+        width=6000,
+        height=4000,
+        byte_size=90_000_000,
+        content_hash="hash-1",
+    )
+    catalogue.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)
+    catalogue.record_rendition(
+        artwork_id=work.id,
+        kind=RenditionKind.TV_DISPLAY,
+        target_width=3840,
+        target_height=2160,
+        path="ready/nighthawks.jpg",
+    )
+    return work
 
 
 def _display(store, tmp_path, *, catalogue=None):
@@ -114,8 +154,8 @@ def test_stepping_on_advances_the_sequence_and_carries_no_pin(display):
     assert second.pinned_work_id is None
 
 
-def test_showing_a_work_now_advances_the_sequence_and_pins_it(service, display):
-    work = service.add_artwork(title="Nighthawks")
+def test_showing_a_work_now_advances_the_sequence_and_pins_it(ready_work, display):
+    work = ready_work()
 
     directive = display.show_work_now(work.id)
 
@@ -123,9 +163,9 @@ def test_showing_a_work_now_advances_the_sequence_and_pins_it(service, display):
     assert directive.pinned_work_id == work.id
 
 
-def test_stepping_on_clears_a_standing_pin(service, display):
+def test_stepping_on_clears_a_standing_pin(ready_work, display):
     """A step that left the pin in place would read as "jump there again"."""
-    work = service.add_artwork(title="Nighthawks")
+    work = ready_work()
     display.show_work_now(work.id)
 
     directive = display.step_display()
@@ -134,8 +174,8 @@ def test_stepping_on_clears_a_standing_pin(service, display):
     assert directive.pinned_work_id is None
 
 
-def test_archiving_the_pinned_work_withdraws_the_pin(service, display):
-    work = service.add_artwork(title="Nighthawks")
+def test_archiving_the_pinned_work_withdraws_the_pin(service, ready_work, display):
+    work = ready_work()
     display.show_work_now(work.id)
 
     service.archive_artwork(work.id)
@@ -143,14 +183,14 @@ def test_archiving_the_pinned_work_withdraws_the_pin(service, display):
     assert display.read_directive().pinned_work_id is None
 
 
-def test_withdrawing_a_pin_does_not_advance_the_sequence(service, display):
+def test_withdrawing_a_pin_does_not_advance_the_sequence(service, ready_work, display):
     """The display plane acts every time the number goes up.
 
     Archiving a work is not an instruction to it, so an advance here would fire a
     directive nobody issued — and the work it would step to is unrelated to the
     one that was archived.
     """
-    work = service.add_artwork(title="Nighthawks")
+    work = ready_work()
     display.show_work_now(work.id)
     before = display.read_directive().sequence
 
@@ -159,8 +199,8 @@ def test_withdrawing_a_pin_does_not_advance_the_sequence(service, display):
     assert display.read_directive().sequence == before
 
 
-def test_archiving_some_other_work_leaves_the_pin_alone(service, display):
-    pinned = service.add_artwork(title="Nighthawks")
+def test_archiving_some_other_work_leaves_the_pin_alone(service, ready_work, display):
+    pinned = ready_work()
     other = service.add_artwork(title="Chop Suey")
     display.show_work_now(pinned.id)
 
@@ -169,11 +209,11 @@ def test_archiving_some_other_work_leaves_the_pin_alone(service, display):
     assert display.read_directive().pinned_work_id == pinned.id
 
 
-def test_an_archived_work_cannot_be_pinned(service, display):
-    work = service.add_artwork(title="Nighthawks")
+def test_an_archived_work_cannot_be_pinned(service, ready_work, display):
+    work = ready_work()
     service.archive_artwork(work.id)
 
-    with pytest.raises(ServiceError, match="out of circulation"):
+    with pytest.raises(ServiceError, match="archived"):
         display.show_work_now(work.id)
 
 
@@ -211,7 +251,7 @@ def test_the_sequence_survives_the_process_that_advanced_it(tmp_path):
     first_store = SqliteCatalogue(open_catalogue_file(path))
     first_catalogue = CatalogueService(first_store)
     first = _display(first_store, tmp_path, catalogue=first_catalogue)
-    work = first_catalogue.add_artwork(title="Nighthawks")
+    work = _a_showable_work(first_catalogue)
     first.step_display()
     first.show_work_now(work.id)
     first_store.close()
