@@ -20,10 +20,12 @@ from curation.manifest.builder import ManifestBuild
 from curation.mcp.envelope import ok
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
+from curation.persistence.discovery_records import DiscoveryRun, InitiatedBy, RunStatus
 from curation.persistence.records import Artist, Artwork, Directive, Theme
 from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing
 from curation.services.container import Services
 from curation.services.display import UNSET
+from curation.services.runner import RunView
 
 #: A bound action: validated arguments in, a result payload out. Every binding
 #: takes the whole container rather than the one service it happens to need, so
@@ -119,6 +121,76 @@ def _activate_theme(services: Services, arguments: Mapping[str, Any]) -> dict[st
     return _built(services.display.activate_theme(arguments["theme_id"]))
 
 
+def _estimate(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    estimate = services.runner.estimate(arguments.get("run_id"))
+    return ok(
+        phase=estimate.phase,
+        # A string rather than a float: a price rendered through binary floating
+        # point is a price that can come back as 0.12699999999999999.
+        estimated_cost_usd=str(estimate.cost_usd),
+        basis=estimate.basis,
+        run_id=estimate.run_id,
+        notice="Estimating costs nothing. This is the only art_discovery action that does not spend.",
+    )
+
+
+def _start_discovery(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    run = services.runner.start(
+        intent_text=arguments["intent"],
+        # Provenance, never authorisation: every surface has identical authority,
+        # and this records which one asked so that "who wanted forty Dalí
+        # candidates" is answerable from the data.
+        initiated_by=InitiatedBy.MCP_CLIENT,
+    )
+    return ok(
+        **_run_fields(run),
+        notice=(
+            "The run is under way; this is a handle, not a result. Call "
+            f"art_discovery(action='status', run_id='{run.id}'), which holds until something changes."
+        ),
+    )
+
+
+def _run_status(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    return _run_view(services.runner.run_status(arguments["run_id"]))
+
+
+def _approve_run(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    return _run_view(services.runner.approve(arguments["run_id"]))
+
+
+def _decline_run(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    return _run_view(services.runner.decline(arguments["run_id"]))
+
+
+def _cancel_run(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    return _run_view(services.runner.cancel(arguments["run_id"]))
+
+
+def _list_runs(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    runs = services.runner.list_runs(status=arguments.get("status"), kind=arguments.get("kind"))
+    return ok(runs=[_run_fields(run) for run in runs], count=len(runs))
+
+
+def _spend(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    report = services.runner.spend_report(
+        run_id=arguments.get("run_id"),
+        year=arguments.get("year"),
+        month=arguments.get("month"),
+    )
+    return ok(
+        scope=report.scope,
+        cost_usd=str(report.cost_usd),
+        run_id=report.run_id,
+        # What this run alone was billed, beside what asking cost altogether. A
+        # run billed little whose re-searches cost ten times more is a fact worth
+        # being able to see rather than one totalled away.
+        run_direct_cost_usd=None if report.run_direct_usd is None else str(report.run_direct_usd),
+        year=report.year,
+        month=report.month,
+    )
+
+
 def _wall_status(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
     reading = services.display.wall_status()
     return ok(
@@ -175,6 +247,14 @@ def _next(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
 #: Every built action, keyed by tool and action name. A tool absent from here
 #: answers `help` and nothing else, which is what its registry record says.
 BINDINGS: Final[Mapping[tuple[str, str], Binding]] = {
+    ("art_discovery", "estimate"): _estimate,
+    ("art_discovery", "start"): _start_discovery,
+    ("art_discovery", "status"): _run_status,
+    ("art_discovery", "approve"): _approve_run,
+    ("art_discovery", "decline"): _decline_run,
+    ("art_discovery", "cancel"): _cancel_run,
+    ("art_discovery", "list_runs"): _list_runs,
+    ("art_discovery", "spend"): _spend,
     ("art_catalogue", "list"): _list_artworks,
     ("art_catalogue", "get"): _get_artwork,
     ("art_theme", "list"): _list_themes,
@@ -323,6 +403,105 @@ def _directive_fields(directive: Directive) -> dict[str, Any]:
         # has no way to know.
         "notice": "The directive is written. The wall converges within about a second; this is not a confirmation it has.",
     }
+
+
+def _run_fields(run: DiscoveryRun) -> dict[str, Any]:
+    """One run as a caller sees it.
+
+    The terminal state is returned as itself and never collapsed into an
+    ok/failed flag. An agent has to be able to tell "you are out of money" from
+    "it broke" from "the process was restarted underneath it", because the
+    correct response to each is different — stop, investigate, and simply run it
+    again respectively.
+    """
+    return {
+        "run_id": run.id,
+        "kind": str(run.kind),
+        "status": str(run.status),
+        "initiated_by": str(run.initiated_by),
+        "intent": run.intent_text,
+        "approval_required": run.approval_required,
+        "estimated_cost_usd": None if run.estimated_cost_usd is None else str(run.estimated_cost_usd),
+        "actual_cost_usd": None if run.actual_cost_usd is None else str(run.actual_cost_usd),
+        "unresolved_work_count": run.unresolved_work_count,
+        "parent_run_id": run.parent_run_id,
+        "started_at": _moment(run.started_at),
+        "completed_at": _moment(run.completed_at),
+    }
+
+
+def _run_view(view: RunView) -> dict[str, Any]:
+    """One run in full, with its works and what it has used of its search cap."""
+    return ok(
+        **_run_fields(view.run),
+        works={
+            "total": view.work_count,
+            "resolved": view.resolved,
+            "unresolved": view.unresolved,
+            "pending": view.pending,
+        },
+        # Reported as two numbers rather than one verdict: the usage is this
+        # run's own history and the allowance is the deployment's current
+        # setting, so a run read after the setting changed shows both instead of
+        # a boolean quietly recomputed against a rule it never ran under.
+        searches={
+            "used": view.searches_used,
+            "allowance": view.search_allowance,
+            "exhausted": view.searches_exhausted,
+        },
+        notice=_run_notice(view),
+    )
+
+
+def _run_notice(view: RunView) -> str:
+    """What this run's state means, and what the caller can do about it.
+
+    A state name tells a model what happened; this tells it what to do next,
+    which is the part it otherwise has to guess. Every branch is reachable: the
+    states enumerated here are the ones a run can be read in.
+    """
+    status = view.run.status
+    if status is RunStatus.RESOLVING_WORKS:
+        return "Phase 1 is working out which works match the intent. Call status again to keep watching."
+    if status is RunStatus.AWAITING_APPROVAL:
+        return (
+            f"This run proposed {view.work_count} works, which is more than the configured threshold, so it "
+            "stopped to ask. Approve it to let it look for images, or decline it — nothing more is spent "
+            "until you do."
+        )
+    if status is RunStatus.RESOLVING_IMAGES:
+        # Truthful about this build rather than reassuring. Delete this branch's
+        # second sentence when image resolution exists: a run waiting on a
+        # capability that has since been built would be told the opposite of what
+        # is true, which is worse than saying nothing.
+        return (
+            f"The work list of {view.work_count} works is settled and the run is ready to look for images. "
+            "Finding images is not wired up in this deployment, so this run will stay here; cancel it when "
+            "you are done reading it."
+        )
+    if status is RunStatus.COMPLETED:
+        settled = f"{view.resolved} of {view.work_count} works have an image"
+        return (
+            f"This run finished: {settled}. Works nothing could be found for are reported as unresolved "
+            "rather than dropped, because that is the signal a proposed work may not exist."
+        )
+    if status is RunStatus.HALTED_BY_BUDGET:
+        return (
+            "The provider refused further spend, so this run stopped where it was. This is not a transient "
+            "error: retrying will fail the same way until the credit limit resets or is raised."
+        )
+    if status is RunStatus.INTERRUPTED:
+        return (
+            "The process working on this run stopped underneath it — a restart or a crash, not a fault in the "
+            "run. Start it again with the same intent; there is nothing to investigate."
+        )
+    if status is RunStatus.FAILED:
+        return "This run hit an error and stopped. The server log has the details; this is worth investigating."
+    if status is RunStatus.DECLINED:
+        return "The work list was declined, so no images were looked for and nothing further was spent."
+    if status is RunStatus.CANCELLED:
+        return "This run was stopped on request. Anything it had already spent is still recorded against it."
+    return f"This run {status}."
 
 
 def _sync_notice(build: ManifestBuild) -> str:

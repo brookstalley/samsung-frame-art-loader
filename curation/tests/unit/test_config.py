@@ -6,6 +6,8 @@ catalogue somewhere unintended. These tests assert the refusals, not just the
 happy path.
 """
 
+from decimal import Decimal
+
 import pytest
 
 from curation.config import (
@@ -335,3 +337,142 @@ def test_the_thumbnail_cache_sits_inside_the_art_root(monkeypatch, tmp_path):
     # Not `tv-thumbs/`, which holds images downloaded from the television keyed
     # by its own content ids — per-device state this catalogue excludes.
     assert settings.thumbnails_path.name != "tv-thumbs"
+
+
+# -- discovery: what it may do, and what it is priced at ------------------------
+
+
+def test_the_shipped_discovery_defaults_reproduce_the_recorded_cost_analysis(monkeypatch, tmp_path):
+    """The defaults are a derivation, not a preference, and this is where it is checked.
+
+    The cost analysis these values come from records a bounded run at $0.11–$0.33
+    and its search component at $0.15–0.25 on a $0.005 engine. Those figures were
+    arrived at independently of this code; if the shipped settings cannot
+    reproduce them, one of the two is wrong and a curator is authorising against
+    a number that describes nothing.
+
+    Computed here rather than compared against a copied total, so the assertion
+    fails when the composition changes rather than tracking it.
+    """
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    discovery = Settings.from_env().discovery_settings
+
+    # A typical run finds about twenty works. Bounded, so this is the ceiling
+    # rather than the expectation.
+    typical_works = 20
+    searches = discovery.phase1_search_allowance + typical_works * discovery.phase2_searches_per_work
+    search_spend = searches * discovery.search_cost_usd
+    run_total = discovery.phase1_estimate_usd + discovery.phase2_estimate_usd(typical_works)
+
+    assert searches == 50
+    assert search_spend == Decimal("0.250"), "the search component's recorded ceiling"
+    assert run_total == Decimal("0.327"), "a bounded run, against a recorded range topping out at $0.33"
+    # The model call alone, against a table recording roughly eight cents.
+    assert Decimal("0.07") < run_total - search_spend < Decimal("0.08")
+
+
+def test_the_gate_ships_at_the_value_a_typical_run_does_not_trip(monkeypatch, tmp_path):
+    """Twenty-five, against a typical run of about twenty.
+
+    Chosen so it never fires on an ordinary run and does fire on one that read
+    the intent far more broadly than intended. A gate that fires every time is
+    one a curator learns to approve without reading.
+    """
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+
+    assert Settings.from_env().discovery_settings.approval_threshold == 25
+
+
+def test_a_deployment_can_override_every_discovery_setting(monkeypatch, tmp_path):
+    """None of these may be a literal in source: prices move and policy is local."""
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    for name, value in {
+        "DISCOVERY_APPROVAL_THRESHOLD": "40",
+        "DISCOVERY_PHASE1_SEARCH_ALLOWANCE": "6",
+        "DISCOVERY_PHASE2_SEARCHES_PER_WORK": "3",
+        "DISCOVERY_SEARCH_COST_USD": "0.001",
+        "DISCOVERY_INPUT_COST_USD_PER_MTOK": "0.30",
+        "DISCOVERY_OUTPUT_COST_USD_PER_MTOK": "2.50",
+        "DISCOVERY_PHASE1_INPUT_TOKENS": "100000",
+        "DISCOVERY_PHASE1_OUTPUT_TOKENS": "5000",
+    }.items():
+        monkeypatch.setenv(name, value)
+
+    discovery = Settings.from_env().discovery_settings
+
+    assert discovery.approval_threshold == 40
+    assert discovery.phase1_search_allowance == 6
+    assert discovery.phase2_searches_per_work == 3
+    assert discovery.search_cost_usd == Decimal("0.001")
+    # 100,000 in at $0.30/M is $0.03; 5,000 out at $2.50/M is $0.0125; six
+    # searches at $0.001 add $0.006.
+    assert discovery.phase1_estimate_usd == Decimal("0.0485")
+    assert discovery.phase2_estimate_usd(10) == Decimal("0.030")
+
+
+def test_a_price_is_read_as_a_decimal_rather_than_through_a_float(monkeypatch, tmp_path):
+    """A tenth of a cent that cannot be represented exactly is a rounding error
+    in every figure derived from it, including a running total nobody will
+    reconcile against the provider's own."""
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv("DISCOVERY_SEARCH_COST_USD", "0.005")
+    monkeypatch.setenv("DISCOVERY_PHASE1_SEARCH_ALLOWANCE", "3")
+
+    priced = Settings.from_env().discovery_settings.search_cost_usd * 3
+
+    assert priced == Decimal("0.015")
+    assert str(priced) == "0.015", "a price that went through float would not render exactly"
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["DISCOVERY_APPROVAL_THRESHOLD", "DISCOVERY_PHASE1_SEARCH_ALLOWANCE", "DISCOVERY_PHASE1_INPUT_TOKENS"],
+)
+def test_a_count_that_is_not_a_number_is_refused_with_the_offending_value(monkeypatch, tmp_path, name):
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv(name, "several")
+
+    with pytest.raises(ConfigError, match="must be a whole number, got 'several'"):
+        Settings.from_env()
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["DISCOVERY_APPROVAL_THRESHOLD", "DISCOVERY_PHASE1_SEARCH_ALLOWANCE", "DISCOVERY_PHASE2_SEARCHES_PER_WORK"],
+)
+def test_a_count_of_zero_is_allowed_rather_than_refused(monkeypatch, tmp_path, name):
+    """Zero gates every run, or forbids searching. Both are coherent settings for
+    a cautious deployment, and refusing them would be config inventing a policy
+    nobody wrote — which is the distinction from a zero rotation interval."""
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv(name, "0")
+
+    assert Settings.from_env()
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["DISCOVERY_APPROVAL_THRESHOLD", "DISCOVERY_PHASE1_SEARCH_ALLOWANCE"],
+)
+def test_a_negative_count_is_refused(monkeypatch, tmp_path, name):
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv(name, "-1")
+
+    with pytest.raises(ConfigError, match="cannot be negative"):
+        Settings.from_env()
+
+
+def test_a_price_that_is_not_a_number_is_refused_with_the_offending_value(monkeypatch, tmp_path):
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv("DISCOVERY_SEARCH_COST_USD", "five cents")
+
+    with pytest.raises(ConfigError, match="must be a decimal number of US dollars, got 'five cents'"):
+        Settings.from_env()
+
+
+def test_a_negative_price_is_refused(monkeypatch, tmp_path):
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv("DISCOVERY_INPUT_COST_USD_PER_MTOK", "-0.14")
+
+    with pytest.raises(ConfigError, match="is a price and cannot be negative"):
+        Settings.from_env()

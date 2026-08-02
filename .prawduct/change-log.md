@@ -48,6 +48,74 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-02: Discovery gets a surface, a seam, and a run id on every line
+
+<!-- prawduct: chunks=14A | status=shipped | scope=v1-build -->
+
+**Why:** `art_discovery` had been a reserved name since the surface was built —
+it answered `help` and refused everything else. Eight of its ten actions are now
+live over MCP, driving the run lifecycle that landed with the discovery entities,
+and none of them can spend a cent: the paid part sits behind a narrow first-party
+interface that this chunk defines and does not implement.
+
+**The engine is a seam, and a deployment gets one that refuses.** Handing the
+service layer a convincing test double would have made every acceptance criterion
+demonstrable and the product a liar — invented works written into a real
+catalogue with nothing distinguishing them from found ones. So the shipped engine
+declares why it cannot run, `start` refuses *before* creating a run, and
+`list_runs` stays empty. Nothing was attempted, so nothing is recorded as having
+been. The fake that drives the tests lives under `tests/`, deliberately out of
+reach of a deployment.
+
+**A run's status can name a phase nothing advances, and the first long-poll did
+not know that.** `status` was written to hold while the run sat in a
+process-held state, which is the obvious reading and was wrong in a way that
+failed silently: after phase 1 settles a work list the run truthfully sits in
+`resolving_images`, image resolution is a later chunk, and so *every* status call
+waited out the full 45 seconds to report something that had been true for
+minutes. The only symptom was a slow surface — the integration suite took 238
+seconds. Keying the hold on whether **this process has the run in hand** is both
+correct and unable to go stale: a phase this process does not run is a phase it
+does not register. The suite now takes 6. It also answers `interrupted` correctly
+for free, since after a restart nothing is in flight.
+
+**The whole MCP dispatch moved off the event loop** to make a 45-second hold
+safe at all. On the loop it would stop every other request in the process, the
+browser surface included. The synchronous service layer was already reached from
+worker threads via HTTP — Starlette runs a synchronous endpoint in one — and the
+catalogue is built for it, one connection behind a reentrant lock.
+
+**The search cap has values, and they are a derivation rather than a preference.**
+A flat 10 for phase 1 and 2 per work for phase 2: a twenty-work run is bounded at
+50 searches, which at $0.005 is $0.25 — exactly the top of the search band the
+cost analysis recorded — and a bounded run total of $0.327 against its recorded
+$0.11–$0.33. `test_config.py` recomputes both from the shipped settings, so the
+analysis and the code cannot drift apart quietly. An engine that *overruns* the
+allowance fails its run rather than having its results trimmed: work bought
+outside the bound was not authorised, and accepting it with a note attached makes
+the breach a footnote on a paid bill.
+
+**Curation logs JSON now, with `run_id` bound rather than passed.** The
+correlation key rides a context variable and is stamped by a filter, so a module
+that logs inside a run carries it without knowing runs exist — the alternative is
+a discipline, and one forgotten call site defeats it. The first implementation
+cleared every root handler to make configuration idempotent, which silently
+disabled the test harness's own capture and failed as *"nothing was logged"*
+rather than as *"your logging setup removed my handler"*. It now removes only its
+own, and both halves are pinned.
+
+**The provisional dedup key ships with tests asserting its known failures.**
+Normalised artist and title. "Untitled" collides across genuinely different
+paintings; a translated title splits one work in two. They pull in opposite
+directions, which is why neither can be fixed by guessing — and a replacement
+argued for later needs the current behaviour written down rather than
+remembered. Writing those tests also found a real collision: a work with no
+artist keyed identically to an artist actually named "Unattributed".
+
+**"No code path can reach the network" is a test, not an assurance.** The three
+modules behind the seam are parsed and refused any import that could open a
+socket. Planted a violation and watched it fail before believing it.
+
 ## 2026-08-02: Backlog reconciled against the tree, and the flat-vs-package question closed
 
 **Why:** Four backlog items were carrying claims about the tree that the tree had

@@ -53,6 +53,20 @@ REFERENCE_ROUTE = (
     "art_theme(action='activate')",
 )
 
+#: The route a caller takes to spend money responsibly: price the question,
+#: commit to it, watch it, then decide. Written down for the same reason the
+#: route above is — an extra required round trip is a regression in navigability,
+#: and on this tool it is also a regression in how easy it is to spend without
+#: looking. `estimate` leads deliberately: an agent has no wallet and no instinct
+#: for what is expensive, so the surface has to make pricing the cheap first move
+#: rather than a thing a careful caller remembers to do.
+DISCOVERY_ROUTE = (
+    "art_discovery(action='estimate')",
+    "art_discovery(action='start')",
+    "art_discovery(action='status')",
+    "art_discovery(action='approve')",
+)
+
 
 @dataclass(frozen=True)
 class Call:

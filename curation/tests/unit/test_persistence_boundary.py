@@ -49,3 +49,43 @@ def test_only_the_durable_store_imports_the_storage_driver():
         f"{_DRIVER!r} is imported outside the durable store by: {', '.join(sorted(set(offenders) - _MAY_IMPORT_SQLITE))}. "
         "Reach storage through the CatalogueStore contract, or add the module here with a reason."
     )
+
+
+# -- discovery reaches nothing, and that is structural --------------------------
+
+
+def test_nothing_behind_the_engine_seam_can_reach_the_network():
+    """The seam exists so the run lifecycle is buildable without a paid API.
+
+    That claim is worth a mechanism rather than a promise: the modules below run
+    a state machine over a local file, and the first HTTP client imported into
+    one of them would turn every test of the lifecycle into a test that quietly
+    depends on a network — passing on a developer's machine and failing on a
+    build host, or worse, spending money.
+
+    The real client, when it lands, belongs behind the seam in its own module,
+    which is exactly what this permits and what makes the boundary visible.
+    """
+    import ast
+    import pathlib
+
+    import curation
+
+    root = pathlib.Path(curation.__file__).parent
+    reachable = {"httpx", "requests", "urllib", "urllib3", "http", "socket", "aiohttp", "openai", "anthropic"}
+    guarded = [
+        root / "discovery" / "engine.py",
+        root / "discovery" / "dedup.py",
+        root / "services" / "runner.py",
+    ]
+
+    for module in guarded:
+        tree = ast.parse(module.read_text())
+        imported: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+                imported.add(node.module.split(".")[0])
+        offending = imported & reachable
+        assert not offending, f"{module.name} imports {sorted(offending)}, which can reach the network"

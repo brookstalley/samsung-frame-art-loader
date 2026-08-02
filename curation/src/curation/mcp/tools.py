@@ -22,6 +22,7 @@ service method answers it, and the service method does the work.
 from typing import Final
 
 from curation.mcp.registry import Action, Param, ToolRecord
+from curation.persistence.discovery_records import RunKind, RunStatus
 from curation.persistence.records import ArtworkStatus
 from curation.services.catalogue import MAX_LIST_LIMIT
 
@@ -84,6 +85,13 @@ ART_CATALOGUE: Final = ToolRecord(
     ),
 )
 
+_RUN_ID = Param(
+    name="run_id",
+    type="string",
+    description="The run's id, as returned by action='start' or action='list_runs'.",
+    required=True,
+)
+
 ART_DISCOVERY: Final = ToolRecord(
     name="art_discovery",
     title="Art discovery",
@@ -91,7 +99,142 @@ ART_DISCOVERY: Final = ToolRecord(
     read_only=False,
     destructive=True,
     open_world=True,
-    unavailable_note=_UNBUILT,
+    actions=(
+        Action(
+            name="estimate",
+            description="Price a discovery run before starting it, or price resolving one that has already found works.",
+            example="art_discovery(action='estimate')",
+            params=(
+                Param(
+                    name="run_id",
+                    type="string",
+                    description="Omit for the cost of asking a new question. Give one for the cost of resolving what it found.",
+                ),
+            ),
+            tips=(
+                "This is the one action on this tool that spends nothing, so an intent can always be priced "
+                "before it is committed to.",
+                "With no run_id the answer covers phase 1 — one model call and its search allowance. With a "
+                "run_id it is that run's stored phase-2 figure, which is what its approval gate authorises against.",
+                "Both figures are bounded rather than typical: they price the whole search allowance, because a "
+                "number a run may freely exceed is not an estimate.",
+            ),
+        ),
+        Action(
+            name="start",
+            description="Begin a discovery run from an intent. Returns a handle at once; the work happens behind it.",
+            example="art_discovery(action='start', intent='Surrealist paintings with strong blues')",
+            params=(
+                Param(
+                    name="intent",
+                    type="string",
+                    description="What to look for, in the curator's own words.",
+                    required=True,
+                ),
+            ),
+            tips=(
+                "This returns immediately with a run_id and does not wait for the run. Poll action='status' "
+                "with that id, which holds until something changes rather than answering straight away.",
+                "A run that proposes more works than the configured threshold stops and waits for "
+                "action='approve' before spending anything on phase 2.",
+                "Works the curator has already rejected are skipped rather than proposed again, so a run may "
+                "return fewer works than the intent would suggest.",
+            ),
+        ),
+        Action(
+            name="status",
+            description="Report where a run has got to, holding until that changes if it is still being worked on.",
+            example="art_discovery(action='status', run_id='<a run_id from action=start>')",
+            params=(_RUN_ID,),
+            tips=(
+                "The call holds for up to 45 seconds while a run is being worked on, and answers immediately "
+                "when it is waiting for you or has ended. Call it again to keep watching.",
+                "The state itself says how a run ended: 'completed', 'failed', 'halted_by_budget' (out of "
+                "money — stop, do not retry), 'declined', 'cancelled', or 'interrupted' (the process was "
+                "restarted underneath it — simply run it again).",
+            ),
+        ),
+        Action(
+            name="approve",
+            description="Accept a run's work list and its price, letting it proceed to finding images.",
+            example="art_discovery(action='approve', run_id='<a run_id awaiting approval>')",
+            params=(_RUN_ID,),
+            tips=("Only a run in 'awaiting_approval' can be approved; check action='status' first.",),
+        ),
+        Action(
+            name="decline",
+            description="Refuse a run's work list. The run ends and phase 2 never spends.",
+            example="art_discovery(action='decline', run_id='<a run_id awaiting approval>')",
+            params=(_RUN_ID,),
+            tips=(
+                "Declining is not the same as cancelling: it is a judgement on the work list, and it is "
+                "available only while the run is waiting for one.",
+            ),
+        ),
+        Action(
+            name="cancel",
+            description="Stop a run wherever it has got to. Money already spent stays recorded.",
+            example="art_discovery(action='cancel', run_id='<a run_id from action=list_runs>')",
+            params=(_RUN_ID,),
+            tips=(
+                "Available from every state a run can still leave, including while it waits for approval — "
+                "wanting a run gone is a different thing from declining what it found.",
+                "A run that has already ended cannot be cancelled; the refusal names how it ended.",
+            ),
+        ),
+        Action(
+            name="list_runs",
+            description="List discovery runs, newest first, optionally narrowed to one state or kind.",
+            example="art_discovery(action='list_runs', status='awaiting_approval')",
+            params=(
+                Param(
+                    name="status",
+                    type="string",
+                    description="Restrict to runs in this state. Omit to list every run.",
+                    choices=tuple(member.value for member in RunStatus),
+                ),
+                Param(
+                    name="kind",
+                    type="string",
+                    description="Restrict to first-time discovery runs or to re-searches. Omit for both.",
+                    choices=tuple(member.value for member in RunKind),
+                ),
+            ),
+            tips=("Listings carry the fields needed to choose; use action='status' for one run in full.",),
+        ),
+        Action(
+            name="spend",
+            description="Report what one run cost, or what a whole calendar month cost.",
+            example="art_discovery(action='spend', run_id='<a run_id>')",
+            params=(
+                Param(
+                    name="run_id",
+                    type="string",
+                    description="The run to price. Omit to report a month instead.",
+                ),
+                Param(
+                    name="year",
+                    type="integer",
+                    description="Calendar year to report, with month. Omit both for the current month.",
+                    minimum=1,
+                ),
+                Param(
+                    name="month",
+                    type="integer",
+                    description="Calendar month to report, with year. Omit both for the current month.",
+                    minimum=1,
+                    maximum=12,
+                ),
+            ),
+            tips=(
+                "A run's figure includes every re-search descended from it, which is what 'what did asking "
+                "for this cost' means once spend is spread across a chain of runs.",
+                "Months are UTC calendar months, matching the boundary the provider's own credit limit "
+                "resets on. A report on any other boundary would disagree with the figure that can actually "
+                "stop spending.",
+            ),
+        ),
+    ),
 )
 
 ART_REVIEW: Final = ToolRecord(

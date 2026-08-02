@@ -13,7 +13,8 @@ day a sixth tool or a new action arrives with nothing exercising it.
 """
 
 import pytest
-from scenarios import REFERENCE_ROUTE, connect
+from fakes import a_work_list
+from scenarios import DISCOVERY_ROUTE, REFERENCE_ROUTE, connect
 
 from curation.mcp.registry import HELP_ACTION
 from curation.mcp.tools import TOOLS
@@ -168,6 +169,79 @@ async def test_a_curator_can_jump_the_wall_to_one_work_and_step_off_it(server_ur
     # The sequence advances, which is how the display plane knows the directive
     # it is holding is stale. Equal sequences would leave the wall on the pin.
     assert stepped["sequence"] > pinned["sequence"]
+
+
+async def test_a_run_can_be_priced_started_watched_and_approved_through_the_tools_alone(server_url, engine):
+    """The money flow, start to finish, using nothing but what the surface returns.
+
+    Threaded like the flow above: the run id reaches `status` and `approve` as
+    the value `start` actually returned. That is what fails when one action names
+    it `run_id` and another expects `id` — a defect invisible from inside either
+    action's own tests.
+    """
+    engine.result = a_work_list(26)
+
+    async with connect(server_url) as caller:
+        quoted = await caller.ok("art_discovery", "estimate")
+        # Priced before anything is committed to, which is the whole point of
+        # the action leading this route.
+        assert quoted["phase"] == "phase_1"
+
+        started = await caller.ok("art_discovery", "start", intent="Surrealist paintings with strong blues")
+        run_id = started["run_id"]
+
+        watched = await caller.ok("art_discovery", "status", run_id=run_id)
+        assert watched["status"] == "awaiting_approval"
+        assert watched["works"]["total"] == 26
+
+        approved = await caller.ok("art_discovery", "approve", run_id=run_id)
+
+    assert approved["run_id"] == run_id
+    assert approved["status"] == "resolving_images"
+    assert tuple(caller.transcript.steps) == DISCOVERY_ROUTE
+
+
+async def test_the_price_a_run_is_approved_against_is_the_one_it_was_quoted(server_url, engine):
+    """A gate authorising against a figure nobody saw is not a gate.
+
+    The two `estimate` calls answer different questions — what asking costs, and
+    what resolving what was found costs — and the second is the number the
+    approval is actually about, so it has to be readable before approving rather
+    than reconstructible afterwards.
+    """
+    engine.result = a_work_list(26)
+
+    async with connect(server_url) as caller:
+        started = await caller.ok("art_discovery", "start", intent="Surrealist paintings")
+        run_id = started["run_id"]
+        waiting = await caller.ok("art_discovery", "status", run_id=run_id)
+        quoted = await caller.ok("art_discovery", "estimate", run_id=run_id)
+        approved = await caller.ok("art_discovery", "approve", run_id=run_id)
+
+    assert quoted["phase"] == "phase_2"
+    assert quoted["estimated_cost_usd"] == waiting["estimated_cost_usd"]
+    assert approved["estimated_cost_usd"] == quoted["estimated_cost_usd"]
+
+
+async def test_a_declined_run_leaves_the_month_where_phase_one_left_it(server_url, engine):
+    """Declining stops the spending that had not happened yet, and only that.
+
+    What phase 1 already cost stays on the books: a run the curator refused
+    still made the model call that produced the list they refused.
+    """
+    engine.result = a_work_list(26)
+
+    async with connect(server_url) as caller:
+        started = await caller.ok("art_discovery", "start", intent="Surrealist paintings")
+        run_id = started["run_id"]
+        await caller.ok("art_discovery", "status", run_id=run_id)
+        before = await caller.ok("art_discovery", "spend")
+
+        declined = await caller.ok("art_discovery", "decline", run_id=run_id)
+        after = await caller.ok("art_discovery", "spend")
+
+    assert declined["status"] == "declined"
+    assert after["cost_usd"] == before["cost_usd"] != "0"
 
 
 async def test_the_wall_admits_that_nothing_has_reported(server_url):

@@ -94,7 +94,7 @@ current chunk, and a blocked chunk ahead of active work silently hands its
 - [x] Chunk 10: Seed the catalogue with the existing corpus (v1 scope item)
 - [x] Chunk 10B: The first browser surface — catalogue, themes, manifest, health
 - [x] Chunk 11: Contract tests — MCP evaluation harness (issue #17) — *plane isolation (#7) split to Chunk 12*
-- [ ] Chunk 14A: `art_discovery` surface, run correlation, the search cap — no spend
+- [x] Chunk 14A: `art_discovery` surface, run correlation, the search cap — no spend
 - [ ] Chunk 14B: The OpenRouter client, the phase-1 engine, the ceiling (issue #12)
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
@@ -228,6 +228,30 @@ thing behind it exists can encode the wrong shape. Judged low **because the live
 probe recorded the real shapes first** — that is precisely what the verify-api
 step bought, and it is why the split is safe here and would not have been before
 2026-08-02.
+
+**14A landed 2026-08-02.** Eight of `art_discovery`'s ten actions are live and
+drive the real service; `resolve_images` is deliberately not advertised, because
+a declared action a model cannot distinguish from a working one is a promise the
+surface cannot keep. The seam stayed **phase 1 only**, which is the one scoping
+call worth carrying forward: defining phase 2's interface now would encode a
+shape before the ARTIC probe that Chunk 16 makes its own first step, and the
+split's stated risk applies exactly there. The consequence is visible and
+truthful rather than hidden — a run that passes the gate sits in
+`resolving_images`, and `status` says in plain words that image resolution is not
+wired up in this deployment and offers `cancel`. **That sentence is owed a
+deletion when phase 2 lands**: a run waiting on a capability that now exists
+would be told the opposite of the truth.
+
+The values the plan left to this chunk are settled and recorded where their rules
+live: the gate at 25 and the two-part cap at 10 + 2/work in
+`nonfunctional-requirements.md`, the estimate's arity in `api-contract.md`, the
+provisional key's site and its two known failure modes in `data-model.md`, and
+the log shape in `observability-strategy.md`. **What 14B still owes is unchanged**
+by this chunk: how "recency-bound" is decided, what writes `DiscoveryRun.strategy`
+and in what form (14A leaves it unset rather than guessing), whether the web fee
+scales with `max_results` — the one input that could move the phase-1 allowance —
+and the 402's observed shape. The two operator actions also stand: provision the
+$20/month key, and a throwaway near-zero-limit key to drive a real 402.
 
 **A requirements pass ran before either half (2026-08-02)** and is the reason the
 chunk entries below carry values rather than the phrase "the configured

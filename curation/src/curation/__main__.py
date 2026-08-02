@@ -4,8 +4,10 @@ import logging
 
 import uvicorn
 
+from curation import logs
 from curation.app import create_app
 from curation.config import Settings
+from curation.discovery.engine import unavailable_engine
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.persistence.sqlite_discovery import SqliteDiscovery
@@ -16,7 +18,7 @@ from curation.services.thumbnails import ThumbnailSettings
 
 def main() -> None:
     """Resolve configuration, open the catalogue, and serve."""
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    logs.configure(level=logging.INFO)
     settings = Settings.from_env()
     log = logging.getLogger(__name__)
     log.info("catalogue=%s bind=%s:%s", settings.catalogue_path, settings.host, settings.port)
@@ -46,6 +48,17 @@ def main() -> None:
         settings.mat_bottom_weight,
         settings.resolution_floor_inches,
     )
+    # What discovery may spend and what it is priced at, on one line, because a
+    # bounded estimate a curator authorises against is only as good as the
+    # numbers behind it — and those are the ones most likely to be stale.
+    discovery = settings.discovery_settings
+    log.info(
+        "discovery gate=%d works phase1_searches=%d phase2_searches_per_work=%d phase1_estimate=$%s",
+        discovery.approval_threshold,
+        discovery.phase1_search_allowance,
+        discovery.phase2_searches_per_work,
+        discovery.phase1_estimate_usd,
+    )
 
     settings.art_root.mkdir(parents=True, exist_ok=True)
     # One connection behind both halves of the model: acceptance promotes a
@@ -64,6 +77,12 @@ def main() -> None:
             ),
             thumbnails=ThumbnailSettings(art_root=settings.art_root, directory=settings.thumbnails_path),
             artwork_box=box,
+            # No model client is configured in this build, so discovery refuses
+            # to start a run rather than being handed a stand-in that would
+            # write invented works into a real catalogue. Every other discovery
+            # action works on runs that already exist.
+            engine=unavailable_engine(),
+            discovery_settings=settings.discovery_settings,
         )
         # The catalogue file outlives any single version of this code, so rules
         # added since it was written are brought to it here rather than assumed

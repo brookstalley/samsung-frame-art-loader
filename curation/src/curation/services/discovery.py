@@ -657,6 +657,22 @@ class DiscoveryService:
         direct = self._spend_total(run_id)
         return RunCost(direct=direct, total=direct + sum(self._spend_total(child) for child in self._descendants(run_id)))
 
+    def searches_in_run(self, run_id: str) -> int:
+        """How many web searches this run has made.
+
+        Read from the records that *price* the searches rather than counted
+        separately, because a per-run search cap and the bill for that run must
+        not be able to disagree about how much searching happened. Web search
+        bills per call rather than per token, which is why it is its own category
+        carrying a unit count at all.
+        """
+        self.get_run(run_id)
+        return sum(
+            record.units or 0
+            for record in self._store.list_spend_records(run_id=run_id)
+            if record.category is SpendCategory.WEB_SEARCH
+        )
+
     def spend_in_month(self, *, year: int, month: int) -> Decimal:
         """Everything spent in one calendar month, UTC.
 

@@ -13,21 +13,31 @@ import threading
 import time
 import uuid
 from collections.abc import Iterator
+from decimal import Decimal
 
 import pytest
 import uvicorn
+from fakes import FakeEngine
 from PIL import Image
 
 from curation.app import create_app
 from curation.config import (
     CATALOGUE_FILENAME,
+    DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
     DEFAULT_HOST,
+    DEFAULT_INPUT_COST_USD_PER_MTOK,
     DEFAULT_MAT_BOTTOM_WEIGHT,
     DEFAULT_MAT_WIDTH_INCHES,
+    DEFAULT_OUTPUT_COST_USD_PER_MTOK,
+    DEFAULT_PHASE1_INPUT_TOKENS,
+    DEFAULT_PHASE1_OUTPUT_TOKENS,
+    DEFAULT_PHASE1_SEARCH_ALLOWANCE,
+    DEFAULT_PHASE2_SEARCHES_PER_WORK,
     DEFAULT_PORT,
     DEFAULT_RESOLUTION_FLOOR_INCHES,
     DEFAULT_ROTATION_INTERVAL_SECONDS,
     DEFAULT_ROTATION_SHUFFLE,
+    DEFAULT_SEARCH_COST_USD,
     DEFAULT_TV_PANEL_DIAGONAL_INCHES,
     DEFAULT_TV_PANEL_HEIGHT_PX,
     DEFAULT_TV_PANEL_WIDTH_PX,
@@ -51,6 +61,7 @@ from curation.services.catalogue import CatalogueService
 from curation.services.container import Services
 from curation.services.discovery import DiscoveryService
 from curation.services.display import DisplayService, WallSettings
+from curation.services.runner import DiscoveryRunner
 from curation.services.thumbnails import ThumbnailService, ThumbnailSettings
 
 _SEEDED_TITLES = ("I Saw the Figure 5 in Gold", "Nighthawks", "The Persistence of Memory")
@@ -105,6 +116,14 @@ def settings(tmp_path) -> Settings:
         mat_width_inches=DEFAULT_MAT_WIDTH_INCHES,
         mat_bottom_weight=DEFAULT_MAT_BOTTOM_WEIGHT,
         resolution_floor_inches=DEFAULT_RESOLUTION_FLOOR_INCHES,
+        approval_threshold=DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
+        phase1_search_allowance=DEFAULT_PHASE1_SEARCH_ALLOWANCE,
+        phase2_searches_per_work=DEFAULT_PHASE2_SEARCHES_PER_WORK,
+        search_cost_usd=Decimal(DEFAULT_SEARCH_COST_USD),
+        input_cost_usd_per_mtok=Decimal(DEFAULT_INPUT_COST_USD_PER_MTOK),
+        output_cost_usd_per_mtok=Decimal(DEFAULT_OUTPUT_COST_USD_PER_MTOK),
+        phase1_input_tokens=DEFAULT_PHASE1_INPUT_TOKENS,
+        phase1_output_tokens=DEFAULT_PHASE1_OUTPUT_TOKENS,
     )
 
 
@@ -126,12 +145,24 @@ def thumbnail_settings(settings: Settings) -> ThumbnailSettings:
 
 
 @pytest.fixture
+def engine() -> FakeEngine:
+    """The discovery engine every test runs against, in its default mood.
+
+    Overridable by a test that needs a different answer: reassigning its fields
+    before the run starts is what selects a failure, a refusal, or a work list of
+    a particular size.
+    """
+    return FakeEngine()
+
+
+@pytest.fixture
 def services(
     store: SqliteCatalogue,
     discovery_store: SqliteDiscovery,
     wall: WallSettings,
     thumbnail_settings: ThumbnailSettings,
     settings: Settings,
+    engine: FakeEngine,
 ) -> Services:
     """Every service, wired the way the entry point wires them."""
     return Services.bind(
@@ -142,6 +173,8 @@ def services(
         # Derived by the same property the entry point calls, so a test never
         # asserts against a box a real deployment would not produce.
         artwork_box=settings.tv_artwork_box,
+        engine=engine,
+        discovery_settings=settings.discovery_settings,
     )
 
 
@@ -163,6 +196,19 @@ def discovery(services: Services) -> DiscoveryService:
 @pytest.fixture
 def display(services: Services) -> DisplayService:
     return services.display
+
+
+@pytest.fixture
+def runner(services: Services, engine: FakeEngine, settings: Settings) -> DiscoveryRunner:
+    """A runner that does phase 1 on the calling thread.
+
+    The shipped runner hands phase 1 to a worker so that `start` can return a
+    handle at once. That is the right behaviour and the wrong one to unit-test
+    against: a test asserting on what phase 1 wrote would have to wait for it,
+    and "wait for a thread" is how a suite acquires flakes. The threaded path is
+    exercised where it matters, through a real server over real HTTP.
+    """
+    return DiscoveryRunner(services.discovery, engine, settings.discovery_settings, spawn=lambda work: work())
 
 
 @pytest.fixture

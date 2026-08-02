@@ -542,6 +542,21 @@ artworks.
 > replacing it is a **re-key of existing rows**, not just a code change: keys
 > already written under the provisional rule must be recomputed, or suppression
 > silently splits into two regimes and the same work gets proposed twice.
+>
+> **Shipped 2026-08-02 at one site: `curation/src/curation/discovery/dedup.py`.**
+> Normalised artist and title — casefolded, accents stripped, punctuation
+> dropped, whitespace collapsed — joined by a separator normalisation guarantees
+> cannot appear inside either half. A work with no artist is keyed under
+> `(unattributed)`, whose brackets are load-bearing: no real name can normalise
+> to it, and a bare sentinel collided with an artist actually so named.
+>
+> **Both known failure modes have tests asserting the wrong behaviour**, which is
+> deliberate. "Untitled" by one artist collides with itself across genuinely
+> different paintings (a false positive: one rejection suppresses a work nobody
+> declined), and a translated title splits one work in two (a false negative:
+> suppression quietly stops working). They pull in opposite directions, which is
+> precisely why neither can be fixed by guessing — and a replacement argued for
+> later needs the current behaviour written down rather than remembered.
 
 ### CandidateImage
 

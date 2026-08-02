@@ -18,12 +18,14 @@ they are settled in one place instead of per constructor.
 
 from dataclasses import dataclass
 
+from curation.discovery.engine import DiscoveryEngine
 from curation.persistence.catalogue import CatalogueStore
 from curation.persistence.discovery import DiscoveryStore
 from curation.services.catalogue import CatalogueService
 from curation.services.discovery import DiscoveryService
 from curation.services.display import DisplayService, WallSettings
 from curation.services.display_fit import ArtworkBox
+from curation.services.runner import DiscoveryRunner, DiscoverySettings
 from curation.services.survey import SurveyService
 from curation.services.thumbnails import ThumbnailService, ThumbnailSettings
 
@@ -41,6 +43,11 @@ class Services:
     #: three of them, and because both surfaces need the identical composition —
     #: which is the same reason the service layer exists at all.
     survey: SurveyService
+    #: Running a discovery run, as distinct from recording one. It sits above
+    #: `discovery` rather than inside it because the record layer is deliberately
+    #: synchronous and knows nothing of processes, and everything about starting
+    #: work behind a handle does.
+    runner: DiscoveryRunner
 
     @classmethod
     def bind(
@@ -51,17 +58,27 @@ class Services:
         wall: WallSettings,
         thumbnails: ThumbnailSettings,
         artwork_box: ArtworkBox,
+        engine: DiscoveryEngine,
+        discovery_settings: DiscoverySettings,
     ) -> Services:
-        """Assemble the services over an already-open file."""
+        """Assemble the services over an already-open file.
+
+        The engine is injected rather than constructed here for the reason every
+        foreign dependency is: a container that built its own model client would
+        make "run the service layer without touching a paid API" impossible to
+        arrange, and that is the arrangement most of this product's tests need.
+        """
         catalogue_service = CatalogueService(catalogue)
         display_service = DisplayService(catalogue, catalogue_service, wall)
         thumbnail_service = ThumbnailService(catalogue_service, thumbnails)
+        discovery_service = DiscoveryService(discovery, catalogue_service)
         return cls(
             catalogue=catalogue_service,
-            discovery=DiscoveryService(discovery, catalogue_service),
+            discovery=discovery_service,
             display=display_service,
             thumbnails=thumbnail_service,
             survey=SurveyService(catalogue_service, display_service, thumbnail_service, artwork_box),
+            runner=DiscoveryRunner(discovery_service, engine, discovery_settings),
         )
 
     def reconcile(self) -> None:

@@ -311,6 +311,30 @@ than a silent truncation of results.
 > and the phase-2 figure becomes computable the moment the work count exists. This
 > is why `art_discovery(action='estimate')` is meaningful both with and without a
 > run id — see `api-contract.md`.
+>
+> **Values shipped 2026-08-02: a flat 10 for phase 1, and 2 per work for phase 2**
+> (`DISCOVERY_PHASE1_SEARCH_ALLOWANCE`, `DISCOVERY_PHASE2_SEARCHES_PER_WORK`).
+> They are a derivation from the table above rather than a preference: a
+> twenty-work run is bounded at 10 + 20×2 = 50 searches, which at $0.005 is
+> **$0.25 — exactly the top of the search band recorded above** — and a bounded
+> run total of $0.327 against the recorded $0.11–$0.33. A cap has to sit at the
+> ceiling of the recorded range rather than at its middle, or it stops runs the
+> analysis says are ordinary. `curation/tests/unit/test_config.py` recomputes both
+> figures from the shipped settings, so the derivation is checked rather than
+> asserted, and a settings change that walks away from this analysis fails.
+>
+> **Still provisional in one respect**, and it is the reason the value was
+> originally left open: the web fee was measured flat at $0.005 for
+> `max_results: 3` on a single model, and whether it scales with `max_results` is
+> unmeasured (`openrouter-api-findings.md` § What this did not establish). If it
+> scales, the phase-1 allowance is the number to revisit — the count stays right,
+> the price per search does not.
+>
+> **Overrunning the allowance fails the run rather than trimming its results.**
+> An engine that searched past its bound spent money the estimate did not cover,
+> so its work list was bought outside what anyone authorised; accepting it with a
+> note attached would make the breach a footnote on a bill already paid. The
+> searches themselves are still recorded, because they happened.
 
 > **The cap applies per run, and re-searches are now runs (2026-07-20).** Modelling
 > `resolve_images` as a `DiscoveryRun` with `kind='resolve'` gave the re-search a

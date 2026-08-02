@@ -7,13 +7,23 @@ tested and entirely unwired, and only removing the call and re-running the suite
 showed it. So the call is asserted here, through `main()` itself.
 """
 
+from decimal import Decimal
+
 import curation.__main__ as entry_point
 from curation.config import (
+    DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
+    DEFAULT_INPUT_COST_USD_PER_MTOK,
     DEFAULT_MAT_BOTTOM_WEIGHT,
     DEFAULT_MAT_WIDTH_INCHES,
+    DEFAULT_OUTPUT_COST_USD_PER_MTOK,
+    DEFAULT_PHASE1_INPUT_TOKENS,
+    DEFAULT_PHASE1_OUTPUT_TOKENS,
+    DEFAULT_PHASE1_SEARCH_ALLOWANCE,
+    DEFAULT_PHASE2_SEARCHES_PER_WORK,
     DEFAULT_RESOLUTION_FLOOR_INCHES,
     DEFAULT_ROTATION_INTERVAL_SECONDS,
     DEFAULT_ROTATION_SHUFFLE,
+    DEFAULT_SEARCH_COST_USD,
     DEFAULT_TV_PANEL_DIAGONAL_INCHES,
     DEFAULT_TV_PANEL_HEIGHT_PX,
     DEFAULT_TV_PANEL_WIDTH_PX,
@@ -64,6 +74,14 @@ def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch)
                 mat_width_inches=DEFAULT_MAT_WIDTH_INCHES,
                 mat_bottom_weight=DEFAULT_MAT_BOTTOM_WEIGHT,
                 resolution_floor_inches=DEFAULT_RESOLUTION_FLOOR_INCHES,
+                approval_threshold=DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
+                phase1_search_allowance=DEFAULT_PHASE1_SEARCH_ALLOWANCE,
+                phase2_searches_per_work=DEFAULT_PHASE2_SEARCHES_PER_WORK,
+                search_cost_usd=Decimal(DEFAULT_SEARCH_COST_USD),
+                input_cost_usd_per_mtok=Decimal(DEFAULT_INPUT_COST_USD_PER_MTOK),
+                output_cost_usd_per_mtok=Decimal(DEFAULT_OUTPUT_COST_USD_PER_MTOK),
+                phase1_input_tokens=DEFAULT_PHASE1_INPUT_TOKENS,
+                phase1_output_tokens=DEFAULT_PHASE1_OUTPUT_TOKENS,
             )
         ),
     )
@@ -135,6 +153,17 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
                 mat_width_inches=3.0,
                 mat_bottom_weight=2.0,
                 resolution_floor_inches=7.5,
+                # And likewise every discovery value: the estimate below is
+                # arithmetic over all of them, so a line built from the constants
+                # rather than the resolved settings cannot reproduce it.
+                approval_threshold=7,
+                phase1_search_allowance=3,
+                phase2_searches_per_work=4,
+                search_cost_usd=Decimal("0.002"),
+                input_cost_usd_per_mtok=Decimal("3.00"),
+                output_cost_usd_per_mtok=Decimal("5.00"),
+                phase1_input_tokens=200_000,
+                phase1_output_tokens=20_000,
             )
         ),
     )
@@ -162,3 +191,14 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
     # The e-paper panel belongs to the display plane, and this one must hold no
     # fact about it.
     assert "1448" not in logged and "1072" not in logged
+    # What discovery may spend, and the estimate derived from it. A curator is
+    # asked to authorise against that figure, so the numbers behind it are worth
+    # a journal line — they are also the ones most likely to go stale, because
+    # provider prices move underneath a deployment that never changes.
+    assert "gate=7 works" in logged
+    assert "phase1_searches=3" in logged
+    assert "phase2_searches_per_work=4" in logged
+    # 200,000 input at $3/M is $0.60 and 20,000 output at $5/M is $0.10; three
+    # searches at $0.002 add $0.006. Computed here rather than copied, so the
+    # assertion fails if the composition changes rather than tracking it.
+    assert "phase1_estimate=$0.706" in logged

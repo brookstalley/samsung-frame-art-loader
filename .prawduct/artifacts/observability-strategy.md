@@ -45,15 +45,34 @@ reader should not conclude these were forgotten.
 > the dependency lists and not through here, which is the repo's own recorded
 > obligation — retiring a claim is a repo-wide grep, not a local edit.
 
-**Curation currently emits plain lines** — `__main__.py` configures
-`"%(asctime)s %(levelname)s %(name)s %(message)s"` — which is enough while the
-only records are startup, refusals and reconciliation, and is *not* enough once a
-discovery run needs `run_id` on every line it produces (the per-run correlation
-this strategy already requires). **Giving curation a structured shape is
-therefore owed by the chunk that first needs it, which is discovery phase 1**, and
-it is named there rather than left as a property nobody owns. Whatever shape is
-chosen, the OTel question does not reopen: an exporter with no collector is
-machinery pretending to be observability.
+**Curation's shape is one JSON object per line, and the run id is bound rather
+than passed** (built 2026-08-02, `curation/src/curation/logs.py`). This discharges
+the debt this section recorded: the plane previously emitted
+`"%(asctime)s %(levelname)s %(name)s %(message)s"`, which was enough for startup,
+refusals and reconciliation and not enough for the per-run correlation below.
+
+Two decisions worth not re-deriving:
+
+- **JSON, not logfmt.** Both are structured; the deciding case is free text. An
+  intent is the curator's own words and goes in a log line, and quoting it into a
+  key=value stream is a rule every call site has to get right. A traceback is
+  carried as one field for the same reason — multi-line output would break the
+  one-line-one-object property the whole shape rests on.
+- **`run_id` rides a context variable and is stamped by a filter**, so a module
+  that logs inside a run carries the key without knowing runs exist. Threading
+  the id through every call site that might log is a discipline, and one
+  forgotten site defeats it — the lines lost that way are the ones emitted from
+  deep inside a failure, which are the ones worth having.
+
+The OTel question does not reopen: an exporter with no collector is machinery
+pretending to be observability.
+
+> **A finding worth keeping, from building it.** The first implementation cleared
+> every root handler to make `configure()` idempotent. That silently disabled the
+> test harness's own capture, and it failed as *"nothing was logged"* rather than
+> as *"your logging setup removed my handler"* — a library evicting handlers it
+> did not install is this product's characteristic failure shape in miniature. It
+> now removes only its own, and both halves are pinned by test.
 
 ## Two Defects to Fix, Not Inherit
 

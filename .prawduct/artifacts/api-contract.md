@@ -116,7 +116,7 @@ tool per action stops paying and consolidation starts.
 
 | Tool | Actions | Notes |
 |---|---|---|
-| `art_discovery` | `estimate`, `start`, `status`, `approve`, `decline`, `cancel`, `resolve_images`, `list_runs`, `spend`, `help` | **The only tool that spends money.** |
+| `art_discovery` | `estimate`, `start`, `status`, `approve`, `decline`, `cancel`, `resolve_images`, `list_runs`, `spend`, `help` | **The only tool that spends money.** Every action but `resolve_images` is live as of 2026-08-02; the re-search arrives with phase 2. Unbuilt actions are **not advertised** — action values are additive, so declaring one before it works would be a promise the surface cannot keep, and a model reading the menu cannot tell a declared action from a working one. |
 | `art_review` | `list_works`, `get_work`, `list_images`, `set_canonical`, `set_verdict`, `reject_image`, `help` | Returns thumbnails; see Inputs & Outputs. Never spends. |
 | `art_catalogue` | `list`, `get`, `archive`, `restore`, `retry_acquisition`, `set_mat_color`, `regenerate`, `help` | |
 | `art_theme` | `list`, `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`, `help` | `activate` changes the wall immediately. |
@@ -380,6 +380,29 @@ Three client facts force this, all verified rather than assumed:
 hallucinote reaches the same conclusion independently and supplies a calibrated
 number: its status action long-polls for 45s, sized to sit under a 60s tool timeout.
 
+> **Built 2026-08-02, and the hold is keyed on work in flight rather than on the
+> run's state.** The obvious implementation — hold while the run is in a
+> process-held state — was written first and was wrong in a way worth recording,
+> because it looked right and failed silently. A run's status can name a phase
+> that *nothing in the current build advances*: after phase 1 lands a work list,
+> a run sits in `resolving_images` because that is truthfully where it is, and
+> image resolution is a later chunk. Every `status` call on such a run waited out
+> the full 45 seconds to report something that had been true for minutes, and the
+> only symptom was a slow surface.
+>
+> Asking instead whether *this process has the run in hand* is both correct and
+> the one formulation that cannot go stale: a phase this process does not run is
+> a phase it does not register, with nobody having to remember to say so. It also
+> answers `interrupted` correctly for free — after a restart nothing is in flight,
+> so the call returns at once.
+>
+> **The whole dispatch moved off the event loop** to make the hold safe
+> (`asyncio.to_thread` in `mcp/server.py`). A 45-second hold on the loop would
+> stop every other request in the process, the browser surface included. The
+> synchronous service layer was already reached this way from HTTP, because
+> Starlette runs a synchronous endpoint in a worker thread, and the catalogue is
+> built for it — one connection behind a reentrant lock.
+
 > **Amended 2026-07-20 — a "must" withdrawn.** Point 2 previously continued: *"So
 > the server **must** emit `notifications/progress` during phase 2 — this is what
 > keeps the connection alive, not a nicety."* That is withdrawn on two findings from
@@ -431,6 +454,20 @@ committing to it.
 The phase-2 figure is **stored, not recomputed on read**, for the same reason
 `approval_required` is stored — prices and caps are configuration, and a run
 reviewed later must still report the estimate it was actually authorised against.
+
+> **Built 2026-08-02, with one thing settled that this section had left open.**
+> The phase-1 figure has to come from *somewhere* before any engine exists, and
+> the answer is arithmetic over deployment values — the assumed per-run token
+> basis at the configured prices, plus the flat phase-1 allowance at the
+> configured search price. So `estimate` reaches no engine, which is what makes
+> it answerable on a deployment where discovery itself is not wired up, and is
+> the sharper form of "free": it is not merely unbilled, it is incapable of
+> spending.
+>
+> **Refusing is part of the contract too.** `estimate` with a run id that has not
+> finished phase 1 is refused rather than answered with a zero or a null — there
+> is no work count yet, so there is no figure — and the refusal names the
+> run's state and points at the no-argument form.
 
 ### Partial success is the normal case
 

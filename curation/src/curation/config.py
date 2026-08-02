@@ -13,6 +13,7 @@ at process start, which is where a missing value should stop things.
 
 import os
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Final
 
@@ -21,6 +22,7 @@ from dotenv import load_dotenv
 from curation.manifest.builder import MANIFEST_FILENAME
 from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 from curation.services.display_fit import ArtworkBox
+from curation.services.runner import DiscoverySettings
 
 #: The catalogue's filename under `ART_ROOT`. Not configurable: both planes
 #: and the backup path need to agree on where the catalogue is, and a setting
@@ -63,6 +65,38 @@ DEFAULT_MAT_BOTTOM_WEIGHT: Final[float] = 1.15
 #: remain selectable; the floor is a warning, never a filter.
 DEFAULT_RESOLUTION_FLOOR_INCHES: Final[float] = 12.0
 
+#: How many proposed works a discovery run may produce before it stops and asks.
+#: The gate is on the **work count**, not on the price: real runs cost well under
+#: a dollar, so a money threshold gates on the axis that does not discriminate,
+#: while the judgement the gate exists to invite is scope — "you asked for Dalí
+#: and I found 200 works — really?". A typical run lands near twenty, so this
+#: never fires on an ordinary one and does fire on a run that read the intent far
+#: more broadly than intended.
+DEFAULT_DISCOVERY_APPROVAL_THRESHOLD: Final[int] = 25
+
+#: How many web searches phase 1 may make. Flat, because phase 1's entire job is
+#: to *produce* the work count that phase 2's allowance derives from — there is
+#: nothing to derive from yet.
+DEFAULT_PHASE1_SEARCH_ALLOWANCE: Final[int] = 10
+
+#: How many web searches phase 2 may make for each work phase 1 proposed.
+DEFAULT_PHASE2_SEARCHES_PER_WORK: Final[int] = 2
+
+#: What one web search costs, in USD. Search bills as provider credits alongside
+#: tokens rather than to a separate account, so one ceiling covers both.
+DEFAULT_SEARCH_COST_USD: Final[str] = "0.005"
+
+#: What the discovery model costs per million tokens, in USD.
+DEFAULT_INPUT_COST_USD_PER_MTOK: Final[str] = "0.14"
+DEFAULT_OUTPUT_COST_USD_PER_MTOK: Final[str] = "0.28"
+
+#: What one phase-1 run is assumed to consume. Input-dominated, and the imbalance
+#: is the point: phase 1 reads injected search results and emits a short list, so
+#: output price barely moves the total and a naive in/out average would rank
+#: candidate models wrongly.
+DEFAULT_PHASE1_INPUT_TOKENS: Final[int] = 490_000
+DEFAULT_PHASE1_OUTPUT_TOKENS: Final[int] = 30_000
+
 
 class ConfigError(RuntimeError):
     """A required deployment value is missing or unusable."""
@@ -91,6 +125,37 @@ class Settings:
     mat_width_inches: float
     mat_bottom_weight: float
     resolution_floor_inches: float
+    #: What discovery is allowed to do, and what a provider charges for doing it.
+    #: Prices move — one recorded model price drifted 28% in twelve days — and the
+    #: allowances are policy a household sets, so none of these may be a literal
+    #: in source.
+    approval_threshold: int
+    phase1_search_allowance: int
+    phase2_searches_per_work: int
+    search_cost_usd: Decimal
+    input_cost_usd_per_mtok: Decimal
+    output_cost_usd_per_mtok: Decimal
+    phase1_input_tokens: int
+    phase1_output_tokens: int
+
+    @property
+    def discovery_settings(self) -> DiscoverySettings:
+        """The discovery allowances and prices, as the service layer wants them.
+
+        Composed here for the same reason `tv_artwork_box` is: every input is a
+        deployment value, and the service that reads them should take one object
+        it can be handed in a test rather than eight it has to be given.
+        """
+        return DiscoverySettings(
+            approval_threshold=self.approval_threshold,
+            phase1_search_allowance=self.phase1_search_allowance,
+            phase2_searches_per_work=self.phase2_searches_per_work,
+            search_cost_usd=self.search_cost_usd,
+            input_cost_usd_per_mtok=self.input_cost_usd_per_mtok,
+            output_cost_usd_per_mtok=self.output_cost_usd_per_mtok,
+            phase1_input_tokens=self.phase1_input_tokens,
+            phase1_output_tokens=self.phase1_output_tokens,
+        )
 
     @property
     def thumbnails_path(self) -> Path:
@@ -170,6 +235,18 @@ class Settings:
             mat_width_inches=_positive_float("MAT_WIDTH_INCHES", DEFAULT_MAT_WIDTH_INCHES),
             mat_bottom_weight=_positive_float("MAT_BOTTOM_WEIGHT", DEFAULT_MAT_BOTTOM_WEIGHT),
             resolution_floor_inches=_positive_float("RESOLUTION_FLOOR_INCHES", DEFAULT_RESOLUTION_FLOOR_INCHES),
+            # Zero is allowed throughout rather than refused: a threshold of zero
+            # gates every run, and an allowance of zero forbids searching. Both
+            # are coherent settings for a cautious deployment, and refusing them
+            # would be this module inventing a policy nobody wrote.
+            approval_threshold=_counted("DISCOVERY_APPROVAL_THRESHOLD", DEFAULT_DISCOVERY_APPROVAL_THRESHOLD),
+            phase1_search_allowance=_counted("DISCOVERY_PHASE1_SEARCH_ALLOWANCE", DEFAULT_PHASE1_SEARCH_ALLOWANCE),
+            phase2_searches_per_work=_counted("DISCOVERY_PHASE2_SEARCHES_PER_WORK", DEFAULT_PHASE2_SEARCHES_PER_WORK),
+            search_cost_usd=_priced("DISCOVERY_SEARCH_COST_USD", DEFAULT_SEARCH_COST_USD),
+            input_cost_usd_per_mtok=_priced("DISCOVERY_INPUT_COST_USD_PER_MTOK", DEFAULT_INPUT_COST_USD_PER_MTOK),
+            output_cost_usd_per_mtok=_priced("DISCOVERY_OUTPUT_COST_USD_PER_MTOK", DEFAULT_OUTPUT_COST_USD_PER_MTOK),
+            phase1_input_tokens=_counted("DISCOVERY_PHASE1_INPUT_TOKENS", DEFAULT_PHASE1_INPUT_TOKENS),
+            phase1_output_tokens=_counted("DISCOVERY_PHASE1_OUTPUT_TOKENS", DEFAULT_PHASE1_OUTPUT_TOKENS),
         )
 
 
@@ -216,6 +293,43 @@ def _positive_float(name: str, default: float) -> float:
         raise ConfigError(f"{name} must be a number, got {raw!r}. Check .env.") from exc
     if value <= 0:
         raise ConfigError(f"{name} must be greater than zero, got {value}. Check .env.")
+    return value
+
+
+def _counted(name: str, default: int) -> int:
+    """Read a whole number that may be zero.
+
+    Distinct from `_positive_int`, which refuses zero because a rotation interval
+    or a panel dimension of zero is a broken deployment. Zero is a real answer
+    for a count of things a run is *allowed* to do: no searches, or a gate on
+    every run.
+    """
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise ConfigError(f"{name} must be a whole number, got {raw!r}. Check .env.") from exc
+    if value < 0:
+        raise ConfigError(f"{name} counts things and cannot be negative, got {value}. Check .env.")
+    return value
+
+
+def _priced(name: str, default: str) -> Decimal:
+    """Read a price as `Decimal`, never through `float`.
+
+    The default is a string for the same reason: `Decimal(0.005)` carries the
+    binary approximation of a tenth of a cent into every figure derived from it,
+    and the figures here are what a curator authorises spending against.
+    """
+    raw = os.environ.get(name) or default
+    try:
+        value = Decimal(raw)
+    except InvalidOperation as exc:
+        raise ConfigError(f"{name} must be a decimal number of US dollars, got {raw!r}. Check .env.") from exc
+    if value < 0:
+        raise ConfigError(f"{name} is a price and cannot be negative, got {value}. Check .env.")
     return value
 
 
