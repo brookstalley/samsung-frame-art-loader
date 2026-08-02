@@ -1710,6 +1710,17 @@ technical_decisions:
         mid-run, so a run can halt partially — which the error model already
         declares normal, but which makes `halted_by_budget` a state the catalogue
         must represent, not just an error string.
+
+        CORRECTION 2026-08-02, after driving a throwaway key to exhaustion: the
+        decision stands, and one sentence supporting it was wrong. "A 402 is
+        unambiguous" does not hold. Exhaustion is a **403** ("Key limit exceeded
+        (total limit)"); the 402 is a pre-flight check that a request's reserved
+        `max_tokens` is affordable, and it arrives with credit still in the
+        account. The outcome is still cleanly derivable — from 403 — but a client
+        keying on 402 would halt runs that still had money, and would never
+        recognise real exhaustion. Left in place rather than rewritten because
+        this records reasoning as it stood on 2026-07-20; the measured shapes are
+        in `openrouter-api-findings.md`.
       alternatives_considered:
         - "App-side soft cap at ~$18 plus provider hard cap at $20 — graceful halt before the ugly 402, at the cost of a second enforcement path that can itself fail open. Recommended, then withdrawn."
         - "App-side metering only — full control of halt semantics, but the fail-closed guarantee is only as strong as our own code, which is the exact class of thing the 2024 codebase got wrong."

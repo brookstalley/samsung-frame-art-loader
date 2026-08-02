@@ -5,10 +5,14 @@ fake built against assumed shapes encodes the assumptions rather than testing
 them. Everything below is **measured**, not recalled or read from documentation,
 except where a line says otherwise.
 
-**Probed with a borrowed key** from another product on this machine (`limit` 10,
-not the product's own ceiling). That is adequate for shapes and for the cost
-arithmetic, and inadequate for anything about *this* product's ceiling — see
-"What this did not establish".
+**Two probe rounds, on different keys, and which one produced a finding matters
+when reading it.** The first used a **borrowed key** from another product on this
+machine (`limit` 10, not this product's ceiling): adequate for response shapes and
+cost arithmetic, inadequate for anything about this product's own ceiling. The
+second, later the same day, used **this product's own keys** — the real $20
+monthly-reset key, and a throwaway limited to $0.25 that was deliberately burned
+to exhaustion. Everything about the ceiling and the refusal codes comes from the
+second round.
 
 ## The generation response carries its own cost, in USD
 
@@ -91,7 +95,8 @@ the page it came from rather than to the model's assertion.
 data.limit                  int     (null when the key is uncapped)
 data.usage                  float
 data.limit_remaining        float
-data.limit_reset            null    (on the probed key)
+data.limit_reset            null | str   (null when no reset is configured;
+                                          "monthly" on a key that has one)
 data.is_free_tier           bool
 data.is_provisioning_key    bool
 data.is_management_key      bool
@@ -116,9 +121,10 @@ five minutes. **So the lag is minutes, not seconds**, and the settled figure is
 exact when it arrives; the problem is latency, never accuracy.
 
 **This does not weaken the ceiling, and it does constrain what `/key` may be used
-for.** The ceiling is enforced by OpenRouter returning 402, not by this product
-reading a number and deciding — that is the ratified Direction norm, and the lag
-is precisely the kind of silent failure that norm exists to avoid. So:
+for.** The ceiling is enforced by OpenRouter refusing the call outright (a 403 —
+see below), never by this product reading a number and deciding. That is the
+ratified Direction norm, and the lag is precisely the kind of silent failure the
+norm exists to avoid. So:
 
 - `/key` is right for **displaying budget remaining**. It is eventually
   consistent, and a figure a few seconds stale is honest for that purpose.
@@ -128,18 +134,70 @@ is precisely the kind of silent failure that norm exists to avoid. So:
 - Per-run actual comes from summing `usage.cost` across the run's calls, which is
   immediate and complete.
 
+## Exhaustion is **403**, and the 402 means something else (measured 2026-08-02)
+
+**This corrects an assumption every artifact in this repo carried.** The refusal
+that means "this key is out of money" is `403`, not `402`. Driven on a real key
+with a $0.25 limit, burned to exhaustion:
+
+```
+403  {"error": {"message": "Key limit exceeded (total limit). Manage it using
+                            https://openrouter.ai/…/keys/<key id>",
+                "code": 403}}
+```
+
+**`402` is a different refusal, and it arrives with credit still in the account.**
+It is a *pre-flight affordability check*, priced against `max_tokens` rather than
+against what the call would actually cost:
+
+```
+402  "This request requires more credits, or fewer max_tokens.
+      You requested up to 32000 tokens, but can only afford 3333."
+```
+
+The arithmetic is exact and worth understanding, because it is not what anyone
+would guess: $0.25 remaining ÷ $75/M **output** price = 3,333 tokens. OpenRouter
+reserves the *maximum output the request could produce* and declines if that
+reservation exceeds the remaining credit. Nothing is generated and nothing is
+spent — the first burn attempt returned 402 with `usage` still exactly `0`.
+
+**Three consequences, none of them cosmetic:**
+
+- **`halted_by_budget` is triggered by 403.** A client watching only for 402 would
+  never recognise exhaustion at all.
+- **A client that leaves `max_tokens` unset will be refused at full credit.** With
+  no ceiling given, the reservation is the model's maximum output, so a nearly
+  empty key refuses everything and a well-funded one refuses expensive models.
+  Setting `max_tokens` deliberately is therefore a correctness requirement of the
+  client, not a tuning choice — and treating that 402 as "out of money" would halt
+  runs with money in the account.
+- **The two must not be collapsed.** They call for different responses: 403 means
+  stop until the limit resets or rises; 402 means ask for less and continue.
+
+**The `/key` lag was demonstrated rather than inferred, in the same run.** While
+live calls were already being refused as limit-exceeded, `/key` still reported
+`usage 0.20634, limit_remaining 0.04366` — a key with money left, according to a
+figure that was already wrong. That is the recorded lag, caught mid-error, and it
+is exactly why `/key` may never gate anything.
+
 ## What this did not establish
 
-Named rather than left for a reader to assume covered:
+**Two gaps this file named are now closed, recorded here rather than deleted so
+that a reader of an earlier revision can see they were answered.** The
+$20-limited key was provisioned and `limit_reset` reads `"monthly"` on it, and
+the over-limit path was driven on a throwaway key — both above, both measured
+2026-08-02. What follows is what remains open.
 
-- **Nothing about a $20-limited key.** The probe key's limit is 10 and belongs to
-  another product. `limit_reset` read `null` here, so the monthly-reset behaviour
-  the cost analysis relies on is **unobserved** — it may only populate on a key
-  configured with a reset.
-- **The 402 path was not driven.** No call was pushed into the over-limit
-  response, so `halted_by_budget`'s trigger shape is still assumed. The build plan
-  makes this an acceptance criterion for a reason; it needs a throwaway near-zero
-  key.
+- **What a mid-generation exhaustion looks like.** Both refusals above arrived
+  *before* any tokens were produced. Whether a call that begins affordably and
+  crosses the limit while streaming is cut off, completed, or billed over is
+  unmeasured — the runs here were short and the reservation check appears to make
+  it hard to reach. `nonfunctional-requirements.md` states that a refusal arrives
+  mid-run and a run can halt with some works acquired and others not; that remains
+  true at the level of a *run* (many calls), and is unestablished for a single call.
+- **Whether 403 distinguishes an exhausted key from a disabled one.** The message
+  says "Key limit exceeded (total limit)", so the text discriminates; whether the
+  status alone does is untested.
 - **One model, one provider route.** `openai/gpt-4o-mini`. Whether `cost_details`
   is populated identically across the models the discovery engine will actually
   use is untested.

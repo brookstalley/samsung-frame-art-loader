@@ -48,6 +48,58 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-02: The refusal we designed against was the wrong one — exhaustion is 403
+
+**Why:** The keys were provisioned and the over-limit path was finally driven,
+which is the acceptance criterion the plan set for a reason: *"fails closed" is a
+claim about a path nobody has executed until someone executes it.* Executing it
+overturned an assumption carried in eight durable places.
+
+**Exhaustion is `403`, not `402`.** `{"error": {"message": "Key limit exceeded
+(total limit)…", "code": 403}}`. Every artifact and docstring said
+`halted_by_budget` derives from a provider 402. A client watching only for 402
+would never have recognised running out of money at all.
+
+**The 402 is a real thing too, and it is worse than a wrong code — it is a
+different condition.** It is a pre-flight affordability check priced against
+`max_tokens`, and it arrives with credit still in the account: *"You requested up
+to 32000 tokens, but can only afford 3333."* The arithmetic is exact — $0.25
+remaining ÷ $75/M output = 3,333 — so OpenRouter reserves the maximum output a
+request could produce and declines if that exceeds the balance. The very first
+burn attempt returned 402 with `usage` still exactly `0`; nothing was spent.
+
+Two consequences for the client that has not been built yet, which is the good
+time to learn them. **`max_tokens` is a correctness requirement, not a tuning
+knob** — left unset, the reservation is the model's ceiling and a nearly-empty
+key refuses everything. And **the two refusals must not be collapsed**: 403 means
+stop, 402 means ask for less and carry on.
+
+**The `/key` lag stopped being an inference.** Mid-probe, `/key` reported
+`usage 0.20634, limit_remaining 0.04366` — money apparently available — while
+live calls were already being refused as limit-exceeded. The recorded lag,
+caught in the act, and the sharpest possible argument for why that endpoint may
+display a figure and never gate one.
+
+**Also closed: `limit_reset`.** It reads `"monthly"` on a key configured with a
+reset and `null` on one without — so the field names the period rather than
+flagging a boolean, and the monthly behaviour the whole $20 analysis rests on is
+observed rather than assumed.
+
+**Swept as a grep, not a local edit** — the lesson from earlier the same day,
+when exactly that shortcut left a stale dependency floor in two files. Corrected:
+`engine.py`, `discovery.py`, `discovery_records.py`, `architecture.md`,
+`data-model.md`, `nonfunctional-requirements.md`, `build-plan.md`, two test
+fixtures, and a correction appended to the `project-state.yaml` decision record.
+The change-log's own earlier entries were left alone: they record what was
+believed when written, and rewriting them would falsify the record rather than
+correct it.
+
+**The restatement was the real defect.** One provider detail had been copied into
+eight durable homes, so one wrong measurement became eight wrong claims. The
+correction reduces the copies rather than just fixing them — the docstrings now
+say "the provider refuses" and point at `openrouter-api-findings.md`, which is
+the only place a status code appears.
+
 ## 2026-08-02: Discovery gets a surface, a seam, and a run id on every line
 
 <!-- prawduct: chunks=14A | status=shipped | scope=v1-build -->

@@ -12,9 +12,16 @@ about the transport, so swapping a direct HTTP client for a framework's chat
 model later is one file's work rather than a rewrite of everything that calls it.
 
 **An engine reports what it spent; it never decides whether it may.** The ceiling
-is a provider-side credit limit that answers 402, and `BudgetExhausted` is how
-that answer arrives here — never a local sum crossing a number, because a local
-tally that fails open is indistinguishable from one that works.
+is a provider-side credit limit, and `BudgetExhausted` is how its refusal
+arrives here — never a local sum crossing a number, because a local tally that
+fails open is indistinguishable from one that works.
+
+**Not every refusal is exhaustion.** The provider also declines a request whose
+*reserved* output would cost more than the credit remaining, which is a different
+condition with money still in the account and a different correct response: ask
+for less rather than stop. Only true exhaustion raises `BudgetExhausted`; the
+mapping from a provider's status codes to that distinction belongs to the client
+behind this seam, and the measured shapes are in `openrouter-api-findings.md`.
 
 **The search allowance travels in and the searches used come back**, so the run
 that authorised a bounded number of searches can check it got one. An engine that

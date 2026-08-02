@@ -39,7 +39,7 @@ unbounded bill.
 > This is precisely the defect shape this codebase already exhibits — `upload_file`
 > catches every exception, logs it, and reports success anyway — so the product has
 > demonstrated it is capable of building exactly this bug. A server-side per-key
-> limit returns 402 and cannot be bypassed by any of those.
+> limit refuses the call and cannot be bypassed by any of those.
 >
 > **Corollary — read from the authority, not from a local tally.** "Budget
 > remaining" is read from `GET /api/v1/key` (`limit_remaining`), and per-run actual
@@ -282,8 +282,12 @@ recorded rather than waved past:
 
 - The reset is at **midnight UTC**, so "monthly" means the UTC calendar month, not
   the curator's local one. Harmless, but it should not be discovered as a surprise.
-- A 402 arrives **mid-run**, so a run can halt with some works acquired and others
-  not. The error model already declares partial success normal, so this is
+- The refusal arrives **mid-run**, so a run can halt with some works acquired and
+  others not. *(Measured 2026-08-02: the refusal is a **403**, "Key limit exceeded".
+  A 402 is a different answer entirely — a pre-flight check that the reserved
+  `max_tokens` is affordable — and it arrives with credit still in the account.
+  Collapsing them would halt runs that still have money. Shapes in
+  `openrouter-api-findings.md`.)* The error model already declares partial success normal, so this is
   consistent with the design rather than a new failure mode — but it is what makes
   `halted_by_budget` a state the catalogue must be able to represent, not merely an
   error string.

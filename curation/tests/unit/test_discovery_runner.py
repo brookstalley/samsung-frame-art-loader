@@ -316,7 +316,7 @@ def test_each_proposed_work_carries_the_engines_reason_for_it(runner, services):
 
 def test_a_provider_refusing_to_spend_halts_the_run_rather_than_failing_it(services, engine, settings):
     """Out of money and broken are different, and the right response differs."""
-    engine.error = BudgetExhausted("The provider returned 402.", spend=spent(tokens_usd="0.04"))
+    engine.error = BudgetExhausted("Key limit exceeded (total limit).", spend=spent(tokens_usd="0.04"))
     runner = DiscoveryRunner(services.discovery, engine, settings.discovery_settings, spawn=lambda work: work())
 
     run_id = start(runner).id

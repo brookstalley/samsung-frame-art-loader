@@ -22,7 +22,7 @@ governed_by:
       - "operation logic lives only in the service layer; MCP tools and HTTP handlers are thin bindings → conforms: Chunk 07 establishes the registry/handler split as a directory boundary before any tool exists, and every later surface chunk binds service methods only; registry generation carries no per-tool logic"
   - artifact: nonfunctional-requirements
     dispositions:
-      - "spend ceilings are enforced by the provider, never by application code → conforms: no chunk builds an application-side ceiling; `halted_by_budget` derives from a provider 402 (Chunk 14B) and budget-remaining reads `GET /api/v1/key`, which lags by minutes and is therefore display-only, never a gate. The per-run search cap (Chunk 14A) is budgeting inside the norm's recorded scope note, not a ceiling"
+      - "spend ceilings are enforced by the provider, never by application code → conforms: no chunk builds an application-side ceiling; `halted_by_budget` derives from the provider's refusal (Chunk 14B) and budget-remaining reads `GET /api/v1/key`, which lags by minutes and is therefore display-only, never a gate. The per-run search cap (Chunk 14A) is budgeting inside the norm's recorded scope note, not a ceiling"
       - "the display plane's ability to show art never depends on the curation plane being reachable → conforms: the display daemon (Chunks 12–13) reads only the manifest, the image tree, and its own store; no network call to curation exists anywhere in the display package, and the plane-isolation test guards it"
   - artifact: data-model
     dispositions:
@@ -250,8 +250,9 @@ the log shape in `observability-strategy.md`. **What 14B still owes is unchanged
 by this chunk: how "recency-bound" is decided, what writes `DiscoveryRun.strategy`
 and in what form (14A leaves it unset rather than guessing), whether the web fee
 scales with `max_results` — the one input that could move the phase-1 allowance —
-and the 402's observed shape. The two operator actions also stand: provision the
-$20/month key, and a throwaway near-zero-limit key to drive a real 402.
+and the refusal's observed shape. **Both operator actions and the refusal probe
+are now done (2026-08-02)** — see `openrouter-api-findings.md`, which records that
+exhaustion is a 403 rather than the 402 this plan assumed.
 
 **A requirements pass ran before either half (2026-08-02)** and is the reason the
 chunk entries below carry values rather than the phrase "the configured
@@ -1334,7 +1335,7 @@ core, built against the surfaces the contract tests already pin.
   (provider-reported), on every surface equally. Cost comes from **inline
   `usage.cost`** with `usage: {"include": true}` — not from a second request, and
   not computed as tokens × price, which would omit the web-search fee that can
-  double a run. Spend records attribute per category; a 402 lands as
+  double a run. Spend records attribute per category; the provider's refusal lands as
   `halted_by_budget`, distinguishable in logs and tool results; budget remaining
   reads `GET /api/v1/key`, which **lags by minutes and may therefore never gate a
   run** — display only.
@@ -1379,10 +1380,12 @@ core, built against the surfaces the contract tests already pin.
 - **Acceptance criteria:** a real intent resolves to a work list with a shown
   estimate; a recency-bound intent ("recent award-winning art") resolves to
   real, post-cutoff works; the curator can trim the list before paying for
-  phase 2; **the ceiling is proven to fail closed, not assumed to** — provision a
-  throwaway key with a near-zero limit, drive a real call into the 402, and show
-  it surfacing as `halted_by_budget`. "Fails closed" is a claim about a path
-  nobody has executed until someone executes it
+  phase 2; **the ceiling is proven to fail closed, not assumed to.** The provider
+  half of that is now *done* — a throwaway key was driven to exhaustion 2026-08-02
+  and both refusal shapes are recorded in `openrouter-api-findings.md`. What
+  remains for this chunk is the client half: the exhaustion **403** surfacing as
+  `halted_by_budget`, and the affordability **402** *not* doing so, since it
+  arrives with credit remaining and means "ask for less" rather than "stop"
 - **Done when:**
   0. ~~verify-api~~ — **done 2026-08-02, recorded in `openrouter-api-findings.md`.**
      `limit_remaining`, the generation `cost` shape and the web-plugin invocation
@@ -1394,8 +1397,13 @@ core, built against the surfaces the contract tests already pin.
      component that can double a run), and `/key` **lags by more than a minute**,
      which makes it sound for displaying remaining budget and unsound for any
      in-run guard. Still outstanding from this step: the recorded prices have not
-     been re-verified against `/models`, and nothing about a $20-limited key or
-     the 402 path was observed — the probe borrowed another product's key
+     been re-verified against `/models`. **The key gaps closed 2026-08-02 in a
+     second probe round** on this product's own keys: `limit_reset` reads
+     `"monthly"` on the real $20 key, and the over-limit path was driven on a
+     throwaway. It overturned this plan's assumption — exhaustion is a **403**,
+     while the **402** is a pre-flight `max_tokens` affordability check that
+     arrives with credit still available. The client must set `max_tokens`
+     deliberately or it will be refused at full credit
   1. Acceptance criteria met and tests pass
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status

@@ -287,7 +287,7 @@ class SpendRecord:
     """What was spent, on what, by which surface. Attribution and history.
 
     **This does not hold the ceiling and nothing consults it before spending.**
-    The cap is a provider-side per-key credit limit that returns 402 when
+    The cap is a provider-side per-key credit limit that refuses calls once
     exhausted; a local sum that fails open is indistinguishable from one that
     works — no error, no alert, just a bill. What this is for is per-run and
     per-surface attribution, "what did this run cost", and monthly reporting,

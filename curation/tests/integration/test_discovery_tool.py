@@ -228,7 +228,7 @@ async def test_the_three_bad_endings_are_distinguishable_by_returned_state_alone
     fault forever or escalate a routine deploy restart as a bug.
     """
     if outcome == "halted":
-        engine.error = BudgetExhausted("The provider returned 402.", spend=spent())
+        engine.error = BudgetExhausted("Key limit exceeded (total limit).", spend=spent())
         run_id = await a_run(server_url)
         payload = await settled(server_url, run_id)
     elif outcome == "failed":

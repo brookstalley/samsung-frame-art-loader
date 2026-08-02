@@ -663,9 +663,9 @@ path consults it before spending.
 > **This table does not enforce the ceiling, and must never be made to.** The
 > ratified Direction norm (`nonfunctional-requirements.md`) is that *spend ceilings
 > are enforced by the provider, never by application code* — the hard cap is an
-> OpenRouter per-key credit limit that returns 402 when exhausted. A local sum that
+> OpenRouter per-key credit limit that refuses calls when exhausted. A local sum that
 > fails open is indistinguishable from one that works: no error, no alert, just a
-> bill. `halted_by_budget` is therefore derived from a **402**, and "budget left"
+> bill. `halted_by_budget` is therefore derived from **the provider's refusal**, and "budget left"
 > is read from `GET /api/v1/key` (`limit_remaining`), never from `SUM(cost_usd)`.
 >
 > What this table *is* for: per-run and per-surface cost attribution, the
@@ -1025,7 +1025,7 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
    passes description text to Pango markup, so unescaped or unexpected markup is
    a rendering failure — today `art.py` does this substitution inline at render
    time, which means every renderer must remember to.
-11. **`halted_by_budget` is derived from a provider 402, never from a local sum.**
+11. **`halted_by_budget` is derived from the provider's refusal, never from a local sum.**
     The ceiling is an OpenRouter per-key credit limit; no application code path
     stands between the product and an unbounded bill (ratified Direction norm,
     `nonfunctional-requirements.md`). `SpendRecord` is attribution and reporting

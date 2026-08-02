@@ -237,7 +237,8 @@ class DiscoveryService:
     def halt_run_for_budget(self, run_id: str, *, actual_cost_usd: Decimal | None = None) -> DiscoveryRun:
         """End a run because the provider refused to spend more.
 
-        **The caller reaches this from a provider 402 and from nothing else.**
+        **The caller reaches this from the provider refusing to spend, and from
+        nothing else.**
         The ceiling is a provider-side credit limit; there is deliberately no
         local sum standing between the product and an unbounded bill, because a
         local tally that fails open is indistinguishable from one that works —
@@ -618,8 +619,8 @@ class DiscoveryService:
         """Record what something cost. Attribution and history — never a ceiling.
 
         Nothing here reads the running total, and no state changes as a result of
-        writing one. The cap is a provider-side credit limit that returns 402 when
-        exhausted, and a run reaching `halted_by_budget` does so because the
+        writing one. The cap is a provider-side credit limit that refuses calls
+        once exhausted, and a run reaching `halted_by_budget` does so because the
         provider said so, not because a local sum crossed a number.
         """
         if cost_usd < 0:

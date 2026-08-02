@@ -497,7 +497,7 @@ catalogue does not apply. What remains:
 | Manifest has an unknown major schema version | new theme not adopted | Display **keeps the previous manifest** and logs at ERROR. Refusing to guess beats rendering a misparse |
 | TV unreachable / websocket drop | rotation stalls | Retry with backoff; the TV holds its last image. Expected operating condition, not an incident |
 | E-paper write fails | label stale | Log and continue; never let a panel failure stop the TV rotation |
-| Budget exhausted (402) mid-run | discovery halts partially | `halted_by_budget`, a modelled outcome. Already-acquired works stay acquired |
+| Budget exhausted mid-run (the provider refuses — a 403; see `openrouter-api-findings.md`) | discovery halts partially | `halted_by_budget`, a modelled outcome. Already-acquired works stay acquired |
 | SD card full | **both planes** | The one genuinely shared failure. Needs a free-space guard before acquisition, not a disk-full exception during it |
 | SD card corruption | catastrophic | The catalogue is the irreplaceable asset and it lives here. Mitigation is off-device backup — see `operational-spec.md` |
 
