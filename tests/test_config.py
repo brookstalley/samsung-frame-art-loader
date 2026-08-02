@@ -161,10 +161,14 @@ def test_the_harness_clears_every_variable_config_reads():
         if not isinstance(node, ast.Call):
             continue
         target = node.func
-        # `os.environ.get("X")`, `_require("X")`, `_require_float("X")` — every
-        # spelling config.py uses to reach the environment with a literal name.
-        named = (isinstance(target, ast.Attribute) and target.attr == "get") or (
-            isinstance(target, ast.Name) and target.id.startswith("_require")
+        # `os.environ.get("X")`, `os.getenv("X")`, a bare `getenv("X")`, and
+        # `_require*("X")`. Wider than the spellings `config.py` uses today, on
+        # purpose: a scan that covers only current usage reports "covered" for
+        # the first variable added a different way, and `_require` keeps the set
+        # non-empty so the `assert read` canary below would not fire either —
+        # silently reintroducing the exact drift this guard exists to catch.
+        named = (isinstance(target, ast.Attribute) and target.attr in {"get", "getenv"}) or (
+            isinstance(target, ast.Name) and (target.id.startswith("_require") or target.id == "getenv")
         )
         if named and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
             read.add(node.args[0].value)
