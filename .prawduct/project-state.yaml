@@ -271,7 +271,7 @@ classification:
       relationship: reference
     - name: "NickWaterton/samsung-tv-ws-api"
       url: "https://github.com/NickWaterton/samsung-tv-ws-api"
-      relevance: "The fork this project pins. Verified alive 2026-07-19: 326 commits, explicit support for LS03A/B/C/D (2021-2024 models), async art API recommended over sync. PyPI samsungtvws shipped 2026-05-28. The 2024 architecture choice held up."
+      relevance: "The fork this project pins, and the only viable source: PyPI `samsungtvws` (the xchwarze upstream) ships no async art client and no event callbacks at all, so it cannot carry this product's TV boundary. Read 2026-08-02 — its Frame-generation support is a model-year branch in `remote.py` that mints a pairing token for 2024-or-later panels before the art channel will accept one; the LS03A/B/C/D list is a README claim and appears nowhere in code. Master last moved 2026-04-06."
       relationship: complement
     - name: "pacepace/3tears"
       url: "https://github.com/pacepace/3tears"
@@ -287,30 +287,54 @@ classification:
   foreign_apis:
     - name: "Samsung TV WebSocket art API (via samsungtvws fork)"
       notes: >
-        Persistent connection, callback-driven. Pinned to fork SHA fa37fff (May
-        2024), not PyPI. Verified against source 2026-07-19 — key facts that
-        constrain the design:
+        Persistent connection, callback-driven. Pinned to a fork SHA on
+        NickWaterton/samsung-tv-ws-api, never PyPI — the PyPI package of the same
+        name has no async art client at all. Read against source 2026-07-19 and
+        re-read against the target 2026-08-02 (fork master fe95ef1); the facts
+        that constrain the design:
           * ONE user-upload category exists (MY-C0002). Categories are 2=my
             pictures, 4=favourites, 8=store; nothing creates new ones, and
             upload() takes no category argument.
           * set_slideshow_status accepts only duration/type/category_id — NO
             content-id list. Native slideshow is whole-category or nothing.
-          * No album, playlist, or non-destructive remove-from-rotation verb
-            across the library's 30 request verbs. delete_list is the only
-            removal.
+          * delete_image_list is the ONLY removal verb, and there is no album,
+            playlist, or non-destructive remove-from-rotation verb anywhere in
+            the request surface. Re-checked verb by verb on the target, which
+            added four (get_current_rotation, set_brightness_sensor_setting,
+            set_motion_sensitivity, set_motion_timer) and removed none — so
+            host-driven rotation and the disabled native slideshow still stand.
+            State the invariant, not a count: the count moves every release.
           * Old vs new API split is version-numeric (<4000 = old): old uses
             auto_rotation_*, new uses slideshow_*. Neither is deprecated; the
             failure modes are asymmetric (old fails silently on new TVs, throws
             AssertionError on older ones), so probing must be defensive. The
-            existing dual-callback registration in tvart.py is correct.
-          * The pinned SHA is ~2 years behind master. Its upload() lacks the
-            timeout and CHUNK_SIZE parameters and buffers whole files in memory.
-            Category and slideshow semantics are unchanged, so design conclusions
-            hold — but the upload reliability improvements are absent.
-          * async delete_list has NO return statement, so it always yields None
-            and cannot confirm deletion. The sync path returns a value the async
-            path does not. Another instance of the silent-failure pattern this
-            product is already correcting.
+            dual-callback registration in tvart.py is correct and the dispatch
+            mechanism behind it is unchanged on the target.
+          * async delete_list still has NO return statement on master — byte
+            for byte the same as the two-year-old pin — so it always yields None
+            and cannot confirm deletion. Bumping does not fix it. The SYNC path
+            proves the set does echo content_id_list back, so the response
+            carries the answer the async path throws away. Confirmed deletion is
+            this repo's own `tv_delete.delete_list_confirmed`, which verifies
+            against the set's content list rather than an echo.
+          * upload() on the target streams in 64 KiB chunks with a settable
+            timeout; the pin buffered whole files. But the chunker is chosen from
+            the ARGUMENT TYPE — a path streams, bytes do not — so a caller that
+            reads the file itself gets no benefit. This product passes the path.
+          * Constructing the async client performs BLOCKING network I/O: a REST
+            call for the model year, plus a websocket open/close to mint a token
+            on 2024-or-later panels, all inside __init__. It raises HttpApiError
+            when the set is unreachable. The pin did neither. A daemon must not
+            construct one on its event loop, and must expect construction — not
+            first use — to be where an asleep television surfaces.
+          * Importing samsungtvws calls urllib3.disable_warnings() at module
+            scope, silencing InsecureRequestWarning for the WHOLE process.
+          * The fork declares the same version string (3.0.5) as the materially
+            different PyPI package, so no installed-version check can tell them
+            apart.
+          * The library's async client signals a timed-out art request by
+            returning None from wait_for_response and then asserting on it, so
+            AssertionError is its timeout type.
     - name: "Art Institute of Chicago API"
       notes: "api.artic.edu. Already throttled in source_utils.py; responses cached to api-cache/."
     - name: "Google Arts & Culture"

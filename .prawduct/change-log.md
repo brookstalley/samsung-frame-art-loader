@@ -48,6 +48,46 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-02: The TV library moved two years forward, and deletion stopped being a guess
+
+<!-- prawduct: chunks=05 | scope=v1-build -->
+
+**Why:** The display plane's rotation design binds to this library's verified
+behaviour, so the pin had to move before that plane is built. It carries no
+`status=` because it is **not finished**: everything here comes from reading the
+library's source and installing it, and what a television does is a separate
+question that needs the set. `tv_api_check.py` is the scripted pass that answers
+it, and until it runs green the new pins are unverified.
+
+**What the verification found, past what the item anticipated.** The PyPI release
+was never a candidate — it ships no async art client and no event callbacks at
+all, so switching to it would have been a rewrite of the TV boundary rather than a
+bump. `delete_list` is unchanged on the fork's master, byte for byte with the
+two-year-old pin, so the bump does not fix it and the fallback fired. And
+`upload()`'s new chunking is selected by argument *type*: a path streams, bytes do
+not, and this product was reading files itself — so the bump alone would have
+bought the new library and none of the benefit.
+
+**Two costs nobody had priced.** The target imports `websockets.asyncio.client`,
+which does not exist before websockets 13.0, while its own metadata still claims
+`websockets>=10.2` — so this is a two-pin change that a resolver would have
+allowed and an import would have failed. And building the art client now performs
+blocking network I/O and raises when the set is unreachable, where the pin
+deferred that to first use; the display daemon inherits that and cannot construct
+one on its event loop.
+
+**Deletion now reports what the set holds.** `tv_delete.delete_list_confirmed`
+verifies against the television's own content list and keeps three outcomes apart
+— gone, still listed, and unconfirmable — because collapsing them is the defect
+this replaces. A removal the set refuses is a WARNING naming the images, so it
+cannot go unreported even where a caller drops the result.
+
+**Also found while verifying, and filed rather than fixed:** `requirements.txt`
+cannot stand up a working legacy environment — `art.py` imports `cairo` and `gi`,
+and neither `pycairo` nor `PyGObject` is listed, though both are in the Pi's
+recovered freeze. That surfaced from actually installing the file rather than
+reading it.
+
 ## 2026-08-01: A browser can see the collection, build a theme, and read why a work is not on the wall
 
 <!-- prawduct: chunks=10B | status=shipped | scope=v1-build -->

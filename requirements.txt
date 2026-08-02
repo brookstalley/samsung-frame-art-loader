@@ -12,7 +12,17 @@ pillow==10.4.0
 python-dotenv==1.0.1
 pytz==2024.1
 requests==2.32.3
-samsungtvws @ git+https://github.com/NickWaterton/samsung-tv-ws-api.git@fa37fffd7a9f8e82147c0883f18bebcd67fd8ff8
+# NOT the PyPI package of the same name, and not interchangeable with it: PyPI
+# `samsungtvws` ships a synchronous art client only, with no `async_art` module
+# and no event callbacks at all. This fork is the one that has them, and the TV
+# code here is built on both. Do not "upgrade" this to the release — the fork
+# declares the same version string (3.0.5) as PyPI does, so `pip list` cannot
+# tell the two apart and the swap fails at import rather than loudly.
+samsungtvws @ git+https://github.com/NickWaterton/samsung-tv-ws-api.git@fe95ef1d784cd32f49bf9a07ec479576574eea07
 scikit-image==0.24.0
 suntime==1.3.2
-websockets==12.0
+# Floor of 13.0, set by samsungtvws above: it imports `websockets.asyncio.client`
+# and `websockets.protocol.State`, neither of which exists earlier. This is not
+# the newest release, deliberately — the wall runs unattended and 17.0 was three
+# days old when this was chosen. 17.0 imports fine; it simply has no mileage.
+websockets==16.1.1

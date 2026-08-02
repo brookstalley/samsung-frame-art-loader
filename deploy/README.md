@@ -64,10 +64,45 @@ it is deployed again:
   operational output, which produces journal entries with no level and no
   timestamp — recorded as a known departure in `project-preferences.md`.
 
+## Before you install the current `requirements.txt` on the Pi
+
+`samsungtvws` and `websockets` moved together on 2026-08-02 — a two-year-old fork
+SHA to fork master, and websockets 12.0 to 16.1.1, which the new library requires.
+**That pair has been verified to resolve and import, and has not yet been run
+against the television.** Until it has, treat installing it as the change it is:
+
+    python tv_api_check.py --image "$ART_ROOT/ready/<a 4K composite>.jpg"
+
+That exercises upload, callback registration, and a confirmed delete against the
+live set, touching only the image it uploads itself, and exits non-zero if any
+check fails. If it does fail, `pi-freeze-2024.txt` below is the rollback — it
+records the exact versions the wall ran on before the move.
+
+Behaviour changes to expect, established by reading the library's source rather
+than by running it:
+
+- **Building the art client now performs blocking network I/O** and raises when
+  the set is unreachable, where it used to defer that to first use.
+- **Deletion is confirmed against the television's own content list**, and the
+  loader now says which of three things happened. Removed: an ordinary INFO line
+  with the confirmed count. Refused — the set still lists them: a WARNING naming
+  the images. **Unconfirmable** — the removal was sent and the list could not be
+  read back: an ERROR, and the run *continues*, because stopping there would skip
+  the catalogue save and every pending upload to prevent some leftover images.
+  That third case is the only one that used to be indistinguishable from success.
+
+**The code and the pins can be deployed independently**, which is what makes this
+safe to land ahead of the hardware pass. `tvart.py` calls only shapes that both
+library versions carry: `available(category=...)` is unchanged between them, and
+`upload()` has always accepted a path — the old one reads the file itself, the new
+one streams it. So pulling the checkout without reinstalling degrades to the old
+buffering behaviour and keeps working, rather than breaking.
+
 ## What `pi-freeze-2024.txt` is
 
 A `pip freeze` of the environment the 2024 loader was running on the Pi, captured
 during the 2026-07-19 archaeology. **Nothing installs from it.** It is kept as
 evidence of which versions the recovered code actually ran against — the frozen
 `samsungtvws` in it is what dictated that plane's interpreter, and the record is
-what makes that traceable rather than remembered.
+what makes that traceable rather than remembered. It is also the rollback target
+for the dependency move described above.

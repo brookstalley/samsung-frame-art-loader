@@ -100,9 +100,9 @@ def test_no_source_file_carries_a_deployment_value(monkeypatch):
     for plane in ("curation/src", "display/src"):
         modules.extend(sorted((repository_root / plane).rglob("*.py")))
     assert modules, f"expected the 2024 modules at {repository_root}; has the layout moved?"
-    assert any("curation/src" in str(path) for path in modules), (
-        f"expected the curation plane under {repository_root}/curation/src; has the layout moved?"
-    )
+    assert any(
+        "curation/src" in str(path) for path in modules
+    ), f"expected the curation plane under {repository_root}/curation/src; has the layout moved?"
 
     offenders = []
     for path in modules:

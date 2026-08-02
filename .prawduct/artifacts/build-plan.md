@@ -54,7 +54,7 @@ attached. The spine is deliberately evidence-first for exactly this reason.
 **Open assumptions / unknowns:**
 
 - [ASSUMPTION: the IT8951 stack builds under uv's PEP 517 isolation on 3.13/aarch64 | HIGH impact | Chunk 04 proves or disproves it before any plane scaffolding exists; user can reorder]
-- [ASSUMPTION: a samsungtvws target exists that carries LS03A/B/C/D support and a fixable `delete_list` | MED impact | Chunk 05's verify step answers it; the fallback (local confirm-deletion wrapper) is scoped in issue #3]
+- [RESOLVED 2026-08-02, half each way: a target exists (fork master `fe95ef1`) and carries Frame-generation support as a model-year branch, but `delete_list` is **not** fixable by bumping — it is unchanged on master, so the fallback fired and confirmed deletion is `tv_delete.delete_list_confirmed` in this repo. Two things the assumption did not anticipate: the target needs `websockets>=13.0` (the pinned 12.0 cannot import it), and its constructor performs blocking network I/O. **Live on hardware is still unverified** — Chunk 05 stays open for the bench pass]
 - [ASSUMPTION: the 2024 code keeps running the wall throughout the build; cutover to the new display plane happens at Chunk 13, and the legacy modules are deleted only at Chunk 20 | MED impact | user can override with an earlier or later cutover]
 - [ASSUMPTION: the existing sun-position brightness behaviour (`local.py`) ports into the display daemon in v1 — it runs on the wall today, so dropping it would be a regression, but the v1 scope list does not name it | LOW impact | user can defer to Later]
 - [ASSUMPTION: rotation timing is per-theme with a global fallback | LOW impact | carried from `data-model.md`; user can collapse to global]
@@ -473,6 +473,29 @@ architecture-proving slice is Chunk 07.
   keeps running production; Chunk 06 carries the same target into the display
   project); confirm-deletion wrapper if upstream is still broken; verification
   notes recorded on issue #3
+- **Verify-api landed 2026-08-02; the source half is done and the hardware half
+  is not.** What the read settled, beyond what the chunk anticipated:
+  - **PyPI was never a candidate.** That package ships no async art client and
+    no callbacks — the whole TV boundary here is built on both. The choice was
+    between fork SHAs, not between fork and release.
+  - **`delete_list` is unchanged on master**, so the bump does not fix it and the
+    fallback fired: `tv_delete.delete_list_confirmed` verifies against the set's
+    own content list. It keeps *unconfirmable* apart from *failed*, because
+    collapsing them is the original defect.
+  - **`upload()` streams only when handed a path.** The chunker is picked from
+    the argument type, so the caller had to change too; passing bytes it had
+    already read would have taken the bump and none of the benefit.
+  - **The target needs `websockets>=13.0`** — it imports `websockets.asyncio.client`,
+    absent from the pinned 12.0. Nothing costed this; it is a two-pin change.
+  - **Constructing the client now blocks on network I/O** and raises when the set
+    is unreachable, where the pin deferred that to first use. Chunk 12's daemon
+    inherits this: construction cannot sit on the event loop, and an asleep
+    television surfaces there rather than at `start_listening`.
+- **What the bench pass still owes:** `tv_api_check.py` is the scripted pass —
+  construction cost, model and API generation, which callback spelling this set
+  emits, a real 4K upload timed by path, and a confirmed delete of only the image
+  it uploaded. Until it runs green against the live set, the new pins are
+  unverified and `deploy/pi-freeze-2024.txt` is the rollback.
 - **Tests:** a scripted hardware pass against the live TV — upload, select,
   confirmed delete, callback registration — captured as notes now, promoted into
   the display plane's test suite in Chunk 12

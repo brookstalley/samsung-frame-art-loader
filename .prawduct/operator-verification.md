@@ -10,6 +10,43 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The samsungtvws move, against the live television — added 2026-08-02
+
+**Not visual — this one needs the hardware, not your eyes.** The library pin and
+`websockets` both moved, and every claim behind the move comes from reading
+source. What a television does is a separate question, and this is the only thing
+that answers it.
+
+On the Pi, with the set awake:
+
+```sh
+pip install -r requirements.txt          # the new pins
+python tv_api_check.py --image "$ART_ROOT/ready/<a 4K composite>.jpg"
+```
+
+It uploads one image, watches which callback the set emits, removes that image
+and confirms the removal — touching nothing else on the wall — and exits non-zero
+if any check fails. Paste its output onto issue #3; the last three acceptance
+boxes there are exactly what it measures.
+
+**Four numbers worth recording from the run**, because each is an input to the
+display daemon rather than a pass/fail:
+
+1. **How long construction blocks.** It makes a REST call and, on 2024-or-later
+   panels, a token round trip, all inside `__init__`.
+2. **Which callback events this set emits.** Three are registered:
+   `slideshow_image_changed` and `auto_rotation_image_changed` are the same
+   notion under two spellings, and the wrong one fails silently, so both go on;
+   `image_selected` is the acknowledgement of the request the script itself
+   made. The run prints whichever fired — record all of them.
+3. **The reported model and API version**, which is what the old/new verb split
+   turns on.
+4. **Upload seconds against file size**, streamed by path. The comparison against
+   the old whole-file-in-memory route is the reason the pin moved.
+
+**If it fails, the rollback is `deploy/pi-freeze-2024.txt`** and nothing else has
+changed on the Pi — the new pins only take effect on an install.
+
 ### The first browser surface — added 2026-08-01
 
 **What to look at.** The four sections and a work detail view, over the real

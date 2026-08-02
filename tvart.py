@@ -14,6 +14,7 @@ import config
 from art import ArtFile, ArtSet
 from display import DisplayLabel
 from local import SunInfo, perceived_brightness
+from tv_delete import UPLOADED_CATEGORY, describe_removal, remove_from_tv
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
 # logging.getLogger().setLevel(logging.DEBUG)
@@ -23,8 +24,6 @@ label_display: DisplayLabel = None
 last_tv_content_id = None
 previous_art_mode = False
 previous_auto_start = None
-
-UPLOADED_CATEGORY = "MY-C0002"
 
 
 def parse_args():
@@ -124,12 +123,12 @@ async def show_available(tv, category=None):
 
 async def delete_all_uploaded(tv_art):
     available_art = await get_available(tv_art, UPLOADED_CATEGORY)
-    await tv_art.delete_list([art["content_id"] for art in available_art])
+    result = await remove_from_tv(tv_art, [art["content_id"] for art in available_art])
     # clear the tv_content_id from any artfiles that were uploaded
     for art_set in artsets:
         for art_file in art_set.art:
             art_file.tv_content_id = None
-    logging.info(f"Deleted {len(available_art)} uploaded images")
+    logging.info(describe_removal(result, len(available_art)))
     # Clear the list of uploaded filenames
     uploaded_files = {}
 
@@ -139,19 +138,17 @@ async def upload_file(local_file: str, tv_art: SamsungTVAsyncArt) -> str:
     if not os.path.exists(local_file):
         raise FileNotFoundError(f"File {local_file} does not exist.")
     remote_filename = None
-    with open(local_file, "rb") as f:
-        data = f.read()
     try:
-        if local_file.endswith(".jpg"):
-            remote_filename = await tv_art.upload(data, file_type="JPEG", matte="none", portrait_matte="none")
-        elif local_file.endswith(".png"):
-            remote_filename = await tv_art.upload(data, file_type="PNG", matte="none", portrait_matte="none")
+        # The path, not the bytes. Given a path, samsungtvws streams the file to
+        # the set in 64 KiB chunks; given bytes, it holds the whole image in
+        # memory, and these are 4K composites. It takes the type from the
+        # suffix, so passing file_type alongside a path would be ignored.
+        if local_file.endswith((".jpg", ".png")):
+            remote_filename = await tv_art.upload(local_file, matte="none", portrait_matte="none")
         update_uploaded_files(local_file, remote_filename)
         await tv_art.select_image(remote_filename)
     except Exception as e:
         logging.error("There was an error: " + str(e))
-    finally:
-        f.close()
 
     return remote_filename
 
@@ -257,7 +254,8 @@ async def sync_artsets_to_tv(tv_art: SamsungTVAsyncArt):
         tv_ids_not_used = [tv_content_id for tv_content_id in tv_thumbnails.keys() if tv_content_id not in tv_ids_in_use]
         if tv_ids_not_used:
             logging.info(f"Deleting {len(tv_ids_not_used)} images from TV that are not in an active artset: {tv_ids_not_used}")
-            await tv_art.delete_list(tv_ids_not_used)
+            result = await remove_from_tv(tv_art, tv_ids_not_used)
+            logging.info(describe_removal(result, len(tv_ids_not_used)))
         else:
             logging.info("No images to delete from TV")
 

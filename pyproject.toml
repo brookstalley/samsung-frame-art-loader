@@ -57,6 +57,7 @@ ignore = [
 "source_utils.py" = ["T20", "E501", "F841", "TRY002", "TRY201", "TRY300", "B007"]
 "tvart.py" = ["T20", "E501", "F841", "TRY002", "TRY201", "TRY300", "B007"]
 # Operator tools run by hand; print() is their output, not logging.
+"tv_api_check.py" = ["T20"]
 "spi_test.py" = ["T20", "E501", "F841", "E402"]
 "remote_test.py" = ["T20", "E501", "F841"]
 "urls_to_json.py" = ["T20", "E501", "F841"]

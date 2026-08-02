@@ -349,6 +349,10 @@ they test the outcome rather than the transformation.
 
 ## Prose that ships to a caller is behaviour, and needs a test aimed at it
 
+## A package's declared dependency floor is a claim; what it imports is the constraint
+
+## Before answering the question a spec asks about a candidate, check that the candidate is one
+
 ## Ratifying a norm creates retroactive obligations on ARTIFACTS, not just code
 
 **When a norm is ratified, the artifacts written before it are as much in scope as

@@ -172,3 +172,55 @@ the tip, and drive the real service to prove each documented refusal is one it
 actually makes. A table keyed on the enum fails the day a sixth cause is added,
 which is the day the tip would otherwise have gone quietly stale. See
 `test_every_reason_show_now_can_refuse_for_is_named_in_its_tip`.
+
+## A package's declared dependency floor is a claim; what it imports is the constraint
+
+`install_requires` (or its equivalent) is written by hand and nothing checks it
+against the code beside it. A resolver honours the metadata, so a package whose
+declared floor is lower than its real one installs cleanly and fails at import —
+after the resolver has already reported success. The declared floor is evidence
+about what the author believed; the import statements are the constraint.
+
+**Worked instance (2026-08-02).** The `samsungtvws` fork's target revision imports
+`websockets.asyncio.client` and `websockets.protocol.State`, neither of which
+exists before websockets 13.0. Its `setup.py` declares `websockets>=10.2`. This
+repo pinned `websockets==12.0` — a version that satisfies the declaration and
+cannot run the code. The whole dependency set resolved, and `import samsungtvws`
+raised `ModuleNotFoundError: No module named 'websockets.asyncio'`.
+
+Nothing about the item that scoped the bump would have surfaced it: it was framed
+as replacing one pin, and no amount of reading `delete_list` and `upload()` — the
+two functions named — reaches an import line in a different module. What surfaced
+it was diffing the *whole* library between the pinned revision and the target,
+including files the item never mentioned. `async_connection.py` is where the
+websockets API is touched, and it is not a file anyone had reason to open.
+
+**The rule:** when moving a pin, diff every module in the package, not the
+functions the ticket names, and read the import lines first — they are the only
+part of a dependency's metadata that cannot be wrong. Then install the exact
+proposed set and import it, because a resolver reporting success is a statement
+about the metadata rather than about the code.
+
+## Before answering the question a spec asks about a candidate, check that the candidate is one
+
+A well-written spec narrows the work by naming the question that decides it. That
+is usually a gift and occasionally a trap: the question presupposes a frame, and
+if the frame is wrong the answer is wrong in a way that looks thorough. The check
+costs one command — list what the candidate actually contains — and it runs before
+the question, not after.
+
+**Worked instance (2026-08-02).** The chunk said: *"confirm the PyPI release
+carries the fork's LS03A/B/C/D support before preferring it."* A careful answer to
+that question would have compared model-support tables and reported a verdict. The
+first thing done instead was `tar tzf` on the release's sdist, which showed no
+`async_art.py` at all — the PyPI package ships a synchronous art client with no
+event callbacks, and this product's entire TV boundary is built on the async one.
+PyPI was never a candidate on any grounds, and the LS03 comparison would have been
+an elaborate answer to a question that could not have mattered.
+
+The premise turned out to be doubly off: `LS03` appears nowhere in either
+codebase. It is a README label. The fork's real generation handling is a branch on
+model *year* in `remote.py` — from 2024, mint a pairing token before the art
+channel will accept one. Both the question's frame and its vocabulary came from a
+README rather than from source, which is the tell worth carrying: **a premise
+sourced from documentation deserves the same verification as the answer.**
