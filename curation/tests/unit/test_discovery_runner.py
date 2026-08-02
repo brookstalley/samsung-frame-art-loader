@@ -10,6 +10,7 @@ threaded path is exercised where its behaviour actually matters, against a real
 server over real HTTP.
 """
 
+import sqlite3
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -465,3 +466,26 @@ def test_a_re_search_is_not_granted_the_flat_phase_one_allowance(runner, service
 
     assert view.work_count == 1
     assert view.search_allowance == settings.discovery_settings.phase2_searches_per_work
+
+
+def test_a_catalogue_fault_while_settling_ends_the_run_rather_than_hanging_it(services, engine, settings, monkeypatch):
+    """The worker's guard has to cover where the record layer is actually touched.
+
+    Recording spend and settling the work list are where an ordinary
+    infrastructure fault arrives — a locked or full catalogue file — and
+    `_settle` expects only `ServiceError`. Left outside the worker-boundary
+    catch, anything else escaping there leaves the run in `resolving_works` with
+    nothing working on it for the life of the process: the same phantom hang the
+    engine's own half is guarded against, one exception class over.
+    """
+    runner = DiscoveryRunner(services.discovery, engine, settings.discovery_settings, spawn=lambda work: work())
+
+    def locked(*args, **kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(services.discovery, "finish_work_list", locked)
+
+    run = services.discovery.get_run(start(runner).id)
+
+    assert run.status is RunStatus.FAILED
+    assert run.status.is_terminal, "a run nothing is working on must not be left in a process-held state"

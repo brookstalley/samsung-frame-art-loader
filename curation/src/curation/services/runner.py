@@ -397,7 +397,17 @@ class DiscoveryRunner:
         """Call the engine and turn whatever it did into a run state."""
         request = WorkListRequest(intent_text=intent_text, search_allowance=self._settings.phase1_search_allowance)
         try:
+            # Recording and settling are inside the guard, not in an `else`.
+            # They are where the record layer is touched, so they are where an
+            # ordinary infrastructure fault — a locked or full catalogue file —
+            # actually arrives, and `_settle` only expects `ServiceError`.
+            # Anything else escaping from here would leave the run in
+            # `resolving_works` with nothing working on it for the life of the
+            # process: the same hang the engine's own half is guarded against,
+            # one exception class over.
             produced = self._engine.enumerate_works(request)
+            self._record_spend(run_id, produced.spend)
+            self._settle(run_id, produced)
         except BudgetExhausted as exc:
             self._record_spend(run_id, exc.spend)
             self._end(run_id, self._discovery.halt_run_for_budget, "run.halted_by_budget", str(exc))
@@ -407,9 +417,6 @@ class DiscoveryRunner:
         except Exception:  # prawduct:allow prawduct/broad-except -- worker boundary: a fault must end the run, not hang it
             log.exception("phase 1 raised an unexpected error", extra={"event": "run.failed"})
             self._end(run_id, self._discovery.fail_run, "run.failed", "Phase 1 failed unexpectedly.")
-        else:
-            self._record_spend(run_id, produced.spend)
-            self._settle(run_id, produced)
 
     def _settle(self, run_id: str, produced: WorkList) -> None:
         """Turn an engine's answer into proposed works and close phase 1."""

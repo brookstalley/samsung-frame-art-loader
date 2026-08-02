@@ -284,7 +284,7 @@ bootstrapped at the root in Chunk 02). Chunk 06 restructures:
 Rationale per package lives in `project-preferences.md` § Tooling,
 `3tears-integration-findings.md`, and `platform-and-dependency-findings.md`.
 
-- **curation (3.14):** fastapi, uvicorn, `mcp>=1.27` (official SDK — decided over
+- **curation (3.14):** fastapi, uvicorn, `mcp>=1.28.1` (official SDK — decided over
   `3tears-mcp`, which drags NATS), 3tears-models (OpenRouter adapters, arriving with
   Chunk 14), httpx, pillow, opencv-python-headless, scikit-image, numpy, pydantic,
   python-dotenv. All wheels on aarch64/3.14, verified 2026-07-20. *(Amended
@@ -664,7 +664,7 @@ the existing 41 works are seeded into them.
 - **Exposed API:** mcp-tool-surface (versioning and error-model decisions
   recorded — `design_decisions.api_versioning_approach` /
   `api_error_model_approach`, both `status: active`)
-- **Foreign API:** mcp Python SDK (`mcp>=1.27`)
+- **Foreign API:** mcp Python SDK (`mcp>=1.28.1`)
 - **Deliverables:** new `curation/src/curation/persistence/`, new
   `curation/src/curation/services/`, new `curation/src/curation/mcp/` (registry +
   bindings), the ASGI app with `/mcp` mounted and the lifespan wired, all five
