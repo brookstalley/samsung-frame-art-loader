@@ -38,6 +38,12 @@ dependencies = [
     # JPEG — `seed/images.py` reads the SOF header for dimensions precisely
     # because that needed no decoder, and downscaling does.
     "pillow",
+    # The OpenRouter client's transport — the one thing in this plane that talks
+    # to a foreign API. Declared 2026-08-02 when that client landed: it resolves
+    # transitively through mcp today, so an undeclared install happens to work,
+    # and the day mcp vendors or drops it `__main__` fails at *import* and the
+    # whole plane stops serving rather than just discovery.
+    "httpx",
 ]
 
 # 3tears core is deliberately absent and is not expected. The catalogue's durable
@@ -60,9 +66,9 @@ dependencies = [
 #   opencv-python-headless, scikit-image, numpy — acquisition and the mat engine,
 #     which arrive with that work rather than being carried unused. Pillow was in
 #     this group until the browser surface needed to downscale a 4K rendition.
-#   httpx — the inverse of the starlette case above. The mcp *client* uses it, so
-#     the contract tests exercise it through that library; no first-party module
-#     imports it, so declaring it would claim a dependency the code does not have.
+#   (httpx was here until 2026-08-02 on the grounds that only the mcp *client*
+#     used it. The OpenRouter client imports it directly now, so it moved into
+#     the declared set above — see the note beside it there.)
 
 [dependency-groups]
 # httpx is declared here and not above on purpose: the browser-surface tests

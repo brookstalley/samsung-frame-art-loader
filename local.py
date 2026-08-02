@@ -18,7 +18,7 @@ class SunInfo:
     at_datetime: datetime
     at_latitude: float
     at_longitude: float
-    noon: datetime | None = (None,)
+    noon: datetime | None = None
     sunrise: datetime | None = None
     sunset: datetime | None = None
     civil_twilight_morning: datetime | None = None

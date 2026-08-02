@@ -485,6 +485,19 @@ reviewed later must still report the estimate it was actually authorised against
 > is no work count yet, so there is no figure — and the refusal names the
 > run's state and points at the no-argument form.
 
+> **A run reports how its intent was read (added 2026-08-02).** Every payload
+> carrying a run carries `strategy` beside the verbatim `intent`: one or two
+> sentences, in the engine's own words, on what it took to be in scope and what
+> it searched for. It is `null` until phase 1 finishes, because nothing has read
+> the intent yet, and it stays `null` on a run whose engine offered no account.
+>
+> The two fields answer different questions and neither substitutes for the
+> other. A work list is judged against the *reading* of a request rather than its
+> wording, so "you asked for recent, I took that to mean 2026 prize winners" is
+> what makes a surprising list explicable instead of merely wrong — and a curator
+> who disagrees with the reading can decline at the gate rather than working
+> through works that were never going to match.
+
 ### Partial success is the normal case
 
 A run that resolves 34 of 40 works succeeded partially. Bulk actions return a

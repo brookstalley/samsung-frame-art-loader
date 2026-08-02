@@ -107,6 +107,40 @@ which is the first point both halves can be measured.
 norm requires and a startup-path guard driven off the declaration rather than off
 a remembered list — verified by mutation in both directions.
 
+**Critic resolutions (2 blocking, 5 warning, 3 notes fixed; 7 accepted).** Both
+blocking findings were undeclared dependencies, and neither would have failed a
+test: `httpx` is imported by the new client but was declared only in `dev`,
+resolving transitively through `mcp` — so an install works right up until `mcp`
+stops vendoring it, at which point the *whole plane* fails at import rather than
+just discovery. And `requirements.txt`, which `deploy/README.md` points a rebuilt
+Pi at, was missing `astral`, `tzlocal`, `omni_epd`, `pycairo` and `PyGObject`
+while still pinning `suntime`, which nothing imports; the apt prerequisites for
+the two that need them are now documented beside them.
+
+Three of the fixed findings are worth naming because each is a *record* that had
+stopped describing the code. The spend-ceiling deliverable reached `.env.example`
+but never `operational-spec.md`, so an operator doing a routine-operations pass
+never met "verify the key still carries its $20 limit" — the one check separating
+a capped deployment from an uncapped one. `boundary-patterns.md` still said
+`art_discovery` answered only `help`, two chunks after eight real actions landed
+on it — the exact stale-row failure that file's own preamble warns disarms the
+consumer-impact check; its action list is now a pointer to `tools.py` rather than
+a copy. And the 2026-08-02 decision to reach OpenRouter first-party was never
+swept into `project-state.yaml` or the 3tears findings banner, both of which still
+read as though `3tears-models` arrives with discovery — the reading that would
+pull seven packages into the Pi's default install.
+
+**Two mechanisms were fixed rather than their symptoms.** `uvicorn.run` now takes
+`log_config=None`: its default attaches non-propagating *text* handlers, so the
+startup banner, every access line and every ASGI traceback left the process as
+plain text beside this plane's JSON — and `journalctl | jq`, the documented way to
+reconstruct a run, aborts on the first such line. The engine-seam network guard
+was **inverted**: it named three modules that may not import a transport, chosen
+when those three were all of discovery, so a phase-2 engine added above the seam
+would have been unguarded with nothing to show it. It now guards every module
+except a two-name allowlist, verified by planting a violation in a module the old
+form never named.
+
 ## 2026-08-02: The refusal we designed against was the wrong one — exhaustion is 403
 
 **Why:** The keys were provisioned and the over-limit path was finally driven,
@@ -439,11 +473,18 @@ entry points that differ only in what it costs the caller:
 — which is what the loader uses, because stopping there would skip the catalogue
 save and every pending upload.
 
-**Also found while verifying, and filed rather than fixed:** `requirements.txt`
-cannot stand up a working legacy environment — `art.py` imports `cairo` and `gi`,
-and neither `pycairo` nor `PyGObject` is listed, though both are in the Pi's
-recovered freeze. That surfaced from actually installing the file rather than
-reading it.
+**Also found while verifying:** `requirements.txt` cannot stand up a working
+legacy environment — `art.py` imports `cairo` and `gi`, and neither `pycairo` nor
+`PyGObject` is listed, though both are in the Pi's recovered freeze. That surfaced
+from actually installing the file rather than reading it.
+
+> **Corrected 2026-08-02.** This paragraph said the gap was "filed rather than
+> fixed", and no backlog item was ever written — so the disposition pointed at a
+> record that did not exist, which is worse than either fixing or filing. It also
+> named only the cairo/gi half: `astral`, `tzlocal` and `omni_epd` were missing
+> too, and `suntime` was still pinned while imported by nothing. All of it is
+> fixed in the 14B resolution commit, with the apt prerequisites documented
+> beside the two packages that need them.
 
 ## 2026-08-01: A browser can see the collection, build a theme, and read why a work is not on the wall
 

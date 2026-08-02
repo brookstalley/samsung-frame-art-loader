@@ -125,7 +125,16 @@ def main() -> None:
         # of it. Before serving, because a surface must not answer from a
         # catalogue still in a state its own rules forbid.
         services.reconcile()
-        uvicorn.run(create_app(services), host=settings.host, port=settings.port)
+        # `log_config=None` so uvicorn installs nothing of its own. Its default
+        # config attaches plain-text handlers to `uvicorn` and `uvicorn.access`
+        # with `propagate: False`, which would put the startup banner, every
+        # access line and every unhandled ASGI traceback into the journal as
+        # multi-line text — beside this plane's JSON. One non-JSON line aborts
+        # `journalctl | jq 'select(.run_id == …)'`, which is the whole reason the
+        # log shape exists, so the failure would be the documented way of
+        # reconstructing a run quietly not working. With no config of its own,
+        # uvicorn's loggers propagate to the root handler installed above.
+        uvicorn.run(create_app(services), host=settings.host, port=settings.port, log_config=None)
     finally:
         catalogue_file.close()
 

@@ -135,6 +135,20 @@ class OpenRouterEngine:
         # spend — including the parsing failures below. A run that paid for an
         # answer it could not read still paid.
         spend = _spend_of(completion)
+        if not completion.content.strip():
+            # Usually the output reservation being reached before anything was
+            # emitted. Named rather than reported as a bare parse failure,
+            # because `DISCOVERY_MAX_OUTPUT_TOKENS` is the setting that fixes it.
+            because = (
+                f"the model stopped on {completion.finish_reason!r}"
+                if completion.finish_reason
+                else "the provider gave no reason"
+            )
+            raise EngineFailure(
+                f"Phase 1 returned an empty answer ({because}). If it stopped on 'length', the output "
+                "reservation is too small for a work list of this size.",
+                spend=spend,
+            )
         try:
             parsed = json.loads(completion.content)
         except json.JSONDecodeError as exc:

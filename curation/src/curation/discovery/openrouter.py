@@ -112,6 +112,10 @@ class Completion:
     input_tokens: int
     output_tokens: int
     citations: tuple[Citation, ...] = ()
+    #: Why the model stopped — `"stop"`, `"length"`, whatever the provider says.
+    #: Carried so a caller judging an unusable answer can explain it, rather than
+    #: reporting an empty result with no account of how it got that way.
+    finish_reason: str | None = None
 
     @property
     def searched(self) -> bool:
@@ -174,8 +178,10 @@ class OpenRouterClient:
         self._max_output_tokens = max_output_tokens
         # Injectable so the suite can drive a recorded transport instead of the
         # network. The default is a real session; nothing else in the package
-        # constructs one.
-        self._http = client or httpx.Client(base_url=BASE_URL)
+        # constructs one. No `base_url` on it: every request below builds its
+        # full URL, and a base that half the code ignored would be a second
+        # answer to where the provider lives.
+        self._http = client or httpx.Client()
         self._headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
 
     @property
@@ -224,7 +230,17 @@ class OpenRouterClient:
         return _read_completion(payload, fallback_model=self._model)
 
     def key_status(self) -> KeyStatus:
-        """What the account says about the ceiling. For display, never for gating."""
+        """What the account says about the ceiling. For display, never for gating.
+
+        **No surface consumes this yet, and that is deliberate rather than an
+        oversight.** `api-contract.md` specifies no action that reports remaining
+        budget; the cost display that will is part of the discovery UI, and until
+        it exists adding a field to the tool surface would be inventing a
+        requirement. What already depends on this is the live suite's check that
+        the key carries a limit at all — the only mechanical test that the
+        product's entire spend ceiling has been provisioned, since nothing in this
+        repository enforces one.
+        """
         payload = self._get("/key")
         data = payload.get("data") or {}
         return KeyStatus(
@@ -305,19 +321,17 @@ def _provider_message(response: httpx.Response) -> str:
 
 def _read_completion(payload: Mapping[str, Any], *, fallback_model: str) -> Completion:
     """Read the one choice, its citations, and what the call cost."""
-    choices = payload.get("choices") or []
-    if not choices:
-        raise OpenRouterError("OpenRouter returned no choices; there is nothing to read a work list from.")
+    # **Nothing here raises, and that is the rule rather than a series of
+    # judgements.** By this point the provider has answered 2xx and the call has
+    # been billed, so any exception raised from this function would travel
+    # without the charge attached — and the run that paid for an unusable answer
+    # would record having spent nothing. That is the under-reporting the whole
+    # spend path is arranged to prevent, so an answer with no choices and an
+    # answer with empty content are treated alike: reported, with their cost.
+    # Judging whether the content is usable belongs to the caller.
+    choices = payload.get("choices") or [{}]
     message = choices[0].get("message") or {}
-    content = message.get("content")
-    if not content:
-        # An empty completion is usually the output reservation being hit
-        # mid-answer, which produces a truncated body rather than an error.
-        finish = choices[0].get("finish_reason")
-        raise OpenRouterError(
-            f"OpenRouter returned an empty completion (finish_reason={finish!r}). "
-            "A model that stopped on length has nothing parseable to give back."
-        )
+    content = message.get("content") or ""
 
     usage = payload.get("usage") or {}
     details = usage.get("cost_details") or {}
@@ -335,6 +349,7 @@ def _read_completion(payload: Mapping[str, Any], *, fallback_model: str) -> Comp
         input_tokens=int(usage.get("prompt_tokens") or 0),
         output_tokens=int(usage.get("completion_tokens") or 0),
         citations=_read_citations(message.get("annotations")),
+        finish_reason=choices[0].get("finish_reason"),
     )
 
 

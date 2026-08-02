@@ -236,14 +236,38 @@ def test_an_unreachable_provider_is_an_error_not_a_crash():
         client_over(refuse).complete(prompt="anything")
 
 
-def test_an_empty_completion_is_an_error_naming_why_it_stopped():
-    """A model truncated by its output reservation returns a body, not a failure."""
+def test_an_answer_with_no_choices_is_returned_with_its_cost_rather_than_raised():
+    """Same rule as an empty completion, for the same reason: it was billed.
+
+    A malformed 2xx is still a charge on the account, so the cost has to travel
+    back for the caller to record before it decides the answer is unusable.
+    """
+    payload = json.loads(json.dumps(SEARCHED))
+    payload["choices"] = []
+
+    completion = client_over(responding(payload)).complete(prompt="anything")
+
+    assert completion.content == ""
+    assert completion.cost_usd == Decimal("0.00523535")
+
+
+def test_an_empty_completion_is_returned_with_its_cost_rather_than_raised():
+    """The call was billed before anyone could see the answer was unusable.
+
+    Raising here would carry no cost with it, so the run that paid would record
+    having spent nothing — the under-reporting the whole spend path exists to
+    prevent. Judging the content belongs to the caller; reporting the charge
+    belongs here.
+    """
     payload = json.loads(json.dumps(SEARCHED))
     payload["choices"][0]["message"]["content"] = ""
     payload["choices"][0]["finish_reason"] = "length"
 
-    with pytest.raises(OpenRouterError, match="length"):
-        client_over(responding(payload)).complete(prompt="anything")
+    completion = client_over(responding(payload)).complete(prompt="anything")
+
+    assert completion.content == ""
+    assert completion.finish_reason == "length", "the caller needs to be able to explain it"
+    assert completion.cost_usd == Decimal("0.00523535"), "the charge survives an unusable answer"
 
 
 # -- what actually goes on the wire ---------------------------------------------

@@ -233,12 +233,16 @@ is no network between planes.
   The split is what keeps the client's measured response shapes testable against a
   recorded transport while the engine's decisions stay testable without either.
 
-  **The network guard's list did not grow, and that is the point.** The test that
-  parses the modules behind the seam and refuses any socket-capable import still
-  names `engine.py`, `dedup.py` and `runner.py` — the client sits on the far side
-  of the seam, which is exactly where an HTTP dependency is allowed to be. A
-  deployment reaching the provider through anything else would have to add an
-  import to a guarded module, and fail.
+  **The network guard was inverted when the client landed, and the inversion is
+  the interesting part.** It had named three modules that may not import a
+  transport — the three that were the whole of discovery when it was written. A
+  list of *guarded* files silently stops covering whatever is added next while its
+  result looks identical, so a phase-2 engine added above the seam would have been
+  unguarded with nothing to show it. It now guards **every module in the package
+  except a two-name allowlist**: the OpenRouter client, which is the far side of
+  the seam and exactly where a transport belongs, and the legacy seed reader,
+  which touches `urllib.parse` and makes no request. Reaching the provider from
+  anywhere else fails the suite by default rather than by having been anticipated.
 
   **Two services were added on 2026-08-01, with the first browser surface.**
   `ThumbnailService` produces the downscaled copies that make a forty-card grid a

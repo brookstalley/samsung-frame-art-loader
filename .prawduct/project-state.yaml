@@ -884,12 +884,17 @@ technical_decisions:
         - "Defer all persistence work and build Chunk 08 first — rejected; the twelve new entities would be written against a shape known to be changing."
         - "No 3tears at all — viable and simplest, but forfeits shared foundation with the operator's other projects."
       date: 2026-07-19
-    - decision: "Use 3tears-models for LLM access, routed through OpenRouter."
+    - decision: "Use 3tears-models for LLM access, routed through OpenRouter. — SUPERSEDED 2026-08-02, see below."
       rationale: "3tears-models depends only on media-contracts and observe — no core, no infrastructure — and already carries langchain-openrouter. Multi-provider routing directly enables the cheap-by-default / escalate-on-request pattern that keeps discovery spend bounded."
       alternatives_considered:
         - "Direct Anthropic or OpenAI SDK — fewer layers, but no provider routing and no shared foundation."
         - "Keep openai==1.37.1 / gpt-4o as in ai.py — rejected; the pin and the model are both from mid-2024."
       date: 2026-07-19
+    - decision: "Discovery reaches OpenRouter through a first-party client behind a narrow seam, not through 3tears-models. Supersedes the 2026-07-19 entry above; 3tears-models stays, confined to the opt-in `eval` group, where it plays the curator driving the MCP surface from outside."
+      rationale: "Not a correctness argument — langchain-openrouter does surface `cost` and `cost_details`, which is what the ceiling depends on. Three things decided it. (1) Everything routes through one provider: search goes through OpenRouter's own web plugin rather than a direct search account, so a multi-provider abstraction carries no traffic. (2) The install lands on the Pi: 3tears-models pulls 3tears-observe, 3tears-media-contracts, anthropic, langchain-anthropic, langchain-openai, langchain-openrouter and jsonschema into the curation plane's DEFAULT install — the plane running co-located with display under a MemoryMax — where today that weight is opt-in. (3) The two model uses are not the same axis: the eval harness's model is the curator, the engine's is the discovery worker, and 'one model-construction path' reads like reuse while actually coupling unrelated roles. The seam is what makes it reversible: adopting create_chat_model later is a one-file change if a second provider ever earns it."
+      alternatives_considered:
+        - "3tears-models via langchain-openrouter — investigated properly rather than dismissed; it preserves the cost fields, and was declined on install weight and on carrying an abstraction with no second provider behind it."
+      date: 2026-08-02
     - decision: "Build the MCP server on the official `mcp` SDK directly, not on `3tears-mcp`."
       rationale: >
         Decided 2026-07-19 when MCP became a core surface. `3tears-mcp` depends on

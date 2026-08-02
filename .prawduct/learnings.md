@@ -532,6 +532,18 @@ transported differently:
   the display plane, and any cache is display-side. The class rule stands;
   `boundary-patterns.md` carries the prospective contract.)*
 
+  > **Narrowed 2026-08-02: "device-specific" is not one property, and reading it
+  > as one caused a real mistake.** `boundary-patterns.md` § `ART_ROOT` filesystem
+  > contract makes the distinction — each derived directory is device-specific in
+  > a *different* way. `ready/` is composed for the television's panel; `label/`
+  > for the e-paper's; and **`thumbs/`, the browser surface's cache added
+  > 2026-08-01, is specific to nothing** — it is derived and cheap and belongs to
+  > no device at all. Reading the class as uniform is what made `tv-thumbs/` look
+  > like the right home for it, which is keyed by the television's own content
+  > ids: per-device state, the class this catalogue exists to keep out. Recorded
+  > here as well as there because a reader of this file alone would still conclude
+  > every derived directory is device-specific.
+
 The rule that falls out:
 
 > Git carries the code and the `all.json` index. Rsync carries the upstream

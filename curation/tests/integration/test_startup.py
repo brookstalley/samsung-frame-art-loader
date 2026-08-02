@@ -308,3 +308,63 @@ def test_the_configured_model_reaches_the_engine(tmp_path):
     settings = replace(_defaults(tmp_path / "art"), openrouter_api_key=SECRET, discovery_model="probe/model-under-test")
 
     assert entry_point._engine(settings).model == "probe/model-under-test"
+
+
+# -- one JSON object per line, including uvicorn's own -------------------------
+
+
+def test_uvicorn_is_given_no_logging_config_of_its_own(tmp_path, monkeypatch):
+    """Otherwise the journal carries plain text beside this plane's JSON.
+
+    uvicorn's default config attaches text handlers to `uvicorn` and
+    `uvicorn.access` with `propagate: False`, so the startup banner, every access
+    line and every unhandled ASGI traceback would leave the process unparseable
+    — and `journalctl | jq 'select(.run_id == …)'`, the documented way to
+    reconstruct a run, aborts on the first non-JSON line. On a product whose
+    defining failure mode is silence, that is the diagnostic path failing quietly.
+
+    Asserted at the call rather than by scraping output because the damage is
+    done by uvicorn's config install, which happens inside `run` — there is no
+    later moment at which a test could observe the handlers this prevents.
+    """
+    art_root = tmp_path / "art"
+    art_root.mkdir()
+    _stub_settings(monkeypatch, art_root)
+    passed: dict = {}
+
+    def capture(app, **kwargs) -> None:  # noqa: ANN001, ANN003 - uvicorn's own signature
+        passed.update(kwargs)
+
+    monkeypatch.setattr(entry_point.uvicorn, "run", capture)
+
+    entry_point.main()
+
+    assert "log_config" in passed, "uvicorn was left to install its own text handlers"
+    assert passed["log_config"] is None
+
+
+def test_uvicorns_own_default_is_what_makes_that_argument_necessary():
+    """Read from uvicorn itself, so the reason cannot outlive the behaviour.
+
+    The argument above is only worth passing while uvicorn's default actually
+    installs text handlers that do **not** propagate — non-propagating is the
+    load-bearing half, because a propagating logger would reach this plane's JSON
+    handler and no argument would be needed. If upstream ever changes this, the
+    justification evaporates and this fails, which is the point: a workaround
+    whose cause has gone is a line nobody can later explain.
+
+    Deliberately not asserted by applying the config: `dictConfig` mutates
+    process-wide logging state, and a test that installed uvicorn's handlers
+    would leave every later test in this session logging through them.
+    """
+    from uvicorn.config import LOGGING_CONFIG
+
+    loggers = LOGGING_CONFIG["loggers"]
+
+    assert loggers["uvicorn"]["handlers"], "uvicorn no longer installs handlers of its own"
+    assert loggers["uvicorn"]["propagate"] is False, "uvicorn's loggers now propagate; log_config=None is moot"
+    assert loggers["uvicorn.access"]["propagate"] is False
+    formatters = LOGGING_CONFIG["formatters"]
+    assert all(
+        "json" not in str(spec).lower() for spec in formatters.values()
+    ), "uvicorn's default formatters are now JSON, which would make this plane's override unnecessary"

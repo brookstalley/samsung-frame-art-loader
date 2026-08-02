@@ -20,7 +20,29 @@ requests==2.32.3
 # tell the two apart and the swap fails at import rather than loudly.
 samsungtvws @ git+https://github.com/NickWaterton/samsung-tv-ws-api.git@fe95ef1d784cd32f49bf9a07ec479576574eea07
 scikit-image==0.24.0
-suntime==1.3.2
+
+# Sunrise, sunset and solar noon for the wall's daily rhythm, and the local zone
+# they are computed in. `local.py` imports both. Versions are the ones the wall
+# actually runs, taken from `deploy/pi-freeze-2024.txt`.
+astral==3.2
+tzlocal==5.2
+
+# The e-paper label panel. `display.py` imports `omni_epd`, which is not on PyPI
+# — the same git-dependency situation as `samsungtvws` above, and pinned to the
+# commit the wall runs.
+omni_epd @ git+https://github.com/robweber/omni-epd.git@1a3acf59522c1a01f64585798af8d98226de8822
+
+# The label's text rendering: `art.py` imports `cairo` and `gi`. **These two need
+# system libraries before pip can build them** — on Raspberry Pi OS:
+#
+#     sudo apt install python3-gi python3-gi-cairo gir1.2-pango-1.0 \
+#                      libcairo2-dev libgirepository1.0-dev
+#
+# Listed here anyway rather than left to setup lore, because this file is what
+# `deploy/README.md` points a rebuilt Pi at, and a dependency nothing declares is
+# one nobody installs until an import fails.
+pycairo==1.26.1
+PyGObject==3.48.2
 # Floor of 13.0, set by samsungtvws above: it imports `websockets.asyncio.client`
 # and `websockets.protocol.State`, neither of which exists earlier. This is not
 # the newest release, deliberately — the wall runs unattended and 17.0 was three

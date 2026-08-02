@@ -17,14 +17,17 @@
 ### MCP tool surface
 
 - **Exists:** **yes**, as of 2026-07-27 — `curation/src/curation/mcp/`. All five
-  tool names are registered and served over streamable HTTP at `/mcp`. Three now
-  carry real actions — `art_catalogue` (`list`, `get`), `art_theme` (`list`,
-  `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`) and
-  `art_display` (`status`, `sync`, `show_now`, `next`) — each alongside `help`.
-  Only `art_discovery` and `art_review` still answer `help` and return a teaching
-  error for anything else. **Read this as a live external surface, not a
-  placeholder:** an action added to any of the three is an addition to something
-  clients already call. `tools.py` is the roster; this row is a summary of it.
+  tool names are registered and served over streamable HTTP at `/mcp`. **Four of
+  the five now carry real actions**; only `art_review` still answers `help` alone
+  and returns a teaching error for anything else. **Read this as a live external
+  surface, not a placeholder:** an action added to any of the four is an addition
+  to something clients already call.
+  **`tools.py` is the roster, and this row deliberately no longer enumerates the
+  actions.** It listed them until 2026-08-02 and was wrong by then — it still
+  said `art_discovery` answered only `help` after two chunks had put eight real
+  actions on it, which is precisely the "Exists: no" failure this file's preamble
+  warns silently disarms the consumer-impact check. A count goes stale far more
+  slowly than a list, and the list has one authoritative home.
 - **Producer:** MCP tool bindings on the curation plane.
 - **Consumer:** **External** — Claude Code, the in-UI agent, any MCP client.
 - **Contract:** tool names, `action` values, argument schemas, and result shapes.
@@ -213,6 +216,7 @@ suites run: `pytest` at the repo root for the 2024 modules, and
 | Integration | **yes** (curation) | Changes crossing the service-layer boundary | `curation/tests/integration/` |
 | Contract | **yes** (curation) | **Any MCP tool-surface change**, including a description edit | `curation/tests/contract/` |
 | Evaluation | **yes** (curation), opt-in | Any tool-surface change, before shipping it — **not** on every run | `curation/tests/eval/`, marker `llm_eval` |
+| Live API | **yes** (curation), opt-in | Any change to the OpenRouter client, and when a recorded price or response shape is in doubt | `curation/tests/live/`, marker `live_api` |
 | End-to-end | no | Before release | — |
 
 **The evaluation level is the only one that does not gate, and that is the
@@ -220,8 +224,19 @@ design** (added 2026-08-01). It drives the surface with a real model over
 OpenRouter, so a run costs money and — the disqualifying property — can reach
 the same goal by a different route next time. A non-deterministic pass/fail
 either flakes or is loosened until it asserts nothing, so it is deselected by
-default (`addopts = -m 'not llm_eval'`) and run deliberately with `-m llm_eval`.
-It measures; the contract level gates.
+default and run deliberately with `-m llm_eval`. It measures; the contract level
+gates.
+
+**The live-API level, added 2026-08-02, is deselected for the first reason and
+not the second.** It spends money, but it is entirely deterministic: it asserts
+the provider's response shapes and prices — inline `usage.cost`, the flat
+per-request search fee, citations, the key's monthly ceiling, strict structured
+output, and a real 403 halting a real run — so a failure means the provider
+moved, not that a model chose differently. It is the durable form of
+`openrouter-api-findings.md`, which is otherwise prose nobody re-runs.
+
+Both paid levels are off by default together: `addopts = -m 'not llm_eval and not
+live_api'`.
 
 Its dependency is an opt-in group (`uv sync --group eval`) rather than `dev`,
 because it is the heaviest install in the repo and no first-party module imports

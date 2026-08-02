@@ -300,6 +300,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "mcp" },
     { name = "pillow" },
     { name = "pydantic" },
@@ -324,6 +325,7 @@ eval = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "mcp", specifier = ">=1.28.1" },
     { name = "pillow" },
     { name = "pydantic" },

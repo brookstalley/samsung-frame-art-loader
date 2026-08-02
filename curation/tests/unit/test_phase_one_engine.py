@@ -263,3 +263,48 @@ def test_an_engine_holding_a_client_is_available():
     """A client cannot be built without a key, so holding one is the whole test
     of readiness. The keyless case is the entry point's, not this engine's."""
     assert engine_over(responding(ANSWER)).unavailable_reason is None
+
+
+def test_an_empty_answer_fails_the_run_and_still_reports_what_it_cost():
+    """The reservation can be reached before a single token is emitted.
+
+    That is a billed call with nothing to parse, so it must fail *carrying its
+    spend* — and name the setting that fixes it, since an empty answer says
+    nothing about why on its own.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "deepseek/deepseek-v4-flash",
+                "choices": [{"finish_reason": "length", "message": {"content": ""}}],
+                "usage": {"prompt_tokens": 900, "completion_tokens": 0, "cost": 0.00012, "cost_details": {}},
+            },
+        )
+
+    with pytest.raises(EngineFailure) as raised:
+        engine_over(handler).enumerate_works(asked())
+
+    assert "length" in str(raised.value)
+    assert sum(entry.cost_usd for entry in raised.value.spend) == Decimal("0.00012")
+
+
+def test_an_answer_with_no_choices_fails_the_run_and_still_reports_its_cost():
+    """A malformed 2xx is billed like any other. The run must fail carrying it."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "deepseek/deepseek-v4-flash",
+                "choices": [],
+                "usage": {"prompt_tokens": 900, "completion_tokens": 0, "cost": 0.00031, "cost_details": {}},
+            },
+        )
+
+    with pytest.raises(EngineFailure) as raised:
+        engine_over(handler).enumerate_works(asked())
+
+    assert "no reason" in str(raised.value), "there is no finish_reason to quote, and it says so"
+    assert sum(entry.cost_usd for entry in raised.value.spend) == Decimal("0.00031")

@@ -267,6 +267,23 @@ the display plane are separate processes on separate Python versions.
 > `architecture.md` § Decision Log, `project-state.yaml` →
 > `technical_decisions.technology`, and `curation/pyproject.toml`.
 >
+> > **That last sentence was overtaken on 2026-08-02 and is corrected here rather
+> > than edited away, because the reasoning above is still the record of what was
+> > believed when.** `3tears-models` did **not** arrive with the discovery work.
+> > Discovery reaches OpenRouter through a first-party client
+> > (`curation/src/curation/discovery/openrouter.py`) behind the engine seam, and
+> > `3tears-models` stays confined to the opt-in `eval` group, where it plays the
+> > *curator* driving the MCP surface from outside rather than the discovery
+> > worker behind it. The deciding factor is the one this file already cares
+> > about: it would pull seven packages into the curation plane's **default**
+> > install, on the Pi, under a `MemoryMax`. Full reasoning in
+> > `openrouter-api-findings.md` § "The client is first-party, behind a seam";
+> > superseding entry in `project-state.yaml` → `technical_decisions.technology`.
+> >
+> > **So the analysis below names a shape the product does not build.** Where it
+> > says "3tears-models for OpenRouter multi-provider access" is required, read
+> > that as the July position, not the answer.
+>
 > The analysis below is retained because it is what produced that answer, and
 > because § Answer 2 is still a live input. It is not a live recommendation.
 

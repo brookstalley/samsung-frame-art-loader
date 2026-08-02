@@ -14,6 +14,7 @@ check, and neither is a status call that holds until there is something to say.
 import asyncio
 import json
 import time
+from dataclasses import replace
 
 import pytest
 from fakes import a_work_list, spent, works
@@ -139,6 +140,31 @@ async def test_status_on_a_run_that_is_waiting_for_a_person_answers_at_once(serv
 
     assert payload["status"] == RunStatus.AWAITING_APPROVAL
     assert time.monotonic() - began < 5.0
+
+
+# -- how the intent was read ------------------------------------------------------
+
+
+async def test_the_runs_strategy_reaches_the_surface(server_url, engine):
+    """Stored and never shown would be write-only data.
+
+    A work list is judged against the *reading* of the request rather than its
+    wording, so "you asked for recent, I took that to mean 2026 prize winners" is
+    what makes a surprising list explicable instead of merely wrong.
+    """
+    engine.result = replace(a_work_list(3), strategy="Read as prize winners from the past year.")
+    run_id = await a_run(server_url)
+
+    payload = await settled(server_url, run_id)
+
+    assert payload["strategy"] == "Read as prize winners from the past year."
+
+
+async def test_a_run_still_working_reports_no_strategy_rather_than_a_placeholder(server_url, engine):
+    """Nothing has read the intent yet, so there is honestly nothing to report."""
+    payload, _ = await call(server_url, "art_discovery", action="start", intent="Surrealists")
+
+    assert payload["strategy"] is None
 
 
 # -- the gate --------------------------------------------------------------------

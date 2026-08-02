@@ -476,3 +476,68 @@ def test_a_negative_price_is_refused(monkeypatch, tmp_path):
 
     with pytest.raises(ConfigError, match="is a price and cannot be negative"):
         Settings.from_env()
+
+
+def test_a_deployment_can_override_every_engine_setting(monkeypatch, tmp_path):
+    """The engine's own values are deployment values too, and none may be a
+    literal in source: the model and its price move independently of this code,
+    and the output reservation is what a provider refuses a request against."""
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv("DISCOVERY_MODEL", "probe/model-under-test")
+    monkeypatch.setenv("DISCOVERY_MAX_OUTPUT_TOKENS", "1234")
+    monkeypatch.setenv("DISCOVERY_SEARCH_RESULTS", "6")
+
+    settings = Settings.from_env()
+
+    assert settings.discovery_model == "probe/model-under-test"
+    assert settings.discovery_max_output_tokens == 1234
+    assert settings.discovery_search_results == 6
+
+
+def test_the_engine_settings_ship_at_the_values_the_analysis_chose(monkeypatch, tmp_path):
+    """A floating model alias, and a search breadth of ten because breadth is free.
+
+    The fee is charged per search request and was measured identical at one,
+    three, five and ten results, so a lower default would save nothing and see
+    less. The alias is floating rather than a dated snapshot so a snapshot
+    retirement cannot break the product's only paid path.
+    """
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+
+    settings = Settings.from_env()
+
+    assert settings.discovery_model == "deepseek/deepseek-v4-flash"
+    assert ":" not in settings.discovery_model, "a dated snapshot pin, not the floating alias"
+    assert settings.discovery_search_results == 10
+
+
+def test_the_output_reservation_must_be_positive(monkeypatch, tmp_path):
+    """There is no coherent request that reserves no output, and the provider
+    refuses one rather than running it cheaply."""
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv("DISCOVERY_MAX_OUTPUT_TOKENS", "0")
+
+    with pytest.raises(ConfigError, match="DISCOVERY_MAX_OUTPUT_TOKENS"):
+        Settings.from_env()
+
+
+def test_the_api_key_is_absent_rather_than_empty_when_unset(monkeypatch, tmp_path):
+    """`None` is what the entry point tests to decide whether discovery can run,
+    and an empty string would be truthy-adjacent enough to invite a bug."""
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv("OPENROUTER_API_KEY", "")
+
+    assert Settings.from_env().openrouter_api_key is None
+
+
+def test_the_api_key_never_appears_in_the_redacted_configuration(monkeypatch, tmp_path):
+    """Driven off the declaration rather than a remembered list, so declaring a
+    new secret is what gets it redacted — and checked."""
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-should-never-be-logged")
+
+    redacted = Settings.from_env().redacted()
+
+    assert "sk-or-v1-should-never-be-logged" not in str(redacted)
+    assert redacted["openrouter_api_key"] == "<set>"
+    assert set(redacted) == set(Settings.__dataclass_fields__), "every field is accounted for, secret or not"
