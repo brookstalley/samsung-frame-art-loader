@@ -447,6 +447,7 @@ class DiscoveryRunner:
                 run_id,
                 approval_threshold=self._settings.approval_threshold,
                 estimated_cost_usd=estimate,
+                strategy=produced.strategy,
             )
         except ServiceError as exc:
             self._could_not_settle(run_id, exc)

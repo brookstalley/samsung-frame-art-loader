@@ -7,13 +7,42 @@ import uvicorn
 from curation import logs
 from curation.app import create_app
 from curation.config import Settings
-from curation.discovery.engine import unavailable_engine
+from curation.discovery.engine import DiscoveryEngine, unavailable_engine
+from curation.discovery.phase_one import build_engine
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.persistence.sqlite_discovery import SqliteDiscovery
 from curation.services.container import Services
 from curation.services.display import WallSettings
 from curation.services.thumbnails import ThumbnailSettings
+
+#: What a deployment with no key is told when it tries to discover. Written for
+#: the curator or agent who reads it back off a refusal, and it names the one
+#: thing that fixes it rather than describing the internals that noticed.
+NO_KEY: str = (
+    "Discovery cannot start: this deployment has no OPENROUTER_API_KEY set, and phase 1 needs a model "
+    "to turn an intent into a list of works. Set it in .env — the spend ceiling is that key's own credit "
+    "limit. Every other art_discovery action works on runs that already exist."
+)
+
+
+def _engine(settings: Settings) -> DiscoveryEngine:
+    """The real engine when a key is configured, and an honest refusal when not.
+
+    Deliberately not a stand-in. A convincing double reachable from a deployment
+    is one somebody eventually wires up, and the result would be invented works
+    written into a real catalogue with nothing to distinguish them from found
+    ones — the curator's evidence that discovery worked would be the product
+    fabricating it.
+    """
+    if not settings.openrouter_api_key:
+        return unavailable_engine(NO_KEY)
+    return build_engine(
+        settings.openrouter_api_key,
+        model=settings.discovery_model,
+        max_output_tokens=settings.discovery_max_output_tokens,
+        search_results=settings.discovery_search_results,
+    )
 
 
 def main() -> None:
@@ -59,6 +88,17 @@ def main() -> None:
         discovery.phase2_searches_per_work,
         discovery.phase1_estimate_usd,
     )
+    # Which model spends the money and whether there is a key to spend it with —
+    # the key's *presence*, never its value. "Is the key even set" is the first
+    # question a discovery misconfiguration raises, and answering it costs
+    # nothing; the repository is public and journals are read over shoulders.
+    log.info(
+        "discovery model=%s max_output_tokens=%d search_results=%d openrouter_key=%s",
+        settings.discovery_model,
+        settings.discovery_max_output_tokens,
+        settings.discovery_search_results,
+        settings.redacted()["openrouter_api_key"],
+    )
 
     settings.art_root.mkdir(parents=True, exist_ok=True)
     # One connection behind both halves of the model: acceptance promotes a
@@ -77,11 +117,7 @@ def main() -> None:
             ),
             thumbnails=ThumbnailSettings(art_root=settings.art_root, directory=settings.thumbnails_path),
             artwork_box=box,
-            # No model client is configured in this build, so discovery refuses
-            # to start a run rather than being handed a stand-in that would
-            # write invented works into a real catalogue. Every other discovery
-            # action works on runs that already exist.
-            engine=unavailable_engine(),
+            engine=_engine(settings),
             discovery_settings=settings.discovery_settings,
         )
         # The catalogue file outlives any single version of this code, so rules

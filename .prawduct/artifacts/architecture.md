@@ -220,11 +220,25 @@ is no network between planes.
   enforces by parsing the modules behind the seam and refusing any import that
   could open a socket.
 
-  The implementation a deployment currently gets is `UnavailableEngine`, which
+  A deployment gets `UnavailableEngine` only when it holds no API key, and it
   declares why it cannot run so that `start` is refused *before* a run exists. A
   convincing stand-in wired here instead would write invented works into a real
   catalogue, indistinguishable from found ones; the test double therefore lives
   under `tests/` and is deliberately out of a deployment's reach.
+
+  **The real implementation landed 2026-08-02 and is two modules, both behind the
+  seam.** `discovery/openrouter.py` is a first-party HTTP client — one provider,
+  one account, and no knowledge of what a discovery run is; `discovery/phase_one.py`
+  is the engine, which turns an intent into works and attributes what that cost.
+  The split is what keeps the client's measured response shapes testable against a
+  recorded transport while the engine's decisions stay testable without either.
+
+  **The network guard's list did not grow, and that is the point.** The test that
+  parses the modules behind the seam and refuses any socket-capable import still
+  names `engine.py`, `dedup.py` and `runner.py` — the client sits on the far side
+  of the seam, which is exactly where an HTTP dependency is allowed to be. A
+  deployment reaching the provider through anything else would have to add an
+  import to a guarded module, and fail.
 
   **Two services were added on 2026-08-01, with the first browser surface.**
   `ThumbnailService` produces the downscaled copies that make a forty-card grid a

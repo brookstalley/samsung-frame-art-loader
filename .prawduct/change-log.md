@@ -48,6 +48,65 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-02: Discovery spends for the first time, and the ceiling is proven closed
+
+<!-- prawduct: chunks=14B | status=shipped | scope=v1-build -->
+
+**Why:** 14A built everything up to the seam and could not start a run. This is
+what sits behind it: a first-party OpenRouter client written to measured response
+shapes, the phase-1 engine that turns an intent into works, and the wiring that
+replaces `unavailable_engine()` with a real one when a key is configured.
+
+**A measurement decided the design before any of it was written.** The one gap
+the plan named as outstanding — whether the web-search fee scales with
+`max_results` — was probed first, because the per-run cap is sized against it. It
+does not scale: the fee is **charged per request and identical at one, three,
+five and ten results** ($0.00500000 to eight decimal places), while citations
+scale one for one. **Breadth is free**, so `DISCOVERY_SEARCH_RESULTS` ships at 10
+and the recorded cap needed no revision.
+
+**Every run searches, and that is a decision rather than a default.** The
+alternative — a trigger deciding per intent — fails in the one direction the
+product cannot detect: a missed recency-bound intent returns real but pre-cutoff
+works with nothing marking them stale. Measured, not argued: without the plugin
+the default model answered *"No major art prize has been awarded in 2026 as of
+2025"* and, asked for a work list, returned 2022–2024 winners describing them as
+recent. Searching always costs a flat $0.005 — $0.30–0.90 a month against a $20
+ceiling — and grounds non-recency intents into the bargain.
+
+**`DiscoveryRun.strategy` finally has a writer.** It is the model's own account of
+how the intent was read, so it lands when the work list settles rather than when
+the run starts — nothing can know it before the intent has been read. The
+now-unreachable `strategy` parameter on `start_discovery_run` was removed rather
+than left as a second way to write one field.
+
+**The two refusals are held apart, which is the whole of the ceiling in code.**
+403 is exhaustion and raises `BudgetExhausted`; 402 arrives *with credit in the
+account* — the provider reserves the maximum output a request could produce — and
+must not halt a run that can still pay. `max_tokens` is therefore always sent, a
+correctness requirement rather than a tuning knob.
+
+**Proven, not assumed.** A key deliberately burned to its limit drives a real run
+end to end to `halted_by_budget` with no spend recorded, in a live suite behind
+`-m live_api` that also re-verifies inline `usage.cost`, the flat search fee,
+citations, the key's monthly ceiling and strict structured output. That suite —
+not the findings file's prose — is now the durable form of those findings.
+
+**What it actually cost, and what the estimate said.** The first real run through
+the booted plane proposed nine 2026 prize-winning works for **$0.0055882058**
+(89% of it the search fee) against an estimate of **$0.127**. The prices are
+right; `DISCOVERY_PHASE1_INPUT_TOKENS` is not — 490,000 assumed against 3,453
+measured, because the plugin injects excerpts rather than pages. **Left standing
+and recorded rather than re-based**: that figure is the cost analysis's *whole
+run* basis while the code spends it on phase 1 alone, and phase 2's tokens are in
+no estimate at all, so correcting phase 1 alone would trade a visible
+overstatement for an invisible understatement. The decision belongs with Chunk 16,
+which is the first point both halves can be measured.
+
+**The curation plane holds its first secret**, so it gained the redaction the
+norm requires and a startup-path guard driven off the declaration rather than off
+a remembered list — verified by mutation in both directions.
+
 ## 2026-08-02: The refusal we designed against was the wrong one — exhaustion is 403
 
 **Why:** The keys were provisioned and the over-limit path was finally driven,

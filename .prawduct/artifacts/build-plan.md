@@ -95,7 +95,7 @@ current chunk, and a blocked chunk ahead of active work silently hands its
 - [x] Chunk 10B: The first browser surface — catalogue, themes, manifest, health
 - [x] Chunk 11: Contract tests — MCP evaluation harness (issue #17) — *plane isolation (#7) split to Chunk 12*
 - [x] Chunk 14A: `art_discovery` surface, run correlation, the search cap — no spend
-- [ ] Chunk 14B: The OpenRouter client, the phase-1 engine, the ceiling (issue #12)
+- [x] Chunk 14B: The OpenRouter client, the phase-1 engine, the ceiling (issue #12)
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
@@ -246,13 +246,26 @@ The values the plan left to this chunk are settled and recorded where their rule
 live: the gate at 25 and the two-part cap at 10 + 2/work in
 `nonfunctional-requirements.md`, the estimate's arity in `api-contract.md`, the
 provisional key's site and its two known failure modes in `data-model.md`, and
-the log shape in `observability-strategy.md`. **What 14B still owes is unchanged**
-by this chunk: how "recency-bound" is decided, what writes `DiscoveryRun.strategy`
-and in what form (14A leaves it unset rather than guessing), whether the web fee
-scales with `max_results` — the one input that could move the phase-1 allowance —
-and the refusal's observed shape. **Both operator actions and the refusal probe
-are now done (2026-08-02)** — see `openrouter-api-findings.md`, which records that
-exhaustion is a 403 rather than the 402 this plan assumed.
+the log shape in `observability-strategy.md`.
+
+**14B landed 2026-08-02 and discovery now spends.** Everything 14A owed is
+settled: every run searches rather than a trigger deciding (the failure mode of a
+wrong trigger is silent and unrecoverable), the engine writes
+`DiscoveryRun.strategy` when the work list settles, and the phase-1 allowance
+stays at 10 because the fee proved to be **per request and flat across result
+counts** — which also makes search breadth free. Exhaustion (403) and
+unaffordability (402) are held apart in the client, and the ceiling is *proven*
+closed: a deliberately exhausted key drives a real run to `halted_by_budget` in a
+live suite behind `-m live_api`, which is now the durable form of
+`openrouter-api-findings.md`.
+
+**One thing 14B found and deliberately did not fix.** A real run cost $0.0056
+against a $0.127 estimate, because `DISCOVERY_PHASE1_INPUT_TOKENS` assumes
+490,000 tokens where the plugin injects 3,453. That figure is the cost analysis's
+*whole-run* basis spent on phase 1 alone, and phase 2's tokens are in no estimate
+at all — so re-basing phase 1 by itself would swap a visible overstatement for an
+invisible understatement. **Chunk 16 owns the correction**, being the first point
+both halves can be measured.
 
 **A requirements pass ran before either half (2026-08-02)** and is the reason the
 chunk entries below carry values rather than the phrase "the configured
@@ -1339,14 +1352,24 @@ core, built against the surfaces the contract tests already pin.
   `halted_by_budget`, distinguishable in logs and tool results; budget remaining
   reads `GET /api/v1/key`, which **lags by minutes and may therefore never gate a
   run** — display only.
-- **Still open at chunk start, to be settled here and recorded where the rule
-  lives:** how "recency-bound" is decided (a heuristic over the intent text, the
-  model choosing via tool availability, or always-search — issue #12 requires the
-  capability and is silent on the trigger); what writes `DiscoveryRun.strategy` and
-  in what form; and the **value** of the flat phase-1 search allowance, which
-  cannot be sized until the web fee's scaling with `max_results` is measured (the
-  fee was flat $0.005 at `max_results: 3` on one model — see the findings file's
-  "What this did not establish").
+- **Settled at build (2026-08-02), each recorded where its rule lives:**
+  - **"Recency-bound" is not decided at all — every run searches.** A trigger
+    fails in the one direction the product cannot detect: a missed recency-bound
+    intent returns real but pre-cutoff works with nothing marking them stale.
+    Demonstrated on the default model, which without the plugin answered *"No
+    major art prize has been awarded in 2026 as of 2025"*. The flat $0.005 per run
+    is $0.30–0.90 a month against a $20 ceiling, and grounding a non-recency
+    intent suppresses invented titles rather than wasting money. Rationale lives
+    in `discovery/phase_one.py`'s module docstring.
+  - **`DiscoveryRun.strategy` is written by the engine** when the work list
+    settles — it is the model's own account of how the intent was read, so it
+    cannot exist before the intent has been read (`data-model.md`).
+  - **The phase-1 allowance stays at 10.** The measurement it waited on came back
+    the useful way: the web fee is **per request, flat across one, three, five and
+    ten results**, so the cap counts the right unit at the right price and its
+    recorded derivation stands unchanged (`nonfunctional-requirements.md`).
+    Breadth being free is why `DISCOVERY_SEARCH_RESULTS` ships at 10; the engine
+    makes one request and so spends 1 of the 10.
 - **Depends on:** Chunk 14A (the seam and the surface), Chunks 08, 11
 - **Artifacts consumed:** `product-brief.md` § Flow 2 (as amended),
   `data-model.md` (DiscoveryRun, SpendRecord), `api-contract.md`

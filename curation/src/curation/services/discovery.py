@@ -138,14 +138,13 @@ class DiscoveryService:
 
     # -- writes: a discovery run's life ---------------------------------------
 
-    def start_discovery_run(
-        self,
-        *,
-        intent_text: str,
-        initiated_by: InitiatedBy,
-        strategy: str | None = None,
-    ) -> DiscoveryRun:
-        """Begin phase 1: the curator's intent becomes a run enumerating works."""
+    def start_discovery_run(self, *, intent_text: str, initiated_by: InitiatedBy) -> DiscoveryRun:
+        """Begin phase 1: the curator's intent becomes a run enumerating works.
+
+        No `strategy` here, deliberately. It is how the intent was *interpreted*,
+        which nothing knows until the model has read it — so it is written when
+        the work list arrives, and a run in flight honestly has none.
+        """
         run = DiscoveryRun(
             id=str(uuid.uuid4()),
             kind=RunKind.DISCOVERY,
@@ -154,13 +153,17 @@ class DiscoveryService:
             approval_required=False,
             started_at=datetime.now(UTC),
             intent_text=require_text(intent_text, field="intent_text"),
-            strategy=strategy,
         )
         store_write(self._store.add_run, run)
         return run
 
     def finish_work_list(
-        self, run_id: str, *, approval_threshold: int, estimated_cost_usd: Decimal | None = None
+        self,
+        run_id: str,
+        *,
+        approval_threshold: int,
+        estimated_cost_usd: Decimal | None = None,
+        strategy: str | None = None,
     ) -> DiscoveryRun:
         """Close phase 1 and either stop for approval or go straight to phase 2.
 
@@ -174,6 +177,12 @@ class DiscoveryService:
         Whether the gate fired is stored rather than left to be re-derived: the
         threshold is configuration, and a run that stopped for approval last
         month must still read that way under today's setting.
+
+        `strategy` lands here because this is the moment it becomes known — it is
+        the engine's account of how the intent was read, and it explains the very
+        list this transition closes. This is its only writer: the transition runs
+        once per run, out of `resolving_works`, so there is no earlier value to
+        preserve and no second chance to overwrite one.
         """
         if approval_threshold < 0:
             raise ServiceError(f"An approval threshold cannot be negative, got {approval_threshold}.")
@@ -185,6 +194,7 @@ class DiscoveryService:
                 status=RunStatus.AWAITING_APPROVAL if required else RunStatus.RESOLVING_IMAGES,
                 approval_required=required,
                 estimated_cost_usd=estimated_cost_usd,
+                strategy=strategy,
             )
             store_write(self._store.update_run, advanced)
         return advanced

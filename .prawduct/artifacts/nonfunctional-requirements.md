@@ -246,6 +246,29 @@ the same finding. A run lands between **$0.11 and $0.33** on the default model, 
 $20 buys on the order of **60–180 runs a month**. Search goes *inside* the
 ceiling, comfortably.
 
+> **A measured phase-1 run came in at $0.0056, and the estimate said $0.127
+> (2026-08-02).** The first real run through the built engine — nine works, one
+> search at ten results — billed $0.0005882 of tokens (3,453 in / 1,608 out) plus
+> the flat $0.005 search fee. **Search was 89% of it**, which sharpens the finding
+> above rather than contradicting it.
+>
+> **The prices are right; the assumed token consumption is not.**
+> `DISCOVERY_PHASE1_INPUT_TOKENS` ships at 490,000 against a measured 3,453,
+> because the web plugin injects *excerpts* rather than whole pages. That is the
+> whole of the twenty-fold gap.
+>
+> **Left standing rather than re-based, and this is the reasoning to reopen
+> against.** The 490,000 figure is this section's own per-run basis, covering a
+> *whole* run; the code spends it on the phase-1 estimate alone, and
+> `phase2_estimate_usd` prices search only — phase 2's model calls are in no
+> estimate at all. Re-basing phase 1 to its measured consumption would make that
+> figure honest while leaving the run figure silently short of phase 2's tokens,
+> trading a visible overstatement for an invisible understatement. **The decision
+> belongs with Chunk 16**, which builds phase 2 and is the first point at which
+> both halves can be measured. Until then the estimate is conservative in the
+> safe direction, and the *actual* is reported from the provider on every surface,
+> so nobody has to trust the estimate to know what a run cost.
+
 **The phase-1 model is a deployment value, defaulting to
 `deepseek/deepseek-v4-flash` (decided 2026-08-02).** The owner ruled out the
 frontier tier explicitly. The reasoning that survives beyond that ruling: phase 1
@@ -327,12 +350,15 @@ than a silent truncation of results.
 > figures from the shipped settings, so the derivation is checked rather than
 > asserted, and a settings change that walks away from this analysis fails.
 >
-> **Still provisional in one respect**, and it is the reason the value was
-> originally left open: the web fee was measured flat at $0.005 for
-> `max_results: 3` on a single model, and whether it scales with `max_results` is
-> unmeasured (`openrouter-api-findings.md` § What this did not establish). If it
-> scales, the phase-1 allowance is the number to revisit — the count stays right,
-> the price per search does not.
+> **No longer provisional, and the values stand (measured 2026-08-02).** The one
+> open question was whether the web fee scales with `max_results`, since the cap
+> is sized against it. It does not: the fee is **charged per search request and
+> is identical at one, three, five and ten results** — $0.00500000 to eight
+> decimal places in all four — while citations scale one for one with the
+> request (`openrouter-api-findings.md` § The web fee is per request). So the
+> cap counts the right unit at the right price, and nothing here needed
+> revisiting. The corollary is that **breadth is free**, which is why
+> `DISCOVERY_SEARCH_RESULTS` ships at 10.
 >
 > **Overrunning the allowance fails the run rather than trimming its results.**
 > An engine that searched past its bound spent money the estimate did not cover,

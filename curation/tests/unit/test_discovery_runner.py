@@ -493,3 +493,43 @@ def test_a_catalogue_fault_while_settling_ends_the_run_rather_than_hanging_it(se
 
     assert run.status is RunStatus.FAILED
     assert run.status.is_terminal, "a run nothing is working on must not be left in a process-held state"
+
+
+# -- the interpreted plan -------------------------------------------------------
+
+
+def test_the_engines_strategy_is_stored_on_the_run(services, engine, settings):
+    """`strategy` explains why a list looks the way it does, so it has to survive.
+
+    Written when phase 1 finishes rather than when the run starts, because it is
+    the engine's account of how the intent was *read* — and nothing knows that
+    until the model has read it.
+    """
+    engine.result = replace(a_work_list(3), strategy="Read as prize winners from the past year.")
+    runner = DiscoveryRunner(services.discovery, engine, settings.discovery_settings, spawn=lambda work: work())
+
+    run = services.discovery.get_run(start(runner).id)
+
+    assert run.strategy == "Read as prize winners from the past year."
+
+
+def test_a_run_in_flight_has_no_strategy_yet(services, engine, settings):
+    """Honestly absent rather than a placeholder: the intent has not been read.
+
+    Phase 1 is never run, which is the state a caller finds a run in while the
+    work is still going on.
+    """
+    runner = DiscoveryRunner(services.discovery, engine, settings.discovery_settings, spawn=lambda work: None)
+
+    run_id = start(runner).id
+
+    assert services.discovery.get_run(run_id).status is RunStatus.RESOLVING_WORKS
+    assert services.discovery.get_run(run_id).strategy is None
+
+
+def test_an_engine_that_offered_no_strategy_leaves_the_run_without_one(services, engine, settings):
+    """Absent rather than an empty string standing in for an explanation."""
+    engine.result = replace(a_work_list(3), strategy=None)
+    runner = DiscoveryRunner(services.discovery, engine, settings.discovery_settings, spawn=lambda work: work())
+
+    assert services.discovery.get_run(start(runner).id).strategy is None

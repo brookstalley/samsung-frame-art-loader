@@ -97,6 +97,32 @@ DEFAULT_OUTPUT_COST_USD_PER_MTOK: Final[str] = "0.28"
 DEFAULT_PHASE1_INPUT_TOKENS: Final[int] = 490_000
 DEFAULT_PHASE1_OUTPUT_TOKENS: Final[int] = 30_000
 
+#: Which model phase 1 asks. A **floating** alias rather than a dated snapshot, so
+#: a snapshot retirement cannot break the only paid path in a household product.
+#: The dated pin is cheaper by about a third, which against a $20 ceiling does not
+#: decide anything.
+DEFAULT_DISCOVERY_MODEL: Final[str] = "deepseek/deepseek-v4-flash"
+
+#: The output reservation, in tokens. **A correctness value, not a tuning knob.**
+#: The provider prices the maximum output a request could produce and refuses the
+#: call when that reservation exceeds the credit remaining — so leaving it unset
+#: means the model's own ceiling is reserved, and a nearly empty key then refuses
+#: everything at full credit. Large enough for a long work list, small enough that
+#: the reservation is a rounding error against a monthly limit.
+DEFAULT_DISCOVERY_MAX_OUTPUT_TOKENS: Final[int] = 8_000
+
+#: How many pages one web search may return. **Breadth is free**: the fee is
+#: charged per search request and was measured identical at one, three, five and
+#: ten results, so a lower number saves nothing and sees less.
+DEFAULT_DISCOVERY_SEARCH_RESULTS: Final[int] = 10
+
+#: Settings fields that must never reach a log line, declared once here rather
+#: than remembered at each site that logs. `Settings.redacted()` walks this set
+#: and so does the guard over it, so declaring a secret is what gets it both
+#: redacted and checked — a guard that only knows the secrets someone remembered
+#: to add to it is the shape that silently stops covering the newest one.
+_SECRET_FIELDS: Final[frozenset[str]] = frozenset({"openrouter_api_key"})
+
 
 class ConfigError(RuntimeError):
     """A required deployment value is missing or unusable."""
@@ -137,6 +163,17 @@ class Settings:
     output_cost_usd_per_mtok: Decimal
     phase1_input_tokens: int
     phase1_output_tokens: int
+    #: How phase 1 reaches its provider. Separate from the allowances above
+    #: because these configure the *engine*, while those configure what the
+    #: service layer may authorise — and only one of the two is a policy a
+    #: household sets.
+    discovery_model: str
+    discovery_max_output_tokens: int
+    discovery_search_results: int
+    #: The key everything paid runs through. Optional: a deployment without one
+    #: serves the whole catalogue and refuses only to *start* a discovery run,
+    #: which is a far better failure than refusing to boot.
+    openrouter_api_key: str | None = None
 
     @property
     def discovery_settings(self) -> DiscoverySettings:
@@ -247,7 +284,27 @@ class Settings:
             output_cost_usd_per_mtok=_priced("DISCOVERY_OUTPUT_COST_USD_PER_MTOK", DEFAULT_OUTPUT_COST_USD_PER_MTOK),
             phase1_input_tokens=_counted("DISCOVERY_PHASE1_INPUT_TOKENS", DEFAULT_PHASE1_INPUT_TOKENS),
             phase1_output_tokens=_counted("DISCOVERY_PHASE1_OUTPUT_TOKENS", DEFAULT_PHASE1_OUTPUT_TOKENS),
+            discovery_model=os.environ.get("DISCOVERY_MODEL") or DEFAULT_DISCOVERY_MODEL,
+            # Positive rather than merely counted: zero is not a coherent output
+            # reservation, and a request reserving nothing is refused by the
+            # provider rather than run cheaply.
+            discovery_max_output_tokens=_positive_int("DISCOVERY_MAX_OUTPUT_TOKENS", DEFAULT_DISCOVERY_MAX_OUTPUT_TOKENS),
+            discovery_search_results=_counted("DISCOVERY_SEARCH_RESULTS", DEFAULT_DISCOVERY_SEARCH_RESULTS),
+            openrouter_api_key=os.environ.get("OPENROUTER_API_KEY") or None,
         )
+
+    def redacted(self) -> dict[str, object]:
+        """Every resolved value, with secrets reported as present rather than shown.
+
+        The repository is public and the journal gets read over someone's
+        shoulder during a failure — which is exactly when logging is turned up.
+        Presence is still reported, because "is the key even set" is the first
+        question a misconfiguration raises and answering it costs nothing.
+        """
+        return {
+            name: ("<set>" if getattr(self, name) else "<unset>") if name in _SECRET_FIELDS else getattr(self, name)
+            for name in self.__dataclass_fields__
+        }
 
 
 def _require(name: str) -> str:

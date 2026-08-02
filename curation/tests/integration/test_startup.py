@@ -7,11 +7,15 @@ tested and entirely unwired, and only removing the call and re-running the suite
 showed it. So the call is asserted here, through `main()` itself.
 """
 
+from dataclasses import replace
 from decimal import Decimal
 
 import curation.__main__ as entry_point
 from curation.config import (
     DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
+    DEFAULT_DISCOVERY_MAX_OUTPUT_TOKENS,
+    DEFAULT_DISCOVERY_MODEL,
+    DEFAULT_DISCOVERY_SEARCH_RESULTS,
     DEFAULT_INPUT_COST_USD_PER_MTOK,
     DEFAULT_MAT_BOTTOM_WEIGHT,
     DEFAULT_MAT_WIDTH_INCHES,
@@ -29,6 +33,7 @@ from curation.config import (
     DEFAULT_TV_PANEL_WIDTH_PX,
     Settings,
 )
+from curation.discovery.phase_one import OpenRouterEngine
 from curation.manifest.builder import MANIFEST_FILENAME
 from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 from curation.persistence.file import open_catalogue_file
@@ -36,6 +41,55 @@ from curation.persistence.records import Theme
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.services.catalogue import CatalogueService
 from curation.services.display import DisplayService, WallSettings
+
+#: A key shaped like the real thing, so a naive redaction that only hides values
+#: it recognises as secret-looking cannot pass by accident.
+SECRET = "sk-or-v1-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+
+def _defaults(art_root, **overrides) -> Settings:
+    """The shipped defaults over a scratch tree, with anything a test cares about
+    overridden by name.
+
+    Constructed rather than resolved: `from_env` loads `.env` with override, so a
+    test that went through it would run against the developer's own machine —
+    and would then pass or fail depending on whether *they* happen to hold a key.
+    """
+    return replace(
+        Settings(
+            art_root=art_root,
+            catalogue_path=art_root / "catalogue.sqlite",
+            manifest_path=art_root / MANIFEST_FILENAME,
+            heartbeat_path=art_root / HEARTBEAT_FILENAME,
+            host="127.0.0.1",
+            port=0,
+            rotation_interval_seconds=DEFAULT_ROTATION_INTERVAL_SECONDS,
+            rotation_shuffle=DEFAULT_ROTATION_SHUFFLE,
+            tv_panel_width_px=DEFAULT_TV_PANEL_WIDTH_PX,
+            tv_panel_height_px=DEFAULT_TV_PANEL_HEIGHT_PX,
+            tv_panel_diagonal_inches=DEFAULT_TV_PANEL_DIAGONAL_INCHES,
+            mat_width_inches=DEFAULT_MAT_WIDTH_INCHES,
+            mat_bottom_weight=DEFAULT_MAT_BOTTOM_WEIGHT,
+            resolution_floor_inches=DEFAULT_RESOLUTION_FLOOR_INCHES,
+            approval_threshold=DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
+            phase1_search_allowance=DEFAULT_PHASE1_SEARCH_ALLOWANCE,
+            phase2_searches_per_work=DEFAULT_PHASE2_SEARCHES_PER_WORK,
+            search_cost_usd=Decimal(DEFAULT_SEARCH_COST_USD),
+            input_cost_usd_per_mtok=Decimal(DEFAULT_INPUT_COST_USD_PER_MTOK),
+            output_cost_usd_per_mtok=Decimal(DEFAULT_OUTPUT_COST_USD_PER_MTOK),
+            phase1_input_tokens=DEFAULT_PHASE1_INPUT_TOKENS,
+            phase1_output_tokens=DEFAULT_PHASE1_OUTPUT_TOKENS,
+            discovery_model=DEFAULT_DISCOVERY_MODEL,
+            discovery_max_output_tokens=DEFAULT_DISCOVERY_MAX_OUTPUT_TOKENS,
+            discovery_search_results=DEFAULT_DISCOVERY_SEARCH_RESULTS,
+        ),
+        **overrides,
+    )
+
+
+def _stub_settings(monkeypatch, art_root, **overrides) -> None:
+    """Make `from_env` yield those defaults, so `main()` runs against them."""
+    monkeypatch.setattr(Settings, "from_env", classmethod(lambda cls: _defaults(art_root, **overrides)))
 
 
 def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch):
@@ -55,36 +109,7 @@ def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch)
     seeding.add_theme(Theme(id="t2", name="Daylight", created_at=_a_moment()))
     seeding.close()
 
-    monkeypatch.setattr(
-        Settings,
-        "from_env",
-        classmethod(
-            lambda cls: cls(
-                art_root=art_root,
-                catalogue_path=path,
-                manifest_path=art_root / MANIFEST_FILENAME,
-                heartbeat_path=art_root / HEARTBEAT_FILENAME,
-                host="127.0.0.1",
-                port=0,
-                rotation_interval_seconds=DEFAULT_ROTATION_INTERVAL_SECONDS,
-                rotation_shuffle=DEFAULT_ROTATION_SHUFFLE,
-                tv_panel_width_px=DEFAULT_TV_PANEL_WIDTH_PX,
-                tv_panel_height_px=DEFAULT_TV_PANEL_HEIGHT_PX,
-                tv_panel_diagonal_inches=DEFAULT_TV_PANEL_DIAGONAL_INCHES,
-                mat_width_inches=DEFAULT_MAT_WIDTH_INCHES,
-                mat_bottom_weight=DEFAULT_MAT_BOTTOM_WEIGHT,
-                resolution_floor_inches=DEFAULT_RESOLUTION_FLOOR_INCHES,
-                approval_threshold=DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
-                phase1_search_allowance=DEFAULT_PHASE1_SEARCH_ALLOWANCE,
-                phase2_searches_per_work=DEFAULT_PHASE2_SEARCHES_PER_WORK,
-                search_cost_usd=Decimal(DEFAULT_SEARCH_COST_USD),
-                input_cost_usd_per_mtok=Decimal(DEFAULT_INPUT_COST_USD_PER_MTOK),
-                output_cost_usd_per_mtok=Decimal(DEFAULT_OUTPUT_COST_USD_PER_MTOK),
-                phase1_input_tokens=DEFAULT_PHASE1_INPUT_TOKENS,
-                phase1_output_tokens=DEFAULT_PHASE1_OUTPUT_TOKENS,
-            )
-        ),
-    )
+    _stub_settings(monkeypatch, art_root)
 
     served: list[str] = []
 
@@ -131,41 +156,37 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
     """
     art_root = tmp_path / "art"
     art_root.mkdir()
-    monkeypatch.setattr(
-        Settings,
-        "from_env",
-        classmethod(
-            lambda cls: cls(
-                art_root=art_root,
-                catalogue_path=art_root / "catalogue.sqlite",
-                manifest_path=art_root / MANIFEST_FILENAME,
-                heartbeat_path=art_root / HEARTBEAT_FILENAME,
-                host="127.0.0.1",
-                port=0,
-                rotation_interval_seconds=931,
-                rotation_shuffle=False,
-                # A panel no default could produce, so a line built from the
-                # constants rather than the resolved settings would show.
-                tv_panel_width_px=1920,
-                tv_panel_height_px=1080,
-                tv_panel_diagonal_inches=55.0,
-                # Likewise the mat and the floor, for the same reason.
-                mat_width_inches=3.0,
-                mat_bottom_weight=2.0,
-                resolution_floor_inches=7.5,
-                # And likewise every discovery value: the estimate below is
-                # arithmetic over all of them, so a line built from the constants
-                # rather than the resolved settings cannot reproduce it.
-                approval_threshold=7,
-                phase1_search_allowance=3,
-                phase2_searches_per_work=4,
-                search_cost_usd=Decimal("0.002"),
-                input_cost_usd_per_mtok=Decimal("3.00"),
-                output_cost_usd_per_mtok=Decimal("5.00"),
-                phase1_input_tokens=200_000,
-                phase1_output_tokens=20_000,
-            )
-        ),
+    _stub_settings(
+        monkeypatch,
+        art_root,
+        rotation_interval_seconds=931,
+        rotation_shuffle=False,
+        # A panel no default could produce, so a line built from the constants
+        # rather than the resolved settings would show.
+        tv_panel_width_px=1920,
+        tv_panel_height_px=1080,
+        tv_panel_diagonal_inches=55.0,
+        # Likewise the mat and the floor, for the same reason.
+        mat_width_inches=3.0,
+        mat_bottom_weight=2.0,
+        resolution_floor_inches=7.5,
+        # And likewise every discovery value: the estimate below is arithmetic
+        # over all of them, so a line built from the constants rather than the
+        # resolved settings cannot reproduce it.
+        approval_threshold=7,
+        phase1_search_allowance=3,
+        phase2_searches_per_work=4,
+        search_cost_usd=Decimal("0.002"),
+        input_cost_usd_per_mtok=Decimal("3.00"),
+        output_cost_usd_per_mtok=Decimal("5.00"),
+        phase1_input_tokens=200_000,
+        phase1_output_tokens=20_000,
+        discovery_model="probe/model-under-test",
+        discovery_max_output_tokens=1234,
+        discovery_search_results=6,
+        # A key shaped like a real one. The plane is about to log its
+        # configuration, and this is the value that must not appear.
+        openrouter_api_key=SECRET,
     )
     monkeypatch.setattr(entry_point.uvicorn, "run", lambda app, **kwargs: None)
 
@@ -202,3 +223,88 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
     # searches at $0.002 add $0.006. Computed here rather than copied, so the
     # assertion fails if the composition changes rather than tracking it.
     assert "phase1_estimate=$0.706" in logged
+    # Which model spends the money, and how much output it reserves. The
+    # reservation is a correctness value — the provider prices it before
+    # accepting a call — so a deployment running an unintended one should be a
+    # journal read rather than an unexplained refusal at full credit.
+    assert "model=probe/model-under-test" in logged
+    assert "max_output_tokens=1234" in logged
+    assert "search_results=6" in logged
+
+
+def test_startup_never_writes_the_api_key_to_the_journal(tmp_path, monkeypatch, caplog):
+    """The plane holds a secret now, and the journal is where secrets leak.
+
+    The repository is public and logging is turned *up* during a failure, which
+    is exactly when someone is reading over a shoulder. Presence is still
+    reported — "is the key even set" is the first question a discovery
+    misconfiguration raises — but the value never is.
+
+    This asserts the whole startup path rather than the redaction helper alone,
+    because a helper that redacts correctly protects nothing if a line
+    somewhere else logs the settings object whole.
+    """
+    art_root = tmp_path / "art"
+    art_root.mkdir()
+    _stub_settings(monkeypatch, art_root, openrouter_api_key=SECRET)
+    monkeypatch.setattr(entry_point.uvicorn, "run", lambda app, **kwargs: None)
+
+    with caplog.at_level("INFO"):
+        entry_point.main()
+
+    assert caplog.text.strip(), "a vacuous pass: nothing was logged at all"
+    assert SECRET not in caplog.text
+    assert "0123456789abcdef" not in caplog.text, "nor any fragment of it"
+    assert "openrouter_key=<set>" in caplog.text, "presence is reported, which is the useful half"
+
+
+def test_a_deployment_with_no_key_says_so_rather_than_looking_configured(tmp_path, monkeypatch, caplog):
+    """`<unset>` and `<set>` must be distinguishable, or the line answers nothing."""
+    art_root = tmp_path / "art"
+    art_root.mkdir()
+    _stub_settings(monkeypatch, art_root, openrouter_api_key=None)
+    monkeypatch.setattr(entry_point.uvicorn, "run", lambda app, **kwargs: None)
+
+    with caplog.at_level("INFO"):
+        entry_point.main()
+
+    assert "openrouter_key=<unset>" in caplog.text
+
+
+# -- which engine a deployment gets ---------------------------------------------
+
+
+def test_a_key_buys_a_real_engine(tmp_path):
+    """The one wiring that turns discovery on. Asserted through the entry point's
+    own resolver rather than by reading configuration, because an engine built
+    correctly somewhere nothing calls is the defect this file exists for."""
+    art_root = tmp_path / "art"
+    settings = replace(_defaults(art_root), openrouter_api_key=SECRET)
+
+    engine = entry_point._engine(settings)
+
+    assert isinstance(engine, OpenRouterEngine)
+    assert engine.unavailable_reason is None, "a deployment holding a key can start a run"
+
+
+def test_no_key_refuses_to_discover_rather_than_faking_it(tmp_path):
+    """Deliberately not a stand-in. A convincing double reachable from a real
+    deployment writes invented works into a real catalogue, and the curator's
+    evidence that discovery worked becomes the product fabricating it."""
+    settings = replace(_defaults(tmp_path / "art"), openrouter_api_key=None)
+
+    engine = entry_point._engine(settings)
+
+    assert not isinstance(engine, OpenRouterEngine)
+    reason = engine.unavailable_reason
+    assert reason is not None
+    assert "OPENROUTER_API_KEY" in reason, "the refusal names the one thing that fixes it"
+    assert "art_discovery" in reason, "and what still works meanwhile"
+
+
+def test_the_configured_model_reaches_the_engine(tmp_path):
+    """A value read from configuration and then not passed on is the wiring bug
+    this file exists to catch — the deployment's model must be the one that runs."""
+    settings = replace(_defaults(tmp_path / "art"), openrouter_api_key=SECRET, discovery_model="probe/model-under-test")
+
+    assert entry_point._engine(settings).model == "probe/model-under-test"

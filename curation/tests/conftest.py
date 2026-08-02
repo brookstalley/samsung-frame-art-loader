@@ -24,6 +24,9 @@ from curation.app import create_app
 from curation.config import (
     CATALOGUE_FILENAME,
     DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
+    DEFAULT_DISCOVERY_MAX_OUTPUT_TOKENS,
+    DEFAULT_DISCOVERY_MODEL,
+    DEFAULT_DISCOVERY_SEARCH_RESULTS,
     DEFAULT_HOST,
     DEFAULT_INPUT_COST_USD_PER_MTOK,
     DEFAULT_MAT_BOTTOM_WEIGHT,
@@ -124,6 +127,13 @@ def settings(tmp_path) -> Settings:
         output_cost_usd_per_mtok=Decimal(DEFAULT_OUTPUT_COST_USD_PER_MTOK),
         phase1_input_tokens=DEFAULT_PHASE1_INPUT_TOKENS,
         phase1_output_tokens=DEFAULT_PHASE1_OUTPUT_TOKENS,
+        discovery_model=DEFAULT_DISCOVERY_MODEL,
+        discovery_max_output_tokens=DEFAULT_DISCOVERY_MAX_OUTPUT_TOKENS,
+        discovery_search_results=DEFAULT_DISCOVERY_SEARCH_RESULTS,
+        # No key, which is the shipped default and the only safe one here: a
+        # fixture holding a real one would let a test reach the paid API by
+        # accident, and the suite is meant to be free.
+        openrouter_api_key=None,
     )
 
 

@@ -91,10 +91,19 @@ class EngineSpend:
 
 @dataclass(frozen=True, slots=True)
 class WorkList:
-    """What phase 1 produced, and what producing it cost."""
+    """What phase 1 produced, and what producing it cost.
+
+    `strategy` is how the intent was read — which works were taken to be in
+    scope, and what was searched for. It comes from the engine rather than being
+    composed above it because interpreting the intent is the engine's act, and a
+    sentence assembled from settings would describe the configuration rather
+    than the reading. It is what lets a curator see *why* a list looks the way it
+    does before judging the works in it.
+    """
 
     works: Sequence[ProposedWork]
     spend: Sequence[EngineSpend] = ()
+    strategy: str | None = None
 
     @property
     def searches_used(self) -> int:

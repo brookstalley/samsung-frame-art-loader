@@ -198,14 +198,65 @@ the over-limit path was driven on a throwaway key — both above, both measured
 - **Whether 403 distinguishes an exhausted key from a disabled one.** The message
   says "Key limit exceeded (total limit)", so the text discriminates; whether the
   status alone does is untested.
-- **One model, one provider route.** `openai/gpt-4o-mini`. Whether `cost_details`
-  is populated identically across the models the discovery engine will actually
-  use is untested.
-- **Any model other than `openai/gpt-4o-mini` with the web plugin.** The fee was
-  a flat $0.005 at `max_results: 3`; whether it scales with `max_results`, and
-  whether it is flat across search back-ends, was not measured. The per-run search
-  cap is sized against that number, so it is worth establishing before the cap's
-  value is chosen.
+- **Whether the fee is flat across search *back-ends*.** Everything below was
+  measured on the default Exa route. The engine-choice spike compares back-ends,
+  and each one's fee is its own measurement.
+
+## The web fee is per request, not per result (measured 2026-08-02)
+
+**This closes the gap that most constrained the design**, and it went the useful
+way. Four calls on `deepseek/deepseek-v4-flash` differing only in `max_results`:
+
+| `max_results` | `usage.cost` | inference | fee | citations |
+|---|---|---|---|---|
+| 1 | 0.00512438 | 0.00012438 | **0.00500000** | 1 |
+| 3 | 0.00524290 | 0.00024290 | **0.00500000** | 3 |
+| 5 | 0.00530378 | 0.00030378 | **0.00500000** | 5 |
+| 10 | 0.00534478 | 0.00034478 | **0.00500000** | 10 |
+
+The fee is **identical to eight decimal places** while citations scale one for
+one with the request. So **breadth is free**: a search returning ten pages costs
+exactly what one returning a single page costs, and `DISCOVERY_SEARCH_RESULTS`
+ships at 10 because a lower number saves nothing and sees less.
+
+Two consequences beyond the number itself:
+
+- **The per-run search cap keeps its recorded sizing.** It counts *requests*, and
+  the price per request is what the analysis assumed. Nothing about the cap's
+  value needed revisiting.
+- **`cost_details` is populated identically on this model**, which closes the
+  second gap this section used to name: the decomposition was previously measured
+  only on `openai/gpt-4o-mini`, and the engine's actual default now shows the
+  same shape.
+
+**The recency gap was demonstrated in the same round, not argued.** The same
+prompt without the plugin answered *"No major art prize has been awarded in 2026
+as of 2025"*, and asked for a work list it returned 2022–2024 winners while
+describing them as recent. With the plugin it returned 2026 prize winners. That
+is issue #12's premise as a measurement.
+
+## What one real phase-1 run actually costs (measured 2026-08-02)
+
+A full run through the booted plane — `"recent award-winning art"`, nine works
+proposed, one search at `max_results: 10`:
+
+```
+discovery_tokens   0.0005882058   3,453 in / 1,608 out
+web_search         0.0050000000   1 request
+run total          0.0055882058   (matches the provider's usage.cost exactly)
+```
+
+**The estimate shown for the same run was $0.127** — about twenty times the
+actual. The overstatement is not in the prices, which are right, but in the
+assumed token consumption: `DISCOVERY_PHASE1_INPUT_TOKENS` ships at 490,000
+against a measured 3,453. The web plugin injects excerpts, not whole pages.
+
+**Recorded rather than corrected here, deliberately.** The 490,000 figure comes
+from a cost analysis of a *whole run*, while the code spends it on phase 1 alone;
+phase 2's own token consumption is not in any estimate and cannot be measured
+until phase 2 exists. Re-basing phase 1 in isolation would trade a visible
+overstatement for an invisible understatement, which is the worse direction. See
+`nonfunctional-requirements.md` § Cost Constraints.
 
 ## The client is first-party, behind a seam (decided 2026-08-02)
 
@@ -252,8 +303,24 @@ checkpointer would give "where is this run" a second owner.
 
 ## Re-verification
 
-Prices and endpoint shapes both move. The probe scripts are disposable by
-design — the durable form of these findings is a test against the real API once
-the client exists, per the project rule that a verification worth writing down is
-usually worth keeping. Until that lands, this file is prose and should be treated
-as a snapshot dated at the top.
+Prices and endpoint shapes both move, so **this file is no longer the durable
+form of these findings — a test is.**
+`curation/tests/live/test_openrouter_shapes_are_still_real.py` asserts each fact
+above that the client depends on, against the live API:
+
+```
+cd curation && uv run pytest -m live_api
+```
+
+It is deselected by default because it spends real money, and each test names the
+client behaviour that breaks if its fact stops holding — so a failure reads as
+"the provider moved, and here is what now mis-parses". Covered: inline
+`usage.cost`, the flat per-request web fee, citations and their excerpts, the
+key's monthly ceiling, strict structured output on the default model, a
+recency-bound intent resolving to post-cutoff works, and — on a deliberately
+exhausted second key — a real 403 halting a real run as `halted_by_budget` with
+no spend recorded.
+
+The prose above remains the *record of when and how* each fact was established,
+which a test cannot carry; treat its numbers as a snapshot dated at the top and
+the test as the thing that keeps them honest.
