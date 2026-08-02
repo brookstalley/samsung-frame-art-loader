@@ -22,7 +22,7 @@ governed_by:
       - "operation logic lives only in the service layer; MCP tools and HTTP handlers are thin bindings → conforms: Chunk 07 establishes the registry/handler split as a directory boundary before any tool exists, and every later surface chunk binds service methods only; registry generation carries no per-tool logic"
   - artifact: nonfunctional-requirements
     dispositions:
-      - "spend ceilings are enforced by the provider, never by application code → conforms: no chunk builds an application-side ceiling; `halted_by_budget` derives from a provider 402 (Chunk 14) and budget-remaining reads `GET /api/v1/key`. The per-run search cap (also Chunk 14) is budgeting inside the norm's recorded scope note, not a ceiling"
+      - "spend ceilings are enforced by the provider, never by application code → conforms: no chunk builds an application-side ceiling; `halted_by_budget` derives from a provider 402 (Chunk 14B) and budget-remaining reads `GET /api/v1/key`, which lags by minutes and is therefore display-only, never a gate. The per-run search cap (Chunk 14A) is budgeting inside the norm's recorded scope note, not a ceiling"
       - "the display plane's ability to show art never depends on the curation plane being reachable → conforms: the display daemon (Chunks 12–13) reads only the manifest, the image tree, and its own store; no network call to curation exists anywhere in the display package, and the plane-isolation test guards it"
   - artifact: data-model
     dispositions:
@@ -93,13 +93,14 @@ current chunk, and a blocked chunk ahead of active work silently hands its
 - [x] Chunk 09: Manifest builder, themes, directives — `art_theme` and `art_display`
 - [x] Chunk 10: Seed the catalogue with the existing corpus (v1 scope item)
 - [x] Chunk 10B: The first browser surface — catalogue, themes, manifest, health
+- [x] Chunk 11: Contract tests — MCP evaluation harness (issue #17) — *plane isolation (#7) split to Chunk 12*
+- [ ] Chunk 14A: `art_discovery` surface, run correlation, the search cap — no spend
+- [ ] Chunk 14B: The OpenRouter client, the phase-1 engine, the ceiling (issue #12)
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
-- [x] Chunk 11: Contract tests — MCP evaluation harness (issue #17) — *plane isolation (#7) split to Chunk 12*
 - [ ] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
-- [ ] Chunk 14: Discovery phase 1 — intent to works, runs, cost visibility (issue #12)
 - [ ] Chunk 15: Spikes — search-engine choice and `work_dedup_key` derivation (issue #18)
 - [ ] Chunk 16: Discovery phase 2 — works to instances, resolve runs
 - [ ] Chunk 17: Review and acceptance — `art_review`, thumbnails inline, promotion
@@ -207,6 +208,38 @@ against rather than a separate exercise. The model half runs through
 `3tears-models` over OpenRouter at the operator's call — its own dependency
 group, because it is the heaviest install in the repo and nothing in the default
 run imports a line of it.
+
+**Re-sequenced and split 2026-08-02 — discovery moves ahead of the hardware
+chunks.** Bench access lapsed, and Chunk 14 depends on 08 and 11 alone: nothing in
+it touches the TV or the panel, and its foreign API is OpenRouter. Leaving it
+behind five hardware-gated chunks would have stalled every non-hardware path in
+the plan behind a blocker unrelated to it — and, per the Status preamble's own
+warning, left a blocked chunk sitting at the first unchecked box handing its
+`Critic mode:` and `Type:` to everything after it. 05, 04, 03, 12 and 13 keep
+their numbers and specs; only their position moved.
+
+**Chunk 14 is split into 14A and 14B**, at the seam
+`openrouter-api-findings.md` already argues for — the narrow first-party interface
+the engine depends on. 14A builds everything up to that seam and spends nothing;
+14B builds what sits behind it. The split's value is that 14A needs no API key, no
+credit and no operator action, so it proceeds while the ceiling is provisioned.
+The risk it carries is named rather than discovered: building to a seam before the
+thing behind it exists can encode the wrong shape. Judged low **because the live
+probe recorded the real shapes first** — that is precisely what the verify-api
+step bought, and it is why the split is safe here and would not have been before
+2026-08-02.
+
+**A requirements pass ran before either half (2026-08-02)** and is the reason the
+chunk entries below carry values rather than the phrase "the configured
+threshold". It found nine gaps, of which the load-bearing ones were: the per-run
+search cap was **undefined for phase 1** (it "derived from the work count", which
+phase 1 exists to produce — corrected in `nonfunctional-requirements.md` to a
+two-part cap), `estimate`'s behaviour had never been specified despite the action
+shipping in the surface table since the start (now in `api-contract.md`), and
+`work_dedup_key`'s interim derivation had no owner even though the column is
+`required` and phase 1 mints rows (now in `data-model.md`). A tenth finding was a
+requirement for a surface that does not exist — cost visibility "on CLI" — struck
+rather than silently inherited.
 
 ## Scaffolding
 
@@ -1215,30 +1248,81 @@ two missing deliverables.)*
 **Discovery and acquisition (Chunks 14–18).** The paid, silent-failure-prone
 core, built against the surfaces the contract tests already pin.
 
-### Chunk 14: Discovery phase 1 — intent to works, runs, cost visibility (issue #12)
+### Chunk 14A: `art_discovery` surface, run correlation, the search cap — no spend
 
-- **Description:** Intent → an enumerable work list, as a `DiscoveryRun` with the
-  full recorded lifecycle: `start` returns a handle immediately (< 2 s), `status`
-  long-polls ≤ 45 s, the work-count approval gate (`awaiting_approval` when the
-  configured count threshold is crossed; `approve`/`decline`), `cancel`, and the
-  `interrupted` path already reconciled by Chunk 08. Phase 1 can search the web
-  when the intent is recency-bound (issue #12) — a text-only call cannot
-  enumerate works past the model's cutoff, and finding works the curator could
-  not have named is the product's definition of discovery; those searches count
-  inside the per-run search cap and the pre-run estimate. **Cost visibility is a
-  named deliverable here, not a norm** (`nonfunctional-requirements.md` § Cost
-  visibility records that it must survive as one): the estimate before
-  (computable from the work count), the actual after (provider-reported cost),
-  on every surface equally. Spend records attribute per category; a 402 lands as
-  `halted_by_budget`, distinguishable in logs and tool results; budget remaining
-  reads `GET /api/v1/key`. `run_id` on every log line — **which is where
-  curation's structured log shape is owed.** The plane ships plain formatted lines
-  today, which is enough for startup, refusals and reconciliation and is not
-  enough for per-run correlation; `observability-strategy.md` names this chunk as
-  the owner rather than leaving the shape a property nobody holds (the artifact
-  previously took it from `3tears-observe`, withdrawn with every other 3tears
-  dependency on 2026-07-27).
+- **Description:** Everything up to the engine seam, spending nothing. The eight
+  `art_discovery` actions — `estimate`, `start`, `status`, `approve`, `decline`,
+  `cancel`, `list_runs`, `spend` — over the `DiscoveryService` lifecycle Chunk 08B
+  already built, driven by a **fake engine behind the narrow interface** 14B later
+  implements for real. `start` returns a handle immediately (< 2 s); `status`
+  long-polls ≤ 45 s; the work-count approval gate fires at **25**; `cancel` and the
+  `interrupted` path already reconciled by Chunk 08 are exercised end to end.
+  `estimate` ships with the arity-dependent behaviour `api-contract.md` now
+  specifies, and is the one action on this tool that spends nothing.
+  **Curation's structured log shape is owed here** and lands here: the plane emits
+  plain formatted lines today, which is enough for startup, refusals and
+  reconciliation and is not enough for per-run correlation
+  (`observability-strategy.md` names discovery phase 1 as the owner rather than
+  leaving the shape a property nobody holds — the artifact previously took it from
+  `3tears-observe`, withdrawn with every other 3tears dependency on 2026-07-27).
+  The fake is **not throwaway scaffolding**: it is the provider the integration
+  tests run against, so it outlives this chunk.
 - **Depends on:** Chunks 08, 11 (harness grows discovery scenarios)
+- **Artifacts consumed:** `api-contract.md` (§ Long-running operations, § Error
+  Model, § `estimate` answers two different questions),
+  `nonfunctional-requirements.md` (§ Performance, § Cost Constraints),
+  `observability-strategy.md` § Correlation, `data-model.md` (DiscoveryRun,
+  SpendRecord)
+- **Deliverables:** the eight actions live over MCP; the engine interface itself
+  and a fake implementing it; curation's structured logging with `run_id` on every
+  line emitted during a run, bound so that no call site can forget it; the
+  **approval threshold (25)**, the **flat phase-1 search allowance** and the
+  **per-work phase-2 component** as deployment values in `config.py` and
+  `.env.example`; the **provisional `work_dedup_key`** derivation at one
+  implementation site, marked provisional and named as Chunk 15's starting
+  hypothesis; harness scenarios for the run lifecycle
+- **Tests:** unit — gate threshold recorded per run (`approval_required` stored,
+  not re-derived), `estimate` at both arities, cap enforcement as a distinguishable
+  outcome rather than a silent truncation; integration — full lifecycle against the
+  fake, including `halted_by_budget` vs `failed` vs `interrupted` as the fake can
+  produce them; contract — an agent can distinguish those three by returned state
+  alone; a log line emitted inside a run carries its `run_id`
+- **Acceptance criteria:** every action is callable over real MCP and drives the
+  real service; a run crosses the gate at 25 works and waits; `estimate` returns a
+  phase-1 figure with no run id and the stored phase-2 figure with one; no code
+  path in this chunk can reach the network
+- **Done when:**
+  1. Acceptance criteria met and tests pass
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+### Chunk 14B: Discovery phase 1 — the client, the engine, the ceiling (issue #12)
+
+- **Description:** The real thing behind 14A's seam: an OpenRouter client written
+  to the shapes `openrouter-api-findings.md` measured, and the phase-1 engine that
+  turns an intent into an enumerable work list. Phase 1 can search the web when the
+  intent is recency-bound (issue #12) — a text-only call cannot enumerate works
+  past the model's cutoff, and finding works the curator could not have named is
+  the product's definition of discovery; those searches count inside the per-run
+  search cap and the pre-run estimate. **Cost visibility is a named deliverable
+  here, not a norm** (`nonfunctional-requirements.md` § Cost visibility records
+  that it must survive as one): the estimate before, the actual after
+  (provider-reported), on every surface equally. Cost comes from **inline
+  `usage.cost`** with `usage: {"include": true}` — not from a second request, and
+  not computed as tokens × price, which would omit the web-search fee that can
+  double a run. Spend records attribute per category; a 402 lands as
+  `halted_by_budget`, distinguishable in logs and tool results; budget remaining
+  reads `GET /api/v1/key`, which **lags by minutes and may therefore never gate a
+  run** — display only.
+- **Still open at chunk start, to be settled here and recorded where the rule
+  lives:** how "recency-bound" is decided (a heuristic over the intent text, the
+  model choosing via tool availability, or always-search — issue #12 requires the
+  capability and is silent on the trigger); what writes `DiscoveryRun.strategy` and
+  in what form; and the **value** of the flat phase-1 search allowance, which
+  cannot be sized until the web fee's scaling with `max_results` is measured (the
+  fee was flat $0.005 at `max_results: 3` on one model — see the findings file's
+  "What this did not establish").
+- **Depends on:** Chunk 14A (the seam and the surface), Chunks 08, 11
 - **Artifacts consumed:** `product-brief.md` § Flow 2 (as amended),
   `data-model.md` (DiscoveryRun, SpendRecord), `api-contract.md`
   (§ Long-running operations, § Error Model), `nonfunctional-requirements.md`
@@ -1252,16 +1336,22 @@ core, built against the surfaces the contract tests already pin.
   ratified norm forbids an application-side ceiling, which makes this key setting
   the *entire* cap: an unprovisioned key is indistinguishable from a capped one on
   every surface the product exposes, so leaving it to setup lore would mean there
-  is no ceiling at all. Then: new `curation/src/curation/discovery/` phase-1
-  engine; `art_discovery` actions live: `estimate`, `start`, `status`, `approve`,
-  `decline`, `cancel`, `list_runs`, `spend` (`resolve_images` arrives in
-  Chunk 16); per-run search cap as a deployment value; harness scenarios for the
-  run lifecycle including `halted_by_budget` vs `failed` vs `interrupted`
-- **Tests:** unit — gate threshold recorded per run (`approval_required` stored,
-  not re-derived), estimate computed from work count, cap enforcement as a
-  distinguishable outcome; integration — full lifecycle against a faked provider
-  built after verify-api; contract — an agent can distinguish "out of money"
-  from "fetch failed" from "restarted underneath" by the returned state alone
+  is no ceiling at all. Then: a first-party OpenRouter client behind 14A's
+  interface (**not** `threetears.models.create_chat_model` — decided 2026-08-02,
+  reasoning in `openrouter-api-findings.md`); new
+  `curation/src/curation/discovery/` phase-1 engine; the **phase-1 model as a
+  deployment value defaulting to `deepseek/deepseek-v4-flash`**, with
+  `google/gemini-3.5-flash-lite` carried as the named alternative for Chunk 15's
+  spike to measure at ~2.9× the token cost; `SpendRecord` rows carrying the model
+  id actually used
+- **Tests:** unit — the client's parsing of `usage.cost`, `cost_details` and
+  search `annotations` against recorded fixtures; the recency-bound trigger,
+  whichever form it takes; integration — a real run end to end against the live
+  API on the capped key; contract — an agent can distinguish "out of money" from
+  "fetch failed" from "restarted underneath" by the returned state alone.
+  **A live re-verification test replaces the findings file's prose**, per the
+  project rule that a verification worth writing down is usually worth keeping:
+  prices and endpoint shapes both move, and the durable form is a test
 - **Acceptance criteria:** a real intent resolves to a work list with a shown
   estimate; a recency-bound intent ("recent award-winning art") resolves to
   real, post-cutoff works; the curator can trim the list before paying for
@@ -1289,7 +1379,7 @@ core, built against the surfaces the contract tests already pin.
 ### Chunk 15: Spikes — search-engine choice and `work_dedup_key` derivation (issue #18)
 
 - **Description:** Two build-time spikes the artifacts explicitly hand to this
-  plan, run against Chunk 14's real output rather than synthetic data. The
+  plan, run against Chunk 14B's real output rather than synthetic data. The
   search-engine spike compares Parallel, Exa-via-OpenRouter, and Perplexity **on
   this product's hard cases** — resolving a named work to a specific museum page,
   and a recency-bound intent — not on generic relevance; cost does not
@@ -1301,7 +1391,11 @@ core, built against the surfaces the contract tests already pin.
   acceptance, within-run dedup) — the linchpin of "a discovery run proposes each
   work exactly once", front-loaded so it cannot be decided implicitly three
   different ways.
-- **Depends on:** Chunk 14
+- **Depends on:** Chunk 14B (the spike measures real phase-1 output, and the model
+  tier is one of the things it measures — `deepseek/deepseek-v4-flash` against
+  `google/gemini-3.5-flash-lite`, alongside the search-engine comparison). Its
+  regression measurements pin an explicit model snapshot rather than the floating
+  default, so an alias moving underneath them cannot read as a quality regression
 - **Artifacts consumed:** `nonfunctional-requirements.md` § Open — engine
   choice (the spike's stated constraint), issue #18, `data-model.md`
   (CandidateWork.work_dedup_key, Q3/Q11)
@@ -1339,7 +1433,7 @@ core, built against the surfaces the contract tests already pin.
   in-flight resolve run and naming them in the error (constraint 14 against
   ResolveRunWork), spend attributed to the resolve run and rolled up through the
   parent.
-- **Depends on:** Chunks 14, 15 (the engine and the dedup key are decided)
+- **Depends on:** Chunks 14B, 15 (the engine and the dedup key are decided)
 - **Artifacts consumed:** `data-model.md` (CandidateImage, ResolveRunWork,
   constraints 8/9/14), `api-contract.md` § Rejecting an image does not
   re-search, `product-brief.md` § Canonical selection,

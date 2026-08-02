@@ -405,6 +405,33 @@ number: its status action long-polls for 45s, sized to sit under a 60s tool time
 > send a token. They are not a correctness dependency, and nothing may be designed
 > as though they were.
 
+### `estimate` answers two different questions, by arity
+
+**Specified 2026-08-02.** The action appeared in the surface table from the start
+and its behaviour was never written down. Every artifact frames the estimate as
+*post*-phase-1 ("the moment phase 1 finishes, the work count is known and the
+phase-2 cost is computable"), which left `estimate` with nothing to return when
+called before a run exists — while issue #12 simultaneously requires a "pre-run
+estimate" that phase-1 searches count inside. Both are real, and they are two
+questions:
+
+- **`estimate` with no `run_id`** — "what will it cost me to ask this?" Returns the
+  **phase-1** figure: one model call plus the flat phase-1 search allowance. It is
+  computable before anything runs, which is what makes it the number shown at the
+  point of decision. Bounded rather than typical, per the cap.
+- **`estimate` with a `run_id`** — "what will it cost to resolve what I found?"
+  Returns that run's stored `estimated_cost_usd`, the **phase-2** figure computed
+  from its work count. This is the number the approval gate is authorising against.
+
+Both are *read-only and free*. `estimate` is the one `art_discovery` action that
+spends nothing, which is worth stating explicitly on the tool that is otherwise
+defined as the one that spends: an agent must be able to price an intent without
+committing to it.
+
+The phase-2 figure is **stored, not recomputed on read**, for the same reason
+`approval_required` is stored — prices and caps are configuration, and a run
+reviewed later must still report the estimate it was actually authorised against.
+
 ### Partial success is the normal case
 
 A run that resolves 34 of 40 works succeeded partially. Bulk actions return a

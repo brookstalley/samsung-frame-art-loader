@@ -214,14 +214,25 @@ has run away.
 
 ### What a run actually costs
 
-Verified against OpenRouter's documentation, 2026-07-19 and re-verified
-2026-07-20. LLM and search pricing moves fast — **re-verify before relying on
-these figures.**
+Model prices **re-verified against the live `GET /api/v1/models` endpoint
+2026-08-02**; search prices carried from OpenRouter's documentation, 2026-07-19
+and re-verified 2026-07-20. LLM and search pricing moves fast — **re-verify
+before relying on these figures.** The 2026-08-02 pass earned its keep: GLM-5.2
+had risen ~28% from the figure recorded on 2026-07-20, while DeepSeek V4 Pro was
+unchanged to the cent. A price table nobody re-reads is a table that quietly
+stops describing the product.
+
+The per-run token basis is **~0.49M input / ~0.03M output** — input-dominated,
+because phase 1's job is reading injected search results and emitting a work
+list. Output price is therefore nearly irrelevant to model choice here, which is
+not obvious and drives the selection below.
 
 | Component | Unit cost | Per run (~20 works) |
 |---|---|---|
-| Discovery tokens (GLM-5.2) | $0.2219/M in, $0.6974/M out | ~$0.13 |
-| Discovery tokens (DeepSeek V4 Pro) | $0.435/M in, $0.87/M out | ~$0.24 |
+| Discovery tokens — **DeepSeek V4 Flash** *(the default)* | $0.14/M in, $0.28/M out | ~$0.08 |
+| Discovery tokens — Gemini 3.5 Flash Lite *(named alternative)* | $0.30/M in, $2.50/M out | ~$0.22 |
+| Discovery tokens — GLM-5.2 | $0.2842/M in, $0.8932/M out | ~$0.17 |
+| Discovery tokens — DeepSeek V4 Pro | $0.435/M in, $0.87/M out | ~$0.24 |
 | Web search — Parallel | $0.001/request (10 results incl.) | $0.03–0.05 |
 | Web search — Exa via OpenRouter | $0.005/request (10 results incl.) | $0.15–0.25 |
 | Web search — Perplexity | $0.005/request | $0.15–0.25 |
@@ -229,9 +240,32 @@ these figures.**
 | Museum APIs, image acquisition | $0 | bandwidth only |
 
 **This retires the recorded worry that search could exceed token spend "by an
-order of magnitude".** Worst case it roughly doubles per-run cost. A run lands
-between **$0.16 and $0.49**, so $20 buys on the order of **40–125 runs a month**.
-Search goes *inside* the ceiling, comfortably.
+order of magnitude".** Worst case it roughly doubles per-run cost — and on the
+chosen model search is now the *dominant* component, which is the sharper form of
+the same finding. A run lands between **$0.11 and $0.33** on the default model, so
+$20 buys on the order of **60–180 runs a month**. Search goes *inside* the
+ceiling, comfortably.
+
+**The phase-1 model is a deployment value, defaulting to
+`deepseek/deepseek-v4-flash` (decided 2026-08-02).** The owner ruled out the
+frontier tier explicitly. The reasoning that survives beyond that ruling: phase 1
+is input-dominated extraction and synthesis rather than deep reasoning, which is
+the task profile where tier differences are smallest and the price multiple is
+largest — the frontier tier costs ~8× and buys 13–15 runs a month against 60–180.
+
+**No quality evidence distinguishes the candidates, and that is stated rather than
+papered over.** The models above are ranked here on price, which is measurable, and
+on nothing else. Whether a stronger model enumerates real works better than a
+cheap one *on this product's intents* is unmeasured — the same gap already recorded
+under "Open — engine choice" for search back-ends, and it resolves the same way:
+the build-time spike measures it on real phase-1 output. Gemini 3.5 Flash Lite is
+carried as the named alternative for that comparison at ~2.9× the token cost.
+
+The default is the **floating** model id rather than a dated snapshot, so a
+snapshot retirement cannot break the only paid path on a household product; the
+dated pin is ~36% cheaper, which against this ceiling is not decision-relevant.
+The spike's regression measurements pin an explicit snapshot instead, so a
+floating alias moving underneath them cannot read as a quality regression.
 
 ### Three decisions this analysis produced
 
@@ -256,9 +290,27 @@ recorded rather than waved past:
 
 **Discovery carries a per-run search cap.** A monthly ceiling does not bound a
 single runaway run, and a pre-run cost estimate is not an estimate if the run can
-freely exceed it. The cap is derived from the work count, is a deployment value
-(never hardcoded — `project-preferences.md`), and its being hit is a distinguishable
-outcome rather than a silent truncation of results.
+freely exceed it. The cap is a deployment value (never hardcoded —
+`project-preferences.md`), and its being hit is a distinguishable outcome rather
+than a silent truncation of results.
+
+> **The cap has two components, and this corrects a contradiction (2026-08-02).**
+> This section previously said only that the cap "is derived from the work count".
+> That is undefined for phase 1, whose entire job is to *produce* the work count —
+> so the cap could not bound the phase that issue #12 requires it to bound ("Phase-1
+> search calls are counted inside the per-run search cap and the pre-run estimate").
+> The cap is therefore:
+>
+> - a **flat phase-1 allowance** — a fixed number of searches, since there is no
+>   count to derive from yet; and
+> - a **per-work phase-2 component**, derived from the phase-1 work count as
+>   originally stated.
+>
+> The estimate decomposes the same way, which is what makes issue #12's "pre-run
+> estimate" a real number: the phase-1 figure is computable before anything runs,
+> and the phase-2 figure becomes computable the moment the work count exists. This
+> is why `art_discovery(action='estimate')` is meaningful both with and without a
+> run id — see `api-contract.md`.
 
 > **The cap applies per run, and re-searches are now runs (2026-07-20).** Modelling
 > `resolve_images` as a `DiscoveryRun` with `kind='resolve'` gave the re-search a
@@ -276,8 +328,16 @@ outcome rather than a silent truncation of results.
 ### Cost visibility
 
 Every operation that spends money should report its estimated cost before it runs
-and its actual cost when it finishes, on every surface equally — web UI, MCP tool
-surface, CLI.
+and its actual cost when it finishes, on every surface equally — the web UI and
+the MCP tool surface.
+
+> **"CLI" struck 2026-08-02.** This sentence listed a third surface the product
+> does not have and has never planned: no CLI appears in `api-contract.md`'s
+> surface inventory or `product-brief.md`'s flows, and `curation/__main__.py` only
+> starts the server. Left standing it would read as an unbuilt requirement — a
+> surface silently owed by whichever chunk noticed — when in fact nothing was ever
+> dropped. Struck rather than deleted quietly, so a reader of an earlier revision
+> can see it was answered.
 
 **This is a requirement, not a norm.** It was proposed as a Direction entry on
 2026-07-20 and deliberately not ratified, so nothing enforces it structurally: it

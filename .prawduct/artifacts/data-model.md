@@ -527,6 +527,21 @@ artworks.
 > one exists) is a design decision deferred to build — but the *column* is specified
 > now, because retrofitting suppression after rejections have accumulated makes the
 > early rejections unrecoverable.
+>
+> **An interim derivation ships before the spike settles it, and that is named
+> rather than left to happen (2026-08-02).** The column is `required`, and phase 1
+> mints `CandidateWork` rows as soon as it exists — so discovery phase 1 cannot
+> wait for the spike that chooses the derivation. Whatever phase 1 ships is
+> therefore a **provisional** key: normalised artist + title, marked provisional at
+> its single implementation site, and treated by the spike as its starting
+> hypothesis rather than as an incumbent to be argued against.
+>
+> **Why this needed saying:** unrecorded, the sequence produces a derivation that
+> is never *decided* — it is merely first, and by the time the spike runs there are
+> rows depending on it. The spike's remit explicitly includes replacing it, and
+> replacing it is a **re-key of existing rows**, not just a code change: keys
+> already written under the provisional rule must be recomputed, or suppression
+> silently splits into two regimes and the same work gets proposed twice.
 
 ### CandidateImage
 
