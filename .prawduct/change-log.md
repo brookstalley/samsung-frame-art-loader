@@ -48,6 +48,65 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-01: A model can be measured against the tool surface, and the surface can be navigated
+
+<!-- prawduct: chunks=11 | status=shipped | scope=v1-build -->
+
+**Why:** `api-contract.md` § Validation says the tool surface is measured, not
+argued about, and draws a line the chunk entry had blurred: contract tests assert
+the surface's **shape**, an evaluation harness asserts a model can **use** it.
+The shape half already existed. This is the other two halves.
+
+**Scenarios thread ids, and that is the whole design.** The runner drives real
+product flows as a real MCP client, and every step passes an id the *previous*
+step's envelope returned rather than one a fixture supplied. Two tools can each
+pass their own tests and still disagree about the name of the thing they hand
+each other; that defect is invisible from inside either one. Proven by mutation:
+renaming the key `art_theme(add)` echoes back breaks two flows and nothing else.
+
+**Every call now checks two envelope invariants**, so scenario coverage doubles
+as coverage of them across the whole surface rather than wherever a unit test
+happened to look — that `isError` agrees with the payload's `success` (derived in
+`envelope.py` precisely so they cannot drift, with nothing asserting they hadn't),
+and that the JSON text and `structuredContent` bodies match. Hard-coding
+`isError=False` fails seven tests.
+
+**The model half measures and deliberately does not gate.** It runs verifiable
+operator prompts through `3tears-models` over OpenRouter, behind the `llm_eval`
+marker, deselected by default. The reason is not cost — it is that a model may
+reach the same goal by a different route next run, so a pass/fail gate here either
+flakes or is loosened until it asserts nothing. It asserts the end state, not the
+route, and reads results back through the service rather than through the tools
+that were supposed to have changed them.
+
+**The harness's own loop is tested with a scripted model**, free and
+deterministic, because the first real run is the worst place to discover a bug in
+it: a failure there is ambiguous between "the surface is hard to navigate", which
+is the finding, and "the loop is broken", which is not. That test caught a real
+defect — the driver's broad `except Exception` would have swallowed the envelope
+invariant assertions and reported a contract violation as a model mistake. Narrowed
+to `McpError`, and the narrowing is proven by mutation rather than assumed.
+
+**A norm row claimed enforcement that never existed.** The manifest-channel row
+named `tests/preferences/test_plane_isolation.py` as a live `Test` mechanism; no
+such file has ever been written, and none could be — its subject is the `display/`
+package, which Chunk 06 deferred. Corrected to Critic, and the test moved to Chunk
+12, which creates that package. **This is the second such row in two sessions**,
+after the broad-except row's linter claim; the recurrence is the finding, not
+either instance.
+
+**Descoped explicitly:** the plane-isolation half (issue #7) is Chunk 12's, and
+issue #7 stays open. A guard walking an empty tree would have passed, which this
+plan's own bar names as worse than no test.
+
+**Verified against what would install, not what was readable.** `3tears-models` is
+pinned `>=0.22.5,<0.23`; the checkout on this machine was 0.19.4, three minors
+behind, and 3tears' own README says its public API shifts between minors. The
+factory signature and the need for an explicit `provider="openrouter"` were both
+checked against 0.22.5 in a scratch environment. **The model-driven suite has not
+been run against a live model** — no `OPENROUTER_API_KEY` is set here — so its
+tests are green only in the sense that they skip.
+
 ## 2026-08-01: The TV library moved two years forward, and deletion stopped being a guess
 
 <!-- prawduct: chunks=05 | scope=v1-build -->

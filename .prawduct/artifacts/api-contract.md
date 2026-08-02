@@ -769,13 +769,35 @@ than deduce.
 
 *(Amended 2026-07-27. This paragraph read "the repo currently has **no test suite at
 all**"; that departure was closed the same day, two suites now run, and the sentence
-had become false.)* What is still outstanding on top of those suites is an **MCP
-evaluation harness** — a different thing from the contract tests that now exist. The
-contract tests assert the surface's shape; the harness would assert that a model can
-actually *use* it, which is the only way to know whether this consolidation is right
-*for this product* rather than in general, and the thing that catches the
-description-drift problem the Versioning section flags. Filed as issue #17 and
-scheduled.
+had become false.)* On top of those suites sits an **MCP evaluation harness** — a
+different thing from the contract tests. The contract tests assert the surface's
+shape; the harness asserts that a model can actually *use* it, which is the only way
+to know whether this consolidation is right *for this product* rather than in
+general, and the thing that catches the description-drift problem the Versioning
+section flags. Filed as issue #17.
+
+*(Amended 2026-08-01 — built, in two halves, and the split is worth stating because
+the distinction above is exactly what produced it.)* Asserting a model can use the
+surface needs a model, and a model is not deterministic: it may reach the same goal
+by a different route on the next run. So the harness is:
+
+- **A scenario runner** (`curation/tests/contract/`), deterministic and in the
+  default suite, driving real product flows as a real MCP client. Each step passes
+  an id the *previous* step's envelope returned, which is what fails when two tools
+  disagree about the name of the thing they hand each other — a defect neither
+  tool's own tests can see. It also checks two envelope invariants on every call:
+  that `isError` agrees with the payload's `success`, and that the JSON text and
+  `structuredContent` bodies match.
+- **A model-driven evaluation** (`curation/tests/eval/`), behind the `llm_eval`
+  marker and deselected by default, running verifiable operator prompts and
+  measuring accuracy, call count and error rate against the scripted route as its
+  yardstick. It asserts the **end state, not the route** — a model that takes six
+  calls instead of four has not failed. It runs through `3tears-models` over
+  OpenRouter.
+
+The second one is what settles the question this section poses, and the reason it
+cannot gate a suite is the reason it is worth having: only a model can tell you
+whether an error message actually teaches.
 
 Both production servers already do the narrower version of this. cordyceps pins its
 tool names in a test; hallucinote boots a real server and asserts `list_tools()`

@@ -201,7 +201,31 @@ suites run: `pytest` at the repo root for the 2024 modules, and
 | Unit | **yes** (curation) | Every change | `curation/tests/unit/`, mirroring module layout |
 | Integration | **yes** (curation) | Changes crossing the service-layer boundary | `curation/tests/integration/` |
 | Contract | **yes** (curation) | **Any MCP tool-surface change**, including a description edit | `curation/tests/contract/` |
+| Evaluation | **yes** (curation), opt-in | Any tool-surface change, before shipping it — **not** on every run | `curation/tests/eval/`, marker `llm_eval` |
 | End-to-end | no | Before release | — |
+
+**The evaluation level is the only one that does not gate, and that is the
+design** (added 2026-08-01). It drives the surface with a real model over
+OpenRouter, so a run costs money and — the disqualifying property — can reach
+the same goal by a different route next time. A non-deterministic pass/fail
+either flakes or is loosened until it asserts nothing, so it is deselected by
+default (`addopts = -m 'not llm_eval'`) and run deliberately with `-m llm_eval`.
+It measures; the contract level gates.
+
+Its dependency is an opt-in group (`uv sync --group eval`) rather than `dev`,
+because it is the heaviest install in the repo and no first-party module imports
+it. Both eval modules therefore `importorskip` at import time, not inside a
+fixture: a marker deselection still *collects* the module, so a missing group
+has to skip rather than fail — otherwise the default run breaks for everyone who
+took the default.
+
+**Within `tests/contract/`, two things now live side by side.** The surface
+tests assert shape — names, schemas, descriptions, annotations, tips. The
+scenario tests assert *navigation*: that the five consolidated tools compose
+into real flows, with each step threading an id out of the previous step's
+envelope. That threading is the point rather than a convenience — two tools can
+each be correct in isolation and still disagree about the name of the thing they
+hand each other, and that defect is invisible to both of their own tests.
 
 **The contract level was built first**, as planned. The MCP surface is the only
 one with external consumers, and it is the only place where a change that looks

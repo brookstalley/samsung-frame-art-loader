@@ -18,7 +18,7 @@ depends_on:
 governed_by:
   - artifact: architecture
     dispositions:
-      - "the theme manifest file is the only channel from curation to display → conforms: every display chunk reads the manifest and image tree only; interactive commands ride the manifest's directive block (the recorded R-17 decision); issue #7's plane-isolation test lands in Chunk 11 and enforces it mechanically"
+      - "the theme manifest file is the only channel from curation to display → conforms: every display chunk reads the manifest and image tree only; interactive commands ride the manifest's directive block (the recorded R-17 decision); issue #7's plane-isolation test lands in Chunk 12 (moved from 11 on 2026-08-01 — it checks the `display/` package, which Chunk 12 is the one to create) and enforces it mechanically from there. Until then the norm is Critic-enforced, which is what `project-preferences.md` now says; it previously named the test as though it already existed"
       - "operation logic lives only in the service layer; MCP tools and HTTP handlers are thin bindings → conforms: Chunk 07 establishes the registry/handler split as a directory boundary before any tool exists, and every later surface chunk binds service methods only; registry generation carries no per-tool logic"
   - artifact: nonfunctional-requirements
     dispositions:
@@ -96,8 +96,8 @@ current chunk, and a blocked chunk ahead of active work silently hands its
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
-- [ ] Chunk 11: Contract tests — MCP evaluation harness (issue #17) and plane isolation (issue #7)
-- [ ] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics
+- [x] Chunk 11: Contract tests — MCP evaluation harness (issue #17) — *plane isolation (#7) split to Chunk 12*
+- [ ] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
 - [ ] Chunk 14: Discovery phase 1 — intent to works, runs, cost visibility (issue #12)
 - [ ] Chunk 15: Spikes — search-engine choice and `work_dedup_key` derivation (issue #18)
@@ -184,6 +184,29 @@ shelf) come due earlier, and every chunk from 14 on now has a UI surface it may
 need to extend. The benefit is that the product becomes usable by a human eleven
 chunks earlier, and each later chunk's UI is reviewed as it lands instead of all
 at once.
+
+**Chunk 11 landed 2026-08-01, split in two.** The MCP evaluation harness is
+built; the plane-isolation half (issue #7) moved to Chunk 12, where the
+`display/` package it checks is actually created — the premise that Chunk 06 had
+already created it was simply wrong, and a guard over an empty tree is the
+green-test-that-cannot-fail this plan explicitly rejects. The correction that
+matters beyond this chunk: **the manifest-channel norm row named that test as a
+live `Test` mechanism and no such file had ever existed.** That is the second
+norm row in two sessions found asserting enforcement it did not have, after the
+broad-except row's linter claim — the recurrence, not either instance, is the
+finding.
+
+What the harness delivers is shaped by a distinction `api-contract.md` §
+Validation already drew and the chunk entry had blurred: contract tests assert
+the surface's **shape**, and the harness asserts a model can **use** it. The
+shape half landed with 07–09, so this chunk is the other two: a deterministic
+**scenario runner** in the default suite, and a **model-driven evaluation**
+behind the `llm_eval` marker, deselected by default. Both produce the same
+transcript, so the scripted route is the yardstick a model's route is measured
+against rather than a separate exercise. The model half runs through
+`3tears-models` over OpenRouter at the operator's call — its own dependency
+group, because it is the heaviest install in the repo and nothing in the default
+run imports a line of it.
 
 ## Scaffolding
 
@@ -285,8 +308,9 @@ Three boundaries carry ratified norms and are restated here because every chunk
 touches at least one: **handlers and tools never contain operation logic** (the
 registry record is declarative; the service method does the work); **display
 imports no curation code and opens no channel to the curation process** (manifest
-and image tree only, enforced by `tests/preferences/test_plane_isolation.py` from
-Chunk 11 on); **hardware sits behind interfaces** (the TV client and panel driver
+and image tree only; Critic-enforced until the `display/` package exists, then by
+`tests/preferences/test_plane_isolation.py`, which is a deliverable of the chunk
+that creates that package); **hardware sits behind interfaces** (the TV client and panel driver
 are swappable modules, so a frozen 2023 driver never again dictates an
 interpreter). Persistence is reached only through the service layer.
 
@@ -1011,37 +1035,49 @@ engine, no build step, no framework: the client is one stylesheet and one script
 **Contract enforcement (Chunk 11).** Pinned before the display plane and
 discovery build against these surfaces.
 
-### Chunk 11: Contract tests — MCP evaluation harness (issue #17) and plane isolation (issue #7)
+### Chunk 11: Contract tests — MCP evaluation harness (issue #17)
 
-- **Description:** The two named test investments, built at the point where both
-  have something real to bite on. The harness drives the MCP surface as a real
-  client: tool names, schemas, and descriptions pinned against the registry so
-  drift fails loudly (a description edit is a behavioural change — the recorded
-  reason the contract level comes first), plus evaluation scenarios exercising
-  real flows through the consolidated tools; scenarios grow with each later
-  chunk. The plane-isolation test settles issue #7's design questions as this
-  plan frames them: "the display plane" is the `display/` package (the boundary
-  now exists, from Chunk 06); imports are checked transitively (a direct-only
-  check is evaded by one shared helper); and the no-network-channel half bans
-  HTTP client construction in display modules outright — the bright line — with
-  the TV websocket explicitly exempt because talking to the TV is display's job.
-  Static, so it holds whether or not curation is running, which is the point.
-- **Depends on:** Chunks 07–09 (live tools to pin), Chunk 06 (the package
-  boundary to enforce)
+**Split 2026-08-01. The plane-isolation half (issue #7) moved to Chunk 12, and
+this is a descope recorded rather than a requirement dropped.** The premise
+written here — "the display plane is the `display/` package (the boundary now
+exists, from Chunk 06)" — is false. Chunk 06 landed as *curation only, display
+plane deferred*, and no `display/` package has existed since. The only isolation
+test writable today would walk an empty tree and pass, which this plan's own
+acceptance bar rejects in the next paragraph. Chunk 12 creates that package, so
+the test belongs to the chunk that gives it a subject; issue #7 is unchanged and
+still open. The manifest-channel norm row was corrected the same day — it had
+named this test as an existing Test mechanism, and never had one.
+
+- **Description:** The MCP evaluation harness, in the two halves the artifacts
+  actually distinguish. `api-contract.md` § Validation is explicit that the
+  contract tests assert the surface's *shape* while the harness asserts that a
+  model can *use* it, and the shape half already landed with Chunks 07–09.
+  So: (a) a **scenario runner** driving real product flows through the
+  consolidated tools as a real MCP client, deterministic and in the default
+  suite, where each step threads an id out of the previous step's envelope —
+  the defect class no per-tool test can see, since two tools can each be correct
+  and still disagree about what they hand each other; and (b) a **model-driven
+  evaluation** behind a `llm_eval` marker, deselected by default, running
+  verifiable operator prompts and measuring accuracy, call count and error rate.
+  The split is not cost — it is that a model may legitimately reach a goal by a
+  different route between runs, so it can measure but must not gate.
+- **Depends on:** Chunks 07–09 (live tools to pin and real flows to drive)
 - **Artifacts consumed:** `api-contract.md` § Validation and § Versioning,
-  `boundary-patterns.md` § Test Levels, issues #7 and #17,
-  `project-preferences.md` (the manifest-channel norm row naming the test path)
-- **Deliverables:** new `tests/contract/` harness (real client boot, registry
-  assertion, scenario runner + first scenarios), new
-  `tests/preferences/test_plane_isolation.py`, issue #7's design decisions
-  recorded on the issue
+  `boundary-patterns.md` § Test Levels, issue #17
+- **Deliverables:** `curation/tests/contract/scenarios.py` (the runner: real
+  client boot, transcript, envelope invariants checked on every call),
+  `curation/tests/contract/test_mcp_scenarios.py` (first scenarios),
+  `curation/tests/eval/` (driver + model-driven scenarios + the driver's own
+  deterministic tests), the `llm_eval` marker and `eval` dependency group
 - **Tests:** this chunk **is** tests; its own acceptance is that each guard
   demonstrably fails on a violation (a renamed tool, an over-budget description,
-  a planted curation import in a display module) — a green test that cannot catch
-  a real violation is worse than none
-- **Acceptance criteria:** harness green against the real server; both halves of
-  the isolation test proven able to fail; norm-index row for the manifest channel
-  now points at an existing, passing enforcement artifact
+  a tool that echoes back a key its neighbour does not expect) — a green test
+  that cannot catch a real violation is worse than none
+- **Acceptance criteria:** scenario suite green against the real server and each
+  guard proven able to fail by mutation; the model-driven suite deselected by
+  default and skipping cleanly when its dependency group or API key is absent;
+  the manifest-channel norm row no longer claims an enforcement artifact that
+  does not exist
 - **Done when:**
   1. Acceptance criteria met and tests pass
   2. `/prawduct:critic` run and blocking findings resolved
@@ -1066,7 +1102,24 @@ discovery build against these surfaces.
   an interface.
 - **Depends on:** Chunks 05 (verified library), 06 (display project), 09
   (manifests to read), 10 (a seeded catalogue, so the wall has content to
-  rotate), 11 (isolation test now guards this plane as it grows)
+  rotate), 11 (the contract suite this plane's manifest reading is checked against)
+- **Carries the plane-isolation test (issue #7), moved here 2026-08-01.** It was
+  Chunk 11's, on the premise that a `display/` package already existed; it did
+  not, and a test with no subject would have passed over an empty tree. **This
+  chunk is where that package is born, so this is where the guard becomes
+  writable — and it has to land with the package, not after it**, because the
+  window in which display-plane code exists unguarded is exactly the window in
+  which "just fetch the label text live" gets written and passes every test.
+  Issue #7's design questions are settled as this plan frames them: "the display
+  plane" is the `display/` package; imports are checked transitively (a
+  direct-only check is evaded by one shared helper); the no-network-channel half
+  bans HTTP client construction in display modules outright, with the TV
+  websocket explicitly exempt because talking to the TV is display's job. Static,
+  so it holds whether or not curation is running — which is the point, since a
+  green suite is what a violation looks like without it. Both halves must be
+  proven able to fail (plant a curation import; plant an HTTP client), issue #7's
+  decisions recorded on the issue, and the manifest-channel norm row in
+  `project-preferences.md` moved back from Critic to Test naming this file.
 - **Carried from Chunk 09 — what an unsatisfiable pin does.** `show_now` refuses
   any work that is not *displayable* (widened at build 2026-07-31; see
   `api-contract.md`). It does **not** check *theme membership*, so a perfectly
