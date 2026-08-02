@@ -66,7 +66,7 @@ it is deployed again:
 
 ## Before you install the current `requirements.txt` on the Pi
 
-`samsungtvws` and `websockets` moved together on 2026-08-02 — a two-year-old fork
+`samsungtvws` and `websockets` moved together on 2026-08-01 — a two-year-old fork
 SHA to fork master, and websockets 12.0 to 16.1.1, which the new library requires.
 **That pair has been verified to resolve and import, and has not yet been run
 against the television.** Until it has, treat installing it as the change it is:

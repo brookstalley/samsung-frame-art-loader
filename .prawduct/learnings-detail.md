@@ -181,7 +181,7 @@ declared floor is lower than its real one installs cleanly and fails at import �
 after the resolver has already reported success. The declared floor is evidence
 about what the author believed; the import statements are the constraint.
 
-**Worked instance (2026-08-02).** The `samsungtvws` fork's target revision imports
+**Worked instance (2026-08-01).** The `samsungtvws` fork's target revision imports
 `websockets.asyncio.client` and `websockets.protocol.State`, neither of which
 exists before websockets 13.0. Its `setup.py` declares `websockets>=10.2`. This
 repo pinned `websockets==12.0` — a version that satisfies the declaration and
@@ -209,7 +209,7 @@ if the frame is wrong the answer is wrong in a way that looks thorough. The chec
 costs one command — list what the candidate actually contains — and it runs before
 the question, not after.
 
-**Worked instance (2026-08-02).** The chunk said: *"confirm the PyPI release
+**Worked instance (2026-08-01).** The chunk said: *"confirm the PyPI release
 carries the fork's LS03A/B/C/D support before preferring it."* A careful answer to
 that question would have compared model-support tables and reported a verdict. The
 first thing done instead was `tar tzf` on the release's sdist, which showed no

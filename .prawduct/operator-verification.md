@@ -10,7 +10,7 @@ each entry, which is the durable form.
 
 ## Pending
 
-### The samsungtvws move, against the live television — added 2026-08-02
+### The samsungtvws move, against the live television — added 2026-08-01
 
 **Not visual — this one needs the hardware, not your eyes.** The library pin and
 `websockets` both moved, and every claim behind the move comes from reading

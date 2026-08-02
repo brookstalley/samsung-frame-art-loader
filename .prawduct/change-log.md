@@ -48,7 +48,7 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
-## 2026-08-02: The TV library moved two years forward, and deletion stopped being a guess
+## 2026-08-01: The TV library moved two years forward, and deletion stopped being a guess
 
 <!-- prawduct: chunks=05 | scope=v1-build -->
 

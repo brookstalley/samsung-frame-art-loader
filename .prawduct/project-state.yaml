@@ -271,7 +271,7 @@ classification:
       relationship: reference
     - name: "NickWaterton/samsung-tv-ws-api"
       url: "https://github.com/NickWaterton/samsung-tv-ws-api"
-      relevance: "The fork this project pins, and the only viable source: PyPI `samsungtvws` (the xchwarze upstream) ships no async art client and no event callbacks at all, so it cannot carry this product's TV boundary. Read 2026-08-02 — its Frame-generation support is a model-year branch in `remote.py` that mints a pairing token for 2024-or-later panels before the art channel will accept one; the LS03A/B/C/D list is a README claim and appears nowhere in code. Master last moved 2026-04-06."
+      relevance: "The fork this project pins, and the only viable source: PyPI `samsungtvws` (the xchwarze upstream) ships no async art client and no event callbacks at all, so it cannot carry this product's TV boundary. Read 2026-08-01 — its Frame-generation support is a model-year branch in `remote.py` that mints a pairing token for 2024-or-later panels before the art channel will accept one; the LS03A/B/C/D list is a README claim and appears nowhere in code. Master last moved 2026-04-06."
       relationship: complement
     - name: "pacepace/3tears"
       url: "https://github.com/pacepace/3tears"
@@ -290,7 +290,7 @@ classification:
         Persistent connection, callback-driven. Pinned to a fork SHA on
         NickWaterton/samsung-tv-ws-api, never PyPI — the PyPI package of the same
         name has no async art client at all. Read against source 2026-07-19 and
-        re-read against the target 2026-08-02 (fork master fe95ef1); the facts
+        re-read against the target 2026-08-01 (fork master fe95ef1); the facts
         that constrain the design:
           * ONE user-upload category exists (MY-C0002). Categories are 2=my
             pictures, 4=favourites, 8=store; nothing creates new ones, and
