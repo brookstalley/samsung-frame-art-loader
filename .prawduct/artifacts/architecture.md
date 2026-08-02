@@ -179,23 +179,28 @@ is no network between planes.
 - **Internal layering, inside that plane** (established 2026-07-27):
 
   ```
-        DiscoveryEngine (Protocol)                the seam every paid call sits behind.
-              │                                   Shipped: UnavailableEngine, which refuses
-  DiscoveryRunner                                 runs a run: worker per run, the status
-        │                                         hold, the gate, estimates, spend reports
   MCP tools  ·  HTTP handlers  ·  browser client   bindings: unpack, call one method, format
         └──────────────┬──────────────┘            (the client renders JSON and decides nothing)
                  Services container                what a surface is handed; no surface names one service
    ┌────────────┬──────┴───────┬────────────┐
   Discovery     │           Display      SurveyService   every rule, transition and derivation
-  Service       │           Service           │          (all three hold CatalogueService;
-        │       │              │        ThumbnailService   it holds none of them)
+  Runner ──┐    │           Service           │          (all hold CatalogueService;
+        │  │    │              │        ThumbnailService   it holds none of them)
+        │  └─ DiscoveryEngine (Protocol)      │          the seam every paid call sits behind;
+        │       UnavailableEngine ships       │          no other service can reach it
+  Discovery     │              │              │
+  Service       │              │              │
         │       └── CatalogueService ─────────┘
         │              │
   SqliteDiscovery  SqliteCatalogue                domain adapters: schema, record↔row, ordering
         └──────────────┬──────────────┘           and paging — the product judgements
               SqliteDurableStore                  generic: tables, keys, rows. Knows no artwork
   ```
+
+  `DiscoveryRunner` holds `DiscoveryService`, not the other way round, and the
+  engine hangs off the runner alone — no other service can reach it, which is
+  what "exactly one tool spends money" looks like as a dependency edge rather
+  than as a rule somebody remembers.
 
   **`DiscoveryRunner` and the engine seam were added 2026-08-02, and the split
   between the runner and `DiscoveryService` is the load-bearing part.**
