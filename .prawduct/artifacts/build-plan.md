@@ -1270,11 +1270,18 @@ core, built against the surfaces the contract tests already pin.
   it surfacing as `halted_by_budget`. "Fails closed" is a claim about a path
   nobody has executed until someone executes it
 - **Done when:**
-  0. verify-api — probe the live OpenRouter key endpoint and one generation:
-     capture the actual `limit_remaining` and per-generation `cost` shapes and
-     the web-plugin invocation format before writing the client; re-verify the
-     recorded prices (they move fast — `nonfunctional-requirements.md` says
-     re-verify before relying)
+  0. ~~verify-api~~ — **done 2026-08-02, recorded in `openrouter-api-findings.md`.**
+     `limit_remaining`, the generation `cost` shape and the web-plugin invocation
+     format are captured from the live API. Three results change the client's
+     design and are not restatements of what was expected: per-call cost arrives
+     **inline** via `usage: {"include": true}` (the `GET /api/v1/generation`
+     route this step assumed returned 404), `usage.cost` **includes the web-search
+     fee** (so a tokens x price computation would under-report by exactly the
+     component that can double a run), and `/key` **lags by more than a minute**,
+     which makes it sound for displaying remaining budget and unsound for any
+     in-run guard. Still outstanding from this step: the recorded prices have not
+     been re-verified against `/models`, and nothing about a $20-limited key or
+     the 402 path was observed — the probe borrowed another product's key
   1. Acceptance criteria met and tests pass
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
