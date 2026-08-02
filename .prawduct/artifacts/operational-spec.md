@@ -98,10 +98,52 @@ not be able to invoke the OOM killer against the display plane. Capping curation
 converts a shared-fate failure into a contained one, which is most of what the
 process split is for on a single box.
 
+**No unit may rely on systemd's stock start rate limit** (settled 2026-08-02).
+The default is five starts in ten seconds, and `Restart=always` with a fault that
+reproduces on every start exhausts it in about half a second — leaving the unit
+permanently `failed`, having logged five lines, with nothing still trying. That
+defeats the success criterion requiring an unattended failure to be visible
+without inspecting the wall: it produces a dark television *and* a service that
+gave up. Every unit therefore sets `StartLimitIntervalSec=0` in `[Unit]` (the
+documented value for no rate limiting, and a `[Unit]` directive rather than a
+`[Service]` one) together with a `RestartSec=` of at least five seconds, so a
+persistent fault stays legible in `systemctl status` and keeps writing to the
+journal instead of going quiet. The retry interval is also what makes the setting
+safe: without it, "retry forever" would mean retrying at 100 ms.
+
+*(Applied to the recovered 2024 loader unit on 2026-08-02, which is the plane
+running the wall today. The rule is stated for all units rather than that one,
+because the same defaults ship with every unit file and the new display and
+curation units are written against this section.)*
+
 ## Configuration
 
 Environment variables via **one `.env` at the repository root, read by both
 planes**, honouring the existing norm that deployment values never live in source.
+
+**Every unit declares `EnvironmentFile=` pointing at that root `.env`, and never
+prefixes it with `-`** (settled 2026-08-02). Both halves are the decision.
+
+*Declared*, because the alternative on the table was to record the
+`.env`-beside-`WorkingDirectory` placement as the contract and leave the unit
+silent about it. A unit that names the file states its own dependency; one that
+relies on a library's search path leaves the dependency discoverable only by
+reading Python. The two resolve to the same file today, so this buys no new
+capability — it buys the failure being attributable.
+
+*Un-prefixed*, because that is the half that does real work. systemd treats a
+missing un-prefixed `EnvironmentFile=` as fatal and refuses to start the unit,
+naming the path it wanted. A `-` prefix makes it optional, which restores exactly
+the silent failure this is meant to remove: the process starts, raises at import
+against five missing variables, and dies for a reason nobody connects to a file
+that was never placed.
+
+**The directive is a presence guard, not the value source.** `load_dotenv(override=True)`
+re-parses the same file inside the process and wins, so systemd's parser and
+python-dotenv's cannot disagree about what the process ends up seeing — only
+about whether the unit starts at all. Anything relying on the two parsers
+agreeing on quoting or inline comments would be relying on something this
+arrangement does not promise.
 
 *(Settled 2026-08-01: this said "a `.env` file per plane", and what exists is one
 shared root file — `.env.example` carries both planes' values, and

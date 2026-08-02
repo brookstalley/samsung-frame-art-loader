@@ -72,3 +72,55 @@ def test_the_tv_token_is_not_tracked():
     tracked = subprocess.run(["git", "ls-files"], capture_output=True, text=True, check=True).stdout.splitlines()
     offenders = [p for p in tracked if pathlib.Path(p).name in {"token_file", ".env"}]
     assert not offenders, f"credential files must never be tracked: {offenders}"
+
+
+#: The loader unit, whose environment dependency is otherwise invisible.
+LOADER_UNIT = pathlib.Path("deploy/samsung-frame-art-loader.service")
+
+
+def _unit_directives() -> dict[str, list[str]]:
+    """Map each directive in the loader unit to every value assigned to it."""
+    directives: dict[str, list[str]] = {}
+    for raw in LOADER_UNIT.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or line.startswith("["):
+            continue
+        key, _, value = line.partition("=")
+        directives.setdefault(key.strip(), []).append(value.strip())
+    return directives
+
+
+def test_the_loader_unit_declares_its_environment_file():
+    """`config.py` raises at import without five deployment values, and the unit is
+    what has to supply them.
+
+    Declared without a `-` prefix on purpose: systemd treats a missing
+    `EnvironmentFile=` as fatal and names the path it wanted, which is a far better
+    failure than the import-time crash that a silently absent file produces.
+    Prefixing it with `-` would restore exactly the silence this guard exists to
+    prevent, so the assertion covers the prefix and not merely the directive.
+    """
+    values = _unit_directives().get("EnvironmentFile", [])
+    assert values, "the loader unit must declare EnvironmentFile= — config.py requires five variables at import"
+    assert not any(v.startswith("-") for v in values), f"EnvironmentFile= must not be optional (`-` prefix): {values}"
+
+
+def test_the_loader_unit_cannot_silently_stop_retrying():
+    """systemd's stock rate limit gives up after 5 starts in 10s.
+
+    With `Restart=always` and no override, an import-time failure burns that whole
+    allowance in about half a second and parks the unit in `failed` — a dark
+    television and a service that stopped trying, which is the opposite of the
+    product's requirement that an unattended failure be visible without inspecting
+    the wall. Retrying on a real interval, forever, keeps the fault legible in the
+    journal and in `systemctl status`.
+    """
+    directives = _unit_directives()
+    assert directives.get("Restart") == ["always"], "the loader is meant to come back from anything"
+    assert directives.get("StartLimitIntervalSec") == [
+        "0"
+    ], "start rate limiting must be disabled, or a crash loop ends in a silent permanent `failed`"
+
+    restart_sec = directives.get("RestartSec", [])
+    assert restart_sec, "RestartSec= must be set; the 100ms default is what exhausts the burst allowance"
+    assert int(restart_sec[0]) >= 5, f"RestartSec= must leave a real gap between attempts, got {restart_sec[0]}"

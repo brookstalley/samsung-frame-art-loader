@@ -1,11 +1,33 @@
 [Unit]
 Description=Samsung TV Art
 After=network.target
+# No start rate limiting. systemd's stock allowance is 5 starts in 10 seconds,
+# which an import-time failure exhausts in about half a second — parking the unit
+# in `failed` with a dark television and nothing still trying. A fault that keeps
+# retrying stays visible in `systemctl status` and keeps writing to the journal;
+# one that gave up three weeks ago does not.
+StartLimitIntervalSec=0
 
 [Service]
+# Declared rather than left to `load_dotenv()`'s search path. config.py raises at
+# import unless ART_ROOT, TV_ADDRESS, LATITUDE, LONGITUDE and LOCATION_NAME all
+# resolve, so this file is a hard dependency of the unit and belongs in it.
+# Deliberately not prefixed with `-`: a missing file must stop the unit with a
+# message naming this path, rather than starting a process that fails at import
+# for a reason nobody connects to a missing file.
+#
+# The values themselves are still read by `load_dotenv(override=True)` in
+# config.py, which re-parses this same file and wins. That is why a difference
+# between systemd's parser and python-dotenv's cannot change what the process
+# sees: this directive is a presence guard, not the value source.
+EnvironmentFile=/home/tvpi/source/samsung-frame-art-loader/.env
 ExecStart=/home/tvpi/source/samsung-frame-art-loader/.venv/bin/python /home/tvpi/source/samsung-frame-art-loader/tvart.py --setfile=all.json --stay
 WorkingDirectory=/home/tvpi/source/samsung-frame-art-loader
 Restart=always
+# The 100ms default is what turns a persistent fault into an exhausted burst
+# allowance. Ten seconds is long enough to outlast a TV power-cycle or a network
+# blip without the unit ever giving up on one.
+RestartSec=10
 User=tvpi
 Environment="PATH=/home/tvpi/source/samsung-frame-art-loader/.venv/bin:/home/tvpi/.pyenv/shims:/home/tvpi/.pyenv/bin:/home/tvpi/.vscode-server/extensions/ms-python.python-2024.10.0-linux-arm64/python_files/deactivate/bash:/home/tvpi/source/samsung-frame-art-loader/.venv/bin:/home/tvpi/.local/bin:/home/tvpi/.cargo/bin:/home/tvpi/.pyenv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/tvpi/.local/bin:/home/tvpi/.local/bin"
 Environment="VIRTUAL_ENV=/home/tvpi/source/samsung-frame-art-loader/.venv"

@@ -10,6 +10,44 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The loader unit starts clean with its declared `EnvironmentFile=` — added 2026-08-02
+
+**Not visual — this needs the Pi, and it is quick.** The unit now declares
+`EnvironmentFile=/home/tvpi/source/samsung-frame-art-loader/.env` un-prefixed and
+sets `StartLimitIntervalSec=0` / `RestartSec=10`. Everything about that was
+established by reading systemd's documentation; whether *this* unit on *this*
+machine starts under it has not been observed, and the un-prefixed directive is
+precisely the kind of change that turns a working unit into one that refuses to
+start if the path is wrong by a character.
+
+The wall is running now, so do this at a moment when a brief outage is fine:
+
+```sh
+sudo cp deploy/samsung-frame-art-loader.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl restart samsung-frame-art-loader
+systemctl status samsung-frame-art-loader          # expect: active (running)
+```
+
+**Then prove the guard actually guards**, which is the half that cannot be
+checked by reading:
+
+```sh
+sudo systemctl stop samsung-frame-art-loader
+mv .env .env.parked && sudo systemctl start samsung-frame-art-loader
+systemctl status samsung-frame-art-loader          # expect: refuses to start, names the .env path
+mv .env.parked .env && sudo systemctl restart samsung-frame-art-loader
+```
+
+The second command is expected to fail — that is the pass condition. What to
+record is **whether the error names the path**, since "failed to start" without it
+would leave the operator no better off than before. Check acceptance box 3 on
+issue #43 with the status output pasted in.
+
+**If the path is wrong**, the fix is the `EnvironmentFile=` line, not a rollback:
+the checkout's absolute paths are machine-specific and already flagged as such in
+`deploy/README.md`.
+
 ### The samsungtvws move, against the live television — added 2026-08-01
 
 **Not visual — this one needs the hardware, not your eyes.** The library pin and

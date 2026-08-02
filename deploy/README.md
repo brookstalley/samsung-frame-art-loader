@@ -7,17 +7,23 @@ Raspberry Pi driving the Frame TV.
 2026-07-27 `config.py` raises at import unless `ART_ROOT`, `TV_ADDRESS`,
 `LATITUDE`, `LONGITUDE` and `LOCATION_NAME` all resolve — deliberately, so that a
 missing deployment value stops the process instead of quietly running against a
-plausible-looking default. `load_dotenv` resolves `.env` next to `config.py`, so
-it must sit in the directory the unit uses as its `WorkingDirectory`.
+plausible-looking default. The unit names that file in `EnvironmentFile=`, and
+`load_dotenv` independently resolves it next to `config.py`; both point at the
+repository root, which is also the unit's `WorkingDirectory`.
 
     cp .env.example .env      # then fill it in
     sudo cp deploy/samsung-frame-art-loader.service /etc/systemd/system/
     sudo systemctl daemon-reload
     sudo systemctl enable --now samsung-frame-art-loader
 
-Skipping the first line does not produce a warning. It produces an import-time
-failure on every start, and — by this unit's own `Restart=always` defaults,
-analysed below — a permanently `failed` unit within half a second, silently.
+**Skipping the first line now fails loudly, and the two ways it can fail are
+worth telling apart.** If `.env` is *absent*, systemd refuses to start the unit at
+all and names the path it wanted — the fastest diagnosis available. If `.env` is
+*present but incomplete*, the unit starts, `config.py` raises at import naming the
+first variable it could not resolve, and the unit retries every ten seconds
+indefinitely rather than giving up; `systemctl status` shows it actively failing
+and `journalctl -u samsung-frame-art-loader` shows the variable. Neither case is
+silent, which is the whole point of both settings.
 
 ## Provenance
 
@@ -34,24 +40,27 @@ it is deployed again:
   extension directory that happened to be in the shell environment when the unit
   was written.
 - `User=tvpi`.
-- **No `EnvironmentFile=`, and the code now requires one.** The unit predates the
-  2026-07-27 config hoist and passes no environment through, so it depends
-  entirely on a `.env` sitting in `WorkingDirectory`. Either declare
-  `EnvironmentFile=` explicitly — which makes the dependency visible in the unit
-  rather than implied by a library's search path — or record that the `.env`
-  placement is the contract.
+- ~~**No `EnvironmentFile=`, and the code now requires one.**~~ **Resolved
+  2026-08-02** — the unit now declares
+  `EnvironmentFile=/home/tvpi/source/samsung-frame-art-loader/.env`, un-prefixed,
+  so a missing file stops the unit with a message naming the path instead of
+  letting a process start that will raise at import. `operational-spec.md`
+  § Configuration carries the reasoning and makes it a rule for every unit, not
+  just this one. Note that the *path* is still one of the machine-specific
+  absolutes listed above, and moves with them if the checkout ever does.
 - `After=network.target`, which does not guarantee the network is actually up.
   `network-online.target` is the correct dependency for a service that talks to
   the TV on startup.
-- **`Restart=always` with no `RestartSec` or `StartLimit*` override — and this one
-  defeats a stated goal, not just a preference.** systemd's defaults restart after
-  100ms and give up after 5 attempts in 10 seconds, so a loader that crashes on
-  startup burns its whole burst allowance in half a second and lands in `failed`,
-  permanently, with nothing sent anywhere. The product's success criteria require
+- ~~**`Restart=always` with no `RestartSec` or `StartLimit*` override**~~ —
+  **Resolved 2026-08-02.** systemd's defaults restart after 100ms and give up
+  after 5 attempts in 10 seconds, so a loader that crashed on startup burned its
+  whole burst allowance in half a second and landed in `failed`, permanently, with
+  nothing sent anywhere — the exact opposite of the success criterion requiring
   that *"a failure in the unattended loader is visible without inspecting the
-  wall"*; this configuration produces the exact opposite — a blank or frozen TV and
-  a service that stopped trying. Needs a real `RestartSec` and a widened
-  `StartLimitIntervalSec`/`StartLimitBurst`. **The `OnFailure=` prescription that
+  wall"*. The unit now sets `StartLimitIntervalSec=0` with `RestartSec=10`, so a
+  persistent fault keeps retrying visibly rather than going quiet; the rule is
+  recorded for every unit in `operational-spec.md` § Process Management. **The
+  `OnFailure=` prescription that
   used to end this bullet is withdrawn (2026-07-20):** the recorded alerting
   decision (`observability-strategy.md` § The Health Surface) chose the curation
   UI health panel as the *only* alerting surface, and a crash-looped display
