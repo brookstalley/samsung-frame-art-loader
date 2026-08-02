@@ -27,13 +27,21 @@ import os
 
 import pytest
 
-# Before importing the driver, which pulls langchain in through 3tears.
-# Deselecting by marker still *collects* this module, so without this the
-# default `uv run pytest` — which does not install the eval group — would fail
-# at import rather than quietly skipping, and the opt-in would not be opt-in.
+# Guarded on `threetears.models` alone, and only because the `model` fixture
+# below needs it. `langchain_core` is NOT the reason: it is declared in `dev`,
+# so `driver.py`'s import resolves under the plain `uv run pytest`.
+#
+# **Do not "clean up" that `dev` entry as redundant transitive noise.** It does
+# also arrive through 3tears, but the deterministic driver guards next door
+# import langchain by name and must run in the canonical suite; declaring it
+# only in `eval` is what left all five of them silently skipping in the suite CI
+# and the gates actually run.
+#
+# The guard still has to sit at import time rather than in the fixture, because
+# deselecting by marker still *collects* this module.
 pytest.importorskip(
     "threetears.models",
-    reason="the evaluation dependency group is not installed — run `uv sync --group eval`",
+    reason="the model-driven evaluation needs the eval group — run `uv sync --group eval`",
 )
 
 from driver import REFERENCE_CALLS, drive  # noqa: E402

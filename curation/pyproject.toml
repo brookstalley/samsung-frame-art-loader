@@ -68,7 +68,14 @@ dev = [
     # without ever executing. It arrives transitively via 3tears-models too, but
     # that edge is an alpha package's transitive detail and this code imports
     # the package by name.
-    "langchain-core>=0.3",
+    #
+    # Bare, like httpx and pydantic above it. A `>=0.3` floor was written here
+    # first and removed: nothing verified it, `uv.lock` resolves 1.5.3, and this
+    # repo's own learning is that a declared floor is a claim — the samsungtvws
+    # move proved that the hard way when a library's own `websockets>=10.2`
+    # resolved fine and could not import. An unverified number is worse than no
+    # number, because the next reader takes it for evidence.
+    "langchain-core",
 ]
 # Its own group, because it is the heaviest thing this repo would install —
 # langchain-anthropic, langchain-openai, langchain-openrouter and the anthropic

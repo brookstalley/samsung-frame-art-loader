@@ -2537,7 +2537,7 @@ api_versioning_decided: "none — no version negotiation. MCP tool names frozen,
 # backlog_prefixes: []
 # backlog_external_imports: []
 
-backlog_last_groomed_at: 2026-07-20
+backlog_last_groomed_at: 2026-08-01
 
 # -----------------------------------------------------------------------------
 # BACKLOG SERVICE CUTOVER (API §2.4)

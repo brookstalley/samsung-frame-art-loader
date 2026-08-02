@@ -99,6 +99,31 @@ either instance.
 issue #7 stays open. A guard walking an empty tree would have passed, which this
 plan's own bar names as worse than no test.
 
+**What the Critic caught: 2 blocking, 8 warnings, 10 notes** across three
+reviewers, over the whole 89-commit bundle rather than this chunk alone. **Six
+were fixed here** (`a4d4524`) — both blocking, plus four warnings. **Four
+warnings were left standing and filed, not resolved:** no `security_settings`
+or Origin check on the MCP session manager now that write actions and a second
+unauthenticated `/api` surface exist; `activate_theme` committing before it
+publishes, so a failed manifest write leaves the catalogue naming a theme the
+wall is not showing; the duplicated Theme/Artist projections; and
+`operational-spec.md`'s bare `Restart=always`. Said plainly because the first
+draft of this paragraph counted only the six and read as a total — which would
+have made the remaining four invisible in the record someone consults later.
+
+The sharpest of the six was that the five tests proving
+the evaluation driver works — deterministic, free, and the whole reason a real
+run's failure is unambiguous — declared `langchain-core` only in the `eval`
+group, while the canonical suite installs `dev`. So every one of them skipped in
+the suite CI and the gates actually run: hand-written harness code, green, with
+not one guard executed. **A test that cannot run is a weaker thing than a test
+that cannot fail, and it looks identical from the summary line.** The same line
+fixed the undeclared-import finding beside it. Also corrected: README and
+CLAUDE.md still told a newcomer the browser interface was not built, and
+`boundary-patterns.md` still read `Exists: no` for the HTTP API that Chunk 19
+builds onto — both the same escalated "retiring a claim is a repo-wide grep"
+learning, at its fifteenth and sixteenth recurrence.
+
 **Verified against what would install, not what was readable.** `3tears-models` is
 pinned `>=0.22.5,<0.23`; the checkout on this machine was 0.19.4, three minors
 behind, and 3tears' own README says its public API shifts between minors. The

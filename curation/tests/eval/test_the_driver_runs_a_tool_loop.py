@@ -20,9 +20,12 @@ that a looping model is stopped.
 
 import pytest
 
+# A backstop, not the normal path: `langchain-core` is in `dev`, so a plain
+# `uv run pytest` resolves it and these run. If this ever starts skipping, the
+# `dev` declaration has been removed — which is the regression, not the skip.
 pytest.importorskip(
     "langchain_core",
-    reason="the evaluation dependency group is not installed — run `uv sync --group eval`",
+    reason="langchain-core is missing from the `dev` group — restore it; these guards must run by default",
 )
 
 from driver import drive  # noqa: E402
