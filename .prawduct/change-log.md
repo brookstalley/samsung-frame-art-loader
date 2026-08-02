@@ -107,7 +107,8 @@ which is the first point both halves can be measured.
 norm requires and a startup-path guard driven off the declaration rather than off
 a remembered list — verified by mutation in both directions.
 
-**Critic resolutions (2 blocking, 5 warning, 3 notes fixed; 7 accepted).** Both
+**Critic resolutions (2 blocking, 4 warning and 4 notes fixed; 6 accepted, 1
+filed as #45).** Both
 blocking findings were undeclared dependencies, and neither would have failed a
 test: `httpx` is imported by the new client but was declared only in `dev`,
 resolving transitively through `mcp` — so an install works right up until `mcp`
@@ -140,6 +141,23 @@ when those three were all of discovery, so a phase-2 engine added above the seam
 would have been unguarded with nothing to show it. It now guards every module
 except a two-name allowlist, verified by planting a violation in a module the old
 form never named.
+
+**Three product changes rode into the resolution commit and belong in this
+record.** Each is argued at its site and tested, but a commit presented as
+"resolutions" should not be where a reader first meets them. **`strategy` is now
+on every `art_discovery` run payload** — a live external surface, so this is an
+additive contract change: it was stored and read by nothing, which made it
+write-only data on a field the data model says exists to explain results.
+`api-contract.md` carries a dated entry and two booted-server tests cover it,
+though `curation/tests/contract/` is untouched — the boundary rule gates MCP
+surface changes there, the integration pair meets its intent, and nothing under
+`tests/contract/` asserts result shapes today, which is why the letter could not
+be followed cheaply. **`_read_completion` no longer raises** on absent choices or
+empty content: both arrive after the provider has billed, so an exception
+travelled without the charge and the run recorded spending nothing — the judgement
+moved to the engine, which fails carrying the spend. And **the client's
+`httpx.Client` lost its `base_url`**, which every request ignored in favour of a
+full URL.
 
 ## 2026-08-02: The refusal we designed against was the wrong one — exhaustion is 403
 
@@ -478,13 +496,22 @@ legacy environment — `art.py` imports `cairo` and `gi`, and neither `pycairo` 
 `PyGObject` is listed, though both are in the Pi's recovered freeze. That surfaced
 from actually installing the file rather than reading it.
 
-> **Corrected 2026-08-02.** This paragraph said the gap was "filed rather than
-> fixed", and no backlog item was ever written — so the disposition pointed at a
-> record that did not exist, which is worse than either fixing or filing. It also
-> named only the cairo/gi half: `astral`, `tzlocal` and `omni_epd` were missing
-> too, and `suntime` was still pinned while imported by nothing. All of it is
-> fixed in the 14B resolution commit, with the apt prerequisites documented
-> beside the two packages that need them.
+> **Corrected 2026-08-02, then corrected again the same day — and the second
+> correction is the one worth reading.** This paragraph named only the cairo/gi
+> half of the gap: `astral`, `tzlocal` and `omni_epd` were missing too, and
+> `suntime` was still pinned while imported by nothing. All of it is fixed in the
+> 14B resolution commit, with the apt prerequisites documented beside the two
+> packages that need them, and **issue #31 — which is where "filed rather than
+> fixed" pointed — is closed by it.**
+>
+> The first correction claimed no such item had ever been filed, and that was
+> wrong. #31 was open on the GitHub Issues backend the whole time; the search that
+> "found" nothing read `.prawduct/backlog.md`, which this project froze when it
+> moved backends. **The real lesson is not "a disposition pointed at nothing" but
+> "a search read the wrong backlog and concluded the record was missing"** — the
+> more useful one, and the same hazard the standing post-sync advisory names. A
+> retraction written into an append-only log is worth more than a clean edit here:
+> the failure mode being recorded is one an agent repeats.
 
 ## 2026-08-01: A browser can see the collection, build a theme, and read why a work is not on the wall
 

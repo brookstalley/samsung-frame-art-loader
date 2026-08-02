@@ -71,8 +71,17 @@ dependencies = [
 #     the declared set above — see the note beside it there.)
 
 [dependency-groups]
-# httpx is declared here and not above on purpose: the browser-surface tests
-# import it directly to drive a booted server, and no first-party module does.
+# httpx appears here *and* in `[project].dependencies`, deliberately. It is a
+# runtime import (the OpenRouter client's transport — see the note beside it
+# above) and the browser-surface tests also drive a booted server with it, so it
+# is pinned into `dev` for the test-only install path as well.
+#
+# **This comment argued the opposite until 2026-08-02**, when the client landed
+# and made "no first-party module imports it" false. Left as a correction rather
+# than deleted because the surviving version was actively dangerous: this file's
+# rule is that the declared set describes what the code imports, so a maintainer
+# applying the old comment would have removed httpx from the runtime list and put
+# the whole plane one `mcp` release away from failing at import.
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",

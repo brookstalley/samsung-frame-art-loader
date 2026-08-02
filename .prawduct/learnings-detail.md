@@ -140,6 +140,31 @@ branch — assert the scope as well as the finding. The colour check now asserts
 that what it scanned is more than half the stylesheet and contains six named
 selectors; that second assertion is what makes the first one mean anything.
 
+**Fourth recurrence, 2026-08-02, and it adds the failure mode above the code: the
+stale scope got written up as a virtue.** Chunk 14A's network guard iterated a
+literal list of three modules that may not import a transport — the three that
+were the whole of discovery when it was written. Chunk 14B then added a client and
+an engine, and the guard went on passing without covering either; a phase-2 engine
+added above the seam in Chunk 16 would likewise have been unguarded. Its own
+sibling eight lines above already did the correct thing (`rglob` over the package
+with an allowlist and a non-vacuity assertion), so the pattern to copy was in the
+same file.
+
+The new part is what I did with the green. I wrote into `architecture.md`: *"The
+network guard's list did not grow, and that is the point."* **The unchanged list
+was evidence of nothing, and I recorded it as evidence of correctness** — in a
+durable artifact, where the next reader would have inherited it as a design
+property rather than a gap. A literal-scope guard makes "it still passes" and "it
+stopped covering anything new" the same observation, and prose is where that
+ambiguity gets resolved in the wrong direction.
+
+**So the habit extends: when you find yourself writing that a guard's scope
+*didn't need to change*, that is the sentence to distrust.** Either the guard
+derives its scope — in which case there is nothing to say — or it does not, in
+which case an unchanged list beside new code is the defect, not the reassurance.
+Now inverted to an allowlist over the whole package, proven by planting a
+violation in a module the old form never named.
+
 ## Prose that ships to a caller is behaviour, and needs a test aimed at it
 
 When a behaviour changes, the sweep has to reach the sentences that describe it to the caller — a tool tip, a `help` payload, an error hint — not only the artifacts and the docstrings; and where a tip states a rule the code enforces, pin them to each other with a test keyed on the enum of causes.
