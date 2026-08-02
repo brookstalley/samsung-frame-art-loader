@@ -57,6 +57,14 @@ ignore = [
 "source_utils.py" = ["T20", "E501", "F841", "TRY002", "TRY201", "TRY300", "B007"]
 "tvart.py" = ["T20", "E501", "F841", "TRY002", "TRY201", "TRY300", "B007"]
 # Operator tools run by hand; print() is their output, not logging.
+#
+# THIS GROUP IS READ AS A LIST. The `logging` only / `print()` norm in
+# .prawduct/artifacts/project-preferences.md points at the entries below this
+# comment instead of restating their names, so every entry from here to the end
+# of the table must be a hand-run operator tool the norm does not apply to.
+# A legacy module carrying `T20` as dated debt goes ABOVE this comment, with the
+# rest of its group — appending one here would silently reclassify it as a tool
+# the rule was never meant to reach, inverting the distinction that row protects.
 "tv_api_check.py" = ["T20"]
 "spi_test.py" = ["T20", "E501", "F841", "E402"]
 "remote_test.py" = ["T20", "E501", "F841"]

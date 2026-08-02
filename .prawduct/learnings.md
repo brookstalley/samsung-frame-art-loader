@@ -194,6 +194,20 @@ the backlog is part of its sweep set.**
     names where the reviewer looked, and the reviewer was reading a diff. The
     remedy is unchanged and takes seconds: grep the concept's distinctive noun
     (`token_file`) across the repo, not the two paths handed to you.
+14. **2026-08-01, fifteenth and sixteenth recurrences — the rule failed twice in
+    one session, the second time immediately after being told about the first.**
+    The Norm Health sweep retired "2,216 lines / 13 modules" in one norm-index row
+    and left the same figures standing three lines above in the *same file*
+    (including a live flat-vs-package design judgement resting on a number 19%
+    under the truth), plus a `project-state.yaml` risk factor —
+    "No test suite exists" — that `operational-spec.md` had retired eight days
+    earlier. The Critic named this entry by title when it raised it. Then, after
+    those fixes, the identical stale carve-out ("eleven files", "three hand-run
+    operator tools") surfaced a *third* time in the Code Style section of the file
+    already twice edited — found only because a backup-restore made the harness
+    echo the file back. **Being told "this is a repo-wide grep" is not the same as
+    running one**, and the section you already edited is exactly where the next
+    home hides, because having edited the file reads as having covered it.
 
 *(This entry is itself the evidence for why the count keeps moving: the failure is
 **fractal**. Every act of propagating a claim is a fresh opportunity to miss a home,
@@ -352,6 +366,10 @@ they test the outcome rather than the transformation.
 ## A package's declared dependency floor is a claim; what it imports is the constraint
 
 ## Before answering the question a spec asks about a candidate, check that the candidate is one
+
+## An index that under-claims its enforcement is defective, not conservatively safe
+
+## A mutation test must prove it mutated, or its green is indistinguishable from a pass
 
 ## Ratifying a norm creates retroactive obligations on ARTIFACTS, not just code
 

@@ -224,3 +224,94 @@ model *year* in `remote.py` — from 2024, mint a pairing token before the art
 channel will accept one. Both the question's frame and its vocabulary came from a
 README rather than from source, which is the tell worth carrying: **a premise
 sourced from documentation deserves the same verification as the answer.**
+
+## An index that under-claims its enforcement is defective, not conservatively safe
+
+An index that names a mechanism it does not have is the obvious defect: it grants
+false confidence. The inverse — a row saying `Critic` while a real test guards the
+norm — feels like the safe direction, because nobody is misled into relaxing.
+
+It is not safe. **The pointer runs both ways: the index protects the artifact as
+much as the artifact enforces the norm.** A test no row names is a test a refactor
+can delete, or rename, or quietly narrow, with nothing to notice — which is how an
+unrecorded mechanism becomes a phantom mechanism, and the row that was merely
+modest becomes the row that lies. Audit both directions: for every row, does the
+named mechanism exist; and for every enforcement artifact, does a row name it.
+
+**Worked instance (2026-08-01).** The Norm Health sweep found the "no secret ever
+reaches a log line" row recording Mechanism `Critic`, artifact `—`, while
+`tests/test_config.py::test_startup_logging_never_emits_a_secret` had guarded the
+norm's highest-risk path since `ba007cd` on 2026-07-27 — the same bundle that
+added the norm. The index recorded no mechanism from the moment the mechanism
+existed. Mutation-proven live: making `redacted_config` return the raw key fails
+it. The row is now `Test (startup config path) + Critic (everywhere else)`, split
+so the judgement half — an object logged for context whose repr contains a token —
+stays where no test can reach.
+
+Two rows in this same index had already been found claiming enforcement they did
+not have, which is why the sweep ran at all. This is the third failure mode of the
+same artifact and the only one nobody was looking for.
+
+**The reverse direction is unswept, and two probes into it have each found
+something.** The rule above prescribes auditing *both* directions; the sweep that
+produced it ran only rows→artifacts. **What follows is two worked instances, not
+a completed audit** — the wording here matters, because a future session that
+reads "swept, one finding, filed" will not re-run it.
+
+*First probe, prompted by a Critic note.* `tests/test_repo_hygiene.py` — three
+guards, among them `test_the_tv_token_is_not_tracked`, whose docstring records
+the reason ("it was committed to a public repo once") — named by no norm row,
+with no norm statement anywhere in the index for either thing it enforces.
+
+*Second probe, prompted by the next Critic round, after the first was written up
+as though it were the answer.* `curation/tests/unit/test_persistence_boundary.py`
+is the same shape one plane over: an AST import check with a named exception set,
+guarding that the storage driver stays inside the persistence package. Its
+docstring states the norm, explains that "the failure mode is invisible by
+construction, so it gets a mechanical guard rather than vigilance", and **cites
+`tests/test_repo_hygiene.py` as its precedent** — so the two unnamed guards
+already knew about each other, and the index knew about neither. **That is three
+consecutive failures of this rule against its own tree, two of them found by
+review rather than by the sweep that was looking.**
+
+The reverse sweep needs judgement, not a blanket check: the index names a
+handful of test artifacts and the suites hold many times that, nearly all
+correctly unnamed because they verify behaviour rather than enforce a norm. What
+belongs in the index is the test whose *purpose* is a norm — which is a reading,
+not a pattern match, and is why this direction resists the mechanical guard the
+forward direction accepted. Tracked as issue #40.
+
+*(The count that stood here is deliberately gone. It read "38 of the repo's 40
+test files" and was right when written — but two agents measured it an hour apart
+and got 40 and 39, because the boundary is genuinely ambiguous: an untracked new
+file counts or does not, and the hand-run operator tools are test-named without
+being suite files. A tally that needs three caveats to be true is a tally that
+will be quoted without them.)*
+
+## A mutation test must prove it mutated, or its green is indistinguishable from a pass
+
+Mutation is how you tell "the test exists" from "the mechanism works", and it is
+the only check worth recording in an enforcement index. But a mutation that
+silently fails to apply produces a green suite that looks exactly like a verified
+guard — the failure mode the mutation was run to rule out, now hiding inside the
+instrument. **Assert the mutation landed before trusting what the suite says
+about it**, and abort rather than report.
+
+Corollary on reverting: `git checkout <path>` is only a safe "undo my mutation"
+idiom on a file with no other uncommitted changes. On a file being edited for real
+work it discards that work too.
+
+**Worked instance (2026-08-01).** During the Norm Health sweep, a mutation meant
+to make `config.py` leak a secret targeted a string literal that does not exist —
+the redaction is a loop over `_SECRET_KEYS`, not the line searched for. The file
+was unchanged, `pytest tests/test_config.py` reported 9 passed, and that green was
+a hair from being written up as "the guard holds". The redo carried
+`assert old in s, "aborting rather than reporting a false pass"`. In the same
+session the revert for a different mutation was `git checkout` on an artifact
+carrying every edit of the sweep; the sandbox classifier refused the command, and
+the redo used a checksummed backup instead.
+
+This is the third consecutive session in which the measurement apparatus carried
+the defect class it was built to measure — the prior one being an
+`except Exception` in the evaluation driver that would have swallowed the envelope
+invariants and reported a contract violation as a low score.
