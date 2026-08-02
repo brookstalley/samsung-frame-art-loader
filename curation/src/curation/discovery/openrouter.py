@@ -165,6 +165,7 @@ class OpenRouterClient:
         *,
         model: str,
         max_output_tokens: int,
+        search_engine: str | None = None,
         client: httpx.Client | None = None,
     ) -> None:
         if not api_key:
@@ -176,6 +177,13 @@ class OpenRouterClient:
             )
         self._model = model
         self._max_output_tokens = max_output_tokens
+        # Not validated against a list of known engines, deliberately. The
+        # provider is the authority on which engines exist, and a local allowlist
+        # is a second answer that drifts the moment one is added — the same
+        # reasoning that keeps the spend ceiling on the provider's side. An
+        # unknown value is refused by the provider with its own message, which is
+        # a better error than one written here from a stale list.
+        self._search_engine = search_engine
         # Injectable so the suite can drive a recorded transport instead of the
         # network. The default is a real session; nothing else in the package
         # constructs one. No `base_url` on it: every request below builds its
@@ -188,6 +196,19 @@ class OpenRouterClient:
     def model(self) -> str:
         """Which model this client calls, for attributing spend to what spent it."""
         return self._model
+
+    @property
+    def search_engine(self) -> str | None:
+        """Which search back-end this client pins, or `None` to take the default.
+
+        Exposed for the same reason as `model`: a measurement of search quality
+        has to be able to say what it measured. `None` is not "no search" — it is
+        the provider's own default, which resolves to the *model provider's*
+        native search where one exists and falls back to Exa where it does not.
+        That makes the engine an emergent consequence of the model rather than a
+        decision, so anything comparing engines has to pin one.
+        """
+        return self._search_engine
 
     def complete(
         self,
@@ -224,7 +245,10 @@ class OpenRouterClient:
                 "json_schema": {"name": "work_list", "strict": True, "schema": dict(schema)},
             }
         if search_results > 0:
-            body["plugins"] = [{"id": "web", "max_results": search_results}]
+            plugin: dict[str, Any] = {"id": "web", "max_results": search_results}
+            if self._search_engine is not None:
+                plugin["engine"] = self._search_engine
+            body["plugins"] = [plugin]
 
         payload = self._post("/chat/completions", body)
         return _read_completion(payload, fallback_model=self._model)

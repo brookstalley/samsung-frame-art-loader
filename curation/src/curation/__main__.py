@@ -42,6 +42,7 @@ def _engine(settings: Settings) -> DiscoveryEngine:
         model=settings.discovery_model,
         max_output_tokens=settings.discovery_max_output_tokens,
         search_results=settings.discovery_search_results,
+        search_engine=settings.discovery_search_engine,
     )
 
 

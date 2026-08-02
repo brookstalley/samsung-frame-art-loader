@@ -170,6 +170,12 @@ class Settings:
     discovery_model: str
     discovery_max_output_tokens: int
     discovery_search_results: int
+    #: Which web-search back-end phase 1 pins, or `None` to take the provider's
+    #: default. Unset is not a neutral choice: the default follows whichever model
+    #: is configured, taking that provider's native search where it has one and
+    #: falling back to Exa where it does not — so leaving this empty makes the
+    #: search back-end a side effect of `discovery_model` rather than a decision.
+    discovery_search_engine: str | None = None
     #: The key everything paid runs through. Optional: a deployment without one
     #: serves the whole catalogue and refuses only to *start* a discovery run,
     #: which is a far better failure than refusing to boot.
@@ -290,6 +296,10 @@ class Settings:
             # provider rather than run cheaply.
             discovery_max_output_tokens=_positive_int("DISCOVERY_MAX_OUTPUT_TOKENS", DEFAULT_DISCOVERY_MAX_OUTPUT_TOKENS),
             discovery_search_results=_counted("DISCOVERY_SEARCH_RESULTS", DEFAULT_DISCOVERY_SEARCH_RESULTS),
+            # No default constant beside the others: there is no engine this code
+            # can name as correct until the comparison behind it has been run, and
+            # an empty value means "the provider's default" rather than "none".
+            discovery_search_engine=os.environ.get("DISCOVERY_SEARCH_ENGINE") or None,
             openrouter_api_key=os.environ.get("OPENROUTER_API_KEY") or None,
         )
 

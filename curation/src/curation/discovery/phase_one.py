@@ -242,7 +242,14 @@ def _read_strategy(raw: object) -> str | None:
     return raw.strip() or None
 
 
-def build_engine(api_key: str, *, model: str, max_output_tokens: int, search_results: int) -> OpenRouterEngine:
+def build_engine(
+    api_key: str,
+    *,
+    model: str,
+    max_output_tokens: int,
+    search_results: int,
+    search_engine: str | None = None,
+) -> OpenRouterEngine:
     """The engine a deployment holding an API key gets.
 
     A function rather than construction at the call site so the wiring reads as
@@ -251,6 +258,6 @@ def build_engine(api_key: str, *, model: str, max_output_tokens: int, search_res
     has to know how to assemble.
     """
     return OpenRouterEngine(
-        OpenRouterClient(api_key, model=model, max_output_tokens=max_output_tokens),
+        OpenRouterClient(api_key, model=model, max_output_tokens=max_output_tokens, search_engine=search_engine),
         search_results=search_results,
     )

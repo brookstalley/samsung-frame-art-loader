@@ -486,12 +486,32 @@ def test_a_deployment_can_override_every_engine_setting(monkeypatch, tmp_path):
     monkeypatch.setenv("DISCOVERY_MODEL", "probe/model-under-test")
     monkeypatch.setenv("DISCOVERY_MAX_OUTPUT_TOKENS", "1234")
     monkeypatch.setenv("DISCOVERY_SEARCH_RESULTS", "6")
+    monkeypatch.setenv("DISCOVERY_SEARCH_ENGINE", "parallel")
 
     settings = Settings.from_env()
 
     assert settings.discovery_model == "probe/model-under-test"
     assert settings.discovery_max_output_tokens == 1234
     assert settings.discovery_search_results == 6
+    assert settings.discovery_search_engine == "parallel"
+
+
+def test_an_unset_search_engine_reads_as_unpinned_rather_than_as_a_name(monkeypatch, tmp_path):
+    """Blank and absent must mean the same thing, and neither may become a name.
+
+    An empty variable is how a deployment says "take the provider's default", and
+    turning that into an engine name here would assert a back-end this code cannot
+    know: the default follows the configured model, taking that provider's native
+    search where it has one and Exa where it does not.
+    """
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.delenv("DISCOVERY_SEARCH_ENGINE", raising=False)
+
+    assert Settings.from_env().discovery_search_engine is None
+
+    monkeypatch.setenv("DISCOVERY_SEARCH_ENGINE", "")
+
+    assert Settings.from_env().discovery_search_engine is None
 
 
 def test_the_engine_settings_ship_at_the_values_the_analysis_chose(monkeypatch, tmp_path):

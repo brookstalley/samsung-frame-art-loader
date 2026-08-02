@@ -273,14 +273,14 @@ def test_an_empty_completion_is_returned_with_its_cost_rather_than_raised():
 # -- what actually goes on the wire ---------------------------------------------
 
 
-def sent_body(**kwargs) -> dict:
+def sent_body(*, client_options: dict | None = None, **kwargs) -> dict:
     captured: dict = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured.update(json.loads(request.content))
         return httpx.Response(200, json=SEARCHED)
 
-    client_over(handler).complete(**kwargs)
+    client_over(handler, **(client_options or {})).complete(**kwargs)
     return captured
 
 
@@ -300,6 +300,42 @@ def test_cost_reporting_is_always_requested():
 def test_the_search_plugin_is_attached_only_when_results_are_asked_for():
     assert "plugins" not in sent_body(prompt="anything", search_results=0)
     assert sent_body(prompt="anything", search_results=10)["plugins"] == [{"id": "web", "max_results": 10}]
+
+
+def test_an_unpinned_engine_sends_no_engine_key_at_all():
+    """Absent and "whatever the default is" must stay the same request.
+
+    Sending a name for the default would be this code asserting which back-end
+    the provider resolves to, which it does not know: the default follows the
+    *model*, taking its native search where one exists and Exa where none does.
+    """
+    plugin = sent_body(prompt="anything", search_results=10)["plugins"][0]
+
+    assert "engine" not in plugin
+
+
+def test_a_pinned_engine_travels_with_the_search():
+    """What makes one search comparable to another.
+
+    Unpinned, the back-end is chosen by whichever model is configured, so
+    changing the model silently changes the search — and a measurement taken
+    across that change would read as a quality difference in the wrong variable.
+    """
+    plugin = sent_body(client_options={"search_engine": "parallel"}, prompt="anything", search_results=10)["plugins"][0]
+
+    assert plugin == {"id": "web", "max_results": 10, "engine": "parallel"}
+
+
+def test_a_pinned_engine_is_not_sent_when_nothing_is_being_searched():
+    """The engine names how to search, so it is meaningless on a call that does
+    not — and a plugin block on a searchless call could bill for one."""
+    assert "plugins" not in sent_body(client_options={"search_engine": "parallel"}, prompt="anything", search_results=0)
+
+
+def test_the_client_reports_which_engine_it_pinned():
+    """A measurement of search quality has to be able to name what it measured."""
+    assert client_over(responding(SEARCHED)).search_engine is None
+    assert client_over(responding(SEARCHED), search_engine="exa").search_engine == "exa"
 
 
 def test_a_schema_is_sent_in_strict_mode():
