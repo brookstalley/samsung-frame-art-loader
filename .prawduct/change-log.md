@@ -48,6 +48,110 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-02: The review Chunk 15 never got, and the four findings that were one finding
+
+**Why:** Chunk 15 shipped without a Critic review. One was dispatched — three
+reviewers, a manifest, `.started` markers — and it died before any of them wrote a
+finding, then a commit landed on top of the tree it had been reading. The
+governance ledger's last review was still 14B's, so nothing recorded the gap; the
+`.critic-findings.json` sitting in the directory was a different review of
+different code, which is the failure mode where a stale file reads as a fresh
+pass. Re-run against the real head, the review returned **0 blocking, 8 warnings,
+8 notes**. All sixteen are dispositioned here in one pass.
+
+**A remote API response could run shell on the loader host.** `get_dezoomify_file`
+interpolated a URL into a string and ran it with `shell=True`, and on the ARTIC
+path that URL is built from `metadata["config"]["iiif_url"]` and
+`metadata["data"]["image_id"]` — fields of a remote document, replayed from
+`api-cache/` on every later acquisition. The same function already sanitised the
+*filename* it derived from that document, which is what made the unsanitised URL
+easy to miss. Now an argv list with no shell. The build plan had barred this shape
+from being ported forward at acquisition, but its reason named *future* discovery
+URLs, so the live path that has been remote-tainted all along had no disposition
+at all — a constraint scheduled for code that does not exist yet, while the code
+running the wall kept the defect.
+
+The test asserts the argv actually passed, not the absence of a crash, and the
+first draft of it failed that bar in a way worth recording: `args.count(url) == 1`
+passes against the *old* code too, because on a shell string that is a substring
+count. Three of four tests failed against the defect and one passed. Every
+assertion now goes through a helper that establishes the call received a list at
+all, and all four fail without the fix.
+
+**The MCP server told every client it only stages changes.** The shipped
+instructions promised "an agent stages changes rather than completing them" while
+`art_theme(action='activate')` and `art_display`'s sync/show_now/next all converge
+the wall within about a second — this server's own tool descriptions say so. A
+model reading that reports staged work to the curator and has in fact changed what
+is hanging. Its other clause was the sentence `security-model.md` recorded as
+VOIDED in 2026-07-19, re-asserted verbatim on the surface where an external
+consumer reads it. Rewritten to what is true, in the form the security model
+settled on: an agent can change the wall, and what the gate guarantees is that
+acceptance rests on a person having seen the image — not on a surface being denied
+a tool.
+
+**Four of the eight warnings were the same defect wearing four hats**, and that is
+the finding rather than any one of them. A 2026-08-02 amendment — `3tears-models`
+confined to an opt-in test group when discovery went to a first-party OpenRouter
+client — landed in the files that argued for it and was never swept. The reviewer
+named five stale sites and a `pyproject.toml` contradicting itself fifty lines
+apart. **The repo-wide grep found nine**, including a *test docstring* teaching the
+retired claim to everyone who reads the suite, plus this project's own
+`learnings.md` entry and a `project-state.yaml` decision record. That the sweep
+prescribed by the learning "retiring a claim is a repo-wide grep, not a local edit"
+was itself done locally enough to miss a third of the sites is the whole lesson,
+and this is its fifth recurrence — the fourth for a Python-version claim
+specifically.
+
+So the fix is structural rather than another sweep: **what holds the 3.14 floor is
+now stated once**, in `project-preferences.md` § Language & Runtime, and the other
+eight sites point at it instead of restating it. A claim duplicated in nine places
+drifts in nine places; a claim stated once cannot. The substance also changed and
+is worth saying plainly — **no default dependency requires 3.14 any more.** The
+only declared holder is a test-only package, so the two-plane split's first stated
+reason now rests on the verified fact that the set resolves on 3.14.4, and
+lowering the floor is a decision available to whoever wants it rather than a
+correction. `architecture.md` says outright that this is the weakest of the
+split's three legs.
+
+**Two module docstrings stated a norm as a description of themselves.** `http/api.py`
+opened "Every handler does three things and nothing else" while six of its twelve
+handlers do more, and `mcp/bindings.py` stated the identical absolute while its
+"get theme" binding composes two service calls. The known-departures table had
+scoped itself to the HTTP file, so the owner's deferred fork — name the exceptions
+or amend the norm — was posed against an undercount that omitted the MCP layer
+entirely. Both docstrings now say the rule binds *and* that the file departs, which
+is the only combination that neither licenses the next departure nor quietly
+weakens the rule. The MCP layer's departure was measured rather than assumed: one
+of twenty-three bindings, by AST.
+
+**The documented way to run the tests did not work.** `CLAUDE.md`'s root column
+gave `pytest tests`, `ruff check .`, `black .` — but those tools live in a
+uv-only dependency group, so a fresh clone gets command-not-found or, worse, a
+system-Python pytest resolving different dependencies and reporting a green suite
+that means nothing. README.md points at this table as the authority. Both columns
+now carry `uv run`.
+
+**Smaller, same shape.** `observability-strategy.md` still listed
+`limit_remaining` as a present, trustworthy spend signal: nothing calls the
+reader, and the figure lags badly enough that it was observed reporting credit
+while calls were already being refused — `operational-spec.md` corrected exactly
+this on the same day and the sweep stopped there. `data-model.md`'s derivation
+block still prescribed the bilingual rule the head commit had deleted, so the
+decision record was teaching what the decision un-made; struck, and the merge risk
+that *does* exist in the shipped code (the uninformative-title list is enumerated
+and English-only, so `Landschaft (Studie)` reads as distinctive) is now recorded
+beside the other residual risks instead of living only in a comment.
+`deploy/README.md` now warns that installing `requirements.txt` resolves the
+IT8951 driver to whatever master is — declaring `omni_epd` put its unpinned child
+on the install path — and gives the SHA the wall ran. Documented rather than
+pinned, because pinning a transitive git URL against the parent's own unpinned
+declaration is resolver behaviour to verify on hardware, and the panel is off the
+bench.
+
+Both suites green, evidence recorded against this tree rather than an earlier
+session's — which was itself one of the warnings.
+
 ## 2026-08-02: Chunk 15 — the derivation and the engine, both decided by measurement
 
 <!-- prawduct: chunks=15 | status=shipped | scope=v1-build -->

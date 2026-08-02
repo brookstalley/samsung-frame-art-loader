@@ -1,11 +1,19 @@
 """The JSON surface the browser client reads, and the shaping that feeds it.
 
-Every handler does three things and nothing else: unpack the request, call **one**
-service method, format the result. A handler that validates, orders or decides is
-the violation — that work belongs to the service layer, which the MCP tools call
-too. This is the same rule `mcp/bindings.py` states, and it is stated twice on
-purpose: it is the only thing keeping an agent and a click from disagreeing about
-the same catalogue.
+A handler unpacks the request, calls **one** service method, and formats the
+result. A handler that validates, orders or decides is the violation — that work
+belongs to the service layer, which the MCP tools call too. This is the same rule
+`mcp/bindings.py` states, and it is stated twice on purpose: it is the only thing
+keeping an agent and a click from disagreeing about the same catalogue.
+
+**Half the handlers below do not meet it today, and it binds anyway** — read it as
+what to write next, not as a description of what is here. Three shapes depart:
+read-back-after-mutate, composite reads, and HTTP conditional-request handling.
+Each carries its reason where it happens, and all of them are recorded with an
+open disposition under "Known departures" in the project preferences — which is
+the point, because a norm with unrecorded exceptions dies by accumulation rather
+than by anyone deciding to end it. Do not reconcile the gap by softening the
+paragraph above.
 
 **Handlers are synchronous `def`, deliberately.** The service layer is
 synchronous and its work is real — sqlite reads, `fsync` on write, and a JPEG

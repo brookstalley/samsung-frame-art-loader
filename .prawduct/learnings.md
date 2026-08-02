@@ -58,10 +58,10 @@ artifact for the *concept*; use grep only as the cheap first pass, never as the
 check that closes the sweep.
 
 **Structural escalation, per the learning lifecycle. The count is the argument, so
-keep it current: THIRTEEN recurrences across four sessions as of 2026-07-20** (entries
-1–12 below; entry 6 covers two). All but one were caught by the Critic — the
-eleventh by a requested design-checkpoint review (entry 10) — and none by the
-author's own sweep-closing check, across at least five distinct causes —
+keep it current: SEVENTEEN recurrences across six sessions as of 2026-08-02**
+(entries 1–15 below; entries 6 and 14 each cover two). All but one were caught by
+the Critic — the eleventh by a requested design-checkpoint review (entry 10) — and
+none by the author's own sweep-closing check, across at least five distinct causes —
 literal-text survival, paraphrase, excluding one's own edited files, consuming
 only part of a finding's enumerated scope, and a home outside the artifact graph
 entirely. Each correction was
@@ -208,6 +208,34 @@ the backlog is part of its sweep set.**
     echo the file back. **Being told "this is a repo-wide grep" is not the same as
     running one**, and the section you already edited is exactly where the next
     home hides, because having edited the file reads as having covered it.
+
+15. **2026-08-02, seventeenth recurrence — and the one that changes the remedy.**
+    The `3tears-models` supersession (confined to an opt-in test group when
+    discovery went to a first-party OpenRouter client) was recorded in the three
+    artifacts that argued for it and swept nowhere else. Critic named five stale
+    sites plus a `pyproject.toml` contradicting itself fifty lines apart; the
+    repo-wide grep found **nine** — the extras being a *test docstring* teaching the
+    retired claim to everyone who reads the suite, this learnings file, and a
+    `project-state.yaml` decision record. Fourth recurrence for a Python-version
+    claim specifically, which is the tell: the same claim keeps going stale because
+    it was written down nine times.
+
+**The correction that follows: stop sweeping a duplicated claim, stop duplicating
+it.** Every remedy above escalates *how well you look* — grep, then walk the
+decision graph, then do not exclude the files you edited, then treat the finding's
+enumeration as a checklist. All of them are attention, and attention has now lost
+seventeen times. The claim "what holds the 3.14 floor" was restated in nine places
+because restating it felt like being thorough; each restatement was a new thing to
+keep true. It now lives in exactly one place — `project-preferences.md` § Language
+& Runtime — and the other eight sites point at it. **A claim stated once cannot
+drift; a claim stated nine times drifts in nine places, and the sweep only ever
+finds the homes you thought of.** So the question when you retire something is not
+only "where else does this appear" but "why does it appear anywhere twice" — and
+where a second home is genuinely needed, it carries a pointer, not a copy.
+
+This does not retire the sweep — existing duplication still has to be found the
+hard way, and the mechanical check filed as `brookstalley/prawduct#136` is still
+the thing that would catch it. It changes what you leave behind afterwards.
 
 *(This entry is itself the evidence for why the count keeps moving: the failure is
 **fractal**. Every act of propagating a claim is a fresh opportunity to miss a home,
@@ -421,10 +449,13 @@ for the full record established 2026-07-19. Summary:
   **Display plane: 3.13** (matches Raspberry Pi OS Trixie), falling back to 3.12;
   verified working on 3.12, and 3.13 is an open assumption until a build proves it.
   **Curation plane: 3.14** on a uv-managed standalone build. _(Re-based
-  2026-07-27: this said "with `3tears` unmodified". The catalogue takes no
-  `3tears` core dependency at all now; the floor rests on `3tears-models`, which
-  declares the same one, and on the whole dependency set having been verified to
-  resolve and import on CPython 3.14.4.)_
+  2026-07-27 and again 2026-08-02: this said "with `3tears` unmodified", then that
+  "the floor rests on `3tears-models`". Neither holds — that package moved to the
+  opt-in `eval` group when discovery went to a first-party OpenRouter client, so
+  no default dependency requires 3.14. What holds the floor is stated once, in
+  `artifacts/project-preferences.md` § Language & Runtime; this entry points there
+  rather than restating it, because restating it is what produced four
+  simultaneously-stale copies.)_
 - Hardware is a **Pi 4 Model B**, so `RPi.GPIO` works and none of the Pi 5 /
   RP1 / `rpi-lgpio` complications apply.
 - Both display drivers are **dormant** (omni-epd 2024-11, IT8951 2023-11), and

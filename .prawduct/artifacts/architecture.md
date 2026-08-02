@@ -120,12 +120,15 @@ fetching, k-means over LAB arrays, and 4K compositing off a Pi 4" — **is no lo
 true and must not be cited.** Co-location retires it. What survives:
 
 1. **The display plane's Python version is pinned by hardware.** The IT8951
-   e-paper driver compiles Cython from 2023 sources targeting 3.12/3.13; the
-   curation plane wants 3.14 for `3tears-models`, whose OpenRouter adapters the
-   discovery work needs and which declares `>=3.14` like every package in that
-   family. (Named specifically because the catalogue no longer takes `3tears`
-   core — see `3tears-integration-findings.md`; the floor rests on the models
-   package alone.) Two venvs on one host is the cheap resolution.
+   e-paper driver compiles Cython from 2023 sources targeting 3.12/3.13, while the
+   curation plane runs 3.14. Two venvs on one host is the cheap resolution, and it
+   stays the resolution whatever the curation floor turns out to be.
+   **What holds that floor is stated once, in `project-preferences.md` §
+   Language & Runtime, and is not repeated here** — this item said the floor
+   "rests on the models package alone" and was still saying it after that package
+   moved to a test-only group. As of 2026-08-02 no default dependency requires
+   3.14, so **this leg of the split is the weakest of the three** and the two
+   below carry it: read them as the reasons, not this one.
 2. **The wall must not go blank when curation restarts.** This matters *more* on
    one box, not less: during development the curation process is restarted
    constantly, and a single-process design would blank the TV every time.

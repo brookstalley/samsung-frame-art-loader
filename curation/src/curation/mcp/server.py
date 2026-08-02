@@ -45,12 +45,21 @@ def _server_version() -> str:
 #: Shown to a client once, alongside the tool list. Kept short deliberately:
 #: the client truncates server instructions at the same 2 KB it truncates a
 #: tool description, and the depth belongs behind each tool's `help`.
+#:
+#: What this must not claim is that an agent only *stages* changes. Activating a
+#: theme and the `art_display` actions converge the wall within about a second, so
+#: a client told it stages will mis-report to the curator what it just did. Nor
+#: should the safety claim rest on a surface lacking a verdict tool — that bound
+#: was relied on once and voided when the gate reached the surface. The guarantee
+#: that survives is narrower and is the one to state: a work is accepted only on a
+#: verdict against an image a person was actually shown.
 INSTRUCTIONS: Final[str] = (
     "Curate a Samsung Frame TV's art collection. Five tools, each a noun taking a required "
     "'action' string. Every tool answers action='help' with its full action menu, parameters, "
     "a worked example, and tips — start there. art_discovery is the only tool that spends money. "
-    "Adding a work to the wall always passes through a human review step, so an agent stages "
-    "changes rather than completing them."
+    "Some actions change the wall as soon as they return — activating a theme, and art_display's "
+    "sync, show_now and next — so report those as done, not as staged. Entering the catalogue is "
+    "the separate thing: a work is accepted only by a verdict on an image a person was shown."
 )
 
 

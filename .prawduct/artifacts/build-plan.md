@@ -299,12 +299,17 @@ Rationale per package lives in `project-preferences.md` § Tooling,
 `3tears-integration-findings.md`, and `platform-and-dependency-findings.md`.
 
 - **curation (3.14):** fastapi, uvicorn, `mcp>=1.28.1` (official SDK — decided over
-  `3tears-mcp`, which drags NATS), 3tears-models (OpenRouter adapters, arriving with
-  Chunk 14), httpx, pillow, opencv-python-headless, scikit-image, numpy, pydantic,
-  python-dotenv. All wheels on aarch64/3.14, verified 2026-07-20. *(Amended
-  2026-07-27: 3tears **core** is no longer in this set — the catalogue's durable
-  tier is first-party code shaped to the framework's `DurableStore` contract, so
-  no framework code is imported. See § The 3tears catalogue dependency.)*
+  `3tears-mcp`, which drags NATS), httpx, pillow, opencv-python-headless,
+  scikit-image, numpy, pydantic, python-dotenv. All wheels on aarch64/3.14,
+  verified 2026-07-20. *(Amended 2026-07-27: 3tears **core** is no longer in this
+  set — the catalogue's durable tier is first-party code shaped to the framework's
+  `DurableStore` contract, so no framework code is imported. See § The 3tears
+  catalogue dependency.)* *(Amended 2026-08-02: **3tears-models leaves this list
+  too.** It was carried here as "OpenRouter adapters, arriving with Chunk 14" —
+  both halves of that chunk have since shipped and it did not arrive, because
+  discovery reaches OpenRouter through a first-party client instead. It is a
+  test-only dependency in the opt-in `eval` group now, so listing it among the
+  plane's runtime dependencies overstated what a deployment installs.)*
 - **display (3.13, system interpreter):** samsungtvws (target decided in Chunk 05),
   pillow, IT8951 (pinned per Chunk 04's outcome), omni-epd, pycairo + PyGObject
   (Pango label typesetting; the GTK stack lives on this plane deliberately),

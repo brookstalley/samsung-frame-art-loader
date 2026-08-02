@@ -109,6 +109,27 @@ library versions carry: `available(category=...)` is unchanged between them, and
 one streams it. So pulling the checkout without reinstalling degrades to the old
 buffering behaviour and keeps working, rather than breaking.
 
+### Installing this file pulls one dependency that is not pinned
+
+`omni_epd` is pinned to the commit the wall runs, but **it declares `IT8951[rpi]`
+as a git dependency with no commit**, so a `pip install -r requirements.txt` on a
+rebuilt Pi resolves the e-paper driver to whatever that repository's master is on
+the day you run it. Before `omni_epd` was declared here, this file installed
+neither package and the driver arrived out-of-band; declaring the parent is what
+put the unpinned child on the install path.
+
+The commit the wall actually ran is recorded in `pi-freeze-2024.txt`:
+
+    IT8951 @ git+https://github.com/GregDMeyer/IT8951.git@9f136139378f74e17d9972d7165dc6ae53a2568e
+
+**If the label panel misbehaves after a rebuild, suspect this first** and install
+that line explicitly. It is documented rather than pinned here because pinning a
+transitive git URL alongside the parent's own unpinned declaration is exactly the
+kind of resolver behaviour that should be verified on the hardware before it is
+committed, and the panel is not on the bench. Pinning or vendoring it is a
+recorded decision still owed — see `project-state.yaml` →
+`technical_decisions.operational`.
+
 ## What `pi-freeze-2024.txt` is
 
 A `pip freeze` of the environment the 2024 loader was running on the Pi, captured

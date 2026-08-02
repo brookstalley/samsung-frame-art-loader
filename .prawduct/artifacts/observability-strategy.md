@@ -27,10 +27,23 @@ reader should not conclude these were forgotten.
 |---|---|---|
 | Structured logs | **Yes** — the primary signal | Both planes, to the systemd journal |
 | Health/heartbeat state | **Yes** | Display writes it; the curation UI reads and displays it |
-| Spend | **Yes** — read from the authority | `GET /api/v1/key` → `limit_remaining` |
+| Spend | **Per run, yes; as a live balance, no** | Recorded spend is on the run and reported by the discovery surface. **`limit_remaining` is deliberately not surfaced** — see the note below the table |
 | Metrics (time series) | No | No store, no query surface, nobody to read them. Revisit only if a real question needs a trend |
 | Distributed tracing | No | Two processes with no request/response between them. There is no distributed call to trace |
 | Uptime monitoring (external) | No | Follows from the operator's alerting decision below |
+
+> **On `limit_remaining`, and why this row shrank (2026-08-02).** The Spend row
+> read "**Yes** — read from the authority | `GET /api/v1/key` → `limit_remaining`".
+> No surface exposes that figure: the client can read it, and nothing in the
+> services, HTTP or MCP layers calls the reader. More importantly it should not be
+> the budget indicator even once something does — it lags by minutes, and was
+> observed reporting credit remaining while live calls were already being refused.
+> A panel built from it would tell the operator they had money at the exact moment
+> spending stopped working. **Do not ship it as the budget signal**; the honest
+> ones are the recorded per-run spend and the `halted_by_budget` outcome. Surfacing
+> it as a lagging advisory figure is a decision someone may still make — with the
+> lag stated on screen. (`operational-spec.md` § Troubleshooting corrected the same
+> claim the same day; this artifact was the copy that sweep did not reach.)
 
 **Both planes use stdlib `logging`, and neither takes a dependency for it.**
 
@@ -228,7 +241,7 @@ signal exists:
 | TV unreachable | Heartbeat carries TV connectivity state; WARNING in the journal |
 | Manifest references a missing file | WARNING per work, and the work is skipped — the run continues |
 | Manifest major version unrecognised | ERROR, previous manifest retained |
-| Budget exhausted | `halted_by_budget` outcome, plus `limit_remaining` at zero in the UI |
+| Budget exhausted | `halted_by_budget` outcome on the run, and the refusal text names the cause. *(Corrected 2026-08-02: this also promised "`limit_remaining` at zero in the UI" — a figure no surface exposes, and one that lags badly enough to read non-zero while calls are already being refused. See the note under the signals table.)* |
 | Disk nearly full | Guarded *before* acquisition starts, not discovered as an exception during it |
 | A work silently absent from a theme | **The manifest build reports exclusions** with a per-work reason — see `architecture.md`. Not a log line: a first-class UI surface |
 | Mat colour degraded to the dominant-colour fallback | Recorded on the record itself (`MatColor.method`), not merely logged. The 2024 code degrades invisibly |

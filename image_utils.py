@@ -20,7 +20,26 @@ from source_utils import artic_metadata_for_artwork_url
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 
 dezoomify_rs_path = "dezoomify-rs"
-dezoomify_params = f'--max-width 8192 --max-height 8192 --compression 0 --parallelism 16 --min-interval 100ms --tile-cache "{config.dezoomify_tile_cache}" --header "{config.dezoomify_user_agent}"'
+# An argv list, never a shell string. The URL and the Referer header this binary is
+# invoked with are read out of a museum API's JSON response, so under a shell a quote
+# plus `;` or `$(...)` in a remote document would run as a command on the loader host.
+# Keep every value a separate list element: that is what makes the metacharacters inert.
+dezoomify_params = [
+    "--max-width",
+    "8192",
+    "--max-height",
+    "8192",
+    "--compression",
+    "0",
+    "--parallelism",
+    "16",
+    "--min-interval",
+    "100ms",
+    "--tile-cache",
+    config.dezoomify_tile_cache,
+    "--header",
+    config.dezoomify_user_agent,
+]
 
 last_artic_call = 0
 
@@ -262,17 +281,15 @@ async def get_dezoomify_file(
         if os.path.exists(out_file):
             os.remove(out_file)
 
-    my_params = dezoomify_params
+    argv = [dezoomify_rs_path, *dezoomify_params]
     if http_referer is not None:
-        my_params = f"{my_params} --header 'Referer: {http_referer}'"
-    cmdline = f'{dezoomify_rs_path} {my_params} "{url}"'
+        argv += ["--header", f"Referer: {http_referer}"]
+    argv.append(url)
     if out_file is not None and out_file != "":
-        cmdline = f'{cmdline} "{out_file}"'
-    cmdline = cmdline.strip()
-    logging.debug(f"Running: {cmdline}")
+        argv.append(out_file)
+    logging.debug(f"Running: {argv}")
     p = subprocess.Popen(
-        cmdline,
-        shell=True,
+        argv,
         cwd=destination_dir,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

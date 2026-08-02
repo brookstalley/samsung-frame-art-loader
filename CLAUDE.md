@@ -31,9 +31,16 @@ Two independent projects, two interpreters, two suites. Both must pass.
 
 | | 2024 modules (repo root) | curation plane |
 |---|---|---|
-| Test | `pytest tests` | `cd curation && uv run pytest` |
-| Lint | `ruff check .` | `cd curation && uv run ruff check .` |
-| Format | `black .` | `cd curation && uv run black .` |
+| Test | `uv run pytest tests` | `cd curation && uv run pytest` |
+| Lint | `uv run ruff check .` | `cd curation && uv run ruff check .` |
+| Format | `uv run black .` | `cd curation && uv run black .` |
+
+**`uv run` in both columns, including the root.** pytest, ruff and black live in a
+`[dependency-groups] dev` group that only uv installs — `pip install -e .` does
+not. Dropping the prefix gets either command-not-found or, worse, a system-Python
+pytest that resolves different dependencies and reports a green suite that means
+nothing. This table is the authority README.md points at for running the tests, so
+a wrong command here costs a fresh clone its first hour.
 
 Run the curation plane: `cd curation && uv run python -m curation`. It needs
 `ART_ROOT` (copy `.env.example` to `.env`); the browser interface serves on

@@ -9,14 +9,18 @@ import sys
 
 
 def test_runs_on_the_pinned_interpreter():
-    """3.14 is a hard floor, and the reason is no longer the one it was.
+    """3.14 is the declared floor; this asserts we are actually on it.
 
-    It was `3tears` core, which this plane no longer depends on at all. What
-    holds the floor now is `3tears-models` — the operator's own model adapters,
-    which the discovery work calls and which declare the same floor — together
-    with the verification that the whole curation dependency set resolves and
-    imports on CPython 3.14.4. The interpreter is a uv-managed standalone build,
-    deliberately not the system 3.13.
+    What *holds* that floor has been re-based twice and is deliberately not
+    restated here — `project-preferences.md` § Language & Runtime is its one
+    canonical home. This docstring named `3tears` core, then `3tears-models`
+    "which the discovery work calls", and was still saying the second after that
+    package became a test-only dependency, which is how a docstring in the suite
+    ends up teaching a retired claim to everyone who reads it.
+
+    The assertion below is worth keeping regardless of the rationale: it fails
+    loudly if the interpreter is the system 3.13 rather than the uv-managed
+    standalone build, which is a real and easy misconfiguration on the Pi.
     """
     assert sys.version_info >= (3, 14)
 

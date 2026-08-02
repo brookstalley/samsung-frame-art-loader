@@ -586,8 +586,16 @@ artworks.
 > The rules, each answering an observed rewrite: citation markup removed; a
 > trailing date dropped; a trailing `from the series ...` clause dropped; a
 > trailing alternate title in parentheses dropped *unless the remainder names
-> nothing in particular*; a bilingual `Original / English` compound reduced to its
-> first half; a parenthesised alias dropped from the artist.
+> nothing in particular*; a parenthesised alias dropped from the artist.
+>
+> *(Amended 2026-08-02: this list also carried "a bilingual `Original / English`
+> compound reduced to its first half". That rule was removed from the code the same
+> day and the clause is struck here so the decision record does not go on
+> prescribing what the decision un-made. It fired on nothing — zero of the 128
+> realistic proposals in the corpus carry the form, which appeared only in a capture
+> whose intent had asked for titles in both languages — and its direction could not
+> be chosen from evidence, while its failure direction is merge, the one with no
+> recovery.)*
 >
 > **The two directions are not symmetric, and that decides every close call.** A
 > split asks the curator about one painting twice — visible, self-correcting. A
@@ -613,6 +621,18 @@ artworks.
 > candidate would wrongly unite, so its zero merges is absence of evidence rather
 > than evidence of absence. The cases that would show one are pinned as separate
 > unit tests.
+>
+> **One known merge risk is carried deliberately, in the harmful direction.** The
+> rule that drops a trailing parenthetical holds it back when the remainder "names
+> nothing in particular", and *nothing in particular* is an enumerated,
+> English-only set — `untitled`, `study`, `landscape`, `portrait` and the like. So
+> `Landschaft (Studie)` reads as distinctive, its parenthetical is dropped, and it
+> can merge onto a different `Landschaft`. Enumeration is still the right shape:
+> length and word count cannot separate these from real one-word titles, since
+> `Coquelicots` is as short as `Untitled`. The list grows only when a real proposal
+> carries the term — never on the guess that a model might emit it — which means
+> the exposure is non-English titles in that one narrow form, and it is recorded
+> here rather than left to be rediscovered from the code.
 >
 > **No re-key shipped, because no rows exist to re-key.** The obligation above
 > stands for any deployment holding `CandidateWork` rows; the catalogue this was

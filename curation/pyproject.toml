@@ -2,10 +2,14 @@
 name = "curation"
 version = "0.1.0"
 description = "Curation plane — discovery, acquisition, catalogue, and the MCP + HTTP surfaces."
-# Every dependency declared below resolves well under 3.14; the floor is here for
-# `3tears-models`, listed under "deliberately not pinned yet", which declares the
-# same one and arrives with the discovery work. Verified 2026-07-27: the whole
-# declared set resolves and imports on CPython 3.14.4.
+# Nothing in the default install requires 3.14. This floor used to be held by
+# `3tears-models`, which declares the same one — but that package was confined to
+# the opt-in `eval` group on 2026-08-02 (see the group below), so the only
+# declared holder of the floor is now a test-only dependency. What still supports
+# it is weaker and worth stating plainly: the whole declared set was verified to
+# resolve and import on CPython 3.14.4 (2026-07-27), and nothing has asked for a
+# lower one. Lowering it is therefore a decision available to whoever needs it,
+# not a correction — but check the `eval` group still resolves before doing so.
 requires-python = ">=3.14"
 dependencies = [
     "fastapi",
@@ -52,10 +56,11 @@ dependencies = [
 # its L1 tier is an in-memory cache that would not have persisted the catalogue
 # anyway. Recorded in full at project-state.yaml -> technical_decisions.technology.
 #
-# Deliberately not pinned yet:
+# Confined to the opt-in `eval` group, where it is pinned (see below):
 #   3tears-models — the operator's own multi-provider model adapters. This used to
-#     say it "arrives with the discovery work that calls it"; that was reversed on
-#     2026-08-02 and it now stays in the `eval` group only. The discovery engine
+#     say it "arrives with the discovery work that calls it" and sat in the list
+#     below as not-yet-pinned; that was reversed on 2026-08-02 and it is pinned in
+#     `eval` today, so it belongs here rather than there. The discovery engine
 #     talks to OpenRouter through a first-party client behind a narrow seam
 #     instead: all traffic goes to one provider (search included, via its web
 #     plugin), and this package would pull 3tears-observe, 3tears-media-contracts,
@@ -63,6 +68,8 @@ dependencies = [
 #     DEFAULT install — the plane that runs on the Pi beside display under a
 #     MemoryMax. Not a rejection: the seam makes adopting it a one-file change if
 #     a second provider ever earns it. Reasoning in `openrouter-api-findings.md`.
+#
+# Deliberately not pinned yet:
 #   opencv-python-headless, scikit-image, numpy — acquisition and the mat engine,
 #     which arrive with that work rather than being carried unused. Pillow was in
 #     this group until the browser surface needed to downscale a 4K rendition.

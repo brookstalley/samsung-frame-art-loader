@@ -1640,10 +1640,13 @@ technical_decisions:
       rationale: >
         RE-BASED 2026-07-27: the catalogue takes no 3tears core dependency at all,
         so "3tears is not relaxed" is no longer this product's question — it is an
-        upstream one. The 3.14 floor stands, now resting on 3tears-models (same
-        declared floor, arrives with the discovery work) and on the verified fact
-        that the whole curation dependency set resolves and imports on CPython
-        3.14.4. The build-vs-relax analysis below is retained as the reason the
+        upstream one. RE-BASED AGAIN 2026-08-02: that revision said the floor now
+        rested on 3tears-models, "arrives with the discovery work". It did not
+        arrive — discovery reaches OpenRouter through a first-party client, and the
+        package is confined to the opt-in eval group — so no default dependency
+        requires 3.14 today. What holds the floor is stated once, in
+        artifacts/project-preferences.md § Language & Runtime, and is not restated
+        here. The build-vs-relax analysis below is retained as the reason the
         floor is affordable, not as a live dependency claim.
 
         Decided 2026-07-20 by the operator. This closes the open question opened the
