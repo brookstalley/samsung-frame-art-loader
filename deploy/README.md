@@ -84,12 +84,14 @@ than by running it:
 - **Building the art client now performs blocking network I/O** and raises when
   the set is unreachable, where it used to defer that to first use.
 - **Deletion is confirmed against the television's own content list**, and the
-  loader now says which of three things happened. Removed: an ordinary INFO line
-  with the confirmed count. Refused — the set still lists them: a WARNING naming
-  the images. **Unconfirmable** — the removal was sent and the list could not be
-  read back: an ERROR, and the run *continues*, because stopping there would skip
-  the catalogue save and every pending upload to prevent some leftover images.
-  That third case is the only one that used to be indistinguishable from success.
+  loader now says which of three things happened. *Removed* — an ordinary INFO
+  line with the confirmed count. *Still listed* — the set kept them: a WARNING
+  naming the images. ***Unconfirmable*** — nobody could establish which of those
+  it is, whether because the set refused the request or because its list could
+  not be read back: an ERROR, and the run *continues*, because stopping there
+  would skip the catalogue save and every pending upload to prevent some leftover
+  images. That third case is the one that used to be indistinguishable from
+  success.
 
 **The code and the pins can be deployed independently**, which is what makes this
 safe to land ahead of the hardware pass. `tvart.py` calls only shapes that both

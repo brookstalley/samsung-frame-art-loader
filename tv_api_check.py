@@ -24,7 +24,7 @@ import time
 
 import requests
 from samsungtvws.async_art import SamsungTVAsyncArt
-from samsungtvws.exceptions import HttpApiError, ResponseError
+from samsungtvws.exceptions import ConnectionFailure, HttpApiError, ResponseError
 
 import config
 from tv_delete import UPLOADED_CATEGORY, DeleteNotConfirmed, delete_list_confirmed
@@ -263,11 +263,12 @@ async def guarded(report: Report, name: str, coroutine):
     otherwise take the callback and confirmed-delete findings with it and cost a
     second trip, so an unexpected exception is recorded as a finding and the run
     continues. `AssertionError` is in the list on purpose: it is how this library
-    reports a timed-out request.
+    reports a timed-out request. `OSError` is what covers the builtin
+    `TimeoutError` a websocket open raises against its `open_timeout`.
     """
     try:
         return await coroutine
-    except (OSError, AssertionError, KeyError, ResponseError, HttpApiError, DeleteNotConfirmed) as err:
+    except (OSError, AssertionError, KeyError, ResponseError, HttpApiError, ConnectionFailure, DeleteNotConfirmed) as err:
         report.fail(name, f"raised {type(err).__name__}: {err}")
         return None
 
@@ -283,7 +284,18 @@ async def run(args) -> int:
         print(f"\n{len(report.lines)} checks, 1 failed")
         return 1
 
-    await tv_art.start_listening()
+    # Guarded like everything else. A set that completes the TCP handshake and
+    # then goes quiet gets past construction and stalls here instead, on the art
+    # websocket — and an unguarded traceback at this line would cost the summary,
+    # the exit path, and the connection close, for the same fault one call later.
+    await guarded(report, "listening", tv_art.start_listening())
+    if report.failed:
+        # Only the listening guard can have failed by here — construction's
+        # failure returned above, and nothing else has run.
+        await tv_art.close()
+        print(f"\n{len(report.lines)} checks, 1 failed")
+        return 1
+
     content_id = None
     try:
         await guarded(report, "identity", check_identity(tv_art, report))

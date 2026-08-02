@@ -99,8 +99,13 @@ async def delete_list_confirmed(tv_art, content_ids, category: str = UPLOADED_CA
         # already changed once in this library's history and is not ours to
         # depend on. Every one of them means the same thing here, and naming a
         # subset is how the ones left out become an abort in the caller.
+        # The cause goes in the message, not only in `__cause__`: this is read
+        # from the journal of an unattended loader, and `str(exception)` never
+        # renders a chained cause. Without it every failure reads alike, and a
+        # TypeError from this repo would look like a television that timed out.
         raise DeleteNotConfirmed(
-            f"asked the television to remove {len(requested)} image(s) and could not establish what it holds"
+            f"asked the television to remove {len(requested)} image(s) and could not establish what it holds "
+            f"({type(err).__name__}: {err})"
         ) from err
 
     still_listed = {entry["content_id"] for entry in remaining}

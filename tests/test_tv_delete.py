@@ -156,9 +156,9 @@ def test_a_removal_request_the_set_refuses_is_unknown_too():
 
 
 def test_a_refused_removal_request_does_not_stop_the_caller(caplog):
-    """The path R-1 of the resolution round found: `remove_from_tv` guarded the
-    unreadable-list case and not the refused-request case, so a refusal aborted
-    the housekeeping pass before it could save or upload."""
+    """A refusal reaches the caller by a different door from an unreadable list,
+    and an earlier version of this guard covered only the second — so a refused
+    removal aborted the housekeeping pass before it could save or upload."""
 
     class ResponseError(Exception):
         pass
@@ -263,3 +263,34 @@ def test_the_three_outcomes_read_differently():
     unknown = describe_removal(None, 1)
 
     assert len({complete, kept, unknown}) == 3
+
+
+def test_the_reason_reaches_the_log_and_not_only_the_chain(caplog):
+    """`str()` of an exception never renders `__cause__`, and an unattended
+    loader is read through its journal. Without the cause in the message every
+    failure reads alike — including a defect in this repo, which would look like
+    a television that timed out and be continued past."""
+
+    class ResponseError(Exception):
+        pass
+
+    tv = FakeTv(listed=["MY-C0002-1"], confirm_raises=ResponseError("error number 3"))
+
+    with caplog.at_level(logging.ERROR):
+        asyncio.run(remove_from_tv(tv, ["MY-C0002-1"]))
+
+    logged = "\n".join(r.getMessage() for r in caplog.records if r.levelno == logging.ERROR)
+    assert "ResponseError" in logged, "the cause's type must survive into the log line"
+    assert "error number 3" in logged
+
+
+def test_a_defect_in_this_repo_is_not_dressed_up_as_a_television_fault(caplog):
+    """The cost of catching every cause is that they all look alike unless the
+    message says otherwise. A TypeError is ours, not the set's."""
+    tv = FakeTv(listed=["MY-C0002-1"], confirm_raises=TypeError("available() got an unexpected keyword"))
+
+    with caplog.at_level(logging.ERROR):
+        asyncio.run(remove_from_tv(tv, ["MY-C0002-1"]))
+
+    logged = "\n".join(r.getMessage() for r in caplog.records if r.levelno == logging.ERROR)
+    assert "TypeError" in logged

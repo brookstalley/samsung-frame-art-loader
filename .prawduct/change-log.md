@@ -79,8 +79,9 @@ one on its event loop.
 **Deletion now reports what the set holds.** `tv_delete.delete_list_confirmed`
 verifies against the television's own content list and keeps three outcomes apart
 — gone, still listed, and unconfirmable — because collapsing them is the defect
-this replaces. A removal the set refuses is a WARNING naming the images, so it
-cannot go unreported even where a caller drops the result.
+this replaces. Images the set kept are a WARNING naming them, so the outcome
+cannot go unreported even where a caller drops the result; a removal nobody could
+confirm either way is an ERROR that does not stop the caller's remaining work.
 
 **Also found while verifying, and filed rather than fixed:** `requirements.txt`
 cannot stand up a working legacy environment — `art.py` imports `cairo` and `gi`,
