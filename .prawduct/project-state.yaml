@@ -1713,6 +1713,17 @@ technical_decisions:
         drift from a local tally; and per-generation `cost` covers "what did this
         run cost". The UX need survives without owning a meter that can lie.
 
+        CORRECTED 2026-08-02, on the half that measurement reached: "authoritative"
+        was too strong. The figure cannot drift from a LOCAL TALLY — that part
+        stands and is the corollary's whole point — but it lags the provider's own
+        enforcement by minutes, and was observed reporting credit remaining while
+        live calls were already being refused. So it is authoritative about the
+        account and not about whether the next call will succeed. The decision
+        itself is unaffected (a provider-enforced ceiling is still right, and
+        `halted_by_budget` still derives from the refusal); what changes is that
+        showing this number to an operator needs a caveat, which is now an open
+        question rather than an assumed deliverable.
+
         Two residuals recorded rather than waved past: the reset is midnight UTC
         (so "month" is the UTC calendar month, not local), and a 402 arrives
         mid-run, so a run can halt partially — which the error model already
@@ -2054,6 +2065,29 @@ design_decisions:
 #   priority: high | medium | low
 
 open_questions:
+  - question: "Should the health panel surface `limit_remaining` at all, and if so with what caveat?"
+    blocking: "Chunk 19's health-panel half. Nothing before it — no surface reads the figure today."
+    waiting_on: operator
+    priority: medium
+    # RAISED 2026-08-02 by Critic verify-resolutions. The ratified corollary in
+    # nonfunctional-requirements.md § Direction says "budget remaining" is read from
+    # the authority (GET /api/v1/key -> limit_remaining), never from a local tally.
+    # That corollary answers WHERE the number comes from and is not in question.
+    # What is in question is whether to SHOW it, because two facts sit against it:
+    # nothing outside the OpenRouter client and its tests reads it today, and it
+    # lags by minutes — it was observed reporting credit remaining while live calls
+    # were already being refused. A panel built naively on it tells the operator
+    # they have money at the exact moment spending stops working.
+    #
+    # The options: (a) do not surface it — per-run spend and halted_by_budget carry
+    # the signal honestly; (b) surface it with the lag stated on screen, as an
+    # advisory figure rather than a budget indicator; (c) surface it plainly, per
+    # the corollary as written.
+    #
+    # Recorded as a question rather than settled because observability-strategy.md
+    # briefly asserted "do not ship it as the budget signal" — new normative content
+    # in an artifact that does not own the norm, against a ratified corollary. That
+    # is an amendment, and amendments are the owner's.
   - question: "Which specific cheap vision model handles mat-colour selection?"
     blocking: "Nothing structural — the two-tier model split is decided; only the specific model is open."
     waiting_on: research
@@ -2590,7 +2624,7 @@ api_versioning_decided: "none — no version negotiation. MCP tool names frozen,
 # backlog_prefixes: []
 # backlog_external_imports: []
 
-backlog_last_groomed_at: 2026-08-01
+backlog_last_groomed_at: 2026-08-02
 
 # -----------------------------------------------------------------------------
 # BACKLOG SERVICE CUTOVER (API §2.4)

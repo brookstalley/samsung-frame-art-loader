@@ -58,8 +58,8 @@ artifact for the *concept*; use grep only as the cheap first pass, never as the
 check that closes the sweep.
 
 **Structural escalation, per the learning lifecycle. The count is the argument, so
-keep it current: SEVENTEEN recurrences across six sessions as of 2026-08-02**
-(entries 1–15 below; entries 6 and 14 each cover two). All but one were caught by
+keep it current: EIGHTEEN recurrences across six sessions as of 2026-08-02**
+(entries 1–16 below; entries 6 and 14 each cover two). All but one were caught by
 the Critic — the eleventh by a requested design-checkpoint review (entry 10) — and
 none by the author's own sweep-closing check, across at least five distinct causes —
 literal-text survival, paraphrase, excluding one's own edited files, consuming
@@ -219,6 +219,14 @@ the backlog is part of its sweep set.**
     `project-state.yaml` decision record. Fourth recurrence for a Python-version
     claim specifically, which is the tell: the same claim keeps going stale because
     it was written down nine times.
+
+16. **2026-08-02, eighteenth recurrence — in the commit that added entry 15.** The
+    same pass fixed the two `limit_remaining` sites a finding named and missed four
+    more, including one 175 lines below the correction *in the same file* and a
+    build-plan deliverable in a file that commit was already editing for an
+    unrelated sweep. Caught by the verify-resolutions round. Entry 15 above, written
+    in that commit, is the escalation arguing that attention has stopped working;
+    it did not survive its own commit.
 
 **The correction that follows: stop sweeping a duplicated claim, stop duplicating
 it.** Every remedy above escalates *how well you look* — grep, then walk the

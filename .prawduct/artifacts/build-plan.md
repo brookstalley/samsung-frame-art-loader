@@ -1662,7 +1662,12 @@ binds already exists and is contract-tested.
   before and after); and the review grid (image-forward, one card per work,
   **alternates behind it** — 10B's grid shows accepted works only, with no
   alternates to stack). It also completes the health panel 10B started, adding
-  `limit_remaining` and backup age (fed by Chunk 20).
+  backup age (fed by Chunk 20) and **whatever the open question on `limit_remaining`
+  resolves to** — this line used to name that field as a deliverable outright, but
+  the figure lags badly enough to read non-zero while calls are already refused, so
+  shipping it unqualified would build the misleading panel. Resolve the question
+  (`project-state.yaml` → `open_questions`) before building this half; if the
+  answer is to show it, it carries its lag on screen.
   **What 10B already delivered — the work grid, work detail, themes, the manifest
   view with its exclusion reasons, and heartbeat age — is not rebuilt here.**
   The pre-UI governance checkpoint disposed issues #2 (design system) and #10 (MCP

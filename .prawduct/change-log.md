@@ -149,6 +149,29 @@ pinned, because pinning a transitive git URL against the parent's own unpinned
 declaration is resolver behaviour to verify on hardware, and the panel is off the
 bench.
 
+**The verify round then caught the sweep failing inside this very commit.** Seven
+of eight warnings verified fixed; `limit_remaining` did not. The two sites the
+finding named were corrected and four more were not — one of them 175 lines below
+the new correction *in the same file*, and one a Chunk 19 deliverable in
+`build-plan.md`, a file this commit was already editing for the unrelated
+`3tears-models` sweep. The learning entry added here argues that attention has
+stopped working as a remedy; it did not survive its own commit. That is the
+eighteenth recurrence and the sharpest evidence yet, so it is recorded as such
+rather than quietly folded into the fix.
+
+**And the fix itself had overreached.** "Do not ship it as the budget signal" is
+new normative content, asserted in an artifact that does not own the norm, against
+a *ratified* corollary in `nonfunctional-requirements.md` § Direction naming
+`limit_remaining` as where budget-left comes from. Two separable things had been
+run together: **where the number comes from if shown** — the corollary, untouched,
+still authority-not-local-tally — and **whether to show it at all**, which the
+measurement bears on and which is nobody's call but the operator's. It is now an
+open question with its three options recorded, the ratified norm carries a pointer
+to it rather than an edit, and Chunk 19's deliverable says "whatever the question
+resolves to" instead of naming the field. Amending a ratified norm to match one's
+own conclusion is the tell this project's norm lifecycle exists to catch, and it
+was caught.
+
 Both suites green, evidence recorded against this tree rather than an earlier
 session's — which was itself one of the warnings.
 

@@ -47,6 +47,14 @@ unbounded bill.
 > counter would be a second source of truth for a number the provider already owns
 > authoritatively, and the two would drift.
 >
+> *(Unchanged, and deliberately: this says where the number comes from **if** it is
+> shown. Whether to show `limit_remaining` on the health panel is a separate,
+> open question as of 2026-08-02 — it lags the provider's own enforcement by
+> minutes and was observed reporting credit remaining while calls were already
+> being refused. See `project-state.yaml` → `open_questions`. Answering that
+> question "no" would not touch this corollary; answering it "yes" makes the lag
+> something the surface has to state.)*
+>
 > **Scope note:** this norm governs *ceilings*, not *budgeting*. A per-run search
 > cap (below, under Cost) is application-enforced and does not depart from this —
 > it bounds one run's ambition, it is not the thing that stops the bill.

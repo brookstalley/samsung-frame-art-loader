@@ -36,14 +36,18 @@ reader should not conclude these were forgotten.
 > read "**Yes** — read from the authority | `GET /api/v1/key` → `limit_remaining`".
 > No surface exposes that figure: the client can read it, and nothing in the
 > services, HTTP or MCP layers calls the reader. More importantly it should not be
-> the budget indicator even once something does — it lags by minutes, and was
-> observed reporting credit remaining while live calls were already being refused.
-> A panel built from it would tell the operator they had money at the exact moment
-> spending stopped working. **Do not ship it as the budget signal**; the honest
-> ones are the recorded per-run spend and the `halted_by_budget` outcome. Surfacing
-> it as a lagging advisory figure is a decision someone may still make — with the
-> lag stated on screen. (`operational-spec.md` § Troubleshooting corrected the same
-> claim the same day; this artifact was the copy that sweep did not reach.)
+> the budget indicator on its own even once something does — it lags by minutes,
+> and was observed reporting credit remaining while live calls were already being
+> refused. A panel built naively from it would tell the operator they had money at
+> the exact moment spending stopped working. The signals that do not have that
+> failure mode are recorded per-run spend and the `halted_by_budget` outcome.
+> **Whether to surface it anyway, as a lagging advisory figure with the lag stated
+> on screen, is an open question for the operator** — see § Spend as an
+> Observability Signal below, and `project-state.yaml` → `open_questions`. It is
+> not settled here, because the norm that governs it lives in
+> `nonfunctional-requirements.md` § Direction and was ratified.
+> (`operational-spec.md` § Troubleshooting corrected the same claim the same day;
+> this artifact was the copy that sweep did not reach.)
 
 **Both planes use stdlib `logging`, and neither takes a dependency for it.**
 
@@ -207,11 +211,27 @@ the session, which is what makes self-announcing failures self-announcing.
 Spend is a *signal* here, not only a cost control: the hard cap cannot be trusted
 to fail closed without something reading it.
 
-**Read from the authority, never from a local tally.** `limit_remaining` from
-`GET /api/v1/key` is the budget-left number, and per-generation `cost` is the
-actual spend for a run. A local counter would be a second source of truth for a
-number the provider owns, and the two would drift — which is the reasoning behind
-the ratified provider-enforced-ceilings norm.
+**Read from the authority, never from a local tally.** Per-generation `cost` is
+the actual spend for a run, and `limit_remaining` from `GET /api/v1/key` is the
+provider's own figure for budget left. A local counter would be a second source of
+truth for a number the provider owns, and the two would drift — which is the
+reasoning behind the ratified provider-enforced-ceilings norm.
+
+> **`limit_remaining` is not surfaced today, and there is an open question about
+> whether it should be (raised 2026-08-02).** Two measured facts sit against it:
+> nothing outside the client and its tests reads it, and it lags by minutes — it
+> was observed reporting credit remaining while live calls were already being
+> refused. A panel built naively on it would tell the operator they had money at
+> the moment spending stopped working.
+>
+> This does **not** overturn the corollary above, which is a ratified norm owned by
+> `nonfunctional-requirements.md` § Direction and is not this artifact's to amend.
+> The corollary answers "where does budget-left come from if you show it" —
+> authority, never a local tally — and that answer is untouched. The open question
+> is the separate one of **whether to show it at all, and with what caveat**; it is
+> recorded in `project-state.yaml` → `open_questions` and is the operator's call.
+> Until it is answered, the honest budget signals are recorded per-run spend and
+> the `halted_by_budget` outcome.
 
 Surfaced in two places: before a run (the estimate, so the curator can decline)
 and after (the actual). `halted_by_budget` is a first-class outcome that must be
