@@ -471,12 +471,16 @@ def test_a_re_search_is_not_granted_the_flat_phase_one_allowance(runner, service
 def test_a_catalogue_fault_while_settling_ends_the_run_rather_than_hanging_it(services, engine, settings, monkeypatch):
     """The worker's guard has to cover where the record layer is actually touched.
 
-    Recording spend and settling the work list are where an ordinary
-    infrastructure fault arrives — a locked or full catalogue file — and
-    `_settle` expects only `ServiceError`. Left outside the worker-boundary
-    catch, anything else escaping there leaves the run in `resolving_works` with
-    nothing working on it for the life of the process: the same phantom hang the
+    `_settle` expects only `ServiceError`, so a refusal of any other type at
+    settling time escapes unless the guard covers it — leaving the run in
+    `resolving_works` with nothing working on it, the same phantom hang the
     engine's own half is guarded against, one exception class over.
+
+    **The fault here is transient, and that is the case this covers.** A single
+    failed write is survivable because ending the run is a write that then
+    succeeds. A *sustained* outage is not, and no in-process handler could make
+    it so — ending a run is itself a record-layer call, so startup
+    reconciliation is the answer there, not a wider catch.
     """
     runner = DiscoveryRunner(services.discovery, engine, settings.discovery_settings, spawn=lambda work: work())
 

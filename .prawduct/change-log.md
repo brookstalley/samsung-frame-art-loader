@@ -116,6 +116,27 @@ artist keyed identically to an artist actually named "Unattributed".
 modules behind the seam are parsed and refused any import that could open a
 socket. Planted a violation and watched it fail before believing it.
 
+**The review took three passes, and the shape of what each caught is the useful
+part.** The cumulative round returned one blocking finding, seven warnings and
+seven notes. The blocking one was a defect already fixed uncommitted — the
+reviewer said so and told the builder to commit rather than rewrite. What the
+following passes found was the *same defect twice more, migrating*: first the
+guard covered the engine call but not the settling that followed it, so an
+ordinary catalogue fault reproduced the identical hang one exception class over;
+then, once guarded, the comment describing the guard claimed to survive a
+sustained outage it cannot, because ending a run is itself a write. Each round
+found a smaller version of the same thing, which is what a defect looks like on
+the way out.
+
+Two findings are worth carrying beyond this chunk. The `mcp>=1.27` floor had
+never been checked against the code: `app.py` passes `session_idle_timeout`,
+confirmed only at 1.28.1, so any resolve below the lock raised at application
+build and every request failed. And closing it took two attempts — the finding
+said *grep*, the first fix edited the three files already open, and `build-plan.md`
+still carried the old floor in two places. This repo's own learning is that
+retiring a claim is a repo-wide grep, not a local edit, and the finding quoting
+it caught the builder doing the opposite.
+
 ## 2026-08-02: Backlog reconciled against the tree, and the flat-vs-package question closed
 
 **Why:** Four backlog items were carrying claims about the tree that the tree had

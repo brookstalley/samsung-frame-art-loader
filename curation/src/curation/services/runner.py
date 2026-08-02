@@ -398,13 +398,18 @@ class DiscoveryRunner:
         request = WorkListRequest(intent_text=intent_text, search_allowance=self._settings.phase1_search_allowance)
         try:
             # Recording and settling are inside the guard, not in an `else`.
-            # They are where the record layer is touched, so they are where an
-            # ordinary infrastructure fault — a locked or full catalogue file —
-            # actually arrives, and `_settle` only expects `ServiceError`.
-            # Anything else escaping from here would leave the run in
-            # `resolving_works` with nothing working on it for the life of the
-            # process: the same hang the engine's own half is guarded against,
-            # one exception class over.
+            # `_settle` expects only `ServiceError`, so any other refusal from
+            # the record layer at settling time would otherwise escape and leave
+            # the run in `resolving_works` with nothing working on it — the same
+            # hang the engine's own half is guarded against, one exception class
+            # over.
+            #
+            # **A sustained record-layer outage is not covered here, and cannot
+            # be.** Ending a run is itself a write, so if the catalogue is down
+            # the handler below fails too. That case is answered by the trace it
+            # logs first and by startup reconciliation, which moves every
+            # process-held run to `interrupted` — no in-process handler can
+            # write a failure record when the thing that records is what failed.
             produced = self._engine.enumerate_works(request)
             self._record_spend(run_id, produced.spend)
             self._settle(run_id, produced)
