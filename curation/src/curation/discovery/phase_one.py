@@ -27,10 +27,10 @@ run rather than a setting nothing honours.
 
 import json
 import logging
-import re
 from collections.abc import Mapping
 from typing import Any, Final
 
+from curation.discovery.dedup import clean_name
 from curation.discovery.engine import (
     BudgetExhausted,
     EngineFailure,
@@ -216,31 +216,12 @@ def _spend_of(completion: Completion) -> tuple[EngineSpend, ...]:
     return tuple(rows)
 
 
-#: An inline markdown link, `[text](url)`. A search-augmented answer cites as it
-#: writes, and it does not confine that to prose: real runs returned titles like
-#: `The Night Watch (...) [rijksmuseum.nl](https://...)`. Kept as the link *text*
-#: rather than dropped whole, because the visible half is usually the name.
-_MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\(\s*<?[^)\s]*>?\s*\)")
-
-#: A URL that arrived without the markdown wrapper around it.
-_BARE_URL = re.compile(r"https?://\S+")
-
-
-def _clean_name(value: str) -> str:
-    """A work's name with citation markup removed, and nothing else changed.
-
-    Only the two identity fields are cleaned. A citation inside `rationale` is
-    prose the curator benefits from, but inside a title it is neither part of the
-    name nor something the review card should render — and it corrupts the work
-    identity derived from that title, so one returning work reads as two.
-
-    Deliberately not a general sanitiser: this removes link *syntax*, not
-    punctuation, diacritics or parentheses, all of which occur in real titles.
-    """
-    return _WHITESPACE_RUN.sub(" ", _BARE_URL.sub(" ", _MARKDOWN_LINK.sub(r"\1", value))).strip()
-
-
-_WHITESPACE_RUN = re.compile(r"\s+")
+#: Cleaning the identity fields is `dedup`'s, because the work identity derived
+#: from a title is the thing most damaged by markup left in one — a citation in a
+#: title splits one returning painting into two. It is applied here as well so
+#: the value the curator reads and the value the key is built from are the same
+#: string, rather than the display keeping markup the identity had to remove.
+_clean_name = clean_name
 
 
 def _read_works(raw: object) -> tuple[ProposedWork, ...]:

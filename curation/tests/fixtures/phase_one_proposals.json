@@ -1,0 +1,904 @@
+{
+  "_comment": "Real phase-1 proposals captured 2026-08-02 from deepseek/deepseek-v4-flash with the OpenRouter web plugin at its default engine, over six realistic intents asked three times each plus three intents written to provoke the known hazards. `work` is ground truth, assigned by reading the titles as a catalogue would -- never by running a derivation over them, which would score a candidate against its own opinion. Two runs of the twenty-four failed on a truncated answer and contributed nothing.",
+  "captured": "2026-08-02",
+  "model": "deepseek/deepseek-v4-flash",
+  "search_engine": null,
+  "rows": [
+    {
+      "id": "r000",
+      "intent": "dutch_golden_age",
+      "title": "The Night Watch (Militia Company of District II under the Command of Captain Frans Banninck Cocq) [rijksmuseum.nl](https://www.rijksmuseum.nl/en/collection/object/De-Nachtwacht--3137deb45cd7765f9a76084a16c99544)",
+      "artist": "Rembrandt van Rijn",
+      "work": "night_watch"
+    },
+    {
+      "id": "r001",
+      "intent": "dutch_golden_age",
+      "title": "The Windmill at Wijk bij Duurstede",
+      "artist": "Jacob van Ruisdael",
+      "work": "windmill_wijk"
+    },
+    {
+      "id": "r002",
+      "intent": "dutch_golden_age",
+      "title": "The Large Dort",
+      "artist": "Aelbert Cuyp",
+      "work": "large_dort"
+    },
+    {
+      "id": "r003",
+      "intent": "dutch_golden_age",
+      "title": "A Panoramic View of Amsterdam looking towards the IJ",
+      "artist": "Jacob van Ruisdael",
+      "work": "panorama_amsterdam"
+    },
+    {
+      "id": "r004",
+      "intent": "dutch_golden_age",
+      "title": "The Night Watch",
+      "artist": "Rembrandt van Rijn",
+      "work": "night_watch"
+    },
+    {
+      "id": "r005",
+      "intent": "dutch_golden_age",
+      "title": "The Large Dort (A Distant View of Dordrecht, with a Milkmaid and Four Cows, and Other Figures)",
+      "artist": "Aelbert Cuyp",
+      "work": "large_dort"
+    },
+    {
+      "id": "r006",
+      "intent": "impressionist_landscape",
+      "title": "Coquelicots (The Poppies)",
+      "artist": "Claude Monet",
+      "work": "coquelicots"
+    },
+    {
+      "id": "r007",
+      "intent": "impressionist_landscape",
+      "title": "Gardener's House at Antibes",
+      "artist": "Claude Monet",
+      "work": "gardeners_house"
+    },
+    {
+      "id": "r008",
+      "intent": "impressionist_landscape",
+      "title": "Poplars on the Epte",
+      "artist": "Claude Monet",
+      "work": "poplars_epte"
+    },
+    {
+      "id": "r009",
+      "intent": "impressionist_landscape",
+      "title": "Printemps à Vétheuil",
+      "artist": "Claude Monet",
+      "work": "printemps_vetheuil"
+    },
+    {
+      "id": "r010",
+      "intent": "impressionist_landscape",
+      "title": "Printemps, saules",
+      "artist": "Claude Monet",
+      "work": "printemps_saules"
+    },
+    {
+      "id": "r011",
+      "intent": "impressionist_landscape",
+      "title": "Coquelicots",
+      "artist": "Claude Monet",
+      "work": "coquelicots"
+    },
+    {
+      "id": "r012",
+      "intent": "impressionist_landscape",
+      "title": "The Artist's Garden at Vétheuil",
+      "artist": "Claude Monet",
+      "work": "artists_garden"
+    },
+    {
+      "id": "r013",
+      "intent": "impressionist_landscape",
+      "title": "Gardener's House at Antibes",
+      "artist": "Claude Monet",
+      "work": "gardeners_house"
+    },
+    {
+      "id": "r014",
+      "intent": "impressionist_landscape",
+      "title": "Poplars on the Epte",
+      "artist": "Claude Monet",
+      "work": "poplars_epte"
+    },
+    {
+      "id": "r015",
+      "intent": "impressionist_landscape",
+      "title": "Landscape in Ile Saint-Martin",
+      "artist": "Claude Monet",
+      "work": "landscape_st_martin"
+    },
+    {
+      "id": "r016",
+      "intent": "impressionist_landscape",
+      "title": "Printemps à Vétheuil",
+      "artist": "Claude Monet",
+      "work": "printemps_vetheuil"
+    },
+    {
+      "id": "r017",
+      "intent": "impressionist_landscape",
+      "title": "Printemps, saules",
+      "artist": "Claude Monet",
+      "work": "printemps_saules"
+    },
+    {
+      "id": "r018",
+      "intent": "modern_abstract",
+      "title": "Vir Heroicus Sublimis",
+      "artist": "Barnett Newman",
+      "work": "vir_heroicus"
+    },
+    {
+      "id": "r019",
+      "intent": "modern_abstract",
+      "title": "Abstraction Blue",
+      "artist": "Georgia O'Keeffe",
+      "work": "abstraction_blue"
+    },
+    {
+      "id": "r020",
+      "intent": "modern_abstract",
+      "title": "Abstraction",
+      "artist": "Piet Mondrian",
+      "work": "mondrian_abstraction"
+    },
+    {
+      "id": "r021",
+      "intent": "modern_abstract",
+      "title": "One: Number 31, 1950",
+      "artist": "Jackson Pollock",
+      "work": "pollock_one_31"
+    },
+    {
+      "id": "r022",
+      "intent": "modern_abstract",
+      "title": "Yellow-Red-Blue",
+      "artist": "Wassily Kandinsky",
+      "work": "yellow_red_blue"
+    },
+    {
+      "id": "r023",
+      "intent": "modern_abstract",
+      "title": "Abstraktes Bild (742-4)",
+      "artist": "Gerhard Richter",
+      "work": "richter_742_4"
+    },
+    {
+      "id": "r024",
+      "intent": "modern_abstract",
+      "title": "Vir Heroicus Sublimis (1950–51)",
+      "artist": "Barnett Newman",
+      "work": "vir_heroicus"
+    },
+    {
+      "id": "r025",
+      "intent": "modern_abstract",
+      "title": "Abstraction Blue (1927)",
+      "artist": "Georgia O'Keeffe",
+      "work": "abstraction_blue"
+    },
+    {
+      "id": "r026",
+      "intent": "modern_abstract",
+      "title": "Abstraction (1939–42)",
+      "artist": "Piet Mondrian",
+      "work": "mondrian_abstraction"
+    },
+    {
+      "id": "r027",
+      "intent": "modern_abstract",
+      "title": "Yellow-Red-Blue (1925)",
+      "artist": "Wassily Kandinsky",
+      "work": "yellow_red_blue"
+    },
+    {
+      "id": "r028",
+      "intent": "modern_abstract",
+      "title": "Abstraktes Bild (742-4) (1991)",
+      "artist": "Gerhard Richter",
+      "work": "richter_742_4"
+    },
+    {
+      "id": "r029",
+      "intent": "dutch_golden_age",
+      "title": "The Night Watch",
+      "artist": "Rembrandt van Rijn",
+      "work": "night_watch"
+    },
+    {
+      "id": "r030",
+      "intent": "dutch_golden_age",
+      "title": "The Large Dort",
+      "artist": "Aelbert Cuyp",
+      "work": "large_dort"
+    },
+    {
+      "id": "r031",
+      "intent": "dutch_golden_age",
+      "title": "The Windmill at Wijk bij Duurstede",
+      "artist": "Jacob Isaacksz van Ruisdael",
+      "work": "windmill_wijk"
+    },
+    {
+      "id": "r032",
+      "intent": "dutch_golden_age",
+      "title": "A Panoramic View of Amsterdam looking towards the IJ",
+      "artist": "Jacob van Ruisdael",
+      "work": "panorama_amsterdam"
+    },
+    {
+      "id": "r033",
+      "intent": "dutch_golden_age",
+      "title": "The Windmill at Wijk bij Duurstede",
+      "artist": "Jacob Isaacksz van Ruisdael",
+      "work": "windmill_wijk"
+    },
+    {
+      "id": "r034",
+      "intent": "dutch_golden_age",
+      "title": "A Panoramic View of Amsterdam looking towards the IJ",
+      "artist": "Jacob van Ruisdael",
+      "work": "panorama_amsterdam"
+    },
+    {
+      "id": "r035",
+      "intent": "dutch_golden_age",
+      "title": "Horsemen and Herdsmen with Cattle",
+      "artist": "Aelbert Cuyp",
+      "work": "horsemen_herdsmen"
+    },
+    {
+      "id": "r036",
+      "intent": "dutch_golden_age",
+      "title": "The Large Dort (A Distant View of Dordrecht, with a Milkmaid and Four Cows, and Other Figures)",
+      "artist": "Aelbert Cuyp",
+      "work": "large_dort"
+    },
+    {
+      "id": "r037",
+      "intent": "dutch_golden_age",
+      "title": "The Great Oak",
+      "artist": "Jacob van Ruisdael",
+      "work": "great_oak"
+    },
+    {
+      "id": "r038",
+      "intent": "dutch_golden_age",
+      "title": "The Maas at Dordrecht",
+      "artist": "Aelbert Cuyp",
+      "work": "maas_dordrecht"
+    },
+    {
+      "id": "r039",
+      "intent": "dutch_golden_age",
+      "title": "The Night Watch",
+      "artist": "Rembrandt van Rijn",
+      "work": "night_watch"
+    },
+    {
+      "id": "r040",
+      "intent": "dutch_golden_age",
+      "title": "The Large Dort",
+      "artist": "Aelbert Cuyp",
+      "work": "large_dort"
+    },
+    {
+      "id": "r041",
+      "intent": "dutch_golden_age",
+      "title": "The Windmill at Wijk bij Duurstede",
+      "artist": "Jacob Isaacksz van Ruisdael",
+      "work": "windmill_wijk"
+    },
+    {
+      "id": "r042",
+      "intent": "dutch_golden_age",
+      "title": "A Panoramic View of Amsterdam looking towards the IJ",
+      "artist": "Jacob van Ruisdael",
+      "work": "panorama_amsterdam"
+    },
+    {
+      "id": "r043",
+      "intent": "dutch_golden_age",
+      "title": "Horsemen and Herdsmen with Cattle",
+      "artist": "Aelbert Cuyp",
+      "work": "horsemen_herdsmen"
+    },
+    {
+      "id": "r044",
+      "intent": "dutch_golden_age",
+      "title": "The Maas at Dordrecht",
+      "artist": "Aelbert Cuyp",
+      "work": "maas_dordrecht"
+    },
+    {
+      "id": "r045",
+      "intent": "impressionist_landscape",
+      "title": "Coquelicots (Poppies)",
+      "artist": "Claude Monet",
+      "work": "coquelicots"
+    },
+    {
+      "id": "r046",
+      "intent": "impressionist_landscape",
+      "title": "The Artist's Garden at Vétheuil",
+      "artist": "Claude Monet",
+      "work": "artists_garden"
+    },
+    {
+      "id": "r047",
+      "intent": "impressionist_landscape",
+      "title": "Gardener's House at Antibes",
+      "artist": "Claude Monet",
+      "work": "gardeners_house"
+    },
+    {
+      "id": "r048",
+      "intent": "impressionist_landscape",
+      "title": "Poplars on the Epte",
+      "artist": "Claude Monet",
+      "work": "poplars_epte"
+    },
+    {
+      "id": "r049",
+      "intent": "impressionist_landscape",
+      "title": "Printemps à Vétheuil",
+      "artist": "Claude Monet",
+      "work": "printemps_vetheuil"
+    },
+    {
+      "id": "r050",
+      "intent": "impressionist_landscape",
+      "title": "Printemps, saules (Spring, Willows)",
+      "artist": "Claude Monet",
+      "work": "printemps_saules"
+    },
+    {
+      "id": "r051",
+      "intent": "impressionist_landscape",
+      "title": "Coquelicots (Poppy Field)",
+      "artist": "Claude Monet",
+      "work": "coquelicots"
+    },
+    {
+      "id": "r052",
+      "intent": "impressionist_landscape",
+      "title": "The Artist's Garden at Vétheuil",
+      "artist": "Claude Monet",
+      "work": "artists_garden"
+    },
+    {
+      "id": "r053",
+      "intent": "impressionist_landscape",
+      "title": "Gardener's House at Antibes",
+      "artist": "Claude Monet",
+      "work": "gardeners_house"
+    },
+    {
+      "id": "r054",
+      "intent": "impressionist_landscape",
+      "title": "Poplars on the Epte",
+      "artist": "Claude Monet",
+      "work": "poplars_epte"
+    },
+    {
+      "id": "r055",
+      "intent": "modern_abstract",
+      "title": "Vir Heroicus Sublimis",
+      "artist": "Barnett Newman",
+      "work": "vir_heroicus"
+    },
+    {
+      "id": "r056",
+      "intent": "modern_abstract",
+      "title": "One: Number 31, 1950",
+      "artist": "Jackson Pollock",
+      "work": "pollock_one_31"
+    },
+    {
+      "id": "r057",
+      "intent": "modern_abstract",
+      "title": "Abstraction",
+      "artist": "Piet Mondrian",
+      "work": "mondrian_abstraction"
+    },
+    {
+      "id": "r058",
+      "intent": "modern_abstract",
+      "title": "Abstraktes Bild (742-4)",
+      "artist": "Gerhard Richter",
+      "work": "richter_742_4"
+    },
+    {
+      "id": "r059",
+      "intent": "modern_abstract",
+      "title": "Yellow-Red-Blue",
+      "artist": "Wassily Kandinsky",
+      "work": "yellow_red_blue"
+    },
+    {
+      "id": "r060",
+      "intent": "modern_abstract",
+      "title": "Vir Heroicus Sublimis (1950–51)",
+      "artist": "Barnett Newman",
+      "work": "vir_heroicus"
+    },
+    {
+      "id": "r061",
+      "intent": "modern_abstract",
+      "title": "Abstraction Blue (1927)",
+      "artist": "Georgia O'Keeffe",
+      "work": "abstraction_blue"
+    },
+    {
+      "id": "r062",
+      "intent": "modern_abstract",
+      "title": "Abstraction (1939–42)",
+      "artist": "Piet Mondrian",
+      "work": "mondrian_abstraction"
+    },
+    {
+      "id": "r063",
+      "intent": "modern_abstract",
+      "title": "One: Number 31, 1950 (1950)",
+      "artist": "Jackson Pollock",
+      "work": "pollock_one_31"
+    },
+    {
+      "id": "r064",
+      "intent": "modern_abstract",
+      "title": "Abstraktes Bild (742-4) (1991)",
+      "artist": "Gerhard Richter",
+      "work": "richter_742_4"
+    },
+    {
+      "id": "r065",
+      "intent": "modern_abstract",
+      "title": "Yellow-Red-Blue (1925)",
+      "artist": "Wassily Kandinsky",
+      "work": "yellow_red_blue"
+    },
+    {
+      "id": "r066",
+      "intent": "modern_abstract",
+      "title": "Untitled (Concentric Squares) (1960s)",
+      "artist": "Frank Stella",
+      "work": "stella_concentric"
+    },
+    {
+      "id": "r067",
+      "intent": "modern_abstract",
+      "title": "Vir Heroicus Sublimis",
+      "artist": "Barnett Newman",
+      "work": "vir_heroicus"
+    },
+    {
+      "id": "r068",
+      "intent": "modern_abstract",
+      "title": "Abstraction Blue",
+      "artist": "Georgia O'Keeffe",
+      "work": "abstraction_blue"
+    },
+    {
+      "id": "r069",
+      "intent": "modern_abstract",
+      "title": "Abstraction",
+      "artist": "Piet Mondrian",
+      "work": "mondrian_abstraction"
+    },
+    {
+      "id": "r070",
+      "intent": "modern_abstract",
+      "title": "One: Number 31, 1950",
+      "artist": "Jackson Pollock",
+      "work": "pollock_one_31"
+    },
+    {
+      "id": "r071",
+      "intent": "modern_abstract",
+      "title": "Yellow-Red-Blue",
+      "artist": "Wassily Kandinsky",
+      "work": "yellow_red_blue"
+    },
+    {
+      "id": "r072",
+      "intent": "modern_abstract",
+      "title": "Abstraktes Bild (742-4)",
+      "artist": "Gerhard Richter",
+      "work": "richter_742_4"
+    },
+    {
+      "id": "r073",
+      "intent": "japanese_prints",
+      "title": "Under the Wave off Kanagawa (Kanagawa oki nami ura), also known as The Great Wave",
+      "artist": "Katsushika Hokusai",
+      "work": "great_wave"
+    },
+    {
+      "id": "r074",
+      "intent": "japanese_prints",
+      "title": "Shoji (Sliding Doors of Katsura Imperial Villa)",
+      "artist": "Saito Kiyoshi",
+      "work": "shoji_katsura"
+    },
+    {
+      "id": "r075",
+      "intent": "japanese_prints",
+      "title": "Yahagi Bridge at Okazaki on the Tōkaidō",
+      "artist": "Katsushika Hokusai",
+      "work": "yahagi_bridge"
+    },
+    {
+      "id": "r076",
+      "intent": "japanese_prints",
+      "title": "The Outskirts of Koshigaya in Musashi Province",
+      "artist": "Utagawa Hiroshige",
+      "work": "koshigaya"
+    },
+    {
+      "id": "r077",
+      "intent": "japanese_prints",
+      "title": "Kabuki Actor Ichikawa Ebizō (Ichikawa Danjūrō V)",
+      "artist": "Tōshūsai Sharaku",
+      "work": "sharaku_ebizo"
+    },
+    {
+      "id": "r078",
+      "intent": "japanese_prints",
+      "title": "Under the Wave off Kanagawa (Kanagawa oki nami ura), also known as The Great Wave, from the series Thirty-six Views of Mount Fuji",
+      "artist": "Katsushika Hokusai",
+      "work": "great_wave"
+    },
+    {
+      "id": "r079",
+      "intent": "japanese_prints",
+      "title": "Yahagi Bridge at Okazaki on the Tōkaidō, from the series Remarkable Views of Bridges in Various Provinces",
+      "artist": "Katsushika Hokusai",
+      "work": "yahagi_bridge"
+    },
+    {
+      "id": "r080",
+      "intent": "japanese_prints",
+      "title": "The Outskirts of Koshigaya in Musashi Province, from the series Thirty-Six Views of Mount Fuji",
+      "artist": "Utagawa Hiroshige",
+      "work": "koshigaya"
+    },
+    {
+      "id": "r081",
+      "intent": "japanese_prints",
+      "title": "Fuji 87",
+      "artist": "Kunio Kaneko",
+      "work": "fuji_87"
+    },
+    {
+      "id": "r082",
+      "intent": "japanese_prints",
+      "title": "Jiko-in, Nara",
+      "artist": "Saito Kiyoshi",
+      "work": "jikoin_nara"
+    },
+    {
+      "id": "r083",
+      "intent": "japanese_prints",
+      "title": "Black night-Ginza (One Hundred Views of Tokyo, Message to the 21st Century)",
+      "artist": "Yoshisuke Funasaka",
+      "work": "black_night_ginza"
+    },
+    {
+      "id": "r084",
+      "intent": "japanese_prints",
+      "title": "May (The Pagoda of Yasaka near Gion)",
+      "artist": "Tomikichiro Tokuriki",
+      "work": "may_yasaka"
+    },
+    {
+      "id": "r085",
+      "intent": "portrait_masters",
+      "title": "Portrait of Oopjen Coppit",
+      "artist": "Rembrandt van Rijn",
+      "work": "oopjen_coppit"
+    },
+    {
+      "id": "r086",
+      "intent": "portrait_masters",
+      "title": "James Stuart (1612–1655), Duke of Richmond and Lennox",
+      "artist": "Anthony van Dyck",
+      "work": "james_stuart"
+    },
+    {
+      "id": "r087",
+      "intent": "portrait_masters",
+      "title": "Mr and Mrs Andrews",
+      "artist": "Thomas Gainsborough",
+      "work": "mr_mrs_andrews"
+    },
+    {
+      "id": "r088",
+      "intent": "portrait_masters",
+      "title": "Christina of Denmark, Duchess of Milan",
+      "artist": "Hans Holbein the Younger",
+      "work": "christina_denmark"
+    },
+    {
+      "id": "r089",
+      "intent": "portrait_masters",
+      "title": "The Nobleman with his Hand on his Chest",
+      "artist": "El Greco (Domenikos Theotokopoulos)",
+      "work": "nobleman_hand_chest"
+    },
+    {
+      "id": "r090",
+      "intent": "portrait_masters",
+      "title": "Queen Henrietta Maria with Sir Jeffrey Hudson",
+      "artist": "Anthony van Dyck",
+      "work": "henrietta_with_hudson"
+    },
+    {
+      "id": "r091",
+      "intent": "portrait_masters",
+      "title": "James Stuart (1612–1655), Duke of Richmond and Lennox, ca. 1633–35, The Metropolitan Museum of Art",
+      "artist": "Anthony van Dyck",
+      "work": "james_stuart"
+    },
+    {
+      "id": "r092",
+      "intent": "portrait_masters",
+      "title": "Portrait of Aechje Claesdr. (NG775), 1634, National Gallery, London",
+      "artist": "Rembrandt",
+      "work": "aechje_claesdr"
+    },
+    {
+      "id": "r093",
+      "intent": "portrait_masters",
+      "title": "Queen Henrietta Maria (L1361), about 1631–32, National Gallery, London",
+      "artist": "Anthony van Dyck",
+      "work": "henrietta_alone"
+    },
+    {
+      "id": "r094",
+      "intent": "portrait_masters",
+      "title": "Mr and Mrs Andrews (NG6301), about 1748‑50, National Gallery, London",
+      "artist": "Thomas Gainsborough",
+      "work": "mr_mrs_andrews"
+    },
+    {
+      "id": "r095",
+      "intent": "portrait_masters",
+      "title": "Sir Thomas More, 1527, The Frick Collection",
+      "artist": "Hans Holbein the Younger",
+      "work": "thomas_more"
+    },
+    {
+      "id": "r096",
+      "intent": "portrait_masters",
+      "title": "Portrait of Gerolamo (?) Barbarigo (NG1944), early 1510s, National Gallery, London",
+      "artist": "Titian (Tiziano Vecellio)",
+      "work": "barbarigo"
+    },
+    {
+      "id": "r097",
+      "intent": "portrait_masters",
+      "title": "The Nobleman with his Hand on his Chest (P000809), ca. 1580, Museo del Prado",
+      "artist": "El Greco (Domenikos Theotokopoulos)",
+      "work": "nobleman_hand_chest"
+    },
+    {
+      "id": "r098",
+      "intent": "portrait_masters",
+      "title": "Marchesa Brigida Spinola Doria, 1606, National Gallery of Art, Washington",
+      "artist": "Peter Paul Rubens",
+      "work": "marchesa_spinola"
+    },
+    {
+      "id": "r099",
+      "intent": "portrait_masters",
+      "title": "Queen Henrietta Maria with Sir Jeffrey Hudson (1633), National Gallery of Art, Washington",
+      "artist": "Anthony van Dyck",
+      "work": "henrietta_with_hudson"
+    },
+    {
+      "id": "r100",
+      "intent": "portrait_masters",
+      "title": "James Stuart (1612–1655), Duke of Richmond and Lennox (ca. 1633–35)",
+      "artist": "Anthony van Dyck",
+      "work": "james_stuart"
+    },
+    {
+      "id": "r101",
+      "intent": "portrait_masters",
+      "title": "Portrait of Gerolamo (?) Barbarigo",
+      "artist": "Titian",
+      "work": "barbarigo"
+    },
+    {
+      "id": "r102",
+      "intent": "portrait_masters",
+      "title": "Sir Thomas More",
+      "artist": "Hans Holbein the Younger",
+      "work": "thomas_more"
+    },
+    {
+      "id": "r103",
+      "intent": "portrait_masters",
+      "title": "The Nobleman with his Hand on his Chest (ca. 1580)",
+      "artist": "El Greco",
+      "work": "nobleman_hand_chest"
+    },
+    {
+      "id": "r104",
+      "intent": "american_modern",
+      "title": "Manhattan (1932) – [americanart.si.edu](https://americanart.si.edu/artwork/manhattan-34289)",
+      "artist": "Georgia O'Keeffe",
+      "work": "manhattan"
+    },
+    {
+      "id": "r105",
+      "intent": "american_modern",
+      "title": "City Night (1926) – [collections.artsmia.org](https://collections.artsmia.org/art/2725/city-night-georgia-okeeffe)",
+      "artist": "Georgia O'Keeffe",
+      "work": "city_night"
+    },
+    {
+      "id": "r106",
+      "intent": "american_modern",
+      "title": "The City from Greenwich Village (1922) – [nga.gov](https://www.nga.gov/collection/art-object-page.52079.html)",
+      "artist": "John Sloan",
+      "work": "greenwich_village"
+    },
+    {
+      "id": "r107",
+      "intent": "american_modern",
+      "title": "Radiator Bldg – Night, New York (1927) – [access-ok.okeeffemuseum.org](https://access-ok.okeeffemuseum.org/object/8647/)",
+      "artist": "Georgia O'Keeffe",
+      "work": "radiator_bldg"
+    },
+    {
+      "id": "r108",
+      "intent": "american_modern",
+      "title": "New York Waterfront (1938) – [buffaloakg.org](https://buffaloakg.org/artworks/rca19436-new-york-waterfront)",
+      "artist": "Stuart Davis",
+      "work": "ny_waterfront"
+    },
+    {
+      "id": "r109",
+      "intent": "american_modern",
+      "title": "East River from the 30th Story of the Shelton Hotel (1928) – [access-ok.okeeffemuseum.org](https://access-ok.okeeffemuseum.org/object/8683/)",
+      "artist": "Georgia O'Keeffe",
+      "work": "east_river_shelton"
+    },
+    {
+      "id": "r110",
+      "intent": "american_modern",
+      "title": "The Brooklyn Bridge: Variation on an Old Theme (1939) – [whitney.org](https://whitney.org/collection/works/2968)",
+      "artist": "Joseph Stella",
+      "work": "brooklyn_bridge"
+    },
+    {
+      "id": "r111",
+      "intent": "american_modern",
+      "title": "The Shelton with Sunspots, N.Y. (1926) – [artic.edu](https://www.artic.edu/artworks/104031/the-shelton-with-sunspots-n-y)",
+      "artist": "Georgia O'Keeffe",
+      "work": "shelton_sunspots"
+    },
+    {
+      "id": "r112",
+      "intent": "american_modern",
+      "title": "Early Sunday Morning (1930) – [whitney.org](https://whitney.org/collection/works/46345)",
+      "artist": "Edward Hopper",
+      "work": "early_sunday"
+    },
+    {
+      "id": "r113",
+      "intent": "american_modern",
+      "title": "A Street (1926) – [access-ok.okeeffemuseum.org](https://access-ok.okeeffemuseum.org/object/71/)",
+      "artist": "Georgia O'Keeffe",
+      "work": "a_street"
+    },
+    {
+      "id": "r114",
+      "intent": "american_modern",
+      "title": "Manhattan",
+      "artist": "Georgia O'Keeffe",
+      "work": "manhattan"
+    },
+    {
+      "id": "r115",
+      "intent": "american_modern",
+      "title": "City Night",
+      "artist": "Georgia O'Keeffe",
+      "work": "city_night"
+    },
+    {
+      "id": "r116",
+      "intent": "american_modern",
+      "title": "Radiator Bldg – Night, New York",
+      "artist": "Georgia O'Keeffe",
+      "work": "radiator_bldg"
+    },
+    {
+      "id": "r117",
+      "intent": "american_modern",
+      "title": "East River from the 30th Story of the Shelton Hotel",
+      "artist": "Georgia O'Keeffe",
+      "work": "east_river_shelton"
+    },
+    {
+      "id": "r118",
+      "intent": "american_modern",
+      "title": "The Shelton with Sunspots, N.Y.",
+      "artist": "Georgia O'Keeffe",
+      "work": "shelton_sunspots"
+    },
+    {
+      "id": "r119",
+      "intent": "american_modern",
+      "title": "A Street",
+      "artist": "Georgia O'Keeffe",
+      "work": "a_street"
+    },
+    {
+      "id": "r120",
+      "intent": "american_modern",
+      "title": "New York Waterfront",
+      "artist": "Stuart Davis",
+      "work": "ny_waterfront"
+    },
+    {
+      "id": "r121",
+      "intent": "american_modern",
+      "title": "The Brooklyn Bridge: Variation on an Old Theme",
+      "artist": "Joseph Stella",
+      "work": "brooklyn_bridge"
+    },
+    {
+      "id": "r122",
+      "intent": "american_modern",
+      "title": "Early Sunday Morning",
+      "artist": "Edward Hopper",
+      "work": "early_sunday"
+    },
+    {
+      "id": "r123",
+      "intent": "american_modern",
+      "title": "Manhattan",
+      "artist": "Georgia O'Keeffe",
+      "work": "manhattan"
+    },
+    {
+      "id": "r124",
+      "intent": "american_modern",
+      "title": "City Night",
+      "artist": "Georgia O'Keeffe",
+      "work": "city_night"
+    },
+    {
+      "id": "r125",
+      "intent": "american_modern",
+      "title": "New York Waterfront",
+      "artist": "Stuart Davis",
+      "work": "ny_waterfront"
+    },
+    {
+      "id": "r126",
+      "intent": "american_modern",
+      "title": "Early Sunday Morning",
+      "artist": "Edward Hopper",
+      "work": "early_sunday"
+    },
+    {
+      "id": "r127",
+      "intent": "american_modern",
+      "title": "The Brooklyn Bridge: Variation on an Old Theme",
+      "artist": "Joseph Stella",
+      "work": "brooklyn_bridge"
+    }
+  ]
+}

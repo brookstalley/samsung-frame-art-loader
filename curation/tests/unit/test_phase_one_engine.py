@@ -317,10 +317,48 @@ def test_a_title_arriving_with_a_markdown_citation_keeps_only_the_name():
     produced = engine_over(responding(answer)).enumerate_works(asked())
 
     assert produced.works[0].title == (
-        "The Night Watch (Militia Company of District II under the Command of Captain Frans Banninck Cocq) rijksmuseum.nl"
+        "The Night Watch (Militia Company of District II under the Command of Captain Frans Banninck Cocq)"
     )
     assert "http" not in produced.works[0].title
     assert "](" not in produced.works[0].title
+
+
+def test_a_citation_whose_text_is_a_host_is_dropped_rather_than_kept():
+    """Measured across 128 captured proposals: every citation reaching a title
+    field had a hostname as its visible text, and none was part of the name.
+
+    Keeping that half is worse than either alternative. `Manhattan (1932) -
+    americanart.si.edu` is not the title, and the date it strands is no longer
+    trailing — so a later rule that reads a trailing date cannot reach it, and
+    the work stays split from the same painting proposed without a citation.
+    """
+    answer = {
+        "strategy": "s",
+        "works": [
+            {
+                "title": "Manhattan (1932) – [americanart.si.edu](https://americanart.si.edu/artwork/manhattan-34289)",
+                "artist": "Georgia O'Keeffe",
+                "rationale": "r",
+            }
+        ],
+    }
+
+    produced = engine_over(responding(answer)).enumerate_works(asked())
+
+    assert produced.works[0].title == "Manhattan (1932)", "the separator the citation hung on goes with it"
+
+
+def test_a_citation_whose_text_is_words_keeps_those_words():
+    """A model that wrapped the name itself must not have it deleted — the title
+    would be empty and the work would be dropped as unrecordable."""
+    answer = {
+        "strategy": "s",
+        "works": [{"title": "[The Night Watch](https://example.org/nw)", "artist": "Rembrandt", "rationale": "r"}],
+    }
+
+    produced = engine_over(responding(answer)).enumerate_works(asked())
+
+    assert produced.works[0].title == "The Night Watch"
 
 
 def test_a_bare_url_in_an_artist_is_removed_too():
