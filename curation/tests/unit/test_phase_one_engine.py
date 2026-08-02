@@ -224,6 +224,56 @@ def test_an_answer_that_cannot_be_read_still_reports_what_it_cost():
     assert sum(entry.cost_usd for entry in raised.value.spend) == Decimal("0.001")
 
 
+def test_an_answer_cut_off_mid_json_is_reported_as_truncation_not_as_bad_json():
+    """Observed in real runs, twice in thirteen: the work list ran past the
+    output reservation and arrived valid up to the character it was cut at.
+
+    Reported as a parse error alone it reads as the model emitting malformed
+    JSON, which is not actionable and is not what happened. The reservation is
+    the setting that fixes it, and the finish reason is what distinguishes the
+    two — so the failure has to carry it.
+    """
+    truncated = json.dumps(ANSWER)[:60]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "deepseek/deepseek-v4-flash",
+                "choices": [{"finish_reason": "length", "message": {"content": truncated}}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 8000, "cost": 0.002, "cost_details": {}},
+            },
+        )
+
+    with pytest.raises(EngineFailure) as raised:
+        engine_over(handler).enumerate_works(asked())
+
+    assert "'length'" in str(raised.value), "the reason it stopped is what makes this diagnosable"
+    assert "cut off rather than malformed" in str(raised.value)
+    assert sum(entry.cost_usd for entry in raised.value.spend) == Decimal("0.002"), "a truncated answer was still billed"
+
+
+def test_genuinely_malformed_json_does_not_claim_it_was_truncated():
+    """The mirror case, so the diagnosis distinguishes rather than always blaming
+    the reservation: a model that stopped normally and still emitted unreadable
+    JSON has a different problem and raising the reservation will not fix it."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "model": "deepseek/deepseek-v4-flash",
+                "choices": [{"finish_reason": "stop", "message": {"content": "{oh dear"}}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.001, "cost_details": {}},
+            },
+        )
+
+    with pytest.raises(EngineFailure) as raised:
+        engine_over(handler).enumerate_works(asked())
+
+    assert "'stop'" in str(raised.value)
+
+
 # -- unusable entries -----------------------------------------------------------
 
 

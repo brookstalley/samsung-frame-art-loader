@@ -140,20 +140,28 @@ class OpenRouterEngine:
             # Usually the output reservation being reached before anything was
             # emitted. Named rather than reported as a bare parse failure,
             # because `DISCOVERY_MAX_OUTPUT_TOKENS` is the setting that fixes it.
-            because = (
-                f"the model stopped on {completion.finish_reason!r}"
-                if completion.finish_reason
-                else "the provider gave no reason"
-            )
             raise EngineFailure(
-                f"Phase 1 returned an empty answer ({because}). If it stopped on 'length', the output "
-                "reservation is too small for a work list of this size.",
+                f"Phase 1 returned an empty answer ({_why_it_stopped(completion)}). If it stopped on 'length', "
+                "the output reservation is too small for a work list of this size.",
                 spend=spend,
             )
         try:
             parsed = json.loads(completion.content)
         except json.JSONDecodeError as exc:
-            raise EngineFailure(f"Phase 1's answer was not the JSON its schema required: {exc}", spend=spend) from exc
+            # A truncated answer is well-formed right up to where it was cut, so
+            # it arrives as a decode error at the final character — which reads as
+            # the model emitting bad JSON when in fact it emitted good JSON and
+            # was stopped. The two have different fixes and only one of them is
+            # actionable, so the reason it stopped is named here for the same
+            # reason it is named above. Truncation is the commoner case of the
+            # two: reaching the reservation *after* writing is far likelier than
+            # reaching it before.
+            raise EngineFailure(
+                f"Phase 1's answer was not the JSON its schema required ({_why_it_stopped(completion)}): {exc}. "
+                "If it stopped on 'length', the answer was cut off rather than malformed, and the output "
+                "reservation is too small for a work list of this size.",
+                spend=spend,
+            ) from exc
         if not isinstance(parsed, dict):
             raise EngineFailure(f"Phase 1 answered with {type(parsed).__name__}, not an object.", spend=spend)
 
@@ -261,6 +269,18 @@ def _read_works(raw: object) -> tuple[ProposedWork, ...]:
             continue
         works.append(ProposedWork(title=title, rationale=rationale, artist=artist or None))
     return tuple(works)
+
+
+def _why_it_stopped(completion: Completion) -> str:
+    """Why generation ended, in words, or that the provider did not say.
+
+    Shared by both unreadable-answer paths so they cannot drift into describing
+    the same event differently — the empty answer and the answer cut off mid-JSON
+    are one cause reaching the reader at two different points.
+    """
+    if completion.finish_reason:
+        return f"the model stopped on {completion.finish_reason!r}"
+    return "the provider gave no reason"
 
 
 def _read_strategy(raw: object) -> str | None:
