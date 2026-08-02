@@ -17,12 +17,16 @@ Three outcomes are kept apart, because collapsing them is the whole defect:
 * the TV still lists some of them — `DeleteResult.surviving` names which, and a
   WARNING is logged by this module so the outcome cannot go unreported even if a
   caller ignores the return value
-* the list could not be read at all — `DeleteNotConfirmed`, the *unknown* state,
-  where reporting either success or failure would be a guess
+* nobody could establish which of those it is — `DeleteNotConfirmed`, where
+  reporting either success or failure would be a guess
 
-The deletion request itself is fire-and-forget by the library's construction, so
-"the request raised" and "the images are still there" are genuinely different
-findings and both reach the caller.
+That third case covers the refused request and the unreadable list alike. They
+are one finding, not two: the removal is sent and the reply discarded, so a
+caller that separated them would be distinguishing states it cannot observe.
+
+Two entry points, differing only in what an unknown outcome costs the caller.
+`delete_list_confirmed` raises; `remove_from_tv` logs an ERROR and returns None,
+for the caller with work left that is worth more than a tidy television.
 """
 
 import logging
@@ -34,10 +38,12 @@ UPLOADED_CATEGORY = "MY-C0002"
 
 
 class DeleteNotConfirmed(Exception):
-    """The removal was sent and the television's content list could not be read.
+    """What the television holds could not be established after a removal request.
 
     Distinct from "the images are still listed", which is a known failure. This
-    is the unknown one: the caller knows only that it asked.
+    is the unknown one: the caller knows only that it asked. Raised whether the
+    request itself was refused or the confirming read could not be made — the
+    library discards the reply either way, so those are the same finding.
     """
 
 
@@ -70,9 +76,10 @@ async def delete_list_confirmed(tv_art, content_ids, category: str = UPLOADED_CA
     parameter rather than imported so this module can be exercised without the
     library or a television.
 
-    Raises `DeleteNotConfirmed` when the confirming read fails. Errors raised by
-    the library itself propagate unchanged and mean the same thing — that the
-    outcome is unknown — so no caller can read a failure as a success.
+    Any failure to establish what the set holds — whether the removal request
+    itself was refused, or the confirming read could not be made — raises
+    `DeleteNotConfirmed`, chained to the original. That is one outcome, not two:
+    in both cases the caller knows only that it asked.
     """
     # Preserve order and drop repeats: the TV is asked once per id, and the
     # report back to the caller reads in the order they asked.
@@ -80,19 +87,20 @@ async def delete_list_confirmed(tv_art, content_ids, category: str = UPLOADED_CA
     if not requested:
         return DeleteResult(requested=(), surviving=())
 
-    await tv_art.delete_list(list(requested))
-
     try:
+        await tv_art.delete_list(list(requested))
         remaining = await tv_art.available(category=category)
-    except AssertionError as err:
-        # Not a broken invariant of ours. samsungtvws signals a timed-out art
-        # request by returning None from `wait_for_response` and then asserting
-        # on it, so AssertionError is that library's timeout. If it is ever
-        # given a real exception type this catch stops matching and the error
-        # propagates instead — which is the safe direction, since the caller
-        # still cannot mistake it for success.
+    except Exception as err:  # prawduct:allow prawduct/broad-except -- unowned library, unstable errors; re-raised
+        # Caught by outcome rather than by type, deliberately. samsungtvws
+        # reports a timed-out art request by returning None from
+        # `wait_for_response` and then *asserting* on it, raises its own
+        # ResponseError when the set replies with an error event, and lets
+        # websockets and JSON errors through from underneath — a list that has
+        # already changed once in this library's history and is not ours to
+        # depend on. Every one of them means the same thing here, and naming a
+        # subset is how the ones left out become an abort in the caller.
         raise DeleteNotConfirmed(
-            f"asked the television to remove {len(requested)} image(s) and could not read its content list back"
+            f"asked the television to remove {len(requested)} image(s) and could not establish what it holds"
         ) from err
 
     still_listed = {entry["content_id"] for entry in remaining}

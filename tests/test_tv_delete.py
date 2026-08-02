@@ -32,15 +32,18 @@ class FakeTv:
     outcome rather than the protocol.
     """
 
-    def __init__(self, listed, honours=None, confirm_raises=None):
+    def __init__(self, listed, honours=None, confirm_raises=None, delete_raises=None):
         self.listed = list(listed)
         self.honours = set(self.listed) if honours is None else set(honours)
         self.confirm_raises = confirm_raises
+        self.delete_raises = delete_raises
         self.delete_calls: list[list[str]] = []
         self.available_calls: list[str | None] = []
 
     async def delete_list(self, content_ids):
         self.delete_calls.append(list(content_ids))
+        if self.delete_raises is not None:
+            raise self.delete_raises
         self.listed = [c for c in self.listed if not (c in content_ids and c in self.honours)]
         # The library returns None here regardless of outcome. That is the defect.
         return None
@@ -121,17 +124,52 @@ def test_an_unreadable_content_list_is_unknown_not_failure():
     assert tv.delete_calls == [["MY-C0002-1"]], "the request was still sent; only the confirmation failed"
 
 
-def test_a_library_error_on_the_read_propagates_unchanged():
-    """Anything other than the library's assert reaches the caller as itself.
-    The point is only that it is never mistaken for a completed removal."""
+def test_any_library_error_on_the_read_is_the_same_unknown_outcome():
+    """Not only the library's assert. Its error taxonomy is not stable and is
+    not ours — a subset named here is a subset that escapes as an abort."""
 
     class ResponseError(Exception):
         pass
 
-    tv = FakeTv(listed=["MY-C0002-1"], confirm_raises=ResponseError("delete_image_list failed with error number 3"))
+    tv = FakeTv(listed=["MY-C0002-1"], confirm_raises=ResponseError("get_content_list failed with error number 3"))
 
-    with pytest.raises(ResponseError):
+    with pytest.raises(DeleteNotConfirmed) as exc:
         asyncio.run(delete_list_confirmed(tv, ["MY-C0002-1"]))
+
+    assert isinstance(exc.value.__cause__, ResponseError), "the original must survive as the cause"
+
+
+def test_a_removal_request_the_set_refuses_is_unknown_too():
+    """The set answering `event: error` to the removal itself raises before the
+    confirming read ever runs. It is the same finding: nobody can say what the
+    set holds, and it must not escape as an abort through the caller."""
+
+    class ResponseError(Exception):
+        pass
+
+    tv = FakeTv(listed=["MY-C0002-1"], delete_raises=ResponseError("delete_image_list failed with error number 3"))
+
+    with pytest.raises(DeleteNotConfirmed):
+        asyncio.run(delete_list_confirmed(tv, ["MY-C0002-1"]))
+
+    assert tv.available_calls == [], "the read is unreachable once the request itself raised"
+
+
+def test_a_refused_removal_request_does_not_stop_the_caller(caplog):
+    """The path R-1 of the resolution round found: `remove_from_tv` guarded the
+    unreadable-list case and not the refused-request case, so a refusal aborted
+    the housekeeping pass before it could save or upload."""
+
+    class ResponseError(Exception):
+        pass
+
+    tv = FakeTv(listed=["MY-C0002-1"], delete_raises=ResponseError("delete_image_list failed with error number 3"))
+
+    with caplog.at_level(logging.ERROR):
+        result = asyncio.run(remove_from_tv(tv, ["MY-C0002-1"]))
+
+    assert result is None
+    assert [r for r in caplog.records if r.levelno == logging.ERROR]
 
 
 def test_nothing_to_remove_does_not_touch_the_television():

@@ -22,6 +22,7 @@ import logging
 import os
 import time
 
+import requests
 from samsungtvws.async_art import SamsungTVAsyncArt
 from samsungtvws.exceptions import HttpApiError, ResponseError
 
@@ -39,10 +40,16 @@ logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 #: television actually sends.
 IMAGE_CHANGED_EVENTS = ("slideshow_image_changed", "auto_rotation_image_changed", "image_selected")
 
-#: How long any single blocking call to the set may take before the script gives
-#: up. Named because the constructor's REST call would otherwise wait forever on
-#: a set that drops packets rather than refusing them, and the whole point of
-#: timing construction is to hand the display daemon a ceiling.
+#: Ceiling for the calls the client's own `timeout=` reaches: the REST request
+#: for the model year, and opening the websocket. Named because both default to
+#: no limit, so a set that drops packets rather than refusing them would hang
+#: construction forever and report no elapsed figure at all.
+#:
+#: It does NOT govern art requests once the connection is up — those carry their
+#: own defaults inside the library (2s for a generic reply, 4s for the content
+#: list, 10s for an upload acknowledgement), and none of them derives from this.
+#: Worth keeping straight: a daemon watchdog built on this number as the
+#: per-request bound would be wrong about every window that governs art traffic.
 TV_TIMEOUT_SECONDS = 15
 
 
@@ -109,11 +116,17 @@ def check_construction(report: Report) -> SamsungTVAsyncArt | None:
             token_file=config.tv_token_file,
             timeout=TV_TIMEOUT_SECONDS,
         )
-    except HttpApiError as err:
+    except (HttpApiError, requests.exceptions.Timeout) as err:
+        # Both, because the library converts only `requests.ConnectionError`
+        # into `HttpApiError` — and a set that completes the handshake then goes
+        # quiet raises `ReadTimeout`, which is not one. Without the second name
+        # the half-open case exits with a traceback and no elapsed figure, which
+        # is the one number this check exists to produce.
         elapsed = time.monotonic() - started
         report.fail(
             "constructor",
-            f"unreachable after {elapsed:.2f}s ({err}). The set is asleep or off — wake it and run this again.",
+            f"unreachable after {elapsed:.2f}s ({type(err).__name__}: {err}). "
+            "The set is asleep, off, or answering nothing — wake it and run this again.",
         )
         return None
     elapsed = time.monotonic() - started
