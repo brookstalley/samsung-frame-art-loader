@@ -18,11 +18,19 @@ what they recovered:
 - *A cataloguing clause.* `..., from the series Thirty-six Views of Mount Fuji`.
 - *An alternate or translated title in parentheses.* `Coquelicots` appeared as
   `(Poppies)`, `(Poppy Field)` and `(The Poppies)` across four runs.
-- *A bilingual compound.* One Vermeer arrived twice in a *single* run, as
-  `Meisje met de parel / Girl with a Pearl Earring` and `La jeune fille à la
-  perle / Girl with a Pearl Earring`.
 - *A parenthesised alias on the artist.* `El Greco (Domenikos Theotokopoulos)`
   and `El Greco` are one painter.
+
+**A rule for bilingual `Original / English` compounds was written and then
+removed**, and the reason is the discipline this module exists to hold. That form
+appeared *only* when an intent explicitly asked for titles in both languages —
+zero rows in 128 realistic proposals carry it. Which half to keep could not be
+decided from evidence either: keeping the first fails the one real case observed
+(a Vermeer returned twice under two different original-language names sharing one
+English gloss), and keeping the last would have been chosen from that single
+observation. A rule that fires on a form the product does not produce, in a
+direction nothing supports, can only merge works — the unrecoverable direction —
+so it is not worth its risk.
 
 **The two failure directions are not symmetric, and that is what settles every
 close call here.** Splitting one work into two identities means the curator is
@@ -130,6 +138,14 @@ _TRAILING_PAREN = re.compile(r"\s*\([^()]*\)\s*$")
 #: parenthetical is dangerous rather than helpful: `Untitled (Composition
 #: Studies)` reduced to `Untitled` merges every untitled canvas by that artist,
 #: and the curator never sees the ones it swallows.
+#:
+#: **Enumerated and English-only, which is a known limitation in the harmful
+#: direction.** A generic title in another language — `Landschaft (Studie)` —
+#: reads as distinctive here, so its parenthetical is dropped and two works can
+#: merge. Enumeration is nonetheless what there is: length and word count do not
+#: separate these from real one-word titles, since `Coquelicots` is as short as
+#: `Untitled`. Anything added here should be added because a real proposal
+#: carried it, not on the guess that a model might one day emit it.
 _UNINFORMATIVE = frozenset(
     {
         "untitled",
@@ -204,7 +220,7 @@ def _canonical_title(title: str) -> str:
         title = _TRAILING_DATE_PAREN.sub("", title).strip()
         title = _TRAILING_DATE_COMMA.sub("", title).strip()
         title = _drop_alternate_title(title)
-    return _first_of_bilingual(title)
+    return title
 
 
 def _drop_alternate_title(title: str) -> str:
@@ -221,16 +237,6 @@ def _drop_alternate_title(title: str) -> str:
     if _normalise(candidate) in _UNINFORMATIVE:
         return title
     return candidate
-
-
-def _first_of_bilingual(title: str) -> str:
-    """The first half of an `Original / English` compound, where one is present.
-
-    Splits only on a slash with space either side. An unspaced slash is far more
-    often part of a title than a separator between two names for one work.
-    """
-    parts = [part.strip() for part in re.split(r"\s+/\s+", title) if part.strip()]
-    return parts[0] if len(parts) > 1 else title
 
 
 def _artist_alias(artist: str | None) -> str | None:

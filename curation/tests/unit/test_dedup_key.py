@@ -133,12 +133,18 @@ def test_a_cataloguing_clause_does_not_split_a_work():
     )
 
 
-def test_a_bilingual_compound_does_not_split_a_work():
-    """One Vermeer arrived twice in a single run, under two original-language names."""
-    assert work_dedup_key(title="Meisje met de parel / Girl with a Pearl Earring", artist="Vermeer") != work_dedup_key(
-        title="La jeune fille à la perle / Girl with a Pearl Earring", artist="Vermeer"
-    ), "the two originals are different strings and are not claimed to unify"
-    assert work_dedup_key(title="Het melkmeisje / The Milkmaid", artist="Vermeer") == work_dedup_key(
+def test_a_bilingual_compound_is_left_alone_on_purpose():
+    """A rule for this was written, measured, and removed.
+
+    One Vermeer did arrive twice in a single run under two original-language names
+    sharing one English gloss, so the failure is real. But the form appears in
+    zero of 128 realistic proposals — it showed up only when an intent asked for
+    both languages — and which half to keep cannot be chosen from that. Keeping
+    the first half does not even fix the case that motivated it. A rule firing on
+    a form the product does not produce, in a direction nothing supports, can only
+    merge works, and merging is the direction with no recovery.
+    """
+    assert work_dedup_key(title="Het melkmeisje / The Milkmaid", artist="Vermeer") != work_dedup_key(
         title="Het melkmeisje", artist="Vermeer"
     )
 
