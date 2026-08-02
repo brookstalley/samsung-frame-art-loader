@@ -41,8 +41,16 @@ dependencies = [
 # anyway. Recorded in full at project-state.yaml -> technical_decisions.technology.
 #
 # Deliberately not pinned yet:
-#   3tears-models — the operator's own multi-provider model adapters, which need
-#     none of the above; it arrives with the discovery work that calls it.
+#   3tears-models — the operator's own multi-provider model adapters. This used to
+#     say it "arrives with the discovery work that calls it"; that was reversed on
+#     2026-08-02 and it now stays in the `eval` group only. The discovery engine
+#     talks to OpenRouter through a first-party client behind a narrow seam
+#     instead: all traffic goes to one provider (search included, via its web
+#     plugin), and this package would pull 3tears-observe, 3tears-media-contracts,
+#     anthropic, langchain-anthropic/openai/openrouter and jsonschema into the
+#     DEFAULT install — the plane that runs on the Pi beside display under a
+#     MemoryMax. Not a rejection: the seam makes adopting it a one-file change if
+#     a second provider ever earns it. Reasoning in `openrouter-api-findings.md`.
 #   opencv-python-headless, scikit-image, numpy — acquisition and the mat engine,
 #     which arrive with that work rather than being carried unused. Pillow was in
 #     this group until the browser surface needed to downscale a 4K rendition.
