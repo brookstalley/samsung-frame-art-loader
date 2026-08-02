@@ -13,7 +13,7 @@ day a sixth tool or a new action arrives with nothing exercising it.
 """
 
 import pytest
-from scenarios import connect
+from scenarios import REFERENCE_ROUTE, connect
 
 from curation.mcp.registry import HELP_ACTION
 from curation.mcp.tools import TOOLS
@@ -54,16 +54,12 @@ async def test_a_work_can_be_put_on_the_wall_through_the_tools_alone(server_url,
         on_the_wall = [entry["artwork_id"] for entry in published["on_the_wall"]]
         assert on_the_wall == [work.id], f"after {caller.transcript}"
 
-    # Four calls, and the goal is reached. The count is the measurement the LLM
-    # evaluation compares against; asserting it here is what makes a regression
-    # in navigability — an extra required round trip — visible as a test failure
-    # rather than as a slowly worsening number nobody reads.
-    assert caller.transcript.steps == [
-        "art_catalogue(action='list')",
-        "art_theme(action='create')",
-        "art_theme(action='add')",
-        "art_theme(action='activate')",
-    ]
+    # The goal is reached by exactly the reference route. Asserting it is what
+    # makes a regression in navigability — an extra required round trip — fail
+    # here rather than become a slowly worsening number nobody reads. The route
+    # lives in `scenarios.py` because the model-driven evaluation sizes its call
+    # budget from it, and a second copy would drift while both stayed true.
+    assert tuple(caller.transcript.steps) == REFERENCE_ROUTE
 
 
 async def test_a_work_that_cannot_be_shown_is_reported_rather_than_dropped(server_url, seeded_titles):

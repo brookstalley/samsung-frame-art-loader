@@ -41,6 +41,18 @@ from typing import Any
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+#: The route a competent caller takes to put one work on the wall, and the only
+#: place it is written down. The scripted scenario asserts it took exactly this
+#: path; the model-driven evaluation sizes its call budget from its length. Two
+#: copies of this would drift the moment the flow needs another round trip — and
+#: they would drift silently, because each would still be true of its own half.
+REFERENCE_ROUTE = (
+    "art_catalogue(action='list')",
+    "art_theme(action='create')",
+    "art_theme(action='add')",
+    "art_theme(action='activate')",
+)
+
 
 @dataclass(frozen=True)
 class Call:

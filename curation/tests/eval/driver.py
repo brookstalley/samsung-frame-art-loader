@@ -29,13 +29,13 @@ from mcp.shared.exceptions import McpError
 # collection order is not something to rest on.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "contract"))
 
-from scenarios import Call, Transcript, connect  # noqa: E402
+from scenarios import REFERENCE_ROUTE, Call, Transcript, connect  # noqa: E402
 
-#: What the scripted flow in `tests/contract/test_mcp_scenarios.py` takes to put
-#: a work on the wall: list, create, add, activate. The budget below is a
-#: multiple of it, so if that flow ever needs another round trip the allowance
-#: here follows rather than silently tightening.
-REFERENCE_CALLS = 4
+#: What the scripted flow takes to put a work on the wall, derived from the one
+#: place that route is written rather than counted here. If the flow ever needs
+#: another round trip the model's allowance follows it, instead of silently
+#: tightening while both numbers stay individually true.
+REFERENCE_CALLS = len(REFERENCE_ROUTE)
 
 #: Deliberately thin. The surface is supposed to explain itself — the server's
 #: own instructions tell a client to start at `help`, and every error teaches.
