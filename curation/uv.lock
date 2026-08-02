@@ -312,6 +312,7 @@ dependencies = [
 dev = [
     { name = "black" },
     { name = "httpx" },
+    { name = "langchain-core" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
@@ -335,6 +336,7 @@ requires-dist = [
 dev = [
     { name = "black", specifier = ">=24" },
     { name = "httpx" },
+    { name = "langchain-core", specifier = ">=0.3" },
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "ruff", specifier = ">=0.6" },

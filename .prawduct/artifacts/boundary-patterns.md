@@ -44,11 +44,20 @@
 
 ### HTTP API (curation UI)
 
-- **Exists:** no.
-- **Producer:** HTTP handlers on the curation plane.
-- **Consumer:** the curation UI, and nothing else.
+- **Exists:** **yes, as of 2026-08-01** (Chunk 10B). This row read "no" until then,
+  including in the bundle that built it — which mattered because an `Exists: no`
+  row silently disarms the consumer-impact investigation this file exists to
+  arm, and Chunk 19 extends exactly this surface.
+- **Producer:** the FastAPI app on the curation plane — `curation/src/curation/http/api.py`,
+  with typed responses in `http/models.py`.
+- **Consumer:** the curation UI, and nothing else — `http/static/app.js`, which
+  binds concrete field names (`work.status`, `s.rights_status`,
+  `s.last_fetch_status`, the heartbeat fields). **It is a real consumer**: a
+  renamed field breaks the page with no test failing unless one is written for it.
 - **Contract:** response models. **No stability obligation** — shipped and deployed
-  with its only consumer.
+  with its only consumer. That exemption is about *versioning*, not about
+  changing fields blindly: producer and consumer ship together, so a rename is
+  free only when both move in the same commit.
 
 ### Service layer
 

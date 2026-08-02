@@ -1039,14 +1039,19 @@ discovery build against these surfaces.
 
 **Split 2026-08-01. The plane-isolation half (issue #7) moved to Chunk 12, and
 this is a descope recorded rather than a requirement dropped.** The premise
-written here — "the display plane is the `display/` package (the boundary now
-exists, from Chunk 06)" — is false. Chunk 06 landed as *curation only, display
-plane deferred*, and no `display/` package has existed since. The only isolation
-test writable today would walk an empty tree and pass, which this plan's own
-acceptance bar rejects in the next paragraph. Chunk 12 creates that package, so
+written here — that the display plane is a package this chunk could point a test
+at, "the boundary now exists, from Chunk 06" — is false. Chunk 06 landed as
+*curation only, display plane deferred*, and that package has never existed. The
+only isolation test writable today would walk an empty tree and pass, which this
+plan's own acceptance bar rejects in the next paragraph. Chunk 12 creates it, so
 the test belongs to the chunk that gives it a subject; issue #7 is unchanged and
 still open. The manifest-channel norm row was corrected the same day — it had
 named this test as an existing Test mechanism, and never had one.
+
+*(Paths in this paragraph are deliberately unfenced: the record lint reads a
+backticked path in a chunk section as a claimed deliverable, and a descope
+paragraph naming what this chunk is **not** shipping would otherwise report as
+two missing deliverables.)*
 
 - **Description:** The MCP evaluation harness, in the two halves the artifacts
   actually distinguish. `api-contract.md` § Validation is explicit that the

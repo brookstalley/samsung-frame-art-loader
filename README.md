@@ -29,5 +29,6 @@ cp .env.example .env          # then set ART_ROOT
 cd curation && uv run python -m curation
 ```
 
-The browser interface is not built yet; the MCP server answers at `/mcp` on
-`CURATION_PORT`.
+Then open `http://127.0.0.1:$CURATION_PORT/` — the browser interface serves the
+catalogue, themes, the wall manifest and a health view. MCP clients connect to
+`/mcp` on the same port, and the UI's own JSON API answers under `/api`.

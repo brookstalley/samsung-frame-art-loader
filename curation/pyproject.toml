@@ -53,12 +53,28 @@ dependencies = [
 [dependency-groups]
 # httpx is declared here and not above on purpose: the browser-surface tests
 # import it directly to drive a booted server, and no first-party module does.
-dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6", "black>=24", "httpx"]
-# Its own group, not `dev`, because it is the heaviest thing this repo would
-# install — langchain-anthropic, langchain-openai, langchain-openrouter and the
-# anthropic SDK arrive with it — and nothing in the default test run imports a
-# line of it. `uv run pytest` stays as fast and as offline as it is today; the
-# model-driven evaluation is opted into deliberately, with `--group eval`.
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+    "black>=24",
+    "httpx",
+    # Same reasoning as httpx directly above, and it belongs in `dev` rather
+    # than `eval` for a reason worth stating: the evaluation driver imports
+    # `langchain_core.messages` directly, and the tests that prove that driver
+    # works are deterministic, free, and reach no provider. Declaring it only in
+    # `eval` left them skipping in the canonical suite — the one CI and the
+    # gates actually run — so the guards on hand-written harness code were green
+    # without ever executing. It arrives transitively via 3tears-models too, but
+    # that edge is an alpha package's transitive detail and this code imports
+    # the package by name.
+    "langchain-core>=0.3",
+]
+# Its own group, because it is the heaviest thing this repo would install —
+# langchain-anthropic, langchain-openai, langchain-openrouter and the anthropic
+# SDK arrive with it — and only the *paid* half of the evaluation needs it. The
+# free half runs on `dev` alone (see langchain-core above), so `uv run pytest`
+# stays fast and offline while still executing every deterministic guard.
 #
 # Pinned below 0.23 on purpose: 3tears is alpha and its own README says the
 # public API can shift between minor versions. `create_chat_model`'s signature

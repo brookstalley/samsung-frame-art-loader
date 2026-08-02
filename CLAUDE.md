@@ -36,8 +36,9 @@ Two independent projects, two interpreters, two suites. Both must pass.
 | Format | `black .` | `cd curation && uv run black .` |
 
 Run the curation plane: `cd curation && uv run python -m curation`. It needs
-`ART_ROOT` (copy `.env.example` to `.env`); the UI placeholder answers on
-`CURATION_PORT`, and MCP clients connect to `/mcp` on the same port.
+`ART_ROOT` (copy `.env.example` to `.env`); the browser interface serves on
+`CURATION_PORT`, its JSON API under `/api`, and MCP clients connect to `/mcp` on
+the same port.
 
 The curation suite boots a real uvicorn server per test class of surface work.
 Do not replace that with an in-process ASGI transport: Starlette does not run a

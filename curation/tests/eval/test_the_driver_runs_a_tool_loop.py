@@ -2,7 +2,11 @@
 
 Unmarked and free: nothing here reaches a provider. The "model" is a stub that
 emits a fixed sequence of tool calls, which makes the loop deterministic and
-means these run in the ordinary suite whenever the eval group is installed.
+means these run in the ordinary suite — `uv run pytest`, with no extra group.
+That is why `langchain-core` is declared in `dev` rather than `eval`: these
+guards were briefly declared only in `eval`, which left every one of them
+skipping in the suite CI and the gates actually run, so hand-written harness
+code sat green without a single guard executing.
 
 They exist because the driver is code this repo wrote, and the first real run
 is the worst possible place to discover a bug in it — a failure there is
