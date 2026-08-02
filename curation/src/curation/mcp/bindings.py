@@ -420,13 +420,13 @@ def _run_fields(run: DiscoveryRun) -> dict[str, Any]:
         "status": str(run.status),
         "initiated_by": str(run.initiated_by),
         "intent": run.intent_text,
+        "strategy": run.strategy,
         # How the intent was read, in the engine's own words. Carried beside the
         # verbatim intent because a work list is judged against the reading of the
         # request rather than against its wording — "you asked for recent, I took
         # that to mean 2026 prize winners" is what makes a surprising list
         # explicable instead of merely wrong. Null while a run is still working:
         # nothing has read the intent yet.
-        "strategy": run.strategy,
         "approval_required": run.approval_required,
         "estimated_cost_usd": None if run.estimated_cost_usd is None else str(run.estimated_cost_usd),
         "actual_cost_usd": None if run.actual_cost_usd is None else str(run.actual_cost_usd),

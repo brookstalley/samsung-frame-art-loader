@@ -1360,7 +1360,7 @@ core, built against the surfaces the contract tests already pin.
     major art prize has been awarded in 2026 as of 2025"*. The flat $0.005 per run
     is $0.30–0.90 a month against a $20 ceiling, and grounding a non-recency
     intent suppresses invented titles rather than wasting money. Rationale lives
-    in `discovery/phase_one.py`'s module docstring.
+    in `curation/src/curation/discovery/phase_one.py`'s module docstring.
   - **`DiscoveryRun.strategy` is written by the engine** when the work list
     settles — it is the model's own account of how the intent was read, so it
     cannot exist before the intent has been read (`data-model.md`).

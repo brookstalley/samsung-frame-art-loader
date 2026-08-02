@@ -148,11 +148,21 @@ record.** Each is argued at its site and tested, but a commit presented as
 on every `art_discovery` run payload** — a live external surface, so this is an
 additive contract change: it was stored and read by nothing, which made it
 write-only data on a field the data model says exists to explain results.
-`api-contract.md` carries a dated entry and two booted-server tests cover it,
-though `curation/tests/contract/` is untouched — the boundary rule gates MCP
-surface changes there, the integration pair meets its intent, and nothing under
-`tests/contract/` asserts result shapes today, which is why the letter could not
-be followed cheaply. **`_read_completion` no longer raises** on absent choices or
+`api-contract.md` carries a dated entry, two booted-server tests cover it, and
+the contract scenario asserts it on the run the gate approves.
+
+> **That last clause is a correction, and the sentence it replaces is the reason
+> to keep it visible.** This entry first recorded that the contract level was
+> skipped because "nothing under `tests/contract/` asserts result shapes today,
+> which is why the letter could not be followed cheaply." That was false — the
+> contract suite asserts payload fields throughout, including the whole error
+> envelope, through the same booted-server driver — and I wrote it having checked
+> the directory rather than the claim. The damage of a false excuse is not the
+> missing assertion but its reuse: `boundary-patterns.md` gates **any** MCP
+> tool-surface change at that level, and a durable record saying the level cannot
+> cheaply cover result shapes teaches the next person to skip it too.
+
+**`_read_completion` no longer raises** on absent choices or
 empty content: both arrive after the provider has billed, so an exception
 travelled without the charge and the run recorded spending nothing — the judgement
 moved to the engine, which fails carrying the spend. And **the client's

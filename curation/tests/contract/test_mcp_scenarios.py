@@ -12,6 +12,8 @@ complete on the day it is written and green forever afterwards — including the
 day a sixth tool or a new action arrives with nothing exercising it.
 """
 
+from dataclasses import replace
+
 import pytest
 from fakes import a_work_list
 from scenarios import DISCOVERY_ROUTE, REFERENCE_ROUTE, connect
@@ -179,7 +181,7 @@ async def test_a_run_can_be_priced_started_watched_and_approved_through_the_tool
     it `run_id` and another expects `id` — a defect invisible from inside either
     action's own tests.
     """
-    engine.result = a_work_list(26)
+    engine.result = replace(a_work_list(26), strategy="Read as Surrealists with a strong blue palette.")
 
     async with connect(server_url) as caller:
         quoted = await caller.ok("art_discovery", "estimate")
@@ -193,6 +195,11 @@ async def test_a_run_can_be_priced_started_watched_and_approved_through_the_tool
         watched = await caller.ok("art_discovery", "status", run_id=run_id)
         assert watched["status"] == "awaiting_approval"
         assert watched["works"]["total"] == 26
+        # How the intent was read, beside the wording of it. Asserted at this
+        # level because a curator decides at the gate below on the *reading* as
+        # much as on the count, so a field that quietly stopped being sent would
+        # take the grounds for that decision with it.
+        assert watched["strategy"] == engine.result.strategy
 
         approved = await caller.ok("art_discovery", "approve", run_id=run_id)
 
