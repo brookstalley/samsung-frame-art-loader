@@ -371,6 +371,8 @@ they test the outcome rather than the transformation.
 
 ## A mutation test must prove it mutated, or its green is indistinguishable from a pass
 
+## A guard built from recurrences is scoped to where you looked, not to the failure
+
 ## Ratifying a norm creates retroactive obligations on ARTIFACTS, not just code
 
 **When a norm is ratified, the artifacts written before it are as much in scope as

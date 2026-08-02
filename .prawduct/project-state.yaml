@@ -2598,6 +2598,51 @@ backlog_last_groomed_at: 2026-08-01
 backlog_service_repo: brookstalley/samsung-frame-art-loader
 
 # =============================================================================
+# NORM HEALTH
+# =============================================================================
+# Written by /prawduct:janitor's Norm Health sweep. `norm_health_last_run` is the
+# fact that resolves the norm-lifecycle advisory; a manual `advisory resolve` is
+# not sticky and the probe re-fires against it.
+#
+# `norm_health` is APPEND-ONLY, one entry per sweep, newest last — the trend IS
+# the record. A norm dying by a hundred individually-defensible exceptions is
+# invisible in any single diff review and visible only across entries here.
+# Keep the last 3; git holds the rest.
+
+norm_health_last_run: 2026-08-02
+
+norm_health:
+  - date: 2026-08-02
+    note: >-
+      First sweep. Three prior norm-index audits ran under this name and none
+      stamped the fact, so the advisory kept re-firing; this is the first
+      recorded measurement. Distances are point-in-time — the next sweep reads
+      them as the baseline, not as a target.
+    measurements:
+      black-formatting: "0 violation sites. Root black config had no plane exclusion and was formatting the curation plane under py312; fixed this sweep, root run now 18 files not 103. The boundary is drawn twice in two syntaxes (ruff list, black regex) and Critic review noted nothing made them agree — tests/preferences/test_tool_config.py now does, mutation-verified three ways."
+      naming-conventions: "0 known violations. Critic-only by decision; ruff N deliberately unselected while the legacy modules live."
+      import-grouping: "0 violation sites. ruff I green on both planes."
+      logging-not-print: "39 print() calls across the 8 legacy modules, all under a per-file waiver with a dated end; 4 hand-run operator tools permanently exempt. 0 unwaived. Measured 39 at ba007cd^, ba007cd and HEAD — the disposition's own evidence said 19 and was never right."
+      type-annotations: "4 root modules carry no annotation of any kind, 2 more annotate params but never a return. Curation shipped code lint-enforced; curation tests exempt by a stated carve-out."
+      broad-except: "7 unwaived catches in the root plane, all in modules with a dated end. Curation: 3 catches, 2 of them unwaived until this sweep, now all 3 pragma'd. 0 unwaived product-wide. The index claimed curation had one — issue #33's cost was understated threefold."
+      no-hardcoded-deployment: "0 violation sites. Guard walks both planes but matches 5 known literals only, so it is a regression guard rather than a general one — adequate for the norm as scoped."
+      async-io-boundary: "4 root modules departed (art, image_utils, metadata, source_utils), including 2 functions that do no I/O at all. Curation 0. Departure row added this sweep; the norm had described the tree as conforming since it was written."
+      hardware-behind-interface: "Not yet measurable — the display plane is unwritten."
+      no-secret-in-log: "0 violation sites. 2 secrets declared; the guard asserted 1 until this sweep and now drives off the declaration, with a sibling failing if a declared secret is not cleared from the test environment and a third asserting every env name config.py reads is cleared at all. All three named in the index Enforcement column, so the norm-index guard resolves them."
+      service-layer-only: "6 of 12 handlers in http/api.py depart from the norm's literal 'call one service method', counted by AST: 3 mutate-then-read-back (add_to_theme, remove_from_theme, move_in_theme, 3 calls each), 2 composite reads (get_theme, get_health, 2 each), and get_thumbnail, which makes one call but carries the HTTP conditional-request decisioning. Each has an in-code reason; NONE is recorded as an exception, and none is 'operation logic' in the sense the Why guards against, since MCP reaches the same services. UNRECONCILED — the fork was presented to the owner and deferred. Recorded as a Known-departures row 2026-08-02 (disposition explicitly open) after Critic review asked why the async departure got a row and this one did not."
+      provider-enforced-spend: "Not yet measurable — no paid path built. OPENROUTER_API_KEY, which IS the ceiling, is absent from .env.example; already a named deliverable of the discovery chunk."
+      display-independence: "Vacuous — the display plane is unwritten."
+      wcag-aa-curation-ui: "0 violation sites. Token test computes every pair in both colour schemes and refuses colour written outside the token blocks."
+      manifest-only-channel: "Vacuous — the display plane is unwritten. Correctly Critic-only until it exists; the test is a deliverable of the chunk that creates it (issue #7)."
+    deferred:
+      - "Four (target) preferences carry no mechanism against this artifact's own 'never leave a preference unassigned' rule: Coverage expectations, Testing strategies, Test location, and File organization."
+      - "File organization says 'decide during discovery whether to keep flat or move to a package'. Discovery closed 2026-07-20 and no decision was recorded, while the de-facto answer exists in the tree. Decayed why."
+      - "Coverage expectations names image_utils, metadata, source_utils and the all.json round-trip; all four have zero tests, and they are the same modules the async departure lands in."
+      - "The service-layer fork (see service-layer-only above) — re-affirm with a named exception for the three shapes, or amend the norm. A Known-departures row now warns readers in the interval; the decision itself is still owed."
+      - "Issue #24 names the MCP layer importing persistence directly; http/api.py now does the same. The boundary eroded after the issue was filed and the issue's scope did not follow."
+      - "Durable prose in this artifact anchors to build-plan chunk ids ('at Chunk 20'), which dangle once the plan ships. Weak form — the meaning survives — but it is the pattern the methodology names."
+
+# =============================================================================
 # CHANGE LOG
 # =============================================================================
 # Change log is in .prawduct/change-log.md (separate file to reduce merge conflicts).

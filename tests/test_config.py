@@ -4,8 +4,10 @@
 under a controlled environment rather than mutating already-bound values.
 """
 
+import ast
 import importlib
 import logging
+import pathlib
 import sys
 
 import pytest
@@ -18,10 +20,31 @@ MINIMAL_ENV = {
     "LOCATION_NAME": "Testville",
 }
 
+#: Every optional variable cleared before `config` is imported, so a developer's
+#: own shell cannot change what these tests observe. The secrets are the
+#: load-bearing half, and they are not left to memory:
+#: `test_the_harness_clears_every_declared_secret` fails if `_SECRET_KEYS` grows
+#: past this list, which is what keeps a redaction assertion from passing or
+#: failing on an untracked environment rather than on the code.
+#:
+#: This is every optional variable `config` reads, not a remembered subset —
+#: `EPD_TYPE` was missing until 2026-08-02, so `load_config`'s promise below was
+#: false for it and a developer with an e-paper type exported ran these tests
+#: against a different resolved config than CI did.
+OPTIONAL_ENV = (
+    "TV_PORT",
+    "TV_TOKEN_FILE",
+    "LOCATION_REGION",
+    "USE_ART_LABEL",
+    "EPD_TYPE",
+    "OPENAI_KEY",
+    "OPENROUTER_API_KEY",
+)
+
 
 def load_config(monkeypatch, **overrides):
     """Import `config` fresh under exactly the given environment."""
-    for key in list(MINIMAL_ENV) + ["TV_PORT", "TV_TOKEN_FILE", "OPENAI_KEY", "LOCATION_REGION", "USE_ART_LABEL"]:
+    for key in list(MINIMAL_ENV) + list(OPTIONAL_ENV):
         monkeypatch.delenv(key, raising=False)
     for key, value in {**MINIMAL_ENV, **overrides}.items():
         if value is None:
@@ -115,22 +138,94 @@ def test_no_source_file_carries_a_deployment_value(monkeypatch):
     assert not offenders, "deployment values must live in .env, not source:\n" + "\n".join(offenders)
 
 
+def test_the_harness_clears_every_variable_config_reads():
+    """`load_config` promises "exactly the given environment". Hold it to that.
+
+    Guards the **harness**, not a product norm — there is deliberately no norm
+    index row for it, because what it protects is these tests' own isolation.
+
+    The sibling below closes the same drift for `_SECRET_KEYS` and cannot close
+    this one: those names are read through a loop variable, so no scan for string
+    literals will ever see them, and this scan cannot see them either. The two
+    guards are complementary and neither subsumes the other.
+
+    One-directional on purpose. Every name `config` reads must be cleared; the
+    reverse does not hold, because `OPENROUTER_API_KEY` is legitimately in
+    `OPTIONAL_ENV` and appears in `config.py` only inside `_SECRET_KEYS`.
+    """
+    source = (pathlib.Path(__file__).resolve().parent.parent / "config.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    read: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        target = node.func
+        # `os.environ.get("X")`, `_require("X")`, `_require_float("X")` — every
+        # spelling config.py uses to reach the environment with a literal name.
+        named = (isinstance(target, ast.Attribute) and target.attr == "get") or (
+            isinstance(target, ast.Name) and target.id.startswith("_require")
+        )
+        if named and node.args and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+            read.add(node.args[0].value)
+    for node in ast.walk(tree):
+        # `os.environ["X"]`, which config.py does not use today and which would
+        # otherwise slip past the call scan above.
+        if isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
+            if isinstance(node.value, ast.Attribute) and node.value.attr == "environ":
+                read.add(node.slice.value)
+
+    assert read, "found no environment reads in config.py; has the resolution style moved?"
+    uncleared = sorted(read - set(MINIMAL_ENV) - set(OPTIONAL_ENV))
+    assert not uncleared, (
+        f"config.py reads these and the harness never clears them: {uncleared}. "
+        "A developer with one exported runs this suite against a different resolved config "
+        "than CI does. Add each to MINIMAL_ENV (required) or OPTIONAL_ENV (optional)."
+    )
+
+
+def test_the_harness_clears_every_declared_secret(monkeypatch):
+    """The two lists above must not drift apart, and only this notices if they do.
+
+    A secret declared in `_SECRET_KEYS` but absent from `OPTIONAL_ENV` is never
+    cleared, so it reads as whatever the developer's own shell holds — and the
+    redaction tests below would then be asserting against an untracked file
+    instead of against the code.
+    """
+    config = load_config(monkeypatch)
+    uncleared = sorted(config._SECRET_KEYS - set(OPTIONAL_ENV))
+    assert not uncleared, f"these secrets are declared but never cleared before import: {uncleared}. Add them to OPTIONAL_ENV."
+
+
 def test_startup_logging_never_emits_a_secret(monkeypatch, caplog):
-    """The carried finding: config is logged at startup, which is where a key leaks."""
-    secret = "sk-do-not-log-me-0123456789"
-    config = load_config(monkeypatch, OPENAI_KEY=secret)
+    """The carried finding: config is logged at startup, which is where a key leaks.
 
-    with caplog.at_level(logging.INFO):
-        config.log_resolved_config()
+    Driven from `_SECRET_KEYS` rather than from the one name that happened to
+    exist when this was written. `redacted_config()` already walks that
+    frozenset, so a secret added there and nowhere else was covered by the code
+    and by nothing that checked it — which is how a Test row quietly becomes a
+    claim. Reading the declaration means the guard grows with it.
+    """
+    declared = sorted(load_config(monkeypatch)._SECRET_KEYS)
+    assert declared, "config declares no secrets at all; has the redaction list moved?"
 
-    emitted = "\n".join(record.getMessage() for record in caplog.records)
-    assert emitted, "startup logging must actually emit something"
-    assert secret not in emitted
-    assert "OPENAI_KEY=<set>" in emitted, "presence is reported; the value is not"
-    # The non-secret values are the point of logging at all.
-    assert MINIMAL_ENV["ART_ROOT"] in emitted
+    for name in declared:
+        secret = f"sk-do-not-log-me-{name.lower()}"
+        config = load_config(monkeypatch, **{name: secret})
+
+        caplog.clear()
+        with caplog.at_level(logging.INFO):
+            config.log_resolved_config()
+
+        emitted = "\n".join(record.getMessage() for record in caplog.records)
+        assert emitted, "startup logging must actually emit something"
+        assert secret not in emitted, f"{name}'s value reached a log line"
+        assert f"{name}=<set>" in emitted, f"{name}'s presence is reported; its value is not"
+        # The non-secret values are the point of logging at all.
+        assert MINIMAL_ENV["ART_ROOT"] in emitted
 
 
 def test_redacted_config_reports_absent_secrets_without_inventing_them(monkeypatch):
-    config = load_config(monkeypatch, OPENAI_KEY=None)
-    assert config.redacted_config()["OPENAI_KEY"] == "<unset>"
+    config = load_config(monkeypatch)
+    for name in sorted(config._SECRET_KEYS):
+        assert config.redacted_config()[name] == "<unset>", f"{name} is unset and must not be reported as present"

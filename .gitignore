@@ -166,6 +166,15 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+# macOS Finder metadata. Untracked 2026-08-02: the root `.DS_Store` had been
+# committed since the initial commit and no rule excluded it, so the stock
+# Python .gitignore this file was seeded from simply never covered the platform
+# every session here runs on. Unanchored on purpose — Finder writes one per
+# directory it has been opened in, not just the root. This rule is the whole
+# mechanism: once ignored, `git add .` cannot stage one again, so no test is
+# owed on top of it.
+.DS_Store
+
 # Prawduct session files
 .claude/settings.local.json
 .prawduct/.bug-inbox

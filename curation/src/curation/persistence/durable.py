@@ -232,7 +232,7 @@ class SqliteDurableStore:
             self._depth = 1
             try:
                 yield
-            except BaseException:
+            except BaseException:  # prawduct:allow prawduct/broad-except -- cleanup-and-reraise; rollback must run on any exit
                 # Deliberately wider than `Exception`, and it swallows nothing:
                 # the group is abandoned and the same exception continues. A
                 # `KeyboardInterrupt` or a generator being closed early leaves

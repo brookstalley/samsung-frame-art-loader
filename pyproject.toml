@@ -15,6 +15,15 @@ dev = ["pytest>=8", "ruff>=0.6", "black>=24"]
 [tool.black]
 target-version = ["py312"]
 line-length = 130
+# Same plane boundary the ruff `extend-exclude` below draws, and it has to be
+# drawn twice because black takes a REGEX against the root-relative path while
+# ruff takes a list of paths. Without this, `black .` run at the root walked
+# both planes — 103 files rather than 18 — and formatted the curation plane
+# under `py312` instead of the `py314` its own `[tool.black]` declares. The two
+# targets happen to produce identical output for this code today, which is
+# exactly why nobody would notice the plane split had stopped holding for
+# formatting while it still held for lint.
+extend-exclude = "^/(curation|display)/"
 
 [tool.ruff]
 line-length = 130

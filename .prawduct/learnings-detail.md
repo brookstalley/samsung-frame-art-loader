@@ -315,3 +315,75 @@ This is the third consecutive session in which the measurement apparatus carried
 the defect class it was built to measure — the prior one being an
 `except Exception` in the evaluation driver that would have swallowed the envelope
 invariants and reported a contract violation as a low score.
+
+## A guard built from recurrences is scoped to where you looked, not to the failure
+
+**When repeated instances justify a mechanical guard, derive its scope from the
+failure *mode*, not from where the instances were found.** N recurrences in one
+place are two facts wearing one coat: the failure is real, *and* that is where
+you happened to be looking. Only the first is about the defect. Write the failure
+in one sentence, then ask where else that sentence is true — those places are
+unguarded, and they are where the next instance appears.
+
+This is the sibling of "adding code to a repo means asking which guards were
+scoped to the old shape", and the difference is the whole point. There, a guard
+was correctly scoped and **narrowed** as the repo grew around it. Here the guard
+never narrowed and never will: it was born scoped to its evidence, which was
+narrower than its subject from the first line.
+
+**Worked instance (2026-08-02, the first stamped Norm Health sweep).** Three
+prior sweeps had each found the norm index asserting enforcement it did not have
+— a row naming ruff rules selected in neither `pyproject.toml`, a row naming a
+test file that had never existed, a row whose carve-out list fell three hours
+behind the config. The third built `tests/preferences/test_norm_index.py`, which
+resolves every test artifact the index names and refuses to scan a table it can
+no longer parse. Good guard. Mutation-verified in both directions.
+
+Its scope is **one column of one table** — the Enforcement artifact column — and
+its docstring says so deliberately, because the Why column legitimately discusses
+artifacts that do not exist.
+
+The next sweep found five instances of the same failure and **not one of them was
+in that column**:
+
+- § Tooling described `r`, an extensionless freeze file at the repo root, and
+  asked that it "should be renamed to say so". The rename had shipped; the path
+  had not resolved for a week.
+- § Tooling placed the `dezoomify-rs` configuration in `config.py`, where it has
+  never been — it is a literal in `image_utils.py`.
+- § Code Style said `image_utils.py` annotates 8 return types. The AST says 9.
+- § Architecture Patterns said async was confined to the TV boundary and
+  instructed the reader to "keep it that way". Four modules said otherwise, and
+  had since before the sentence was written.
+- The broad-except row claimed curation had exactly one broad catch, in its
+  **Why** column — the same table, the same row, one cell outside the guard.
+
+The failure mode was never "the Enforcement column names a file that is not
+there". It was **"this artifact asserts something about the tree and nothing
+counted it"** — and that sentence is true of every cell and every bullet in the
+document.
+
+**The direction is not random, and the exception is what makes it legible.**
+Three of the four countable claims understated the gap they were arguing about:
+19 print() calls where there were 39; "the only broad catch" where there were
+three; five service-layer departures where the AST says six — that last one
+written into `project-state.yaml` *during this sweep*, by the agent writing this
+entry, and caught only by re-counting before trusting it. The fourth ran the
+other way: `image_utils.py` was said to annotate 8 return types and annotates 9,
+so the code was better than its description.
+
+That is the tell. The three that drifted were **arguments** — each number was
+doing rhetorical work in a sentence about how bad something was, and each landed
+on the figure that felt right while the argument was being written. The one that
+drifted the other way was **inventory**: nobody was arguing anything with it, so
+it simply went stale when a function gained an annotation. Both fail; only the
+first fails in a direction. Distrust a number hardest when it is load-bearing for
+a claim you are making, because that is when you are least likely to go and count.
+
+**The check.** Every one of these was findable by counting — `grep -c`, an AST
+walk, `git show <commit>:<file>`. None needed judgment. Careful prose review will
+not catch them, twice over: it reads for sense rather than arithmetic, and two
+sessions of it did not. Before asserting a quantity or a location about the tree
+in a durable artifact, run the command that produces it, in that moment. Prefer
+the invariant that cannot go stale; where a number is unavoidable, compute it as
+you write it and never copy one from an adjacent line.
