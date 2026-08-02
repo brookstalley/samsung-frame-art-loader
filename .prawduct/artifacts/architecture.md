@@ -179,6 +179,10 @@ is no network between planes.
 - **Internal layering, inside that plane** (established 2026-07-27):
 
   ```
+        DiscoveryEngine (Protocol)                the seam every paid call sits behind.
+              │                                   Shipped: UnavailableEngine, which refuses
+  DiscoveryRunner                                 runs a run: worker per run, the status
+        │                                         hold, the gate, estimates, spend reports
   MCP tools  ·  HTTP handlers  ·  browser client   bindings: unpack, call one method, format
         └──────────────┬──────────────┘            (the client renders JSON and decides nothing)
                  Services container                what a surface is handed; no surface names one service
@@ -192,6 +196,30 @@ is no network between planes.
         └──────────────┬──────────────┘           and paging — the product judgements
               SqliteDurableStore                  generic: tables, keys, rows. Knows no artwork
   ```
+
+  **`DiscoveryRunner` and the engine seam were added 2026-08-02, and the split
+  between the runner and `DiscoveryService` is the load-bearing part.**
+  `DiscoveryService` owns the *records* — both state machines, the verdicts, the
+  spend rows — and is deliberately synchronous with no notion of a process.
+  `DiscoveryRunner` sits above it and owns everything that has one: a worker per
+  run behind the handle `start` returns, the `status` hold, the approval gate's
+  threshold, the estimates, and spend reporting. A record layer that also knew
+  about worker threads would be untestable without them.
+
+  **`DiscoveryEngine` is a Protocol, and every call that can cost money is behind
+  it.** That placement is the structural half of the ratified norm that spend
+  ceilings are the provider's: the engine reports what it spent and raises
+  `BudgetExhausted` when the provider refuses, and nothing above it consults a
+  local tally to decide whether it may proceed. It is also what makes the run
+  lifecycle testable without a network, an API key, or a cent — a property a test
+  enforces by parsing the modules behind the seam and refusing any import that
+  could open a socket.
+
+  The implementation a deployment currently gets is `UnavailableEngine`, which
+  declares why it cannot run so that `start` is refused *before* a run exists. A
+  convincing stand-in wired here instead would write invented works into a real
+  catalogue, indistinguishable from found ones; the test double therefore lives
+  under `tests/` and is deliberately out of a deployment's reach.
 
   **Two services were added on 2026-08-01, with the first browser surface.**
   `ThumbnailService` produces the downscaled copies that make a forty-card grid a

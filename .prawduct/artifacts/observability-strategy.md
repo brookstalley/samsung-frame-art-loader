@@ -94,8 +94,8 @@ technically logged, practically invisible. *(Restated 2026-08-01: this said
 "Critic-enforced preference; converted on touch", and both halves changed on
 2026-07-27. It is now a **linter** rule — ruff `T20` in both `pyproject.toml`s —
 and its disposition for the eight legacy modules is a **dated waiver, not
-convert-on-touch**: they die with the 2024 modules at Chunk 20, because
-convert-on-touch had no mechanism behind it and all eight were touched without a
+convert-on-touch**: they die with the 2024 modules at the legacy retirement,
+because convert-on-touch had no mechanism behind it and all eight were touched without a
 single call being converted. Do not convert them against that waiver, and do not
 report their survival as a defect. The authority is `project-preferences.md`'s
 `T20` row.)*

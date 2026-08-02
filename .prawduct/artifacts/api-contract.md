@@ -87,7 +87,7 @@ table fifty lines above it, and was one of three surviving sites of the retired
 exemption.)* A blanket policy would either over-engineer the HTTP API or
 under-protect the other two.
 
-Built on the **official `mcp` SDK** (`mcp>=1.27`), not `3tears-mcp` — that package
+Built on the **official `mcp` SDK** (`mcp>=1.28.1`), not `3tears-mcp` — that package
 would drag NATS in via `3tears-epoch`, and its RBAC-gated server has nothing to
 gate in a single-principal product. See `project-state.yaml` →
 `technical_decisions.technology`.
@@ -116,11 +116,26 @@ tool per action stops paying and consolidation starts.
 
 | Tool | Actions | Notes |
 |---|---|---|
-| `art_discovery` | `estimate`, `start`, `status`, `approve`, `decline`, `cancel`, `resolve_images`, `list_runs`, `spend`, `help` | **The only tool that spends money.** Every action but `resolve_images` is live as of 2026-08-02; the re-search arrives with phase 2. Unbuilt actions are **not advertised** — action values are additive, so declaring one before it works would be a promise the surface cannot keep, and a model reading the menu cannot tell a declared action from a working one. |
+| `art_discovery` | `estimate`, `start`, `status`, `approve`, `decline`, `cancel`, `resolve_images`, `list_runs`, `spend`, `help` | **The only tool that spends money.** |
 | `art_review` | `list_works`, `get_work`, `list_images`, `set_canonical`, `set_verdict`, `reject_image`, `help` | Returns thumbnails; see Inputs & Outputs. Never spends. |
 | `art_catalogue` | `list`, `get`, `archive`, `restore`, `retry_acquisition`, `set_mat_color`, `regenerate`, `help` | |
 | `art_theme` | `list`, `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`, `help` | `activate` changes the wall immediately. |
 | `art_display` | `status`, `sync`, `show_now`, `next`, `help` | Every action goes through the theme manifest — see below. |
+
+**This table is the surface as designed, and no row states what is built.** That
+is deliberate rather than an omission: three of the five tools currently declare
+fewer actions than they list here, and annotating some rows and not others is
+worse than annotating none — a reader takes an unannotated row for a complete
+one. **The surface answers the as-built question itself, at runtime and without
+ambiguity:** `action='help'` returns exactly the actions a tool serves, and a
+tool with none carries `unavailable_note` saying so. A caller therefore cannot
+be misled into calling something that does not exist, which is the failure a
+build-status column would exist to prevent.
+
+**Unbuilt actions are never declared.** Action values are additive and a
+declaration is a promise, so an action appears in the registry on the day it
+works — a model reading the menu has no way to tell a declared action from a
+working one, and finding out by calling it is the expensive way.
 
 ### What the review surface must show about an image
 
@@ -184,7 +199,8 @@ read is a second, rarer route to the same state.)
 
 The membership check is deliberately **not** added here: only the display plane
 can decide what to do with a pin it cannot resolve, and choosing at the writing
-end would design that behaviour from the wrong plane. Chunk 12 settles it — log
+end would design that behaviour from the wrong plane. The plane that builds the
+display side settles it — log
 one WARNING and carry on rotating, by the same posture as a missing render file.
 
 Two consequences worth stating because they surprise:

@@ -17,7 +17,7 @@ from decimal import Decimal
 import pytest
 from fakes import a_work, a_work_list, spent, works
 
-from curation.discovery.engine import BudgetExhausted, EngineFailure, WorkList, unavailable_engine
+from curation.discovery.engine import BudgetExhausted, EngineFailure, ProposedWork, WorkList, unavailable_engine
 from curation.persistence.discovery_records import InitiatedBy, RunStatus, SpendCategory, Verdict
 from curation.services.errors import ServiceError
 from curation.services.runner import DiscoveryRunner
@@ -430,3 +430,38 @@ def test_spend_with_nothing_named_reports_the_current_utc_month(runner):
 
     assert report.scope == "month"
     assert (report.year, report.month) == (now.year, now.month)
+
+
+def test_a_work_the_engine_returns_with_no_rationale_fails_the_run_rather_than_hanging_it(services, engine, settings):
+    """A refusal while settling is not automatically a cancellation.
+
+    The record layer refuses a work with no rationale using the same exception a
+    cancelled run raises, and reading both as "somebody stopped this" would leave
+    the run sitting in a phase nothing is working on, with nothing recorded as
+    wrong — a permanent silent hang, which is the failure the worker exists to
+    make impossible.
+    """
+    engine.result = WorkList(works=(ProposedWork(title="The Elephants", rationale="  "),), spend=spent())
+    runner = DiscoveryRunner(services.discovery, engine, settings.discovery_settings, spawn=lambda work: work())
+
+    run = services.discovery.get_run(start(runner).id)
+
+    assert run.status is RunStatus.FAILED
+    assert run.status.is_terminal, "a run nothing is working on must not be left in a process-held state"
+
+
+def test_a_re_search_is_not_granted_the_flat_phase_one_allowance(runner, services, settings):
+    """Phase 1 already happened on its parent, so a re-search never runs one.
+
+    Granting the flat allowance as well would report a bound larger than a
+    resolve run could legitimately use — on the operation a curator can repeat
+    as often as they like.
+    """
+    run_id = start(runner).id
+    work = services.discovery.list_candidate_works(run_id)[0]
+    child = services.discovery.start_resolve_run(candidate_work_ids=[work.id], initiated_by=InitiatedBy.WEB_UI)
+
+    view = runner.run_status(child.id, wait=False)
+
+    assert view.work_count == 1
+    assert view.search_allowance == settings.discovery_settings.phase2_searches_per_work

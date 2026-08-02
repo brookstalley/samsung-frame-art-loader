@@ -44,10 +44,11 @@
 
 ### HTTP API (curation UI)
 
-- **Exists:** **yes, as of 2026-08-01** (Chunk 10B). This row read "no" until then,
+- **Exists:** **yes, as of 2026-08-01.** This row read "no" until then,
   including in the bundle that built it — which mattered because an `Exists: no`
   row silently disarms the consumer-impact investigation this file exists to
-  arm, and Chunk 19 extends exactly this surface.
+  arm, and the discovery half of the browser surface extends exactly this one
+  rather than standing up a second.
 - **Producer:** the FastAPI app on the curation plane — `curation/src/curation/http/api.py`,
   with typed responses in `http/models.py`.
 - **Consumer:** the curation UI, and nothing else — `http/static/app.js`, which
@@ -82,9 +83,10 @@
 - **Exists:** **the producing half does**, as of 2026-07-31 — curation writes
   `theme-manifest.json` into `ART_ROOT` (schema major 1), atomically, with the
   rotation settings and directive block the design calls for. **The consuming
-  half does not:** the display plane arrives at Chunk 12, so nothing reads this
+  half does not:** the display plane does not exist yet, so nothing reads this
   file yet. Curation also *reads* the reverse-direction heartbeat and reports
-  honestly that none exists, which is the true state until Chunk 13.
+  honestly that none exists, which stays the true state until a display plane
+  runs and writes one.
 - **Producer:** curation plane. **Consumer:** display plane. **Same machine.**
 - **Contract:** the **theme manifest** — a versioned JSON document written
   atomically (temp + `os.replace`) into the shared `ART_ROOT` and polled by display

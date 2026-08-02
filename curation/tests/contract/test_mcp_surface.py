@@ -234,3 +234,20 @@ def test_a_stale_render_is_refused_in_the_words_the_tip_uses(service, display, r
 
     assert excluded.detail in str(refused.value)
     assert "earlier acquisition" in str(refused.value).lower()
+
+
+def test_a_parameter_that_is_required_by_some_actions_is_described_neutrally(tools):
+    """Every action's parameters are flattened onto one wire schema, and only the
+    first description survives.
+
+    `run_id` is required by `status`, `approve`, `decline` and `cancel`, and
+    optional to `estimate` and `spend`. A description written for either case is
+    published as though it governed both — so one that said "omit this for the
+    cost of a new question" would be telling a model that omitting it is
+    meaningful on the four actions where it is simply an error. What each action
+    does with the parameter belongs in that action's own description and tips.
+    """
+    published = tools["art_discovery"].inputSchema["properties"]["run_id"]["description"]
+
+    assert "omit" not in published.lower(), f"run_id's published description assumes one action's arity: {published!r}"
+    assert "run" in published.lower()

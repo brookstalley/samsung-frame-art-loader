@@ -15,6 +15,7 @@ import logging
 import sys
 from pathlib import Path
 
+from curation import logs
 from curation.config import Settings
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.sqlite import SqliteCatalogue
@@ -25,7 +26,10 @@ from curation.services.catalogue import CatalogueService
 
 def main(argv: list[str] | None = None) -> int:
     """Read the index, seed the catalogue, print what happened."""
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    # The same shape the serving entry point installs. Two entry points into one
+    # plane emitting two log formats is a journal that has to be read two ways,
+    # and the one that ingests the whole 2024 corpus is not the one to leave out.
+    logs.configure(level=logging.INFO)
     parser = argparse.ArgumentParser(prog="python -m curation.seed", description=__doc__.splitlines()[0])
     parser.add_argument("index", type=Path, help="the 2024 index file, normally all.json in the legacy checkout")
     arguments = parser.parse_args(argv)

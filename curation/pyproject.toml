@@ -21,7 +21,13 @@ dependencies = [
     # always-on-but-idle plane on a Pi. Dropped 2026-08-01; add it back with the
     # named component and the measurement that wanted it.
     "uvicorn",
-    "mcp>=1.27",
+    # The floor is the version this code is actually verified against, not the
+    # one the design was first written for. `app.py` passes `session_idle_timeout`
+    # to `StreamableHTTPSessionManager`, and that parameter is confirmed present
+    # here and nowhere earlier — a resolve below it raises TypeError while the
+    # application is being built, so every request fails and the plane never
+    # serves. The old `>=1.27` was a claim nobody had checked.
+    "mcp>=1.28.1",
     "python-dotenv",
     # The typed response models the HTTP API returns. It resolves transitively
     # via mcp, but this code imports it directly now, and the rule below cuts

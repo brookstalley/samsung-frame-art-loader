@@ -324,7 +324,7 @@ eval = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi" },
-    { name = "mcp", specifier = ">=1.27" },
+    { name = "mcp", specifier = ">=1.28.1" },
     { name = "pillow" },
     { name = "pydantic" },
     { name = "python-dotenv" },

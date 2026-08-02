@@ -85,12 +85,19 @@ ART_CATALOGUE: Final = ToolRecord(
     ),
 )
 
-_RUN_ID = Param(
-    name="run_id",
-    type="string",
-    description="The run's id, as returned by action='start' or action='list_runs'.",
-    required=True,
-)
+#: One description for `run_id`, because every action's parameters are flattened
+#: onto a single wire schema and only the first description survives. This is the
+#: surface's first parameter that is required by some actions and optional to
+#: others, so a description written for either case would be published as though
+#: it governed both — telling a model that omitting `run_id` prices a new question
+#: on the four actions where omitting it is simply an error. What each action does
+#: with it belongs in that action's own description and tips, which `help` shows.
+_RUN_ID_DESCRIPTION = "A discovery run's id, as returned by action='start' or action='list_runs'."
+
+_RUN_ID = Param(name="run_id", type="string", description=_RUN_ID_DESCRIPTION, required=True)
+
+#: The same parameter where it is optional, and its absence asks a wider question.
+_OPTIONAL_RUN_ID = Param(name="run_id", type="string", description=_RUN_ID_DESCRIPTION)
 
 ART_DISCOVERY: Final = ToolRecord(
     name="art_discovery",
@@ -104,13 +111,7 @@ ART_DISCOVERY: Final = ToolRecord(
             name="estimate",
             description="Price a discovery run before starting it, or price resolving one that has already found works.",
             example="art_discovery(action='estimate')",
-            params=(
-                Param(
-                    name="run_id",
-                    type="string",
-                    description="Omit for the cost of asking a new question. Give one for the cost of resolving what it found.",
-                ),
-            ),
+            params=(_OPTIONAL_RUN_ID,),
             tips=(
                 "This is the one action on this tool that spends nothing, so an intent can always be priced "
                 "before it is committed to.",
@@ -207,11 +208,7 @@ ART_DISCOVERY: Final = ToolRecord(
             description="Report what one run cost, or what a whole calendar month cost.",
             example="art_discovery(action='spend', run_id='<a run_id>')",
             params=(
-                Param(
-                    name="run_id",
-                    type="string",
-                    description="The run to price. Omit to report a month instead.",
-                ),
+                _OPTIONAL_RUN_ID,
                 Param(
                     name="year",
                     type="integer",

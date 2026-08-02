@@ -437,15 +437,7 @@ class DiscoveryRunner:
                 estimated_cost_usd=estimate,
             )
         except ServiceError as exc:
-            # The run left `resolving_works` while the engine was working — a
-            # curator cancelled it. Its spend is already recorded; its results
-            # are discarded, because writing works onto a run somebody stopped
-            # would resurrect the thing they stopped.
-            log.info(
-                "phase 1 finished on a run that had already ended; discarding its results: %s",
-                exc,
-                extra={"event": "run.discarded"},
-            )
+            self._could_not_settle(run_id, exc)
             return
         self._bump()
         log.info(
@@ -461,6 +453,32 @@ class DiscoveryRunner:
                 "approval_threshold": self._settings.approval_threshold,
                 "estimated_cost_usd": str(estimate),
             },
+        )
+
+    def _could_not_settle(self, run_id: str, exc: ServiceError) -> None:
+        """Decide what a refusal during settling actually was, rather than assuming.
+
+        Two very different things raise here and the run's own state is what
+        tells them apart. If it has ended, a curator cancelled it while the
+        engine was working: its spend stands, its results are discarded, and
+        that is an ordinary outcome — writing works onto a run somebody stopped
+        would resurrect the thing they stopped.
+
+        **Anything else is a fault, and must end the run.** An engine returning
+        a work with no title or no rationale is refused by the record layer with
+        the same exception type, and treating that as a cancellation would leave
+        the run sitting in a phase nothing is working on, with nothing recorded
+        as wrong — the silent hang this whole worker is arranged to prevent.
+        """
+        if self._discovery.get_run(run_id).status.is_terminal:
+            log.info(
+                "phase 1 finished on a run that had already ended; discarding its results: %s",
+                exc,
+                extra={"event": "run.discarded"},
+            )
+            return
+        self._end(
+            run_id, self._discovery.fail_run, "run.failed", f"Phase 1 produced a work list that could not be recorded: {exc}"
         )
 
     def _propose(self, run_id: str, produced: WorkList) -> tuple[int, int, int]:
@@ -516,11 +534,23 @@ class DiscoveryRunner:
             unresolved=len(results.unresolved),
             pending=len(results.pending),
             searches_used=self._discovery.searches_in_run(run_id),
-            # The two-part cap as one number: a flat phase-1 allowance, plus a
-            # per-work phase-2 component that only exists once phase 1 has said
-            # how many works there are.
-            search_allowance=self._settings.phase1_search_allowance + works * self._settings.phase2_searches_per_work,
+            search_allowance=self._allowance_for(results.run, works),
         )
+
+    def _allowance_for(self, run: DiscoveryRun, works: int) -> int:
+        """The two-part cap as one number, for the phases this run actually performs.
+
+        A discovery run gets the flat phase-1 allowance plus a per-work component
+        that only exists once phase 1 has said how many works there are. **A
+        re-search gets only the per-work component**, because phase 1 already
+        happened on its parent: granting it the flat allowance as well would
+        report a bound larger than anything it could legitimately use, on the
+        operation a curator can repeat as often as they like.
+        """
+        per_work = works * self._settings.phase2_searches_per_work
+        if run.kind is RunKind.RESOLVE:
+            return per_work
+        return self._settings.phase1_search_allowance + per_work
 
     def _record_spend(self, run_id: str, spend: Sequence[EngineSpend]) -> None:
         """Write down what the engine spent, whether or not the run succeeded.

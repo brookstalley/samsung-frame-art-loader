@@ -11,8 +11,14 @@ scattering its tests into a file that disclaims it is how that boundary stops
 being legible.
 """
 
-from curation.mcp.bindings import _truncation_notice
+from datetime import UTC, datetime
+
+import pytest
+
+from curation.mcp.bindings import _run_notice, _truncation_notice
+from curation.persistence.discovery_records import DiscoveryRun, InitiatedBy, RunKind, RunStatus
 from curation.services.catalogue import MAX_LIST_LIMIT
+from curation.services.runner import RunView
 
 
 def test_a_complete_page_gets_no_notice(seeded_service):
@@ -69,3 +75,71 @@ def test_the_last_page_reached_by_paging_carries_no_notice(service):
         service.add_artwork(title=f"Work {index:03d}")
 
     assert _truncation_notice(service.list_artworks(limit=4, offset=8)) is None
+
+
+# -- what a run's state means to whoever asked ----------------------------------
+
+
+@pytest.mark.parametrize("status", list(RunStatus))
+def test_every_state_a_run_can_be_read_in_carries_guidance(status):
+    """A state name says what happened; the notice says what to do about it.
+
+    Parametrised over the enum rather than over a list written here, so a state
+    added later arrives already covered instead of silently falling through to
+    whatever the default says. That matters most for the states nobody expects
+    to meet: an agent reading an unfamiliar one has the notice and nothing else.
+    """
+    view = RunView(
+        run=DiscoveryRun(
+            id="r1",
+            kind=RunKind.DISCOVERY,
+            initiated_by=InitiatedBy.MCP_CLIENT,
+            status=status,
+            approval_required=False,
+            started_at=datetime(2026, 8, 2, 9, 0, tzinfo=UTC),
+        ),
+        resolved=1,
+        unresolved=1,
+        pending=0,
+        searches_used=3,
+        search_allowance=14,
+    )
+
+    notice = _run_notice(view)
+
+    assert notice.strip(), f"{status} carries no guidance"
+    assert notice.endswith("."), f"{status}'s guidance is not a sentence"
+
+
+@pytest.mark.parametrize(
+    ("status", "must_say"),
+    [
+        (RunStatus.HALTED_BY_BUDGET, "retrying will fail"),
+        (RunStatus.INTERRUPTED, "nothing to investigate"),
+        (RunStatus.FAILED, "worth investigating"),
+    ],
+)
+def test_the_three_endings_an_agent_must_tell_apart_each_say_what_to_do_next(status, must_say):
+    """Stop, run it again, and investigate are three different instructions.
+
+    An agent that reads them as one will either retry a real fault forever or
+    escalate a routine deploy restart as a bug. The state alone distinguishes
+    them; this is the sentence that says why it matters.
+    """
+    view = RunView(
+        run=DiscoveryRun(
+            id="r1",
+            kind=RunKind.DISCOVERY,
+            initiated_by=InitiatedBy.MCP_CLIENT,
+            status=status,
+            approval_required=False,
+            started_at=datetime(2026, 8, 2, 9, 0, tzinfo=UTC),
+        ),
+        resolved=0,
+        unresolved=0,
+        pending=0,
+        searches_used=0,
+        search_allowance=10,
+    )
+
+    assert must_say in _run_notice(view)

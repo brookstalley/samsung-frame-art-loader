@@ -49,9 +49,7 @@ async def settled(server_url, run_id: str) -> dict:
     """
     for _ in range(5):
         payload, _errored = await call(server_url, "art_discovery", action="status", run_id=run_id)
-        if payload["status"] not in {RunStatus.RESOLVING_WORKS, RunStatus.RESOLVING_IMAGES}:
-            return payload
-        if payload["status"] == RunStatus.RESOLVING_IMAGES:
+        if payload["status"] != RunStatus.RESOLVING_WORKS:
             return payload
     raise AssertionError(f"run {run_id} never settled: {payload}")
 
@@ -374,12 +372,14 @@ async def test_an_unknown_run_state_is_refused_with_the_valid_set(server_url):
 # -- correlation -------------------------------------------------------------------
 
 
-async def test_a_line_emitted_inside_a_run_carries_that_runs_id(server_url, runner, services, engine, caplog):
-    """The correlation key reaches the journal through the real code path.
+async def test_a_line_emitted_inside_a_run_carries_that_runs_id(runner, caplog):
+    """The correlation key reaches the journal through the plane's own code path.
 
-    Driven through the runner rather than by binding the context by hand,
-    because what is being checked is that the plane's own logging *is* bound —
-    a test that set the context itself would prove only that the filter works.
+    Driven through the runner rather than by binding the context by hand: what
+    is under test is that the *product* binds it, and a test that opened the
+    context itself would prove only that the filter works. That distinction is
+    the whole claim — the id has to arrive on lines whose call sites know
+    nothing about runs.
     """
     import logging
 
@@ -392,4 +392,62 @@ async def test_a_line_emitted_inside_a_run_carries_that_runs_id(server_url, runn
 
     correlated = [record for record in caplog.records if getattr(record, "run_id", None) == run.id]
     assert correlated, "no log line carried the run id"
+    # Both ends of phase 1, so this cannot pass on the one line that happens to
+    # be emitted where the context is opened.
     assert {getattr(record, "event", None) for record in correlated} >= {"run.started", "run.work_list_ready"}
+
+
+# -- the prose the surface ships -------------------------------------------------
+
+
+async def test_a_run_that_has_already_ended_cannot_be_cancelled_and_the_refusal_names_how(server_url, engine):
+    """The tip on `cancel` promises exactly this, so the tip is driven, not read.
+
+    A tool tip is what a model reads before deciding what to call, and it drifts
+    like any other prose — with nothing checking it, because it is documentation
+    right up until a model acts on it.
+    """
+    engine.result = a_work_list(26)
+    run_id = await a_run(server_url)
+    await settled(server_url, run_id)
+    await call(server_url, "art_discovery", action="decline", run_id=run_id)
+
+    payload, errored = await call(server_url, "art_discovery", action="cancel", run_id=run_id)
+
+    assert errored is True
+    assert "declined" in payload["error"], "the refusal should name how the run ended"
+
+
+async def test_declining_is_refused_anywhere_but_the_gate(server_url, engine):
+    """`decline` is a judgement on a work list, so it needs one to judge."""
+    engine.result = a_work_list(2)
+    run_id = await a_run(server_url)
+    await settled(server_url, run_id)
+
+    payload, errored = await call(server_url, "art_discovery", action="decline", run_id=run_id)
+
+    assert errored is True
+    assert "awaiting_approval" in payload["error"]
+
+
+async def test_a_refusal_carries_a_correct_example_rather_than_a_correction(server_url):
+    """Every error names what was wrong, and shows a call that would work.
+
+    Never a guess at what the caller meant: there is no nearest-match logic
+    anywhere on this surface, because a single guess can mislead where an
+    enumerated set cannot.
+    """
+    payload, errored = await call(server_url, "art_discovery", action="status", run_id="no-such-run")
+
+    assert errored is True
+    assert "no-such-run" in payload["error"]
+    assert payload["example"].startswith("art_discovery(action='status'")
+    assert "art_discovery(action='help')" in payload["hint"]
+
+
+async def test_starting_without_an_intent_names_what_is_required(server_url):
+    payload, errored = await call(server_url, "art_discovery", action="start")
+
+    assert errored is True
+    assert "'intent'" in payload["error"]
+    assert payload["required_parameters"] == ["intent"]
