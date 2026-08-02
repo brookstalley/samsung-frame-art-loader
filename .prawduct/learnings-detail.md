@@ -165,6 +165,45 @@ which case an unchanged list beside new code is the defect, not the reassurance.
 Now inverted to an allowlist over the whole package, proven by planting a
 violation in a module the old form never named.
 
+## A negative claim needs the search that would have falsified it
+
+"There is no X" cannot be checked against the evidence that produced it: *I looked and found nothing* and *I looked in the wrong place* are the same observation. So before writing one down, name the search that would have found an X and confirm it covers where an X would actually live.
+
+**Two instances, 2026-08-02, both inside Critic-resolution prose and both caught
+by the next review.**
+
+- Resolving a finding about `requirements.txt`, I wrote that no backlog item had
+  ever been filed for the gap — so the old "filed rather than fixed" disposition
+  "pointed at a record that did not exist". **Issue #31 was open the whole time.**
+  The search read `.prawduct/backlog.md`, which this project froze when it moved
+  to the GitHub Issues backend — a fact recorded in the *same review* I was
+  resolving, as a separate finding.
+- Recording why a new MCP result field shipped without a contract test, I wrote
+  that "nothing under `tests/contract/` asserts result shapes today, which is why
+  the letter could not be followed cheaply". That suite asserts payload fields
+  throughout, including the whole error envelope, through the same booted-server
+  driver the new assertion would use. I checked the directory rather than the
+  claim.
+
+**Why this is worse than an ordinary wrong fact: a false negative usually arrives
+as a *reason*.** Both of these were justifications for a decision, written into
+durable records. A wrong assertion gets corrected when someone trips over it; a
+wrong reason gets **reused** — the second was already licensing the next skip of a
+gate that exists to catch producer/consumer disagreements across an external
+surface, and the next person would have skipped it on my authority.
+
+**Same shape as a literal-scope guard, one layer up.** There, green means "nothing
+was found in whatever I looked at" and the size of *whatever I looked at* is what
+no assertion states. Here, prose makes the identical claim with no assertion at
+all. The remedy is the same: state the scope, not just the finding. "No item on
+the Issues backend (`gh issue list --state all --search …`)" is checkable; "no
+backlog item was ever written" is not.
+
+**Cheapest sufficient checks, both under ten seconds:** for a backlog claim, query
+the live backend named in `backlog_service_repo` rather than any file; for a
+"nothing tests X" claim, grep for the assertion shape rather than looking at the
+directory.
+
 ## Prose that ships to a caller is behaviour, and needs a test aimed at it
 
 When a behaviour changes, the sweep has to reach the sentences that describe it to the caller — a tool tip, a `help` payload, an error hint — not only the artifacts and the docstrings; and where a tip states a rule the code enforces, pin them to each other with a test keyed on the enum of causes.
