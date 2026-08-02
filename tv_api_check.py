@@ -25,6 +25,7 @@ import time
 import requests
 from samsungtvws.async_art import SamsungTVAsyncArt
 from samsungtvws.exceptions import ConnectionFailure, HttpApiError, ResponseError
+from websockets.exceptions import WebSocketException
 
 import config
 from tv_delete import UPLOADED_CATEGORY, DeleteNotConfirmed, delete_list_confirmed
@@ -264,11 +265,25 @@ async def guarded(report: Report, name: str, coroutine):
     second trip, so an unexpected exception is recorded as a finding and the run
     continues. `AssertionError` is in the list on purpose: it is how this library
     reports a timed-out request. `OSError` is what covers the builtin
-    `TimeoutError` a websocket open raises against its `open_timeout`.
+    `TimeoutError` a websocket open raises against its `open_timeout`, and
+    `WebSocketException` the handshake failures that are not `OSError` at all.
+
+    Not a complete set, and cannot be: a television that accepts the websocket
+    and then goes silent hangs in the startup `recv()`, which carries no timeout
+    of its own. That one is a stopwatch and a Ctrl-C, and it is a finding.
     """
     try:
         return await coroutine
-    except (OSError, AssertionError, KeyError, ResponseError, HttpApiError, ConnectionFailure, DeleteNotConfirmed) as err:
+    except (
+        OSError,
+        AssertionError,
+        KeyError,
+        ResponseError,
+        HttpApiError,
+        ConnectionFailure,
+        WebSocketException,
+        DeleteNotConfirmed,
+    ) as err:
         report.fail(name, f"raised {type(err).__name__}: {err}")
         return None
 

@@ -76,12 +76,15 @@ blocking network I/O and raises when the set is unreachable, where the pin
 deferred that to first use; the display daemon inherits that and cannot construct
 one on its event loop.
 
-**Deletion now reports what the set holds.** `tv_delete.delete_list_confirmed`
-verifies against the television's own content list and keeps three outcomes apart
-— gone, still listed, and unconfirmable — because collapsing them is the defect
-this replaces. Images the set kept are a WARNING naming them, so the outcome
-cannot go unreported even where a caller drops the result; a removal nobody could
-confirm either way is an ERROR that does not stop the caller's remaining work.
+**Deletion now reports what the set holds.** The new `tv_delete` verifies against
+the television's own content list and keeps three outcomes apart — gone, still
+listed, and unconfirmable — because collapsing them is the defect this replaces.
+Images the set kept are a WARNING naming them, so the outcome cannot go
+unreported even where a caller drops the result. The unconfirmable case has two
+entry points that differ only in what it costs the caller:
+`delete_list_confirmed` raises, and `remove_from_tv` logs an ERROR and carries on
+— which is what the loader uses, because stopping there would skip the catalogue
+save and every pending upload.
 
 **Also found while verifying, and filed rather than fixed:** `requirements.txt`
 cannot stand up a working legacy environment — `art.py` imports `cairo` and `gi`,

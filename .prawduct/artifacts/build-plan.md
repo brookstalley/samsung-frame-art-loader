@@ -491,6 +491,15 @@ architecture-proving slice is Chunk 07.
     is unreachable, where the pin deferred that to first use. Chunk 12's daemon
     inherits this: construction cannot sit on the event loop, and an asleep
     television surfaces there rather than at `start_listening`.
+- **`tv_api_check.py` has no unit tests, and cannot have them here.** It imports
+  `samsungtvws`, a Pi-side runtime dependency the root project deliberately keeps
+  in `requirements.txt` rather than installing, so the module has no reachable
+  test home in this suite. The symbol-grep coverage floor scores it as
+  "referenced" on the `tv_delete` symbols it imports — that is the floor behaving
+  as documented, not a coverage claim. Its logic goes into the display plane's
+  suite with the rest of the TV boundary, where the library is present. The
+  deletion wrapper it calls is separately and fully tested, because that module
+  takes the client as a parameter and imports nothing.
 - **What the bench pass still owes:** `tv_api_check.py` is the scripted pass —
   construction cost, model and API generation, which callback spelling this set
   emits, a real 4K upload timed by path, and a confirmed delete of only the image
