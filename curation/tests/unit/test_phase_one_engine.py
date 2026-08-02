@@ -247,6 +247,71 @@ def test_a_work_the_record_layer_would_refuse_is_dropped_not_fatal(entry, why):
     assert [work.title for work in produced.works] == ["Landscape"], why
 
 
+# -- citation markup in the fields that carry a work's identity -----------------
+
+
+def test_a_title_arriving_with_a_markdown_citation_keeps_only_the_name():
+    """Verbatim from a real run: a search-augmented answer cites as it writes,
+    and does not confine that to prose.
+
+    The markup is not part of the name. Left in, it reaches the curator's review
+    card as raw syntax and corrupts the identity derived from the title, so one
+    returning work reads as two and suppression stops working on it.
+    """
+    contaminated = (
+        "The Night Watch (Militia Company of District II under the Command of Captain Frans Banninck Cocq) "
+        "[rijksmuseum.nl](https://www.rijksmuseum.nl/en/collection/object/De-Nachtwacht--3137deb45cd7765f9a76084a16c99544)"
+    )
+    answer = {"strategy": "s", "works": [{"title": contaminated, "artist": "Rembrandt", "rationale": "r"}]}
+
+    produced = engine_over(responding(answer)).enumerate_works(asked())
+
+    assert produced.works[0].title == (
+        "The Night Watch (Militia Company of District II under the Command of Captain Frans Banninck Cocq) rijksmuseum.nl"
+    )
+    assert "http" not in produced.works[0].title
+    assert "](" not in produced.works[0].title
+
+
+def test_a_bare_url_in_an_artist_is_removed_too():
+    """The artist is the other half of the identity, so it carries the same risk."""
+    answer = {
+        "strategy": "s",
+        "works": [{"title": "The Milkmaid", "artist": "Johannes Vermeer https://example.org/v", "rationale": "r"}],
+    }
+
+    produced = engine_over(responding(answer)).enumerate_works(asked())
+
+    assert produced.works[0].artist == "Johannes Vermeer"
+
+
+def test_cleaning_a_name_leaves_the_punctuation_real_titles_contain():
+    """Not a general sanitiser. Parentheses, commas, colons, accents and hyphens
+    are all load-bearing in real catalogue titles — a scrub that took them would
+    merge works that differ only by a catalogue number."""
+    answer = {
+        "strategy": "s",
+        "works": [{"title": "Abstraktes Bild (742-4)", "artist": "Gerhard Richter", "rationale": "r"}],
+    }
+
+    produced = engine_over(responding(answer)).enumerate_works(asked())
+
+    assert produced.works[0].title == "Abstraktes Bild (742-4)"
+
+
+def test_a_rationale_keeps_its_citations():
+    """A citation in prose is evidence the curator benefits from seeing; only the
+    identity fields are cleaned."""
+    answer = {
+        "strategy": "s",
+        "works": [{"title": "T", "artist": "A", "rationale": "Held at [the Rijksmuseum](https://rijksmuseum.nl)."}],
+    }
+
+    produced = engine_over(responding(answer)).enumerate_works(asked())
+
+    assert produced.works[0].rationale == "Held at [the Rijksmuseum](https://rijksmuseum.nl)."
+
+
 def test_an_answer_naming_no_works_is_an_empty_list_not_a_failure():
     """ "Nothing matched" is a real answer to a narrow intent, and a run that
     reports it honestly is not a run that broke."""

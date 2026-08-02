@@ -27,6 +27,7 @@ run rather than a setting nothing honours.
 
 import json
 import logging
+import re
 from collections.abc import Mapping
 from typing import Any, Final
 
@@ -207,6 +208,33 @@ def _spend_of(completion: Completion) -> tuple[EngineSpend, ...]:
     return tuple(rows)
 
 
+#: An inline markdown link, `[text](url)`. A search-augmented answer cites as it
+#: writes, and it does not confine that to prose: real runs returned titles like
+#: `The Night Watch (...) [rijksmuseum.nl](https://...)`. Kept as the link *text*
+#: rather than dropped whole, because the visible half is usually the name.
+_MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\(\s*<?[^)\s]*>?\s*\)")
+
+#: A URL that arrived without the markdown wrapper around it.
+_BARE_URL = re.compile(r"https?://\S+")
+
+
+def _clean_name(value: str) -> str:
+    """A work's name with citation markup removed, and nothing else changed.
+
+    Only the two identity fields are cleaned. A citation inside `rationale` is
+    prose the curator benefits from, but inside a title it is neither part of the
+    name nor something the review card should render — and it corrupts the work
+    identity derived from that title, so one returning work reads as two.
+
+    Deliberately not a general sanitiser: this removes link *syntax*, not
+    punctuation, diacritics or parentheses, all of which occur in real titles.
+    """
+    return _WHITESPACE_RUN.sub(" ", _BARE_URL.sub(" ", _MARKDOWN_LINK.sub(r"\1", value))).strip()
+
+
+_WHITESPACE_RUN = re.compile(r"\s+")
+
+
 def _read_works(raw: object) -> tuple[ProposedWork, ...]:
     """Turn the answer's work entries into proposals, dropping what is unusable.
 
@@ -222,9 +250,9 @@ def _read_works(raw: object) -> tuple[ProposedWork, ...]:
     for entry in raw:
         if not isinstance(entry, dict):
             continue
-        title = str(entry.get("title") or "").strip()
+        title = _clean_name(str(entry.get("title") or ""))
         rationale = str(entry.get("rationale") or "").strip()
-        artist = str(entry.get("artist") or "").strip()
+        artist = _clean_name(str(entry.get("artist") or ""))
         if not title or not rationale:
             log.warning(
                 "dropping a proposed work that cannot be recorded",
