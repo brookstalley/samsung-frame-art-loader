@@ -48,6 +48,62 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-02: Chunk 15 — the derivation and the engine, both decided by measurement
+
+<!-- prawduct: chunks=15 | status=shipped | scope=v1-build -->
+
+**Why:** two derivations the rest of discovery depends on were unmeasured guesses,
+and the plan front-loaded them so they could not be settled implicitly three
+different ways later.
+
+**Cross-run suppression was working about a fifth of the time.** Measured against
+128 proposals captured from 22 real runs: ask the same intent twice and the same
+painting returns under a different name. Normalised artist plus title held **7 of
+36** recurring works together; the derivation now shipped holds **29 of 36**. That
+fraction is the share of a curator's rejections that keep working, so Q3 — the
+question `data-model.md` calls the one most easily missed — was mostly unanswered.
+
+**Neither of the two hazards named in advance was the one that bit.** The feared
+false positive (bare "Untitled" repeated by one artist) barely occurs, because
+real catalogue titles carry disambiguators the normalisation already preserved.
+The dominant cause was unlisted: the same model, on the same intent, minutes
+apart, appends a year.
+
+**Two rules that scored better were rejected**, because the directions are not
+symmetric. A split asks the curator about one painting twice — visible,
+self-correcting. A merge silently withholds a painting nobody turned down. So
+stripping any trailing parenthetical is out (it collapses Richter's hundreds of
+`Abstraktes Bild`), and first-and-last artist names are out (`Hans Holbein the
+Younger` becomes `hans younger`). A provenance-tail rule reached 31 of 36 and was
+also rejected: it broke a work it had been holding.
+
+**The engine comparison reversed its own premise.** `nonfunctional-requirements.md`
+had argued cost could not discriminate, so engine choice had to be a quality
+decision. Across sixteen holding-museum cases and a recency-bound intent, Exa,
+Parallel and Perplexity scored identically. Quality did not discriminate; cost did,
+four to one. Parallel is pinned. The model-tier half was measured too: both tiers
+proposed only verifiable works, and the cheaper one proposed more.
+
+**Three defects found by running it for real, none of which any test could have
+caught.** Phase 1 leaked markdown citations into `proposed_title`, corrupting both
+the review card and the identity derived from it. A truncated answer was reported
+as the model emitting bad JSON when it had been cut off at the output reservation —
+two of thirteen runs, with the actionable half of the diagnosis missing. And the
+search engine was never pinned, so which back-end the product used was a side
+effect of `DISCOVERY_MODEL`.
+
+**The sweep found a defect the decision itself introduced.**
+`DISCOVERY_SEARCH_COST_USD` still held the Exa price while the pinned engine bills
+a fifth of it, which would have overstated search five-fold in the one figure a
+curator authorises against. A test now holds the two settings together.
+
+**Recorded honestly rather than flattered:** the corpus contains no two works any
+candidate would wrongly unite, so its zero over-merges is absence of evidence, not
+evidence of absence — the cases that would show one are pinned as separate unit
+tests. The seven residual splits are two named shapes, asserted so the claim fails
+rather than decays. No re-key migration shipped because no deployment holds
+`CandidateWork` rows; the obligation stands for any that does.
+
 ## 2026-08-02: Discovery spends for the first time, and the ceiling is proven closed
 
 <!-- prawduct: chunks=14B | status=shipped | scope=v1-build -->

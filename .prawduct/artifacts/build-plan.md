@@ -101,7 +101,7 @@ current chunk, and a blocked chunk ahead of active work silently hands its
 - [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [ ] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
-- [ ] Chunk 15: Spikes — search-engine choice and `work_dedup_key` derivation (issue #18)
+- [x] Chunk 15: Spikes — search-engine choice and `work_dedup_key` derivation (issue #18)
 - [ ] Chunk 16: Discovery phase 2 — works to instances, resolve runs
 - [ ] Chunk 17: Review and acceptance — `art_review`, thumbnails inline, promotion
 - [ ] Chunk 18: Acquisition and preparation — fetch, metadata, mat engine, 4K render
