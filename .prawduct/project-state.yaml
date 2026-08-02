@@ -2079,17 +2079,31 @@ open_questions:
   # ceiling. Routing search through OpenRouter's plugin rather than a direct Exa
   # account is strictly better on both axes ($0.005 vs $0.007, and one meter
   # instead of two).
-  - question: "Which search engine should discovery default to — Parallel, Exa, or Perplexity?"
-    blocking: "Nothing structural. All three are affordable; this is a result-quality decision with no evidence yet."
-    waiting_on: research
-    priority: medium
-    # Opened 2026-07-20 when the cost question resolved without discriminating
-    # between engines: the spread is $0.05 vs $0.25 per run, which against a $20
-    # ceiling is not decision-relevant. Choosing on price would be choosing on the
-    # one axis that does not matter. Deferred to a build-time spike, which must
-    # compare on this product's actual hard cases — resolving a named work to a
-    # specific museum page, and answering a recency-bound intent ("recent
-    # award-winning art") — not on generic search relevance.
+  # RESOLVED 2026-08-02 — discovery defaults to Parallel.
+  #
+  # Opened 2026-07-20 when the cost question resolved without discriminating
+  # between engines: the spread is $0.05 vs $0.25 per run, which against a $20
+  # ceiling is not decision-relevant. Choosing on price would be choosing on the
+  # one axis that does not matter. Deferred to a build-time spike, which had to
+  # compare on this product's actual hard cases — resolving a named work to a
+  # specific museum page, and answering a recency-bound intent ("recent
+  # award-winning art") — not on generic search relevance.
+  #
+  # The spike honoured that constraint and reversed the conclusion it was meant to
+  # support. Sixteen holding-museum cases and a recency-bound intent: Exa,
+  # Parallel and Perplexity each resolved every case and returned the same share
+  # of in-period citations. Quality is the axis that did not discriminate. Cost
+  # did, four to one, so price decided by being the only thing left that differed.
+  #
+  # The first eight cases were world-famous works — the generic relevance the
+  # constraint warned against — so it was re-run on mid-tier works with
+  # independently-known holdings. All three scored identically again.
+  #
+  # Scope of what was measured: phase 1's search (given a work, find its
+  # institution). Phase 2 retrieves image instances with rights and resolution,
+  # a different task that may separate these engines; Chunk 16 establishes that.
+  # DISCOVERY_SEARCH_ENGINE is a deployment value, so revising is configuration.
+  # Held by tests/live/test_search_engine_choice_still_holds.py.
   - question: "Does relaxing 3tears to 3.13 survive a real test run under 3.13?"
     blocking: "Merging the upstream relaxation PR. NOTHING in this product — see below."
     waiting_on: research

@@ -523,10 +523,19 @@ artworks.
 > meaning that nobody records is how the next drift starts.
 >
 > **Q3.** `work_dedup_key` is what stops discovery re-proposing declined works
-> forever. Its derivation (normalised artist + title, or a source identifier where
-> one exists) is a design decision deferred to build — but the *column* is specified
-> now, because retrofitting suppression after rejections have accumulated makes the
-> early rejections unrecoverable.
+> forever. The *column* was specified before its derivation, because retrofitting
+> suppression after rejections have accumulated makes the early rejections
+> unrecoverable. **The derivation was decided by measurement on 2026-08-02** and is
+> recorded below.
+>
+> **A source identifier was considered and is ruled out.** An earlier phrasing here
+> offered "normalised artist + title, *or a source identifier where one exists*".
+> Both halves of that fail. It contradicts this document's own § Direction norm —
+> **identity is never a source URL** — whose reasoning covers an institution's
+> accession number just as well: the same painting held by two institutions would
+> take two identities. And it is unreachable in any case, because the key is
+> written by `propose_work` during phase 1, before phase 2 has found any source at
+> all.
 >
 > **An interim derivation ships before the spike settles it, and that is named
 > rather than left to happen (2026-08-02).** The column is `required`, and phase 1
@@ -557,6 +566,59 @@ artworks.
 > suppression quietly stops working). They pull in opposite directions, which is
 > precisely why neither can be fixed by guessing — and a replacement argued for
 > later needs the current behaviour written down rather than remembered.
+>
+> ---
+>
+> **DECIDED 2026-08-02 — the derivation, measured against real output.** The
+> provisional key held **7 of 36** recurring works together across 128 proposals
+> captured from 22 real runs. The rule now shipped holds **29 of 36**. That
+> fraction is not a code-quality metric: it is the share of a curator's rejections
+> that keep working, so a fifth of them holding meant Q3 was mostly not answered.
+>
+> **The provisional key's two named hazards were both wrong about what bites.**
+> The feared false positive — bare "Untitled" repeated by one artist — barely
+> occurs, because real catalogue titles carry disambiguators (`Untitled #1`,
+> `Untitled #12`, `No. 1 (Untitled)`) that the normalisation already preserves.
+> The dominant failure was one nobody had listed: **the same model, on the same
+> intent, minutes apart, appends a year.** `Abstraction Blue` and `Abstraction
+> Blue (1927)` are one painting and were two identities.
+>
+> The rules, each answering an observed rewrite: citation markup removed; a
+> trailing date dropped; a trailing `from the series ...` clause dropped; a
+> trailing alternate title in parentheses dropped *unless the remainder names
+> nothing in particular*; a bilingual `Original / English` compound reduced to its
+> first half; a parenthesised alias dropped from the artist.
+>
+> **The two directions are not symmetric, and that decides every close call.** A
+> split asks the curator about one painting twice — visible, self-correcting. A
+> merge silently withholds a painting nobody turned down: it is skipped, and
+> nothing tells them it existed. So two rules that *scored better* were rejected —
+> stripping any trailing parenthetical (which collapses Richter's hundreds of
+> `Abstraktes Bild` onto one identity) and reducing an artist to first and last
+> name (which turns `Hans Holbein the Younger` into `hans younger`).
+>
+> **Note that this asymmetry is the opposite of the one in § Direction's "collapse
+> aggressively, but never discard".** That corollary is scoped to *instances*,
+> where a losing candidate is retained as a non-primary row and an over-eager merge
+> stays inspectable. Nothing is retained at the work scope, so the same instinct
+> applied here would invert the safety property — which is the Q3/Q11 trap in a
+> new place.
+>
+> **The seven residual splits are two known shapes**, both asserted by
+> `tests/unit/test_dedup_key_corpus.py` so the claim fails rather than decays: a
+> trailing provenance tail (`..., ca. 1633-35, The Metropolitan Museum of Art`),
+> and a patronymic (`Jacob Isaacksz van Ruisdael` against `Jacob van Ruisdael`).
+>
+> **The corpus cannot demonstrate an over-merge**, holding no two works any
+> candidate would wrongly unite, so its zero merges is absence of evidence rather
+> than evidence of absence. The cases that would show one are pinned as separate
+> unit tests.
+>
+> **No re-key shipped, because no rows exist to re-key.** The obligation above
+> stands for any deployment holding `CandidateWork` rows; the catalogue this was
+> developed against holds none, and the curation plane has not cut over (Chunk 13).
+> Anything replacing this derivation against a populated catalogue still owes the
+> migration.
 
 ### CandidateImage
 
@@ -637,10 +699,36 @@ transform" checkable rather than asserted:
 | `preview_url`, `preview_path`, `estimated_width`, `estimated_height`, `quality_score` | *(not carried)* | Pre-acceptance facts. Previews are disposable, and real dimensions come from the acquired `Original` rather than from an estimate |
 
 `CandidateWork.proposed_artist` is **not** carried into an `Artist` row here. It
-is free text that has to be parsed and matched against existing artists, which is
-the same normalisation problem as `work_dedup_key` and is settled with it; until
-then an accepted work carries no `artist_id` and the attribution is added when
-that lands.
+is free text that has to be parsed and matched against existing artists; until
+that lands an accepted work carries no `artist_id` and the attribution is added
+with it.
+
+**What the 2026-08-02 derivation spike settles for this, and what it does not
+(recorded because "settled with `work_dedup_key`" used to stand here and is too
+strong).** Artist matching is the third call site the derivation is meant to
+serve, alongside cross-run suppression and within-run dedup. The first two are
+live and share `curation/src/curation/discovery/dedup.py`; **this one must derive
+its identity from that module rather than reimplement normalisation**, which is
+the whole point of settling it once.
+
+What is settled: casefolding, accent-stripping, punctuation-dropping and
+alias-dropping — `El Greco (Domenikos Theotokopoulos)` and `El Greco` are one
+painter, and that is measured.
+
+What is **not** settled, and is a live hazard for this call site specifically: an
+artist's name varies in ways a work's title does not. `Jacob Isaacksz van
+Ruisdael` and `Jacob van Ruisdael` appeared in the same corpus as one painter and
+key apart. The obvious fix — keeping the first and last name tokens — was measured
+and rejected, because it turns `Hans Holbein the Younger` into `hans younger`. So
+whoever builds this inherits an open question rather than a solved one, and it
+carries the harsher failure direction: merging two painters attributes a work to
+the wrong person on a physical label (**Q9**), where splitting one merely creates
+a duplicate `Artist` row.
+
+No artist-identity function ships ahead of that call site. There is nothing to
+measure a candidate against until `Artist` rows are being matched, and shipping an
+unmeasured one now would repeat exactly the mistake this spike was convened to
+correct.
 
 ### SpendRecord
 

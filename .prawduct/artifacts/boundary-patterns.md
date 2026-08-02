@@ -125,9 +125,13 @@
   and startup reconciliation are enforced in the service layer. The per-theme
   rotation settings landed with the manifest builder that reads them, and were the
   first change to a table that files on disk already carried — the durable store's
-  column-widening step exists because of them. **Still to come:**
-  `work_dedup_key`'s derivation, whose spike is scheduled; the column and the
-  suppression that reads it are in place and the caller supplies the key.
+  column-widening step exists because of them. `work_dedup_key`'s derivation was
+  decided by measurement on 2026-08-02; the column, the suppression that reads it
+  and the caller that supplies the key were already in place, so **the change was
+  to the value written, not to the surface** — which is why it crossed no boundary
+  even though it altered every key. Changing it again against a catalogue holding
+  `CandidateWork` rows *would* cross one, because stored keys would have to be
+  recomputed: see `data-model.md` **Q3**.
 - **Producer:** the persistence layer. **Currently stdlib `sqlite3` behind a
   Protocol**, not 3tears collections — see the build plan's deferral note. The
   Protocol is what keeps that swap a one-module change.

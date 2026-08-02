@@ -182,8 +182,10 @@ async def test_a_run_crosses_the_gate_at_the_configured_threshold_and_waits(serv
     assert payload["works"]["total"] == 26
     assert "more than the configured threshold" in payload["notice"]
     # The figure the gate is authorising against is on the record, not
-    # recomputed when somebody asks.
-    assert payload["estimated_cost_usd"] == "0.260"
+    # recomputed when somebody asks. 26 works x 2 searches on the pinned
+    # engine's $0.001 request; it was $0.260 on the $0.005 default this
+    # product used before the engine was chosen.
+    assert payload["estimated_cost_usd"] == "0.052"
 
 
 async def test_a_run_inside_the_threshold_does_not_stop_to_ask(server_url, engine):
@@ -288,8 +290,10 @@ async def test_estimate_answers_two_different_questions_by_arity(server_url, eng
     assert errored is False
     assert asking["phase"] == "phase_1"
     assert asking["run_id"] is None
-    # One model call at the shipped prices plus the whole ten-search allowance.
-    assert asking["estimated_cost_usd"] == "0.127"
+    # One model call at the shipped prices plus the whole ten-search allowance,
+    # priced at the pinned engine's $0.001 request rather than the $0.005 the
+    # provider default charges.
+    assert asking["estimated_cost_usd"] == "0.087"
 
     run_id = await a_run(server_url)
     await settled(server_url, run_id)
@@ -298,7 +302,7 @@ async def test_estimate_answers_two_different_questions_by_arity(server_url, eng
     assert errored is False
     assert resolving["phase"] == "phase_2"
     assert resolving["run_id"] == run_id
-    assert resolving["estimated_cost_usd"] == "0.260"
+    assert resolving["estimated_cost_usd"] == "0.052"
 
 
 async def test_estimating_is_the_one_action_that_spends_nothing(server_url):

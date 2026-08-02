@@ -345,11 +345,16 @@ def test_the_thumbnail_cache_sits_inside_the_art_root(monkeypatch, tmp_path):
 def test_the_shipped_discovery_defaults_reproduce_the_recorded_cost_analysis(monkeypatch, tmp_path):
     """The defaults are a derivation, not a preference, and this is where it is checked.
 
-    The cost analysis these values come from records a bounded run at $0.11–$0.33
-    and its search component at $0.15–0.25 on a $0.005 engine. Those figures were
-    arrived at independently of this code; if the shipped settings cannot
-    reproduce them, one of the two is wrong and a curator is authorising against
-    a number that describes nothing.
+    The cost analysis these values come from records a bounded run at $0.11–$0.13
+    on the pinned engine, its search component at $0.03–0.05, and the model call
+    alone at roughly eight cents. Those figures were arrived at independently of
+    this code; if the shipped settings cannot reproduce them, one of the two is
+    wrong and a curator is authorising against a number that describes nothing.
+
+    **The search figures moved when the engine was chosen (2026-08-02)**, from a
+    $0.005 request to a $0.001 one. That is the analysis changing under a
+    decision, not this assertion being relaxed to fit: the model-only component is
+    untouched at eight cents, and the search component fell exactly five-fold.
 
     Computed here rather than compared against a copied total, so the assertion
     fails when the composition changes rather than tracking it.
@@ -365,10 +370,35 @@ def test_the_shipped_discovery_defaults_reproduce_the_recorded_cost_analysis(mon
     run_total = discovery.phase1_estimate_usd + discovery.phase2_estimate_usd(typical_works)
 
     assert searches == 50
-    assert search_spend == Decimal("0.250"), "the search component's recorded ceiling"
-    assert run_total == Decimal("0.327"), "a bounded run, against a recorded range topping out at $0.33"
-    # The model call alone, against a table recording roughly eight cents.
+    assert search_spend == Decimal("0.050"), "the search component's recorded ceiling on the pinned engine"
+    assert run_total == Decimal("0.127"), "a bounded run, against a recorded range topping out at $0.13"
+    # The model call alone, against a table recording roughly eight cents. Unchanged
+    # by the engine decision, which is what makes the fall attributable to search.
     assert Decimal("0.07") < run_total - search_spend < Decimal("0.08")
+
+
+def test_the_search_price_matches_the_engine_that_is_pinned(monkeypatch, tmp_path):
+    """The two settings are one decision and must not drift apart.
+
+    Parallel bills $0.001 and the other back-ends $0.005, so a deployment that
+    changed the engine and left the price would put a five-fold error into the
+    only figure a curator sees before authorising a run — silently, because
+    nothing else in the system compares them.
+    """
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    settings = Settings.from_env()
+
+    prices = {"parallel": Decimal("0.001"), "exa": Decimal("0.005"), "perplexity": Decimal("0.005")}
+    expected = prices.get(settings.discovery_search_engine)
+
+    assert expected is not None, (
+        f"{settings.discovery_search_engine!r} has no recorded per-request price; add it here with the "
+        "measurement behind it, or the run estimate is guessing"
+    )
+    assert settings.search_cost_usd == expected, (
+        f"the engine is {settings.discovery_search_engine!r} at {expected}/request, but the configured "
+        f"search price is {settings.search_cost_usd}"
+    )
 
 
 def test_the_gate_ships_at_the_value_a_typical_run_does_not_trip(monkeypatch, tmp_path):

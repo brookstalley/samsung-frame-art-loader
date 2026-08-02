@@ -198,9 +198,14 @@ the over-limit path was driven on a throwaway key — both above, both measured
 - **Whether 403 distinguishes an exhausted key from a disabled one.** The message
   says "Key limit exceeded (total limit)", so the text discriminates; whether the
   status alone does is untested.
-- **Whether the fee is flat across search *back-ends*.** Everything below was
-  measured on the default Exa route. The engine-choice spike compares back-ends,
-  and each one's fee is its own measurement.
+- **~~Whether the fee is flat across search *back-ends*.~~ Answered 2026-08-02:
+  it is not, and the difference is large.** Everything below was measured on the
+  default route, which resolves to Exa at $0.005 per request. Parallel bills
+  $0.001 for the same work. A nine-call comparison ran at $0.0119 on Parallel
+  against $0.0472 on Exa and $0.0475 on Perplexity — a four-fold spread on
+  identical results, which is what decided the engine. So a per-request fee
+  recorded here is a fact about *one back-end*, and `DISCOVERY_SEARCH_COST_USD`
+  now has to agree with whichever `DISCOVERY_SEARCH_ENGINE` names.
 
 ## The web fee is per request, not per result (measured 2026-08-02)
 
@@ -250,6 +255,12 @@ run total          0.0055882058   (matches the provider's usage.cost exactly)
 actual. The overstatement is not in the prices, which are right, but in the
 assumed token consumption: `DISCOVERY_PHASE1_INPUT_TOKENS` ships at 490,000
 against a measured 3,453. The web plugin injects excerpts, not whole pages.
+
+Both figures above are on the provider's default route, which is Exa at $0.005;
+this run predates the engine decision. The phase-1 estimate is **$0.087** on the
+engine since pinned, and the same run would bill about **$0.0016**. The
+overstatement widens rather than narrows, because what is wrong with it is the
+token basis and only the search component got cheaper.
 
 **Recorded rather than corrected here, deliberately.** The 490,000 figure comes
 from a cost analysis of a *whole run*, while the code spends it on phase 1 alone;

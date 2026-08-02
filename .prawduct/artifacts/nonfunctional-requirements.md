@@ -233,24 +233,49 @@ not obvious and drives the selection below.
 | Discovery tokens — Gemini 3.5 Flash Lite *(named alternative)* | $0.30/M in, $2.50/M out | ~$0.22 |
 | Discovery tokens — GLM-5.2 | $0.2842/M in, $0.8932/M out | ~$0.17 |
 | Discovery tokens — DeepSeek V4 Pro | $0.435/M in, $0.87/M out | ~$0.24 |
-| Web search — Parallel | $0.001/request (10 results incl.) | $0.03–0.05 |
+| Web search — **Parallel** *(the default, chosen 2026-08-02)* | $0.001/request (10 results incl.) | $0.03–0.05 |
 | Web search — Exa via OpenRouter | $0.005/request (10 results incl.) | $0.15–0.25 |
 | Web search — Perplexity | $0.005/request | $0.15–0.25 |
 | Mat-colour vision | one call per *accepted* work | negligible |
 | Museum APIs, image acquisition | $0 | bandwidth only |
 
 **This retires the recorded worry that search could exceed token spend "by an
-order of magnitude".** Worst case it roughly doubles per-run cost — and on the
-chosen model search is now the *dominant* component, which is the sharper form of
-the same finding. A run lands between **$0.11 and $0.33** on the default model, so
-$20 buys on the order of **60–180 runs a month**. Search goes *inside* the
-ceiling, comfortably.
+order of magnitude".** Worst case it roughly doubles per-run cost. Across every
+row above a run lands between **$0.11 and $0.33**, so $20 buys on the order of
+**60–180 runs a month**. Search goes *inside* the ceiling, comfortably.
 
-> **A measured phase-1 run came in at $0.0056, and the estimate said $0.127
-> (2026-08-02).** The first real run through the built engine — nine works, one
-> search at ten results — billed $0.0005882 of tokens (3,453 in / 1,608 out) plus
-> the flat $0.005 search fee. **Search was 89% of it**, which sharpens the finding
-> above rather than contradicting it.
+> **On the engine actually pinned, a run lands at $0.11–$0.13 (2026-08-02).** The
+> range above spans all four models and all three back-ends, which was the right
+> shape while both were open. With `parallel` chosen and
+> `deepseek/deepseek-v4-flash` the default, the bounded figure is **$0.127** — about
+> eight cents of model call and five of search — and $20 buys on the order of
+> **150 runs a month**.
+>
+> **The "search is now the dominant component" reading that used to sit here was
+> true of a $0.005 request and is not true of a $0.001 one.** Model spend is now
+> the larger half again. The prices in the table are per-request facts about
+> vendors and stay as they are; which one applies is the decision in "Decided —
+> engine choice" below, and `DISCOVERY_SEARCH_COST_USD` has to move with
+> `DISCOVERY_SEARCH_ENGINE` or every pre-run estimate is wrong five-fold.
+> `test_the_search_price_matches_the_engine_that_is_pinned` is what stops them
+> drifting apart.
+
+> **A measured phase-1 run came in at $0.0056 against an estimate of $0.127
+> (2026-08-02, both figures as they stood before the engine was chosen).** The
+> first real run through the built engine — nine works, one search at ten results
+> — billed $0.0005882 of tokens (3,453 in / 1,608 out) plus the flat $0.005
+> search fee. **Search was 89% of it.**
+>
+> On the engine now pinned both sides fall: the phase-1 estimate is **$0.087** and
+> the same run would bill about **$0.0016**. The ratio between them goes from
+> roughly twenty-fold to roughly fifty, because the estimate's error is in assumed
+> *tokens* and only its search component got cheaper.
+>
+> That run predates the engine decision and used the provider's default, which
+> resolved to Exa at $0.005. On the engine now pinned the same run bills about
+> $0.0016 — measured separately at ~$0.0013 per searching call during the engine
+> comparison — with search a smaller share of a much smaller total. The gap
+> against the estimate widens rather than narrows.
 >
 > **The prices are right; the assumed token consumption is not.**
 > `DISCOVERY_PHASE1_INPUT_TOKENS` ships at 490,000 against a measured 3,453,
@@ -279,10 +304,29 @@ largest — the frontier tier costs ~8× and buys 13–15 runs a month against 6
 **No quality evidence distinguishes the candidates, and that is stated rather than
 papered over.** The models above are ranked here on price, which is measurable, and
 on nothing else. Whether a stronger model enumerates real works better than a
-cheap one *on this product's intents* is unmeasured — the same gap already recorded
-under "Open — engine choice" for search back-ends, and it resolves the same way:
-the build-time spike measures it on real phase-1 output. Gemini 3.5 Flash Lite is
-carried as the named alternative for that comparison at ~2.9× the token cost.
+cheap one *on this product's intents* is unmeasured — the same gap that was
+recorded for search back-ends under "Decided — engine choice" below. Gemini 3.5
+Flash Lite is carried as the named alternative for that comparison at ~2.9× the
+token cost.
+
+**Measured 2026-08-02, and the default stands.** Both tiers were run over three
+real intents with the pinned engine, and every work either proposed was checked
+for an institutional page — the shape a hallucinated title takes here is one no
+museum has heard of. `deepseek/deepseek-v4-flash` proposed **11 works, 11
+verifiable**; `google/gemini-3.5-flash-lite` proposed **8 works, 8 verifiable**.
+Neither invented anything, and the cheaper model proposed more.
+
+**This is weak evidence and is recorded as such.** Three intents is a small
+sample; "an institutional page exists" is a proxy for the work being real, not a
+proof of it; and it cannot see the failure that would matter most — a model
+quietly proposing *duller* works that are all perfectly real. What it does rule
+out is the specific worry that motivated carrying an alternative: that the cheap
+tier would fabricate plausible titles. It did not, on this sample.
+
+**The same prediction failed for search back-ends** — quality was expected to
+decide and did not discriminate at all, leaving price the only difference. Two
+comparisons is not a rule, but it is now twice that the dearer option did not
+earn its multiple on this product's work.
 
 The default is the **floating** model id rather than a dated snapshot, so a
 snapshot retirement cannot break the only paid path on a household product; the
@@ -342,11 +386,17 @@ than a silent truncation of results.
 > **Values shipped 2026-08-02: a flat 10 for phase 1, and 2 per work for phase 2**
 > (`DISCOVERY_PHASE1_SEARCH_ALLOWANCE`, `DISCOVERY_PHASE2_SEARCHES_PER_WORK`).
 > They are a derivation from the table above rather than a preference: a
-> twenty-work run is bounded at 10 + 20×2 = 50 searches, which at $0.005 is
-> **$0.25 — exactly the top of the search band recorded above** — and a bounded
-> run total of $0.327 against the recorded $0.11–$0.33. A cap has to sit at the
-> ceiling of the recorded range rather than at its middle, or it stops runs the
-> analysis says are ordinary. `curation/tests/unit/test_config.py` recomputes both
+> twenty-work run is bounded at 10 + 20×2 = 50 searches. At the $0.005 the
+> comparison engines charge that is **$0.25 — exactly the top of the search band
+> recorded above** — and a bounded run total of $0.327 against the recorded
+> $0.11–$0.33, which is the arithmetic these allowances were sized by. On the
+> engine since pinned the same 50 searches cost **$0.05**, for a bounded run of
+> **$0.127**. The *counts* are unchanged, and deliberately so: they bound how much
+> a run may do, which is a policy about fan-out rather than about price, and
+> re-deriving them every time a vendor's rate moves would make the bound follow
+> the market instead of the household. A cap has to sit at the ceiling of the
+> recorded range rather than at its middle, or it stops runs the analysis says are
+> ordinary. `curation/tests/unit/test_config.py` recomputes both
 > figures from the shipped settings, so the derivation is checked rather than
 > asserted, and a settings change that walks away from this analysis fails.
 >
@@ -409,19 +459,49 @@ the only channel through which it can behave responsibly.
 The estimate must be *bounded* rather than *typical*, which is what the per-run
 search cap is for. A number a run can freely exceed is not an estimate.
 
-### Open — engine choice
+### Decided — engine choice: Parallel (2026-08-02)
 
-**Which search engine discovery defaults to is deliberately undecided**, pending a
-build-time spike comparing result quality on real intents. The cost bound is
-stated for all three above and does not discriminate: the spread between the
-cheapest and dearest option is $0.05 versus $0.25 per run, which against a $20
-ceiling is not decision-relevant. **Engine choice is therefore a quality decision,
-and no quality evidence exists yet.** Choosing on price would be choosing on the
-one axis that does not matter.
+**Discovery pins `parallel`, and the reasoning came out the opposite way round
+from what was predicted here.** This section previously argued that the cost
+spread was not decision-relevant against a $20 ceiling, so engine choice had to be
+a quality decision and choosing on price would be choosing on the one axis that
+did not matter.
 
-Constraint on the spike: it must compare on this product's actual hard case —
-resolving a named work to a specific museum page, and answering a recency-bound
-intent like "recent award-winning art" — not on generic search relevance.
+The measurement says quality is the axis that does not matter. Exa, Parallel and
+Perplexity were compared on both hard cases named below — sixteen "resolve a named
+work to the museum that holds it" cases, and a recency-bound intent. **All three
+found the holding institution in every case and returned the same share of
+in-period citations.** Nothing separated them. Cost separates them four to one:
+$0.001 per request against $0.005.
+
+So the constraint below was honoured and answered, and the conclusion it was
+meant to support did not survive it. Price decided because it was the only thing
+left that differed.
+
+**The first eight cases were world-famous paintings, which is the generic
+relevance this section warned against** — any engine finds the Rijksmuseum page
+for The Night Watch. The comparison was re-run on mid-tier works whose holdings
+were known independently rather than read back from an engine's own citations,
+which would have scored the others against one engine's answer. All three scored
+identically on that set too.
+
+**What was measured is phase 1's search: given a work, find its institution.**
+Phase 2 retrieves image *instances*, with rights and resolution, which is a
+different retrieval task and may separate these engines where this did not. That
+is Chunk 16's to establish. The engine is a deployment value
+(`DISCOVERY_SEARCH_ENGINE`), so revising the answer is a configuration change.
+
+**Pinning matters independently of which engine wins.** Left unset, the provider
+resolves the engine from the *model* — that model provider's native search where
+one exists, Exa where none does — so an unpinned engine makes the search back-end
+a side effect of `DISCOVERY_MODEL`, and changing the model silently changes how
+the product searches.
+
+Held by `tests/live/test_search_engine_choice_still_holds.py`, which re-checks
+both halves: that the chosen engine still resolves works to their museums, and
+that the price gap it was chosen for has not closed. Both can decay — an index
+can rot, a per-request price can move — and a decision nobody re-runs quietly
+stops describing the world.
 
 ## Output Quality
 

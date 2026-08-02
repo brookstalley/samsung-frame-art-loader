@@ -84,7 +84,14 @@ DEFAULT_PHASE2_SEARCHES_PER_WORK: Final[int] = 2
 
 #: What one web search costs, in USD. Search bills as provider credits alongside
 #: tokens rather than to a separate account, so one ceiling covers both.
-DEFAULT_SEARCH_COST_USD: Final[str] = "0.005"
+#:
+#: **This is a price for one back-end, not for searching in general**, and it has
+#: to agree with `DEFAULT_DISCOVERY_SEARCH_ENGINE`. Parallel bills $0.001;
+#: Exa and Perplexity bill $0.005 for the same request. Changing the engine
+#: without changing this leaves every pre-run estimate wrong by five times in
+#: whichever direction, on the one figure a curator uses to decide whether to
+#: authorise a run.
+DEFAULT_SEARCH_COST_USD: Final[str] = "0.001"
 
 #: What the discovery model costs per million tokens, in USD.
 DEFAULT_INPUT_COST_USD_PER_MTOK: Final[str] = "0.14"

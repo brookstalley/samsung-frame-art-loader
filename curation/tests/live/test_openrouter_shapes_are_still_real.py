@@ -20,7 +20,7 @@ from decimal import Decimal
 
 import pytest
 
-from curation.config import DEFAULT_DISCOVERY_MODEL, DEFAULT_SEARCH_COST_USD
+from curation.config import DEFAULT_DISCOVERY_MODEL, DEFAULT_DISCOVERY_SEARCH_ENGINE, DEFAULT_SEARCH_COST_USD
 from curation.discovery.engine import WorkListRequest
 from curation.discovery.openrouter import OpenRouterClient
 from curation.discovery.phase_one import build_engine
@@ -35,7 +35,19 @@ needs_key = pytest.mark.skipif(not KEY, reason="OPENROUTER_API_KEY is not set")
 
 @pytest.fixture(scope="module")
 def client() -> OpenRouterClient:
-    return OpenRouterClient(KEY or "", model=DEFAULT_DISCOVERY_MODEL, max_output_tokens=2000)
+    """Configured exactly as a deployment is, engine included.
+
+    The engine is not incidental to what this file checks. Search bills per
+    back-end, so a client left on the provider's default would measure a fee the
+    product does not pay and report the price check green while the configured
+    engine's price had moved.
+    """
+    return OpenRouterClient(
+        KEY or "",
+        model=DEFAULT_DISCOVERY_MODEL,
+        max_output_tokens=2000,
+        search_engine=DEFAULT_DISCOVERY_SEARCH_ENGINE,
+    )
 
 
 @needs_key
