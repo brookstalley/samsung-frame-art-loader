@@ -146,14 +146,38 @@ Developer preferences for how code is written in this project. Captured during d
   to is image and metadata logic. Those are the same modules § Testing names as owing
   coverage and none of them has any — which is what the norm predicted would happen and what
   nothing was watching for.)_
-- **File organization**: flat — 14 modules at the repository root, no package directory
-  _(inferred)_. _(target)_ Decide during discovery whether to keep flat or move to a package;
-  flat is defensible at the root plane's present ~2,700 lines but the hardware and TV
-  boundaries need real interfaces regardless (see learnings § Platform and dependencies).
-  _(Re-measured 2026-08-01 by the norm sweep: this read "13 modules" and "defensible at
-  2,216 lines", both exactly right on 2026-07-19 and neither recomputed since. The line
-  count is the load-bearing one — it is the input to a live flat-vs-package judgement, and
-  it was 19% under the truth.)_
+- **File organization**: per plane, not per repository. The root plane is flat — bare modules
+  at the repository root, no package directory — and **shrinking**: they are deleted at the
+  legacy retirement, and the rule below means the set only ever loses members. A root module
+  count that has gone *up* is the violation, which is why no count is quoted here. The
+  curation plane is a `src/` layout package. The display plane will be a package when it is
+  created. _(target)_ Keep each as it is:
+  **new code goes in a plane package; nothing new is added at the root.**
+  _(Decided 2026-08-02, closing a question left open at discovery. The row asked to "decide
+  during discovery whether to keep flat or move to a package"; discovery closed 2026-07-20
+  and nobody did, so the tree answered by default and the answer went unwritten.
+  **Converting the root plane to a package had stopped being a live option before the
+  decision was owed**: the build plan scheduled those modules for deletion at the legacy
+  retirement on the same day discovery closed, so from that point a package move was a
+  refactor of code with a settled death date, paid in merge conflicts against the plane that
+  replaces it. The rule that
+  carries the intent forward is the one about additions, not about layout — flat is
+  survivable for a fixed set of modules on their way out, and unsurvivable as a habit that
+  new work is allowed to join.
+  **The clause about interfaces was discharged elsewhere and is retired here, not dropped.**
+  The row's Why ran "the hardware and TV boundaries need real interfaces regardless", and
+  they got them — but from the two-plane split rather than from any directory move: the
+  theme manifest is the curation→display interface, and the TV boundary became testable when
+  `tv_delete` took the client as a parameter instead of importing one. A package directory
+  would not have produced either, which is why "regardless" was the wrong word for it.
+  This also retires the line count as a live input. It was re-measured 2026-08-01 by the norm
+  sweep — the row had read "13 modules" and "defensible at 2,216 lines", both exactly right
+  on 2026-07-19 and neither recomputed since, the second 19% under the truth. It was load
+  bearing only while the flat-vs-package judgement was open, and the judgement is now closed
+  on a reason no count moves.
+  Still unassigned: this row has **no mechanism** — it is Critic-enforced like the other
+  three `(target)` preferences the 2026-08-02 sweep found carrying none. A guard over "the
+  root gains no new module" is the cheap form if this erodes.)_
 
 ## Tooling
 

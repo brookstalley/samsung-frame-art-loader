@@ -48,6 +48,75 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-02: Backlog reconciled against the tree, and the flat-vs-package question closed
+
+**Why:** Four backlog items were carrying claims about the tree that the tree had
+stopped supporting, and the norm sweep's second deferred finding — a `(target)`
+preference asking for a decision that discovery never made — was a five-minute
+call left open for thirteen days. No product code changed.
+
+**File organization is decided: per plane, not per repository.** The root plane
+stays flat, the curation plane stays a `src/` package, the display plane becomes
+one when it is created. The binding half is about additions rather than layout —
+**nothing new is added at the root** — because that is the half that can be
+violated. Converting the root plane to a package had stopped being a live option
+before the decision was even owed: the build plan scheduled those modules for
+deletion at the legacy retirement on the same day discovery closed, so from that
+point the move was a refactor of code with a settled death date.
+
+The row's Why was retired in place rather than dropped. It had run "the hardware
+and TV boundaries need real interfaces regardless", and both got them — from the
+two-plane split, not from any directory move: the theme manifest is the
+curation→display interface, and the TV boundary became testable when `tv_delete`
+took the client as a parameter instead of importing one. "Regardless" was the
+wrong word, and saying so is the difference between closing the question and
+deleting it.
+
+**The row no longer quotes a module count, and that is the point.** The count had
+already gone stale twice (13→14, and a line figure 19% under). It was load-bearing
+only while the judgement was open; now that the norm forbids additions, the set can
+only shrink, so *a root module count that has gone up is the violation* rather than
+a doc-drift to sync. The tally became an invariant.
+
+**Issue #5 was NOT closed, against a prior session's handoff, which prescribed
+marking it shipped.** Eight of its nine acceptance boxes are met and verified. The
+ninth is "Verified on the Pi (display plane still starts under systemd)", and no
+record of that exists in the change log, the reflections, or the operator
+verification queue. Closing it would have asserted a verification that never
+happened — in an item whose whole subject is deployment values.
+
+**That box is load-bearing, not ceremonial, and the check found why.** The config
+hoist changed the deployment contract and the committed unit was never updated to
+match: `deploy/samsung-frame-art-loader.service` passes no `EnvironmentFile=`,
+while `config.py` has raised at import without five variables since 2026-07-27. It
+depends entirely on a gitignored `.env` in its `WorkingDirectory`. Latent — a
+running process does not re-import — but on the next restart, `Restart=always` with
+default limits burns its burst allowance in about half a second and lands the unit
+in `failed`, silently. `deploy/README.md` states this plainly and nothing tracked
+it; it is now **issue #43**. Issue #37 was checked and does not cover it — that one
+is the `Restart=always` guard missing from `operational-spec.md`, scoped to the new
+unit Chunk 13 builds.
+
+**Issue #33 carried four stale counts, not the one the handoff named.** The curation
+plane's broad catches are three, not one — `mcp/server.py` plus `manifest/builder.py`
+and `persistence/durable.py`, the latter two catching `BaseException`, which `BLE001`
+flags as readily as `Exception` — so the estimate was understated threefold in both
+places it appeared. The waived list read two and is four. Acceptance box 3 said six
+unwaived root-plane catches while the issue's own Evidence section listed seven; the
+Evidence was right. The fourth instance sat one section above the box, sourced from
+the same list — found only because the count was recomputed rather than compared
+against the adjacent line.
+
+**Issue #24's scope had eroded into the thing it predicted.** It named the MCP layer
+importing persistence directly; `http/api.py:51` now does the same, so the title is
+widened to the surface layer. Its module path was also stale — the 07B split moved
+the records to `curation.persistence.records`, leaving `catalogue.py` holding only
+the store Protocol and its errors.
+
+Issue #6's duplicated `prawduct` block was cleared. Low stakes alone — a closed
+item's `added:` date — but the warning it tripped names no issue, so it was masking
+any future instance behind a generic line.
+
 ## 2026-08-01: A model can be measured against the tool surface, and the surface can be navigated
 
 <!-- prawduct: chunks=11 | status=shipped | scope=v1-build -->
