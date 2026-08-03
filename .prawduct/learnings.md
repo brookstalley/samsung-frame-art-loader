@@ -470,6 +470,19 @@ exactly like a finding. `curation/tools/mutation_sweep.py` now refuses an ambigu
 pattern; the no-op case it cannot detect, so confirm your mutation breaks something
 before writing a test for it.
 
+## When you rewrite a test's assertions, re-read its name against what it now checks
+
+**A dropped contract and an adjusted wording look identical in a diff; the test's
+name is what tells them apart.** Rewriting assertions to match changed output is
+routine, and in a batch of six such edits one of them was not a wording change at
+all — it was `assert "all 0 scans" not in notice`, a guard against a specific bad
+output, deleted in the commit that made that output reachable again. The test was
+named `..._is_not_reassured_about_it` and afterwards enforced nothing about
+reassurance. The name is the statement of intent that survives an edit to the
+body, so a name that no longer describes the assertions is the signal a contract
+was dropped rather than adjusted. Record any assertion you remove where a reader
+will find it — one that nothing records is indistinguishable from one never written.
+
 ## Assert what must be absent, not only what must be present
 
 **A conditional clause needs the case where it must not appear.** Two sweep
