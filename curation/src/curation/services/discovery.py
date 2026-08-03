@@ -526,7 +526,16 @@ class DiscoveryService:
     # -- reads and writes: image instances ------------------------------------
 
     def list_candidate_images(self, candidate_work_id: str) -> Sequence[CandidateImage]:
-        """Every instance found for this work, the selected one first.
+        """Every instance found for this work, in the store's ranking.
+
+        *Every* one, unlike the review card built from it, which is capped —
+        callers that show these to a person are responsible for saying what they
+        left out.
+
+        The selected instance leads where one exists. A work whose scans are all
+        below the floor or all turned down has no selection, and then the leading
+        row is simply the highest-ranked, which may be a scan already refused.
+        `is_selected` is what distinguishes them; position is not.
 
         Losing instances are kept rather than deleted: they are the alternates a
         review card offers, they make an over-eager merge inspectable, and on

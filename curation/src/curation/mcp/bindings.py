@@ -634,13 +634,19 @@ def _instances_truncation_notice(listing: InstanceListing) -> str | None:
     shown_surviving = sum(1 for instance in listing.instances if not instance.rejected)
     if listing.surviving_held == 0:
         # Nothing is choosable, so every sentence this function knows how to say
-        # about choosable scans is vacuous. "All 0 scans still open to you are on
-        # this card" is true and reads as reassurance, directly after
-        # `_nothing_choosable_notice` has said none are open — the same empty-set
-        # phrasing the `else` branch's conditional clause exists to avoid, and the
-        # reason this branch is separate rather than folded into the next.
-        what_was_dropped = "the ones omitted are also scans you have already turned down"
-    elif listing.shows_every_choosable_instance:
+        # about choosable scans is vacuous — **including the tail**, which is why
+        # this branch returns rather than falling through to it. Both halves said
+        # the same wrong thing in different words: "all 0 scans still open to you
+        # are on this card" reads as reassurance directly after
+        # `_nothing_choosable_notice` reported none are open, and "a scan you can
+        # still choose may sit anywhere on the card" advises reading a per-row
+        # field to tell apart rows that are all the same. Removing only the first
+        # left the second, which is exactly what happened once.
+        return (
+            f"Showing {len(listing.instances)} of {listing.held} scans found for this work; the ones "
+            "omitted are also scans you have already turned down. There is no paging here."
+        )
+    if listing.shows_every_choosable_instance:
         # Every scan the curator can act on is here, so what fell off is refused
         # scans only.
         what_was_dropped = (

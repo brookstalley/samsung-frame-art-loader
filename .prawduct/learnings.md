@@ -470,6 +470,16 @@ exactly like a finding. `curation/tools/mutation_sweep.py` now refuses an ambigu
 pattern; the no-op case it cannot detect, so confirm your mutation breaks something
 before writing a test for it.
 
+## Treat a finding's recommendation as a checklist, and tick each item off in the file
+
+**Fix the parts you were not already thinking about.** A finding named two
+contradictory sentences in one state; I removed the one I had been editing, left
+the other — it lived past an unconditional `return` I never looked at — and then
+wrote a comment on my fix saying every such sentence was gone. **A partial fix
+carrying a comment that claims completeness reads exactly like a complete one**, on
+review and on re-reading, so nothing downstream catches it. Go back to the
+finding's text after the edit and confirm each named item against the file.
+
 ## When you rewrite a test's assertions, re-read its name against what it now checks
 
 **A dropped contract and an adjusted wording look identical in a diff; the test's

@@ -315,7 +315,12 @@ def test_a_candidate_cannot_belong_to_a_run_that_does_not_exist(discovery_store)
 
 
 def test_instances_read_with_the_chosen_one_first(discovery_store):
-    """A review card leads with the choice and offers the rest as alternates."""
+    """The store's ranking puts a work's selected instance first.
+
+    A claim about this read, not about what a review card shows: that card is
+    capped and keeps refused scans, so its own leading row is whatever ranks
+    first among the ones it kept.
+    """
     discovery_store.add_run(_run())
     discovery_store.add_candidate_work(_work())
     discovery_store.add_candidate_image(_image(id="i1", confidence=0.4, is_selected=True))

@@ -783,6 +783,16 @@ async def test_a_work_whose_every_scan_was_turned_down_is_not_reassured_about_it
     # were split, and the string came straight back.
     assert "all 0 scans" not in payload["notice"]
     assert "still open to you are on this card" not in payload["notice"]
+    # The tail said the same wrong thing in other words: advising a curator that a
+    # choosable scan "may sit anywhere on the card" where none is choosable, and to
+    # read a per-row field to tell apart rows that are all identical in it. Removing
+    # only the first sentence left this one, which is what happened.
+    assert "may sit anywhere on the card" not in payload["notice"]
+    assert "rather than its position" not in payload["notice"]
+    # And the content this branch does say, so emptying it fails rather than
+    # merely losing a sentence nothing asserts.
+    assert f"Showing {MAX_INSTANCES_LISTED} of {MAX_INSTANCES_LISTED + 2} scans found" in payload["notice"]
+    assert "the ones omitted are also scans you have already turned down" in payload["notice"]
 
 
 async def test_a_work_no_image_was_ever_found_for_says_what_to_do_about_it(server_url, services, propose):
@@ -808,7 +818,6 @@ async def test_a_work_no_image_was_ever_found_for_says_what_to_do_about_it(serve
     # been turned down for a work no scan was ever found for, and pointing them at
     # a paid re-search on the strength of it. Asserted as an absence because a
     # present-only assertion passes under exactly that bug.
-    assert "have already turned down" not in payload["notice"]
     assert "None of the 0 scans" not in payload["notice"]
     assert "resolve_images" in payload["notice"], "the remedy is named, and it is on the tool that owns it"
 
