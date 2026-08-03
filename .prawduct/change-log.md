@@ -130,6 +130,41 @@ sources** — acquisition is their only consumer so far. Adding a reader would b
 this chunk widening a different tool's contract on its own authority, so it is
 filed instead. Everything else in the criterion runs over MCP.
 
+## 2026-08-03: "A preview is re-fetchable" was false in four places
+
+<!-- prawduct: chunks=17B | status=shipped | scope=v1-build -->
+
+**Nothing re-fetches a preview, and four artifacts said otherwise.**
+`PreviewCache.store` runs once — when phase 2 first records an instance — and a
+re-search does not restore the file either, because `record_image` returns the
+instance a work already holds for that URL without rewriting `preview_path`. So a
+deleted preview costs its instance the inline picture for the rest of that work's
+review. That is the difference between "disposable" meaning *losing one costs a
+picture rather than a record* and meaning *it comes back*; every site had drifted
+to the second.
+
+It mattered most where an operator acts on it: the disk-headroom row told someone
+on a filling SD card that hand-deleting `previews/` was "always safe", which is
+how a curator loses the inline picture of every candidate still under review —
+the picture `security-model.md` makes the whole of the review gate. Corrected in
+`operational-spec.md` (twice — the runbook row and the backup section),
+`boundary-patterns.md`, and `data-model.md`.
+
+**Three sweeps, three sites short, and that is the entry worth reading.** The
+first correction fixed one site. The Critic named a second in the same round and
+the fix did not reach it. The PR reviewer found that second one still standing —
+in the branch that had just added `learnings.md` entry 19, which is *about*
+retiring a claim repo-wide — and running the grep it prescribed turned up two more
+that nobody had named. `learnings.md` entry 20 records the tell: entry 19's lesson
+was being applied as a check on a list already written, when a grep run *before*
+the edits is the only one that finds the sites you were never going to think of. A
+reviewer names a sample, not the set.
+
+**Also corrected:** the sweep-vs-hook `[DECISION: …]` was qualified in
+`boundary-patterns.md` and `operational-spec.md` and left verbatim at both of its
+build-plan sites — the record that says the chunk is done, and so the one a reader
+trusts to know whether it delivered. Both now name the unbuilt half and issue #62.
+
 ## 2026-08-03: The route assertion that counted polls
 
 <!-- prawduct: chunks=17B | status=shipped | scope=v1-build -->

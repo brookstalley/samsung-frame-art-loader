@@ -211,12 +211,19 @@ every judgement they have already made.
 > three.** Upstream originals in the image tree; derived renditions and
 > `thumbs/`, regenerated per device; and — since 2026-08-02 — `previews/`, the
 > candidate previews phase 2 caches so review works when a museum does not.
-> Previews are the most disposable of the three: each one is re-fetchable from a
-> URL the catalogue already holds, and a restored catalogue with an empty
-> `previews/` shows review cards that fall back to their source URLs while
-> everything else self-heals as described below. The **judgements** made against
-> those previews — which instance was selected, the rationale, which images were
-> rejected — are catalogue rows and are backed up.
+> Previews are the most disposable of the three, and **disposable here means
+> "losing one costs a picture, not a record" — not "it comes back"** (corrected
+> 2026-08-03). Nothing re-fetches a preview: `PreviewCache.store` runs once, when
+> phase 2 first records an instance, and a re-search does not restore the file
+> because `record_image` returns the instance a work already holds for that URL
+> without rewriting `preview_path`. So a restored catalogue with an empty
+> `previews/` shows review cards that fall back to reporting their source URLs —
+> permanently for every candidate still under review, until acquisition fetches
+> the real image after acceptance. That is a degraded review surface rather than
+> a loss, which is why the exclusion stands; it is not self-healing, which the
+> earlier wording implied. The **judgements** made against those previews — which
+> instance was selected, the rationale, which images were rejected — are catalogue
+> rows and are backed up.
 
 **Destination: another machine on the network** (desktop or NAS, over LAN or the
 overlay network). Decided 2026-07-20. No third party, no cost, no credential on

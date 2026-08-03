@@ -264,8 +264,8 @@ the backlog is part of its sweep set.**
 
 19. **2026-08-03, twenty-second recurrence — the sweep that retired a claim left
     the claim standing at its most load-bearing site.** A preview-sweep docstring
-    claimed a race was
-    closed when it was not, and the claim had been copied into five places. I
+    claimed a race was closed when it was not, and the claim had been copied into
+    five places. I
     fixed four, listed them in the change-log as "the module docstring, the
     inline comment, `architecture.md`, and this entry", and called the sweep
     done. The fifth was `DiscoveryService.transaction()`'s docstring — carrying
@@ -281,6 +281,24 @@ the backlog is part of its sweep set.**
     section's dominant sub-shape. A count is a claim about a search, and it goes
     stale the instant the search was incomplete. The change-log now records the
     lesson and points here rather than restating it.
+
+20. **2026-08-03, twenty-third recurrence — three sweeps, three sites short, on
+    the same claim.** "A preview is re-fetchable" was false and lived in four
+    artifacts. The first correction fixed `operational-spec.md` § Add disk
+    headroom. The Critic named `boundary-patterns.md` in the same round and the
+    fix did not reach it. The PR reviewer then found `boundary-patterns.md` still
+    standing — **in the branch that added entry 19 above, about exactly this** —
+    and running the `grep -rn "re-fetchable"` it prescribed turned up two *more*
+    sites the reviewer had not named: `operational-spec.md`'s backup section and
+    `data-model.md`'s disposability block. Every one of those corrections was made
+    by a reader who believed they had just finished the sweep.
+    **The tell is doing the grep at the end.** Entry 19's lesson was "grep, don't
+    recollect", and it was still applied as a *check on a list I had already
+    written* rather than as the thing that produces the list. A grep run after the
+    edits confirms the edits; a grep run before them is the only one that finds
+    the sites you were never going to think of. Where a Critic or reviewer names
+    one site, treat it as a sample and not as the set — they read a diff, not the
+    repo.
 
 **The correction that follows: stop sweeping a duplicated claim, stop duplicating
 it.** Every remedy above escalates *how well you look* — grep, then walk the

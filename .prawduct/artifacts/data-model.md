@@ -67,10 +67,20 @@ specific output geometry is reproducible from upstream inputs and is never
 synced between machines.
 
 > **Candidate previews are a third class, and they are disposable.**
-> `CandidateImage.preview_path` files are neither upstream (they are cheap and
-> re-fetchable) nor derived (nothing renders them from a held original — there is no
-> original yet). They exist only to make review work without depending on a museum
-> server being reachable. **They are safe to delete once their `CandidateWork`
+> `CandidateImage.preview_path` files are neither upstream (they are cheap, and
+> losing one costs a picture rather than a record) nor derived (nothing renders
+> them from a held original — there is no original yet). They exist only to make
+> review work without depending on a museum server being reachable.
+>
+> **"Disposable" does not mean "comes back"** (corrected 2026-08-03, after the
+> claim was retired from three other artifacts and survived here). Nothing
+> re-fetches a preview: `PreviewCache.store` runs once, when phase 2 first records
+> an instance, and a re-search does not restore the file either, because
+> `record_image` returns the instance a work already holds for that URL without
+> rewriting `preview_path`. A deleted preview costs its instance the inline
+> picture for the rest of that work's review, leaving the card to report the
+> source URL instead. That is what makes deleting them safe *once a work is
+> decided* and lossy before then — which is precisely the line the sweep draws. **They are safe to delete once their `CandidateWork`
 > reaches a terminal verdict**, and deleting them must never affect the catalogue:
 > the accepted work's imagery comes from acquisition, not from the preview. Flagged
 > 2026-07-19 by Critic review, which noted the rows are deliberately permanent while
