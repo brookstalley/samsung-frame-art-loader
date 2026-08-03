@@ -143,29 +143,43 @@ class Transcript:
 
     @property
     def steps(self) -> list[str]:
-        """Every call in order, for failure messages and for prefix assertions.
+        """Every call in order — the exact log, polls and all.
 
-        *Every* one, polls included — so a scenario that watches a run until it
-        finishes has as many `status` entries as it needed attempts. Compare a
-        whole route against `route` rather than this.
+        This is what a whole-route assertion should use **whenever the scenario's
+        call count is deterministic**, which is most of them: it is the stricter
+        check, and it catches a repeated call as readily as an extra distinct
+        one. `REFERENCE_ROUTE` and `DISCOVERY_ROUTE` are compared against it for
+        that reason and should stay that way.
+
+        Reach for `route` only where a scenario *polls* — waiting on a run makes
+        the count a property of the machine rather than of the surface.
         """
         return [str(call) for call in self.calls]
 
     @property
     def route(self) -> list[str]:
-        """The steps with consecutive repeats collapsed — the *distinct* path taken.
+        """The steps with consecutive repeats collapsed — the path, not the log.
 
-        **A polling loop makes the raw sequence non-deterministic**, and a route
-        assertion written against it is a flake waiting for a loaded machine: a
-        run that answers `completed` on the first `status` gives one entry, and
-        the same run behind a slower phase 2 gives two. What the routes in this
-        module claim is that a goal takes these calls *in this order* — an extra
-        required round trip is the regression they exist to catch — and asking
-        the same question twice while waiting is not one.
+        **For scenarios that poll, and only those.** Watching a run until it
+        finishes takes as many `status` calls as the machine needs, so a fixed
+        route compared against `steps` fails on whichever run is slower. What the
+        routes in this module claim is that a goal takes these calls *in this
+        order*, and asking the same question twice while waiting is not a change
+        to that.
 
-        Collapsing consecutive repeats keeps the claim intact: a second *distinct*
-        call still lands, and so does the same call re-entered after something
-        else, because only adjacent duplicates fold.
+        **What this gives up, stated plainly: a flow that genuinely requires the
+        same call twice in a row is indistinguishable from one that requires it
+        once.** Folding cannot tell a poll from a needed repetition — nothing in a
+        transcript can. So a scenario whose route legitimately contains an
+        adjacent duplicate must assert against `steps` and accept that it cannot
+        also poll, or assert the duplicate separately. Only *adjacent* repeats
+        fold, so a call re-entered after something else is still a second visit.
+
+        The fold is over the rendered step, which carries the image count — so
+        two `list_images` calls that returned different numbers of pictures do
+        **not** collapse. That is deliberate: the review gate lives in those
+        counts, and a fold that ignored them would let a route keep claiming
+        pictures arrived after they stopped.
         """
         collapsed: list[str] = []
         for step in self.steps:

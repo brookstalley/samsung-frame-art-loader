@@ -147,13 +147,23 @@ asserts `steps[:2]` and the picture-bearing subset, never the whole tuple, for
 exactly this reason — and the new test copied the route idea without the reason
 behind its shape.
 
-`Transcript.route` now collapses *adjacent* repeats, and route assertions compare
-against that; `steps` still carries every call, which is what failure messages
-want. Only adjacent duplicates fold, so a call re-entered after something else is
-still a second visit — an extra required round trip remains the thing these routes
-catch, which is the property that had to survive the fix. Pinned by a test of the
-folding itself, since a loosened assertion that nobody checks is just a weaker
-assertion.
+`Transcript.route` now collapses *adjacent* repeats, and the polling scenario
+compares against that; `steps` stays the default for every scenario whose call
+count is deterministic, because it is the stricter check. Only adjacent duplicates
+fold, so a call re-entered after something else is still a second visit — an extra
+required round trip remains the thing these routes catch.
+
+**Three reviewers independently found the same two things, and both were about
+what the fix was quiet on.** The fold is over the *rendered* step, which carries
+the image count — so two `list_images` calls that returned different numbers of
+pictures do not collapse. That is load-bearing rather than incidental: the review
+gate lives in those counts, and a fold blind to them would let a route certify
+that pictures arrived after they stopped. The test now carries a differing count
+for exactly that reason; without it, reimplementing the fold on `(tool, action)`
+passed. And what folding *gives up* is now stated where it is defined — a flow
+genuinely requiring the same call twice in a row is indistinguishable from one
+requiring it once, because nothing in a transcript can tell a poll from a needed
+repetition. Such a scenario has to assert against `steps`.
 
 ## 2026-08-03: What the Critic round changed about 17B
 

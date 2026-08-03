@@ -40,35 +40,46 @@ ADVERTISED = [(tool.name, action) for tool in TOOLS for action in tool.action_na
 _BROKEN_SURFACE = ("Unknown action:", "is declared but not wired up", "failed unexpectedly")
 
 
-def test_the_route_folds_a_poll_without_hiding_a_round_trip():
+def test_the_route_folds_a_poll_without_hiding_a_round_trip_or_a_lost_picture():
     """The harness's own guard on the thing that made a route assertion flake.
 
     `route` exists because a scenario that watches a run polls an unpredictable
     number of times, and a fixed route compared against the raw call log fails
-    on whichever machine is slower. What it must not do is fold away a *real*
-    extra round trip, which is the only regression the routes are there to
-    catch — so both halves are pinned here rather than trusted.
+    on whichever machine is slower. Two things it must not fold are pinned here
+    rather than trusted: a *real* extra round trip, which is the only regression
+    the routes are there to catch, and a change in how many pictures a call
+    returned, which is where the review gate lives.
+
+    The image counts are not decoration. Folding on `(tool, action)` instead of
+    the rendered step passes every other assertion in this test and would let a
+    route go on claiming pictures arrived after they stopped — the exact defect
+    `ACCEPTANCE_ROUTE`'s `2 image(s)` / `1 image(s)` exist to catch.
     """
     transcript = Transcript()
-    for tool, action in [
-        ("art_discovery", "start"),
-        ("art_discovery", "status"),
-        ("art_discovery", "status"),
-        ("art_discovery", "status"),
-        ("art_review", "list_works"),
-        ("art_discovery", "status"),
+    for tool, action, images in [
+        ("art_discovery", "start", 0),
+        ("art_discovery", "status", 0),
+        ("art_discovery", "status", 0),
+        ("art_discovery", "status", 0),
+        ("art_review", "list_images", 2),
+        ("art_review", "list_images", 0),
+        ("art_discovery", "status", 0),
     ]:
-        transcript.calls.append(Call(tool, action, True, {}))
+        transcript.calls.append(Call(tool, action, True, {}, images=images))
 
     assert transcript.route == [
         "art_discovery(action='start')",
         "art_discovery(action='status')",
-        "art_review(action='list_works')",
+        "art_review(action='list_images', 2 image(s))",
+        # Adjacent, same tool, same action — and it does not fold, because the
+        # pictures stopped arriving between the two. A fold blind to that is a
+        # route that certifies the review gate while the gate is off.
+        "art_review(action='list_images')",
         # Re-entered after something else, so it is a second visit and not a
         # poll — folding this would hide exactly the round trip that matters.
         "art_discovery(action='status')",
-    ]
-    assert len(transcript.steps) == 6, "the raw log still carries every call, for failure messages"
+    ], f"folded wrongly: {transcript}"
+    assert len(transcript.steps) == 7, "the raw log still carries every call, for failure messages"
 
 
 async def test_a_work_can_be_put_on_the_wall_through_the_tools_alone(server_url, ready_work):
@@ -459,5 +470,9 @@ class TestReviewingWhatDiscoveryFound:
         # Collapsing adjacent repeats keeps what the route claims — that the goal
         # takes these calls in this order — while letting a slow phase 2 poll
         # twice.
-        assert tuple(caller.transcript.route) == ACCEPTANCE_ROUTE
+        assert tuple(caller.transcript.route) == ACCEPTANCE_ROUTE, (
+            f"the route taken was not the one this flow claims.\n"
+            f"  every call made: {caller.transcript}\n"
+            f"  polls folded:    {' -> '.join(caller.transcript.route)}"
+        )
         assert not caller.transcript.failures, f"a step failed: {caller.transcript}"
