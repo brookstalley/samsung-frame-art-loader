@@ -345,16 +345,28 @@ def test_the_thumbnail_cache_sits_inside_the_art_root(monkeypatch, tmp_path):
 def test_the_shipped_discovery_defaults_reproduce_the_recorded_cost_analysis(monkeypatch, tmp_path):
     """The defaults are a derivation, not a preference, and this is where it is checked.
 
-    The cost analysis these values come from records a bounded run at $0.11–$0.13
-    on the pinned engine, its search component at $0.03–0.05, and the model call
-    alone at roughly eight cents. Those figures were arrived at independently of
-    this code; if the shipped settings cannot reproduce them, one of the two is
-    wrong and a curator is authorising against a number that describes nothing.
+    The figures come from a cost analysis arrived at independently of this code.
+    If the shipped settings cannot reproduce them, one of the two is wrong and a
+    curator is authorising against a number that describes nothing.
 
-    **The search figures moved when the engine was chosen (2026-08-02)**, from a
-    $0.005 request to a $0.001 one. That is the analysis changing under a
-    decision, not this assertion being relaxed to fit: the model-only component is
-    untouched at eight cents, and the search component fell exactly five-fold.
+    **Twice now the analysis has moved under a decision, and neither time was
+    this assertion relaxed to fit.** The engine choice (2026-08-02) took a search
+    request from $0.005 to $0.001, and the model-only component was untouched at
+    eight cents — which is what made the fall attributable to search. Then phase 2
+    was built and measured (2026-08-02), and both halves of the run changed at
+    once:
+
+    - **Phase 1's token basis was re-based against a measured run** — 3,453 in and
+      1,608 out, against a shipped 490,000 / 30,000. The old input figure was a
+      whole-run basis being spent on phase 1 alone, and it made the number shown
+      to a curator about twenty times the actual. The bounds now shipped are
+      8,000 each: roughly twice the measured input, and for output the
+      provider-priced reservation itself.
+    - **Phase 2 costs nothing**, because it asks open museum APIs and establishes
+      identity by local comparison rather than by a model call. That is what made
+      the re-basing safe to do: correcting phase 1 while phase 2's consumption was
+      unknown would have traded a visible overstatement for an invisible
+      understatement of the run as a whole.
 
     Computed here rather than compared against a copied total, so the assertion
     fails when the composition changes rather than tracking it.
@@ -365,16 +377,29 @@ def test_the_shipped_discovery_defaults_reproduce_the_recorded_cost_analysis(mon
     # A typical run finds about twenty works. Bounded, so this is the ceiling
     # rather than the expectation.
     typical_works = 20
-    searches = discovery.phase1_search_allowance + typical_works * discovery.phase2_searches_per_work
-    search_spend = searches * discovery.search_cost_usd
     run_total = discovery.phase1_estimate_usd + discovery.phase2_estimate_usd(typical_works)
+    # Only phase 1 searches for money. The per-work allowance still bounds phase
+    # 2's fan-out and is still reported beside a run's usage — it simply bills
+    # nothing, which is why it is absent from this sum rather than multiplied by
+    # a price.
+    paid_searches = discovery.phase1_search_allowance
+    search_spend = paid_searches * discovery.search_cost_usd
+    model_spend = run_total - search_spend
 
-    assert searches == 50
-    assert search_spend == Decimal("0.050"), "the search component's recorded ceiling on the pinned engine"
-    assert run_total == Decimal("0.127"), "a bounded run, against a recorded range topping out at $0.13"
-    # The model call alone, against a table recording roughly eight cents. Unchanged
-    # by the engine decision, which is what makes the fall attributable to search.
-    assert Decimal("0.07") < run_total - search_spend < Decimal("0.08")
+    assert paid_searches == 10
+    assert (
+        discovery.phase1_search_allowance + typical_works * discovery.phase2_searches_per_work == 50
+    ), "the fan-out cap is unchanged at 10 + 2/work; only its price went to zero"
+    assert search_spend == Decimal("0.010"), "ten requests at the pinned engine's $0.001"
+    assert discovery.phase2_estimate_usd(typical_works) == Decimal(0), "museum APIs are free and phase 2 makes no model call"
+    assert run_total == Decimal("0.01336"), "a bounded run, an order of magnitude under the pre-measurement estimate"
+    # The model call alone: 8,000 in at $0.14/M and 8,000 out at $0.28/M.
+    assert model_spend == Decimal("0.00336")
+    # The correction's whole point, stated as a relation rather than a number so
+    # it cannot be satisfied by a stale constant: a real run measured $0.0016, and
+    # a bound that far exceeds what it bounds is not informative. Ten-fold is
+    # generous headroom for an allowance a run uses one of.
+    assert run_total < 10 * Decimal("0.0016"), "the estimate is a usable bound rather than a twenty-fold overstatement"
 
 
 def test_the_search_price_matches_the_engine_that_is_pinned(monkeypatch, tmp_path):
@@ -437,7 +462,12 @@ def test_a_deployment_can_override_every_discovery_setting(monkeypatch, tmp_path
     # 100,000 in at $0.30/M is $0.03; 5,000 out at $2.50/M is $0.0125; six
     # searches at $0.001 add $0.006.
     assert discovery.phase1_estimate_usd == Decimal("0.0485")
-    assert discovery.phase2_estimate_usd(10) == Decimal("0.030")
+    # Zero whatever the per-work allowance is set to, because phase 2 asks museum
+    # APIs and identifies works locally — it makes no paid call for the allowance
+    # to price. The allowance is still read and still bounds fan-out, which is
+    # what the assertion three lines up checks; what it no longer does is cost
+    # anything.
+    assert discovery.phase2_estimate_usd(10) == Decimal(0)
 
 
 def test_a_price_is_read_as_a_decimal_rather_than_through_a_float(monkeypatch, tmp_path):

@@ -27,7 +27,9 @@ from curation.discovery.engine import (
     WorkList,
     WorkListRequest,
 )
+from curation.discovery.images import FoundImage, ImageQuery, ImageSearchFailure
 from curation.persistence.discovery_records import SpendCategory
+from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
 
 #: Titles that are actually distinct works by one artist, so a run built from
 #: them exercises the dedup key doing nothing rather than the key collapsing a
@@ -65,14 +67,19 @@ def spent(*, tokens_usd: str = "0.08", searches: int = 1, search_usd: str = "0.0
     token, and its `units` is where the search count lives — the same record that
     prices the searches is the one the cap is read from, so the two cannot
     disagree.
+
+    The token counts are the ones a **real run measured** — 3,453 in and 1,608
+    out. They were 490,000 / 30,000, which was the shipped estimate basis before
+    it was re-based against that measurement; a fake echoing a figure the code no
+    longer holds reads as corroborating it.
     """
     return (
         EngineSpend(
             category=SpendCategory.DISCOVERY_TOKENS,
             cost_usd=Decimal(tokens_usd),
             model_id="fake/deterministic-v1",
-            input_tokens=490_000,
-            output_tokens=30_000,
+            input_tokens=3_453,
+            output_tokens=1_608,
         ),
         EngineSpend(category=SpendCategory.WEB_SEARCH, cost_usd=Decimal(search_usd) * searches, units=searches),
     )
@@ -117,3 +124,66 @@ class FakeEngine:
     def searched(self) -> Sequence[int]:
         """The allowance every call was given, for asserting the cap travelled."""
         return [request.search_allowance for request in self.requests]
+
+
+#: A museum's response to a work it holds, at a size that clears the floor on the
+#: shipped 42" geometry. Dimensions are the master's, as the real API reports
+#: them on `thumbnail` — see `.prawduct/artifacts/artic-api-findings.md`.
+def an_image(
+    title: str,
+    *,
+    artist: str | None = "Salvador Dalí",
+    width: int = 6949,
+    height: int = 8400,
+    provider: str = "artic",
+    rights: RightsStatus | None = RightsStatus.PUBLIC_DOMAIN,
+) -> FoundImage:
+    return FoundImage(
+        url=f"https://api.artic.edu/api/v1/artworks/{abs(hash((title, width))) % 100000}",
+        provider=provider,
+        source_class=SourceClass.INSTITUTIONAL,
+        acquisition_method=AcquisitionMethod.DEZOOMIFY,
+        title=title,
+        artist=artist,
+        preview_url=f"https://www.artic.edu/iiif/2/{abs(hash(title)) % 100000}/full/843,/0/default.jpg",
+        estimated_width=width,
+        estimated_height=height,
+        rights_status=rights,
+    )
+
+
+@dataclass
+class FakeImageSearch:
+    """A museum that holds whatever it was built to hold.
+
+    Keyed by the title asked for rather than answering one fixed list, because
+    the interesting phase-2 runs are the mixed ones — some works resolved, one
+    below floor, one the collection does not hold — and a provider that answered
+    identically for every work could not produce them.
+
+    Anything not in `holdings` comes back as the real API does for a work it does
+    not have: plausible results for *other* works, which is what the judgement
+    above the seam has to reject.
+    """
+
+    holdings: dict[str, Sequence[FoundImage]] = field(default_factory=dict)
+    unreachable: bool = False
+    fails_for: set[str] = field(default_factory=set)
+    asked: list[str] = field(default_factory=list)
+    fetched: list[str] = field(default_factory=list)
+    preview_bytes: bytes | None = b"\xff\xd8\xff\xe0 jpeg"
+
+    def find_images(self, query: ImageQuery) -> Sequence[FoundImage]:
+        self.asked.append(query.title)
+        if self.unreachable or query.title in self.fails_for:
+            raise ImageSearchFailure(f"could not reach the collection for {query.title!r}")
+        if query.title in self.holdings:
+            return self.holdings[query.title]
+        # A near-match rather than an empty list, which is what the live API
+        # really returns: the collection at a comfortable score, none of it the
+        # work asked for.
+        return (an_image("Ann-In Memory", artist="Joseph Cornell"),)
+
+    def fetch_preview(self, url: str) -> bytes | None:
+        self.fetched.append(url)
+        return self.preview_bytes

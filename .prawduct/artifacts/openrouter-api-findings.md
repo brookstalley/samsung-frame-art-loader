@@ -262,12 +262,30 @@ engine since pinned, and the same run would bill about **$0.0016**. The
 overstatement widens rather than narrows, because what is wrong with it is the
 token basis and only the search component got cheaper.
 
-**Recorded rather than corrected here, deliberately.** The 490,000 figure comes
-from a cost analysis of a *whole run*, while the code spends it on phase 1 alone;
-phase 2's own token consumption is not in any estimate and cannot be measured
-until phase 2 exists. Re-basing phase 1 in isolation would trade a visible
-overstatement for an invisible understatement, which is the worse direction. See
-`nonfunctional-requirements.md` § Cost Constraints.
+~~**Recorded rather than corrected here, deliberately.**~~ **Corrected
+2026-08-02, when phase 2 was built.** The reasoning for leaving it standing was
+that the 490,000 figure came from a cost analysis of a *whole run* while the code
+spent it on phase 1 alone, and phase 2's own consumption was in no estimate and
+unmeasurable until phase 2 existed — so re-basing phase 1 in isolation would have
+traded a visible overstatement for an invisible understatement.
+
+**Phase 2 turned out to consume no tokens at all.** It queries museum APIs, which
+are open and unmetered, and decides whether a result is the requested work by
+comparing titles and artists locally rather than by asking a model
+(`artic-api-findings.md`). So the understatement the correction was held back
+against does not exist, and both halves could be settled at once:
+
+```
+DISCOVERY_PHASE1_INPUT_TOKENS    490,000  ->  8,000   (measured 3,453, bounded at ~2x)
+DISCOVERY_PHASE1_OUTPUT_TOKENS    30,000  ->  8,000   (the provider-priced reservation)
+phase-1 estimate                  $0.087  ->  $0.01336
+phase-2 estimate            work_count x 2 searches  ->  $0
+```
+
+The measured run above billed $0.0056 on the default route and would bill about
+$0.0016 on the pinned engine, so the shipped bound is now roughly eight times a
+real run rather than fifty — which is what a bound over an allowance a run uses
+one of should look like. See `nonfunctional-requirements.md` § Cost Constraints.
 
 ## The client is first-party, behind a seam (decided 2026-08-02)
 

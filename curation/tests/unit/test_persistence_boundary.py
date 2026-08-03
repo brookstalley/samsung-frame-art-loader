@@ -62,6 +62,10 @@ _MAY_REACH_THE_NETWORK = {
     # The OpenRouter client — the far side of the engine seam, which is exactly
     # where a transport belongs.
     "curation.discovery.openrouter",
+    # The Art Institute client — the far side of the *image* seam, the same
+    # arrangement one phase down. `urllib.parse` comes with it, for percent-
+    # encoding a search term into a query string; no request is made through it.
+    "curation.discovery.artic",
     # `urllib.parse` only, for reading identifiers out of legacy filenames. No
     # request is made; the module is listed because the guard matches on the
     # top-level name rather than pretending to know which submodule is inert.

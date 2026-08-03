@@ -33,6 +33,14 @@ CATALOGUE_FILENAME: Final[str] = "catalogue.sqlite"
 #: regenerated on whatever machine needs them, never copied between machines.
 THUMBNAILS_DIRNAME: Final[str] = "thumbs"
 
+#: Where candidate previews are cached under `ART_ROOT`. **A third class**, and
+#: kept apart from `thumbs/` because of it: a thumbnail is derived from a work
+#: the catalogue holds, while a preview belongs to a work nobody has accepted and
+#: may never. Previews are disposable the moment their candidate reaches a
+#: terminal verdict, and a sweep that could not tell the two apart would delete a
+#: held work's thumbnails.
+PREVIEWS_DIRNAME: Final[str] = "previews"
+
 DEFAULT_HOST: Final[str] = "127.0.0.1"
 DEFAULT_PORT: Final[int] = 8770
 
@@ -97,12 +105,34 @@ DEFAULT_SEARCH_COST_USD: Final[str] = "0.001"
 DEFAULT_INPUT_COST_USD_PER_MTOK: Final[str] = "0.14"
 DEFAULT_OUTPUT_COST_USD_PER_MTOK: Final[str] = "0.28"
 
-#: What one phase-1 run is assumed to consume. Input-dominated, and the imbalance
-#: is the point: phase 1 reads injected search results and emits a short list, so
-#: output price barely moves the total and a naive in/out average would rank
-#: candidate models wrongly.
-DEFAULT_PHASE1_INPUT_TOKENS: Final[int] = 490_000
-DEFAULT_PHASE1_OUTPUT_TOKENS: Final[int] = 30_000
+#: What one phase-1 run may consume, as a bound rather than a typical figure.
+#:
+#: **Re-based 2026-08-02 against a measured run**, from 490,000 / 30,000. A real
+#: run billed 3,453 input and 1,608 output tokens, because the web plugin injects
+#: *excerpts* rather than whole pages — the old input figure was a cost analysis's
+#: basis for a *whole* run being spent on phase 1 alone, and it made the estimate
+#: shown to a curator about twenty times the actual.
+#:
+#: Bounds, not the measurement: an estimate a run may freely exceed is not one.
+#: Input is roughly twice the measured consumption at the configured ten search
+#: results, which is headroom for a long intent and long excerpts. Output is the
+#: reservation itself (`DEFAULT_DISCOVERY_MAX_OUTPUT_TOKENS`) — a true physical
+#: bound, since it is the ceiling the provider prices and refuses against.
+#:
+#: **They are near-equal even though real consumption is input-heavy**, and that
+#: is a consequence worth knowing rather than an oversight: the old basis put
+#: output at 6% of tokens, which made output price nearly irrelevant to model
+#: choice. It is not irrelevant now, and a model billing $2.50/M output is priced
+#: accordingly. `nonfunctional-requirements.md` § Cost Constraints carries the
+#: reordered table; the chosen model is cheapest on either basis.
+#:
+#: Re-basing was safe to do here and not before **because phase 2 was measured at
+#: the same time and consumes no tokens at all**: it queries museum APIs, which
+#: are free, and establishes identity by local comparison. Before that was known,
+#: correcting phase 1 alone would have traded a visible overstatement for an
+#: invisible understatement of the run as a whole.
+DEFAULT_PHASE1_INPUT_TOKENS: Final[int] = 8_000
+DEFAULT_PHASE1_OUTPUT_TOKENS: Final[int] = 8_000
 
 #: Which model phase 1 asks. A **floating** alias rather than a dated snapshot, so
 #: a snapshot retirement cannot break the only paid path in a household product.
@@ -201,6 +231,14 @@ class Settings:
     #: serves the whole catalogue and refuses only to *start* a discovery run,
     #: which is a far better failure than refusing to boot.
     openrouter_api_key: str | None = None
+    #: How this deployment identifies itself to the museum APIs phase 2 asks.
+    #: **Optional, and its absence is what switches phase 2 off**: the Art
+    #: Institute's API is open but asks callers to name themselves and give a
+    #: contact address, and sending someone else's identifier — or a default
+    #: pretending to be one — would be this product misrepresenting whoever runs
+    #: it to a third party. So there is no default, and a deployment that has not
+    #: set one resolves no images rather than resolving them anonymously.
+    artic_user_agent: str | None = None
 
     @property
     def discovery_settings(self) -> DiscoverySettings:
@@ -231,6 +269,17 @@ class Settings:
         television state, the class this catalogue exists to keep out.
         """
         return self.art_root / THUMBNAILS_DIRNAME
+
+    @property
+    def previews_path(self) -> Path:
+        """Where phase 2 caches the previews a review card shows.
+
+        Inside `ART_ROOT` because every catalogue path is relative to it, and in
+        its own directory because these files are disposable in a way nothing
+        else under that root is — deletable as soon as their candidate work is
+        accepted or rejected, and never a loss when they go.
+        """
+        return self.art_root / PREVIEWS_DIRNAME
 
     @property
     def tv_pixels_per_inch(self) -> float:
@@ -319,6 +368,7 @@ class Settings:
             discovery_search_results=_counted("DISCOVERY_SEARCH_RESULTS", DEFAULT_DISCOVERY_SEARCH_RESULTS),
             discovery_search_engine=os.environ.get("DISCOVERY_SEARCH_ENGINE") or DEFAULT_DISCOVERY_SEARCH_ENGINE,
             openrouter_api_key=os.environ.get("OPENROUTER_API_KEY") or None,
+            artic_user_agent=os.environ.get("ARTIC_USER_AGENT") or None,
         )
 
     def redacted(self) -> dict[str, object]:

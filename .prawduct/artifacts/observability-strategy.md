@@ -140,6 +140,43 @@ Deliberately minimal, because the topology does not need more.
 There is no request-id propagation between planes because there are no requests
 between planes.
 
+> **Phase 2's events, added 2026-08-02, and what they exist to make visible.**
+> Phase 2 is where a run can fail *quietly* in the one direction this product
+> cannot otherwise detect — by finding nothing and looking like it worked, or by
+> finding the wrong painting and looking like it found the right one. So the
+> discards are logged as loudly as the successes:
+>
+> | Event | Says |
+> |---|---|
+> | `phase_two.searched` | which collection was asked about which work, how many results came back, and how many were usable at all |
+> | `phase_two.judged` | how many instances were credible, and how many of those are below the floor |
+> | `phase_two.not_the_work` | a result was discarded as a different painting, naming what the provider called it and who it says painted it |
+> | `phase_two.size_unknown` | a result was discarded because the provider reported no dimensions |
+> | `phase_two.unreachable` | a provider could not be asked about a work, which leaves it pending rather than unresolved |
+> | `phase_two.verdict_stands` | a resolution finished against a work the curator had already decided; the result is reported, not applied |
+> | `preview.cached` / `preview.absent` | whether a review card will have local bytes to show |
+> | `run.completed` | the run's works split into resolved, unresolved and unreachable |
+>
+> **`phase_two.not_the_work` is the one to read first when a run comes back
+> emptier than expected.** It carries the museum's own title and artist beside the
+> requested ones, so the two failure modes it sits between are distinguishable
+> from the journal alone: a work the collection genuinely does not hold, and a
+> work it holds under a name the identity comparison did not match. The second is
+> a defect in the comparison; the first is the product working.
+
+## What the museum is told about us
+
+The Art Institute's API is open — no key, no account — but asks callers to
+identify themselves. `ARTIC_USER_AGENT` carries a deployment name and a contact
+address, and **there is deliberately no default**: sending a made-up identifier
+would misrepresent whoever runs this to a third party. Unset switches phase 2 off
+rather than making it anonymous, which is also why the startup line reports which
+provider is configured — a run stuck at `resolving_images` should be one journal
+read from its explanation.
+
+No rate-limit headers exist on that API to read back (measured, not assumed), so
+there is no budget signal to log and none is invented.
+
 ## The Health Surface
 
 **Display writes a heartbeat; curation reads and displays it.**

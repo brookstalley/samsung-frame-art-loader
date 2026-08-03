@@ -103,6 +103,7 @@ def test_every_state_a_run_can_be_read_in_carries_guidance(status):
         pending=0,
         searches_used=3,
         search_allowance=14,
+        image_resolution_available=True,
     )
 
     notice = _run_notice(view)
@@ -140,6 +141,7 @@ def test_the_three_endings_an_agent_must_tell_apart_each_say_what_to_do_next(sta
         pending=0,
         searches_used=0,
         search_allowance=10,
+        image_resolution_available=True,
     )
 
     assert must_say in _run_notice(view)

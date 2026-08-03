@@ -7,13 +7,16 @@ import uvicorn
 from curation import logs
 from curation.app import create_app
 from curation.config import Settings
+from curation.discovery.artic import build_image_search
 from curation.discovery.engine import DiscoveryEngine, unavailable_engine
+from curation.discovery.images import ImageSearch
 from curation.discovery.phase_one import build_engine
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.persistence.sqlite_discovery import SqliteDiscovery
 from curation.services.container import Services
 from curation.services.display import WallSettings
+from curation.services.previews import PreviewSettings
 from curation.services.thumbnails import ThumbnailSettings
 
 #: What a deployment with no key is told when it tries to discover. Written for
@@ -44,6 +47,21 @@ def _engine(settings: Settings) -> DiscoveryEngine:
         search_results=settings.discovery_search_results,
         search_engine=settings.discovery_search_engine,
     )
+
+
+def _image_search(settings: Settings) -> ImageSearch | None:
+    """The museum provider phase 2 asks, or nothing when none is configured.
+
+    `None` rather than a refusing stand-in, because the two say different things
+    at different times. Phase 1 refuses at `start`, where a run does not yet
+    exist and refusing creates no record. Phase 2 has a run in hand by the time
+    it would refuse, and failing it would record a run that broke when in fact a
+    capability is simply not configured — so the honest arrangement is to leave
+    the run where it is and let `status` say so in words.
+    """
+    if not settings.artic_user_agent:
+        return None
+    return build_image_search(user_agent=settings.artic_user_agent)
 
 
 def main() -> None:
@@ -101,6 +119,16 @@ def main() -> None:
         settings.redacted()["openrouter_api_key"],
     )
 
+    # Which museum phase 2 asks, and whether it can be asked at all. Logged for
+    # the same reason the key's presence is: "is it even configured" is the first
+    # question a run stuck at `resolving_images` raises.
+    image_search = _image_search(settings)
+    log.info(
+        "phase2 image_provider=%s previews=%s",
+        "artic" if image_search is not None else "none (ARTIC_USER_AGENT unset)",
+        settings.previews_path if image_search is not None else "disabled",
+    )
+
     settings.art_root.mkdir(parents=True, exist_ok=True)
     # One connection behind both halves of the model: acceptance promotes a
     # candidate's image instances into a work's sources, and that has to commit
@@ -120,6 +148,10 @@ def main() -> None:
             artwork_box=box,
             engine=_engine(settings),
             discovery_settings=settings.discovery_settings,
+            image_search=image_search,
+            previews=(
+                None if image_search is None else PreviewSettings(art_root=settings.art_root, directory=settings.previews_path)
+            ),
         )
         # The catalogue file outlives any single version of this code, so rules
         # added since it was written are brought to it here rather than assumed

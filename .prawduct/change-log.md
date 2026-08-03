@@ -48,6 +48,87 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-02: Discovery phase 2 — works become instances, and the near-match is refused
+
+<!-- prawduct: chunks=16A | status=shipped | scope=v1-build -->
+
+**Why:** A run that cleared the approval gate had nowhere to go. It settled its
+work list, moved to `resolving_images`, and sat there — with `status` saying in
+plain words that finding images was not wired up in this deployment. That
+sentence is now deleted, and a run completes under its own power with one card's
+worth of data per work.
+
+**Chunk 16 was split into 16A and 16B** at the operator's call, at the seam
+between turning works into instances and doing it a *second* time on request. One
+Critic round over the whole would have read a diff comparable to 14A and 14B
+combined. 16A meets the acceptance criterion the chunk states; 16B adds
+`resolve_images` on top of the engine it builds.
+
+**The verify-api probe ran first and changed the design rather than confirming
+it** (`artic-api-findings.md`). Two findings did the work:
+
+- **The Art Institute's relevance score cannot carry confidence.** Scores are not
+  comparable between queries — two correct searches topped out at 3,362 and 122 —
+  a nonsense query returns the *whole collection* rather than nothing, and asking
+  for a painting the museum does not hold returns real works by real artists at
+  comfortable scores. Asking for *The Persistence of Memory* surfaces *Ann-In
+  Memory* by Joseph Cornell. **Ranking by that number attaches it to the request
+  and reports success**, which is the "confident near-match" the data model
+  forbids arriving through the most obvious implementation. So confidence is an
+  identity comparison against the requested title and artist, derived from the
+  same normalisation `work_dedup_key` is built from, and an artist disagreement
+  disqualifies rather than deducts — the collection holds *American Gothic* by
+  Grant Wood **and** by Elizabeth Layton.
+- **The search response already carries the master's dimensions.**
+  `thumbnail.width`/`height` describe the full image, verified equal to the IIIF
+  `info.json` on separate works, so an instance is sized from the response that
+  found it and the per-result round trip a careful implementation would have made
+  is not needed. Every IIIF response is 843px wide whatever is asked for, which
+  settles both the preview URL and `acquisition_method = dezoomify`.
+
+**Phase 2 reaches museum APIs only (operator decision).** That comparison is free
+and deterministic, so phase 2 spends nothing — which is what made the cost
+correction below safe. A work no museum holds lands `unresolved`, already a
+first-class outcome whose remedy is the re-search.
+
+**The floor is an exclusion in the one function that decides selection**, not a
+filter at recording time and not a deduction in the score. Recording-time
+filtering would hide the instance, which the requirement forbids; a deduction
+would still select it whenever nothing better existed, which is the case the
+floor exists for. Every consequence then falls out of one rule: the instance is
+stored and offered as an alternate, a work with only below-floor instances is
+reported `unresolved`, a curator can still choose one by name, and **rejecting a
+good scan does not fall through to a below-floor alternate** — which would hand
+someone asking for something better the worst image on the card.
+
+**The cost estimate is corrected, both halves at once.**
+`DISCOVERY_PHASE1_INPUT_TOKENS` shipped at 490,000 against a measured 3,453, and
+14B deliberately left it standing because phase 2's consumption was unmeasurable
+and re-basing phase 1 alone would have traded a visible overstatement for an
+invisible understatement. Phase 2 turned out to consume nothing, so both settled
+together: a bounded run goes from **$0.127 to $0.01336**, and the phase-2 estimate
+from `work_count x 2 searches` to **zero**.
+
+**A consequence worth stating rather than glossing:** the token basis is no longer
+input-dominated. Input is a measurement with headroom; output is the provider's
+reservation, which a run cannot exceed. The old basis put output at 6% of tokens,
+which is why "output price is nearly irrelevant to model choice" stood — it is not
+irrelevant now, and the model table reorders, with Gemini 3.5 Flash Lite moving
+from third to last on its $2.50/M output. The chosen model is cheapest on either
+basis, so the decision is unaffected.
+
+**Verified against the live API, not only against fakes.** Four real works resolve
+at 0.95 confidence with previews on disk; *The Persistence of Memory* and an
+invented title both land `unresolved`. The suites are 1,022 + 52 green.
+
+**One thing found by writing the tests.** The first quality metric ranked on
+rendered inches, and preferred a 2000x1500 landscape over a 6949x8400 portrait —
+because the artwork box is wide, so a tall master is limited by its height and
+renders shorter while having four times the resolution to spare.
+`nonfunctional-requirements.md` had already said what isolates resolution is
+whether the render is a downscale or a native-size paste; the metric now bands by
+that verdict, and the case is pinned by a test.
+
 ## 2026-08-02: The review Chunk 15 never got, and the four findings that were one finding
 
 **Why:** Chunk 15 shipped without a Critic review. One was dispatched — three

@@ -483,21 +483,35 @@ def _run_notice(view: RunView) -> str:
             "until you do."
         )
     if status is RunStatus.RESOLVING_IMAGES:
-        # Truthful about this build rather than reassuring. Delete this branch's
-        # second sentence when image resolution exists: a run waiting on a
-        # capability that has since been built would be told the opposite of what
-        # is true, which is worse than saying nothing.
+        # Two different situations share this state, and which one it is comes
+        # from the wiring rather than from a sentence written here — a hardcoded
+        # answer was true until phase 2 was built and false the moment it was.
+        if not view.image_resolution_available:
+            return (
+                f"The work list of {view.work_count} works is settled, but no image provider is configured "
+                "in this deployment, so the run will stay here; cancel it when you are done reading it."
+            )
         return (
-            f"The work list of {view.work_count} works is settled and the run is ready to look for images. "
-            "Finding images is not wired up in this deployment, so this run will stay here; cancel it when "
-            "you are done reading it."
+            f"The work list of {view.work_count} works is settled and the run is looking for an image of each. "
+            "Call status again to keep watching."
         )
     if status is RunStatus.COMPLETED:
-        settled = f"{view.resolved} of {view.work_count} works have an image"
-        return (
-            f"This run finished: {settled}. Works nothing could be found for are reported as unresolved "
-            "rather than dropped, because that is the signal a proposed work may not exist."
-        )
+        settled = f"This run finished: {view.resolved} of {view.work_count} works have an image."
+        if view.unresolved:
+            settled += (
+                f" {view.unresolved} could not be matched to any image and are reported as unresolved "
+                "rather than dropped, because that is the signal a proposed work may not exist."
+            )
+        if view.pending:
+            # Held apart from unresolved on purpose. "We looked and it is not
+            # there" and "we could not look" lead to opposite actions, and
+            # collapsing them would tell a curator their painting does not exist
+            # because a museum was briefly unreachable.
+            settled += (
+                f" {view.pending} could not be looked up at all — the image provider was unreachable for them, "
+                "which says nothing about whether they exist. Re-run to try those again."
+            )
+        return settled
     if status is RunStatus.HALTED_BY_BUDGET:
         return (
             "The provider refused further spend, so this run stopped where it was. This is not a transient "

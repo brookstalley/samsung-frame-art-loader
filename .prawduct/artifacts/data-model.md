@@ -675,10 +675,88 @@ selected. Produced by phase 2.
 > the wrong one — a photo of the gallery wall, or an "inspired by" — so confidence
 > carries almost all the weight.
 >
+> **`source_class`-dependent dominance is NOT built, and the ranking is
+> unconditional (2026-08-02).** This is an explicit deferral, not an oversight —
+> recorded here because the paragraph above reads as a description of shipped
+> behaviour and is not one.
+>
+> **Why it is deferred: nothing produces a `contemporary_web` candidate.** Phase 2
+> reaches museum APIs only, and every instance it records is `institutional`. The
+> value appears on the candidate side nowhere else; the one other producer in the
+> tree is the legacy seeder, which writes catalogue `Source` rows for works already
+> accepted and never passes through this ranking. So a switch on `source_class`
+> would today have exactly one reachable branch, and its other branch would be a
+> test asserting behaviour no deployment can reach — the green-test-that-cannot-fail
+> this project rejects elsewhere.
+>
+> **What replaces it is stronger in the direction `contemporary_web` needs, which
+> is why the deferral is safe.** Confidence is not a weight here at all: an
+> instance whose title or artist disagrees with the request is **refused**, not
+> ranked lower. For a work with exactly one candidate image — the
+> `contemporary_web` shape — that means confidence carries not "almost all" the
+> weight but all of it, since a wrong image is discarded rather than left to lose a
+> comparison it has no competitor in.
+>
+> **What is genuinely not yet built is the `institutional` half: canonicity.**
+> Quality currently orders equally-confident instances by resolution and rights,
+> which is a reasonable proxy while every candidate comes from the holding
+> institution itself and is not one once a second provider offers copies of the
+> same work. **The chunk that adds a non-museum provider owns this**, and should
+> reopen this paragraph rather than inherit it.
+> **How both scores are derived (settled 2026-08-02, when phase 2 was built).**
+> The two fields existed with their meanings recorded and their *derivations*
+> open. Both are now decided, and the first one was decided by measurement rather
+> than by design.
+>
+> **`confidence` is an identity comparison, never a provider's relevance score.**
+> The Art Institute's search was measured returning a real work by a real artist,
+> at a comfortable score, for a painting it does not hold: asking for *The
+> Persistence of Memory* surfaces *Ann-In Memory* by Joseph Cornell. Its scores
+> are also not comparable between queries — two correct searches topped out at
+> 3,362 and 122 — and a nonsense query returns the whole collection rather than
+> nothing (`artic-api-findings.md`). So the test is whether the title the provider
+> returned *is* the requested title and whether the artists agree, **derived from
+> the same normalisation `work_dedup_key` is built from** rather than a second
+> one free to drift from it.
+>
+> Three tiers, because how much of the identity was confirmable differs:
+> both title and artist agree; the title agrees and the *request* named no
+> artist; the title agrees and the *record* names no artist. **A disagreement
+> between two named artists is disqualifying, not a deduction** — this collection
+> holds *American Gothic* by Grant Wood and *American Gothic* by Elizabeth Layton,
+> so a scheme that merely ranked one above the other would attach the wrong one
+> whenever the right one was absent. Nothing that fails the comparison is recorded
+> at all: a near-match kept at low confidence is still selected the moment nothing
+> better exists, which is precisely the case a work no museum holds produces, so
+> the only safe representation of "this is a different painting" is absence.
+>
+> **`quality_score` is the fit verdict banded, then graded within the band**, plus
+> a small rights term. The metric is *not* rendered size, and the difference bites:
+> a 6949x8400 master rendered into a wide artwork box is limited by the box's
+> height and comes out shorter on the wall than a 2000x1500 one that suits the
+> shape — while having four times the resolution to spare. Ranking on rendered
+> inches prefers the smaller file. `nonfunctional-requirements.md` § Output Quality
+> says what isolates resolution: whether the render is a downscale or a
+> native-size paste. So the verdict picks the band and coverage grades within it.
+>
+> Rights contribute a minority term, which is this field's own definition
+> ("resolution, fidelity, rights, institutional provenance") and **not a rights
+> gate** — constraint 13 stands: nothing is excluded or filtered on rights, and an
+> in-copyright instance with better resolution still wins.
+>
 > **`preview_path` exists because review cannot depend on the network.** The review
 > grid — in the web UI and over MCP alike — must show the picture. A source-side URL
 > alone means a curator reviewing an hour later sees broken images if a museum is
 > down or rate-limiting, and it means the MCP surface has nothing local to inline.
+>
+> Cached under `previews/` in `ART_ROOT`, kept apart from `thumbs/` because the
+> two have different lifecycles: a thumbnail belongs to a work the catalogue
+> holds, a preview to one nobody has accepted and may never. The file is named
+> from a digest of its source URL, so a work re-searched later finds its preview
+> already on disk and the museum is asked once per distinct image rather than
+> once per attempt. **A preview that will not download is not a failure** — the
+> instance is recorded with its source-side URL and no `preview_path`, because
+> losing a work over a missing thumbnail would be the tail wagging the dog.
 >
 > **Losing instances are retained, never deleted.** They are what makes an
 > over-eager merge inspectable, they are the alternates the review card offers, and

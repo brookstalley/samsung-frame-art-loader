@@ -48,6 +48,7 @@ from curation.persistence.discovery_records import (
 from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
 from curation.services import selection
 from curation.services.catalogue import CatalogueService
+from curation.services.display_fit import ArtworkBox
 from curation.services.errors import ServiceError
 from curation.services.fields import relative_path, require_member, require_text
 from curation.services.store import store_write
@@ -106,9 +107,16 @@ class RunCost:
 class DiscoveryService:
     """Read and write the pre-acceptance pipeline."""
 
-    def __init__(self, store: DiscoveryStore, catalogue: CatalogueService) -> None:
+    def __init__(self, store: DiscoveryStore, catalogue: CatalogueService, artwork_box: ArtworkBox | None = None) -> None:
         self._store = store
         self._catalogue = catalogue
+        #: The space a work is rendered into, which is what turns an instance's
+        #: pixels into a size on the wall. Held because automatic selection has
+        #: to withhold an instance that would render below the floor, and the
+        #: floor is physical — so the rule cannot be evaluated from a row alone.
+        #: Optional so a caller with no deployment geometry gets the ranking
+        #: without a floor rather than a constructor it cannot satisfy.
+        self._artwork_box = artwork_box
 
     # -- reads: runs ----------------------------------------------------------
 
@@ -498,6 +506,13 @@ class DiscoveryService:
         The first surviving instance a work has becomes its selection, so a work
         with instances is never selectionless; a later choice moves the selection
         rather than adding a second one.
+
+        **Unless it would render below the floor**, which is never selected
+        without a curator asking for it by name. Such an instance is still
+        recorded, still offered as an alternate, and still carries the size it
+        would appear at — a work whose every instance is below floor simply holds
+        no selection, and is reported `unresolved` rather than putting a postage
+        stamp on the wall on nobody's authority.
         """
         with self._store.transaction():
             work = self.get_candidate_work(candidate_work_id)
@@ -510,7 +525,7 @@ class DiscoveryService:
                 source_class=require_member(source_class, enum=SourceClass, field="source_class"),
                 acquisition_method=require_member(acquisition_method, enum=AcquisitionMethod, field="acquisition_method"),
                 confidence=confidence,
-                is_selected=not any(other.is_selected for other in held),
+                is_selected=False,
                 preview_url=preview_url,
                 preview_path=None if preview_path is None else relative_path(preview_path, field="preview_path"),
                 estimated_width=estimated_width,
@@ -521,6 +536,10 @@ class DiscoveryService:
                 quality_score=quality_score,
                 selection_rationale=selection_rationale,
             )
+            # Decided from the built row rather than from the arguments, so the
+            # floor is evaluated against exactly the dimensions being stored.
+            claimed = not any(other.is_selected for other in held) and not self._below_floor(image)
+            image = replace(image, is_selected=claimed)
             store_write(self._store.add_candidate_image, image)
         return image
 
@@ -571,7 +590,7 @@ class DiscoveryService:
             # and the move would be silent.
             survivors = self._store.list_candidate_images(work.id)
             if not any(other.is_selected for other in survivors):
-                replacement = selection.best(survivors)
+                replacement = selection.best(survivors, box=self._artwork_box)
                 if replacement is not None:
                     self._select(replacement, rationale=None)
             awaiting = replace(work, verdict=Verdict.AWAITING_BETTER_IMAGE)
@@ -593,7 +612,7 @@ class DiscoveryService:
         """
         with self._store.transaction():
             work = self.get_candidate_work(candidate_work_id)
-            chosen = selection.best(self._store.list_candidate_images(work.id))
+            chosen = selection.best(self._store.list_candidate_images(work.id), box=self._artwork_box)
             status = ResolutionStatus.RESOLVED if chosen is not None else ResolutionStatus.UNRESOLVED
             if work.verdict.is_terminal:
                 return ResolutionOutcome(work=work, resolution_status=status, selected=chosen, applied=False)
@@ -752,6 +771,16 @@ class DiscoveryService:
         accepted = replace(work, verdict=Verdict.ACCEPTED, artwork_id=artwork.id, decided_at=datetime.now(UTC))
         store_write(self._store.update_candidate_work, accepted)
         return accepted
+
+    def _below_floor(self, image: CandidateImage) -> bool:
+        """Whether this instance is too small to be selected without being asked for.
+
+        Answers `False` when no artwork box was configured, which is the same
+        thing `selection.best` does with no box: a deployment that has not said
+        how big its wall is has not stated a floor either, and inventing one here
+        would withhold instances against a rule nobody wrote.
+        """
+        return self._artwork_box is not None and selection.below_floor(image, self._artwork_box)
 
     def _select(self, image: CandidateImage, *, rationale: str | None) -> CandidateImage:
         """Make one instance the selected one, standing every other one down."""

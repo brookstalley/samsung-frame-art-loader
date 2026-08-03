@@ -193,6 +193,27 @@ def clean_name(value: str) -> str:
     return _DANGLING_TAIL.sub("", cleaned).strip()
 
 
+def title_key(title: str) -> str:
+    """The identity of a work's name, with cataloguing variation normalised away.
+
+    One half of `work_dedup_key`, exposed because comparing a *requested* work
+    against a *found* one needs the halves separately: a work proposed without an
+    artist still has to be recognisable in a museum record that names one, and a
+    whole-key comparison would answer no to every such pair.
+    """
+    return _normalise(_canonical_title(clean_name(title)))
+
+
+def artist_key(artist: str) -> str:
+    """The identity of an artist's name. The other half of `work_dedup_key`.
+
+    Empty for a name that normalises to nothing, which a caller must read as
+    "unattributed" rather than as a name that failed to match — the two lead to
+    opposite decisions when judging whether a found work is the right one.
+    """
+    return _normalise(_artist_alias(clean_name(artist)))
+
+
 def work_dedup_key(*, title: str, artist: str | None = None) -> str:
     """Derive the identity two proposals of the same work should share.
 
@@ -201,9 +222,12 @@ def work_dedup_key(*, title: str, artist: str | None = None) -> str:
     Accents are stripped rather than preserved because a model asked for "Dali"
     and a museum recording "Dalí" mean the same person, and a key that separated
     them would suppress neither.
+
+    Composed from the two halves above rather than deriving its own, so a caller
+    comparing halves and a caller comparing keys can never come to disagree about
+    what makes two works the same one.
     """
-    artist_name = _artist_alias(clean_name(artist) if artist is not None else None)
-    return f"{_normalise(artist_name) or _NO_ARTIST}{_SEPARATOR}{_normalise(_canonical_title(clean_name(title)))}"
+    return f"{(artist_key(artist) if artist is not None else '') or _NO_ARTIST}{_SEPARATOR}{title_key(title)}"
 
 
 def _canonical_title(title: str) -> str:

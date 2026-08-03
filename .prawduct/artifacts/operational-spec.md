@@ -207,6 +207,17 @@ reasons, hand-approved mat colours, theme membership, suppression scopes) is not
 reproducible at any price except re-running discovery and re-asking the curator
 every judgement they have already made.
 
+> **Three kinds of file live under `ART_ROOT`, and the exclusion covers all
+> three.** Upstream originals in the image tree; derived renditions and
+> `thumbs/`, regenerated per device; and — since 2026-08-02 — `previews/`, the
+> candidate previews phase 2 caches so review works when a museum does not.
+> Previews are the most disposable of the three: each one is re-fetchable from a
+> URL the catalogue already holds, and a restored catalogue with an empty
+> `previews/` shows review cards that fall back to their source URLs while
+> everything else self-heals as described below. The **judgements** made against
+> those previews — which instance was selected, the rationale, which images were
+> rejected — are catalogue rows and are backed up.
+
 **Destination: another machine on the network** (desktop or NAS, over LAN or the
 overlay network). Decided 2026-07-20. No third party, no cost, no credential on
 the Pi beyond what already exists.

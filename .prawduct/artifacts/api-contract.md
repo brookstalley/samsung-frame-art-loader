@@ -459,8 +459,14 @@ questions:
   computable before anything runs, which is what makes it the number shown at the
   point of decision. Bounded rather than typical, per the cap.
 - **`estimate` with a `run_id`** — "what will it cost to resolve what I found?"
-  Returns that run's stored `estimated_cost_usd`, the **phase-2** figure computed
-  from its work count. This is the number the approval gate is authorising against.
+  Returns that run's stored `estimated_cost_usd`, the **phase-2** figure. **That
+  figure is zero as of 2026-08-02**, when phase 2 was built against museum APIs:
+  they are open and unmetered, and whether a result is the requested work is
+  decided locally, so resolving a work list makes no model call and no paid
+  search. The action, the arity and the stored value all stay — a zero that a
+  caller can read is the answer to the question, and the `basis` alongside it says
+  *why* it is zero so it cannot be misread as a missing estimate. **The approval
+  gate is unaffected: it fires on the work count and never was on the price.**
 
 Both are *read-only and free*. `estimate` is the one `art_discovery` action that
 spends nothing, which is worth stating explicitly on the tool that is otherwise

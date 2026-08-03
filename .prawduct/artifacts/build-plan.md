@@ -76,12 +76,13 @@ identities, and their detailed sections stay in numeric order below. The list wa
 re-ordered on 2026-07-31; the two changes and why are recorded in the Context
 block under "Re-sequenced 2026-07-31".
 
-The hardware-gated chunks are **no longer blocked** — the Pi and panel are on the
-bench as of 2026-07-31 — so they take their place in build order rather than
-sitting at the end. The reason they were parked there still holds for anything
-that becomes blocked later: the tooling takes the first unchecked box as the
-current chunk, and a blocked chunk ahead of active work silently hands its
-`Critic mode:` and `Type:` to every chunk after it.
+The hardware-gated chunks sit **after** the discovery chunks again, because bench
+access lapsed on 2026-08-02 and 05, 04 and 03 need the Pi and panel in hand. This
+is the same rule that parked them originally, applied a second time: the tooling
+takes the first unchecked box as the current chunk, and a blocked chunk ahead of
+active work silently hands its `Critic mode:` and `Type:` to every chunk after
+it. They keep their numbers and their specs; only their position moved, and it
+moves back the moment the bench returns.
 
 - [x] Chunk 01: Untrack the TV pairing token; drop the catalogue backups (issue #4)
 - [x] Chunk 02: Deployment values out of source (issue #5) + `art.py` defect dispositions (issue #6)
@@ -96,13 +97,14 @@ current chunk, and a blocked chunk ahead of active work silently hands its
 - [x] Chunk 11: Contract tests — MCP evaluation harness (issue #17) — *plane isolation (#7) split to Chunk 12*
 - [x] Chunk 14A: `art_discovery` surface, run correlation, the search cap — no spend
 - [x] Chunk 14B: The OpenRouter client, the phase-1 engine, the ceiling (issue #12)
+- [x] Chunk 15: Spikes — search-engine choice and `work_dedup_key` derivation (issue #18)
+- [x] Chunk 16A: Discovery phase 2 — works to instances, over a real museum API
+- [ ] Chunk 16B: `resolve_images` — the re-search, its coverage and its rollup
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [ ] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
-- [x] Chunk 15: Spikes — search-engine choice and `work_dedup_key` derivation (issue #18)
-- [ ] Chunk 16: Discovery phase 2 — works to instances, resolve runs
 - [ ] Chunk 17: Review and acceptance — `art_review`, thumbnails inline, promotion
 - [ ] Chunk 18: Acquisition and preparation — fetch, metadata, mat engine, 4K render
 - [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
@@ -278,6 +280,42 @@ shipping in the surface table since the start (now in `api-contract.md`), and
 `required` and phase 1 mints rows (now in `data-model.md`). A tenth finding was a
 requirement for a surface that does not exist — cost visibility "on CLI" — struck
 rather than silently inherited.
+
+**Chunk 16 was split into 16A and 16B on 2026-08-02**, at the operator's call, at
+the seam between turning works into instances and doing it a second time on
+request — the same reason 08 and 14 were split, one Critic round over ~5,000 lines.
+**16A landed the same day** and a discovery run now completes under its own power:
+the `status` notice telling a curator that finding images was not wired up is
+deleted, which is the sentence 14A recorded as owed.
+
+**The verify-api probe ran first and changed the design rather than confirming
+it**, which is the thing worth carrying forward about this chunk.
+`artic-api-findings.md` records it. The load-bearing finding is that **the
+museum's own relevance score cannot carry confidence**: scores are not comparable
+between queries, a nonsense query returns the whole collection rather than
+nothing, and asking for a painting the museum does not hold returns real works by
+real artists at comfortable scores. The most obvious implementation — rank by
+score, take the leader — produces exactly the "confident near-match" the data
+model forbids, silently. So confidence is an identity comparison derived from the
+same normalisation `work_dedup_key` uses, and **an artist disagreement
+disqualifies rather than deducts**, because a deduction still selects the wrong
+work whenever the right one is absent.
+
+Two scoping decisions are settled and recorded where their rules live. **Phase 2
+reaches museum APIs only** (`nonfunctional-requirements.md`): the comparison is
+free and deterministic, so phase 2 spends nothing, and a work no museum holds
+lands `unresolved` rather than triggering a paid fallback nobody has shown is
+needed. **The floor is an exclusion in the single selection function**, not a
+record-time filter and not a score deduction — the first hides the instance, the
+second still selects it when nothing better exists.
+
+**Chunk 16A owned the cost correction and both halves settled together.** Phase 2
+consuming nothing is what retired 14B's reason for leaving `DISCOVERY_PHASE1_INPUT_TOKENS`
+standing at 490,000 against a measured 3,453. A bounded run goes from $0.127 to
+$0.01336. **One consequence is recorded rather than glossed**: the token basis is
+no longer input-dominated, so "output price is nearly irrelevant to model choice"
+no longer holds and the model table in `nonfunctional-requirements.md` reorders.
+The chosen model is cheapest on either basis, so the decision stands.
 
 ## Scaffolding
 
@@ -1480,43 +1518,102 @@ core, built against the surfaces the contract tests already pin.
 
 ### Chunk 16: Discovery phase 2 — works to instances, resolve runs
 
-- **Description:** Per-work search across museum APIs and the open web producing
-  CandidateImages; ranking on the two deliberately-separate axes (confidence vs
-  quality, dominance depending on `source_class`); exactly one selected instance
-  per work with `selection_rationale`; previews cached locally
-  (`preview_path` — review must not depend on a museum being reachable);
-  below-floor instances shown, labelled with rendered physical size, never
-  auto-selected, never hidden; works with no credible instance land at
-  `unresolved` — reported, never silently dropped, never filled with a confident
-  near-match. `resolve_images` arrives as the re-search: a `DiscoveryRun` with
-  `kind='resolve'` and `parent_run_id`, refusing work ids already covered by an
-  in-flight resolve run and naming them in the error (constraint 14 against
-  ResolveRunWork), spend attributed to the resolve run and rolled up through the
-  parent.
+**Split into 16A and 16B on 2026-08-02, at the operator's call**, at the seam
+between the two things the chunk does: turning works into instances, and doing
+that a *second* time on request. The reason is the one that split 08 and 14 —
+one Critic round over the whole would read a diff comparable to 14A and 14B
+combined (~5,000 lines), and review quality is known to degrade across one that
+size. 16A alone meets the acceptance criterion this entry states, which is what
+makes the seam a delivery boundary rather than an arbitrary cut.
+
+The **verify-api step ran first, before either half** (2026-08-02), and its
+findings are `artic-api-findings.md`. Two of them changed the design rather than
+confirming it, which is what the step is for — see 16A.
+
+**Phase 2 reaches museum APIs only, ARTIC first (decided 2026-08-02).** The open
+web stays out of both halves. This follows from the probe: confidence has to be a
+title/artist comparison rather than a relevance score, and that comparison is free
+and deterministic, so phase 2 over a museum API spends nothing. A work no museum
+holds lands at `unresolved`, which is already a first-class outcome whose remedy
+is the re-search — rather than a paid fallback added before anything has shown one
+is needed. `provider` stays an open vocabulary, so a web provider is an addition
+and not a rework.
+
+### Chunk 16A: Discovery phase 2 — works to instances, over a real museum API
+
+- **Description:** Per-work search against museum APIs producing CandidateImages;
+  ranking on the two deliberately-separate axes (confidence vs quality — **the
+  `source_class`-dependent dominance is explicitly descoped, see below**); exactly
+  one selected instance per work with
+  `selection_rationale`; previews cached locally (`preview_path` — review must
+  not depend on a museum being reachable); below-floor instances shown, labelled
+  with rendered physical size, never auto-selected, never hidden; works with no
+  credible instance land at `unresolved` — reported, never silently dropped,
+  never filled with a confident near-match. A run that clears the approval gate
+  now proceeds through `resolving_images` to `completed` under its own power,
+  which is what retires the `status` notice telling a curator that finding images
+  is not wired up in this deployment.
 - **Depends on:** Chunks 14B, 15 (the engine and the dedup key are decided)
-- **Artifacts consumed:** `data-model.md` (CandidateImage, ResolveRunWork,
-  constraints 8/9/14), `api-contract.md` § Rejecting an image does not
-  re-search, `product-brief.md` § Canonical selection,
-  `nonfunctional-requirements.md` § Output Quality (the floor)
+- **Artifacts consumed:** `artic-api-findings.md` (the measured shapes),
+  `data-model.md` (CandidateImage, constraints 8/9), `product-brief.md`
+  § Canonical selection, `nonfunctional-requirements.md` § Output Quality (the
+  floor)
 - **Foreign API:** museum APIs (ARTIC first; open vocabulary by design)
-- **Deliverables:** phase-2 engine in `curation/src/curation/discovery/`;
-  `resolve_images` live with coverage enforcement; selection with recorded
-  rationale; preview caching
-- **Tests:** unit — selection respects suppression (`rejected_at` instances
-  excluded; the work stays eligible — Q11), constraint 14 refusal names ids,
-  below-floor never auto-selected, unresolved reported; **the terminal-verdict
-  guard — a resolve run completing against a work the curator accepted (or
-  rejected) in the meantime leaves the verdict alone and reports its result, and
-  no path ever yields a work with an `artwork_id` and a non-accepted verdict**;
-  integration — a double-submitted resolve is refused, an interrupted resolve
-  frees its coverage
+- **Deliverables:** an ARTIC client and a phase-2 engine behind a seam of their
+  own in `curation/src/curation/discovery/`; selection with recorded rationale;
+  preview caching; the run driven to completion; the cost estimate corrected
+- **Tests:** unit — **a near-match is refused rather than attached** (the probe's
+  Dalí case: a real work by a real artist scoring well against a request for a
+  work the museum does not hold), selection respects suppression (`rejected_at`
+  instances excluded; the work stays eligible — Q11), below-floor never
+  auto-selected but always reported with its rendered size, unresolved reported;
+  integration — a run over a seeded intent reaches `completed` with instances,
+  previews on disk, and unresolved works named
 - **Acceptance criteria:** a run over a small intent produces one card's worth
   of data per work — selected instance, alternates, rationale — with unresolved
   works reported as their own outcome
+- **Descoped, explicitly:** `source_class`-dependent axis dominance. Nothing
+  produces a `contemporary_web` candidate — phase 2 reaches museum APIs only, so
+  every instance is `institutional` — and a switch on it would ship one reachable
+  branch and one no deployment can exercise. Confidence being a *gate* rather than
+  a weight already covers the `contemporary_web` concern more strongly than
+  dominance would; what is genuinely unbuilt is canonicity among many
+  institutional copies of one work, which cannot arise with a single provider.
+  **Owned by whichever chunk adds a non-museum provider**; the reasoning and the
+  reopen trigger are in `data-model.md` → CandidateImage.
 - **Done when:**
-  0. verify-api — probe the ARTIC API for the actual response shapes (fields,
-     IIIF tile endpoints) before writing the client; fakes follow the captured
+  0. ~~verify-api — probe the ARTIC API for the actual response shapes~~ **done
+     2026-08-02**, recorded in `artic-api-findings.md`; fakes follow the captured
      shapes
+  1. Acceptance criteria met and tests pass
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+### Chunk 16B: `resolve_images` — the re-search, its coverage and its rollup
+
+- **Description:** `resolve_images` as the paid re-search over 16A's engine: a
+  `DiscoveryRun` with `kind='resolve'` and `parent_run_id`, refusing work ids
+  already covered by an in-flight resolve run and naming them in the error
+  (constraint 14 against ResolveRunWork), spend attributed to the resolve run and
+  rolled up through the parent. The action becomes advertised on `art_discovery`
+  for the first time — 14A deliberately withheld it, because a declared action a
+  model cannot distinguish from a working one is a promise the surface cannot
+  keep.
+- **Depends on:** Chunk 16A (the engine a resolve run drives)
+- **Artifacts consumed:** `data-model.md` (ResolveRunWork, constraint 14),
+  `api-contract.md` § Rejecting an image does not re-search
+- **Deliverables:** `resolve_images` live and advertised, with coverage
+  enforcement; spend rollup through `parent_run_id`
+- **Tests:** unit — constraint 14 refusal names the offending ids; **the
+  terminal-verdict guard — a resolve run completing against a work the curator
+  accepted (or rejected) in the meantime leaves the verdict alone and reports its
+  result, and no path ever yields a work with an `artwork_id` and a non-accepted
+  verdict**; integration — a double-submitted resolve is refused, an interrupted
+  resolve frees its coverage
+- **Acceptance criteria:** a rejected image can be re-searched, the second
+  submission of the same ids is refused by name, and the parent run's cost
+  includes what the re-search spent
+- **Done when:**
   1. Acceptance criteria met and tests pass
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status

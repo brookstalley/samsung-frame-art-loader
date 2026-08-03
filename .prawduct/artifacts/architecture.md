@@ -189,8 +189,10 @@ is no network between planes.
   Discovery     │           Display      SurveyService   every rule, transition and derivation
   Runner ──┐    │           Service           │          (all hold CatalogueService;
         │  │    │              │        ThumbnailService   it holds none of them)
-        │  └─ DiscoveryEngine (Protocol)      │          the seam every paid call sits behind;
-        │       UnavailableEngine ships       │          no other service can reach it
+        │  ├─ DiscoveryEngine (Protocol)      │          phase 1 — the seam every paid call sits
+        │  │    UnavailableEngine ships       │          behind; no other service can reach it
+        │  └─ ImageSearch (Protocol)          │          phase 2 — the museum seam. Free, but
+        │       ArticImageSearch ships        │          behind a seam for the same reason
   Discovery     │              │              │
   Service       │              │              │
         │       └── CatalogueService ─────────┘
@@ -228,6 +230,34 @@ is no network between planes.
   convincing stand-in wired here instead would write invented works into a real
   catalogue, indistinguishable from found ones; the test double therefore lives
   under `tests/` and is deliberately out of a deployment's reach.
+
+  **`ImageSearch` is phase 2's seam, added 2026-08-02, and it is a seam despite
+  costing nothing.** Museum APIs are open and unmetered, so the money argument
+  that placed `DiscoveryEngine` does not apply — the reason here is the other
+  one: everything above the seam (driving a run, ranking instances, caching
+  previews, deciding a work is unresolved) must be testable without a network,
+  and `provider` is an open vocabulary in the data model precisely because one
+  museum is the first of many. A second provider is an implementation of this
+  protocol rather than a change to anything that consumes it. The same parsing
+  test that guards the paid seam covers this one, as an allowlist over the whole
+  package rather than a list of named files.
+
+  **What is deliberately *not* behind it: the judgement.** A provider reports
+  what its collection holds; whether any of it is the work that was asked for is
+  decided above the seam, in `discovery/phase_two.py`, so two providers cannot
+  come to disagree about what "confident" means. That placement is a measurement
+  rather than a preference — the Art Institute's own relevance score was measured
+  unusable for the purpose (`artic-api-findings.md`), and a design that trusted
+  each provider's score would have taken it.
+
+  **The asymmetry with phase 1 is deliberate**: a missing model client refuses
+  `start` before a run exists, while a missing image provider leaves an existing
+  run at `resolving_images` and says so through `status`. Phase 2 has a run in
+  hand by the time it would refuse, and failing that run would record something
+  breaking when in fact a capability is simply not configured. The run view
+  carries whether resolution is available, so the surface's wording comes from
+  the wiring rather than from a sentence that goes stale the day it is built —
+  which is exactly what happened to the one it replaced.
 
   **The real implementation landed 2026-08-02 and is two modules, both behind the
   seam.** `discovery/openrouter.py` is a first-party HTTP client — one provider,

@@ -40,10 +40,20 @@ from curation.discovery.engine import (
     WorkList,
     WorkListRequest,
 )
+from curation.discovery.images import ImageQuery, ImageSearchFailure
+from curation.discovery.phase_two import JudgedImage, PhaseTwoEngine
 from curation.logs import run_context
-from curation.persistence.discovery_records import DiscoveryRun, InitiatedBy, RunKind, RunStatus
+from curation.persistence.discovery_records import (
+    CandidateWork,
+    DiscoveryRun,
+    InitiatedBy,
+    ResolutionStatus,
+    RunKind,
+    RunStatus,
+)
 from curation.services.discovery import DiscoveryService
 from curation.services.errors import ServiceError
+from curation.services.previews import PreviewCache
 
 log = logging.getLogger(__name__)
 
@@ -81,9 +91,12 @@ class DiscoverySettings:
     search_cost_usd: Decimal
     input_cost_usd_per_mtok: Decimal
     output_cost_usd_per_mtok: Decimal
-    #: What one phase-1 run is assumed to consume. Input-dominated, and the
-    #: imbalance is the point: phase 1 reads injected search results and emits a
-    #: short list, so the output price barely moves the total.
+    #: What one phase-1 run may consume, as bounds rather than typical figures.
+    #: The two are arrived at differently: input is a measurement with headroom,
+    #: output is the provider's own reservation, which a run physically cannot
+    #: exceed. So they are close in size even though real consumption is
+    #: input-heavy — and a model with cheap input and expensive output is priced
+    #: accordingly rather than getting the pass an input-dominated basis gave it.
     phase1_input_tokens: int
     phase1_output_tokens: int
 
@@ -99,13 +112,22 @@ class DiscoverySettings:
         return self._model_call_usd + self.phase1_search_allowance * self.search_cost_usd
 
     def phase2_estimate_usd(self, work_count: int) -> Decimal:
-        """What resolving a known work list costs, at the allowance's ceiling.
+        """What resolving a known work list costs. Nothing, on museum APIs.
 
-        Search is the whole of it: museum APIs and image acquisition cost
-        bandwidth and nothing else, so the per-work charge prices the searching
-        that finds the image rather than the fetching of it.
+        **Zero is measured, not assumed** (2026-08-02). Phase 2 asks museum APIs,
+        which are open and unmetered, and establishes whether a result is the
+        requested work by comparing titles and artists locally — so it makes no
+        model call and no paid web search. Bandwidth is the only cost and nobody
+        bills for it.
+
+        This figure priced `phase2_searches_per_work` paid web searches until the
+        providers were chosen. That allowance still bounds a run's fan-out and is
+        still reported beside a run's usage, but nothing it bounds is billed
+        today, and pricing it would show a curator a charge that will not appear.
+        **A paid provider added later reinstates the arithmetic here**, which is
+        the one place it has to change.
         """
-        return work_count * self.phase2_searches_per_work * self.search_cost_usd
+        return Decimal(0)
 
     @property
     def _model_call_usd(self) -> Decimal:
@@ -167,6 +189,13 @@ class RunView:
     pending: int
     searches_used: int
     search_allowance: int
+    #: Whether this deployment can resolve images at all. Carried on the view
+    #: because a run sitting in `resolving_images` means two different things
+    #: depending on it — work under way, or work nothing will ever pick up — and
+    #: a surface describing that state has no other way to tell them apart. It
+    #: was a hardcoded sentence once, and it went from true to false the day
+    #: phase 2 was built; a fact read from the wiring cannot go stale that way.
+    image_resolution_available: bool
 
     @property
     def work_count(self) -> int:
@@ -200,11 +229,25 @@ class DiscoveryRunner:
         engine: DiscoveryEngine,
         settings: DiscoverySettings,
         *,
+        images: PhaseTwoEngine | None = None,
+        previews: PreviewCache | None = None,
         spawn: Callable[[Callable[[], None]], None] = _daemon_thread,
     ) -> None:
         self._discovery = discovery
         self._engine = engine
         self._settings = settings
+        #: Phase 2, and the cache its previews land in. Optional together: a
+        #: deployment without an image provider runs phase 1 and stops, which is
+        #: a coherent configuration and the one every phase-1 test uses. What is
+        #: not coherent is one without the other, so the pair is checked rather
+        #: than each being defaulted independently.
+        if (images is None) != (previews is None):
+            raise ServiceError(
+                "Phase 2 needs both an image engine and a preview cache, or neither. One without the other "
+                "would either find instances it cannot show or cache previews for instances nothing finds."
+            )
+        self._images = images
+        self._previews = previews
         self._spawn = spawn
         #: Woken whenever any run's state changes, so a held `status` answers as
         #: soon as there is something to say. The counter is what closes the gap
@@ -254,9 +297,9 @@ class DiscoveryRunner:
             phase="phase_2",
             cost_usd=run.estimated_cost_usd,
             basis=(
-                f"Resolving the {len(self._discovery.list_candidate_works(run_id))} works this run proposed, at up to "
-                f"{self._settings.phase2_searches_per_work} web searches each. This is the figure the approval "
-                "gate authorises against."
+                f"Resolving the {len(self._discovery.list_candidate_works(run_id))} works this run proposed. "
+                "Phase 2 asks museum APIs, which are free, and identifies works locally — so approving this "
+                "run spends nothing further. The gate is on the work count, not the price."
             ),
             run_id=run_id,
         )
@@ -359,8 +402,15 @@ class DiscoveryRunner:
         return run
 
     def approve(self, run_id: str) -> RunView:
-        """Accept the work list and its price."""
-        return self._transition(self._discovery.approve_run, run_id, event="run.approved")
+        """Accept the work list and its price, and let phase 2 begin behind it.
+
+        Returns as soon as the decision is recorded, exactly as `start` does and
+        for the same reason: resolving a work list takes minutes, and a call held
+        open for it would be abandoned by the client long before it finished.
+        """
+        view = self._transition(self._discovery.approve_run, run_id, event="run.approved")
+        self._begin_phase_two(run_id)
+        return view
 
     def decline(self, run_id: str) -> RunView:
         """Refuse the work list. The run ends without phase 2 ever spending."""
@@ -467,6 +517,13 @@ class DiscoveryRunner:
                 "estimated_cost_usd": str(estimate),
             },
         )
+        if run.status is RunStatus.RESOLVING_IMAGES:
+            # Inline on this worker rather than spawned onto another. This thread
+            # is already registered as working on the run, and handing off would
+            # let `_enumerate`'s release run first — leaving a run whose phase 2
+            # is under way looking idle to every `status` call, which is the one
+            # thing the registration exists to prevent.
+            self._attempt_phase_two(run_id)
 
     def _could_not_settle(self, run_id: str, exc: ServiceError) -> None:
         """Decide what a refusal during settling actually was, rather than assuming.
@@ -536,6 +593,180 @@ class DiscoveryRunner:
             proposed += 1
         return proposed, suppressed, duplicates
 
+    # -- phase 2 --------------------------------------------------------------
+
+    def _begin_phase_two(self, run_id: str) -> None:
+        """Put phase 2 on a worker, if this deployment has one to run.
+
+        A deployment with no image provider simply leaves the run where it is,
+        which `status` reports in words. Nothing is created and nothing fails:
+        the run's work list is real and was worth producing, and a run that
+        failed because a capability is absent would be indistinguishable from
+        one that failed because something broke.
+        """
+        if self._images is None:
+            return
+        # Registered before the hand-off, so a `status` arriving in the gap
+        # between approval returning and the worker starting still sees a run in
+        # flight and holds for it.
+        with self._changed:
+            self._in_flight.add(run_id)
+        self._bump()
+        self._spawn(lambda: self._resolve_run(run_id))
+
+    def _resolve_run(self, run_id: str) -> None:
+        """Phase 2 on its own worker, releasing the run however it ends."""
+        try:
+            with run_context(run_id):
+                self._attempt_phase_two(run_id)
+        finally:
+            with self._changed:
+                self._in_flight.discard(run_id)
+            self._bump()
+
+    def _attempt_phase_two(self, run_id: str) -> None:
+        """Resolve every pending work, then close the run.
+
+        Runs on a worker with nobody to raise to, so everything that can go wrong
+        ends as a run state. A worker dying with an exception would leave the run
+        process-held and looking alive until the next restart reconciled it,
+        turning every provider bug into a phantom hang.
+
+        The engine and the cache are read once here and passed down, so the
+        deployment that has neither returns before anything else looks — and no
+        method below has to defend against a `None` it cannot do anything about.
+        """
+        images, previews = self._images, self._previews
+        if images is None or previews is None:
+            return
+        try:
+            self._resolve_pending(run_id, images, previews)
+        except ServiceError as exc:
+            # The record layer refusing. Distinguished from a fault the same way
+            # phase 1 does it — by the run's own state — because a curator
+            # cancelling mid-resolve is an ordinary outcome and not a failure.
+            if self._discovery.get_run(run_id).status.is_terminal:
+                log.info("phase 2 finished on a run that had already ended: %s", exc, extra={"event": "run.discarded"})
+                return
+            self._end(run_id, self._discovery.fail_run, "run.failed", f"Phase 2 could not record what it found: {exc}")
+        except Exception:  # prawduct:allow prawduct/broad-except -- worker boundary: a fault must end the run, not hang it
+            log.exception("phase 2 raised an unexpected error", extra={"event": "run.failed"})
+            self._end(run_id, self._discovery.fail_run, "run.failed", "Phase 2 failed unexpectedly.")
+
+    def _resolve_pending(self, run_id: str, images: PhaseTwoEngine, previews: PreviewCache) -> None:
+        """Ask the provider about each work that has not been resolved yet."""
+        works = [
+            work for work in self._discovery.list_candidate_works(run_id) if work.resolution_status is ResolutionStatus.PENDING
+        ]
+        resolved = unresolved = unreachable = 0
+        for work in works:
+            # Re-read each time round rather than once before the loop: a curator
+            # cancelling partway through must stop the run there, and a decision
+            # read before the first work would honour it only if it arrived
+            # before any of them.
+            if self._discovery.get_run(run_id).status.is_terminal:
+                log.info(
+                    "phase 2 stopping: the run ended underneath it",
+                    extra={"event": "run.discarded", "works_remaining": len(works) - resolved - unresolved - unreachable},
+                )
+                return
+            outcome = self._resolve_work(work, images, previews)
+            if outcome is None:
+                unreachable += 1
+            elif outcome:
+                resolved += 1
+            else:
+                unresolved += 1
+        self._close_phase_two(run_id, resolved=resolved, unresolved=unresolved, unreachable=unreachable, works=len(works))
+
+    def _resolve_work(self, work: CandidateWork, images: PhaseTwoEngine, previews: PreviewCache) -> bool | None:
+        """Find and record one work's instances.
+
+        Three outcomes, and they are genuinely different. `True` — an instance
+        was found and selected. `False` — the provider was asked and holds
+        nothing credible, which makes the work `unresolved` and is the signal
+        that phase 1 may have proposed something that does not exist. `None` —
+        the provider could not be asked at all, which says nothing about the work
+        and so must not be recorded as a verdict on it.
+        """
+        try:
+            judged = images.resolve(ImageQuery(title=work.proposed_title, artist=work.proposed_artist))
+        except ImageSearchFailure as exc:
+            log.warning(
+                "could not search for a work's images; it stays pending rather than being called unresolved: %s",
+                exc,
+                extra={"event": "phase_two.unreachable", "work_title": work.proposed_title},
+            )
+            return None
+        for entry in judged:
+            self._record_instance(work, entry, previews)
+        outcome = self._discovery.record_resolution(work.id)
+        if not outcome.applied:
+            log.info(
+                "a resolution finished against a work the curator had already decided; reporting, not applying",
+                extra={"event": "phase_two.verdict_stands", "work_title": work.proposed_title},
+            )
+        return outcome.resolution_status is ResolutionStatus.RESOLVED
+
+    def _record_instance(self, work: CandidateWork, entry: JudgedImage, previews: PreviewCache) -> None:
+        """Write down one judged instance, caching its preview on the way in.
+
+        The preview is fetched before the row is written so the path is recorded
+        with it rather than by a second update — a row written first and patched
+        after is a row that is briefly wrong, and on a crash permanently so.
+        """
+        found = entry.found
+        self._discovery.record_image(
+            candidate_work_id=work.id,
+            url=found.url,
+            provider=found.provider,
+            source_class=found.source_class,
+            acquisition_method=found.acquisition_method,
+            confidence=entry.confidence,
+            preview_url=found.preview_url,
+            preview_path=previews.store(found.preview_url) if found.preview_url else None,
+            estimated_width=found.estimated_width,
+            estimated_height=found.estimated_height,
+            rights_status=found.rights_status,
+            quality_score=entry.quality_score,
+            selection_rationale=entry.rationale,
+        )
+
+    def _close_phase_two(self, run_id: str, *, resolved: int, unresolved: int, unreachable: int, works: int) -> None:
+        """End the run on what phase 2 actually managed.
+
+        **A run whose every work was unreachable failed**, and saying otherwise
+        is the difference that matters here: "we looked and your paintings are
+        not in the collection" and "we could not reach the collection" lead to
+        opposite actions, and only the first is a fact about the works. A run
+        that reached the provider for some of them completed, with the rest left
+        pending and visible as such rather than silently called unresolved.
+        """
+        if works and unreachable == works:
+            self._end(
+                run_id,
+                self._discovery.fail_run,
+                "run.failed",
+                f"Phase 2 could not reach an image provider for any of this run's {works} works. "
+                "Nothing is known about whether they exist; the works are unchanged and can be re-searched.",
+            )
+            return
+        try:
+            self._discovery.complete_run(run_id, actual_cost_usd=self._discovery.run_cost(run_id).direct)
+        except ServiceError as exc:
+            log.info("could not complete the run; it had already ended: %s", exc, extra={"event": "run.already_ended"})
+            return
+        self._bump()
+        log.info(
+            "phase 2 finished",
+            extra={
+                "event": "run.completed",
+                "works_resolved": resolved,
+                "works_unresolved": unresolved,
+                "works_unreachable": unreachable,
+            },
+        )
+
     # -- internals ------------------------------------------------------------
 
     def _view(self, run_id: str) -> RunView:
@@ -548,6 +779,7 @@ class DiscoveryRunner:
             pending=len(results.pending),
             searches_used=self._discovery.searches_in_run(run_id),
             search_allowance=self._allowance_for(results.run, works),
+            image_resolution_available=self._images is not None,
         )
 
     def _allowance_for(self, run: DiscoveryRun, works: int) -> int:

@@ -230,34 +230,64 @@ had risen ~28% from the figure recorded on 2026-07-20, while DeepSeek V4 Pro was
 unchanged to the cent. A price table nobody re-reads is a table that quietly
 stops describing the product.
 
-The per-run token basis is **~0.49M input / ~0.03M output** — input-dominated,
-because phase 1's job is reading injected search results and emitting a work
-list. Output price is therefore nearly irrelevant to model choice here, which is
-not obvious and drives the selection below.
+The per-run token basis was **~0.49M input / ~0.03M output** until 2026-08-02.
+**It is now 8,000 in / 8,000 out**, and both halves of that changed for different
+reasons, which matters because the second one reorders the table.
 
-| Component | Unit cost | Per run (~20 works) |
-|---|---|---|
-| Discovery tokens — **DeepSeek V4 Flash** *(the default)* | $0.14/M in, $0.28/M out | ~$0.08 |
-| Discovery tokens — Gemini 3.5 Flash Lite *(named alternative)* | $0.30/M in, $2.50/M out | ~$0.22 |
-| Discovery tokens — GLM-5.2 | $0.2842/M in, $0.8932/M out | ~$0.17 |
-| Discovery tokens — DeepSeek V4 Pro | $0.435/M in, $0.87/M out | ~$0.24 |
-| Web search — **Parallel** *(the default, chosen 2026-08-02)* | $0.001/request (10 results incl.) | $0.03–0.05 |
-| Web search — Exa via OpenRouter | $0.005/request (10 results incl.) | $0.15–0.25 |
-| Web search — Perplexity | $0.005/request | $0.15–0.25 |
-| Mat-colour vision | one call per *accepted* work | negligible |
-| Museum APIs, image acquisition | $0 | bandwidth only |
+*Input* is a measurement: a real run consumed **3,453** tokens, because the web
+plugin injects excerpts rather than whole pages. 8,000 is roughly twice that,
+for headroom.
+
+*Output* is not a measurement — it is `DISCOVERY_MAX_OUTPUT_TOKENS`, the
+reservation the provider prices and refuses against. A run physically cannot emit
+more, so it is the true bound, where any multiple of the measured 1,608 would be
+a chosen one.
+
+**The consequence: the basis is no longer input-dominated, so output price is no
+longer nearly irrelevant.** The old basis had output at 6% of tokens and the
+claim followed; the new one is even, and a model with cheap input and expensive
+output is now priced accordingly. Two rows swap because of it — Gemini 3.5 Flash
+Lite, at $2.50/M output, moves from third to last. **The decision below is
+unaffected**: DeepSeek V4 Flash is cheapest on both bases, by a wide margin on
+each.
+
+| Component | Unit cost | Per run, old basis | Per run, measured basis |
+|---|---|---|---|
+| Discovery tokens — **DeepSeek V4 Flash** *(the default)* | $0.14/M in, $0.28/M out | ~$0.08 | **~$0.0034** |
+| Discovery tokens — GLM-5.2 | $0.2842/M in, $0.8932/M out | ~$0.17 | ~$0.0094 |
+| Discovery tokens — DeepSeek V4 Pro | $0.435/M in, $0.87/M out | ~$0.24 | ~$0.0104 |
+| Discovery tokens — Gemini 3.5 Flash Lite *(named alternative)* | $0.30/M in, $2.50/M out | ~$0.22 | ~$0.0224 |
+| Web search — **Parallel** *(the default, chosen 2026-08-02)* | $0.001/request (10 results incl.) | $0.03–0.05 | **$0.010** |
+| Web search — Exa via OpenRouter | $0.005/request (10 results incl.) | $0.15–0.25 | $0.050 |
+| Web search — Perplexity | $0.005/request | $0.15–0.25 | $0.050 |
+| Mat-colour vision | one call per *accepted* work | negligible | negligible |
+| Museum APIs, image acquisition | $0 | bandwidth only | bandwidth only |
+
+The search rows fall in the fourth column for a different reason from the token
+rows: not a re-based basis, but **phase 2 no longer searching the web at all**.
+Only phase 1's flat allowance of 10 is billed, where the third column priced all
+50 of the two-part cap.
 
 **This retires the recorded worry that search could exceed token spend "by an
-order of magnitude".** Worst case it roughly doubles per-run cost. Across every
-row above a run lands between **$0.11 and $0.33**, so $20 buys on the order of
-**60–180 runs a month**. Search goes *inside* the ceiling, comfortably.
+order of magnitude".** On the old basis a run landed between **$0.11 and $0.33**
+across every row above, so $20 bought on the order of **60–180 runs a month**,
+and search went *inside* the ceiling comfortably.
 
-> **On the engine actually pinned, a run lands at $0.11–$0.13 (2026-08-02).** The
-> range above spans all four models and all three back-ends, which was the right
-> shape while both were open. With `parallel` chosen and
-> `deepseek/deepseek-v4-flash` the default, the bounded figure is **$0.127** — about
-> eight cents of model call and five of search — and $20 buys on the order of
-> **150 runs a month**.
+**On the measured basis search is the dominant component after all — and it no
+longer matters.** A bounded run is now cents rather than tens of cents, so the
+ceiling is not the constraint it was sized against and the ranking above is a
+model-choice input rather than a budget one. The worry was about proportion; what
+retired it in the end was the absolute figure falling by a factor of ten.
+
+> **On the engine actually pinned, a bounded run lands at $0.013 (2026-08-02).**
+> The range above spans all four models and all three back-ends, which was the
+> right shape while both were open. With `parallel` chosen and
+> `deepseek/deepseek-v4-flash` the default, the bounded figure was $0.127 — about
+> eight cents of model call and five of search — until the token basis behind the
+> model half was re-based against a measured run later the same day. It is now
+> **$0.01336**: a third of a cent of model call and a cent of search allowance.
+> $20 buys on the order of **1,500 bounded runs a month**, and far more real ones,
+> since a typical run uses one of its ten searches.
 >
 > **The "search is now the dominant component" reading that used to sit here was
 > true of a $0.005 request and is not true of a $0.001 one.** Model spend is now
@@ -285,29 +315,59 @@ row above a run lands between **$0.11 and $0.33**, so $20 buys on the order of
 > comparison — with search a smaller share of a much smaller total. The gap
 > against the estimate widens rather than narrows.
 >
-> **The prices are right; the assumed token consumption is not.**
-> `DISCOVERY_PHASE1_INPUT_TOKENS` ships at 490,000 against a measured 3,453,
-> because the web plugin injects *excerpts* rather than whole pages. That is the
+> **The prices are right; the assumed token consumption was not.**
+> `DISCOVERY_PHASE1_INPUT_TOKENS` shipped at 490,000 against a measured 3,453,
+> because the web plugin injects *excerpts* rather than whole pages. That was the
 > whole of the twenty-fold gap.
 >
-> **Left standing rather than re-based, and this is the reasoning to reopen
-> against.** The 490,000 figure is this section's own per-run basis, covering a
-> *whole* run; the code spends it on the phase-1 estimate alone, and
-> `phase2_estimate_usd` prices search only — phase 2's model calls are in no
-> estimate at all. Re-basing phase 1 to its measured consumption would make that
-> figure honest while leaving the run figure silently short of phase 2's tokens,
-> trading a visible overstatement for an invisible understatement. **The decision
-> belongs with Chunk 16**, which builds phase 2 and is the first point at which
-> both halves can be measured. Until then the estimate is conservative in the
-> safe direction, and the *actual* is reported from the provider on every surface,
-> so nobody has to trust the estimate to know what a run cost.
+> **~~Left standing rather than re-based~~ — corrected 2026-08-02 when phase 2
+> was built.** The reasoning for holding off was that 490,000 is this section's
+> own per-run basis covering a *whole* run, while the code spent it on phase 1
+> alone, and `phase2_estimate_usd` priced search only, so phase 2's model calls
+> were in no estimate at all. Re-basing phase 1 in isolation would have traded a
+> visible overstatement for an invisible understatement.
+>
+> **Phase 2 consumes no tokens, so the understatement does not exist.** It asks
+> museum APIs, which are open and unmetered, and decides whether a result is the
+> requested work by comparing titles and artists locally rather than by asking a
+> model. Both halves therefore settled together:
+>
+> | | before | after |
+> |---|---|---|
+> | `DISCOVERY_PHASE1_INPUT_TOKENS` | 490,000 | **8,000** (measured 3,453, bounded ~2x) |
+> | `DISCOVERY_PHASE1_OUTPUT_TOKENS` | 30,000 | **8,000** (the provider-priced reservation) |
+> | phase-1 estimate | $0.087 | **$0.01336** |
+> | phase-2 estimate | work count x 2 searches x $0.001 | **$0** |
+> | a bounded run | $0.127 | **$0.01336** |
+>
+> The bound is now roughly eight times a real run rather than fifty, and the
+> remaining gap is the search allowance: the estimate prices all ten searches
+> because that is the most a run may use, and a typical run uses one. **That gap
+> is the estimate doing its job**, not an error to squeeze out — a figure a run
+> may freely exceed is not an estimate.
+>
+> **The per-run search cap is unchanged at 10 + 2/work.** It still bounds fan-out
+> and is still reported beside a run's usage; what changed is that nothing it
+> bounds is billed. A paid image provider added later reinstates the arithmetic
+> in `phase2_estimate_usd`, which is the one place it lives.
+>
+> *(Superseded reasoning, kept because it is the shape of a good call rather than
+> a wrong one: the correction was deferred to the chunk that builds phase 2, being
+> the first point at which both halves could be measured. Until then the estimate
+> was conservative in the safe direction, and the* actual *is reported from the
+> provider on every surface — so nobody ever had to trust the estimate to know
+> what a run cost. What made the deferral right was that the direction of the
+> unknown was known: phase 2 could only add cost, never remove it.)*
 
 **The phase-1 model is a deployment value, defaulting to
 `deepseek/deepseek-v4-flash` (decided 2026-08-02).** The owner ruled out the
 frontier tier explicitly. The reasoning that survives beyond that ruling: phase 1
 is input-dominated extraction and synthesis rather than deep reasoning, which is
 the task profile where tier differences are smallest and the price multiple is
-largest — the frontier tier costs ~8× and buys 13–15 runs a month against 60–180.
+largest — the frontier tier costs ~8× the chosen one. (The run-count figures that
+stood here, 13–15 a month against 60–180, were computed on the pre-measurement
+token basis. The *multiple* is what the ruling turned on and it is unchanged;
+both absolute counts are now an order of magnitude higher.)
 
 **No quality evidence distinguishes the candidates, and that is stated rather than
 papered over.** The models above are ranked here on price, which is measurable, and
@@ -399,7 +459,12 @@ than a silent truncation of results.
 > recorded above** — and a bounded run total of $0.327 against the recorded
 > $0.11–$0.33, which is the arithmetic these allowances were sized by. On the
 > engine since pinned the same 50 searches cost **$0.05**, for a bounded run of
-> **$0.127**. The *counts* are unchanged, and deliberately so: they bound how much
+> $0.127.
+>
+> **Only 10 of those 50 are billed now**, because phase 2 asks museum APIs
+> instead of searching the web: the phase-2 component of the cap bounds fan-out
+> against a provider that charges nothing, so a bounded run is **$0.01336** and
+> its search half is $0.010. The *counts* are unchanged, and deliberately so: they bound how much
 > a run may do, which is a policy about fan-out rather than about price, and
 > re-deriving them every time a vendor's rate moves would make the bound follow
 > the market instead of the household. A cap has to sit at the ceiling of the
@@ -605,6 +670,27 @@ never be silently omitted (`data-model.md` constraint 9), and the work stays
 eligible for re-search. Nothing is silently dropped and nothing is silently
 accepted — which is the requirement, on a product whose defining constraint is that
 failure is silent.
+
+> **Built 2026-08-02, and the mechanism is worth naming because "not
+> auto-selected" had three places it could have lived.** It is an exclusion in
+> the single function that decides which instance represents a work
+> (`services/selection.py`), not a filter at recording time and not a deduction
+> in the score. Recording-time filtering would have hidden the instance, which
+> this section forbids outright. A score deduction would still select it whenever
+> nothing better existed — the exact case the floor is for.
+>
+> Excluding it there makes every consequence fall out of one rule: the instance
+> is stored and listed as an alternate; a work with only below-floor instances
+> gets no selection and is therefore reported `unresolved`; a curator can still
+> choose one by name, because that path does not go through automatic selection;
+> and **rejecting a good scan does not fall through to a below-floor alternate**,
+> which would otherwise hand a curator asking for something better the worst
+> instance on the card.
+>
+> The artwork box has to reach the service layer for this, since the floor is a
+> size on the wall and cannot be evaluated from a stored row. A deployment with
+> no configured geometry gets the ranking with no floor applied rather than an
+> invented one.
 
 **No upscaling.** See `data-model.md` → Original.
 
