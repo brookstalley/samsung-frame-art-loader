@@ -196,7 +196,8 @@ is no network between planes.
         │  └─ PreviewCache                    │          writes the disposable local copy an
         │                                     │          instance is reviewed from
   Discovery ── ReviewService                  │          the pre-acceptance twin of SurveyService
-  Service       │              │              │
+  Service ──── PreviewSweep                   │          reclaims the previews of decided works;
+        │       │              │              │          the plane's second background thread
         │       └── CatalogueService ─────────┘
         │              │
   SqliteDiscovery  SqliteCatalogue                domain adapters: schema, record↔row, ordering
@@ -218,6 +219,24 @@ is no network between planes.
   `ReviewService` reads those files without going through it: producing a
   small copy for a tool result is a read of the art tree, not another reason to
   reach a museum.
+
+  **`PreviewSweep` is the plane's second background thread, and the first driven
+  by a timer** (added 2026-08-03). The runner's threads are one per run, started
+  by a request and finished when that run is; this one is started by the
+  application's lifespan, sweeps immediately, then waits out
+  `PREVIEW_SWEEP_INTERVAL_SECONDS` and repeats until shutdown stops it. It sits
+  beside `ReviewService` on `DiscoveryService` rather than under the runner,
+  because what it needs is the record layer and the art tree — never an engine,
+  never a museum, and nothing that can cost money. It is in the container for
+  the reason every service is: the entry point wires one thing, and a concern
+  reachable only by an entry point is one no surface and no test can exercise.
+
+  Its pass runs inside one store transaction. Deciding what to delete is a read
+  and deleting it is a write to the filesystem, and `record_image` landing
+  between them would attach a work still under review to a file already gone —
+  so the lock is held across both halves. That is the one place in this plane
+  where a transaction spans work outside the store, and it is bounded to a walk
+  of the catalogue's rows plus a handful of unlinks.
 
   `DiscoveryRunner` holds `DiscoveryService`, not the other way round, and the
   engine hangs off the runner alone — no other service can reach it, which is

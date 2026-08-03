@@ -116,6 +116,57 @@ sources** — acquisition is their only consumer so far. Adding a reader would b
 this chunk widening a different tool's contract on its own authority, so it is
 filed instead. Everything else in the criterion runs over MCP.
 
+## 2026-08-03: What the Critic round changed about 17B
+
+<!-- prawduct: chunks=17B | status=shipped | scope=v1-build -->
+
+Fourteen findings, thirteen fixed in one pass and one accepted. Three are worth
+recording beyond the ledger, because each changed the design rather than tidying
+it.
+
+**Two reviewers found the same race independently, from opposite directions, and
+it was real.** The sweep read its references and then unlinked, holding nothing
+across the two. `PreviewCache.store` hands back a digest-named file it finds on
+disk *without re-fetching*, so a resolve run for a work still under review could
+attach a row to a path the pass had already judged reclaimable — and
+`record_image` never rewrites `preview_path` for a URL its work already holds, so
+that row would have named a deleted file for the rest of its review life. Exactly
+the outcome the path-shaped unit of deletion was built to prevent, re-entered
+through the write side instead of the verdict side. The pass now runs inside one
+store transaction, which is the lock `record_image` takes; the invariant the
+artifacts state unconditionally now holds against a writer rather than against the
+moment the sweep looked. `DiscoveryService.transaction()` is exposed for that one
+caller and says so.
+
+**A named deliverable was not shipped, and the surface — not the contract — was
+wrong.** `api-contract.md` requires the refusal of `verdict='awaiting_better_image'`
+to name `reject_image`; what shipped was the schema's enum error, which enumerates
+the valid set and names nothing. The service's teaching error is unreachable through
+the only caller it has, because validation runs before dispatch by design. Fixed by
+giving `Param` a `refused_hint` — a declarative pointer carried into the refusal
+message — rather than by amending the contract to match the code. The direction
+matters: a caller asking for that verdict has not mistyped a value, they want what
+another action does, and an enumeration alone sends them away without it.
+
+**The record half of the sweep had a weaker error posture than the file half.** A
+read-only mount cost one file and the pass continued; a refused *write* escaped
+`run` and cost every path after it, with no `SweepResult` to say how far it got.
+Symmetrical now, and the asymmetry is the kind only a reader looking for it finds
+— every test passed either way.
+
+Also fixed: `architecture.md` had not heard of `PreviewSweep` or of the plane's
+first timer-driven thread; `observability-strategy.md` had none of the six sweep
+events, which for a periodic job is the difference between "it is running" and
+silence; the review card told a swept work's curator that no copy was ever cached,
+pointing diagnosis at phase 2 rather than at the sweep; `api-contract.md`'s own
+new arity section said `set_canonical` takes an `image_id` "and nothing else"
+while the shipped action also takes `rationale`; the recorded test evidence
+predated every test in this chunk; and `possible_duplicate_artists` entered a
+payload with its bound unnamed.
+
+**Accepted, not fixed:** backlog reconciliation is dormant on the Issues backend.
+That is a known interim state with a standing advisory, not a defect in this work.
+
 ## 2026-08-03: Who painted it, and the slot a refused scan yields
 
 <!-- prawduct: status=shipped | scope=v1-build -->

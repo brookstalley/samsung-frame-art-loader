@@ -27,6 +27,7 @@ core keeps this logic testable without an event loop.
 import logging
 import uuid
 from collections.abc import Callable, Iterable, Sequence
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -147,6 +148,24 @@ class DiscoveryService:
         #: Optional so a caller with no deployment geometry gets the ranking
         #: without a floor rather than a constructor it cannot satisfy.
         self._artwork_box = artwork_box
+
+    def transaction(self) -> AbstractContextManager[None]:
+        """Apply a rule that spans several of this service's operations, atomically.
+
+        Exposed for the one caller whose correctness needs it: reclaiming
+        previews decides what to delete by reading rows and then deletes files,
+        and a writer landing between those two halves would attach a work still
+        under review to a file already gone. Holding the store's lock across both
+        is what makes "a file survives while any work still under review
+        references it" true against a concurrent writer rather than only against
+        the moment the reader looked.
+
+        Nesting joins the outer group, so the operations composed inside still
+        commit exactly once. Every other caller should use the service method
+        that already wraps what it needs — this is not a general escape hatch,
+        and holding it across slow work would serialise the plane behind it.
+        """
+        return self._store.transaction()
 
     # -- reads: runs ----------------------------------------------------------
 

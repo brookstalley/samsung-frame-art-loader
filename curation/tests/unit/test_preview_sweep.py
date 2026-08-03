@@ -8,14 +8,17 @@ actually deletes things" is the shortest test here and the rest are about the
 edges.
 """
 
+import logging
 import pathlib
 import threading
 
 import pytest
 
 from curation.persistence.discovery_records import Verdict
+from curation.persistence.records import AcquisitionMethod, SourceClass
+from curation.services import sweep as sweep_module
 from curation.services.errors import ServiceError
-from curation.services.sweep import PreviewSweep, run_periodically
+from curation.services.sweep import PreviewSweep, run_periodically, start_sweeping
 
 
 @pytest.fixture
@@ -33,8 +36,15 @@ def preview(settings):
 
 
 @pytest.fixture
-def sweep(discovery, settings) -> PreviewSweep:
-    return PreviewSweep(discovery, art_root=settings.art_root)
+def sweep(services) -> PreviewSweep:
+    """The container's own sweep, so these tests exercise the wiring a plane runs."""
+    return services.sweep
+
+
+@pytest.fixture
+def review(services):
+    """The review surface, for the two tests about what a curator is told afterwards."""
+    return services.review
 
 
 def decide(discovery, work, verdict=Verdict.ACCEPTED):
@@ -277,6 +287,43 @@ def test_an_empty_catalogue_sweeps_without_reaching_for_anything(sweep):
     assert sweep.run().deleted == 0
 
 
+# -- what the curator is told afterwards ---------------------------------------
+
+
+def test_a_swept_works_card_says_the_copy_was_reclaimed_not_that_none_existed(
+    discovery, sweep, review, propose, add_image, preview
+):
+    """A decided work stays on the review surface, so its card outlives its previews.
+
+    `run_results` splits by `resolution_status`, not by verdict, so `list_works`
+    and `get_work` keep returning accepted and rejected works. Saying "no local
+    copy was cached" about a preview this plane deleted on purpose is a false
+    statement of history, and it points whoever asks at phase 2's caching —
+    `ARTIC_USER_AGENT` unset, no preview URL, a failed fetch — rather than at the
+    sweep that did it.
+    """
+    work = propose("The Persistence of Memory")
+    add_image(work, preview_path=preview("memory.jpg"))
+    decide(discovery, work, Verdict.ACCEPTED)
+    sweep.run()
+
+    note = review.list_images(work.id).instances[0].preview_note
+
+    assert "reclaimed" in note
+    assert "accepted" in note, "the verdict that reclaimed it, so the reason is not merely asserted"
+    assert "was cached" not in note, "the never-cached message would send diagnosis to phase 2"
+
+
+def test_a_live_work_with_no_cached_copy_still_says_none_was_cached(discovery, review, propose, add_image):
+    """The other branch, which the one above must not have swallowed."""
+    work = propose("The Persistence of Memory")
+    add_image(work)
+
+    note = review.list_images(work.id).instances[0].preview_note
+
+    assert "No local copy of this image was cached" in note
+
+
 # -- the guard on the write itself --------------------------------------------
 
 
@@ -301,6 +348,98 @@ def test_forgetting_a_preview_that_is_already_forgotten_is_not_an_error(discover
     discovery.forget_preview(image.id)
 
     assert discovery.forget_preview(image.id).preview_path is None
+
+
+def test_a_record_that_refuses_to_be_cleared_costs_one_row_and_not_the_pass(
+    discovery, sweep, propose, add_image, preview, monkeypatch, settings
+):
+    """The error posture that held for the unlink half and not the record half.
+
+    A read-only mount cost one file and the pass continued; a refused *write*
+    escaped `run` and cost every path after it, with no `SweepResult` to say how
+    far it got. A record layer that refuses one row is exactly as survivable as a
+    filesystem that refuses one unlink.
+    """
+    stubborn = propose("The Persistence of Memory", dedup_key="memory")
+    ordinary = propose("Swans Reflecting Elephants", dedup_key="swans")
+    # Named so the paths sort in a known order: the pass walks them sorted, so
+    # the refusal lands on the first and the assertion below is about what
+    # happened *after* it.
+    refused = add_image(stubborn, url="https://museum.example/one", preview_path=preview("aaa.jpg"))
+    add_image(ordinary, url="https://museum.example/two", preview_path=preview("zzz.jpg"))
+    decide(discovery, stubborn, Verdict.REJECTED)
+    decide(discovery, ordinary, Verdict.REJECTED)
+    real_forget = type(discovery).forget_preview
+
+    def refuse_the_first(self, image_id):
+        if image_id == refused.id:
+            raise ServiceError("the row is held by something else")
+        return real_forget(self, image_id)
+
+    monkeypatch.setattr(type(discovery), "forget_preview", refuse_the_first)
+
+    result = sweep.run()
+
+    # Both files went; only the second row could be cleared. The pass reports
+    # what it managed rather than dying between the two.
+    assert result.deleted == 2
+    assert result.forgotten == 1
+    assert not (settings.art_root / "previews/zzz.jpg").exists()
+
+
+def test_a_writer_cannot_land_between_the_pass_reading_rows_and_deleting_files(
+    discovery, sweep, propose, add_image, preview, monkeypatch
+):
+    """Reading the references and unlinking are two steps, and phase 2 writes between them.
+
+    `PreviewCache.store` hands back a digest-named file it finds on disk without
+    re-fetching, so a resolve run can attach a work still under review to a path
+    the pass has already judged reclaimable — and `record_image` never rewrites
+    `preview_path` for a URL its work already holds, so that row would name a
+    deleted file for the rest of its review life. Holding the store's lock across
+    both halves is what makes the rule hold against a writer rather than only
+    against the moment the sweep looked.
+
+    Driven from inside the unlink, which is the exact instant the gap would be
+    open. The negative assertion is the load-bearing one and it cannot flake into
+    a false pass: a writer can only land there if the lock is *not* held. The
+    positive one afterwards is what stops the test passing because the writer was
+    simply broken.
+    """
+    shared = preview("shared.jpg")
+    decided = propose("The Persistence of Memory", dedup_key="memory")
+    live = propose("Swans Reflecting Elephants", dedup_key="swans")
+    add_image(decided, url="https://museum.example/shared", preview_path=shared)
+    decide(discovery, decided, Verdict.REJECTED)
+
+    landed = threading.Event()
+    real_unlink = pathlib.Path.unlink
+
+    def race_the_unlink(self, *args, **kwargs):
+        writer = threading.Thread(
+            target=lambda: (
+                discovery.record_image(
+                    candidate_work_id=live.id,
+                    url="https://museum.example/shared",
+                    provider="artic",
+                    source_class=SourceClass.INSTITUTIONAL,
+                    acquisition_method=AcquisitionMethod.DEZOOMIFY,
+                    confidence=0.9,
+                    preview_path=shared,
+                ),
+                landed.set(),
+            ),
+            daemon=True,
+        )
+        writer.start()
+        assert not landed.wait(timeout=0.5), "a writer attached a live work to a path being deleted"
+        return real_unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(pathlib.Path, "unlink", race_the_unlink)
+
+    sweep.run()
+
+    assert landed.wait(timeout=5), "the writer was blocked rather than serialised, which is a different defect"
 
 
 # -- the loop that drives it ---------------------------------------------------
@@ -347,6 +486,36 @@ def test_the_loop_keeps_going_after_a_pass_raises():
     run_periodically(counting, interval_seconds=0, stop=stop, after_pass=stop_after_two)
 
     assert counting.passes == 2, "the failure did not end the loop"
+
+
+def test_shutdown_says_so_when_the_sweep_will_not_stop(monkeypatch, caplog):
+    """The join's own answer, which shutdown previously discarded.
+
+    A pass that outlasts the bound is holding the store lock the next generation
+    of services will want, and the two log lines around it claim the sweep was
+    started and stopped. Saying nothing here makes a wedged sweep look like a
+    clean shutdown, which is the wrong diagnosis for the one fault this thread
+    has that the process survives.
+
+    The bound is monkeypatched rather than parameterised: a shutdown budget is
+    not a deployment knob, and a parameter whose only caller is a test is the
+    thing this repo removes when it finds one.
+    """
+    monkeypatch.setattr(sweep_module, "_SHUTDOWN_JOIN_SECONDS", 0.05)
+    wedged = threading.Event()
+
+    class _WedgedSweep:
+        def run(self) -> None:
+            wedged.wait(timeout=10)
+
+    halt = start_sweeping(_WedgedSweep(), interval_seconds=3600)
+    try:
+        with caplog.at_level(logging.WARNING):
+            halt()
+    finally:
+        wedged.set()
+
+    assert any(record.__dict__.get("event") == "preview.sweep_wedged" for record in caplog.records)
 
 
 def test_the_loop_returns_as_soon_as_it_is_asked_to_stop():

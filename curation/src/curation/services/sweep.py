@@ -25,6 +25,16 @@ then report the file as unreadable when in fact this process removed it. So the
 unit of deletion is the *path*, and a path survives while any work still under
 review references it.
 
+**That rule holds against a concurrent writer, not merely against the moment this
+pass looked**, and one transaction around the whole pass is what buys the
+difference. Reading the references and unlinking are two steps, and phase 2 writes
+between them: `PreviewCache.store` hands back a digest-named file it finds on disk
+without re-fetching, so a resolve run can attach a work still under review to a
+path this pass has already judged reclaimable. That row would name a deleted file
+*permanently*, since `record_image` never rewrites `preview_path` for a URL its
+work already holds. `run` therefore takes the store's lock across both halves —
+the same lock `record_image` takes.
+
 **The record follows the file, in that order.** A row whose `preview_path` names
 a file this sweep deleted is a lie the review card would tell as "the cached copy
 could not be read" — a corruption message for a routine reclamation. Clearing the
@@ -48,6 +58,7 @@ from typing import Final
 
 from curation.persistence.discovery_records import CandidateImage
 from curation.services.discovery import DiscoveryService
+from curation.services.errors import ServiceError
 
 log = logging.getLogger(__name__)
 
@@ -98,21 +109,42 @@ class PreviewSweep:
         Derived entirely from current state, so two passes in a row are a pass
         and a no-op rather than a pass and a mistake.
         """
-        referenced = self._references()
+        # A pass is announced before it starts as well as after it ends, so a
+        # wedged one is visible. With only the closing line, a pass that never
+        # returns and a plane that stopped sweeping look identical in the
+        # journal — silence — and they are different faults with different fixes.
+        log.debug("sweeping candidate previews", extra={"event": "preview.sweep_started"})
         deleted = forgotten = reclaimed = retained = failed = 0
-        for path, images in sorted(referenced.items()):
-            if any(not self._is_decided(image) for image in images):
-                retained += 1
-                continue
-            removed, freed = self._unlink(path)
-            if not removed:
-                failed += 1
-                continue
-            deleted += 1
-            reclaimed += freed
-            for image in images:
-                self._discovery.forget_preview(image.id)
-                forgotten += 1
+        # **The whole pass runs inside one transaction, and that is what makes
+        # the rule hold against a writer rather than only against a reader.**
+        # Reading the references and then unlinking are two steps, and phase 2
+        # writes between them: `PreviewCache.store` hands back a digest-named
+        # file it finds on disk without re-fetching, so a resolve run for a work
+        # still under review can attach a row to a path this pass decided was
+        # reclaimable — and `record_image` never rewrites `preview_path` for a
+        # URL a work already holds, so that row would name a deleted file for
+        # the rest of its review life. Taking the store's lock across both halves
+        # serialises this against `record_image`, which takes the same one.
+        #
+        # The cost is bounded by what is inside: a walk of a household's rows and
+        # a handful of unlinks, single-digit milliseconds, against a plane whose
+        # writers are a curator's own runs. Nothing slow is done in here — no
+        # fetch, no encode — and nothing may be added.
+        with self._discovery.transaction():
+            referenced, decided = self._references()
+            for path, images in sorted(referenced.items()):
+                if any(image.candidate_work_id not in decided for image in images):
+                    retained += 1
+                    continue
+                removed, freed = self._unlink(path)
+                if not removed:
+                    failed += 1
+                    continue
+                deleted += 1
+                reclaimed += freed
+                for image in images:
+                    if self._forget(image):
+                        forgotten += 1
         result = SweepResult(
             deleted=deleted,
             forgotten=forgotten,
@@ -138,26 +170,56 @@ class PreviewSweep:
         )
         return result
 
-    def _references(self) -> dict[str, list[CandidateImage]]:
-        """Every cached preview on record, and the instances pointing at it.
+    def _references(self) -> tuple[dict[str, list[CandidateImage]], set[str]]:
+        """Every cached preview on record, the instances pointing at it, and which
+        of their works the curator has finished with.
 
-        Walked through the service's own listings rather than a query of its
-        own, because the durable store's contract is equality filters and a
+        Walked through the service's own listings rather than a query of its own,
+        because the durable store's contract is equality filters and a
         deterministic order — a join or a `WHERE preview_path IS NOT NULL` would
         widen that contract for a job that runs on a timer over a household's
         worth of rows.
+
+        Iterating runs reaches every work exactly once: a work belongs to the
+        discovery run that proposed it and keeps that id for life, so a resolve
+        run — which covers works through `ResolveRunWork` rather than owning them
+        — contributes an empty list rather than a second sighting.
+
+        The verdicts come back with the walk rather than being asked for again
+        per instance. The walk already holds each work, and re-reading it once
+        per image would be a query per preview to answer a question already in
+        hand — on the pass where nothing is reclaimable, which is most of them.
         """
         references: dict[str, list[CandidateImage]] = defaultdict(list)
+        decided: set[str] = set()
         for run in self._discovery.list_runs():
             for work in self._discovery.list_candidate_works(run.id):
+                if work.verdict.is_terminal:
+                    decided.add(work.id)
                 for image in self._discovery.list_candidate_images(work.id):
                     if image.preview_path is not None:
                         references[image.preview_path].append(image)
-        return references
+        return references, decided
 
-    def _is_decided(self, image: CandidateImage) -> bool:
-        """Whether this instance's work has had the curator's final word."""
-        return self._discovery.get_candidate_work(image.candidate_work_id).verdict.is_terminal
+    def _forget(self, image: CandidateImage) -> bool:
+        """Clear one row's `preview_path`, reporting whether it went.
+
+        Guarded for the reason `_unlink` is, and the asymmetry was worth closing:
+        the file half tolerated a read-only mount and carried on, while a refused
+        *write* would have escaped `run` and cost every path after it — with no
+        `SweepResult` to say how far the pass got. A record layer that refuses one
+        row is exactly as survivable as a filesystem that refuses one unlink, and
+        the next pass finds the row still naming a file that is now gone.
+        """
+        try:
+            self._discovery.forget_preview(image.id)
+        except ServiceError as exc:
+            log.warning(
+                "a candidate preview was deleted but its record still names it",
+                extra={"event": "preview.forget_failed", "candidate_image_id": image.id, "reason": str(exc)},
+            )
+            return False
+        return True
 
     def _unlink(self, path: str) -> tuple[bool, int]:
         """Remove one preview, reporting whether it went and what it freed.
@@ -244,5 +306,15 @@ def start_sweeping(sweep: PreviewSweep, *, interval_seconds: float) -> Callable[
         # Joined with a bound rather than indefinitely: the sweep holds no lock
         # a shutdown needs back.
         thread.join(timeout=_SHUTDOWN_JOIN_SECONDS)
+        if thread.is_alive():
+            # The join's own answer, which was previously discarded — leaving
+            # shutdown to log that it had stopped the sweep while the sweep was
+            # still running. A pass that outlasts the bound is holding the store
+            # lock the next generation of services will want, so it is the one
+            # thing here worth waking someone for.
+            log.warning(
+                "a preview sweep did not stop when asked and is still running",
+                extra={"event": "preview.sweep_wedged", "waited_seconds": _SHUTDOWN_JOIN_SECONDS},
+            )
 
     return halt

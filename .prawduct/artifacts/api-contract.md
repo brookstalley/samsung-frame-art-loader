@@ -307,11 +307,16 @@ The accepted cost is the friction the security section already accepts: acceptin
 a good run's whole output is one call each. A UI's select-all sends the ids either
 way.
 
-**`set_canonical` and `reject_image` take an `image_id` and nothing else.** An
+**`set_canonical` and `reject_image` take an `image_id` and no second id.** An
 instance already carries its work, so accepting a `work_id` beside it would create
 a pair that can disagree and a rule about which wins — for an argument the caller
 would have to fetch anyway. `list_images` is where an `image_id` comes from, which
-is also the call that shows the picture being judged.
+is also the call that shows the picture being judged. `set_canonical` also takes
+an optional `rationale`, which is not an identifier but the curator's reason: it
+is persisted on the instance and carried onto the `Source` at promotion, so why
+this scan was chosen survives into the catalogue. `reject_image` takes no reason,
+and that asymmetry is deliberate — "this one" is a judgement worth keeping, while
+"not this one" is followed by a re-search whose result is the record.
 
 ### Why not split reads from writes
 

@@ -164,6 +164,29 @@ between planes.
 > work it holds under a name the identity comparison did not match. The second is
 > a defect in the comparison; the first is the product working.
 
+> **The preview sweep's events, added 2026-08-03, and the failure they exist to
+> break the silence around.** The sweep is the plane's only periodic job, and its
+> characteristic failure is that it stops happening — which produces no error, no
+> refusal, and no user-visible symptom until an SD card fills weeks later.
+>
+> | Event | Level | Says |
+> |---|---|---|
+> | `preview.sweep_started` | DEBUG | a pass began. Only useful against `preview.swept`: a start with no finish is a wedged pass, which is a different fault from a plane that stopped sweeping |
+> | `preview.swept` | INFO | a pass finished, with what it deleted, what it cleared, what it freed, what it held back for works still under review, and what it could not remove |
+> | `preview.sweep_failed` | WARNING | one file could not be deleted — a read-only mount or a permissions problem. Its record still names it, so the next pass retries |
+> | `preview.forget_failed` | WARNING | one file went but its record could not be cleared, so a row names a file that is gone. The card degrades to "no picture" and the next pass retries |
+> | `preview.sweep_error` | ERROR | a whole pass raised, with its traceback. The loop continues; two of these in a row means every pass is failing |
+> | `preview.sweep_wedged` | WARNING | shutdown asked the sweep to stop and it did not within the bound. It holds the store lock, so the next generation of services will wait on it |
+>
+> **`preview.swept` logs at INFO on every pass, including the ones that reclaim
+> nothing**, and that is the point rather than noise: a job that logs only when it
+> acts is indistinguishable from a job that died. The question an operator has
+> about a periodic task is first "is it running at all", and this is the line that
+> answers it. At the shipped hourly interval it is 24 lines a day.
+>
+> The counterpart on the operations side is `operational-spec.md` § Add disk
+> headroom, which now points at this event rather than at a manual prune.
+
 ## What the museum is told about us
 
 The Art Institute's API is open — no key, no account — but asks callers to

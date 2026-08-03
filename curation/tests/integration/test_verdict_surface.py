@@ -258,12 +258,16 @@ async def test_asking_for_awaiting_better_image_teaches_the_action_that_sets_it(
     )
 
     assert errored is True
-    # Refused by the schema's own enum before the service is reached, and the
-    # enumeration is what teaches: the valid set is in the error rather than a
-    # sentence about one value. The action that *does* set it is in the tips,
-    # which `help` returns.
     assert "awaiting_better_image" in payload["error"]
     assert payload["valid_values"] == {"verdict": ["accepted", "rejected"]}
+    # The naming is the requirement, not the enumeration. `api-contract.md`
+    # § set_verdict cannot set `awaiting_better_image` asks the refusal to point
+    # at `reject_image`, and it is the *schema* that refuses here — validation
+    # runs before dispatch, so the service's own teaching error never fires
+    # through this path. A caller asking for that verdict has not mistyped a
+    # value; they want what another action does, and a valid-set enumeration
+    # alone would send them away without it.
+    assert "reject_image" in payload["error"]
 
 
 # -- choosing among the scans --------------------------------------------------

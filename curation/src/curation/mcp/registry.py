@@ -60,6 +60,13 @@ class Param:
     leaves the validator accepting `[1, 2]` for a list of ids — which then fails
     somewhere below with an error phrased about whatever the elements were used
     for rather than about what the caller sent.
+
+    `refused_hint` is for the case where a rejected value is not a typo but a
+    request for something this surface does elsewhere. The enumeration alone says
+    what is allowed and not what to do instead, which is the difference between a
+    caller retrying blind and a caller reaching the right action — so a parameter
+    whose invalid values have a *destination* names it here and the refusal
+    carries it.
     """
 
     name: str
@@ -70,6 +77,7 @@ class Param:
     minimum: int | None = None
     maximum: int | None = None
     items: str | None = None
+    refused_hint: str | None = None
 
     def __post_init__(self) -> None:
         if self.type not in _JSON_TYPES:
@@ -414,7 +422,11 @@ def _check_value(param: Param, value: object, action: Action) -> None:
         _check_elements(param, param.items, value, action)
     if param.choices is not None and value not in param.choices:
         raise ArgumentError(
-            f"Invalid value for {param.name!r}: {_render(value)}.",
+            # The hint joins the message rather than riding in its own field: a
+            # caller that reads only `error` is the one this exists for, and it
+            # is the field every client shows first.
+            f"Invalid value for {param.name!r}: {_render(value)}."
+            + ("" if param.refused_hint is None else f" {param.refused_hint}"),
             enumeration={"valid_values": {param.name: list(param.choices)}},
             example=action.example,
         )

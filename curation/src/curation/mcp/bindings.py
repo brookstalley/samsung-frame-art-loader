@@ -312,6 +312,15 @@ def _set_verdict(services: Services, arguments: Mapping[str, Any]) -> dict[str, 
         # when an artist was minted would teach a caller to read its absence as
         # "nothing happened", which is the silence this pair exists to break —
         # the same rule `not_displayable` follows on the display surface.
+        #
+        # **Uncapped, and what bounds it is worth naming rather than assuming.**
+        # `possible_duplicate_artists` holds artists already in the catalogue that
+        # plausibly name the painter just minted, which `attribution` derives by
+        # shared name tokens — so it is bounded by how many *held* painters share
+        # a name with one new one, in a catalogue sized by a single wall. Two is a
+        # lot. A cap here would truncate the one thing this field exists to make
+        # visible, and the bound is a property of the data rather than of a limit
+        # anybody chose.
         minted_artist=None if outcome.minted_artist is None else _artist_fields(outcome.minted_artist),
         possible_duplicate_artists=[_artist_fields(artist) for artist in outcome.duplicate_candidates],
         notice=_verdict_notice(outcome),

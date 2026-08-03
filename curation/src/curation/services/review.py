@@ -156,10 +156,13 @@ class InstanceView:
     other is a fact about our record of it.
 
     `preview` is None whenever no picture travels with this instance — no local
-    copy was ever cached, or the file will not decode. `preview_note` says which.
-    An instance without a picture is still listed, still carries its source-side
-    URL, and is still selectable; losing a work over a missing thumbnail would be
-    the tail wagging the dog.
+    copy was ever cached, the copy was reclaimed after the work was decided, or
+    the file will not decode. `preview_note` says which, and the three are kept
+    apart because they send whoever asks to three different places: phase 2's
+    caching, a sweep working as designed, and a corrupt file. An instance without
+    a picture is still listed, still carries its source-side URL, and is still
+    selectable; losing a work over a missing thumbnail would be the tail wagging
+    the dog.
     """
 
     image: CandidateImage
@@ -390,7 +393,7 @@ class ReviewService:
         held = self._discovery.list_candidate_images(work.id)
         return InstanceListing(
             work=work,
-            instances=[self._instance(image) for image in _fill(held)],
+            instances=[self._instance(image, work) for image in _fill(held)],
             held=len(held),
             surviving_held=sum(1 for image in held if image.rejected_at is None),
         )
@@ -416,14 +419,14 @@ class ReviewService:
             chosen = next(iter(selection.surviving(images)), None)
         return CandidateView(
             work=work,
-            shown=None if chosen is None else self._instance(chosen),
+            shown=None if chosen is None else self._instance(chosen, work),
             instances_held=len(images),
             instances_surviving=sum(1 for image in images if image.rejected_at is None),
         )
 
-    def _instance(self, image: CandidateImage) -> InstanceView:
+    def _instance(self, image: CandidateImage, work: CandidateWork) -> InstanceView:
         fit, fit_note = self._fit(image)
-        preview, preview_note = self._preview(image)
+        preview, preview_note = self._preview(image, work)
         return InstanceView(image=image, fit=fit, fit_note=fit_note, preview=preview, preview_note=preview_note)
 
     def _fit(self, image: CandidateImage) -> tuple[FitAssessment | None, str | None]:
@@ -435,11 +438,22 @@ class ReviewService:
             )
         return assess_display_fit(width=image.estimated_width, height=image.estimated_height, box=self._box), None
 
-    def _preview(self, image: CandidateImage) -> tuple[InlinePreview | None, str | None]:
+    def _preview(self, image: CandidateImage, work: CandidateWork) -> tuple[InlinePreview | None, str | None]:
         """The picture this instance travels with, or why it travels without one."""
         if image.preview_path is None:
+            # A decided work's previews are reclaimed on a timer, so the common
+            # reason a picture is absent here is not that one was never cached —
+            # it is that this plane deleted it, on purpose, after the curator was
+            # finished with the work. Saying otherwise sends whoever asks to
+            # phase 2's caching, which is the wrong place and the one they would
+            # look first.
+            if work.verdict.is_terminal:
+                return None, (
+                    f"This work was {work.verdict}, so its cached copy was reclaimed — previews are kept only "
+                    "while a work is under review. Its source URL is reported beside it."
+                )
             return None, (
-                "No local copy of this image was cached, so it cannot be shown here. Its source URL is " "reported beside it."
+                "No local copy of this image was cached, so it cannot be shown here. Its source URL is reported beside it."
             )
         rendered = inline_preview(self._art_root / image.preview_path)
         if rendered is None:

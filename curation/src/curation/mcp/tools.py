@@ -405,6 +405,19 @@ ART_REVIEW: Final = ToolRecord(
                     description="'accepted' puts the work in the catalogue; 'rejected' closes it. Both are final.",
                     required=True,
                     choices=("accepted", "rejected"),
+                    # `api-contract.md` § set_verdict cannot set
+                    # `awaiting_better_image` requires the refusal to name
+                    # `reject_image`, and it is the schema that refuses it — the
+                    # service's own teaching error is unreachable from here,
+                    # because validation runs first by design. A caller asking
+                    # for that verdict has not mistyped; they want the thing a
+                    # different action does, and an enumeration alone would send
+                    # them away without it.
+                    refused_hint=(
+                        "To ask for a better scan instead, use action='reject_image' with the image_id — that is "
+                        "the only way to awaiting_better_image, and it also suppresses the scan so a re-search "
+                        "cannot return it."
+                    ),
                 ),
                 Param(
                     name="reason",
