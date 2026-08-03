@@ -413,6 +413,63 @@ the defect class it was built to measure — the prior one being an
 `except Exception` in the evaluation driver that would have swallowed the envelope
 invariants and reported a contract violation as a low score.
 
+## A cap sized from one part of a result is not a cap
+
+`api-contract.md` sized the review surface's 400 px thumbnail cap from image
+tokens: 40 works x ~160 = 6,400, "comfortably inside the budget". The arithmetic
+was right and the conclusion was wrong, because the *rows* scale with the same 40.
+The first listing shape measured ~7,000 tokens of text on top of the 6,400,
+putting a full page past the 10,000 at which the client warns with the images
+still innocent. Narrowing rows to what a caller needs in order to choose — moving
+the instance record behind a second action — brought the page to 10,200.
+
+The general form: a bound justified by a calculation is only as good as the terms
+the calculation names. Ask what else grows with the same N. The tell here was that
+the artifact's own table listed only image costs, and nobody had ever multiplied
+the row.
+
+Two thresholds turned out to want two knobs rather than one compromise: the page
+*ceiling* is sized against the hard cap, where truncation would take the pictures
+and leave the rows; the *default* page is sized against the warning, so a caller
+who asked for nothing never trips it.
+
+## A rule stated at one level does not enforce itself one level up
+
+`api-contract.md` says a below-floor image is "shown, labelled, and selectable —
+never hidden", in a section about what the *image* listing must show. The work
+listing carries one picture per row, and the obvious choice — the selected
+instance — has no answer for a work where nothing was selected, which is exactly
+the below-floor case. Those rows arrived with no picture at all.
+
+Nothing was violated by the letter of the rule; it simply did not reach. The
+failure was caught as a test expectation I had written wrongly, which is the cheap
+way to meet it — the test asserted two image blocks and got one, and the reason
+was the product's rather than the test's.
+
+## A field whose only defence would be a test written to defend it is a field to delete
+
+Two mutation survivors in the review surface were `run_id` on `get_work` — beside a
+work already carrying `discovery_run_id`, one fact under two names in one payload —
+and `run_id` on `list_images`, which cost a `get_run` per call to report a run the
+caller necessarily already knew, having arrived with a work id from a run-scoped
+listing.
+
+The reflex on a survivor is to write the missing test. The question to ask first is
+what the field is for. Both were deleted, along with the wrapper dataclass that
+existed only to carry one of them.
+
+## Governance you put where it cannot see is governance that did not run
+
+Chunk 17A and 17B were authored as `#### Chunk 17A:` / `#### Chunk 17B:` nested
+under an `### Chunk 17:`, while every other split chunk in the same file — 07B,
+08A, 08B, 14A, 14B, 16A, 16B — uses `###`. The record linter matches the h3 form,
+so both were invisible to it and `chunk-ref-missing` came back `null`.
+
+**Null is not zero.** The check did not pass; it did not run, and nothing about the
+chunk's declared deliverables was graded. The Critic caught it by hand and found
+two real deliverable gaps in the same breath — one of them a deliverable I had
+dropped without saying so.
+
 ## A guard built from recurrences is scoped to where you looked, not to the failure
 
 **When repeated instances justify a mechanical guard, derive its scope from the

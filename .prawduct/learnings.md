@@ -445,6 +445,42 @@ they test the outcome rather than the transformation.
 
 ## A mutation test must prove it mutated, or its green is indistinguishable from a pass
 
+**Extended 2026-08-03 with the two ways a sweep lies in the other direction**, both
+found by running one: a mutation that changes no behaviour, and a `find` pattern
+that matches twice. Each reports a survivor that is nobody's coverage gap and reads
+exactly like a finding. `curation/tools/mutation_sweep.py` now refuses an ambiguous
+pattern; the no-op case it cannot detect, so confirm your mutation breaks something
+before writing a test for it.
+
+## A cap sized from one part of a result is not a cap
+
+**When you bound a result with an arithmetic, name every term that scales with the
+same N** — the one you leave out is the one that will dominate. Sizing a thumbnail
+cap from image tokens alone left the rows, which scale with the same batch, to add
+nearly as much again and push a full page past the client's warning threshold.
+
+## A rule stated at one level does not enforce itself one level up
+
+**When an artifact states a rule about a detail view, check what the *listing*
+does with it.** "Shown, labelled, never hidden" governed the image list; the work
+list carried one picture per row keyed on the selected instance, and a work with no
+selection arrived with no picture — not withheld by any rule, just absent, and
+indistinguishable to a curator from a work no picture exists for.
+
+## A field whose only defence would be a test written to defend it is a field to delete
+
+**When a sweep says nothing covers a field, ask whether the field earns a test
+before writing one.** Two survivors here were a `run_id` duplicating a value the
+same payload already carried under another name, and a read performed solely to
+produce it.
+
+## Governance you put where it cannot see is governance that did not run
+
+**Match the structural form the tooling matches on** — a heading level, a tag, a
+filename. Authoring a chunk as `####` where every other split chunk uses `###` made
+the record linter return `chunk_graded: null`, and null is not zero: nothing about
+the chunk's declared deliverables was checked, and the report said so quietly.
+
 ## A guard built from recurrences is scoped to where you looked, not to the failure
 
 ## A rule that could not be violated yet is a rule nobody has implemented
