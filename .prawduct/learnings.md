@@ -437,6 +437,24 @@ they test the outcome rather than the transformation.
 
 ## Prose that ships to a caller is behaviour, and needs a test aimed at it
 
+**Assert the thing the sentence claims, not that the sentence is present.** A
+notice describing an *ordering*, a *completeness* or a *remedy* is making a
+checkable claim, and membership-and-count assertions pass under every wrong
+wording of it. A truncation notice said "selectable ones first" while the rows
+kept their ranking — describing how slots were allocated as though it described
+what the caller receives — and its correction then claimed every choosable scan
+was on the card, which is false once they alone outrun the cap. Both shipped past
+tests asserting counts and membership. Position is what catches an ordering claim;
+a second test for the other branch is what catches a completeness one.
+
+## When a behaviour is retired, grep the sentences that justified it, not just the code
+
+**A retired rule outlives its retirement in prose, and the code may cite that
+prose as authority for the opposite of what it now does.** Replacing a best-first
+cut left the rule stated in the constant's own rationale five lines above the new
+function, and in the artifact — which a docstring then pointed at as "states the
+requirement". Search on the *claim's words*, not on the identifier.
+
 ## A package's declared dependency floor is a claim; what it imports is the constraint
 
 ## Before answering the question a spec asks about a candidate, check that the candidate is one
