@@ -101,11 +101,11 @@ async def finished(server_url: str, run_id: str) -> dict:
 def preview_file(settings):
     """Write a decodable preview into the art tree and return its catalogue path."""
 
-    def _write(name: str) -> str:
+    def _write(name: str, *, width: int = 1200, height: int = 900) -> str:
         relative = f"previews/{name}"
         target = settings.art_root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(a_jpeg())
+        target.write_bytes(a_jpeg(width, height))
         return relative
 
     return _write
@@ -471,12 +471,17 @@ async def test_the_alternates_arrive_in_full_each_with_its_own_picture(server_ur
     """
     run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
     work = propose("A work with alternates", run_id=run.id, dedup_key="alts")
-    for index, confidence in enumerate((0.9, 0.6, 0.3)):
+    # Distinct aspect ratios, so each block identifies its own row. Identical
+    # previews would let a binding emit the blocks in a different order than the
+    # rows and still satisfy `image_block_index == [0, 1, 2]` — which is the exact
+    # hazard this action carries: the wrong scan of the right painting.
+    shapes = [(800, 400), (400, 800), (600, 600)]
+    for index, (confidence, (width, height)) in enumerate(zip((0.9, 0.6, 0.3), shapes, strict=True)):
         add_image(
             work,
             url=f"https://museum.example/scan-{index}",
             confidence=confidence,
-            preview_path=preview_file(f"scan-{index}.jpg"),
+            preview_path=preview_file(f"scan-{index}.jpg", width=width, height=height),
             estimated_width=4000,
             estimated_height=3000,
         )
@@ -497,6 +502,14 @@ async def test_the_alternates_arrive_in_full_each_with_its_own_picture(server_ur
     ]
     assert [image["is_on_offer"] for image in payload["images"]] == [True, False, False]
     assert [image["image_block_index"] for image in payload["images"]] == [0, 1, 2]
+
+    # And each index resolves to *that* row's picture, checked by looking at it.
+    blocks = images_of(result)
+    for row, (source_width, source_height) in zip(payload["images"], shapes, strict=True):
+        pictured = Image.open(BytesIO(_decoded(blocks[row["image_block_index"]])))
+        assert pictured.width / pictured.height == pytest.approx(
+            source_width / source_height, rel=0.01
+        ), f"{row['url']} points at a block that is not its own picture"
 
     # The fields the listing shape leaves out, which is why this shape exists.
     leading = payload["images"][0]
@@ -542,6 +555,15 @@ async def test_a_card_with_more_scans_than_it_can_carry_says_what_it_dropped(
     assert "no paging" in payload["notice"]
     # What was dropped is the tail of the ranking, never the instance on offer.
     assert payload["images"][0]["is_on_offer"] is True
+
+    # **The cap's own arithmetic, measured rather than asserted in prose.** This
+    # is the third capped result on the surface and the first whose justification
+    # was only a docstring — which is precisely how the page cap went wrong: it
+    # was sized from the pictures and the rows came to nearly as much again. A
+    # full card is a wide shape (every field, not the listing's subset), so it
+    # gets the same treatment as the two page budgets.
+    pictures, text = cost_of(result)
+    assert pictures + text < WARN_THRESHOLD_TOKENS, f"a full card costs images {pictures:.0f} + text {text:.0f}"
 
 
 async def test_a_work_no_image_was_ever_found_for_says_what_to_do_about_it(server_url, services, propose):

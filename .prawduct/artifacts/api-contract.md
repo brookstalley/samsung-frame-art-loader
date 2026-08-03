@@ -419,11 +419,29 @@ local copy — so block *n* is not row *n* the moment one preview is missing. Ev
 row therefore carries `image_block_index`, null when it contributed no block, and
 every result that carries pictures says so in its notice.
 
+**`list_images` is capped at 12 instances, and it is the third capped result on
+this surface** — a work's scans accumulate across every re-search, rejected ones
+stay as the record of a judgement, and the growth is driven by a curator asking
+for something better rather than by anything that stops. Measured 2026-08-03: a
+full card is about **3,600 tokens**, 1,920 of picture and 1,700 of text.
+
+**It offers no paging, and that is a different decision from the page's.** The
+instances are ordered best-first by the one ranking this product has, so a
+truncated card omits the *worst* candidates — where what falls off a page is
+arbitrary, and paging is the remedy. A caller told to page through scans ranked
+below the ones already shown would be sent to look at the least likely answers.
+The notice says so rather than offering an offset.
+
 Truncation is always explicit. A result that omits rows says so and says how many —
 never a silent cut. Where the action takes an `offset` the notice names paging as
 the remedy; `art_discovery(action='status')` deliberately does not, because it has
 no offset to point at — `art_review(action='list_works')` is the paged listing it
-defers to.
+defers to — and `art_review(action='list_images')` does not, because paging its
+list would be an affordance pointing the wrong way.
+
+**Every cap on this surface is measured by a test, not argued in prose.** The
+reason is recorded above: the page cap was first sized from its images alone, and
+the rows — which scale with the same batch — came to nearly as much again.
 
 ### Long-running operations: start, then poll
 

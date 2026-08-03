@@ -80,11 +80,19 @@ DEFAULT_REVIEW_LIMIT: Final[int] = 30
 #: grows a longer card each time, and the growth is driven by a curator asking
 #: for something better rather than by anything that stops.
 #:
-#: 12 because these rows are the wide shape, not the listing's: at roughly 160
-#: tokens of picture and 120 of text each, a full card is about 3,400 tokens,
-#: which leaves a caller room to read several works in one conversation. A work
+#: 12 because these rows are the wide shape, not the listing's. **Measured
+#: 2026-08-03, not reasoned**: a full card costs about 3,600 tokens — 1,920 of
+#: picture (160 each, as the published relation gives) and 1,700 of text, which
+#: is about 142 per row rather than the 120 this comment first guessed. That
+#: leaves a caller room to read several works in one conversation, and a work
 #: with more than a dozen distinct scans on offer is not a review problem the
 #: curator can solve by reading further down.
+#:
+#: The measurement is asserted by the truncation test rather than left here as
+#: prose, for the reason the page cap exists to teach: the first version of that
+#: cap was sized from its pictures alone and the rows came to nearly as much
+#: again. A cap whose arithmetic nothing checks is the same mistake with a
+#: smaller N.
 #:
 #: **There is deliberately no paging here**, and the notice does not offer any.
 #: The instances are ordered best-first by the one ranking this product has, so a
