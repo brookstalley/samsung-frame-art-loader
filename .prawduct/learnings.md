@@ -249,6 +249,19 @@ the backlog is part of its sweep set.**
     is a value copied into every `.env` where no later correction can reach it.
     A default in one place beats a correct value in two.
 
+18. **2026-08-03, twenty-first recurrence — and I had already written the correct
+    value down.** Adding `resolve_images` took the MCP bindings from 23 to 24. I
+    counted them, wrote "one of twenty-four MCP bindings" into the handoff notes,
+    and left `project-preferences.md` § Known departures saying twenty-three —
+    the artifact that *governs* the norm, whose count exists to make the
+    departure legible. The Critic found it. **Knowing the number is not the same
+    as having swept for it**: I produced the corrected figure for a file nobody
+    enforces and never asked which file held the old one. The row now states the
+    shape ("the only binding in the file that does; every other one makes exactly
+    one service call") rather than a count, which is the remedy the paragraph
+    below prescribes and the one this entry's own preamble was already an
+    instance of.
+
 **The correction that follows: stop sweeping a duplicated claim, stop duplicating
 it.** Every remedy above escalates *how well you look* — grep, then walk the
 decision graph, then do not exclude the files you edited, then treat the finding's
@@ -433,6 +446,23 @@ they test the outcome rather than the transformation.
 ## A mutation test must prove it mutated, or its green is indistinguishable from a pass
 
 ## A guard built from recurrences is scoped to where you looked, not to the failure
+
+## A rule that could not be violated yet is a rule nobody has implemented
+
+**When a chunk makes a previously impossible operation possible, treat every
+artifact claim about that operation as unverified — the age of the sentence is
+not evidence.** A guard whose violating case cannot arise has never been
+exercised, so "written down since July" and "enforced" are indistinguishable
+until the operation exists. Find them by writing the test the artifact's own
+sentence describes, and expecting it to fail.
+
+## An action is only usable if its arguments are obtainable from something built
+
+**Before advertising an action, construct a real call to it using only surfaces
+that ship — and if a test needs a service-layer call to build a tool argument,
+that is the finding, not a convenience.** Withholding an action until it works is
+half the bar; the other half is that a caller can reach its inputs. A test that
+reaches past the surface for an id makes the whole suite blind to the gap.
 
 ## Ratifying a norm creates retroactive obligations on ARTIFACTS, not just code
 
