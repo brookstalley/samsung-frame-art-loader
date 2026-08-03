@@ -110,7 +110,8 @@ re-created the same silence one line further down.
 - [x] Chunk 15: Spikes — search-engine choice and `work_dedup_key` derivation (issue #18)
 - [x] Chunk 16A: Discovery phase 2 — works to instances, over a real museum API
 - [x] Chunk 16B: `resolve_images` — the re-search, its coverage and its rollup
-- [ ] Chunk 17: Review and acceptance — `art_review`, thumbnails inline, promotion
+- [ ] Chunk 17A: The review surface — works, instances, and the image in the transcript
+- [ ] Chunk 17B: The verdict, the artist, and the preview's death
 - [ ] Chunk 18: Acquisition and preparation — fetch, metadata, mat engine, 4K render
 - [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
@@ -1688,26 +1689,103 @@ and not a rework.
   is idempotent and safe to re-run after crashes, where a hook that dies with
   the process leaks silently — and deletion never touches the catalogue either
   way | user can veto/override]`. Truncation in listings is always explicit.
+**Split into 17A and 17B on 2026-08-03, at the operator's call**, at the seam
+between *showing* the curator the work and *recording* what they decided. The
+reason is the one that split 08, 14 and 16 — one Critic round over the whole would
+read ~2,000 lines, and review quality is known to degrade across a diff that size.
+
+The seam is a delivery boundary rather than an arbitrary cut, but **only 17B meets
+this entry's acceptance criterion**, and that is the honest reading: 17A ships the
+half of the gate that can be built without a verdict existing, and a curator
+cannot accept anything until 17B lands. What makes 17A worth shipping alone is
+that it carries all of the *image* machinery — the inline content-block seam, the
+candidate-preview thumbnail, the token budget — which is the part the security
+model's control actually rests on, and the part that has no prior art in this
+codebase to review against.
+
+**`art_review` therefore declares three actions after 17A and six after 17B.**
+That follows the contract's existing rule rather than departing from it: unbuilt
+actions are never declared, `action='help'` answers the as-built question at
+runtime, and a tool part-way through its action set is exactly what 14A/14B and
+16A/16B already did to `art_discovery`.
+
+#### Chunk 17A: The review surface — works, instances, and the image in the transcript
+
+- **Description:** The half of the human gate that shows the picture.
+  `list_works`/`get_work`/`list_images` return candidate thumbnails **inline as
+  image content blocks** (capped 400 px long edge — a 40-work batch stays inside
+  the client's token budget), alongside the service-derived `display_fit` and
+  rendered-inches figures a thumbnail cannot convey, with `rights_status` beside
+  them as a provenance signal that gates nothing. A `below_floor` instance is
+  **shown, labelled and offered** — never hidden, never auto-selected. **The
+  envelope emits text content only today**, so the seam that carries an image
+  block out of a binding is this chunk's, and it is the one piece of the surface
+  with no prior art here to follow. Truncation in listings is always explicit,
+  and the bound on every collection this adds is named where it is imposed.
 - **Depends on:** Chunk 16
 - **Artifacts consumed:** `api-contract.md` (§ What the review surface must
-  show, § Images are returned inline, § Token budget, § set_verdict),
-  `security-model.md` § Content Appropriateness, `data-model.md`
-  (promotion relationships, constraints 7/15)
-- **Deliverables:** `art_review` actions live; promotion in the service layer;
-  the preview sweep; harness scenarios covering the review flow with images
-  asserted present in results
+  show, § Images are returned inline, § Token budget),
+  `security-model.md` § Content Appropriateness, `data-model.md` (CandidateWork,
+  CandidateImage, constraint 7)
+- **Deliverables:** `art_review`'s three read actions live; image content blocks
+  reachable from a binding; a candidate-preview thumbnail producer distinct from
+  the catalogue's (previews are disposable and are not renditions); harness
+  scenarios asserting the image block is present in the result
+- **Tests:** contract — every result a curator could judge from carries the image
+  block; a 40-work listing stays under the token ceiling; unit — `display_fit`
+  and rendered inches are reported per instance; a `below_floor` instance is
+  listed and labelled rather than withheld; an instance whose preview never
+  downloaded reports the absence and still lists, because losing a work over a
+  missing thumbnail is the tail wagging the dog
+- **Acceptance criteria:** a real MCP client lists the candidate works of a
+  completed run and the images are present in the transcript, each beside the
+  size it would render at on the wall
+- **Done when:**
+  1. Acceptance criteria met and tests pass
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+#### Chunk 17B: The verdict, the artist, and the preview's death
+
+- **Description:** What the curator's decision does. `set_verdict` accepts
+  `accepted`/`rejected` only, requires explicit work ids (refusing a bare
+  accept-everything — the accepted set must appear in the transcript), and
+  returns a teaching error naming `reject_image` for `awaiting_better_image`;
+  `reject_image` is the single entry to that state and always sets `rejected_at`;
+  `set_canonical` chooses among the instances 17A showed. **The verdict rules and
+  the promotion itself already landed in the service layer with the discovery
+  entities** — minting the Artwork and turning CandidateImages into Sources
+  (selected → `is_primary`) — so what this chunk owes is the tool surface over
+  them **plus the one piece promotion still leaves out: the artist.**
+  `proposed_artist` is free text that has to be parsed and matched against
+  existing Artist rows, which is the same normalisation problem as
+  `work_dedup_key`; until it is done an accepted work carries no `artist_id`, and
+  **Q9 — who is the artist, for the physical label — has no answer for anything
+  discovery accepted.** The preview-file lifecycle decision that
+  `boundary-patterns.md` leaves open is made here: `[DECISION: candidate previews
+  are deleted by a periodic sweep over terminal-verdict CandidateWorks, not an
+  on-verdict hook | a sweep is idempotent and safe to re-run after crashes, where
+  a hook that dies with the process leaks silently — and deletion never touches
+  the catalogue either way | user can veto/override]`.
+- **Depends on:** Chunk 17A
+- **Artifacts consumed:** `api-contract.md` (§ set_verdict, § Rejecting an image
+  does not re-search), `data-model.md` (promotion relationships, constraints
+  7/15), `boundary-patterns.md` (the preview lifecycle it leaves open)
+- **Deliverables:** `art_review`'s three write actions live; the artist parse and
+  match reaching a promoted work; the preview sweep; harness scenarios covering
+  the review flow through to acceptance
 - **Tests:** unit — the artist is parsed, matched to an existing row where one
   fits, and reaches the accepted work (Q9 answerable for a discovered work, which
   it is not before this chunk); promotion mirrors the candidate shape into the
   catalogue shape end to end through the tool; suppression scopes never share a
-  key (Q3 vs Q11, both directions);
-  `set_verdict` is accepted from `awaiting_better_image` (the curator is never
-  blocked on a running re-search) while still refusing that value as a *target*;
-  contract — every accept-capable result carries the image block; a 40-work
-  listing stays under the token ceiling; explicit-ids enforcement
+  key (Q3 vs Q11, both directions); `set_verdict` is accepted from
+  `awaiting_better_image` (the curator is never blocked on a running re-search)
+  while still refusing that value as a *target*; the sweep deletes only
+  terminal-verdict previews and is idempotent across a re-run; contract —
+  explicit-ids enforcement
 - **Acceptance criteria:** the worked example runs end to end over MCP from a
   real client: works reviewed with images in the transcript, accepted works
-  appear in the catalogue with sources and rationale intact
+  appear in the catalogue with sources, artist and rationale intact
 - **Done when:**
   1. Acceptance criteria met and tests pass
   2. `/prawduct:critic` run and blocking findings resolved
