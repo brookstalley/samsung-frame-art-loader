@@ -165,6 +165,39 @@ which case an unchanged list beside new code is the defect, not the reassurance.
 Now inverted to an allowlist over the whole package, proven by planting a
 violation in a module the old form never named.
 
+## Prose explaining a distinction is not a mechanism recording it
+
+Careful prose about why two things differ reads as if the difference is handled. It
+is not: the mechanism that records the difference is a marker, a test, a column or
+a type, and the prose is free to describe one that was never wired.
+
+**Three instances in one session (2026-08-02), which is why it is a rule and not an
+anecdote.** All three were caught by review rather than by me.
+
+- A docstring asserted the phase-2 ordering was universal while the chunk
+  description required it to vary by `source_class`. The descope was defensible and
+  I had reasoned it through — nothing produces the other source class — but nothing
+  anywhere recorded that reasoning, which is exactly the difference between a
+  descope and a silent drop.
+- `PreviewCache.store` said "every failure path here reports absence rather than
+  raising". Two of its failure paths raised. The sentence was the enforcement.
+- The free museum live-suite carried a docstring arguing at length that it costs
+  nothing, on a marker whose own registered description reads "Costs money, needs
+  OPENROUTER_API_KEY" — so its instruction to run `-m live_api` would spend real
+  credit. **The distinction was explained correctly and filed on the wrong side of
+  itself.**
+
+**The tell is writing the words "unlike", "rather than", or "for a different
+reason".** Each one asserts a distinction, and each is worth one question: what
+would go red if this stopped being true? For the marker that was a second marker;
+for the contract, a test per branch; for the descope, a dated deferral with a named
+reopen trigger.
+
+**The check:** after writing prose that explains why something differs, name the
+mechanism carrying the difference. If the answer is "this paragraph", the
+difference is undefended — and prose is the one artifact that cannot notice when it
+stops being true.
+
 ## A negative claim needs the search that would have falsified it
 
 "There is no X" cannot be checked against the evidence that produced it: *I looked and found nothing* and *I looked in the wrong place* are the same observation. So before writing one down, name the search that would have found an X and confirm it covers where an X would actually live.

@@ -397,6 +397,8 @@ they test the outcome rather than the transformation.
 
 ## Adding code to a repo means asking which guards were scoped to the old shape
 
+## Prose explaining a distinction is not a mechanism recording it
+
 ## A negative claim needs the search that would have falsified it
 
 ## Prose that ships to a caller is behaviour, and needs a test aimed at it
