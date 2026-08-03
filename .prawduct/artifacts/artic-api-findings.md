@@ -182,6 +182,21 @@ separately from the read timeout (20 s), because connect is the phase that gets
 multiplied and read is the one worth waiting on. That reduces the worst case; it
 does not bound it.
 
+> **This is not an ARTIC-client concern, and reading it as one is the mistake
+> this note exists to prevent.** It was found here because this is where the live
+> suite ran, but the exposure belongs to every httpx client in the plane, and
+> **`openrouter.py` has it worse.** That client passes *scalar* timeouts —
+> `COMPLETION_TIMEOUT_SECONDS = 180.0`, `KEY_TIMEOUT_SECONDS = 15.0` — and a
+> scalar httpx timeout applies to every phase alike, so its connect phase is
+> bounded at 180 seconds *per address* against this client's deliberate 5. The
+> client that got hardened is the one that was already the least exposed.
+>
+> Left as it is on purpose rather than half-fixed: issue #47 is scoped to cover
+> both clients and sits at `stage: design`, because the open question is which
+> layer owns address-family policy rather than which constant to change. Tuning
+> one client's timeouts while the other stays 36x worse per attempt would make the
+> hazard look addressed.
+
 **What it does not do, and why.** Forcing IPv4, or resolving and racing
 addresses here, would put a network-family policy into a museum client — a new
 configuration surface invented in the middle of a build rather than a requirement
