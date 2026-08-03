@@ -901,6 +901,16 @@ the total — `"showing 20 of 84; narrow the filter"` — never a silent cut. Bo
 the operator's servers enforce this and cordyceps' own comment names the reason:
 items that cannot be handled are *reported as failures, not silently skipped*.
 
+**Bounded exception — a listing whose order is total and best-first takes no
+`limit`.** `art_review(action='list_images')` is the one such listing: its
+instances are ordered by the single ranking this product has, so a truncated card
+omits the *worst* candidates rather than an arbitrary slice. The `limit` half of
+the rule exists to let a caller reach items a cut would otherwise hide, and here
+there are none to reach — a caller lowering the limit would only ask for fewer of
+the best. The cap is therefore fixed, and the truncation half of the rule still
+binds in full: the card reports what it holds against what it shows, and offers no
+paging it cannot honour. Any listing whose cut is arbitrary takes the `limit`.
+
 **Bulk operations** return the per-item shape described under Inputs & Outputs.
 
 **Summary then detail.** Listing actions return the fields needed to decide;
