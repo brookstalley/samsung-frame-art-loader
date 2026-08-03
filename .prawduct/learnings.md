@@ -470,6 +470,23 @@ exactly like a finding. `curation/tools/mutation_sweep.py` now refuses an ambigu
 pattern; the no-op case it cannot detect, so confirm your mutation breaks something
 before writing a test for it.
 
+## A fixture that reaches the branch is not a fixture that can falsify its claim
+
+**Build the member that would make the claim false, not just enough members to
+execute the line.** Twice in one chunk a test reached the code and excluded the
+only state where the code could be wrong: a crowd-out test with one survivor,
+where the lone survivor is the *selected* instance and leads the order anyway; and
+a branch about omitted scans built with nothing omitted of the kind whose ranking
+was in question. Both passed, both proved nothing. Ask what single row, added to
+this fixture, would make the assertion fail — if the answer is "none", the fixture
+is the test's weakest part.
+
+**The sharper form, when a branch is conditional:** work out what must be true for
+control to arrive there at all. The branch claiming omitted scans ranked lowest
+was reachable *only* when the slot set filled from survivors alone — which is
+exactly when every rejected scan was omitted, and rejected scans outrank the rest.
+Its precondition and its falsifier were the same fact.
+
 ## Run a new regression test against the unfixed code, not just the fixed code
 
 **A test written from a defect's *description* can pass on both sides of the fix,
