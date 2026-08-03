@@ -1239,8 +1239,25 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
    that it was the same image. The rule also retires the duplicate alternate a
    second search would otherwise add to every review card.
 8. **Exactly one CandidateImage per CandidateWork has `is_selected = true`**, while
-   the work has any unrejected instance. A work whose every instance has been
-   rejected re-enters phase 2 rather than sitting selectionless.
+   the work has any unrejected instance **that clears the display floor**. There
+   are two selectionless states, not one, and they are different situations for a
+   curator:
+   - *Every instance rejected.* The work re-enters phase 2 rather than sitting
+     selectionless.
+   - *Every surviving instance below the floor.* Selection declines them all —
+     that is what the floor is for, so nothing under it is ever chosen without
+     being asked for. The instances are still shown, still labelled with the size
+     they would appear at, and still choosable; what does not happen is an
+     automatic choice. **Acceptance is refused until one is chosen explicitly**,
+     because promoting with no selection mints an artwork whose every source is
+     `is_primary = false` — no record of which scan produced the original, and a
+     work on the wall nobody picked.
+
+   > The second state was reachable and undescribed until 2026-08-03: the
+   > constraint named only the rejection case, while `selection.best` had declined
+   > below-floor instances since the floor was introduced. The guard that now
+   > refuses acceptance is what makes the constraint true of the code rather than
+   > only of the intent.
 9. **A CandidateWork with `resolution_status = unresolved` is never presented as
    accepted-able**, and never silently omitted from the run's results. It is
    reported. **Q12.**

@@ -606,6 +606,12 @@ sentence describes, and expecting it to fail.
 
 ## An action is only usable if its arguments are obtainable from something built
 
+**Before advertising an action, construct a real call to it using only surfaces
+that ship — and if a test needs a service-layer call to build a tool argument,
+that is the finding, not a convenience.** Withholding an action until it works is
+half the bar; the other half is that a caller can reach its inputs. A test that
+reaches past the surface for an id makes the whole suite blind to the gap.
+
 ## When a result gains a collection, name what bounds it before deciding it needs no cap
 
 **Write the bound down as a comment, and the false ones announce themselves.** A
@@ -622,12 +628,6 @@ treat `caplog` the same way, since `at_level` scopes the level and not the
 buffer.** Both failures look identical: green alone, red in the suite. Fixing one
 as a fixture concern does not generalise; the rule belongs to the *data*, so the
 next test written against the same read reintroduces it.
-
-**Before advertising an action, construct a real call to it using only surfaces
-that ship — and if a test needs a service-layer call to build a tool argument,
-that is the finding, not a convenience.** Withholding an action until it works is
-half the bar; the other half is that a caller can reach its inputs. A test that
-reaches past the surface for an id makes the whole suite blind to the gap.
 
 ## Ratifying a norm creates retroactive obligations on ARTIFACTS, not just code
 

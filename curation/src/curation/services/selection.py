@@ -1,7 +1,12 @@
 """Which image instance represents a candidate work, decided in one place.
 
 A work usually has several instances and exactly one of them stands for it while
-any unrejected instance exists. That ordering is asked for from more than one
+any unrejected instance clears the display floor. **Two states hold none**, and
+`best()` below returns `None` for both: every instance rejected, and every
+surviving instance too small to show without being asked for. The second is the
+floor working rather than a gap — it is why acceptance refuses a work with no
+selection instead of promoting one nobody chose. That ordering is asked for from
+more than one
 direction — a resolution attempt choosing the instance to present, and a curator
 rejecting the one on offer, which has to fall through to the next — so it lives
 here rather than being decided twice and differently.

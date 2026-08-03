@@ -206,25 +206,57 @@ class TestGenerating:
     def test_a_write_that_fails_partway_leaves_no_partial_file_behind(self, thumbnails, settings, work, monkeypatch):
         """The half that actually needs the cleanup, and the one that is easy to miss.
 
-        The unreadable-source case above cannot reach it: `Image.open` raises
-        before `save` has created anything, so that test passes with the cleanup
-        deleted outright — verified by deleting it. A disk filling up mid-encode
-        is the real path, and it is the one that would otherwise leave a
-        half-written `.tmp` in the cache for every failed attempt.
+        The unreadable-source case above cannot reach it: decoding raises before
+        anything has been written, so that test passes with the cleanup deleted
+        outright — verified by deleting it. A disk filling up mid-write is the
+        real path, and it is the one that would otherwise leave a half-written
+        `.tmp` in the cache for every failed attempt, each under a fresh uuid and
+        so stranded for good.
+
+        **The injection point moved when the decode was extracted**, and the
+        contract did not. Encoding now happens in memory and only the finished
+        bytes reach the disk, so a failure during *encode* can no longer strand
+        anything — there is nothing on disk yet to strand. What remains is the
+        disk write itself, which is what this now fails, and it is covered by the
+        `finally` rather than by either named handler.
         """
         artwork = work()
-        truncated = Image.Image.save
+        intact = Path.write_bytes
 
-        def fail_partway(self, path, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202
-            Path(path).write_bytes(b"\xff\xd8half an image")
+        def fail_partway(self, data):  # noqa: ANN001, ANN202
+            intact(self, b"\xff\xd8half an image")
             raise OSError("no space left on device")
 
-        monkeypatch.setattr(Image.Image, "save", fail_partway)
+        monkeypatch.setattr(Path, "write_bytes", fail_partway)
         with pytest.raises(ThumbnailUnavailable, match="could not be read"):
             thumbnails.thumbnail(artwork.id)
-        monkeypatch.setattr(Image.Image, "save", truncated)
+        monkeypatch.setattr(Path, "write_bytes", intact)
 
         assert _leftovers(settings) == []
+
+    def test_a_mode_pillow_refuses_to_convert_is_reported_not_raised(self, thumbnails, work, monkeypatch):
+        """A `ValueError` out of `convert` is a missing thumbnail, not a 500.
+
+        Injected rather than built from a file, because no format round-trips to
+        the mode that provokes it (`La`) through `Image.open` — the sibling
+        `inline_preview` records that measurement and this is its other half. The
+        branch is boundary defence; what is asserted is the *contract*, which is
+        real either way: this service answers "no thumbnail, here is why" and the
+        route above it turns that into a reported absence beside the work rather
+        than an error page over the whole grid.
+
+        It was absent here while the sibling carried it, and that asymmetry is
+        what the extracted decode exists to stop recurring.
+        """
+        artwork = work()
+
+        def refuse(self, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003, ANN202
+            raise ValueError("conversion from La to RGB not supported")
+
+        monkeypatch.setattr(Image.Image, "convert", refuse)
+
+        with pytest.raises(ThumbnailUnavailable, match="could not be read"):
+            thumbnails.thumbnail(artwork.id)
 
     def test_a_greyscale_master_still_produces_a_jpeg_a_browser_renders(self, thumbnails, service, settings, work):
         """Museum scans arrive in modes a JPEG save would otherwise refuse."""

@@ -204,6 +204,53 @@ def test_a_work_whose_only_image_was_turned_down_cannot_be_accepted(discovery, r
         discovery.set_verdict(work.id, Verdict.ACCEPTED)
 
 
+def test_a_work_whose_every_scan_is_below_the_floor_cannot_be_accepted(discovery, propose, add_image, service):
+    """The second selectionless state, and the one that reached the catalogue.
+
+    Constraint 8 named only the all-rejected case, and the all-below-floor case
+    was reachable the whole time: nothing is rejected, so the rejection guard
+    passes, and `selection.best` has declined every instance — so promotion ran
+    with nothing to make primary and minted an artwork whose every source carried
+    `is_primary=False`. No record of which scan produced the original, and a scan
+    on the wall that the floor exists precisely to stop anyone choosing by
+    accident.
+    """
+    work = propose("A work only ever found small", dedup_key="small-only")
+    for index in range(2):
+        add_image(work, url=f"https://museum.example/small-{index}", estimated_width=600, estimated_height=450)
+    work = discovery.record_resolution(work.id).work
+    held = discovery.list_candidate_images(work.id)
+    assert held and not any(image.is_selected for image in held), "the floor declined every one of them"
+    assert all(image.rejected_at is None for image in held), "and none was rejected, so that guard does not fire"
+
+    with pytest.raises(ServiceError, match="no instance is selected"):
+        discovery.set_verdict(work.id, Verdict.ACCEPTED)
+
+    assert discovery.get_candidate_work(work.id).artwork_id is None
+    assert list(service.list_artworks(limit=10).entries) == [], "no artwork was minted on the way to the refusal"
+
+
+def test_a_below_floor_work_is_acceptable_once_an_instance_is_chosen(discovery, propose, add_image, service):
+    """The floor forces a decision; it does not forbid the work.
+
+    `api-contract.md` requires a below-floor instance to be shown, labelled and
+    *selectable* — never hidden. Refusing acceptance outright would make the floor
+    a veto instead of a prompt, so the refusal has to lift the moment a curator
+    chooses one.
+    """
+    work = propose("A work only ever found small", dedup_key="small-only")
+    small = add_image(work, url="https://museum.example/small", estimated_width=600, estimated_height=450)
+    work = discovery.record_resolution(work.id).work
+    discovery.select_image(small.id, rationale="Small, and I want it anyway.")
+
+    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED).work
+
+    assert accepted.artwork_id is not None
+    sources = service.list_sources(accepted.artwork_id)
+    assert [source.is_primary for source in sources] == [True], "the chosen scan is the work's primary source"
+    assert sources[0].url == small.url
+
+
 def test_a_work_with_one_surviving_image_can_still_be_accepted(discovery, resolved_work, add_image):
     """The guard is about there being something left, not about nothing having been rejected."""
     work = resolved_work()

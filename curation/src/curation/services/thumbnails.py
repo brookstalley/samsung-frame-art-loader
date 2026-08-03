@@ -29,11 +29,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, UnidentifiedImageError
 
 from curation.persistence.records import RenditionKind
 from curation.services.catalogue import CatalogueService
 from curation.services.errors import ServiceError
+from curation.services.imaging import encode_downscaled
 
 log = logging.getLogger(__name__)
 
@@ -164,22 +165,23 @@ class ThumbnailService:
         # each other cannot write the same temp file: rename is atomic, but two
         # writers sharing one path are interleaving their bytes before it.
         staging = destination.with_name(f"{destination.name}.{uuid.uuid4().hex}.tmp")
+        # **Cleanup in `finally`, not per handler.** The staging name is unique
+        # per attempt, so anything this method fails to unlink is stranded for
+        # good and every retry strands another — and cleaning up only inside the
+        # handlers meant an exception neither of them named leaked a file as well
+        # as a 500. After a successful `os.replace` the name is already gone, so
+        # the unlink is a no-op on the happy path.
         try:
-            with Image.open(source) as image:
-                # Decodes the JPEG at a reduced DCT scale — up to eight times
-                # smaller per axis — so a 47-megapixel master never becomes a
-                # 47-megapixel bitmap in memory. A no-op for other formats.
-                image.draft("RGB", (THUMBNAIL_MAX_EDGE_PX, THUMBNAIL_MAX_EDGE_PX))
-                upright = ImageOps.exif_transpose(image) or image
-                # CMYK and greyscale scans both appear in museum downloads, and
-                # neither saves as a JPEG a browser will render the same way.
-                frame = upright.convert("RGB")
-                frame.thumbnail((THUMBNAIL_MAX_EDGE_PX, THUMBNAIL_MAX_EDGE_PX), Image.Resampling.LANCZOS)
-                frame.save(staging, format="JPEG", quality=THUMBNAIL_JPEG_QUALITY, optimize=True)
+            frame = encode_downscaled(source, max_edge=THUMBNAIL_MAX_EDGE_PX, quality=THUMBNAIL_JPEG_QUALITY)
+            staging.write_bytes(frame.data)
+            os.replace(staging, destination)
         except Image.DecompressionBombError as exc:
-            staging.unlink(missing_ok=True)
             raise ThumbnailUnavailable(f"The image at {source.name} is too large to open safely: {exc}") from exc
-        except (OSError, UnidentifiedImageError) as exc:
-            staging.unlink(missing_ok=True)
+        except (OSError, UnidentifiedImageError, ValueError) as exc:
+            # `ValueError` is here for the same reason `inline_preview` carries
+            # it: Pillow raises it from `convert` for at least one mode (`La`).
+            # It was absent here while the sibling had it, which is exactly the
+            # drift that comes of keeping two copies of one decode.
             raise ThumbnailUnavailable(f"The image at {source.name} could not be read: {exc}") from exc
-        os.replace(staging, destination)
+        finally:
+            staging.unlink(missing_ok=True)

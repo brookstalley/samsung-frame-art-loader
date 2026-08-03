@@ -28,13 +28,13 @@ import logging
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
-from io import BytesIO
 from pathlib import Path
 from typing import Final
 
-from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL import Image, UnidentifiedImageError
 
 from curation.services.errors import ServiceError
+from curation.services.imaging import encode_downscaled
 
 log = logging.getLogger(__name__)
 
@@ -255,19 +255,7 @@ def inline_preview(path: Path) -> InlinePreview | None:
     deliberately the only one of its kind.
     """
     try:
-        with Image.open(path) as image:
-            # Reduced-scale DCT decode: a 3000 px museum preview never becomes a
-            # 3000 px bitmap on the way to a 400 px one. A no-op for formats
-            # that do not support it.
-            image.draft("RGB", (INLINE_MAX_EDGE_PX, INLINE_MAX_EDGE_PX))
-            upright = ImageOps.exif_transpose(image) or image
-            # CMYK and greyscale both appear in museum downloads and neither
-            # saves as a JPEG every client renders the same way.
-            frame = upright.convert("RGB")
-            frame.thumbnail((INLINE_MAX_EDGE_PX, INLINE_MAX_EDGE_PX), Image.Resampling.LANCZOS)
-            buffer = BytesIO()
-            frame.save(buffer, format="JPEG", quality=INLINE_JPEG_QUALITY, optimize=True)
-            width, height = frame.size
+        frame = encode_downscaled(path, max_edge=INLINE_MAX_EDGE_PX, quality=INLINE_JPEG_QUALITY)
     except Image.DecompressionBombError as exc:
         # Pillow's own guard against a decompression bomb. Caught by name rather
         # than swept up with the rest, because a file engineered to exhaust
@@ -288,10 +276,10 @@ def inline_preview(path: Path) -> InlinePreview | None:
         # listing, which is the outcome this whole module exists to prevent.
         return _no_inline(path, f"it could not be read: {exc}")
     return InlinePreview(
-        data=base64.b64encode(buffer.getvalue()).decode("ascii"),
+        data=base64.b64encode(frame.data).decode("ascii"),
         media_type=INLINE_MEDIA_TYPE,
-        width=width,
-        height=height,
+        width=frame.width,
+        height=frame.height,
     )
 
 

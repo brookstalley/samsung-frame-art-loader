@@ -29,6 +29,17 @@ were this, and both were investigated as findings before the mistake was
 spotted. If a survivor surprises you, confirm the mutation actually breaks
 something before you go writing a test for it.
 
+**A killed sweep leaves the source mutated, and git will happily commit it.**
+The restore runs in a `finally`, which handles an exception and a Ctrl-C and does
+*not* handle SIGKILL — so a sweep cut short by an outer timeout leaves the target
+file carrying its mutation and a `.sweepbak` sitting beside it. The next run then
+reports `pattern is not in <file> any more`, which reads like mutation drift and
+is actually the tool telling you the tree is dirty. **If a sweep is killed, restore
+from the `.sweepbak` before doing anything else** — `git status` shows the stray
+backup, and `git diff` shows a change you did not write. Give a sweep a timeout it
+can finish inside: one mutation costs a full run of the target tests, so budget
+`(mutations + 1) x suite time`.
+
 **Bytecode caching is disabled for the child runs, and that is not a detail.**
 This rewrites a source file, runs pytest, and restores it, often several times a
 second. CPython decides a `.pyc` is current by comparing the source's

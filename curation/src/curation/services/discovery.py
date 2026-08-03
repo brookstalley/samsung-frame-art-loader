@@ -834,6 +834,16 @@ class DiscoveryService:
         alone would not be enough — a work with no credible instance would mint an
         artwork with no source, and so nothing to acquire and no way to answer
         "can this be re-acquired from scratch".
+
+        **A work with instances but no selection is refused too, and that is the
+        floor doing its job.** There are two ways to hold none: every instance
+        rejected, and every instance below the display floor — `selection.best`
+        declines the second, so nothing under the floor is ever chosen without
+        being asked for. Promoting anyway would mint an artwork whose sources are
+        every one `is_primary=False`: no record of which scan produced the
+        original, and a postage stamp on the wall chosen by nobody. The remedy is
+        for the curator to choose an instance explicitly, which is exactly the
+        decision the floor exists to force.
         """
         # Asked of the images rather than of `resolution_status`, which answers a
         # different question: only a resolution attempt recomputes that column, so
@@ -848,6 +858,18 @@ class DiscoveryService:
             raise ServiceError(
                 f"Candidate work {work.id!r}: {cause}, so there is no image to accept it on. "
                 "Re-search it with resolve_images, or reject it."
+            )
+        # The second selectionless state, which the guard above does not cover:
+        # instances survive, and every one of them is below the display floor, so
+        # `selection.best` declined them all. Constraint 8 in `data-model.md` names
+        # both exceptions; this is the one that reaches acceptance with sources to
+        # promote and nothing to make primary.
+        if not any(image.is_selected for image in images):
+            raise ServiceError(
+                f"Candidate work {work.id!r}: no instance is selected, because every one found is below "
+                "the size this deployment will show without being asked. Accepting now would record the "
+                "work with no primary source and hang a scan nobody chose. Choose an instance explicitly, "
+                "or reject the work."
             )
         # Resolved before the artwork is minted, because `add_artwork` refuses an
         # `artist_id` the catalogue does not hold — so the row has to exist first,
