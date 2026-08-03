@@ -105,6 +105,98 @@ def test_a_url_without_a_recognised_extension_still_gets_an_image_suffix(tmp_pat
     assert path.endswith(".jpg")
 
 
+# -- the "never raises" contract, enforced rather than asserted in a docstring ---
+#
+# Every branch below returns `None` instead of propagating. That is the whole
+# point of the module: a preview is a review-card nicety, and a run that found
+# its images must not die because one thumbnail could not be written. Each test
+# names the exception a real deployment would produce.
+
+
+def test_a_provider_that_raises_something_other_than_a_transport_error_is_absorbed(tmp_path, cache_dir):
+    """`httpx.InvalidURL` is not an `HTTPError`, so the seam's `None` is not enough.
+
+    A provider that raises past its own contract would otherwise reach the
+    run-level handler and fail a whole run over a thumbnail.
+    """
+
+    def fetch(url: str) -> bytes:
+        raise ValueError("not a valid URL")
+
+    assert a_cache(tmp_path, cache_dir, fetch).store(URL) is None
+
+
+def test_a_provider_raising_an_oserror_is_reported_as_the_provider_not_the_cache(tmp_path, cache_dir, caplog):
+    """The two `OSError` sources are different diagnoses and must read differently.
+
+    One handler over both would send whoever reads the log looking at their disk
+    when the fault was the network.
+    """
+
+    def fetch(url: str) -> bytes:
+        raise OSError("connection reset by peer")
+
+    with caplog.at_level("INFO"):
+        assert a_cache(tmp_path, cache_dir, fetch).store(URL) is None
+
+    reasons = [record.reason for record in caplog.records if hasattr(record, "reason")]
+    assert any("the provider raised" in reason for reason in reasons)
+    assert not any("the cache could not be read" in reason for reason in reasons)
+
+
+def test_an_unreadable_cache_directory_degrades_the_card_rather_than_failing_the_run(tmp_path, cache_dir, monkeypatch):
+    """A stat that raises is this machine's problem, and it is reported as one."""
+
+    def explode(self):
+        raise OSError("permission denied")
+
+    monkeypatch.setattr("pathlib.Path.exists", explode)
+
+    assert a_cache(tmp_path, cache_dir, lambda url: JPEG).store(URL) is None
+
+
+def test_bytes_that_cannot_be_written_degrade_the_card_rather_than_failing_the_run(tmp_path, cache_dir, monkeypatch):
+    """A full or read-only disk is a real operational condition, not a run-ender.
+
+    The run has already done the expensive part — it found the images — so
+    losing it here would throw away everything for the sake of a thumbnail.
+    """
+
+    def explode(self, _data):
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr("pathlib.Path.write_bytes", explode)
+
+    assert a_cache(tmp_path, cache_dir, lambda url: JPEG).store(URL) is None
+
+
+def test_a_run_survives_a_preview_cache_that_cannot_write_anything(tmp_path, cache_dir, monkeypatch):
+    """The contract stated end to end: the instance is still recorded and selected.
+
+    `store` returning `None` is only useful if the caller carries on, so this
+    asserts the consequence rather than the return value.
+    """
+    from fakes import FakeImageSearch, an_image
+
+    from curation.discovery.images import ImageQuery
+    from curation.discovery.phase_two import PhaseTwoEngine
+    from curation.services.display_fit import ArtworkBox
+
+    def explode(self, _data):
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr("pathlib.Path.write_bytes", explode)
+    museum = FakeImageSearch(holdings={"The Elephants": (an_image("The Elephants"),)})
+    cache = a_cache(tmp_path, cache_dir, museum.fetch_preview)
+    box = ArtworkBox(width=3316, height=1597, pixels_per_inch=104.9, floor_inches=12.0)
+
+    judged = PhaseTwoEngine(museum, box=box).resolve(ImageQuery(title="The Elephants", artist="Salvador Dalí"))
+
+    assert judged, "the instance is found regardless of whether its preview can be cached"
+    assert cache.store(judged[0].found.preview_url) is None
+    assert judged[0].found.preview_url is not None, "the card falls back to the source URL"
+
+
 def test_a_cache_outside_the_art_tree_is_refused_at_wiring_time(tmp_path):
     """Caught at startup naming both directories, not mid-run as a `relative_to` error."""
     with pytest.raises(ServiceError, match="must sit inside ART_ROOT"):

@@ -91,12 +91,18 @@ class PreviewCache:
         """
         destination = self._path_for(url)
         relative = str(destination.relative_to(self._settings.art_root))
+        # The cache read and the provider call are guarded separately, because an
+        # `OSError` can come out of either and they are different diagnoses: an
+        # unreadable cache directory is this machine's problem, and a provider
+        # raising one is the network's. One handler over both would report the
+        # second as the first, sending whoever reads the log to the wrong place.
         try:
             if destination.exists() and destination.stat().st_size > 0:
                 return relative
-            payload = self._fetch(url)
         except OSError as exc:
             return self._absent(url, f"the cache could not be read: {exc}")
+        try:
+            payload = self._fetch(url)
         except Exception as exc:  # prawduct:allow prawduct/broad-except -- a provider fault must not fail the work
             # The seam promises `None` for a preview it cannot get, and a
             # provider that raises something else instead — an httpx URL error is

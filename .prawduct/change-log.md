@@ -119,7 +119,9 @@ basis, so the decision is unaffected.
 
 **Verified against the live API, not only against fakes.** Four real works resolve
 at 0.95 confidence with previews on disk; *The Persistence of Memory* and an
-invented title both land `unresolved`. The suites are 1,022 + 52 green.
+invented title both land `unresolved`. Both suites green with evidence recorded
+against this tree — the figure lives in `.test-evidence.json`, which is regenerated,
+rather than being copied into prose that cannot notice when it stops being true.
 
 **One thing found by writing the tests.** The first quality metric ranked on
 rendered inches, and preferred a 2000x1500 landscape over a 6949x8400 portrait —

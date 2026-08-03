@@ -8,12 +8,17 @@ document nobody re-runs quietly stops describing the API, so the durable form of
 those measurements is a test that fails when one stops holding.
 
 **Deselected by default**, like its OpenRouter sibling — but for a different
-reason, and the difference is worth naming. That suite is deselected because it
-*costs money*. This one costs nothing: the Art Institute's API is open and
-unmetered. It is deselected because it needs the **network**, and a suite whose
-job is to be green cannot depend on a third party being up. Run deliberately:
+reason, and the difference is why it carries a **different marker**. That suite
+is deselected because it *costs money*. This one costs nothing: the Art
+Institute's API is open and unmetered. It is deselected because it needs the
+**network**, and a suite whose job is to be green cannot depend on a third party
+being up. Run deliberately:
 
-    uv run pytest -m live_api
+    uv run pytest -m live_museum
+
+**Not `-m live_api`** — that selector also runs both OpenRouter suites, so a file
+arguing at length that it is free would have been instructing the reader to spend
+real credit.
 
 Each test names the client behaviour that would break if its fact changed, so a
 failure reads as "the museum moved, and here is what now mis-parses" rather than
@@ -30,7 +35,7 @@ from curation.discovery.phase_two import CONFIDENT, PhaseTwoEngine
 from curation.persistence.records import AcquisitionMethod, SourceClass
 from curation.services.display_fit import ArtworkBox
 
-pytestmark = pytest.mark.live_api
+pytestmark = pytest.mark.live_museum
 
 #: A real identifier, as the API asks for. The suite identifies itself honestly
 #: rather than borrowing a string, which is the same reason there is no default.
