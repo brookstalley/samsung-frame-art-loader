@@ -156,9 +156,17 @@ class DiscoveryService:
         previews decides what to delete by reading rows and then deletes files,
         and a writer landing between those two halves would attach a work still
         under review to a file already gone. Holding the store's lock across both
-        is what makes "a file survives while any work still under review
-        references it" true against a concurrent writer rather than only against
-        the moment the reader looked.
+        is what stops that particular interleaving.
+
+        **It does not make the sweep and phase 2 race-free, and this is the site
+        that would have to change to get there.** `record_image` records a
+        `preview_path` without checking that the file exists, and its caller
+        evaluates that path before taking this lock — so a row can still be
+        written naming a file a sweep pass removed in the meantime. Closing that
+        means the row write verifying the file inside the lock it already takes,
+        which is a filesystem dependency this service has never had. Anyone
+        arriving here from `PreviewSweep.run` wanting to fix it has arrived at
+        the right place; `sweep.py`'s module docstring has the interleaving.
 
         Nesting joins the outer group, so the operations composed inside still
         commit exactly once. Every other caller should use the service method

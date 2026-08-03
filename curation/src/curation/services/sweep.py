@@ -40,8 +40,10 @@ because `record_image` never rewrites `preview_path` for a URL its work already
 holds. Closing it means the row write verifying the file inside the lock it takes,
 which is a change to what the record layer depends on and is filed rather than
 smuggled in here. The consequence is bounded and is reported honestly: `review.py`
-treats a `preview_path` whose file is missing as an absent copy, so such an instance
-loses its picture and says so, rather than reading as a corrupt download.
+asks whether the file is there *after* failing to read it, so such an instance
+loses its picture and is described as an absent copy rather than a corrupt
+download — and that answer is true at the moment it is given, whenever the file
+went.
 
 **The record follows the file, in that order.** A row still naming a file this
 sweep deleted has nothing to show and should not claim otherwise, so clearing the

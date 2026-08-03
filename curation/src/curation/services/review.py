@@ -456,23 +456,31 @@ class ReviewService:
                 "No local copy of this image was cached, so it cannot be shown here. Its source URL is reported beside it."
             )
         cached = self._art_root / image.preview_path
+        rendered = inline_preview(cached)
+        if rendered is not None:
+            return rendered, None
         # **Absent and unreadable are different answers, and a row can name a
         # file that is simply gone.** The reclaiming sweep clears the column it
         # deletes, so the ordinary swept case never reaches here — but the sweep
         # and the write that records a `preview_path` are not a single critical
         # section, so a row can be written naming a file a pass removed a moment
         # earlier. Reporting that as unreadable would be the corruption message
-        # for a file this plane deleted on purpose, which is the exact wrong
-        # diagnosis: it sends whoever asks looking for a bad download.
+        # for a file this plane deleted on purpose, which sends whoever asks
+        # looking for a bad download.
+        #
+        # Asked *after* the read fails rather than before it, which is what makes
+        # this honest rather than merely usually-right. A check beforehand is not
+        # atomic with the read that follows it, so a file swept in between would
+        # still be reported as unreadable; asked afterwards, "the file is not
+        # there" is true at the moment it is stated however it came to be true.
+        # It also costs a `stat` only on the failing path, on a plane whose disk
+        # is an SD card.
         if not cached.exists():
             return None, (
                 "No local copy of this image is on disk, so it cannot be shown here — it was either never "
                 "cached or has since been reclaimed. Its source URL is reported beside it."
             )
-        rendered = inline_preview(cached)
-        if rendered is None:
-            return None, (
-                "The cached copy of this image could not be read, so it cannot be shown here. Its source "
-                "URL is reported beside it."
-            )
-        return rendered, None
+        return None, (
+            "The cached copy of this image could not be read, so it cannot be shown here. Its source "
+            "URL is reported beside it."
+        )
