@@ -103,6 +103,33 @@ DEFAULT_REVIEW_LIMIT: Final[int] = 30
 MAX_INSTANCES_LISTED: Final[int] = 12
 
 
+def _fill(held: Sequence[CandidateImage]) -> Sequence[CandidateImage]:
+    """Choose which of a work's instances a capped card carries.
+
+    Selectable instances claim the slots first and rejected ones take what is
+    left, so a card can never be all refused scans while the choosable ones fall
+    off the end. Within that, the store's order is preserved rather than
+    rebuilt — the chosen set is read back out of `held` — because the instance
+    leading this card has to stay the instance `selection.best` would take, and a
+    second ordering here is exactly how a curator's card and the automatic choice
+    come to disagree about which scan is on offer.
+
+    A rejected scan is not filler: it is the evidence of a judgement already made,
+    and dropping it silently would leave a curator wondering why a re-search
+    returned fewer instances than before. It simply yields to an instance that can
+    still be chosen, which is the only claim on a slot that outranks it.
+    """
+    if len(held) <= MAX_INSTANCES_LISTED:
+        return held
+    surviving = [image for image in held if image.rejected_at is None]
+    keep = {image.id for image in surviving[:MAX_INSTANCES_LISTED]}
+    for image in held:
+        if len(keep) >= MAX_INSTANCES_LISTED:
+            break
+        keep.add(image.id)
+    return [image for image in held if image.id in keep]
+
+
 @dataclass(frozen=True, slots=True)
 class InstanceView:
     """One image instance as a curator judging it needs to see it.
@@ -300,15 +327,24 @@ class ReviewService:
 
         Capped at `MAX_INSTANCES_LISTED`, because nothing else bounds this list:
         a work accumulates instances across every re-search, rejected ones stay,
-        and the growth is driven by a curator asking for something better. The
-        cut takes the *worst* candidates, since the order is best-first — which is
-        why there is no paging to offer and none is promised.
+        and the growth is driven by a curator asking for something better.
+
+        **The cut falls on the rejected scans before any selectable one**, which
+        is what makes "no paging" honest rather than merely convenient. Slicing
+        the store's order instead would drop the wrong end: rejections gather at
+        the *top* of a confidence ranking, because the scan a curator turns down
+        is the best one on offer and turning it down does not change how good the
+        picture is, while each re-search appends its finds below. Past a cardful
+        of rejections a sliced card would show only scans already refused, and the
+        only instances still choosable would be the ones it omitted — with no
+        second way to reach their ids, since this is the sole enumerator of a
+        work's instances. `api-contract.md` states the requirement.
         """
         work = self._discovery.get_candidate_work(candidate_work_id)
         held = self._discovery.list_candidate_images(work.id)
         return InstanceListing(
             work=work,
-            instances=[self._instance(image) for image in held[:MAX_INSTANCES_LISTED]],
+            instances=[self._instance(image) for image in _fill(held)],
             held=len(held),
         )
 

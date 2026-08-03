@@ -452,6 +452,17 @@ exactly like a finding. `curation/tools/mutation_sweep.py` now refuses an ambigu
 pattern; the no-op case it cannot detect, so confirm your mutation breaks something
 before writing a test for it.
 
+## Run a new regression test against the unfixed code, not just the fixed code
+
+**A test written from a defect's *description* can pass on both sides of the fix,
+because the fixture never reaches the state described.** Written for a card that
+dropped selectable scans when rejections filled it, with one survivor — and one
+survivor is the *selected* instance, which leads the store's order and therefore
+rode the top of even the broken slice. It passed against the unfixed code and
+defended nothing. Two survivors reach it, because the instance that falls off is
+the unselected alternate. The check is one mutation that restores the old
+behaviour: if the new test still passes, the fixture is wrong, not the fix.
+
 ## A survivor says a branch is undefended, never that it deserves defending
 
 **Before writing the test a survivor asks for, check whether the branch does

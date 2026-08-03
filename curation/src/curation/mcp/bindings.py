@@ -613,17 +613,25 @@ def _instances_truncation_notice(listing: InstanceListing) -> str | None:
     """Say which instances the card left out, and why no offset is offered.
 
     The listing's notice names paging as the remedy; this one deliberately does
-    not, because there is none and there is also no need for one: the instances
-    are ordered best-first, so what a full card omits is the least likely scan to
-    be worth choosing. Saying that is more useful than an affordance that does not
-    exist, which is the failure the withheld action was withheld to avoid.
+    not, because there is none and there is also no need for one: what a full card
+    omits is never an instance the caller could have chosen. Saying that is more
+    useful than an affordance that does not exist, which is the failure the
+    withheld action was withheld to avoid.
+
+    **The sentence is only true because the card fills with selectable instances
+    first**, so it names what was dropped rather than asserting a ranking. A
+    card that sliced a confidence order would omit choosable scans as soon as a
+    work collected a cardful of rejections, and this notice would then be telling
+    a curator that the only instances still open to them are not worth their
+    attention.
     """
     if not listing.truncated:
         return None
+    shown_surviving = sum(1 for instance in listing.instances if not instance.rejected)
     return (
-        f"Showing the best {len(listing.instances)} of {listing.held} scans found for this work; the rest "
-        "are ranked below these and are not listed. There is no paging here — a lower-ranked scan is not "
-        "one this surface can help you choose."
+        f"Showing {len(listing.instances)} of {listing.held} scans found for this work, selectable ones "
+        f"first ({shown_surviving} here); the rest are not listed. There is no paging here — every scan "
+        "omitted is one you have already turned down, or ranks below one shown."
     )
 
 

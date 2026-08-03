@@ -528,8 +528,8 @@ async def test_a_card_with_more_scans_than_it_can_carry_says_what_it_dropped(
 
     A work accumulates instances across every re-search and rejected ones stay,
     so this list grows with exactly the action a dissatisfied curator takes. The
-    cut is best-first, so the notice explains rather than offering an offset that
-    does not exist.
+    cut falls on the scans a caller cannot choose, so the notice explains rather
+    than offering an offset that does not exist.
     """
     run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
     work = propose("A much re-searched work", run_id=run.id, dedup_key="many")
@@ -551,7 +551,8 @@ async def test_a_card_with_more_scans_than_it_can_carry_says_what_it_dropped(
     assert payload["held"] == MAX_INSTANCES_LISTED + 4
     assert payload["truncated"] is True
     assert len(images_of(result)) == MAX_INSTANCES_LISTED, "a card never carries more pictures than rows"
-    assert f"Showing the best {MAX_INSTANCES_LISTED} of {MAX_INSTANCES_LISTED + 4}" in payload["notice"]
+    assert f"Showing {MAX_INSTANCES_LISTED} of {MAX_INSTANCES_LISTED + 4}" in payload["notice"]
+    assert f"({MAX_INSTANCES_LISTED} here)" in payload["notice"], "every scan on this card is still selectable"
     assert "no paging" in payload["notice"]
     # What was dropped is the tail of the ranking, never the instance on offer.
     assert payload["images"][0]["is_on_offer"] is True
@@ -564,6 +565,76 @@ async def test_a_card_with_more_scans_than_it_can_carry_says_what_it_dropped(
     # gets the same treatment as the two page budgets.
     pictures, text = cost_of(result)
     assert pictures + text < WARN_THRESHOLD_TOKENS, f"a full card costs images {pictures:.0f} + text {text:.0f}"
+
+
+async def test_a_cardful_of_rejections_never_crowds_out_a_scan_still_on_offer(
+    server_url, services, propose, add_image, preview_file
+):
+    """The state that made the cap a defect rather than a bound.
+
+    Rejections gather at the *top* of a confidence ranking: the scan a curator
+    turns down is the best one on offer, and turning it down does not make the
+    picture worse, while each re-search appends its finds below. So a card that
+    sliced the store's order would, past a cardful of rejections, show only scans
+    already refused — and the instances still choosable would be exactly the ones
+    it omitted, with no second way to reach their ids, since this action is the
+    only enumerator of a work's instances anywhere in the product.
+
+    Nothing in the ranking is wrong here; every rejected scan really is the
+    highest-confidence one. The bug is treating "worst" and "not choosable" as
+    the same question.
+
+    **Two survivors, not one, and that is what makes this test reach the defect.**
+    A single survivor is the selected instance, and `is_selected DESC` leads the
+    store's order — so it rides at the top of even a naive slice and the card
+    looks correct while the rule is unenforced. The first version of this test had
+    one survivor, passed against the unfixed code, and defended nothing. The
+    instance that falls off is the *unselected* alternate: still choosable, still
+    the thing `set_canonical` exists to let a curator pick, and outranked on
+    confidence by every scan they already refused.
+    """
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    work = propose("A much re-searched work", run_id=run.id, dedup_key="rejected-lead")
+    rejected = []
+    for index in range(MAX_INSTANCES_LISTED):
+        rejected.append(
+            add_image(
+                work,
+                url=f"https://museum.example/turned-down-{index}",
+                # The best scans, which is why they were the ones offered and
+                # turned down. They outrank everything found afterwards.
+                confidence=0.99 - index / 1000,
+                preview_path=preview_file(f"turned-down-{index}.jpg"),
+                estimated_width=4000,
+                estimated_height=3000,
+            )
+        )
+    for image in rejected:
+        services.discovery.reject_image(image.id)
+    survivors = [
+        add_image(
+            work,
+            url=f"https://museum.example/still-on-offer-{index}",
+            confidence=0.2 - index / 1000,
+            preview_path=preview_file(f"survivor-{index}.jpg"),
+            estimated_width=4000,
+            estimated_height=3000,
+        )
+        for index in range(2)
+    ]
+
+    result = await call(server_url, "art_review", action="list_images", work_id=work.id)
+    payload = payload_of(result)
+
+    assert payload["truncated"] is True
+    shown = [image["image_id"] for image in payload["images"]]
+    for survivor in survivors:
+        assert survivor.id in shown, "a scan the curator can still choose fell off the card"
+    assert payload["count"] == MAX_INSTANCES_LISTED
+    # The rejected scans are still evidence and still shown — they simply yield
+    # their slots to the instances that can still be chosen.
+    assert sum(1 for image in payload["images"] if image["rejected_for_this_work"]) == MAX_INSTANCES_LISTED - 2
+    assert "(2 here)" in payload["notice"], "the notice says how many of the shown scans are still selectable"
 
 
 async def test_a_work_no_image_was_ever_found_for_says_what_to_do_about_it(server_url, services, propose):
