@@ -1747,6 +1747,21 @@ runtime, and a tool part-way through its action set is exactly what 14A/14B and
 
 ### Chunk 17B: The verdict, the artist, and the preview's death
 
+> **Partially built as of 2026-08-03, and the tree is consistent at that point.**
+> Two of the four deliverables have landed: the **artist** (exact `artist_key()`
+> matching with reported near-misses, reaching a promoted work — Q9 is answerable
+> for a discovered work), and the **review card's slot budget** (refused scans
+> cannot crowd out the ones a curator can still choose). What remains is
+> `art_review`'s three write actions, the preview sweep, and the harness
+> scenarios.
+>
+> Nothing half-wired ships: the write actions are absent from the surface rather
+> than declared-and-broken, per this plan's own rule that unbuilt actions are
+> never declared, and `set_verdict`'s `VerdictOutcome.duplicate_candidates` is
+> populated by the service and simply has no binding to report it yet. **The
+> chunk stays unchecked** — its acceptance criterion is the worked example end to
+> end over MCP, which needs the write actions.
+
 - **Description:** What the curator's decision does. `set_verdict` accepts
   `accepted`/`rejected` only, requires explicit work ids (refusing a bare
   accept-everything — the accepted set must appear in the transcript), and
