@@ -262,6 +262,25 @@ the backlog is part of its sweep set.**
     below prescribes and the one this entry's own preamble was already an
     instance of.
 
+19. **2026-08-03, twenty-second recurrence — inside the commit that corrected the
+    twenty-second recurrence.** A preview-sweep docstring claimed a race was
+    closed when it was not, and the claim had been copied into five places. I
+    fixed four, listed them in the change-log as "the module docstring, the
+    inline comment, `architecture.md`, and this entry", and called the sweep
+    done. The fifth was `DiscoveryService.transaction()`'s docstring — carrying
+    the sentence near word-for-word, and the single site most needing the
+    correction, since it defines what that exposure buys and is the API anyone
+    would change to close the residual. **The list was assembled by recalling
+    where I had written the claim, not by grepping for it**, which is entry 18's
+    failure exactly ("knowing the number is not the same as having swept for
+    it"). One `grep -rn "concurrent writer"` would have returned all five; it
+    now returns none. Two things make this the sharpest datapoint here: it is
+    entry 16's shape — the failure recurring in the very commit correcting it —
+    and the vehicle was an *enumeration certifying completeness*, which is this
+    section's dominant sub-shape. A count is a claim about a search, and it goes
+    stale the instant the search was incomplete. The change-log now records the
+    lesson and points here rather than restating it.
+
 **The correction that follows: stop sweeping a duplicated claim, stop duplicating
 it.** Every remedy above escalates *how well you look* — grep, then walk the
 decision graph, then do not exclude the files you edited, then treat the finding's

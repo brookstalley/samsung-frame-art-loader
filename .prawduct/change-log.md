@@ -148,16 +148,15 @@ that the consequence stops lying: a `preview_path` with no file behind it now re
 as an absent copy rather than an unreadable one, which is the difference between
 sending a reader after the sweep and sending them after a corrupt download.
 
-**The correction took two rounds, and the second one is the lesson.** The first
-pass listed the places claiming the race closed and fixed them — and the list was
-short by one, because it was assembled by recalling where the claim had been
-*written* rather than by grepping for the sentence. The one it missed was
-`DiscoveryService.transaction()`'s docstring: the definition of what that exposure
-buys, and the exact API anyone would change to close the residual, so the reader
-most in need of the corrected reasoning was the one still being misinformed. An
-enumeration written as "these four" then certified the sweep complete at the moment
-it was not. A claim retired across a repo is a grep, never a recollection — and
-where the count is the evidence, the count is the thing that goes stale.
+**The correction took two rounds, and the second one is recorded where it counts.**
+The first pass listed the places claiming the race closed, fixed them, and was
+short by one — `DiscoveryService.transaction()`'s docstring, the definition of what
+that exposure buys and the exact API anyone would change to close the residual, so
+the reader most in need of the corrected reasoning was the one still being
+misinformed. That is `learnings.md` § "Retiring a claim is a repo-wide grep, not a
+local edit", entry 19, which is where the recurrence log that makes the argument
+lives. Restating the lesson here rather than pointing at it would be the same
+mistake one level up.
 
 **A named deliverable was not shipped, and the surface — not the contract — was
 wrong.** `api-contract.md` requires the refusal of `verdict='awaiting_better_image'`
