@@ -211,8 +211,10 @@
 ## Test Levels
 
 Three of the four levels exist on the curation plane as of 2026-07-27. Two
-suites run: `pytest` at the repo root for the 2024 modules, and
-`cd curation && uv run pytest` for the plane.
+suites run: `uv run pytest tests` at the repo root for the 2024 modules, and
+`cd curation && uv run pytest` for the plane. *(Corrected 2026-08-03: the root
+command was written without `uv run`. Both planes need the prefix — the dev tools
+are in a uv-only dependency group — and `CLAUDE.md` is the authority.)*
 
 | Level | Exists | When to Run | Location |
 |-------|--------|-------------|----------|

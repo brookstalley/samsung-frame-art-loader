@@ -31,7 +31,7 @@ from curation.discovery.engine import WorkList
 from curation.persistence.discovery_records import RunStatus
 from curation.services.container import Services
 from curation.services.previews import PreviewSettings
-from curation.services.review import DEFAULT_REVIEW_LIMIT, MAX_REVIEW_LIMIT
+from curation.services.review import DEFAULT_REVIEW_LIMIT, MAX_INSTANCES_LISTED, MAX_REVIEW_LIMIT
 
 #: The client's two thresholds for a tool result, per `api-contract.md` § Token
 #: budget. They are different failures and the surface holds them with different
@@ -95,6 +95,20 @@ async def finished(server_url: str, run_id: str) -> dict:
         if RunStatus(payload["status"]).is_terminal:
             return payload
     raise AssertionError(f"run {run_id} never finished: {payload}")
+
+
+@pytest.fixture
+def preview_file(settings):
+    """Write a decodable preview into the art tree and return its catalogue path."""
+
+    def _write(name: str) -> str:
+        relative = f"previews/{name}"
+        target = settings.art_root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(a_jpeg())
+        return relative
+
+    return _write
 
 
 @pytest.fixture
@@ -444,6 +458,90 @@ async def test_a_result_with_no_pictures_at_all_says_so_rather_than_going_quiet(
     for work in payload["works"]:
         assert work["shown_image"]["image_block_index"] is None
         assert work["shown_image"]["preview_note"]
+
+
+async def test_the_alternates_arrive_in_full_each_with_its_own_picture(server_url, services, propose, add_image, preview_file):
+    """`list_images` executed end to end — the action that shows what else was found.
+
+    The chunk's own criterion is that every result a curator could judge from
+    carries the image block, and this is the result they judge *alternates* from.
+    It also carries the fields a listing row deliberately drops, which is the
+    whole reason the two shapes differ; asserting them here is what stops the
+    narrow shape being applied to both.
+    """
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    work = propose("A work with alternates", run_id=run.id, dedup_key="alts")
+    for index, confidence in enumerate((0.9, 0.6, 0.3)):
+        add_image(
+            work,
+            url=f"https://museum.example/scan-{index}",
+            confidence=confidence,
+            preview_path=preview_file(f"scan-{index}.jpg"),
+            estimated_width=4000,
+            estimated_height=3000,
+        )
+
+    result = await call(server_url, "art_review", action="list_images", work_id=work.id)
+    payload = payload_of(result)
+
+    assert payload["count"] == 3
+    assert payload["held"] == 3
+    assert payload["truncated"] is False
+    assert len(images_of(result)) == 3, "every alternate is shown, not just the one on offer"
+
+    # Best first, and only the best is on offer.
+    assert [image["url"] for image in payload["images"]] == [
+        "https://museum.example/scan-0",
+        "https://museum.example/scan-1",
+        "https://museum.example/scan-2",
+    ]
+    assert [image["is_on_offer"] for image in payload["images"]] == [True, False, False]
+    assert [image["image_block_index"] for image in payload["images"]] == [0, 1, 2]
+
+    # The fields the listing shape leaves out, which is why this shape exists.
+    leading = payload["images"][0]
+    assert leading["image_id"]
+    assert leading["provider"] == "artic"
+    assert leading["confidence"] == 0.9
+    assert leading["rejected_for_this_work"] is False
+    assert leading["renders_at_pixels"]
+    assert leading["display_fit"] == "native"
+
+
+async def test_a_card_with_more_scans_than_it_can_carry_says_what_it_dropped(
+    server_url, services, propose, add_image, preview_file
+):
+    """The bound on the one collection 17A adds that nothing else limits.
+
+    A work accumulates instances across every re-search and rejected ones stay,
+    so this list grows with exactly the action a dissatisfied curator takes. The
+    cut is best-first, so the notice explains rather than offering an offset that
+    does not exist.
+    """
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    work = propose("A much re-searched work", run_id=run.id, dedup_key="many")
+    for index in range(MAX_INSTANCES_LISTED + 4):
+        add_image(
+            work,
+            url=f"https://museum.example/many-{index}",
+            # Descending, so the ones dropped are the lowest-ranked.
+            confidence=1.0 - index / 100,
+            preview_path=preview_file(f"many-{index}.jpg"),
+            estimated_width=4000,
+            estimated_height=3000,
+        )
+
+    result = await call(server_url, "art_review", action="list_images", work_id=work.id)
+    payload = payload_of(result)
+
+    assert payload["count"] == MAX_INSTANCES_LISTED
+    assert payload["held"] == MAX_INSTANCES_LISTED + 4
+    assert payload["truncated"] is True
+    assert len(images_of(result)) == MAX_INSTANCES_LISTED, "a card never carries more pictures than rows"
+    assert f"Showing the best {MAX_INSTANCES_LISTED} of {MAX_INSTANCES_LISTED + 4}" in payload["notice"]
+    assert "no paging" in payload["notice"]
+    # What was dropped is the tail of the ranking, never the instance on offer.
+    assert payload["images"][0]["is_on_offer"] is True
 
 
 async def test_a_work_no_image_was_ever_found_for_says_what_to_do_about_it(server_url, services, propose):

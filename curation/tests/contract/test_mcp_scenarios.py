@@ -15,11 +15,15 @@ day a sixth tool or a new action arrives with nothing exercising it.
 from dataclasses import replace
 
 import pytest
-from fakes import a_work_list
-from scenarios import DISCOVERY_ROUTE, REFERENCE_ROUTE, connect
+from fakes import a_museum_holding, a_work, a_work_list
+from scenarios import DISCOVERY_ROUTE, REFERENCE_ROUTE, REVIEW_ROUTE, connect
 
+from curation.discovery.engine import WorkList
 from curation.mcp.registry import HELP_ACTION
 from curation.mcp.tools import TOOLS
+from curation.persistence.discovery_records import RunStatus
+from curation.services.container import Services
+from curation.services.previews import PreviewSettings
 
 #: Every tool, by name, as the registry holds them. Parametrising from this is
 #: what makes a newly-registered tool arrive already covered.
@@ -283,3 +287,98 @@ async def test_the_wall_admits_that_nothing_has_reported(server_url):
     assert payload["display_plane_has_reported"] is False
     assert payload["reported_at"] is None
     assert payload["observation"], "status returned no human-readable observation"
+
+
+class TestReviewingWhatDiscoveryFound:
+    """The route from an intent to a curator looking at the pictures.
+
+    A class so the image provider is wired for these tests and nothing else in
+    this module: every other scenario here runs phase 1 only, and a museum in the
+    module-level container would change what they exercise.
+
+    **The claim being pinned is that the images are in the transcript**, not that
+    the payload describes them. `security-model.md` § Content Appropriateness
+    makes the review gate the household's only protection and states its content
+    exactly — every surface a work can be accepted on shows the image first — and
+    over MCP the enforceable half is that the picture was present at the moment of
+    judgement. A result whose payload is perfect and whose blocks are missing
+    defeats that while looking correct from every other angle, which is why the
+    transcript records the count.
+    """
+
+    @pytest.fixture
+    def museum(self):
+        return a_museum_holding("The Elephants", "Swans Reflecting Elephants")
+
+    @pytest.fixture
+    def services(self, store, discovery_store, wall, thumbnail_settings, settings, engine, museum):
+        engine.result = WorkList(works=(a_work("The Elephants"), a_work("Swans Reflecting Elephants")))
+        return Services.bind(
+            catalogue=store,
+            discovery=discovery_store,
+            wall=wall,
+            thumbnails=thumbnail_settings,
+            artwork_box=settings.tv_artwork_box,
+            engine=engine,
+            discovery_settings=settings.discovery_settings,
+            image_search=museum,
+            previews=PreviewSettings(art_root=settings.art_root, directory=settings.previews_path),
+        )
+
+    async def test_a_curator_reaches_the_pictures_from_an_intent_alone(self, server_url):
+        """Every id threaded out of the previous response, ending at the images.
+
+        The route is asserted whole rather than step by step, because what would
+        regress is its *length* and its *last steps* — an extra required round
+        trip on the way to the pictures, or a final step that stopped carrying
+        them.
+        """
+        async with connect(server_url) as caller:
+            started = await caller.ok("art_discovery", "start", intent="Dalí, elephants")
+            run_id = started["run_id"]
+
+            for _ in range(8):
+                watched = await caller.ok("art_discovery", "status", run_id=run_id)
+                if RunStatus(watched["status"]).is_terminal:
+                    break
+            else:
+                pytest.fail(f"the run never finished: {watched}")
+
+            works = await caller.ok("art_review", "list_works", run_id=run_id)
+            chosen = next(work for work in works["works"] if work["title"] == "The Elephants")
+            alternates = await caller.ok("art_review", "list_images", work_id=chosen["work_id"])
+
+        assert {work["title"] for work in works["works"]} == {"The Elephants", "Swans Reflecting Elephants"}
+        assert alternates["count"] == 1
+
+        # The transcript is the assertion. A payload-only harness would have
+        # every line of this pass with no picture ever reaching the caller.
+        pictured = [call for call in caller.transcript.calls if call.images]
+        assert [str(call) for call in pictured] == list(REVIEW_ROUTE[2:])
+        assert tuple(caller.transcript.steps)[:2] == REVIEW_ROUTE[:2]
+
+    async def test_the_transcript_would_notice_if_the_pictures_stopped_arriving(self, server_url, services):
+        """The harness's own guard: an unshowable work is recorded as showing nothing.
+
+        Without this, "the transcript records image counts" is a claim no test
+        distinguishes from "the transcript records zero, always" — and every
+        assertion above would go on passing if the recording broke.
+        """
+        async with connect(server_url) as caller:
+            started = await caller.ok("art_discovery", "start", intent="Dalí, elephants")
+            for _ in range(8):
+                watched = await caller.ok("art_discovery", "status", run_id=started["run_id"])
+                if RunStatus(watched["status"]).is_terminal:
+                    break
+
+            listed = await caller.ok("art_review", "list_works", run_id=started["run_id"])
+            work_id = listed["works"][0]["work_id"]
+            # Take the cached copy away, leaving the instance real and picture-less.
+            held = services.discovery.list_candidate_images(work_id)[0]
+            (services.review._art_root / held.preview_path).unlink()
+
+            bare = await caller.ok("art_review", "list_images", work_id=work_id)
+
+        assert bare["count"] == 1, "the instance is still listed"
+        assert caller.transcript.calls[-1].images == 0
+        assert "list_images'" in str(caller.transcript.calls[-1]), "no image count is rendered when there are none"

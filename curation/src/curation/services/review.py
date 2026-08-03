@@ -71,6 +71,29 @@ MAX_REVIEW_LIMIT: Final[int] = 40
 #: rather than quietly costing a curator their images.
 DEFAULT_REVIEW_LIMIT: Final[int] = 30
 
+#: The most instances one work's image listing will carry, each with a picture.
+#:
+#: **Nothing else bounds this list.** A work's instances accumulate: phase 2
+#: records what a museum offered, and every re-search adds whatever it finds that
+#: the work does not already hold. Rejecting a scan does not remove it either —
+#: it stays as the evidence of a judgement — so a work re-searched repeatedly
+#: grows a longer card each time, and the growth is driven by a curator asking
+#: for something better rather than by anything that stops.
+#:
+#: 12 because these rows are the wide shape, not the listing's: at roughly 160
+#: tokens of picture and 120 of text each, a full card is about 3,400 tokens,
+#: which leaves a caller room to read several works in one conversation. A work
+#: with more than a dozen distinct scans on offer is not a review problem the
+#: curator can solve by reading further down.
+#:
+#: **There is deliberately no paging here**, and the notice does not offer any.
+#: The instances are ordered best-first by the one ranking this product has, so a
+#: truncated card omits the *worst* candidates — which is the opposite of the
+#: listing case, where what falls off a page is arbitrary and paging is the
+#: remedy. Promising an offset that does not exist is the failure the withheld
+#: action was withheld to avoid.
+MAX_INSTANCES_LISTED: Final[int] = 12
+
 
 @dataclass(frozen=True, slots=True)
 class InstanceView:
@@ -155,7 +178,7 @@ class CandidatePage:
 
 @dataclass(frozen=True, slots=True)
 class InstanceListing:
-    """Every instance found for one work, best first.
+    """A work's instances, best first, capped at what one card can carry.
 
     Carries the work as well as the instances, because a caller that had to ask
     twice — once for the pictures and once for the title they belong to — is the
@@ -166,10 +189,21 @@ class InstanceListing:
     action holding a work id they got from a run-scoped listing, so they already
     know the run. Removed rather than pinned by a test — a field whose only
     defence would be a test written to defend it is a field to delete.
+
+    `held` is what the work actually has, against `len(instances)` for what this
+    card shows. The two are reported separately so a truncated card cannot be read
+    as a complete one — the failure a count omitted alongside a list always
+    produces.
     """
 
     work: CandidateWork
     instances: Sequence[InstanceView]
+    held: int
+
+    @property
+    def truncated(self) -> bool:
+        """True when the work holds instances this card does not show."""
+        return len(self.instances) < self.held
 
 
 class ReviewService:
@@ -255,11 +289,19 @@ class ReviewService:
         A rejected instance is included and labelled rather than dropped. It is
         the evidence of a judgement already made, and hiding it would leave a
         curator wondering why a re-search returned fewer instances than before.
+
+        Capped at `MAX_INSTANCES_LISTED`, because nothing else bounds this list:
+        a work accumulates instances across every re-search, rejected ones stay,
+        and the growth is driven by a curator asking for something better. The
+        cut takes the *worst* candidates, since the order is best-first — which is
+        why there is no paging to offer and none is promised.
         """
         work = self._discovery.get_candidate_work(candidate_work_id)
+        held = self._discovery.list_candidate_images(work.id)
         return InstanceListing(
             work=work,
-            instances=[self._instance(image) for image in self._discovery.list_candidate_images(work.id)],
+            instances=[self._instance(image) for image in held[:MAX_INSTANCES_LISTED]],
+            held=len(held),
         )
 
     def _view(self, work: CandidateWork) -> CandidateView:

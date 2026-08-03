@@ -32,7 +32,7 @@ from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkLi
 from curation.services.container import Services
 from curation.services.display import UNSET
 from curation.services.previews import InlinePreview
-from curation.services.review import MAX_REVIEW_LIMIT, CandidatePage, CandidateView, InstanceView
+from curation.services.review import MAX_REVIEW_LIMIT, CandidatePage, CandidateView, InstanceListing, InstanceView
 from curation.services.runner import RunView
 
 #: A bound action: validated arguments in, a result payload out. Every binding
@@ -260,7 +260,13 @@ def _list_candidate_images(services: Services, arguments: Mapping[str, Any]) -> 
             title=listing.work.proposed_title,
             images=instances,
             count=len(instances),
-            notice=_joined(pictures.notice(), _no_instances_notice(instances)),
+            held=listing.held,
+            truncated=listing.truncated,
+            notice=_joined(
+                pictures.notice(),
+                _no_instances_notice(instances),
+                _instances_truncation_notice(listing),
+            ),
         ),
         pictures.blocks,
     )
@@ -600,6 +606,24 @@ def _no_instances_notice(instances: list[dict[str, Any]]) -> str | None:
         "No image instances have been found for this work. It is reported unresolved rather than "
         "dropped, because that is the signal a proposed work may not exist; art_discovery("
         "action='resolve_images') looks again."
+    )
+
+
+def _instances_truncation_notice(listing: InstanceListing) -> str | None:
+    """Say which instances the card left out, and why no offset is offered.
+
+    The listing's notice names paging as the remedy; this one deliberately does
+    not, because there is none and there is also no need for one: the instances
+    are ordered best-first, so what a full card omits is the least likely scan to
+    be worth choosing. Saying that is more useful than an affordance that does not
+    exist, which is the failure the withheld action was withheld to avoid.
+    """
+    if not listing.truncated:
+        return None
+    return (
+        f"Showing the best {len(listing.instances)} of {listing.held} scans found for this work; the rest "
+        "are ranked below these and are not listed. There is no paging here — a lower-ranked scan is not "
+        "one this surface can help you choose."
     )
 
 

@@ -1709,7 +1709,7 @@ actions are never declared, `action='help'` answers the as-built question at
 runtime, and a tool part-way through its action set is exactly what 14A/14B and
 16A/16B already did to `art_discovery`.
 
-#### Chunk 17A: The review surface — works, instances, and the image in the transcript
+### Chunk 17A: The review surface — works, instances, and the image in the transcript
 
 - **Description:** The half of the human gate that shows the picture.
   `list_works`/`get_work`/`list_images` return candidate thumbnails **inline as
@@ -1745,7 +1745,7 @@ runtime, and a tool part-way through its action set is exactly what 14A/14B and
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-#### Chunk 17B: The verdict, the artist, and the preview's death
+### Chunk 17B: The verdict, the artist, and the preview's death
 
 - **Description:** What the curator's decision does. `set_verdict` accepts
   `accepted`/`rejected` only, requires explicit work ids (refusing a bare

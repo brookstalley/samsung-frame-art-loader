@@ -208,10 +208,15 @@ Developer preferences for how code is written in this project. Captured during d
     *(Corrected 2026-08-02 by the norm sweep: this read "configured in `config.py`", which
     would send someone looking for a setting that has never been there.)*
 - **Dev commands**: `python tvart.py [--flags]` is the entry point for the 2024 modules.
-  **Established 2026-07-27** and current: `pytest tests` / `ruff check .` / `black .` at the
-  root, and `uv run pytest` / `uv run ruff check .` / `uv run black .` in `curation/`.
+  **Established 2026-07-27** and current: `uv run pytest tests` / `uv run ruff check .` /
+  `uv run black .` at the root, and `uv run pytest` / `uv run ruff check .` /
+  `uv run black .` in `curation/`.
   _(This read "There is no test, lint, or format command wired up"; both departures were
-  closed the same day.)_
+  closed the same day. **Corrected 2026-08-03**: the root column had dropped `uv run`,
+  contradicting `CLAUDE.md`, which is the authority README.md points at and which explains
+  the consequence — pytest, ruff and black live in a `[dependency-groups] dev` group only uv
+  installs, so a bare `pytest` is command-not-found or, worse, a system-Python run that
+  resolves different dependencies and reports a green suite meaning nothing.)_
 - **`requirements.txt` vs `deploy/pi-freeze-2024.txt`**: `requirements.txt` is the
   hand-maintained direct-dependency list — the set installed on the Pi.
   `deploy/pi-freeze-2024.txt` is a **`pip freeze` capture from the Pi's venv**, the only

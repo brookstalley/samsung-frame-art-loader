@@ -68,17 +68,45 @@ DISCOVERY_ROUTE = (
 )
 
 
+#: The route a curator takes to see what a run found and judge it. The last two
+#: steps are the ones the product's only safety control lives in: `security-model.md`
+#: § Content Appropriateness makes "the reviewing surface shows the image" the
+#: whole of that control, so a route that reached a verdict without a step
+#: returning pictures would be a navigable path to accepting a work sight-unseen.
+#: Written down here for the same reason the other routes are — a change that adds
+#: a required round trip, or removes the step that carries the images, is a
+#: regression this file is what notices.
+REVIEW_ROUTE = (
+    "art_discovery(action='start')",
+    "art_discovery(action='status')",
+    "art_review(action='list_works', 2 image(s))",
+    "art_review(action='list_images', 1 image(s))",
+)
+
+
 @dataclass(frozen=True)
 class Call:
-    """One tool call and how it landed."""
+    """One tool call and how it landed.
+
+    `images` is the count of image content blocks the result carried, and it is
+    recorded rather than discarded because on the review surface it is the whole
+    point of the call. A harness that kept only the payload would let a scenario
+    assert everything about a review result *except* whether the curator was
+    shown anything — and a result with the pictures silently missing is exactly
+    what defeats the review gate while looking correct. The count rather than the
+    bytes: a transcript is read in failure messages, and forty base64 blobs in one
+    would make it unreadable.
+    """
 
     tool: str
     action: str
     succeeded: bool
     payload: dict[str, Any]
+    images: int = 0
 
     def __str__(self) -> str:
-        return f"{self.tool}(action={self.action!r})"
+        pictures = f", {self.images} image(s)" if self.images else ""
+        return f"{self.tool}(action={self.action!r}{pictures})"
 
 
 @dataclass
@@ -164,7 +192,8 @@ class Caller:
             f"with success={structured.get('success')!r}; the envelope derives one from the other"
         )
 
-        self.transcript.calls.append(Call(tool, action, succeeded, structured))
+        pictures = sum(1 for block in result.content if block.type == "image")
+        self.transcript.calls.append(Call(tool, action, succeeded, structured, images=pictures))
         return structured
 
     async def ok(self, tool: str, action: str, **arguments: Any) -> dict[str, Any]:

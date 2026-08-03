@@ -115,6 +115,15 @@ async def drive(server_url: str, model: Any, *, goal: str, budget: int) -> Outco
 
             for request in reply.tool_calls:
                 payload = await _execute(caller, request)
+                # **The model is fed the payload and not the image blocks, and
+                # that is a stated limitation rather than an oversight.** A tool
+                # result may carry pictures — `art_review` does — and relaying
+                # them would mean assembling a multimodal tool message per
+                # provider. Until that lands, this harness cannot measure the one
+                # claim the review gate rests on: that the model was shown the
+                # image. `caller.transcript` still records the block counts, so a
+                # scenario asserting the pictures arrived is meaningful; what is
+                # not yet measurable here is whether a *model* uses them.
                 messages.append(
                     ToolMessage(
                         content=json.dumps(payload, default=str),

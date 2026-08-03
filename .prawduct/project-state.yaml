@@ -162,7 +162,7 @@ classification:
         rationale: "0.x line; README states the API can shift between minor versions. A 3tears breaking change becomes art-loader work. Mitigated by pinning."
       - factor: "E-paper driver stack is dormant upstream"
         level: medium
-        rationale: "omni-epd last touched 2024-11, IT8951 2023-11 with no releases and an unpinned dependency. Mitigated by the display-plane interface boundary and by pinning 9f13613."
+        rationale: "omni-epd last touched 2024-11, IT8951 2023-11 with no releases and an unpinned dependency. Mitigated by the display-plane interface boundary. **The 9f13613 pin is NOT taken** (corrected 2026-08-03): `requirements.txt` pins omni_epd to a commit, and omni_epd declares `IT8951[rpi]` as a git dependency with no commit, so a rebuild resolves the driver to that repo's master on the day. 9f13613 is the commit the wall actually ran, recorded in `deploy/pi-freeze-2024.txt` and documented in `deploy/README.md` as the first thing to suspect after a rebuild — documented rather than pinned, because pinning a transitive git URL beside the parent's own unpinned declaration is resolver behaviour to verify on hardware, and the panel is off the bench. This row previously read as though the pin had been applied; it names the decision still owed, in `technical_decisions.operational`, and Chunk 04 is where it is verified."
       - factor: "Two-plane topology introduces a contract to maintain"
         level: low
         rationale: >

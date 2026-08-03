@@ -88,10 +88,24 @@ def apply_and_run(mutation: Mutation, targets: list[str]) -> bool:
     if not path.is_file():
         raise SweepError(f"{mutation.label}: {path} does not exist")
     original = path.read_text()
-    if mutation.find not in original:
+    found = original.count(mutation.find)
+    if found == 0:
         raise SweepError(
             f"{mutation.label}: its pattern is not in {mutation.file} any more. "
             "Update the mutation — a sweep that skips is a sweep that passes."
+        )
+    if found > 1:
+        # Ambiguity is refused rather than resolved by taking the first match.
+        # Two functions in one module can easily share a guard — `if not
+        # listing.truncated: return None` appeared in both a catalogue listing
+        # and an image listing — and mutating the wrong one tests a branch you
+        # were not asking about, against a target set chosen for the one you
+        # were. The result is a survivor that is nobody's real coverage gap, and
+        # it reads exactly like one.
+        raise SweepError(
+            f"{mutation.label}: its pattern appears {found} times in {mutation.file}, so which one "
+            "would be mutated is not decidable. Extend `find` until it is unique — a mutation that "
+            "lands somewhere other than where you meant reports on a branch you did not choose."
         )
 
     backup = path.with_suffix(path.suffix + ".sweepbak")

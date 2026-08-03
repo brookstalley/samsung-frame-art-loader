@@ -197,3 +197,38 @@ class FakeImageSearch:
     def fetch_preview(self, url: str) -> bytes | None:
         self.fetched.append(url)
         return self.preview_bytes
+
+
+def a_decodable_jpeg(width: int = 1200, height: int = 900) -> bytes:
+    """Preview bytes a museum could really have served, and that Pillow can open.
+
+    `FakeImageSearch.preview_bytes` defaults to a stub that is *not* decodable,
+    which is right for tests about caching bytes and wrong for every test about
+    showing them: a preview that will not decode produces no image block, so a
+    review surface would look broken for a reason that is the fixture's.
+    """
+    from io import BytesIO
+
+    from PIL import Image
+
+    buffer = BytesIO()
+    Image.new("RGB", (width, height), (84, 66, 132)).save(buffer, format="JPEG", quality=90)
+    return buffer.getvalue()
+
+
+def a_museum_holding(*titles: str, sizes: dict[str, tuple[int, int]] | None = None) -> FakeImageSearch:
+    """A provider holding one instance of each named work, with showable previews.
+
+    Sizes default to a gallery-grade scan, because most tests want a work that
+    clears the resolution floor and only a few care about the one that does not.
+    Pass `sizes` to make a particular work small.
+    """
+    measured = sizes or {}
+    holdings = {}
+    for title in titles:
+        width, height = measured.get(title, (6000, 4500))
+        slug = title.lower().replace(" ", "-")
+        holdings[title] = (an_image(title, url=f"https://artic.edu/{slug}", width=width, height=height),)
+    found = FakeImageSearch(holdings=holdings)
+    found.preview_bytes = a_decodable_jpeg()
+    return found

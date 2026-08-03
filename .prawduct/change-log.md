@@ -1429,7 +1429,7 @@ physical label as visible text. Unknown tags are unwrapped and their text kept �
 right for `<span>`, wrong for code. Fixed, with tests for both the closed and the
 unclosed case.
 
-**295 tests pass across both suites** (283 curation, 12 root), up from 154. Ruff
+**Both suites pass**, the curation one having roughly doubled with this work. Ruff
 and black clean. The real server was launched against a scratch `ART_ROOT` and
 wrote a catalogue carrying all nine tables and its seeded directive row — verified
 by reading the file the server itself wrote, not one a test wrote.
@@ -1555,8 +1555,10 @@ framework dependency is taken, which also **withdraws** the develop-branch git
 reference the previous record had accepted: an unreleased moving branch buys
 nothing when no framework code is called.
 
-**A refactor, held to that standard:** 154 tests pass across both suites (104
-pre-existing — 92 curation, 12 root — none modified or weakened, plus 50 new).
+**A refactor, held to that standard:** both suites pass, and **no pre-existing test
+was modified or weakened** — the claim that matters about a refactor, and the one
+that stays checkable against this commit forever. (Counts removed 2026-08-03: a
+tally in durable prose goes stale, and these were three generations out.)
 
 Two of the three acceptance criteria are now pinned by a test that fails when they
 stop holding: read-compatibility with an older catalogue, and the rule that inside

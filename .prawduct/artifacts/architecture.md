@@ -191,9 +191,11 @@ is no network between planes.
         │  │    │              │        ThumbnailService   it holds none of them)
         │  ├─ DiscoveryEngine (Protocol)      │          phase 1 — the seam every paid call sits
         │  │    UnavailableEngine ships       │          behind; no other service can reach it
-        │  └─ ImageSearch (Protocol)          │          phase 2 — the museum seam. Free, but
-        │       ArticImageSearch ships        │          behind a seam for the same reason
-  Discovery     │              │              │
+        │  ├─ ImageSearch (Protocol)          │          phase 2 — the museum seam. Free, but
+        │  │    ArticImageSearch ships        │          behind a seam for the same reason
+        │  └─ PreviewCache                    │          writes the disposable local copy an
+        │                                     │          instance is reviewed from
+  Discovery ── ReviewService                  │          the pre-acceptance twin of SurveyService
   Service       │              │              │
         │       └── CatalogueService ─────────┘
         │              │
@@ -201,6 +203,21 @@ is no network between planes.
         └──────────────┬──────────────┘           and paging — the product judgements
               SqliteDurableStore                  generic: tables, keys, rows. Knows no artwork
   ```
+
+  **`ReviewService` is `SurveyService`'s counterpart on the other side of
+  acceptance, and they are deliberately two classes rather than one.** Both
+  compose "a work as a surface showing it to a human needs it", but they read
+  different entities entirely — one the catalogue, one the pipeline — and share
+  no logic, so a single service spanning both would hold the catalogue and
+  discovery stores at once to save a name. `ReviewService` holds
+  `DiscoveryService`, never the reverse, which keeps the dependency running the
+  way the pipeline does.
+
+  **`PreviewCache` hangs off the runner, beside the two engine seams**, because a
+  preview is fetched at the moment an instance is found and from nowhere else.
+  `ReviewService` reads those files without going through it: producing a
+  small copy for a tool result is a read of the art tree, not another reason to
+  reach a museum.
 
   `DiscoveryRunner` holds `DiscoveryService`, not the other way round, and the
   engine hangs off the runner alone — no other service can reach it, which is
