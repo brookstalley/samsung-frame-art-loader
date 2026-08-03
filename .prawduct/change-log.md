@@ -1475,7 +1475,7 @@ plan, and the correction itself said "every framework method takes `conn`" when
 
 **A second `verify-resolutions` pass then found the same defect class one round
 later, in the fix for the first one.** `reconcile()` had five tests; the *call* to
-it in `main()` had none, so deleting the line left all 288 green — verbatim the
+it in `main()` had none, so deleting the line left the whole suite green — verbatim the
 thing this entry had just described catching by mutation. The test that closes it
 drives `main()` with uvicorn's run captured and reads the catalogue through a
 second connection at the moment the server would start, so it pins the ordering as

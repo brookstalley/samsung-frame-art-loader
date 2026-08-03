@@ -828,6 +828,33 @@ measure a candidate against until `Artist` rows are being matched, and shipping 
 unmeasured one now would repeat exactly the mistake this spike was convened to
 correct.
 
+`[DECISION: a candidate matches an existing Artist only on exact `artist_key()`
+equality, and a near-miss is reported rather than merged | the failure directions
+are not symmetric, so the tie goes to the reversible one — a duplicate `Artist`
+row is visible in the catalogue and can be merged later, where a wrong merge puts
+another painter's name on a physical label and leaves no trace that a decision was
+ever made. Every heuristic that would close the `Jacob Isaacksz van Ruisdael` /
+`Jacob van Ruisdael` gap was measured against the corpus and takes the harsher
+direction to do it: keeping first and last tokens turns `Hans Holbein the Younger`
+into `hans younger`, and a stopword list for the forms that break it (`the
+Younger`/`Elder`, `Sr`/`Jr`, patronymics like `Isaacksz`, nobiliary particles) is a
+set of guesses measured against nothing until real accepted works exist to measure
+against. So the split is taken deliberately and made *visible*: when a new row is
+minted and an existing artist shares a surname token, acceptance says so, which
+turns a silent duplicate into a reported one a curator can act on. | user can
+veto/override]`
+
+**Two properties this inherits from `artist_key()` rather than restating.** It
+normalises casefolding, accents, punctuation and parenthesised aliases, so
+`El Greco (Domenikos Theotokopoulos)` and `El Greco` are one painter without any
+work here. And it returns **empty** for a name that normalises to nothing — which
+a matcher must read as *unattributed*, never as a key. Two unattributed works
+share that empty string, so a lookup that keyed on it would merge every
+unattributed work in the catalogue into a single artist named nothing: the
+worst-case wrong merge, reached without any name being similar to any other. An
+unattributed candidate takes no artist at all, which is what `artist_id`'s
+nullability is for.
+
 ### SpendRecord
 
 **Attribution and history — not enforcement.** This is the record of what was

@@ -1772,8 +1772,9 @@ runtime, and a tool part-way through its action set is exactly what 14A/14B and
   does not re-search), `data-model.md` (promotion relationships, constraints
   7/15), `boundary-patterns.md` (the preview lifecycle it leaves open)
 - **Deliverables:** `art_review`'s three write actions live; the artist parse and
-  match reaching a promoted work; the preview sweep; harness scenarios covering
-  the review flow through to acceptance
+  match reaching a promoted work; the preview sweep; the review card's slot
+  budget, so rejected scans cannot crowd out selectable ones; harness scenarios
+  covering the review flow through to acceptance
 - **Tests:** unit — the artist is parsed, matched to an existing row where one
   fits, and reaches the accepted work (Q9 answerable for a discovered work, which
   it is not before this chunk); promotion mirrors the candidate shape into the
@@ -1781,8 +1782,10 @@ runtime, and a tool part-way through its action set is exactly what 14A/14B and
   key (Q3 vs Q11, both directions); `set_verdict` is accepted from
   `awaiting_better_image` (the curator is never blocked on a running re-search)
   while still refusing that value as a *target*; the sweep deletes only
-  terminal-verdict previews and is idempotent across a re-run; contract —
-  explicit-ids enforcement
+  terminal-verdict previews and is idempotent across a re-run; a work whose
+  rejected instances alone exceed the card's cap still offers every selectable
+  one, and the truncation notice stays true in that state; two unattributed works
+  do not merge into one artist; contract — explicit-ids enforcement
 - **Acceptance criteria:** the worked example runs end to end over MCP from a
   real client: works reviewed with images in the transcript, accepted works
   appear in the catalogue with sources, artist and rationale intact

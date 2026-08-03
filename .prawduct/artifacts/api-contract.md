@@ -901,15 +901,29 @@ the total — `"showing 20 of 84; narrow the filter"` — never a silent cut. Bo
 the operator's servers enforce this and cordyceps' own comment names the reason:
 items that cannot be handled are *reported as failures, not silently skipped*.
 
-**Bounded exception — a listing whose order is total and best-first takes no
-`limit`.** `art_review(action='list_images')` is the one such listing: its
-instances are ordered by the single ranking this product has, so a truncated card
-omits the *worst* candidates rather than an arbitrary slice. The `limit` half of
-the rule exists to let a caller reach items a cut would otherwise hide, and here
-there are none to reach — a caller lowering the limit would only ask for fewer of
-the best. The cap is therefore fixed, and the truncation half of the rule still
-binds in full: the card reports what it holds against what it shows, and offers no
-paging it cannot honour. Any listing whose cut is arbitrary takes the `limit`.
+**Bounded exception — a listing whose cut can only fall on items the caller has
+no reason to reach takes no `limit`.** `art_review(action='list_images')` is the
+one such listing. The `limit` half of the rule exists to let a caller reach items
+a cut would otherwise hide; where the cut provably hides nothing a caller could
+act on, there is nothing to reach and a lower limit would only ask for fewer of
+the best. The cap is therefore fixed. The truncation half still binds in full: the
+card reports what it holds against what it shows, and offers no paging it cannot
+honour. **Any listing whose cut is arbitrary takes the `limit`.**
+
+**The exception is conditional, and the condition is a requirement on the card,
+not an observation about it: a truncated card must never drop a selectable
+instance in favour of one the curator has already turned down.** Rejected scans
+stay on the card as the evidence of a judgement, so they compete for its slots —
+and they arrive at the *top* of a confidence ordering, because the scan a curator
+turns down is the best one on offer and rejecting it does not change its
+confidence. An ordering that does not sink them therefore has a state where the
+card is entirely already-rejected scans while the only selectable ones fall off
+the bottom, and the notice's promise — that what is unlisted is not worth choosing
+— is false in the one state where it decides anything. `list_images` is the sole
+enumerator of a work's instances, so there is no second path to the ids it drops.
+Filling the card from the surviving instances first and spending what remains on
+rejected ones satisfies this; so does any ordering that sinks rejections. What
+does not satisfy it is a cut that reads confidence alone.
 
 **Bulk operations** return the per-item shape described under Inputs & Outputs.
 
