@@ -351,7 +351,10 @@ class ReviewService:
         return self._view(self._discovery.get_candidate_work(candidate_work_id))
 
     def list_images(self, candidate_work_id: str) -> InstanceListing:
-        """Every instance found for a work, in the order the review card offers them.
+        """A work's instances in the order the review card offers them, capped.
+
+        Not *every* instance: the card carries at most `MAX_INSTANCES_LISTED`, and
+        `held` beside the rows is what says so.
 
         The order is the store's — selected first, then by confidence, then by id
         — which is the same order `selection.best` walks. Re-sorting here would be
@@ -395,10 +398,15 @@ class ReviewService:
         # including one the curator had already rejected.
         chosen = next((image for image in images if image.is_selected), None)
         # Falling back through `selection.surviving` rather than a local sort, so
-        # the instance a listing pictures is the one the review card leads with
-        # and the one `best` would choose if the floor were lifted. A second
-        # ordering here is how a curator's card and the automatic choice come to
-        # disagree about which scan is the best of a bad set.
+        # this picture is the one `best` would choose if the floor were lifted. A
+        # second ordering here is how a curator's card and the automatic choice
+        # come to disagree about which scan is the best of a bad set.
+        #
+        # It is *not* a claim about which row leads `list_images`: that card is
+        # capped and includes rejected instances, so its first row is whatever the
+        # store ranks first among those kept, which in a selectionless state can
+        # be a scan already turned down. The two answers coincide wherever a
+        # selection exists and are different questions everywhere else.
         if chosen is None:
             chosen = next(iter(selection.surviving(images)), None)
         return CandidateView(

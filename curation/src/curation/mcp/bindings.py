@@ -265,6 +265,7 @@ def _list_candidate_images(services: Services, arguments: Mapping[str, Any]) -> 
             notice=_joined(
                 pictures.notice(),
                 _no_instances_notice(instances),
+                _nothing_choosable_notice(listing),
                 _instances_truncation_notice(listing),
             ),
         ),
@@ -613,12 +614,14 @@ def _instances_truncation_notice(listing: InstanceListing) -> str | None:
     """Say which instances the card left out, and why no offset is offered.
 
     The listing's notice names paging as the remedy; this one deliberately does
-    not, because there is none and there is also no need for one: what a full card
-    omits is never an instance the caller could have chosen. Saying that is more
-    useful than an affordance that does not exist, which is the failure the
-    withheld action was withheld to avoid.
+    not, because there is none and no need for one: nothing omitted is both
+    choosable and better than what is shown. That is weaker than "what is omitted
+    could not have been chosen" — a card can omit choosable scans, once those
+    alone outrun the cap — and the weaker claim is the one that is true. Saying it
+    is more useful than an affordance that does not exist, which is the failure
+    the withheld action was withheld to avoid.
 
-    **It says what was dropped, and deliberately claims nothing about row order.**
+    **It names what was dropped, and never implies that position sorts it.**
     Selectable instances get first claim on the card's slots, but the rows keep
     the store's ranking — so a card can read [selectable, refused, …, selectable],
     and a sentence promising the selectable ones "first" would send a caller to
@@ -629,17 +632,11 @@ def _instances_truncation_notice(listing: InstanceListing) -> str | None:
     if not listing.truncated:
         return None
     shown_surviving = sum(1 for instance in listing.instances if not instance.rejected)
-    if listing.surviving_held == 0:
-        # Reached when a work's every instance has been turned down and it holds
-        # more than a cardful. Branch A is true here in the empty sense — no
-        # choosable scan is missing because none exists — and saying so as
-        # reassurance would be the wrong sentence in the one state where the
-        # curator's next move is not on this surface at all.
-        what_was_dropped = (
-            "none of these are still open to you; every scan found for this work has been turned down, so "
-            "art_discovery(action='resolve_images') is what finds more"
-        )
-    elif listing.shows_every_choosable_instance:
+    if listing.shows_every_choosable_instance:
+        # Every scan the curator can act on is here, so what fell off is refused
+        # scans only. Said in the empty case too — with nothing choosable the
+        # count is zero and reads honestly, and the sentence that matters then is
+        # `_nothing_choosable_notice`'s rather than this one's.
         what_was_dropped = (
             f"all {shown_surviving} scans still open to you are on this card — the ones omitted are scans "
             "you have already turned down"
@@ -650,17 +647,42 @@ def _instances_truncation_notice(listing: InstanceListing) -> str | None:
         # is *not* below what is shown — a refused scan is typically the
         # highest-confidence one there is, which is why it was offered and
         # refused — so the two kinds of omission are named separately rather than
-        # under one claim about ranking.
+        # under one claim about ranking. The refused clause is conditional because
+        # this state does not require any to exist.
+        also_refused = listing.held - listing.surviving_held
         what_was_dropped = (
             f"this work has {listing.surviving_held} scans you could still choose and the card holds the "
             f"{shown_surviving} best of them; what is omitted is the rest of those, which rank below every "
-            "scan shown, together with every scan you have already turned down"
-        )
+            "scan shown"
+        ) + (f", together with the {also_refused} you have already turned down" if also_refused else "")
     return (
         f"Showing {len(listing.instances)} of {listing.held} scans found for this work; "
         f"{what_was_dropped}. Read rejected_for_this_work on each row rather than its position — "
         "the rows keep their ranking, so a scan you can still choose may sit anywhere on the card. "
         "There is no paging here."
+    )
+
+
+def _nothing_choosable_notice(listing: InstanceListing) -> str | None:
+    """Say when a card holds pictures but no scan the curator can act on.
+
+    Independent of truncation, which is the point: a work whose every scan was
+    turned down is the ordinary result of rejecting alternates one at a time, and
+    it far more often holds a handful than more than a cardful. Folding this into
+    the truncation notice made it reach only the works with thirteen or more
+    scans — the rare ones — and stay silent on exactly the common case.
+
+    It names the paid action rather than leaving a curator to infer it, because
+    this surface has no remedy of its own to offer: every row on the card is
+    evidence of a decision already taken, and looking again costs money and lives
+    on `art_discovery`.
+    """
+    if not listing.instances or listing.surviving_held:
+        return None
+    return (
+        f"None of the {listing.held} scans found for this work are still open to you — every one has been "
+        "turned down. art_discovery(action='resolve_images') searches again for a better one; it spends, "
+        "and it is the only thing that changes this."
     )
 
 

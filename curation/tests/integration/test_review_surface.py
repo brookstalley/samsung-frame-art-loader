@@ -527,9 +527,13 @@ async def test_a_card_with_more_scans_than_it_can_carry_says_what_it_dropped(
     """The bound on the one collection 17A adds that nothing else limits.
 
     A work accumulates instances across every re-search and rejected ones stay,
-    so this list grows with exactly the action a dissatisfied curator takes. The
-    cut falls on the scans a caller cannot choose, so the notice explains rather
-    than offering an offset that does not exist.
+    so this list grows with exactly the action a dissatisfied curator takes.
+
+    This fixture is the case where the *choosable* scans alone outrun the cap, so
+    the cut reaches them — the notice has to say so rather than claim everything
+    still open is present. The refused scan added at the end is what makes that
+    claim falsifiable: it outranks all twelve shown and is omitted, so a notice
+    asserting the omitted scans rank lowest would be wrong here.
     """
     run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
     work = propose("A much re-searched work", run_id=run.id, dedup_key="many")
@@ -554,6 +558,10 @@ async def test_a_card_with_more_scans_than_it_can_carry_says_what_it_dropped(
     assert f"Showing {MAX_INSTANCES_LISTED} of {MAX_INSTANCES_LISTED + 4}" in payload["notice"]
     assert f"this work has {MAX_INSTANCES_LISTED + 4} scans you could still choose" in payload["notice"]
     assert f"the card holds the {MAX_INSTANCES_LISTED} best of them" in payload["notice"]
+    # No scan here was ever turned down, so the clause naming refused ones must be
+    # absent rather than reading "the 0 you have already turned down".
+    assert "turned down" not in payload["notice"]
+    assert "still open to you" not in payload["notice"], "nothing here is refused, so nothing is spent"
     assert "no paging" in payload["notice"]
     # What was dropped is the tail of the ranking, never the instance on offer.
     assert payload["images"][0]["is_on_offer"] is True
@@ -631,6 +639,7 @@ async def test_a_cardful_of_rejections_never_crowds_out_a_scan_still_on_offer(
     shown = [image["image_id"] for image in payload["images"]]
     for survivor in survivors:
         assert survivor.id in shown, "a scan the curator can still choose fell off the card"
+    assert "None of the" not in payload["notice"], "two scans are still choosable here"
     assert payload["count"] == MAX_INSTANCES_LISTED
     # The rejected scans are still evidence and still shown — they simply yield
     # their slots to the instances that can still be chosen.
@@ -700,9 +709,42 @@ async def test_a_card_that_cannot_hold_every_choosable_scan_says_so_instead(
     assert f"{MAX_INSTANCES_LISTED + 3} scans you could still choose" in payload["notice"]
     assert "rank below every scan shown" in payload["notice"], "true of the omitted choosable scans"
     assert (
-        "every scan you have already turned down" in payload["notice"]
-    ), "the omitted refused scans are named separately, because they do not rank below what is shown"
+        "the 1 you have already turned down" in payload["notice"]
+    ), "the omitted refused scan is named separately, because it does not rank below what is shown"
     assert "still open to you are on this card" not in payload["notice"]
+
+
+async def test_a_short_card_of_only_refused_scans_still_says_nothing_is_choosable(
+    server_url, services, propose, add_image, preview_file
+):
+    """The common shape of this state, which the truncation notice could not reach.
+
+    Rejecting alternates one at a time is the ordinary way a work ends up with
+    nothing choosable, and it far more often leaves a handful of scans than more
+    than a cardful. Folding the sentence into the truncation notice made it fire
+    only for works with thirteen or more — the rare ones — and stay silent here,
+    where a curator sees three pictures and nothing telling them all three are
+    spent.
+    """
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    work = propose("A work with three refused scans", run_id=run.id, dedup_key="three-refused")
+    for index in range(3):
+        image = add_image(
+            work,
+            url=f"https://museum.example/short-refused-{index}",
+            confidence=0.9 - index / 100,
+            preview_path=preview_file(f"short-refused-{index}.jpg"),
+            estimated_width=4000,
+            estimated_height=3000,
+        )
+        services.discovery.reject_image(image.id)
+
+    payload = payload_of(await call(server_url, "art_review", action="list_images", work_id=work.id))
+
+    assert payload["truncated"] is False, "this card is not truncated, which is the whole point"
+    assert payload["count"] == 3
+    assert "None of the 3 scans found for this work are still open to you" in payload["notice"]
+    assert "resolve_images" in payload["notice"]
 
 
 async def test_a_work_whose_every_scan_was_turned_down_is_not_reassured_about_it(
@@ -732,9 +774,8 @@ async def test_a_work_whose_every_scan_was_turned_down_is_not_reassured_about_it
 
     assert payload["truncated"] is True
     assert all(image["rejected_for_this_work"] for image in payload["images"])
-    assert "none of these are still open to you" in payload["notice"]
+    assert "None of the" in payload["notice"] and "still open to you" in payload["notice"]
     assert "resolve_images" in payload["notice"], "the curator is pointed at what actually finds more"
-    assert "all 0 scans" not in payload["notice"]
 
 
 async def test_a_work_no_image_was_ever_found_for_says_what_to_do_about_it(server_url, services, propose):

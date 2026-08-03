@@ -943,7 +943,11 @@ does not satisfy it is a cut that reads confidence alone.
 **Summary then detail.** Listing actions return the fields needed to decide;
 `get_*` returns the full record. This is the cheapest lever on token cost and it is
 why `art_review(action='list_works')` returns one thumbnail per work rather than
-every instance found.
+the instances found for it. That one picture is not always the instance a verdict
+would accept on — a work whose scans are all below the floor has no selection and
+still arrives with a picture, because a work no picture exists for and a work
+whose picture was withheld must not look alike. `is_on_offer` is what separates
+them.
 
 ## Open Questions
 

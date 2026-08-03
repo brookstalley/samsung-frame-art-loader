@@ -291,7 +291,7 @@ ART_REVIEW: Final = ToolRecord(
     actions=(
         Action(
             name="list_works",
-            description="Page through a run's proposed works, each with the image currently on offer.",
+            description="Page through a run's proposed works, each with the image standing for it.",
             example="art_review(action='list_works', run_id='<a run_id from art_discovery(action=list_runs)>')",
             params=(
                 Param(
@@ -331,7 +331,10 @@ ART_REVIEW: Final = ToolRecord(
             params=(_WORK_ID,),
             tips=(
                 _BLOCK_ORDER_TIP,
-                "This carries the one image on offer. Use action='list_images' to see the alternates found " "for the same work.",
+                "This carries one image, and is_on_offer says whether it is the one a verdict would accept "
+                "on. It is false for a work whose scans are all below the floor or all turned down — the "
+                "picture is still shown, because a work with no picture and a work nothing was found for "
+                "must not look alike. Use action='list_images' to see the alternates found for the work.",
                 "rationale is the engine's account of why this work matched the intent. A work is judged "
                 "against that reading of the request rather than against its wording.",
             ),
