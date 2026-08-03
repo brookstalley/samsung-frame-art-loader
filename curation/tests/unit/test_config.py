@@ -403,12 +403,27 @@ def test_the_shipped_discovery_defaults_reproduce_the_recorded_cost_analysis(mon
 
 
 def test_the_search_price_matches_the_engine_that_is_pinned(monkeypatch, tmp_path):
-    """The two settings are one decision and must not drift apart.
+    """The two *shipped defaults* are one decision and must not drift apart.
 
-    Parallel bills $0.001 and the other back-ends $0.005, so a deployment that
-    changed the engine and left the price would put a five-fold error into the
-    only figure a curator sees before authorising a run — silently, because
-    nothing else in the system compares them.
+    Parallel bills $0.001 and the other back-ends $0.005, so shipping an engine
+    and a price that disagree would put a five-fold error into the only figure a
+    curator sees before authorising a run.
+
+    **This cannot see a deployment, and saying so is the point.** The module's
+    autouse `_clean_env` stubs `load_dotenv` and clears no `DISCOVERY_*` name, so
+    what runs here compares two constants in `config.py` to each other. That stub
+    is correct — a config test that read the developer's own `.env` would pass or
+    fail by machine — but it means the case in the sentence above, *a deployment*
+    that changed one and left the other, is invisible here and was live on this
+    repo's own `.env` while this test was green: `DISCOVERY_SEARCH_COST_USD=0.005`
+    with no engine pinned, so estimates priced Exa while the engine was the
+    `parallel` default.
+
+    The mechanism for the deployment case is therefore **not a test**: startup
+    logs the engine and the price on one line, so a mismatch is one journal read
+    rather than a silent five-fold error. Adding a boot-time refusal was
+    considered and not done — a household product that will not start because two
+    optional settings disagree fails harder than the error it is preventing.
     """
     monkeypatch.setenv("ART_ROOT", str(tmp_path))
     settings = Settings.from_env()

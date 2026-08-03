@@ -100,11 +100,22 @@ def main() -> None:
     # bounded estimate a curator authorises against is only as good as the
     # numbers behind it — and those are the ones most likely to be stale.
     discovery = settings.discovery_settings
+    # The engine and its per-request price on the same line as the estimate they
+    # produce. They are one decision — parallel bills $0.001 and the other
+    # back-ends $0.005 — and a deployment that pins the price without the engine
+    # puts a five-fold error into the only figure a curator authorises against.
+    # Nothing refuses to boot over it: two optional settings disagreeing is not
+    # worth failing a household product to start. But it is not silent either,
+    # because the test that reads as the guard here deliberately cannot see a
+    # deployment's own `.env` — see `test_the_search_price_matches_the_engine_that_is_pinned`.
     log.info(
-        "discovery gate=%d works phase1_searches=%d phase2_searches_per_work=%d phase1_estimate=$%s",
+        "discovery gate=%d works phase1_searches=%d phase2_searches_per_work=%d search_engine=%s "
+        "search_price=$%s phase1_estimate=$%s",
         discovery.approval_threshold,
         discovery.phase1_search_allowance,
         discovery.phase2_searches_per_work,
+        settings.discovery_search_engine,
+        discovery.search_cost_usd,
         discovery.phase1_estimate_usd,
     )
     # Which model spends the money and whether there is a key to spend it with —
