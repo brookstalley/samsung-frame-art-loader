@@ -776,6 +776,13 @@ async def test_a_work_whose_every_scan_was_turned_down_is_not_reassured_about_it
     assert all(image["rejected_for_this_work"] for image in payload["images"])
     assert "None of the" in payload["notice"] and "still open to you" in payload["notice"]
     assert "resolve_images" in payload["notice"], "the curator is pointed at what actually finds more"
+    # **The reassurance this test is named for.** Both notices fire on a card this
+    # size, and the truncation half knows how to say "all N scans still open to you
+    # are on this card" — vacuously true at N=0 and contradicting the sentence
+    # immediately before it. This assertion existed, was deleted when the notices
+    # were split, and the string came straight back.
+    assert "all 0 scans" not in payload["notice"]
+    assert "still open to you are on this card" not in payload["notice"]
 
 
 async def test_a_work_no_image_was_ever_found_for_says_what_to_do_about_it(server_url, services, propose):
@@ -795,6 +802,14 @@ async def test_a_work_no_image_was_ever_found_for_says_what_to_do_about_it(serve
     assert payload["images"] == []
     assert payload["count"] == 0
     assert "No image instances have been found" in payload["notice"]
+    # **Nothing found and nothing left to choose are different reports.** Both
+    # states have zero choosable scans, so the nothing-choosable notice would fire
+    # here too without its empty-list guard — telling a curator every scan has
+    # been turned down for a work no scan was ever found for, and pointing them at
+    # a paid re-search on the strength of it. Asserted as an absence because a
+    # present-only assertion passes under exactly that bug.
+    assert "have already turned down" not in payload["notice"]
+    assert "None of the 0 scans" not in payload["notice"]
     assert "resolve_images" in payload["notice"], "the remedy is named, and it is on the tool that owns it"
 
 

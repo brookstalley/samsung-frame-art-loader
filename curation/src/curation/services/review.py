@@ -294,7 +294,12 @@ class ReviewService:
         self._art_root = art_root
 
     def list_works(self, run_id: str, *, limit: int | None = None, offset: int = 0) -> CandidatePage:
-        """A page of the works a run is responsible for, each with the image on offer.
+        """A page of the works a run is responsible for, each with a picture.
+
+        Not "the image on offer": a work whose scans are all below the floor or
+        all turned down has no selection, and still arrives pictured — see
+        `CandidateView`, which spells out why. `shown_is_on_offer` separates the
+        two cases.
 
         Scoped to a run because that is the id a caller can actually obtain:
         `art_discovery(action='list_runs')` returns run ids, and nothing on any
