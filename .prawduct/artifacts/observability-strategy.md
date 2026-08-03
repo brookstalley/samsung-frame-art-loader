@@ -322,6 +322,7 @@ signal exists:
 | Manifest references a missing file | WARNING per work, and the work is skipped — the run continues |
 | Manifest major version unrecognised | ERROR, previous manifest retained |
 | Budget exhausted | `halted_by_budget` outcome on the run, and the refusal text names the cause. *(Corrected 2026-08-02: this also promised "`limit_remaining` at zero in the UI" — a figure no surface exposes, and one that lags badly enough to read non-zero while calls are already being refused. See the note under the signals table.)* |
+| Preview sweep stopped running | **The only signal is a positive one, which is why it logs on empty passes**: `preview.swept` at INFO every interval, so what says the job died is its *absence* over one. A pass that hangs rather than stops reads differently — `preview.sweep_started` with no `preview.swept`, then `preview.sweep_wedged` at shutdown — and matters more, because that pass holds the store lock |
 | Disk nearly full | Guarded *before* acquisition starts, not discovered as an exception during it |
 | A work silently absent from a theme | **The manifest build reports exclusions** with a per-work reason — see `architecture.md`. Not a log line: a first-class UI surface |
 | Mat colour degraded to the dominant-colour fallback | Recorded on the record itself (`MatColor.method`), not merely logged. The 2024 code degrades invisibly |

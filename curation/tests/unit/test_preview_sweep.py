@@ -324,6 +324,26 @@ def test_a_live_work_with_no_cached_copy_still_says_none_was_cached(discovery, r
     assert "No local copy of this image was cached" in note
 
 
+def test_a_row_naming_a_file_that_is_gone_reads_as_absent_not_corrupt(discovery, review, propose, add_image, preview, settings):
+    """The residual of the race the transaction narrows without closing.
+
+    `PreviewCache.store` checks the file with no lock and `record_image` takes one
+    afterwards, so a row can be written naming a file a sweep pass removed in
+    between — for a work still under review, which is the case the sweep itself
+    never produces. Reporting that as unreadable is the corruption message for a
+    file this plane deleted on purpose, and it sends whoever asks looking for a
+    bad download instead of at the sweep.
+    """
+    work = propose("The Persistence of Memory")
+    add_image(work, preview_path=preview("memory.jpg"))
+    (settings.art_root / "previews/memory.jpg").unlink()
+
+    note = review.list_images(work.id).instances[0].preview_note
+
+    assert "reclaimed" in note
+    assert "could not be read" not in note, "the corruption message would misdirect the diagnosis"
+
+
 # -- the guard on the write itself --------------------------------------------
 
 

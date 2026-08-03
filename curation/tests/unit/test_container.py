@@ -17,7 +17,7 @@ from curation.persistence.records import Theme
 from curation.services.catalogue import CatalogueService
 from curation.services.discovery import DiscoveryService
 from curation.services.display import DisplayService
-from curation.services.sweep import PreviewSweep
+from curation.services.sweep import SWEEP_THREAD_NAME, PreviewSweep
 
 _A_MOMENT = datetime(2026, 7, 20, 9, 30, tzinfo=UTC)
 
@@ -36,6 +36,11 @@ class _SweepSpy:
     def run(self) -> None:
         self.passes += 1
         self.swept.set()
+
+
+def _sweep_threads() -> list[threading.Thread]:
+    """Live threads the sweep started, found the way an operator would: by name."""
+    return [thread for thread in threading.enumerate() if thread.name == SWEEP_THREAD_NAME and thread.is_alive()]
 
 
 def test_the_container_carries_every_concern_a_surface_may_need(services):
@@ -142,8 +147,13 @@ async def test_the_application_stops_sweeping_when_it_stops_serving(services):
 
     async with app.router.lifespan_context(app):
         assert spy.swept.wait(timeout=5)
+        # Pinned from both sides, because the assertion after the block is a
+        # `not any(...)` over a name nothing else in the suite fixes: rename the
+        # thread and the predicate matches nothing, `not any` is True, and the
+        # test reports success while a live sweep outlives the application.
+        assert _sweep_threads(), "no thread by that name was running, so the assertion below would pass vacuously"
 
-    assert not any(thread.name == "preview-sweep" and thread.is_alive() for thread in threading.enumerate())
+    assert not _sweep_threads()
 
 
 async def test_an_application_given_no_interval_never_sweeps(services):

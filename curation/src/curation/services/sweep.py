@@ -25,23 +25,30 @@ then report the file as unreadable when in fact this process removed it. So the
 unit of deletion is the *path*, and a path survives while any work still under
 review references it.
 
-**That rule holds against a concurrent writer, not merely against the moment this
-pass looked**, and one transaction around the whole pass is what buys the
-difference. Reading the references and unlinking are two steps, and phase 2 writes
-between them: `PreviewCache.store` hands back a digest-named file it finds on disk
-without re-fetching, so a resolve run can attach a work still under review to a
-path this pass has already judged reclaimable. That row would name a deleted file
-*permanently*, since `record_image` never rewrites `preview_path` for a URL its
-work already holds. `run` therefore takes the store's lock across both halves —
-the same lock `record_image` takes.
+**The pass runs inside one store transaction, and what that closes is worth
+stating exactly, because it is not everything.** Reading the references and
+unlinking are two steps, and holding the store's lock across both stops a writer
+landing *between them* — `record_image` takes the same lock, so no row can appear
+against a path this pass has already judged reclaimable while the pass is running.
 
-**The record follows the file, in that order.** A row whose `preview_path` names
-a file this sweep deleted is a lie the review card would tell as "the cached copy
-could not be read" — a corruption message for a routine reclamation. Clearing the
-column is what makes the absence honest, and it happens after the unlink so that
-a crash in between leaves a row pointing at a missing file, which the next sweep
-resolves. The other order strands bytes with nothing referencing them, and
-nothing would ever reclaim those.
+**What it does not close is the writer's own straddle, and that is recorded rather
+than claimed away.** `PreviewCache.store` returns a digest-named file it finds on
+disk without re-fetching, and it holds no lock while doing so; `record_image` takes
+the lock afterwards. So a resolve run can read "the file is there", have a whole
+sweep pass run and delete it, and then write a row naming it. That row is permanent,
+because `record_image` never rewrites `preview_path` for a URL its work already
+holds. Closing it means the row write verifying the file inside the lock it takes,
+which is a change to what the record layer depends on and is filed rather than
+smuggled in here. The consequence is bounded and is reported honestly: `review.py`
+treats a `preview_path` whose file is missing as an absent copy, so such an instance
+loses its picture and says so, rather than reading as a corrupt download.
+
+**The record follows the file, in that order.** A row still naming a file this
+sweep deleted has nothing to show and should not claim otherwise, so clearing the
+column is part of reclaiming rather than a tidy-up. It happens *after* the unlink,
+so a crash in between leaves a row pointing at a missing file — which the next
+pass finds and finishes. The other order strands bytes with nothing referencing
+them, and nothing would ever reclaim those.
 
 Deleting a preview never touches the catalogue proper. An accepted work's imagery
 comes from acquisition against the source URL the catalogue holds; the preview
@@ -66,6 +73,14 @@ log = logging.getLogger(__name__)
 #: Short because a sweep of a household catalogue is milliseconds of work, and a
 #: pass that is somehow wedged must not hold a restart open.
 _SHUTDOWN_JOIN_SECONDS: Final[float] = 5.0
+
+#: What the sweep's thread is called, in `journalctl` and in a stack dump.
+#:
+#: A constant rather than a literal at the one place it is set, because the only
+#: way to observe that this thread does not outlive the application is to look for
+#: it by name — and a test written against a literal is disarmed by a rename,
+#: silently and while staying green.
+SWEEP_THREAD_NAME: Final[str] = "preview-sweep"
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,16 +130,11 @@ class PreviewSweep:
         # journal — silence — and they are different faults with different fixes.
         log.debug("sweeping candidate previews", extra={"event": "preview.sweep_started"})
         deleted = forgotten = reclaimed = retained = failed = 0
-        # **The whole pass runs inside one transaction, and that is what makes
-        # the rule hold against a writer rather than only against a reader.**
-        # Reading the references and then unlinking are two steps, and phase 2
-        # writes between them: `PreviewCache.store` hands back a digest-named
-        # file it finds on disk without re-fetching, so a resolve run for a work
-        # still under review can attach a row to a path this pass decided was
-        # reclaimable — and `record_image` never rewrites `preview_path` for a
-        # URL a work already holds, so that row would name a deleted file for
-        # the rest of its review life. Taking the store's lock across both halves
-        # serialises this against `record_image`, which takes the same one.
+        # The whole pass runs inside one transaction, so no row can appear
+        # against a path *while* the pass is deciding about it: `record_image`
+        # takes the same lock. That is what this closes, and it is not the whole
+        # race — a writer whose file check ran before the pass started can still
+        # write afterwards. The module docstring has the surviving interleaving.
         #
         # The cost is bounded by what is inside: a walk of a household's rows and
         # a handful of unlinks, single-digit milliseconds, against a plane whose
@@ -296,7 +306,7 @@ def start_sweeping(sweep: PreviewSweep, *, interval_seconds: float) -> Callable[
         target=run_periodically,
         args=(sweep,),
         kwargs={"interval_seconds": interval_seconds, "stop": stop},
-        name="preview-sweep",
+        name=SWEEP_THREAD_NAME,
         daemon=True,
     )
     thread.start()

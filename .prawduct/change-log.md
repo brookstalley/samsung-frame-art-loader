@@ -133,10 +133,22 @@ attach a row to a path the pass had already judged reclaimable — and
 that row would have named a deleted file for the rest of its review life. Exactly
 the outcome the path-shaped unit of deletion was built to prevent, re-entered
 through the write side instead of the verdict side. The pass now runs inside one
-store transaction, which is the lock `record_image` takes; the invariant the
-artifacts state unconditionally now holds against a writer rather than against the
-moment the sweep looked. `DiscoveryService.transaction()` is exposed for that one
-caller and says so.
+store transaction, which is the lock `record_image` takes, and
+`DiscoveryService.transaction()` is exposed for that one caller.
+
+**That narrowed the race and did not close it, which the verify pass caught and
+this entry originally claimed otherwise.** The writer's own two halves straddle the
+lock: `PreviewCache.store` checks the file with no lock at all, and `record_image`
+takes one afterwards, so a resolve run can capture a path, have a whole sweep pass
+delete it, and then write the row. Closing that means the row write verifying the
+file inside the lock it already takes — a change to what the record layer depends
+on, and one that quietly rewrites how a good deal of the suite seeds previews, so
+it is filed rather than bolted on at the end of a review round. What did land is
+that the consequence stops lying: a `preview_path` with no file behind it now reads
+as an absent copy rather than an unreadable one, which is the difference between
+sending a reader after the sweep and sending them after a corrupt download. Every
+place that claimed the race closed — the module docstring, the inline comment,
+`architecture.md`, and this entry — now states what the transaction actually buys.
 
 **A named deliverable was not shipped, and the surface — not the contract — was
 wrong.** `api-contract.md` requires the refusal of `verdict='awaiting_better_image'`

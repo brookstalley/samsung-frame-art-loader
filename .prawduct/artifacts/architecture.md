@@ -231,12 +231,18 @@ is no network between planes.
   the reason every service is: the entry point wires one thing, and a concern
   reachable only by an entry point is one no surface and no test can exercise.
 
-  Its pass runs inside one store transaction. Deciding what to delete is a read
-  and deleting it is a write to the filesystem, and `record_image` landing
-  between them would attach a work still under review to a file already gone —
-  so the lock is held across both halves. That is the one place in this plane
-  where a transaction spans work outside the store, and it is bounded to a walk
-  of the catalogue's rows plus a handful of unlinks.
+  Its pass runs inside one store transaction, and **what that closes is narrower
+  than "the sweep and phase 2 cannot race"**. Deciding what to delete is a read
+  and deleting it is a write to the filesystem; holding the lock across both stops
+  `record_image` landing *between* them, because it takes the same lock. It does
+  not stop the writer's own two halves straddling it — `PreviewCache.store` checks
+  the file with no lock at all and `record_image` takes one afterwards, so a row
+  can still be written naming a file a pass removed in between. That residual is
+  filed, and its consequence is bounded rather than hidden: `ReviewService` reports
+  a `preview_path` with no file behind it as an absent copy, not an unreadable one.
+  This is the one place in this plane where a transaction spans work outside the
+  store, and it is bounded to a walk of the catalogue's rows plus a handful of
+  unlinks.
 
   `DiscoveryRunner` holds `DiscoveryService`, not the other way round, and the
   engine hangs off the runner alone — no other service can reach it, which is
@@ -589,6 +595,7 @@ catalogue does not apply. What remains:
 | TV unreachable / websocket drop | rotation stalls | Retry with backoff; the TV holds its last image. Expected operating condition, not an incident |
 | E-paper write fails | label stale | Log and continue; never let a panel failure stop the TV rotation |
 | Budget exhausted mid-run (the provider refuses — a 403; see `openrouter-api-findings.md`) | discovery halts partially | `halted_by_budget`, a modelled outcome. Already-acquired works stay acquired |
+| Preview sweep stops running | **curation only, and silently** | The characteristic failure of the plane's one periodic job: no error, no refusal, and no symptom until the SD card fills. It is upstream of the row below, and the only signal is positive — `preview.swept` at INFO on **every** pass, including the ones that reclaim nothing, so absence over an interval is the fault. A pass that hangs instead of stopping is the neighbouring case and reads differently: `preview.sweep_started` with no `preview.swept`, and at shutdown a `preview.sweep_wedged` warning, because that pass holds the store lock the next generation of services will want |
 | SD card full | **both planes** | The one genuinely shared failure. Needs a free-space guard before acquisition, not a disk-full exception during it |
 | SD card corruption | catastrophic | The catalogue is the irreplaceable asset and it lives here. Mitigation is off-device backup — see `operational-spec.md` |
 
