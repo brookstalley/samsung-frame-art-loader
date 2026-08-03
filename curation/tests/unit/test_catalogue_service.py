@@ -48,6 +48,25 @@ def test_a_work_cannot_point_at_an_artist_that_does_not_exist(service):
         service.add_artwork(title="Nighthawks", artist_id="nope")
 
 
+def test_artists_are_listed_in_the_name_order_three_docstrings_promise(service):
+    """The order is documented in the protocol, the adapter and the service.
+
+    Nothing asserted it, and the assertions that existed compared against an
+    empty list — which a store returning nothing at all would satisfy. Insertion
+    order is deliberately not name order here, so a read that simply echoed the
+    order rows were written in comes out wrong.
+    """
+    for name in ("Vincent van Gogh", "edward hopper", "Salvador Dalí"):
+        service.add_artist(name=name)
+
+    listed = [artist.name for artist in service.list_artists()]
+
+    assert listed == ["edward hopper", "Salvador Dalí", "Vincent van Gogh"], (
+        "case-insensitive by name — a lowercase entry sorting after every capitalised one "
+        "is the ordering a caller sees as arbitrary"
+    )
+
+
 def test_listing_reports_the_total_not_just_the_page(seeded_service):
     listing = seeded_service.list_artworks(limit=2)
 
