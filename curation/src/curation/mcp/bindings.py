@@ -26,7 +26,7 @@ from curation.manifest.builder import ManifestBuild
 from curation.mcp.envelope import ok
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
-from curation.persistence.discovery_records import DiscoveryRun, InitiatedBy, RunStatus
+from curation.persistence.discovery_records import DiscoveryRun, InitiatedBy, RunKind, RunStatus
 from curation.persistence.records import Artist, Artwork, Directive, Theme
 from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing
 from curation.services.container import Services
@@ -173,6 +173,21 @@ def _cancel_run(services: Services, arguments: Mapping[str, Any]) -> dict[str, A
     return _run_view(services.runner.cancel(arguments["run_id"]))
 
 
+def _resolve_images(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    run = services.runner.resolve_images(
+        candidate_work_ids=arguments["work_ids"],
+        initiated_by=InitiatedBy.MCP_CLIENT,
+    )
+    return ok(
+        **_run_fields(run),
+        notice=(
+            "The re-search is under way; this is a handle, not a result. Call "
+            f"art_discovery(action='status', run_id='{run.id}'), which holds until something changes. "
+            "What it spends is added to the run that first proposed these works."
+        ),
+    )
+
+
 def _list_runs(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
     runs = services.runner.list_runs(status=arguments.get("status"), kind=arguments.get("kind"))
     return ok(runs=[_run_fields(run) for run in runs], count=len(runs))
@@ -259,6 +274,7 @@ BINDINGS: Final[Mapping[tuple[str, str], Binding]] = {
     ("art_discovery", "approve"): _approve_run,
     ("art_discovery", "decline"): _decline_run,
     ("art_discovery", "cancel"): _cancel_run,
+    ("art_discovery", "resolve_images"): _resolve_images,
     ("art_discovery", "list_runs"): _list_runs,
     ("art_discovery", "spend"): _spend,
     ("art_catalogue", "list"): _list_artworks,
@@ -488,8 +504,16 @@ def _run_notice(view: RunView) -> str:
         # answer was true until phase 2 was built and false the moment it was.
         if not view.image_resolution_available:
             return (
-                f"The work list of {view.work_count} works is settled, but no image provider is configured "
+                f"There are {view.work_count} works to find images for, but no image provider is configured "
                 "in this deployment, so the run will stay here; cancel it when you are done reading it."
+            )
+        # A re-search never had a work list of its own to settle — the curator
+        # named its works — so the sentence a discovery run gets would describe
+        # a phase this run did not perform.
+        if view.run.kind is RunKind.RESOLVE:
+            return (
+                f"This re-search is looking again for images of the {view.work_count} works it covers. "
+                "Call status again to keep watching."
             )
         return (
             f"The work list of {view.work_count} works is settled and the run is looking for an image of each. "

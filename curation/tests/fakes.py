@@ -137,9 +137,19 @@ def an_image(
     height: int = 8400,
     provider: str = "artic",
     rights: RightsStatus | None = RightsStatus.PUBLIC_DOMAIN,
+    url: str | None = None,
 ) -> FoundImage:
+    """One instance a provider offers. Its URL is derived unless a test names one.
+
+    A test about *which* instance a work ended up with has to be able to say
+    which URL it expects, and a derived one it cannot write down forces the
+    assertion to go through some other field instead. The derivation stays the
+    default because most tests do not care, and two calls with the same title
+    and size standing for the same instance is what makes "the provider offered
+    it again" expressible at all.
+    """
     return FoundImage(
-        url=f"https://api.artic.edu/api/v1/artworks/{abs(hash((title, width))) % 100000}",
+        url=url or f"https://api.artic.edu/api/v1/artworks/{abs(hash((title, width))) % 100000}",
         provider=provider,
         source_class=SourceClass.INSTITUTIONAL,
         acquisition_method=AcquisitionMethod.DEZOOMIFY,

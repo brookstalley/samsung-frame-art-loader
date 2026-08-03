@@ -48,6 +48,50 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-03: The re-search runs, and the rejection it defends against finally sticks
+
+<!-- prawduct: chunks=16B | status=shipped | scope=v1-build -->
+
+**Why:** `resolve_images` was fully specified and half built — coverage,
+constraint 14, the parent link and the terminal-verdict guard all landed with 08B
+and 16A — but nothing ran a resolve run and the action was withheld from the
+surface. A curator who rejected a scan had no way to ask for a better one, so
+`awaiting_better_image` was a dead end.
+
+**What changed:** the runner half. `DiscoveryRunner.resolve_images` starts a
+`kind='resolve'` run, registers it in flight before handing off, and returns its
+handle at once — the third entry into phase 2 after the inline one and
+`approve`'s. A re-search asks about **everything it covers**: coverage is the
+scope a curator named, every covered work has been resolved once by definition,
+and the discovery-run filter on "not yet resolved" would have skipped the whole
+request while still holding the works against a second attempt. The action is
+advertised for the first time, with the tips a model reads pinned to the refusals
+the service actually makes. `art_discovery` is now whole at ten actions.
+
+**The defect this chunk surfaced:** instance suppression was scoped to the row
+carrying the rejection, not to the URL. A provider re-offering the same scan —
+the normal case between two searches a minute apart — wrote a fresh row with a
+null `rejected_at` and selected it, handing the curator back exactly what they
+had turned down. Nothing before this could produce it, because nothing searched
+twice. `record_image` now returns the instance a work already holds for a URL
+rather than adding a second, and the rule is written as a corollary to constraint
+7 in `data-model.md`.
+
+**Two smaller things, recorded rather than glossed.** The registry gained an
+`array` parameter type carrying its element type, because `work_ids` is the
+surface's first list and a bare `{"type": "array"}` publishes nothing a model can
+act on — elements are type-checked with the offending position named. And a
+resolve run is priced at creation from the works it covers, because `estimate` on
+one otherwise answered with a sentence about phase 1 finishing, which cannot
+happen on a run that never had one.
+
+**Verified:** both suites green (curation 1034 → 1067). Every new branch was
+deleted in turn and the suite watched go red — eight for eight, two of which were
+undefended on the first pass and are the reason the check was run. The product
+was booted and driven by a real MCP client: `work_ids` publishes
+`items: {type: string}`, `help` carries the action and its five tips, and the
+three refusals answer in the words the tips promise.
+
 ## 2026-08-02: Discovery phase 2 — works become instances, and the near-match is refused
 
 <!-- prawduct: chunks=16A | status=shipped | scope=v1-build -->

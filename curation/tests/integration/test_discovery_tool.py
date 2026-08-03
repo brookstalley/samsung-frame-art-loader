@@ -75,7 +75,11 @@ async def test_every_declared_action_is_reachable_over_the_wire(server_url):
     assert payload["note"] is None
     declared = {action["action"] for action in payload["actions"]}
     assert declared == set(ART_DISCOVERY.action_names)
-    assert "resolve_images" not in declared, "a re-search is not built; advertising it would be a promise"
+    # Withheld until the re-search could actually run, because a declared action
+    # a model cannot tell apart from a working one is a promise the surface
+    # cannot keep. It runs now, so it is advertised — and this asserts the
+    # advertising rather than its absence.
+    assert "resolve_images" in declared
 
 
 async def test_a_start_returns_a_handle_rather_than_a_result(server_url, engine):

@@ -649,7 +649,7 @@ selected. Produced by phase 2.
 |---|---|---|---|
 | `id` | UUID | PK | |
 | `candidate_work_id` | UUID | FK → CandidateWork, required | |
-| `url` | string | required | Where this instance was found. |
+| `url` | string | required | Where this instance was found. Unique per `candidate_work_id` — see constraint 7. |
 | `preview_url` | string | nullable | Small image for review. Source-side URL. |
 | `preview_path` | string | nullable | Cached local copy, relative to `ART_ROOT`. Review must not depend on a museum server being reachable. |
 | `provider` | string | required | e.g. `artic`, `google_arts`, `gallery_site`. Open vocabulary. |
@@ -1200,6 +1200,17 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
       its work, and this must leave the work itself eligible.
    Enforcing (b) through (a) is the failure mode: asking for a better scan would
    blacklist the painting. **Q11.**
+   **(b) is scoped to the URL, not to the row that holds it** *(added 2026-08-03,
+   when the re-search was first built and immediately defeated it)*. A work holds
+   **at most one instance per `url`**: recording one it already has returns the
+   instance already held rather than adding a second. Without that, suppression
+   lasts exactly as long as nothing searches again — a re-search re-offering the
+   same URL, which is the normal case because museums do not move their images
+   between two searches a minute apart, wrote a fresh row with a null
+   `rejected_at` and selected it. The curator asked for a better scan and was
+   handed back the one they had just turned down, with nothing anywhere recording
+   that it was the same image. The rule also retires the duplicate alternate a
+   second search would otherwise add to every review card.
 8. **Exactly one CandidateImage per CandidateWork has `is_selected = true`**, while
    the work has any unrejected instance. A work whose every instance has been
    rejected re-enters phase 2 rather than sitting selectionless.

@@ -184,6 +184,32 @@ ART_DISCOVERY: Final = ToolRecord(
             ),
         ),
         Action(
+            name="resolve_images",
+            description="Look again for images of works whose instances the curator turned down. Returns a handle at once.",
+            example="art_discovery(action='resolve_images', work_ids=['<a work_id awaiting a better image>'])",
+            params=(
+                Param(
+                    name="work_ids",
+                    type="array",
+                    items="string",
+                    description="The candidate works to re-search, by id. They must all come from the same discovery run.",
+                    required=True,
+                ),
+            ),
+            tips=(
+                "This is a run like any other: it returns a run_id, and action='status', action='cancel' and "
+                "action='spend' all take it.",
+                "A work already being re-searched by a running re-search is refused, and the refusal names it — "
+                "submitting the same ids twice would pay twice for one result.",
+                "The works must all come from one discovery run, because a re-search hangs its cost on the "
+                "intent that proposed them. Start one re-search per originating run.",
+                "What this costs rolls up into the originating run's figure, so action='spend' on that run "
+                "still answers what asking for it cost altogether.",
+                "A verdict you reach while this is running wins: a re-search finishing against a work you have "
+                "since accepted or rejected reports what it found and leaves your decision alone.",
+            ),
+        ),
+        Action(
             name="list_runs",
             description="List discovery runs, newest first, optionally narrowed to one state or kind.",
             example="art_discovery(action='list_runs', status='awaiting_approval')",

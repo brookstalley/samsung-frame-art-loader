@@ -26,7 +26,7 @@ core keeps this logic testable without an event loop.
 
 import logging
 import uuid
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -72,6 +72,16 @@ class RunResults:
     resolved: Sequence[CandidateWork]
     unresolved: Sequence[CandidateWork]
     pending: Sequence[CandidateWork]
+
+    @property
+    def works(self) -> Sequence[CandidateWork]:
+        """Every work this run is responsible for, whatever came of it.
+
+        The buckets partition the works, so callers that want the whole set get
+        it from here rather than re-adding three lengths in their own arithmetic
+        — which is how two surfaces come to disagree about how big a run was.
+        """
+        return [*self.resolved, *self.unresolved, *self.pending]
 
 
 @dataclass(frozen=True, slots=True)
@@ -283,7 +293,13 @@ class DiscoveryService:
 
     # -- writes: the re-search ------------------------------------------------
 
-    def start_resolve_run(self, *, candidate_work_ids: Sequence[str], initiated_by: InitiatedBy) -> DiscoveryRun:
+    def start_resolve_run(
+        self,
+        *,
+        candidate_work_ids: Sequence[str],
+        initiated_by: InitiatedBy,
+        price: Callable[[int], Decimal] | None = None,
+    ) -> DiscoveryRun:
         """Begin a re-search over works an earlier run proposed.
 
         A resolve run enters at phase 2 and can never reach `resolving_works`,
@@ -294,6 +310,12 @@ class DiscoveryService:
         them.** Double-submitting the same ids would spend twice for one result
         on the only operation that spends at all, and a curator who did it by
         accident should find out rather than be quietly corrected.
+
+        `price` is asked for the estimate rather than handed one, because the
+        count it prices is the *deduplicated* one this method works out, and a
+        caller pricing the ids it sent would over-charge every request that
+        named a work twice. Pricing itself stays out of here: what a search
+        costs is configuration, and this layer holds no configuration.
         """
         if not candidate_work_ids:
             raise ServiceError("A resolve run needs at least one candidate work to re-search.")
@@ -317,6 +339,7 @@ class DiscoveryService:
                 approval_required=False,
                 started_at=datetime.now(UTC),
                 parent_run_id=parent_ids.pop(),
+                estimated_cost_usd=None if price is None else price(len(works)),
             )
             store_write(self._store.add_run, run)
             for work in works:
@@ -513,14 +536,32 @@ class DiscoveryService:
         would appear at — a work whose every instance is below floor simply holds
         no selection, and is reported `unresolved` rather than putting a postage
         stamp on the wall on nobody's authority.
+
+        **A URL the work already holds returns the instance already held**, and
+        writes nothing. A rejection is a fact about the scan at that address, not
+        about the row that happens to carry it, so a second row for the same URL
+        would come back with a null `rejected_at` and be handed straight back to
+        the curator who turned it down — suppression lasting only until something
+        searched again. Searching again is exactly what a re-search does, and a
+        provider re-offering the same URL is the normal case rather than the
+        exotic one.
         """
         with self._store.transaction():
             work = self.get_candidate_work(candidate_work_id)
+            found_at = require_text(url, field="url")
             held = self._store.list_candidate_images(work.id)
+            already = next((instance for instance in held if instance.url == found_at), None)
+            if already is not None:
+                log.info(
+                    "an instance of %r was offered again at a URL the work already holds; keeping the one on record",
+                    work.proposed_title,
+                    extra={"event": "image.already_held", "rejected": already.rejected_at is not None},
+                )
+                return already
             image = CandidateImage(
                 id=str(uuid.uuid4()),
                 candidate_work_id=work.id,
-                url=require_text(url, field="url"),
+                url=found_at,
                 provider=require_text(provider, field="provider"),
                 source_class=require_member(source_class, enum=SourceClass, field="source_class"),
                 acquisition_method=require_member(acquisition_method, enum=AcquisitionMethod, field="acquisition_method"),

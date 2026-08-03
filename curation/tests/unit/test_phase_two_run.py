@@ -393,9 +393,10 @@ def test_a_run_that_could_not_reach_the_provider_for_anything_fails(services, en
 def test_a_verdict_reached_while_phase_2_ran_is_not_overwritten(services, engine, settings, museum, previews):
     """Only the curator's verdict is authoritative; a resolution reports, never applies.
 
-    The 16B re-search exercises this against a resolve run. Here it is reachable
-    the moment phase 2 exists at all, because a curator reviewing a partly
-    resolved run can decide a work while the next one is still being searched.
+    Reachable the moment phase 2 exists at all, because a curator reviewing a
+    partly resolved run can decide a work while the next one is still being
+    searched. `test_resolve_run.py` exercises the same guard against a
+    re-search, where the window is wide open rather than incidental.
     """
     engine.result = a_list("The Elephants")
     museum.holdings = {"The Elephants": (an_image("The Elephants"),)}

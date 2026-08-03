@@ -29,7 +29,13 @@ _JSON_TYPES: Final[Mapping[str, type | tuple[type, ...]]] = {
     "string": str,
     "integer": int,
     "boolean": bool,
+    "array": list,
 }
+
+#: What an array's elements may be. Narrower than `_JSON_TYPES` on purpose: an
+#: array of arrays has no describable element type in this scheme, and nothing
+#: on this surface wants one.
+_ELEMENT_TYPES: Final[tuple[str, ...]] = ("string", "integer")
 
 
 class RegistryError(RuntimeError):
@@ -48,6 +54,12 @@ class Param:
     `choices`, `minimum`, and `maximum` are the valid set in machine-readable
     form: they become the JSON Schema constraint, the value the validator
     checks, and the enumeration an error message quotes back.
+
+    `items` is the same idea one level down, and an array must carry it. A bare
+    `{"type": "array"}` tells a model nothing about what to put in the list, and
+    leaves the validator accepting `[1, 2]` for a list of ids — which then fails
+    somewhere below with an error phrased about whatever the elements were used
+    for rather than about what the caller sent.
     """
 
     name: str
@@ -57,10 +69,17 @@ class Param:
     choices: tuple[str, ...] | None = None
     minimum: int | None = None
     maximum: int | None = None
+    items: str | None = None
 
     def __post_init__(self) -> None:
         if self.type not in _JSON_TYPES:
             raise RegistryError(f"Param {self.name!r} has unsupported type {self.type!r}.")
+        if self.type == "array" and self.items not in _ELEMENT_TYPES:
+            raise RegistryError(
+                f"Array param {self.name!r} must declare items as one of {', '.join(_ELEMENT_TYPES)}, got {self.items!r}."
+            )
+        if self.type != "array" and self.items is not None:
+            raise RegistryError(f"Param {self.name!r} is {_article(self.type)} and cannot declare items.")
 
     def json_schema(self) -> dict[str, object]:
         schema: dict[str, object] = {"type": self.type, "description": self.description}
@@ -70,6 +89,8 @@ class Param:
             schema["minimum"] = self.minimum
         if self.maximum is not None:
             schema["maximum"] = self.maximum
+        if self.items is not None:
+            schema["items"] = {"type": self.items}
         return schema
 
 
@@ -159,16 +180,17 @@ class ToolRecord:
                 # actions declaring `limit` with different maxima would ship a
                 # schema stating one action's ceiling as if it governed both,
                 # while per-action validation quietly enforced the other.
-                if (previous.type, previous.choices, previous.minimum, previous.maximum) != (
+                if (previous.type, previous.choices, previous.minimum, previous.maximum, previous.items) != (
                     param.type,
                     param.choices,
                     param.minimum,
                     param.maximum,
+                    param.items,
                 ):
                     raise RegistryError(
                         f"{self.name} declares {param.name!r} inconsistently: "
-                        f"{previous.type}/{previous.choices}/{previous.minimum}-{previous.maximum} then "
-                        f"{param.type}/{param.choices}/{param.minimum}-{param.maximum}."
+                        f"{previous.type}[{previous.items}]/{previous.choices}/{previous.minimum}-{previous.maximum} then "
+                        f"{param.type}[{param.items}]/{param.choices}/{param.minimum}-{param.maximum}."
                     )
 
     @property
@@ -261,6 +283,8 @@ def _param_help(param: Param) -> dict[str, object]:
     }
     if param.choices is not None:
         described["valid_values"] = list(param.choices)
+    if param.items is not None:
+        described["items"] = param.items
     bounds = _bounds(param)
     if bounds:
         described["range"] = bounds
@@ -386,6 +410,8 @@ def _check_value(param: Param, value: object, action: Action) -> None:
             enumeration={"parameter_types": {param.name: param.type}},
             example=action.example,
         )
+    if param.items is not None and isinstance(value, list):
+        _check_elements(param, value, action)
     if param.choices is not None and value not in param.choices:
         raise ArgumentError(
             f"Invalid value for {param.name!r}: {_render(value)}.",
@@ -398,6 +424,25 @@ def _check_value(param: Param, value: object, action: Action) -> None:
         raise ArgumentError(
             f"Parameter {param.name!r} must be {_bounds_phrase(param)}, got {value}.",
             enumeration={"parameter_range": {param.name: _bounds(param)}},
+            example=action.example,
+        )
+
+
+def _check_elements(param: Param, values: list[object], action: Action) -> None:
+    """Check every element, and say which one was wrong.
+
+    The position is in the message because a list of forty ids with one integer
+    in it is a caller error nobody can find from "must be an array of string".
+    A `bool` is refused for an integer element for the same reason it is at the
+    top level: it is an `int` in Python and would go on to behave as 1.
+    """
+    expected = _JSON_TYPES[param.items]  # type: ignore[index]
+    for position, element in enumerate(values):
+        if isinstance(element, expected) and not (param.items == "integer" and isinstance(element, bool)):
+            continue
+        raise ArgumentError(
+            f"Parameter {param.name!r} must be an array of {param.items}, " f"but item {position} is {_render(element)}.",
+            enumeration={"parameter_types": {param.name: f"array of {param.items}"}},
             example=action.example,
         )
 

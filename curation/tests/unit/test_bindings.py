@@ -11,6 +11,7 @@ scattering its tests into a file that disclaims it is how that boundary stops
 being legible.
 """
 
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -145,3 +146,48 @@ def test_the_three_endings_an_agent_must_tell_apart_each_say_what_to_do_next(sta
     )
 
     assert must_say in _run_notice(view)
+
+
+def _resolving(kind: RunKind) -> RunView:
+    return RunView(
+        run=DiscoveryRun(
+            id="r1",
+            kind=kind,
+            initiated_by=InitiatedBy.MCP_CLIENT,
+            status=RunStatus.RESOLVING_IMAGES,
+            approval_required=False,
+            started_at=datetime(2026, 8, 2, 9, 0, tzinfo=UTC),
+            parent_run_id="r0" if kind is RunKind.RESOLVE else None,
+        ),
+        resolved=0,
+        unresolved=0,
+        pending=2,
+        searches_used=0,
+        search_allowance=4,
+        image_resolution_available=True,
+    )
+
+
+def test_a_re_search_is_not_told_its_work_list_has_settled():
+    """The two run kinds share this state and reached it by different routes.
+
+    A re-search never ran phase 1 — the curator named its works — so the
+    sentence written for a discovery run describes a step this run did not
+    perform, on the state a client sees for the whole time it is working.
+    """
+    discovery_notice = _run_notice(_resolving(RunKind.DISCOVERY))
+    resolve_notice = _run_notice(_resolving(RunKind.RESOLVE))
+
+    assert "work list" in discovery_notice
+    assert "work list" not in resolve_notice
+    assert "re-search" in resolve_notice
+    assert "2 works it covers" in resolve_notice
+
+
+def test_a_deployment_with_no_provider_says_so_whichever_kind_of_run_is_asking():
+    """The absent capability outranks the run kind: neither can advance, for one reason."""
+    for kind in RunKind:
+        view = _resolving(kind)
+        notice = _run_notice(replace(view, image_resolution_available=False))
+
+        assert "no image provider is configured" in notice

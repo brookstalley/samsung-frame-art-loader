@@ -9,7 +9,7 @@ import pytest
 from curation.mcp import registry
 from curation.mcp.bindings import BINDINGS
 from curation.mcp.registry import HELP_ACTION, Action, ArgumentError, Param, RegistryError, ToolRecord
-from curation.mcp.tools import ART_CATALOGUE, ART_REVIEW, TOOLS
+from curation.mcp.tools import ART_CATALOGUE, ART_DISCOVERY, ART_REVIEW, TOOLS
 
 
 def _tool(**overrides) -> ToolRecord:
@@ -208,6 +208,58 @@ def test_a_boolean_is_not_accepted_as_an_integer():
 
     with pytest.raises(ArgumentError, match="must be an integer"):
         registry.validate(ART_CATALOGUE, action, {"action": "list", "limit": True})
+
+
+def test_an_arrays_elements_are_checked_and_the_offending_one_is_named():
+    """A list of forty ids with one integer in it has to say *which* one.
+
+    Checking only that the value is a list would let the wrong element through
+    to whatever consumes it, which then fails with a message phrased about what
+    it was doing rather than about what the caller sent.
+    """
+    action = ART_DISCOVERY.action("resolve_images")
+
+    with pytest.raises(ArgumentError) as caught:
+        registry.validate(ART_DISCOVERY, action, {"action": "resolve_images", "work_ids": ["a-real-id", 7]})
+
+    assert "must be an array of string" in caught.value.message
+    assert "item 1 is 7" in caught.value.message
+    assert caught.value.enumeration["parameter_types"] == {"work_ids": "array of string"}
+
+
+def test_a_boolean_is_not_accepted_as_an_arrays_integer_element():
+    """The same trap as the top-level check, one level down: bool subclasses int."""
+    counts = Param(name="counts", type="array", items="integer", description="Some counts.", required=True)
+    tool = _tool(actions=(Action(name="tally", description="Tally.", example="art_test(action='tally')", params=(counts,)),))
+
+    with pytest.raises(ArgumentError, match="item 0 is true"):
+        registry.validate(tool, tool.action("tally"), {"action": "tally", "counts": [True]})
+
+
+def test_an_array_parameter_publishes_the_type_of_its_elements():
+    """A bare `{"type": "array"}` tells a model nothing about what to put in the list."""
+    schema = registry.input_schema(ART_DISCOVERY)["properties"]["work_ids"]
+
+    assert schema["type"] == "array"
+    assert schema["items"] == {"type": "string"}
+    help_entry = next(
+        param
+        for action in registry.help_payload(ART_DISCOVERY)["actions"]
+        if action["action"] == "resolve_images"
+        for param in action["required_parameters"]
+    )
+    assert help_entry["items"] == "string"
+
+
+def test_an_array_that_declares_no_element_type_is_refused_at_import():
+    with pytest.raises(RegistryError, match="must declare items"):
+        Param(name="ids", type="array", description="Some ids.")
+
+
+def test_a_scalar_that_declares_an_element_type_is_refused_at_import():
+    """Meaningless rather than harmless: it would publish an `items` nothing reads."""
+    with pytest.raises(RegistryError, match="cannot declare items"):
+        Param(name="name", type="string", description="A name.", items="string")
 
 
 def test_a_value_outside_a_parameters_range_reports_the_bounds():

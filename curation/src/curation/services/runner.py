@@ -293,15 +293,23 @@ class DiscoveryRunner:
                 "when phase 1 finishes and the work count is known. Call estimate with no run_id for the "
                 "phase-1 figure, or status to see where this run has got to."
             )
-        return Estimate(
-            phase="phase_2",
-            cost_usd=run.estimated_cost_usd,
-            basis=(
-                f"Resolving the {len(self._discovery.list_candidate_works(run_id))} works this run proposed. "
-                "Phase 2 asks museum APIs, which are free, and identifies works locally — so approving this "
-                "run spends nothing further. The gate is on the work count, not the price."
-            ),
-            run_id=run_id,
+        return Estimate(phase="phase_2", cost_usd=run.estimated_cost_usd, basis=self._phase_two_basis(run), run_id=run_id)
+
+    def _phase_two_basis(self, run: DiscoveryRun) -> str:
+        """What the phase-2 figure prices, in the terms of the run being asked about.
+
+        A re-search has no work list of its own and no approval gate, so the
+        sentence written for a discovery run would tell a curator that this run
+        proposed nothing and that approving it spends no more — one false, the
+        other describing a decision they will never be offered.
+        """
+        works = len(self._discovery.run_results(run.id).works)
+        free = "Phase 2 asks museum APIs, which are free, and identifies works locally"
+        if run.kind is RunKind.RESOLVE:
+            return f"Re-searching the {works} works this run covers. {free}, so this re-search costs nothing."
+        return (
+            f"Resolving the {works} works this run proposed. {free} — so approving this run spends nothing "
+            "further. The gate is on the work count, not the price."
         )
 
     def spend_report(self, *, run_id: str | None = None, year: int | None = None, month: int | None = None) -> SpendReport:
@@ -419,6 +427,52 @@ class DiscoveryRunner:
     def cancel(self, run_id: str) -> RunView:
         """Stop a run from wherever it is. Money already spent stays recorded."""
         return self._transition(self._discovery.cancel_run, run_id, event="run.cancelled")
+
+    def resolve_images(self, *, candidate_work_ids: Sequence[str], initiated_by: InitiatedBy) -> DiscoveryRun:
+        """Look again for images of works whose instances the curator turned down.
+
+        Returns a handle at once and re-searches behind it, exactly as `start`
+        does and for the same reason: this takes minutes, and a call held open
+        for it would be abandoned by the client long before it finished. The
+        handle is a run, so `status`, `cancel` and `spend` work on it with
+        nothing special to know.
+
+        **A deployment with no image provider is refused here** rather than
+        given a run. `approve` on a discovery run tolerates that case, because
+        the run's work list is real and was worth producing whatever happens
+        next; a re-search has nothing else in it, so the same tolerance would
+        mint a row that nothing will ever pick up and report it as under way.
+        """
+        images = self._images
+        if images is None:
+            raise ServiceError(
+                "This deployment has no image provider configured, so a re-search has nothing to ask. "
+                "Nothing was started and nothing was spent."
+            )
+        run = self._discovery.start_resolve_run(
+            candidate_work_ids=candidate_work_ids,
+            initiated_by=initiated_by,
+            price=self._settings.phase2_estimate_usd,
+        )
+        # Registered before the work is handed off, so a `status` arriving in
+        # the gap between the handle being returned and the worker starting
+        # still sees a run in flight and holds for it.
+        with self._changed:
+            self._in_flight.add(run.id)
+        self._bump()
+        with run_context(run.id):
+            log.info(
+                "re-search started",
+                extra={
+                    "event": "run.started",
+                    "initiated_by": str(run.initiated_by),
+                    "parent_run_id": run.parent_run_id,
+                    "works_covered": len(self._discovery.covered_works(run.id)),
+                    "estimated_cost_usd": str(run.estimated_cost_usd),
+                },
+            )
+        self._spawn(lambda: self._resolve_run(run.id))
+        return run
 
     # -- phase 1 --------------------------------------------------------------
 
@@ -653,11 +707,28 @@ class DiscoveryRunner:
             log.exception("phase 2 raised an unexpected error", extra={"event": "run.failed"})
             self._end(run_id, self._discovery.fail_run, "run.failed", "Phase 2 failed unexpectedly.")
 
-    def _resolve_pending(self, run_id: str, images: PhaseTwoEngine, previews: PreviewCache) -> None:
-        """Ask the provider about each work that has not been resolved yet."""
-        works = [
+    def _works_to_resolve(self, run_id: str) -> Sequence[CandidateWork]:
+        """Which works this run should be asking about, which depends on its kind.
+
+        A discovery run proposed a whole list and resolves the part of it that
+        has not been resolved yet. **A re-search asks about everything it
+        covers, with no such filter**: coverage is the scope a curator named and
+        the thing constraint 14 holds against double-submission, so a covered
+        work left unasked would be a silent no-op that still blocked the work
+        from being re-searched until the run ended. Every work a re-search
+        covers has already been resolved once, by definition — that is what the
+        curator is asking to redo.
+        """
+        run = self._discovery.get_run(run_id)
+        if run.kind is RunKind.RESOLVE:
+            return self._discovery.covered_works(run_id)
+        return [
             work for work in self._discovery.list_candidate_works(run_id) if work.resolution_status is ResolutionStatus.PENDING
         ]
+
+    def _resolve_pending(self, run_id: str, images: PhaseTwoEngine, previews: PreviewCache) -> None:
+        """Ask the provider about each work this run is responsible for."""
+        works = self._works_to_resolve(run_id)
         resolved = unresolved = unreachable = 0
         for work in works:
             # Re-read each time round rather than once before the loop: a curator
@@ -771,7 +842,7 @@ class DiscoveryRunner:
 
     def _view(self, run_id: str) -> RunView:
         results = self._discovery.run_results(run_id)
-        works = len(results.resolved) + len(results.unresolved) + len(results.pending)
+        works = len(results.works)
         return RunView(
             run=results.run,
             resolved=len(results.resolved),

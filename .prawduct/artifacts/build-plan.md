@@ -99,7 +99,7 @@ moves back the moment the bench returns.
 - [x] Chunk 14B: The OpenRouter client, the phase-1 engine, the ceiling (issue #12)
 - [x] Chunk 15: Spikes — search-engine choice and `work_dedup_key` derivation (issue #18)
 - [x] Chunk 16A: Discovery phase 2 — works to instances, over a real museum API
-- [ ] Chunk 16B: `resolve_images` — the re-search, its coverage and its rollup
+- [x] Chunk 16B: `resolve_images` — the re-search, its coverage and its rollup
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
@@ -231,10 +231,11 @@ probe recorded the real shapes first** — that is precisely what the verify-api
 step bought, and it is why the split is safe here and would not have been before
 2026-08-02.
 
-**14A landed 2026-08-02.** Eight of `art_discovery`'s ten actions are live and
-drive the real service; `resolve_images` is deliberately not advertised, because
-a declared action a model cannot distinguish from a working one is a promise the
-surface cannot keep. The seam stayed **phase 1 only**, which is the one scoping
+**14A landed 2026-08-02.** Eight of `art_discovery`'s ten actions went live and
+drove the real service; `resolve_images` was deliberately withheld, because a
+declared action a model cannot distinguish from a working one is a promise the
+surface cannot keep. *(It runs and is advertised as of 16B — all ten are live.)*
+The seam stayed **phase 1 only**, which is the one scoping
 call worth carrying forward: defining phase 2's interface now would encode a
 shape before the ARTIC probe that Chunk 16 makes its own first step, and the
 split's stated risk applies exactly there. The consequence is visible and
@@ -316,6 +317,40 @@ $0.01336. **One consequence is recorded rather than glossed**: the token basis i
 no longer input-dominated, so "output price is nearly irrelevant to model choice"
 no longer holds and the model table in `nonfunctional-requirements.md` reorders.
 The chosen model is cheapest on either basis, so the decision stands.
+
+**Chunk 16B landed 2026-08-03, and `art_discovery` is now whole** — all ten
+actions live, the last of them the one 14A withheld on purpose. A curator who
+turns down a scan can ask for a better one: `resolve_images` mints a
+`kind='resolve'` run, returns its handle at once, re-searches every work it
+covers, and rolls its spend up to the intent that proposed them. `status`,
+`cancel` and `spend` take its id with no special-casing, which is what modelling
+the re-search as a run bought.
+
+**Most of the chunk was already there, and the part that was not was the part
+that could not be seen from the record layer.** Coverage, constraint 14, the
+parent link and the terminal-verdict guard all landed with 08B and 16A; what 16B
+added is the runner half — and the rule that a re-search asks about **everything
+it covers**, with no "not yet resolved" filter. Every covered work has been
+resolved once by definition, so the discovery-run filter would have skipped the
+entire request while still holding the works against a second attempt.
+
+**The chunk found a defect the whole design depended on and nothing enforced.**
+Instance suppression was scoped to the *row* carrying a rejection, not to the
+URL — so a provider re-offering the same scan, which is the normal case between
+two searches a minute apart, wrote a fresh row with a null `rejected_at` and
+selected it. The curator asked for better and was handed back exactly what they
+had just turned down. **Nothing before this chunk could produce it, because
+nothing searched twice.** The rule is now written where it belongs, as a
+corollary to constraint 7 in `data-model.md`: a work holds at most one instance
+per `url`, and recording one it already has returns the instance already held.
+
+Two smaller consequences are recorded rather than glossed. The registry gained an
+**`array` parameter type** with a declared element type, because `work_ids` is
+the surface's first list and a bare `{"type": "array"}` publishes nothing a model
+can act on. And a re-search now carries an `estimated_cost_usd` of its own,
+priced from the works it covers — without it, `estimate` on a resolve run
+answered with a sentence about phase 1 finishing, which will never happen on a
+run that never had one.
 
 ## Scaffolding
 
