@@ -1688,7 +1688,9 @@ and not a rework.
   sweep over terminal-verdict CandidateWorks, not an on-verdict hook | a sweep
   is idempotent and safe to re-run after crashes, where a hook that dies with
   the process leaks silently — and deletion never touches the catalogue either
-  way | user can veto/override]`. Truncation in listings is always explicit.
+  way | user can veto/override]`. **Delivered in part — see 17B's entry below
+  for what the shipped sweep does not reclaim, and issue #62.** Truncation in
+  listings is always explicit.
 **Split into 17A and 17B on 2026-08-03, at the operator's call**, at the seam
 between *showing* the curator the work and *recording* what they decided. The
 reason is the one that split 08, 14 and 16 — one Critic round over the whole would
@@ -1773,6 +1775,15 @@ runtime, and a tool part-way through its action set is exactly what 14A/14B and
   on-verdict hook | a sweep is idempotent and safe to re-run after crashes, where
   a hook that dies with the process leaks silently — and deletion never touches
   the catalogue either way | user can veto/override]`.
+  **Shipped partial, and this box is `[x]` anyway** (recorded 2026-08-03): the
+  sweep reclaims previews whose `CandidateImage` row names them, which is the
+  class an on-verdict hook would have reclaimed too. The crash-leaked file — no
+  row, so invisible to a sweep that walks rows — is the half the rationale above
+  actually turns on, and it is **unbuilt**, filed as issue #62 at `stage: design`
+  because a bare directory walk cannot tell an orphan from a file a live run
+  wrote seconds ago. The chunk is complete against its own deliverables; the
+  decision is not yet fully delivered, and a reader taking this DECISION at face
+  value would believe otherwise.
 - **Depends on:** Chunk 17A
 - **Artifacts consumed:** `api-contract.md` (§ set_verdict, § Rejecting an image
   does not re-search), `data-model.md` (promotion relationships, constraints

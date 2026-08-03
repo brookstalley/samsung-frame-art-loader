@@ -211,12 +211,19 @@ every judgement they have already made.
 > three.** Upstream originals in the image tree; derived renditions and
 > `thumbs/`, regenerated per device; and — since 2026-08-02 — `previews/`, the
 > candidate previews phase 2 caches so review works when a museum does not.
-> Previews are the most disposable of the three: each one is re-fetchable from a
-> URL the catalogue already holds, and a restored catalogue with an empty
-> `previews/` shows review cards that fall back to their source URLs while
-> everything else self-heals as described below. The **judgements** made against
-> those previews — which instance was selected, the rationale, which images were
-> rejected — are catalogue rows and are backed up.
+> Previews are the most disposable of the three, and **disposable here means
+> "losing one costs a picture, not a record" — not "it comes back"** (corrected
+> 2026-08-03). Nothing re-fetches a preview: `PreviewCache.store` runs once, when
+> phase 2 first records an instance, and a re-search does not restore the file
+> because `record_image` returns the instance a work already holds for that URL
+> without rewriting `preview_path`. So a restored catalogue with an empty
+> `previews/` shows review cards that fall back to reporting their source URLs —
+> permanently for every candidate still under review, until acquisition fetches
+> the real image after acceptance. That is a degraded review surface rather than
+> a loss, which is why the exclusion stands; it is not self-healing, which the
+> earlier wording implied. The **judgements** made against those previews — which
+> instance was selected, the rationale, which images were rejected — are catalogue
+> rows and are backed up.
 
 **Destination: another machine on the network** (desktop or NAS, over LAN or the
 overlay network). Decided 2026-07-20. No third party, no cost, no credential on
@@ -259,7 +266,7 @@ that will actually get run rather than skipped.
 | Deploy | `git pull`, then `systemctl restart` each unit. No migration spans the planes — the manifest is regenerated, never migrated |
 | Rollback | `git checkout` the previous commit, restart both |
 | Restart one plane | Safe at any time, in either order. The other is unaffected by design |
-| Add disk headroom | Prune `tile-cache/` and `temp/` — working space, not steady-state storage, sized by the largest single work in flight. **`previews/` reclaims itself since 2026-08-03**: the plane sweeps it hourly (`PREVIEW_SWEEP_INTERVAL_SECONDS`, 0 to disable), deleting the cached thumbnails of candidate works the curator has accepted or rejected, and logging `preview.swept` every pass whether or not it took anything — a plane that has stopped sweeping is therefore visible in the journal rather than only in the free-space figure. **Two things it does not reclaim, and the second is why deleting the directory by hand is still a listed remedy.** The previews of works nobody has judged yet — those are the ones review still needs, so a backlog of undecided candidates is a state in which this directory legitimately grows, and deciding them is the remedy. And **files no row names**: the sweep derives every path it considers from `CandidateImage.preview_path`, so bytes written by a phase-2 run that died between writing the file and recording the row are invisible to it permanently. That is not hypothetical — it is the case an on-verdict hook could never have covered, which is part of why the sweep exists — and it is unbuilt, filed rather than glossed. Until it is built, **`rm -rf` on `previews/` is the only thing that reclaims an orphan**, and it is always safe: a preview is disposable by design, a card falls back to its source URL, and the next review that needs one re-fetches it. It matters here because § Risks opens with the SD card as the top operational risk |
+| Add disk headroom | Prune `tile-cache/` and `temp/` — working space, not steady-state storage, sized by the largest single work in flight. **`previews/` reclaims itself since 2026-08-03**: the plane sweeps it hourly (`PREVIEW_SWEEP_INTERVAL_SECONDS`, 0 to disable), deleting the cached thumbnails of candidate works the curator has accepted or rejected, and logging `preview.swept` every pass whether or not it took anything — a plane that has stopped sweeping is therefore visible in the journal rather than only in the free-space figure. **Two things it does not reclaim, and the second is why deleting the directory by hand is still a listed remedy.** The previews of works nobody has judged yet — those are the ones review still needs, so a backlog of undecided candidates is a state in which this directory legitimately grows, and deciding them is the remedy. And **files no row names**: the sweep derives every path it considers from `CandidateImage.preview_path`, so bytes written by a phase-2 run that died between writing the file and recording the row are invisible to it permanently. That is not hypothetical — it is the case an on-verdict hook could never have covered, which is part of why the sweep exists — and it is unbuilt, filed rather than glossed. Until it is built, **`rm -rf` on `previews/` is the only thing that reclaims an orphan**, and it costs more than the word "disposable" suggests: **nothing re-fetches a preview.** `PreviewCache.store` is called once, by phase 2 when an instance is first recorded, and a re-search does not restore the file either — `record_image` returns the instance a work already holds for that URL without rewriting `preview_path`. So deleting the directory permanently costs the inline picture of every candidate **still under review**, whose cards fall back to reporting a source URL a curator would have to open by hand; works already decided lose nothing, since their previews were the sweep's to take anyway. Safe on a full card, and not free — prefer deciding the outstanding candidates first, which lets the sweep reclaim them properly. It matters here because § Risks opens with the SD card as the top operational risk |
 | **Verify the spend ceiling** | In the OpenRouter console, confirm the key in `OPENROUTER_API_KEY` still carries a **USD 20 credit limit with a monthly reset**. **This setting is the entire cap** — nothing in this repository enforces one, by ratified decision, because an application-side meter that fails open is indistinguishable from one that works. A key whose limit was cleared, or a key swapped for an uncapped one, looks identical on every surface the product exposes right up to the bill. `cd curation && uv run pytest -m live_api` asserts it mechanically (`test_the_key_reports_a_monthly_ceiling`) and costs a few cents to run |
 | Bound the journal | `SystemMaxUse=` in `journald.conf`. **Set this explicitly** — see below |
 | Patch curation's CPython | `uv python upgrade 3.14`, then rebuild the venv and restart. **`apt upgrade` does not do this** — it patches the display plane's 3.13 only |

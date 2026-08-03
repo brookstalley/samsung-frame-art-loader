@@ -130,6 +130,76 @@ sources** — acquisition is their only consumer so far. Adding a reader would b
 this chunk widening a different tool's contract on its own authority, so it is
 filed instead. Everything else in the criterion runs over MCP.
 
+## 2026-08-03: "A preview is re-fetchable" was false in four places
+
+<!-- prawduct: chunks=17B | status=shipped | scope=v1-build -->
+
+**Nothing re-fetches a preview, and four artifacts said otherwise.**
+`PreviewCache.store` runs once — when phase 2 first records an instance — and a
+re-search does not restore the file either, because `record_image` returns the
+instance a work already holds for that URL without rewriting `preview_path`. So a
+deleted preview costs its instance the inline picture for the rest of that work's
+review. That is the difference between "disposable" meaning *losing one costs a
+picture rather than a record* and meaning *it comes back*; every site had drifted
+to the second.
+
+It mattered most where an operator acts on it: the disk-headroom row told someone
+on a filling SD card that hand-deleting `previews/` was "always safe", which is
+how a curator loses the inline picture of every candidate still under review —
+the picture `security-model.md` makes the whole of the review gate. Corrected in
+`operational-spec.md` (twice — the runbook row and the backup section),
+`boundary-patterns.md`, and `data-model.md`.
+
+**Three sweeps, three sites short, and that is the entry worth reading.** The
+first correction fixed one site. The Critic named a second in the same round and
+the fix did not reach it. The PR reviewer found that second one still standing —
+in the branch that had just added `learnings.md` entry 19, which is *about*
+retiring a claim repo-wide — and running the grep it prescribed turned up two more
+that nobody had named. `learnings.md` entry 20 records the tell: entry 19's lesson
+was being applied as a check on a list already written, when a grep run *before*
+the edits is the only one that finds the sites you were never going to think of. A
+reviewer names a sample, not the set.
+
+**Also corrected:** the sweep-vs-hook `[DECISION: …]` was qualified in
+`boundary-patterns.md` and `operational-spec.md` and left verbatim at both of its
+build-plan sites — the record that says the chunk is done, and so the one a reader
+trusts to know whether it delivered. Both now name the unbuilt half and issue #62.
+
+## 2026-08-03: The route assertion that counted polls
+
+<!-- prawduct: chunks=17B | status=shipped | scope=v1-build -->
+
+**A flake introduced by 17B's own acceptance scenario, found by running the merged
+suite rather than by reading it.** The scenario watches a run until it finishes,
+then asserted the whole call log equalled `ACCEPTANCE_ROUTE` — a fixed six-step
+tuple with one `status`. The loop polls until terminal, so on a machine where
+phase 2 answered on the second poll the log had seven entries and the test failed.
+It passed on the branch and failed on the first full run after the merge, which is
+the whole tell: nothing about the tree changed, only how busy the machine was.
+
+**The sibling test already knew.** `test_a_curator_reaches_the_pictures_from_an_intent_alone`
+asserts `steps[:2]` and the picture-bearing subset, never the whole tuple, for
+exactly this reason — and the new test copied the route idea without the reason
+behind its shape.
+
+`Transcript.route` now collapses *adjacent* repeats, and the polling scenario
+compares against that; `steps` stays the default for every scenario whose call
+count is deterministic, because it is the stricter check. Only adjacent duplicates
+fold, so a call re-entered after something else is still a second visit — an extra
+required round trip remains the thing these routes catch.
+
+**Three reviewers independently found the same two things, and both were about
+what the fix was quiet on.** The fold is over the *rendered* step, which carries
+the image count — so two `list_images` calls that returned different numbers of
+pictures do not collapse. That is load-bearing rather than incidental: the review
+gate lives in those counts, and a fold blind to them would let a route certify
+that pictures arrived after they stopped. The test now carries a differing count
+for exactly that reason; without it, reimplementing the fold on `(tool, action)`
+passed. And what folding *gives up* is now stated where it is defined — a flow
+genuinely requiring the same call twice in a row is indistinguishable from one
+requiring it once, because nothing in a transcript can tell a poll from a needed
+repetition. Such a scenario has to assert against `steps`.
+
 ## 2026-08-03: What the Critic round changed about 17B
 
 <!-- prawduct: chunks=17B | status=shipped | scope=v1-build -->

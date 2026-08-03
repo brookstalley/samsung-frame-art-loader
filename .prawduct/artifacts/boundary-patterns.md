@@ -171,9 +171,14 @@
   before recording its row is invisible to it — permanently, since nothing else
   ever looks at that directory. That is exactly the case a hook could not cover
   and the sweep was chosen to cover, so it is the half still owed rather than a
-  limitation of the approach. Unbuilt and filed; `operational-spec.md` § Add disk
-  headroom names hand-deletion as the interim reclamation, which is safe because
-  a preview is re-fetchable from a URL the catalogue holds.
+  limitation of the approach. Unbuilt and filed as issue #62; `operational-spec.md`
+  § Add disk headroom names hand-deletion as the interim reclamation and states
+  what it costs. **Not "re-fetchable" — nothing re-fetches a preview.**
+  `PreviewCache.store` is called once, when phase 2 first records an instance, and
+  a re-search does not restore the file either, because `record_image` returns the
+  instance a work already holds for that URL without rewriting `preview_path`. A
+  preview is disposable in the sense that losing one costs a picture rather than a
+  record; it is not disposable in the sense of coming back.
 - **The unit of deletion is the *path*, not the row**, because a preview file is
   named by a digest of its URL and two candidate works can therefore share one.
   A file survives while any work still under review references it. The producer
