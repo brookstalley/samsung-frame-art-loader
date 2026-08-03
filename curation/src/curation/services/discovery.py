@@ -865,11 +865,23 @@ class DiscoveryService:
         # both exceptions; this is the one that reaches acceptance with sources to
         # promote and nothing to make primary.
         if not any(image.is_selected for image in images):
+            # Derived from the data rather than asserted, exactly as the guard
+            # above derives its own. The two situations reach this line and read
+            # very differently to a curator: a work only ever found small, and one
+            # whose good scan they turned down themselves — which is reachable
+            # because `set_verdict` is deliberately allowed from
+            # `awaiting_better_image`. Telling the second that every scan found
+            # was too small contradicts what they just did.
+            cause = (
+                "every scan found for it is below the size this deployment will show without being asked"
+                if all(self._below_floor(image) for image in images)
+                else "the scans you have not turned down are all below that size, and the ones that cleared "
+                "it you have already rejected"
+            )
             raise ServiceError(
-                f"Candidate work {work.id!r}: no instance is selected, because every one found is below "
-                "the size this deployment will show without being asked. Accepting now would record the "
-                "work with no primary source and hang a scan nobody chose. Choose an instance explicitly, "
-                "or reject the work."
+                f"Candidate work {work.id!r}: no instance is selected, because {cause}. Accepting now "
+                "would record the work with no primary source and hang a scan nobody chose. Choose an "
+                "instance explicitly, or reject the work."
             )
         # Resolved before the artwork is minted, because `add_artwork` refuses an
         # `artist_id` the catalogue does not hold — so the row has to exist first,

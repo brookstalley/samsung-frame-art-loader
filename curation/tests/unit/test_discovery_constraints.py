@@ -77,10 +77,19 @@ def test_rejecting_an_image_does_not_stop_the_work_being_proposed_again(discover
     assert propose("Nighthawks").work_dedup_key == work.work_dedup_key
 
 
-# -- 8. Exactly one instance per work is selected, while any survives ----------
+# -- 8. Exactly one instance per work is selected, while any survives that -----
+#      clears the display floor
 #
-# A work whose every instance has been rejected re-enters phase 2 rather than
-# sitting selectionless.
+# Two states hold no selection, not one, and they are different situations:
+#
+#   - Every instance rejected. The work re-enters phase 2 rather than sitting
+#     selectionless.
+#   - Every surviving instance below the floor. Selection declines them all,
+#     which is what the floor is for — nothing under it is chosen without being
+#     asked for. Acceptance is refused until one is chosen explicitly, because
+#     promoting with no selection mints an artwork whose every source is
+#     non-primary. The tests for that refusal are in section 9, with the other
+#     acceptance guards.
 
 
 def test_the_first_instance_found_represents_the_work(discovery, propose, add_image):
@@ -223,11 +232,38 @@ def test_a_work_whose_every_scan_is_below_the_floor_cannot_be_accepted(discovery
     assert held and not any(image.is_selected for image in held), "the floor declined every one of them"
     assert all(image.rejected_at is None for image in held), "and none was rejected, so that guard does not fire"
 
-    with pytest.raises(ServiceError, match="no instance is selected"):
+    with pytest.raises(ServiceError, match="every scan found for it is below") as refused:
         discovery.set_verdict(work.id, Verdict.ACCEPTED)
+    assert "already rejected" not in str(refused.value), "nothing here was rejected; the floor is the whole cause"
 
     assert discovery.get_candidate_work(work.id).artwork_id is None
     assert list(service.list_artworks(limit=10).entries) == [], "no artwork was minted on the way to the refusal"
+
+
+def test_the_refusal_does_not_blame_the_floor_for_a_scan_the_curator_rejected(discovery, propose, add_image):
+    """The same refusal, reached the other way, saying something different.
+
+    A big scan was found and the curator turned it down; what survives is only the
+    small one, so there is no selection and acceptance is still refused. But
+    "every scan found for it is below the size this deployment will show" is
+    *false* here — the big one was found, and rejecting it is what they just did.
+    Accepting from `awaiting_better_image` is deliberately permitted, so this is an
+    ordinary path rather than a corner, and a message that contradicts the
+    curator's own last action is worse than no message.
+
+    The cause is derived from the instances rather than asserted, which is the
+    thing this test pins: the first guard in `_accept` already worked that way and
+    the second one did not.
+    """
+    work = propose("A work found big and small", dedup_key="big-and-small")
+    big = add_image(work, url="https://museum.example/big", estimated_width=6000, estimated_height=4500)
+    add_image(work, url="https://museum.example/small", estimated_width=600, estimated_height=450)
+    work = discovery.record_resolution(work.id).work
+    discovery.reject_image(big.id)
+    assert not any(image.is_selected for image in discovery.list_candidate_images(work.id))
+
+    with pytest.raises(ServiceError, match="already rejected"):
+        discovery.set_verdict(work.id, Verdict.ACCEPTED)
 
 
 def test_a_below_floor_work_is_acceptable_once_an_instance_is_chosen(discovery, propose, add_image, service):
