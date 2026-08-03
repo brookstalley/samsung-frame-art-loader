@@ -259,13 +259,24 @@ ART_DISCOVERY: Final = ToolRecord(
     ),
 )
 
-#: The work a review action is about. Required by all three, so one description
-#: governs every use of it and there is no optional-vs-required split to write
-#: around, as there is for `run_id` on art_discovery.
+#: The work a review action is about. Required wherever it appears, so one
+#: description governs every use of it and there is no optional-vs-required split
+#: to write around, as there is for `run_id` on art_discovery.
 _WORK_ID = Param(
     name="work_id",
     type="string",
     description="A proposed work's id, as returned by action='list_works'.",
+    required=True,
+)
+
+#: The one scan an action is about, for the two that judge scans rather than
+#: works. Deliberately the *only* id those actions take: an instance already
+#: knows its work, and accepting a `work_id` beside it would invent a way for the
+#: two to disagree and a rule about which wins.
+_IMAGE_ID = Param(
+    name="image_id",
+    type="string",
+    description="One scan's id, as returned by action='list_images'. It carries its own work.",
     required=True,
 )
 
@@ -284,7 +295,10 @@ _BLOCK_ORDER_TIP = (
 ART_REVIEW: Final = ToolRecord(
     name="art_review",
     title="Art review",
-    summary="Show candidate works and images for a curator to judge, with the size each would appear at. Never spends.",
+    summary=(
+        "Show candidate works and images with the size each would appear at, and record what the curator "
+        "decides about them. Never spends."
+    ),
     read_only=False,
     destructive=True,
     open_world=False,
@@ -358,6 +372,77 @@ ART_REVIEW: Final = ToolRecord(
                 "size it would appear at, never hidden.",
                 "renders_at_inches is the number a thumbnail cannot convey. A 900-pixel scan and a "
                 "6000-pixel scan look identical here and are not the same thing on a wall.",
+            ),
+        ),
+        Action(
+            name="set_canonical",
+            description="Choose which of a work's scans represents it, overriding the automatic choice.",
+            example="art_review(action='set_canonical', image_id='<an image_id from action=list_images>')",
+            params=(
+                _IMAGE_ID,
+                Param(
+                    name="rationale",
+                    type="string",
+                    description="Why this scan was chosen. Kept on the source after acceptance, so the choice stays readable.",
+                ),
+            ),
+            tips=(
+                "This is how a below_floor scan gets onto the wall: automatic selection withholds one, and "
+                "choosing it explicitly is the decision the floor exists to force. Nothing else overrides it.",
+                "A scan already turned down cannot be chosen again — that is what rejecting one means. Use "
+                "art_discovery(action='resolve_images') to go looking for a better one.",
+            ),
+        ),
+        Action(
+            name="set_verdict",
+            description="Accept or reject one proposed work. Accepting puts it in the catalogue.",
+            example="art_review(action='set_verdict', work_id='<a work_id from action=list_works>', verdict='accepted')",
+            params=(
+                _WORK_ID,
+                Param(
+                    name="verdict",
+                    type="string",
+                    description="'accepted' puts the work in the catalogue; 'rejected' closes it. Both are final.",
+                    required=True,
+                    choices=("accepted", "rejected"),
+                ),
+                Param(
+                    name="reason",
+                    type="string",
+                    description="Why the work was turned down. Recorded on a rejection; ignored on an acceptance.",
+                ),
+            ),
+            tips=(
+                "One work per call, named by id, and there is no accept-everything: the works being accepted "
+                "have to appear in the conversation, because a curator seeing what they accepted is the whole "
+                "of the review gate. Look at the picture before calling this.",
+                "Accepting mints the artwork, promotes every scan found into a source with the chosen one "
+                "primary, and attributes it to an artist. A work with no scan selected is refused rather than "
+                "recorded with no primary source — choose one with action='set_canonical' first.",
+                "minted_artist says a new artist row was created. Where it arrives with "
+                "possible_duplicate_artists, the catalogue may now hold the same painter twice under different "
+                "spellings — visible and mergeable, which a wrong merge would not be.",
+                "'awaiting_better_image' is not settable here. Turning down a scan is "
+                "action='reject_image', which is also what suppresses it.",
+                "Both verdicts are final: a work already accepted or rejected cannot be re-judged.",
+            ),
+        ),
+        Action(
+            name="reject_image",
+            description="Turn down one scan and ask for a better one. The work stays wanted.",
+            example="art_review(action='reject_image', image_id='<an image_id from action=list_images>')",
+            params=(_IMAGE_ID,),
+            tips=(
+                "This does not go looking for a replacement — art_discovery(action='resolve_images') does, and "
+                "it is the call that spends money. Reject the scans you want re-searched, then re-search them "
+                "in one batch.",
+                "The work moves to awaiting_better_image and the scan is suppressed, so a later search cannot "
+                "hand back the one just turned down. The suppression is the reason this is the only way into "
+                "that state.",
+                "Rejecting the scan on offer falls the selection through to the next survivor; rejecting an "
+                "alternate leaves the standing choice alone.",
+                "You are never blocked on a re-search: action='set_verdict' works from awaiting_better_image "
+                "too, so a curator can accept the best scan on offer or give up on the work at any point.",
             ),
         ),
     ),

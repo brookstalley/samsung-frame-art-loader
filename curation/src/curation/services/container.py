@@ -32,6 +32,7 @@ from curation.services.previews import PreviewCache, PreviewSettings
 from curation.services.review import ReviewService
 from curation.services.runner import DiscoveryRunner, DiscoverySettings
 from curation.services.survey import SurveyService
+from curation.services.sweep import PreviewSweep
 from curation.services.thumbnails import ThumbnailService, ThumbnailSettings
 
 
@@ -60,6 +61,13 @@ class Services:
     #: synchronous and knows nothing of processes, and everything about starting
     #: work behind a handle does.
     runner: DiscoveryRunner
+    #: Reclaiming the previews of works the curator has decided. Built
+    #: unconditionally, unlike the phase-2 pair it cleans up after: a deployment
+    #: that never cached a preview has nothing to sweep, and the pass costs one
+    #: walk of a household's rows to find that out. An optional here would mean
+    #: a deployment could disable phase 2, keep the files it already wrote, and
+    #: lose the only thing that reclaims them.
+    sweep: PreviewSweep
 
     @classmethod
     def bind(
@@ -125,6 +133,10 @@ class Services:
                 images=None if image_search is None else PhaseTwoEngine(image_search, box=artwork_box),
                 previews=None if image_search is None or previews is None else PreviewCache(previews, image_search.fetch_preview),
             ),
+            # `art_root` off the thumbnail settings for the same reason `review`
+            # takes it from there: it is one deployment value, already validated,
+            # and a second copy is a second chance for the two to disagree.
+            sweep=PreviewSweep(discovery_service, art_root=thumbnails.art_root),
         )
 
     def reconcile(self) -> None:

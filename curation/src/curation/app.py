@@ -33,6 +33,7 @@ from curation.http import api, pages
 from curation.mcp.server import build_server
 from curation.services.container import Services
 from curation.services.errors import ServiceError
+from curation.services.sweep import start_sweeping
 
 log = logging.getLogger(__name__)
 
@@ -56,12 +57,18 @@ MCP_SESSION_IDLE_TIMEOUT_SECONDS: Final[float] = 1800.0
 STATIC_PATH: Final[str] = "/static"
 
 
-def create_app(services: Services) -> FastAPI:
+def create_app(services: Services, *, preview_sweep_interval_seconds: int = 0) -> FastAPI:
     """Build the application around already-constructed services.
 
     They are injected rather than assembled here so that a test can run the real
     application against a scratch catalogue, and so that nothing at import time
     touches the filesystem.
+
+    **Sweeping is off unless a caller asks for it**, and the deployment entry
+    point is what asks. A background thread that deletes files is not something a
+    test harness should acquire by constructing the application: a suite that
+    accepted a work and then read its review card would be racing a reclamation
+    it never opted into, and the failure would be intermittent.
     """
     mcp_server = build_server(services)
     session_manager = StreamableHTTPSessionManager(
@@ -71,9 +78,26 @@ def create_app(services: Services) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        async with session_manager.run():
-            log.info("curation plane ready; MCP server mounted at %s", MCP_PATH)
-            yield
+        # Started before the surface is served and stopped after it is not, so
+        # the sweep's whole life is inside the application's. Nothing it does is
+        # request-scoped; it simply must not outlive the process that owns the
+        # catalogue it reads.
+        halt = (
+            None
+            if preview_sweep_interval_seconds <= 0
+            else start_sweeping(services.sweep, interval_seconds=preview_sweep_interval_seconds)
+        )
+        if halt is None:
+            log.info("candidate previews will not be swept; PREVIEW_SWEEP_INTERVAL_SECONDS is 0")
+        else:
+            log.info("sweeping candidate previews every %ds", preview_sweep_interval_seconds)
+        try:
+            async with session_manager.run():
+                log.info("curation plane ready; MCP server mounted at %s", MCP_PATH)
+                yield
+        finally:
+            if halt is not None:
+                halt()
 
     app = FastAPI(
         title="Curation",

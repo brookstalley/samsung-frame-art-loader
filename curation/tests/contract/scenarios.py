@@ -84,6 +84,24 @@ REVIEW_ROUTE = (
 )
 
 
+#: The whole of the product's first flow: an intent becomes a work on the
+#: catalogue, judged by someone who saw it. It extends `REVIEW_ROUTE` rather
+#: than restating it, because the claim that matters is that **acceptance costs
+#: one call past the pictures** — a route that reached a verdict by some other
+#: path would satisfy a copy of these steps while breaking the one property the
+#: review gate has.
+#:
+#: The last step is the catalogue's, deliberately. Acceptance returns an
+#: `artwork_id`, and a flow that ended at the verdict would prove the tool
+#: answered rather than that a work arrived where the rest of the product looks
+#: for it — which is the difference between a recorded decision and a promotion.
+ACCEPTANCE_ROUTE = (
+    *REVIEW_ROUTE,
+    "art_review(action='set_verdict')",
+    "art_catalogue(action='get')",
+)
+
+
 @dataclass(frozen=True)
 class Call:
     """One tool call and how it landed.

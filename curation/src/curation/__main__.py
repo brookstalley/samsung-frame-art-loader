@@ -135,9 +135,13 @@ def main() -> None:
     # question a run stuck at `resolving_images` raises.
     image_search = _image_search(settings)
     log.info(
-        "phase2 image_provider=%s previews=%s",
+        "phase2 image_provider=%s previews=%s preview_sweep=%s",
         "artic" if image_search is not None else "none (ARTIC_USER_AGENT unset)",
         settings.previews_path if image_search is not None else "disabled",
+        # On this line rather than its own: the directory and the only thing
+        # that reclaims it are one operational fact, and a deployment reading
+        # `previews=<path>` with no sweep beside it is the state § Risks names.
+        f"every {settings.preview_sweep_interval_seconds}s" if settings.preview_sweep_interval_seconds else "disabled",
     )
 
     settings.art_root.mkdir(parents=True, exist_ok=True)
@@ -178,7 +182,12 @@ def main() -> None:
         # log shape exists, so the failure would be the documented way of
         # reconstructing a run quietly not working. With no config of its own,
         # uvicorn's loggers propagate to the root handler installed above.
-        uvicorn.run(create_app(services), host=settings.host, port=settings.port, log_config=None)
+        uvicorn.run(
+            create_app(services, preview_sweep_interval_seconds=settings.preview_sweep_interval_seconds),
+            host=settings.host,
+            port=settings.port,
+            log_config=None,
+        )
     finally:
         catalogue_file.close()
 

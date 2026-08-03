@@ -155,9 +155,23 @@
 - Candidate `preview_path` files are a third class — neither upstream nor derived;
   cheap, disposable, pre-acceptance. Their lifecycle **is** recorded in
   `data-model.md`: safe to delete once their `CandidateWork` reaches a terminal
-  verdict, and deletion never touches the catalogue. **Open (narrowed
-  2026-07-20):** only *what performs* that deletion — an on-verdict hook or a
-  periodic sweep — is a build decision not yet made.
+  verdict, and deletion never touches the catalogue. **Settled 2026-08-03: a
+  periodic sweep performs it, not an on-verdict hook.** `[DECISION: candidate
+  previews are reclaimed by a periodic sweep over terminal-verdict CandidateWorks
+  | a sweep derives what to delete from current state, so it is idempotent and a
+  crashed pass costs a delay — where a hook that dies with the process leaks
+  silently, and nothing afterwards is looking for a leaked preview | user can
+  veto/override]` It runs on a daemon thread inside the application's lifespan,
+  sweeping immediately at start and then on `PREVIEW_SWEEP_INTERVAL_SECONDS`
+  (hourly by default, 0 to disable): a start-only sweep would reclaim nothing on
+  an always-on plane, which is the deployment this exists for.
+- **The unit of deletion is the *path*, not the row**, because a preview file is
+  named by a digest of its URL and two candidate works can therefore share one.
+  A file survives while any work still under review references it. The producer
+  of the sharing is ordinary — phase 1 naming one painting twice, phase 2
+  resolving both to the same museum image — and deleting on the first work's
+  verdict would take the picture out from under a work still being judged, which
+  the review card would then report as a file it could not read.
 - **`label/` is retired from this prospective contract (recorded 2026-07-20).**
   Labels are rendered on the display plane from manifest label text; a rendered
   label is device state, so any cache of one lives display-side, never in

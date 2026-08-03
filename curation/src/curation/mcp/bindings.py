@@ -30,6 +30,7 @@ from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, 
 from curation.persistence.records import Artist, Artwork, Directive, Theme
 from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing
 from curation.services.container import Services
+from curation.services.discovery import VerdictOutcome
 from curation.services.display import UNSET
 from curation.services.previews import InlinePreview
 from curation.services.review import MAX_REVIEW_LIMIT, CandidatePage, CandidateView, InstanceListing, InstanceView
@@ -273,6 +274,97 @@ def _list_candidate_images(services: Services, arguments: Mapping[str, Any]) -> 
     )
 
 
+def _set_canonical(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    chosen = services.discovery.select_image(arguments["image_id"], rationale=arguments.get("rationale"))
+    # **No `is_on_offer`.** It was here, and it could only ever be `true`:
+    # `select_image` either makes this instance the one on offer or raises, and a
+    # raise returns no payload at all. A field with one reachable value restates
+    # the envelope's own `success`, and its only possible defence would be a test
+    # written to defend it — which is the reason `InstanceListing` dropped its
+    # `run_id` rather than pinning it. Which scan is on offer is a question
+    # `list_images` answers per row, where it has two answers.
+    return ok(
+        image_id=chosen.id,
+        work_id=chosen.candidate_work_id,
+        url=chosen.url,
+        selection_rationale=chosen.selection_rationale,
+    )
+
+
+def _set_verdict(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    outcome = services.discovery.set_verdict(
+        arguments["work_id"],
+        arguments["verdict"],
+        reason=arguments.get("reason"),
+    )
+    work = outcome.work
+    return ok(
+        work_id=work.id,
+        title=work.proposed_title,
+        verdict=str(work.verdict),
+        # None on a rejection, and the id of the minted work on an acceptance.
+        # It is the handle every catalogue action takes, so an acceptance hands
+        # back the thing a caller's next call needs rather than making them go
+        # looking for the work they just created.
+        artwork_id=work.artwork_id,
+        decided_at=_moment(work.decided_at),
+        # Both reported on every acceptance, empty included. A key present only
+        # when an artist was minted would teach a caller to read its absence as
+        # "nothing happened", which is the silence this pair exists to break —
+        # the same rule `not_displayable` follows on the display surface.
+        minted_artist=None if outcome.minted_artist is None else _artist_fields(outcome.minted_artist),
+        possible_duplicate_artists=[_artist_fields(artist) for artist in outcome.duplicate_candidates],
+        notice=_verdict_notice(outcome),
+    )
+
+
+def _reject_image(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    work = services.discovery.reject_image(arguments["image_id"])
+    return ok(
+        image_id=arguments["image_id"],
+        work_id=work.id,
+        title=work.proposed_title,
+        verdict=str(work.verdict),
+        # The next move, in the payload rather than only in the tool's tips: a
+        # caller arrives here having decided the scan is not good enough, and
+        # the one thing that finds a better one is a different tool. Naming it
+        # at the moment of rejection is what keeps "reject" from reading as a
+        # request that something will act on.
+        notice=(
+            "The scan is turned down and cannot be offered for this work again. Nothing is searching for a "
+            "replacement: art_discovery(action='resolve_images', work_ids=['"
+            f"{work.id}']) is what looks, and it spends. Reject every scan you want re-searched first, then "
+            "ask once."
+        ),
+    )
+
+
+def _verdict_notice(outcome: VerdictOutcome) -> str | None:
+    """Say what acceptance did that the work's own fields do not show.
+
+    Only the artist. Minting one is the single part of a promotion a curator can
+    neither see in the accepted work nor undo from it — a duplicate row looks
+    exactly like a painter newly encountered — so it is said in words at the
+    moment it happens, where a field on a payload nobody re-reads would not
+    reach them.
+    """
+    minted = outcome.minted_artist
+    # Both conditions rather than the one that carries the message. Near-misses
+    # are reported only alongside a mint, so `minted is None` here is currently
+    # unreachable — but the sentence names the minted row, and deriving that it
+    # exists from a *different* field being non-empty is how a payload comes to
+    # say `None` where a name belongs the day the service reports near-misses
+    # for anything else.
+    if minted is None or not outcome.duplicate_candidates:
+        return None
+    names = ", ".join(repr(artist.name) for artist in outcome.duplicate_candidates)
+    return (
+        f"A new artist {minted.name!r} was recorded, and the catalogue already holds {names}. They may be "
+        "the same painter under different spellings; matching is exact, because a wrong merge puts another "
+        "painter's name on a label and leaves no trace. Both rows stand until someone decides."
+    )
+
+
 def _wall_status(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
     reading = services.display.wall_status()
     return ok(
@@ -341,6 +433,9 @@ BINDINGS: Final[Mapping[tuple[str, str], Binding]] = {
     ("art_review", "list_works"): _list_candidate_works,
     ("art_review", "get_work"): _get_candidate_work,
     ("art_review", "list_images"): _list_candidate_images,
+    ("art_review", "set_canonical"): _set_canonical,
+    ("art_review", "set_verdict"): _set_verdict,
+    ("art_review", "reject_image"): _reject_image,
     ("art_catalogue", "list"): _list_artworks,
     ("art_catalogue", "get"): _get_artwork,
     ("art_theme", "list"): _list_themes,

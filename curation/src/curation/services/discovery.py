@@ -654,6 +654,40 @@ class DiscoveryService:
             chosen = self._select(image, rationale=rationale)
         return chosen
 
+    def forget_preview(self, candidate_image_id: str) -> CandidateImage:
+        """Record that this instance no longer has a local copy of its picture.
+
+        The record half of reclaiming a preview. Deleting the file belongs to
+        whoever owns the directory; this is what stops the row from claiming a
+        picture that is not there, which a review card would otherwise report as
+        a file it could not read — a corruption message for a routine
+        reclamation.
+
+        **Refused while the work is still under review**, because a preview is
+        the picture that review shows and a work not yet decided may still be
+        looked at. The rule that only a decided work loses its previews is
+        enforced here rather than only in the caller that walks them: this is the
+        one write that can break it, and a second caller written later would
+        otherwise have to remember.
+
+        Already-forgotten is not an error. The state being converged on is "no
+        file, and no row pointing at one", and a caller re-running after a crash
+        must find the second half done rather than a refusal.
+        """
+        with self._store.transaction():
+            image = self._require_image(candidate_image_id)
+            work = self.get_candidate_work(image.candidate_work_id)
+            if not work.verdict.is_terminal:
+                raise ServiceError(
+                    f"Candidate work {work.id!r} is {work.verdict}, so it is still under review and its "
+                    "previews are what review shows. A preview is reclaimable once its work is accepted or rejected."
+                )
+            if image.preview_path is None:
+                return image
+            forgotten = replace(image, preview_path=None)
+            store_write(self._store.update_candidate_image, forgotten)
+        return forgotten
+
     def reject_image(self, candidate_image_id: str) -> CandidateWork:
         """Turn down an instance and ask for a better one. The work stays wanted.
 

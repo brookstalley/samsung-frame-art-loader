@@ -48,6 +48,74 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-03: The verdict reaches the surface, and previews stop accumulating
+
+<!-- prawduct: chunks=17B | status=shipped | scope=v1-build -->
+
+**17B's remaining three deliverables**, closing the chunk the previous entry
+deliberately left unchecked: `art_review`'s three write actions, the preview
+sweep, and a harness scenario that runs the worked example end to end. The
+acceptance criterion is met — a real MCP client turns an intent into a catalogued
+work, and the two calls carrying pictures are the two immediately before the
+verdict.
+
+**What the surface owed was the tool half only.** Every rule the write actions
+enforce already lived in the service layer with the discovery entities and was
+already pinned by the unit suite: a verdict is final, `awaiting_better_image` is
+reachable only by rejecting an instance, acceptance mints the artwork and promotes
+every scan into a source. What could not exist until the actions did is the
+property that is *about* the surface — that acceptance is one call past the
+pictures. `ACCEPTANCE_ROUTE` asserts it, extending the review route rather than
+restating it, so a shortcut that reached a verdict without a picture-bearing step
+fails there rather than passing a copy of its own steps.
+
+**Two interface decisions the contract had left open**, now recorded in
+`api-contract.md` rather than only in a schema. `set_verdict` judges **one work
+per call**: "explicit work ids" is satisfied by there being no action that omits
+one, and the payload differs per work — an artwork id, a minted artist, its
+near-misses — so a batch result would flatten those or invent a per-item envelope
+this surface has nowhere else. `set_canonical` and `reject_image` take an
+`image_id` and **nothing else**, because an instance already carries its work and
+a `work_id` beside it would create a pair that can disagree and a rule about which
+wins.
+
+**The preview sweep is a sweep, and the decision `boundary-patterns.md` left open
+is closed.** A periodic pass over terminal-verdict works, on a daemon thread
+inside the application's lifespan, sweeping immediately at start and then hourly.
+Immediately because a start-only sweep reclaims nothing on an always-on plane and
+a wait-first loop reclaims nothing on one that keeps restarting — which is what an
+SD-card-bound plane does when something goes wrong. It logs every pass whether or
+not it took anything, so a sweep that has stopped is visible in the journal rather
+than only in the free-space figure.
+
+**The sweep found a rule the design needed and nothing had written down.** A
+preview file is named by a digest of its **URL**, so the same museum scan resolved
+for two candidate works is two rows over one file — ordinary whenever phase 1
+proposes one painting under two titles. Deleting on the first work's verdict takes
+the picture out from under a work still being judged, and the review card would
+then report the file as unreadable when in fact the sweep removed it. The unit of
+deletion is therefore the **path**, and a path survives while any work still under
+review references it. Written into `data-model.md` beside the disposability rule,
+with its corollary: a row must not outlive the file it names, so the file goes
+first and `preview_path` is cleared after — an interruption strands a row the next
+pass finishes, rather than bytes nothing references and nothing would ever reclaim.
+
+**The mutation sweep found the one thing the diff did not.** `set_canonical`
+returned `is_on_offer`, which could only ever be `true`: the call either makes the
+instance the one on offer or raises, and a raise returns no payload. Replacing the
+field with the constant killed no test, because there is no reachable state where
+it differs. Removed rather than defended — the same call `InstanceListing` made
+about its `run_id`, and for the same reason: a field whose only possible defence is
+a test written to defend it is a field to delete. The test now asks the record
+whether the instance is on offer, which is the claim worth making.
+
+**One acceptance-criterion clause is met below the wire, and that is stated rather
+than glossed.** "Accepted works appear in the catalogue with sources … intact" is
+asserted through the service, because **no action on `art_catalogue` returns
+sources** — acquisition is their only consumer so far. Adding a reader would be
+this chunk widening a different tool's contract on its own authority, so it is
+filed instead. Everything else in the criterion runs over MCP.
+
 ## 2026-08-03: Who painted it, and the slot a refused scan yields
 
 <!-- prawduct: status=shipped | scope=v1-build -->

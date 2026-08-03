@@ -51,6 +51,20 @@ DEFAULT_PORT: Final[int] = 8770
 DEFAULT_ROTATION_INTERVAL_SECONDS: Final[int] = 180
 DEFAULT_ROTATION_SHUFFLE: Final[bool] = True
 
+#: How often the plane reclaims the previews of decided works.
+#:
+#: Hourly because the quantity being bounded is driven by a person: previews
+#: accumulate per image instance found, and instances are found by runs the
+#: curator starts. An hour is far shorter than the interval between a household's
+#: discovery sessions, so the directory is empty of decided works' previews
+#: whenever anyone looks — and the sweep is a walk over a household's rows plus a
+#: handful of unlinks, so running it more often than it has work to do costs
+#: nothing worth measuring.
+#:
+#: It matters because `operational-spec.md` § Risks opens with the SD card, and
+#: this directory is the only one under `ART_ROOT` that nothing else reclaims.
+DEFAULT_PREVIEW_SWEEP_INTERVAL_SECONDS: Final[int] = 3600
+
 #: The reference deployment is a 42" Frame at 4K, but nothing may hardcode a
 #: panel: the mat is specified in physical units and the resolution floor is a
 #: minimum size on the wall, so both are wrong on a different television. These
@@ -191,6 +205,10 @@ class Settings:
     port: int
     rotation_interval_seconds: int
     rotation_shuffle: bool
+    #: How often the plane reclaims the previews of works the curator has
+    #: decided. Zero disables sweeping, which is a coherent choice for a
+    #: deployment with disk to spare — previews are harmless, only numerous.
+    preview_sweep_interval_seconds: int
     #: The **television's** panel, never the e-paper one. Curation composes the
     #: mat and judges whether a source is large enough for the wall, so it needs
     #: the TV's physical size; it must hold no fact about the label panel, which
@@ -342,6 +360,10 @@ class Settings:
             port=_port("CURATION_PORT", DEFAULT_PORT),
             rotation_interval_seconds=_positive_int("ROTATION_INTERVAL_SECONDS", DEFAULT_ROTATION_INTERVAL_SECONDS),
             rotation_shuffle=_flag("ROTATION_SHUFFLE", DEFAULT_ROTATION_SHUFFLE),
+            # `_counted` rather than `_positive_int`: zero means "do not sweep",
+            # which is a deployment's to choose, where a rotation interval of
+            # zero is simply broken.
+            preview_sweep_interval_seconds=_counted("PREVIEW_SWEEP_INTERVAL_SECONDS", DEFAULT_PREVIEW_SWEEP_INTERVAL_SECONDS),
             tv_panel_width_px=_positive_int("TV_PANEL_WIDTH_PX", DEFAULT_TV_PANEL_WIDTH_PX),
             tv_panel_height_px=_positive_int("TV_PANEL_HEIGHT_PX", DEFAULT_TV_PANEL_HEIGHT_PX),
             tv_panel_diagonal_inches=_positive_float("TV_PANEL_DIAGONAL_INCHES", DEFAULT_TV_PANEL_DIAGONAL_INCHES),
