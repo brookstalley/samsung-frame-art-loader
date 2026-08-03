@@ -220,7 +220,8 @@ suites run: `pytest` at the repo root for the 2024 modules, and
 | Integration | **yes** (curation) | Changes crossing the service-layer boundary | `curation/tests/integration/` |
 | Contract | **yes** (curation) | **Any MCP tool-surface change**, including a description edit | `curation/tests/contract/` |
 | Evaluation | **yes** (curation), opt-in | Any tool-surface change, before shipping it — **not** on every run | `curation/tests/eval/`, marker `llm_eval` |
-| Live API | **yes** (curation), opt-in | Any change to the OpenRouter client, and when a recorded price or response shape is in doubt | `curation/tests/live/`, marker `live_api` |
+| Live API — paid | **yes** (curation), opt-in | Any change to the OpenRouter client, and when a recorded price or response shape is in doubt | `curation/tests/live/`, marker `live_api` |
+| Live API — free | **yes** (curation), opt-in | Any change to a museum client, and when a recorded response shape is in doubt | `curation/tests/live/`, marker **`live_museum`** |
 | End-to-end | no | Before release | — |
 
 **The evaluation level is the only one that does not gate, and that is the
@@ -239,8 +240,19 @@ output, and a real 403 halting a real run — so a failure means the provider
 moved, not that a model chose differently. It is the durable form of
 `openrouter-api-findings.md`, which is otherwise prose nobody re-runs.
 
-Both paid levels are off by default together: `addopts = -m 'not llm_eval and not
-live_api'`.
+**It split into two markers later the same day, and the split is the point.**
+The museum suite (`artic-api-findings.md`'s durable form) is deselected for a
+*third* reason — neither non-determinism nor cost, but that it needs the network,
+which a suite whose job is to be green cannot depend on. It rode `live_api`
+briefly, which meant its own instruction to run `-m live_api` would also run both
+OpenRouter suites and spend real credit whenever a key was in the environment: a
+file arguing at length that it was free, filed on the marker whose registered
+description reads "Costs money". **A marker is what records the distinction; the
+paragraph explaining it is not.** Anything added that talks to a free API goes on
+`live_museum`.
+
+All three are off by default: `addopts = -m 'not llm_eval and not live_api and
+not live_museum'`.
 
 Its dependency is an opt-in group (`uv sync --group eval`) rather than `dev`,
 because it is the heaviest install in the repo and no first-party module imports

@@ -170,31 +170,50 @@ def test_bytes_that_cannot_be_written_degrade_the_card_rather_than_failing_the_r
     assert a_cache(tmp_path, cache_dir, lambda url: JPEG).store(URL) is None
 
 
-def test_a_run_survives_a_preview_cache_that_cannot_write_anything(tmp_path, cache_dir, monkeypatch):
-    """The contract stated end to end: the instance is still recorded and selected.
+def test_a_run_completes_when_no_preview_can_be_written(services, settings, engine, monkeypatch):
+    """The consequence, through the runner that actually joins the two.
 
-    `store` returning `None` is only useful if the caller carries on, so this
-    asserts the consequence rather than the return value.
+    `store` returning `None` is only worth anything if the caller carries on, and
+    the caller is `DiscoveryRunner._record_instance` — so this drives a whole run
+    rather than calling the engine and the cache side by side, which would prove
+    each half works and nothing about the seam between them.
     """
-    from fakes import FakeImageSearch, an_image
+    from fakes import FakeImageSearch, a_work, an_image
 
-    from curation.discovery.images import ImageQuery
+    from curation.discovery.engine import WorkList
     from curation.discovery.phase_two import PhaseTwoEngine
-    from curation.services.display_fit import ArtworkBox
+    from curation.persistence.discovery_records import InitiatedBy, ResolutionStatus, RunStatus
+    from curation.services.runner import DiscoveryRunner
 
     def explode(self, _data):
         raise OSError("no space left on device")
 
     monkeypatch.setattr("pathlib.Path.write_bytes", explode)
     museum = FakeImageSearch(holdings={"The Elephants": (an_image("The Elephants"),)})
-    cache = a_cache(tmp_path, cache_dir, museum.fetch_preview)
-    box = ArtworkBox(width=3316, height=1597, pixels_per_inch=104.9, floor_inches=12.0)
+    engine.result = WorkList(works=(a_work("The Elephants"),))
+    runner = DiscoveryRunner(
+        services.discovery,
+        engine,
+        settings.discovery_settings,
+        images=PhaseTwoEngine(museum, box=settings.tv_artwork_box),
+        previews=PreviewCache(
+            PreviewSettings(art_root=settings.art_root, directory=settings.previews_path),
+            museum.fetch_preview,
+        ),
+        spawn=lambda work: work(),
+    )
 
-    judged = PhaseTwoEngine(museum, box=box).resolve(ImageQuery(title="The Elephants", artist="Salvador Dalí"))
+    run_id = runner.start(intent_text="elephants", initiated_by=InitiatedBy.MCP_CLIENT).id
 
-    assert judged, "the instance is found regardless of whether its preview can be cached"
-    assert cache.store(judged[0].found.preview_url) is None
-    assert judged[0].found.preview_url is not None, "the card falls back to the source URL"
+    assert services.discovery.get_run(run_id).status is RunStatus.COMPLETED
+    work = services.discovery.list_candidate_works(run_id)[0]
+    assert work.resolution_status is ResolutionStatus.RESOLVED
+    image = services.discovery.list_candidate_images(work.id)[0]
+    assert image.is_selected is True
+    assert image.preview_path is None, "nothing was written, and the row says so"
+    # Asserted on the stored row rather than on the fake's input, so this checks
+    # what a review card would actually read back.
+    assert image.preview_url, "the card falls back to the source URL"
 
 
 def test_a_cache_outside_the_art_tree_is_refused_at_wiring_time(tmp_path):
