@@ -48,6 +48,72 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-03: Who painted it, and the slot a refused scan yields
+
+<!-- prawduct: status=shipped | scope=v1-build -->
+
+**This entry carries no `chunks=` tag, deliberately.** `regen-views` derives the
+build plan's `## Status` checkboxes from that tag, so tagging `chunks=17B` flipped
+17B to shipped — which is false, and would tell the next session the remaining
+work was done. The chunk stays unchecked until its acceptance criterion is met:
+the worked example end to end over MCP, which needs the write actions. The scope
+tag is enough for the rollup.
+
+**Partial chunk, and the entry says so.** Two of 17B's four deliverables landed;
+the three `art_review` write actions, the preview sweep and the harness scenarios
+did not, so 17B stays unchecked. Nothing half-wired ships — the write actions are
+absent from the surface rather than declared and broken, and
+`_check_bindings_match_registry` raises at import on any mismatch.
+
+**Why the artist:** acceptance minted an Artwork from the title alone and left
+`proposed_artist` behind as free text, so **Q9 — who is the artist, for the
+physical label — had no answer for anything discovery accepted**. It does now:
+exact `artist_key()` equality against the artists already held, reusing the
+normalisation `work_dedup_key` settled rather than inventing a second one.
+
+**The decision the artifact handed over unsolved**, recorded in `data-model.md`:
+a match must be certain, because the failure directions are not symmetric. A
+duplicate `Artist` row is visible in the catalogue and mergeable later; a wrong
+merge puts another painter's name on a physical label and leaves no trace a choice
+was made. Every heuristic that would close the `Jacob Isaacksz van Ruisdael` /
+`Jacob van Ruisdael` gap buys the merge direction to do it — reducing a name to
+first and last tokens turns `Hans Holbein the Younger` into `hans younger`, which
+`dedup.py` had already measured and rejected. So the split is taken deliberately
+and made *visible*: minting a row while an existing one plausibly names the same
+painter reports it, which `VerdictOutcome` carries.
+
+**An empty key is not a key.** `artist_key` returns empty for a name that
+normalises to nothing, meaning *unattributed*. Matching on it would attribute
+every anonymous work in the catalogue to one artist named nothing — the worst
+reachable merge, needing no two names to resemble each other. Pinned in both
+layers.
+
+**Why the slot budget:** the review card sliced the store's ranking, and
+rejections gather at the *top* of it, because the scan a curator turns down is the
+best one on offer and refusing it does not make the picture worse. Past a cardful
+of rejections the card was entirely scans already refused, while the only ones
+still choosable fell off the bottom — with no second way to reach their ids, since
+`list_images` is the sole enumerator of a work's instances. Selectable instances
+now claim the slots first; the rows keep their ranking, so the truncation notice
+claims nothing about position and points at `rejected_for_this_work` instead.
+
+**What the reviews caught that the tests did not.** A three-character floor on
+name tokens, justified in its own comment as excluding initials, also discarded
+every short surname — `Wu Li` reduced to nothing, so the duplicate notice silently
+never fired for whole naming traditions while every European name looked correct.
+A regression test that passed against the unfixed code, because its single
+survivor was the selected instance and led the order anyway. And the cumulative
+review found a live defect none of it reached: a work whose every scan fell below
+the display floor could be accepted, minting an artwork whose every source was
+non-primary — no record of which scan produced the original. Constraint 8 named
+one selectionless state and the code had two.
+
+**Verified:** both suites green (1240 passed, 0 failed) with the recorded evidence
+tree equal to HEAD. Mutation sweeps over every branch this work added, including
+the notice's three states and the acceptance guard. A cumulative Critic review
+across correctness, design and sustainability returned 0 blocking with all eleven
+findings dispositioned, and three verify passes since, all 0 blocking.
+
 ## 2026-08-03: The review surface, and the text that was half the picture budget
 
 <!-- prawduct: chunks=17A | status=shipped | scope=v1-build -->
