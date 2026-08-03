@@ -712,6 +712,7 @@ async def test_a_card_that_cannot_hold_every_choosable_scan_says_so_instead(
         "the 1 you have already turned down" in payload["notice"]
     ), "the omitted refused scan is named separately, because it does not rank below what is shown"
     assert "still open to you are on this card" not in payload["notice"]
+    assert "no paging" in payload["notice"]
 
 
 async def test_a_short_card_of_only_refused_scans_still_says_nothing_is_choosable(
@@ -793,6 +794,11 @@ async def test_a_work_whose_every_scan_was_turned_down_is_not_reassured_about_it
     # merely losing a sentence nothing asserts.
     assert f"Showing {MAX_INSTANCES_LISTED} of {MAX_INSTANCES_LISTED + 2} scans found" in payload["notice"]
     assert "the ones omitted are also scans you have already turned down" in payload["notice"]
+    # `review.py` records "there is deliberately no paging here" as a product
+    # decision, and both branches that truncate ship the sentence. Nothing asserted
+    # it in either, so the decision could have been dropped from the surface with
+    # the suite green.
+    assert "no paging" in payload["notice"]
 
 
 async def test_a_work_no_image_was_ever_found_for_says_what_to_do_about_it(server_url, services, propose):

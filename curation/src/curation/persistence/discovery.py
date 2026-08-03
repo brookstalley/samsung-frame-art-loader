@@ -105,7 +105,13 @@ class DiscoveryStore(Protocol):
         ...
 
     def list_candidate_images(self, candidate_work_id: str) -> Sequence[CandidateImage]:
-        """Return a work's instances in a stable order, the selected one first."""
+        """Return a work's instances in a stable order, the selected one leading.
+
+        Only where a selection exists: a work whose scans are all below the floor
+        or all turned down has none, and the leading row is then the
+        highest-ranked, which may be one already refused. `is_selected` answers
+        which case this is; position does not.
+        """
         ...
 
     # -- spend ----------------------------------------------------------------

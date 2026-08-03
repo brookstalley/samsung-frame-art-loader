@@ -250,6 +250,16 @@ class CandidateImage:
     and on acceptance they become the work's non-primary sources — which is what
     makes re-acquisition robust when an institution reorganises its site.
 
+    **"The alternates the review card offers" is a claim about retention, and it
+    is correct wherever it appears.** Recorded here, once, because the sentence is
+    repeated in several layers and reads like the *ordering* claim that was
+    retired across this surface — that a card leads with the choice, that what it
+    omits ranks lowest, that its rows are the offerable ones. Those are false in
+    states this model allows and were removed. This one only says a losing
+    instance is kept and remains available to be chosen, which no cap or ordering
+    changes. Whoever next audits that vocabulary can stop here rather than
+    re-deriving the distinction.
+
     `preview_path` is a cached local copy because review must not depend on a
     museum server being reachable. It is disposable: safe to delete once the work
     reaches a terminal verdict, and deleting it never affects the catalogue,

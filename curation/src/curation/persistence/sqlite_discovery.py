@@ -7,8 +7,16 @@ write on both sides of the pipeline boundary in one transaction.
 
 Ordering is decided here rather than below because it is a product judgement.
 Runs read newest first because a run list is a history. Instances read with the
-selected one first because a review card leads with the choice and offers the
-rest as alternates.
+selected one first where a selection exists, so the automatic choice and any
+surface showing it cannot come to disagree about which scan is on offer.
+
+**That ordering is not a statement about which instances are offerable.** A work
+whose scans are all below the floor or all turned down has no selection, and then
+the leading row is simply the highest-ranked — which may be one already refused,
+since refusing a scan does not change how good the picture is. `is_selected` and
+`rejected_at` are what answer those questions; position is not. A reader who takes
+this order as an offerability guarantee writes a surface that shows a curator
+scans they cannot choose.
 
 **The unique index below does not replace the service layer's rules.** Every rule
 is applied in the service layer, where a refusal can be phrased for whoever
@@ -154,7 +162,9 @@ _BY_START: Final[tuple[OrderBy, ...]] = (OrderBy("started_at", descending=True),
 #: What a curator scans by, then a tie-break that makes the order repeatable.
 _BY_TITLE: Final[tuple[OrderBy, ...]] = (OrderBy("proposed_title", ignore_case=True), OrderBy("id"))
 
-#: The chosen instance leads; the rest are the alternates the review card offers.
+#: The chosen instance leads where one exists. Rejected instances keep their place
+#: in this order rather than sorting last, so a surface that caps this list decides
+#: for itself which rows a curator can still act on — see `services/review.py`.
 _BY_SELECTION: Final[tuple[OrderBy, ...]] = (
     OrderBy("is_selected", descending=True),
     OrderBy("confidence", descending=True),
