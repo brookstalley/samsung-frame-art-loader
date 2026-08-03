@@ -19,7 +19,6 @@ from tv_delete import UPLOADED_CATEGORY, describe_removal, remove_from_tv
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
 # logging.getLogger().setLevel(logging.DEBUG)
 artsets = []
-uploaded_files = {}
 label_display: DisplayLabel = None
 last_tv_content_id = None
 previous_art_mode = False
@@ -105,10 +104,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def update_uploaded_files(local_file, tv_content_id):
-    uploaded_files[local_file] = {"tv_content_id": tv_content_id}
-
-
 async def get_available(tv, category=None):
     # Retrieve available art
     return await tv.available(category=category)
@@ -129,8 +124,6 @@ async def delete_all_uploaded(tv_art):
         for art_file in art_set.art:
             art_file.tv_content_id = None
     logging.info(describe_removal(result, len(available_art)))
-    # Clear the list of uploaded filenames
-    uploaded_files = {}
 
 
 async def upload_file(local_file: str, tv_art: SamsungTVAsyncArt) -> str:
@@ -145,7 +138,6 @@ async def upload_file(local_file: str, tv_art: SamsungTVAsyncArt) -> str:
         # suffix, so passing file_type alongside a path would be ignored.
         if local_file.endswith((".jpg", ".png")):
             remote_filename = await tv_art.upload(local_file, matte="none", portrait_matte="none")
-        update_uploaded_files(local_file, remote_filename)
         await tv_art.select_image(remote_filename)
     except Exception as e:
         logging.error("There was an error: " + str(e))
@@ -191,7 +183,6 @@ async def upload_art_files(tv_art: SamsungTVAsyncArt, art_files: list[ArtFile]):
         while not success and retries < retry_limit:
             try:
                 tv_content_id = await upload_file(art_file.ready_fullpath, tv_art)
-                update_uploaded_files(art_file.ready_fullpath, tv_content_id)
                 art_file.tv_content_id = tv_content_id
                 try:
                     md5 = await get_thumbnail_md5(tv_art, tv_content_id)
@@ -243,7 +234,6 @@ async def sync_artsets_to_tv(tv_art: SamsungTVAsyncArt):
                     tv_thumb_md5 = hashlib.md5(thumbnail_data).hexdigest()
                     if tv_thumb_md5 == art_file.tv_content_thumb_md5:
                         logging.info(f"Found match for {art_file.ready_fullpath} in TV image {tv_content_id}")
-                        update_uploaded_files(art_file.ready_fullpath, tv_content_id)
                         art_file.tv_content_id = tv_content_id
                         matched += 1
                 checked += 1

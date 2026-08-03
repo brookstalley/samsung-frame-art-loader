@@ -378,11 +378,19 @@ class DiscoveryService:
         with self._store.transaction():
             for status in (held for held in RunStatus if held.is_process_held):
                 for run in self._store.list_runs(status=status):
+                    # The id goes in `extra`, not only in the message. This is
+                    # the one line that says a run died, and the documented way
+                    # to reconstruct a run is to select on the `run_id` field —
+                    # an id readable only inside the text is invisible to that
+                    # filter, so an operator would get every line of the run
+                    # except the one explaining its silence, and the artifact
+                    # tells them to read that silence as a second defect.
                     log.warning(
                         "Discovery run %s was left in %s by a process that did not survive; marking it interrupted. "
                         "Re-run it; do not investigate it as a failure.",
                         run.id,
                         status,
+                        extra={"event": "run.interrupted", "run_id": run.id, "status": str(status)},
                     )
                     # Coverage is released by the run becoming terminal, not by
                     # deleting its rows: the join records what the run's scope

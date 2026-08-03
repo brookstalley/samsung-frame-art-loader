@@ -19,8 +19,9 @@ entry was caught by a Critic round or a later verification pass rather than by t
 self-review that immediately preceded it — which is the rule's real content: this
 failure is invisible from inside the edit that causes it. *(The preamble here once
 read "twice in two sessions" while thirteen numbered entries sat under it. Stating
-the count made this entry an instance of its own neighbour, "prefer an invariant to
-a tally"; it now states the shape instead, which cannot go stale.)*
+the count made this entry an instance of the rule that a durable artifact should
+carry an invariant rather than a tally — the count moves, the shape does not; it
+now states the shape, which cannot go stale.)*
 
 1. **2026-07-19, first pass.** The architecture rationale was amended from "the split
    was *forced* by a Python version conflict" to "the split is a *choice*" across
@@ -559,6 +560,15 @@ Also 2026-07-19, verified by reading the source — not assumed:
   "the seam that makes a non-SQL durable backend possible", and scriob's
   `GitL3Backend` is a working precedent.
 - **`3tears-models` needs no core at all** — only `media-contracts` and `observe`.
+  **Superseded as an adoption argument on 2026-08-02, and left here because the
+  fact is still true while the conclusion is not.** "No core" is not "no weight":
+  the package was measured pulling `3tears-observe`, `3tears-media-contracts`,
+  `anthropic`, `langchain-anthropic`, `langchain-openai`, `langchain-openrouter`
+  and `jsonschema` into the default install, and was declined on exactly that —
+  it is now an optional dependency group nothing in the default run imports. See
+  `openrouter-api-findings.md` § The install lands on the Pi. Read alone, this
+  bullet says adopting it is nearly free, which is the conclusion the measurement
+  retired.
 - **`3tears-agent-memory` is the exception**: it depends on `pgvector`, so it
   genuinely requires Postgres. Deferring it is what keeps the curation plane
   infrastructure-free.

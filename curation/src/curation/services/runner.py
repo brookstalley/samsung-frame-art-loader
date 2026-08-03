@@ -24,10 +24,12 @@ that the figure a curator authorised is one the run cannot freely exceed.
 
 import logging
 import threading
+from collections import Counter
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from enum import StrEnum
 from time import monotonic
 from typing import Final
 
@@ -67,6 +69,22 @@ STATUS_HOLD_SECONDS: Final[float] = 45.0
 #: normally woken by the change itself; this only bounds how long a change made
 #: by something outside this process could go unnoticed.
 _RECHECK_SECONDS: Final[float] = 5.0
+
+
+class WorkOutcome(StrEnum):
+    """What phase 2 managed for one work. Four things, none of which absorbs another.
+
+    Named rather than returned as a boolean-with-a-null because the fourth
+    arrived and there was no room for it: a work whose curator decided it while
+    the search was running is not `resolved`, even when an instance was found,
+    because nothing was written to the work. Counting it as resolved would have a
+    re-search report that it changed something it did not.
+    """
+
+    RESOLVED = "resolved"
+    UNRESOLVED = "unresolved"
+    UNREACHABLE = "unreachable"
+    VERDICT_STOOD = "verdict_stood"
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,9 +202,13 @@ class RunView:
     """
 
     run: DiscoveryRun
-    resolved: int
-    unresolved: int
-    pending: int
+    #: The works themselves, not only how many there are. A surface that reported
+    #: counts alone left every action taking a work id — `resolve_images` first
+    #: among them — with no way for a caller to obtain one, so an advertised
+    #: action was one a model could read in full and had no path to invoke.
+    #: Naming which works a re-search covers is also the question
+    #: `ResolveRunWork` exists to make answerable.
+    works: Sequence[CandidateWork]
     searches_used: int
     search_allowance: int
     #: Whether this deployment can resolve images at all. Carried on the view
@@ -199,7 +221,26 @@ class RunView:
 
     @property
     def work_count(self) -> int:
-        return self.resolved + self.unresolved + self.pending
+        return len(self.works)
+
+    # The three tallies are counted off the works rather than carried beside
+    # them, because a view holding both could be built with a count that
+    # disagrees with the list under it — and the notice quotes the counts while
+    # a caller acts on the list.
+    @property
+    def resolved(self) -> int:
+        return self._counted(ResolutionStatus.RESOLVED)
+
+    @property
+    def unresolved(self) -> int:
+        return self._counted(ResolutionStatus.UNRESOLVED)
+
+    @property
+    def pending(self) -> int:
+        return self._counted(ResolutionStatus.PENDING)
+
+    def _counted(self, status: ResolutionStatus) -> int:
+        return sum(1 for work in self.works if work.resolution_status is status)
 
     @property
     def searches_exhausted(self) -> bool:
@@ -729,7 +770,7 @@ class DiscoveryRunner:
     def _resolve_pending(self, run_id: str, images: PhaseTwoEngine, previews: PreviewCache) -> None:
         """Ask the provider about each work this run is responsible for."""
         works = self._works_to_resolve(run_id)
-        resolved = unresolved = unreachable = 0
+        tally: Counter[WorkOutcome] = Counter()
         for work in works:
             # Re-read each time round rather than once before the loop: a curator
             # cancelling partway through must stop the run there, and a decision
@@ -738,28 +779,39 @@ class DiscoveryRunner:
             if self._discovery.get_run(run_id).status.is_terminal:
                 log.info(
                     "phase 2 stopping: the run ended underneath it",
-                    extra={"event": "run.discarded", "works_remaining": len(works) - resolved - unresolved - unreachable},
+                    extra={"event": "run.discarded", "works_remaining": len(works) - sum(tally.values())},
                 )
                 return
-            outcome = self._resolve_work(work, images, previews)
-            if outcome is None:
-                unreachable += 1
-            elif outcome:
-                resolved += 1
-            else:
-                unresolved += 1
-        self._close_phase_two(run_id, resolved=resolved, unresolved=unresolved, unreachable=unreachable, works=len(works))
+            tally[self._resolve_work(work, images, previews)] += 1
+        self._close_phase_two(run_id, tally=tally, works=len(works))
 
-    def _resolve_work(self, work: CandidateWork, images: PhaseTwoEngine, previews: PreviewCache) -> bool | None:
+    def _resolve_work(self, work: CandidateWork, images: PhaseTwoEngine, previews: PreviewCache) -> WorkOutcome:
         """Find and record one work's instances.
 
-        Three outcomes, and they are genuinely different. `True` — an instance
-        was found and selected. `False` — the provider was asked and holds
-        nothing credible, which makes the work `unresolved` and is the signal
-        that phase 1 may have proposed something that does not exist. `None` —
+        Four outcomes, and they are genuinely different — which is why this
+        returns a named one rather than a boolean with a null for "don't know".
+        `RESOLVED`: an instance was found and selected. `UNRESOLVED`: the
+        provider was asked and holds nothing credible, which is the signal that
+        phase 1 may have proposed something that does not exist. `UNREACHABLE`:
         the provider could not be asked at all, which says nothing about the work
-        and so must not be recorded as a verdict on it.
+        and so must not be recorded as a verdict on it. `VERDICT_STOOD`: the
+        curator had already decided, so whatever was found is reported and not
+        applied.
+
+        **A work the curator has already decided is not searched at all.** The
+        result could not be applied to it, and recording instances against a work
+        already promoted to the catalogue would leave rows no surface reaches —
+        its images became `Source`s when it was accepted. A verdict landing
+        *during* the search is still possible and is caught at the write by
+        `record_resolution`, which is the authoritative guard; this only spares
+        the case that was already true before the work was reached.
         """
+        if work.verdict.is_terminal:
+            log.info(
+                "not re-searching a work the curator has already decided; its result could not be applied",
+                extra={"event": "phase_two.verdict_stands", "work_title": work.proposed_title, "verdict": str(work.verdict)},
+            )
+            return WorkOutcome.VERDICT_STOOD
         try:
             judged = images.resolve(ImageQuery(title=work.proposed_title, artist=work.proposed_artist))
         except ImageSearchFailure as exc:
@@ -768,7 +820,7 @@ class DiscoveryRunner:
                 exc,
                 extra={"event": "phase_two.unreachable", "work_title": work.proposed_title},
             )
-            return None
+            return WorkOutcome.UNREACHABLE
         for entry in judged:
             self._record_instance(work, entry, previews)
         outcome = self._discovery.record_resolution(work.id)
@@ -777,7 +829,8 @@ class DiscoveryRunner:
                 "a resolution finished against a work the curator had already decided; reporting, not applying",
                 extra={"event": "phase_two.verdict_stands", "work_title": work.proposed_title},
             )
-        return outcome.resolution_status is ResolutionStatus.RESOLVED
+            return WorkOutcome.VERDICT_STOOD
+        return WorkOutcome.RESOLVED if outcome.resolution_status is ResolutionStatus.RESOLVED else WorkOutcome.UNRESOLVED
 
     def _record_instance(self, work: CandidateWork, entry: JudgedImage, previews: PreviewCache) -> None:
         """Write down one judged instance, caching its preview on the way in.
@@ -803,7 +856,7 @@ class DiscoveryRunner:
             selection_rationale=entry.rationale,
         )
 
-    def _close_phase_two(self, run_id: str, *, resolved: int, unresolved: int, unreachable: int, works: int) -> None:
+    def _close_phase_two(self, run_id: str, *, tally: Counter[WorkOutcome], works: int) -> None:
         """End the run on what phase 2 actually managed.
 
         **A run whose every work was unreachable failed**, and saying otherwise
@@ -813,6 +866,7 @@ class DiscoveryRunner:
         that reached the provider for some of them completed, with the rest left
         pending and visible as such rather than silently called unresolved.
         """
+        unreachable = tally[WorkOutcome.UNREACHABLE]
         if works and unreachable == works:
             self._end(
                 run_id,
@@ -832,9 +886,14 @@ class DiscoveryRunner:
             "phase 2 finished",
             extra={
                 "event": "run.completed",
-                "works_resolved": resolved,
-                "works_unresolved": unresolved,
+                "works_resolved": tally[WorkOutcome.RESOLVED],
+                "works_unresolved": tally[WorkOutcome.UNRESOLVED],
                 "works_unreachable": unreachable,
+                # A work whose curator decided it first is neither resolved nor
+                # unresolved: the search happened, or was skipped, and either way
+                # nothing was written to the work. Folding it into `resolved`
+                # would report a re-search as having changed something it did not.
+                "works_verdict_stood": tally[WorkOutcome.VERDICT_STOOD],
             },
         )
 
@@ -842,14 +901,11 @@ class DiscoveryRunner:
 
     def _view(self, run_id: str) -> RunView:
         results = self._discovery.run_results(run_id)
-        works = len(results.works)
         return RunView(
             run=results.run,
-            resolved=len(results.resolved),
-            unresolved=len(results.unresolved),
-            pending=len(results.pending),
+            works=results.works,
             searches_used=self._discovery.searches_in_run(run_id),
-            search_allowance=self._allowance_for(results.run, works),
+            search_allowance=self._allowance_for(results.run, len(results.works)),
             image_resolution_available=self._images is not None,
         )
 

@@ -26,7 +26,7 @@ from curation.manifest.builder import ManifestBuild
 from curation.mcp.envelope import ok
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
-from curation.persistence.discovery_records import DiscoveryRun, InitiatedBy, RunKind, RunStatus
+from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, RunKind, RunStatus
 from curation.persistence.records import Artist, Artwork, Directive, Theme
 from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing
 from curation.services.container import Services
@@ -442,13 +442,13 @@ def _run_fields(run: DiscoveryRun) -> dict[str, Any]:
         "status": str(run.status),
         "initiated_by": str(run.initiated_by),
         "intent": run.intent_text,
-        "strategy": run.strategy,
         # How the intent was read, in the engine's own words. Carried beside the
         # verbatim intent because a work list is judged against the reading of the
         # request rather than against its wording — "you asked for recent, I took
         # that to mean 2026 prize winners" is what makes a surprising list
         # explicable instead of merely wrong. Null while a run is still working:
         # nothing has read the intent yet.
+        "strategy": run.strategy,
         "approval_required": run.approval_required,
         "estimated_cost_usd": None if run.estimated_cost_usd is None else str(run.estimated_cost_usd),
         "actual_cost_usd": None if run.actual_cost_usd is None else str(run.actual_cost_usd),
@@ -456,6 +456,25 @@ def _run_fields(run: DiscoveryRun) -> dict[str, Any]:
         "parent_run_id": run.parent_run_id,
         "started_at": _moment(run.started_at),
         "completed_at": _moment(run.completed_at),
+    }
+
+
+def _work_summary(work: CandidateWork) -> dict[str, Any]:
+    """One proposed work, in the fields an action taking a work id needs.
+
+    Enough to choose and to act, and no more. What an instance looks like — its
+    preview, its size on the wall, why it was selected — belongs to the review
+    surface, which returns images alongside it; duplicating a slice of that here
+    would be a second review card that drifts from the real one. This exists so
+    a caller can obtain a work id at all: every count-only listing left the
+    actions that take one with no reachable source for it.
+    """
+    return {
+        "work_id": work.id,
+        "title": work.proposed_title,
+        "artist": work.proposed_artist,
+        "verdict": str(work.verdict),
+        "resolution_status": str(work.resolution_status),
     }
 
 
@@ -468,6 +487,10 @@ def _run_view(view: RunView) -> dict[str, Any]:
             "resolved": view.resolved,
             "unresolved": view.unresolved,
             "pending": view.pending,
+            # The works themselves, because the counts alone cannot be acted on.
+            # Bounded by the approval gate: a run proposing more than the
+            # threshold stops for a decision before it can grow further.
+            "each": [_work_summary(work) for work in view.works],
         },
         # Reported as two numbers rather than one verdict: the usage is this
         # run's own history and the allowance is the deployment's current

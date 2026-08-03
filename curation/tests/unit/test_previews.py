@@ -170,6 +170,29 @@ def test_bytes_that_cannot_be_written_degrade_the_card_rather_than_failing_the_r
     assert a_cache(tmp_path, cache_dir, lambda url: JPEG).store(URL) is None
 
 
+def test_a_publish_that_fails_after_writing_leaves_no_partial_behind(tmp_path, cache_dir, monkeypatch):
+    """The staging file is reclaimed, because nothing else ever will.
+
+    Its name is derived from the destination, so it is never read — nothing
+    looks for `.partial` — and no sweep collects it. The failure this handles is
+    a full disk, which is the condition under which stranded bytes cost the most,
+    and the device is the one the operational spec names as the top risk.
+
+    Distinct from the write failing outright: there the staging file was never
+    created, so the leak needs a publish that gets the bytes down and then
+    cannot rename them.
+    """
+
+    def explode(self, _target):
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr("pathlib.Path.replace", explode)
+    cache = a_cache(tmp_path, cache_dir, lambda url: JPEG)
+
+    assert cache.store(URL) is None
+    assert list((tmp_path / cache_dir).glob("*.partial")) == []
+
+
 def test_a_run_completes_when_no_preview_can_be_written(services, settings, engine, monkeypatch):
     """The consequence, through the runner that actually joins the two.
 

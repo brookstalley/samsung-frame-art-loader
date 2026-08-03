@@ -272,10 +272,14 @@ is no network between planes.
   list of *guarded* files silently stops covering whatever is added next while its
   result looks identical, so a phase-2 engine added above the seam would have been
   unguarded with nothing to show it. It now guards **every module in the package
-  except a two-name allowlist**: the OpenRouter client, which is the far side of
-  the seam and exactly where a transport belongs, and the legacy seed reader,
-  which touches `urllib.parse` and makes no request. Reaching the provider from
-  anywhere else fails the suite by default rather than by having been anticipated.
+  except a named allowlist**, each entry carrying its reason in the list itself:
+  the OpenRouter client and the Art Institute client, each the far side of its own
+  seam and exactly where a transport belongs, and the legacy seed reader, which
+  touches `urllib.parse` and makes no request. Reaching the provider from anywhere
+  else fails the suite by default rather than by having been anticipated. *(The
+  allowlist is named rather than counted here: it grew by one the moment phase 2
+  landed a second client, and this sentence still said "two-name" until Critic
+  review caught it — a count in prose about a list that exists to be added to.)*
 
   **Two services were added on 2026-08-01, with the first browser surface.**
   `ThumbnailService` produces the downscaled copies that make a forty-card grid a

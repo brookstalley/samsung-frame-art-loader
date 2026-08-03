@@ -11,6 +11,7 @@ prevent, because a test that only asserts the mechanism stops explaining itself
 the moment somebody wonders whether the mechanism is still wanted.
 """
 
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -299,6 +300,29 @@ def test_a_crashed_re_search_does_not_block_its_works_forever(discovery, propose
     discovery.reconcile()
 
     assert discovery.start_resolve_run(candidate_work_ids=[work.id], initiated_by=InitiatedBy.WEB_UI).id
+
+
+def test_the_line_announcing_a_dead_run_can_be_found_by_that_runs_id(discovery, propose, caplog):
+    """The only signal a run died has to be reachable by the documented query.
+
+    A dying process cannot report its own death, so this WARNING is the whole
+    record of it — and the way an operator reconstructs a run is to select on the
+    `run_id` field. An id readable only inside the message text is invisible to
+    that filter, so they would get every line of the run except the one saying it
+    ended, and the observability spec tells them to read that silence as a
+    *second*, non-existent defect.
+    """
+    work = propose()
+    resolve = discovery.start_resolve_run(candidate_work_ids=[work.id], initiated_by=InitiatedBy.WEB_UI)
+
+    with caplog.at_level(logging.WARNING):
+        caplog.clear()
+        discovery.reconcile()
+
+    selected = [record for record in caplog.records if getattr(record, "run_id", None) == resolve.id]
+    assert len(selected) == 1, "the dead run is not findable by its own id"
+    assert selected[0].event == "run.interrupted"
+    assert "interrupted" in selected[0].getMessage()
 
 
 def test_coverage_survives_the_run_that_recorded_it(discovery, propose):

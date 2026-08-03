@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 import pytest
 
 from curation.mcp.bindings import _run_notice, _truncation_notice
-from curation.persistence.discovery_records import DiscoveryRun, InitiatedBy, RunKind, RunStatus
+from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, ResolutionStatus, RunKind, RunStatus
 from curation.services.catalogue import MAX_LIST_LIMIT
 from curation.services.runner import RunView
 
@@ -81,6 +81,32 @@ def test_the_last_page_reached_by_paging_carries_no_notice(service):
 # -- what a run's state means to whoever asked ----------------------------------
 
 
+def _works(*, resolved: int = 0, unresolved: int = 0, pending: int = 0) -> tuple[CandidateWork, ...]:
+    """Works in the three resolution states, which is what a view's tallies count.
+
+    Built rather than asserted as numbers, because the view derives its counts
+    from the works themselves — a fixture that supplied both could describe a run
+    with three resolved works and an empty list.
+    """
+    counts = (
+        (ResolutionStatus.RESOLVED, resolved),
+        (ResolutionStatus.UNRESOLVED, unresolved),
+        (ResolutionStatus.PENDING, pending),
+    )
+    return tuple(
+        CandidateWork(
+            id=f"w{status}{index}",
+            discovery_run_id="r1",
+            proposed_title=f"Work {index}",
+            rationale="Central to what was asked for.",
+            work_dedup_key=f"key-{status}-{index}",
+            resolution_status=status,
+        )
+        for status, count in counts
+        for index in range(count)
+    )
+
+
 @pytest.mark.parametrize("status", list(RunStatus))
 def test_every_state_a_run_can_be_read_in_carries_guidance(status):
     """A state name says what happened; the notice says what to do about it.
@@ -99,9 +125,7 @@ def test_every_state_a_run_can_be_read_in_carries_guidance(status):
             approval_required=False,
             started_at=datetime(2026, 8, 2, 9, 0, tzinfo=UTC),
         ),
-        resolved=1,
-        unresolved=1,
-        pending=0,
+        works=_works(resolved=1, unresolved=1),
         searches_used=3,
         search_allowance=14,
         image_resolution_available=True,
@@ -137,9 +161,7 @@ def test_the_three_endings_an_agent_must_tell_apart_each_say_what_to_do_next(sta
             approval_required=False,
             started_at=datetime(2026, 8, 2, 9, 0, tzinfo=UTC),
         ),
-        resolved=0,
-        unresolved=0,
-        pending=0,
+        works=(),
         searches_used=0,
         search_allowance=10,
         image_resolution_available=True,
@@ -159,9 +181,7 @@ def _resolving(kind: RunKind) -> RunView:
             started_at=datetime(2026, 8, 2, 9, 0, tzinfo=UTC),
             parent_run_id="r0" if kind is RunKind.RESOLVE else None,
         ),
-        resolved=0,
-        unresolved=0,
-        pending=2,
+        works=_works(pending=2),
         searches_used=0,
         search_allowance=4,
         image_resolution_available=True,

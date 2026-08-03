@@ -48,6 +48,56 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-03: An advertised action nothing could supply an argument to
+
+<!-- prawduct: chunks=16B | status=shipped | scope=v1-build -->
+
+**Why:** the cumulative Critic round over 16B returned 0 blocking, 6 warnings and
+10 notes, and the correctness one was the finding the chunk most needed. 16B
+advertised `resolve_images` with a required `work_ids` array, and **no built
+surface produced a work id**: `art_review` owns any listing of candidate works
+and is not built until Chunk 17, and a run reported its works as counts only. A
+model reading `help` saw a fully described action with no path to invoke it — the
+same promise-the-surface-cannot-keep that 14A withheld the action to avoid, one
+level down. The suite could not see it because the integration test reached past
+the tool for the id.
+
+**What changed:** `RunView` carries the works themselves and derives its three
+tallies from them, so the counts and the list cannot disagree; `status` returns
+`works.each` with the id, title, artist and both statuses — enough to choose and
+to act, and deliberately not a second review card, which belongs to Chunk 17 with
+its images. The integration test takes the id off the surface now, so the gap
+cannot re-open silently.
+
+**The second finding it raised, which the first was hiding:** a re-search against
+a work the curator had already decided reported it as *resolved*. Nothing was
+written to that work — the terminal-verdict guard discarded the result, correctly
+— so the run was claiming a change it did not make, and `_record_instance` had
+already written candidate images onto a work whose images became catalogue
+sources at acceptance, reachable from no surface at all. A decided work is now
+not searched, and `WorkOutcome` replaces the boolean-with-a-null so
+`verdict_stood` is counted apart from `resolved` on both the already-decided path
+and the race.
+
+**Four smaller ones.** The line announcing a dead run put its id in the message
+text with no `run_id` field — invisible to the `jq 'select(.run_id == …)'` query
+`logs.py` documents, so an operator reconstructing a run got every line except
+the one saying it died, and `observability-strategy.md` tells that reader to read
+the silence as a *second* defect. A failed preview publish stranded a
+fixed-name `.partial` that nothing reclaims, on the one failure it handles — a
+full disk. `architecture.md` promised a two-name network allowlist that has three
+(now named rather than counted, since the list exists to be added to);
+`project-preferences.md` counted 23 MCP bindings against 24. Plus a comment
+sitting above the wrong field on an external contract surface, two stale
+learnings cross-references, and the dead `uploaded_files` dict in `tvart.py`
+whose comment asserted a clearing effect Python made a local rebind.
+
+**Verified:** both suites green (curation 1067 → 1073). The mutation sweep ran
+twice more and found **three more undefended branches on the first pass** —
+`verdict_stood`'s race path, the run-death line's `run_id`, and the partial's
+unlink — all now red when broken. That is five undefended branches caught this
+way across the chunk, and none of them by re-reading the diff.
+
 ## 2026-08-03: The re-search runs, and the rejection it defends against finally sticks
 
 <!-- prawduct: chunks=16B | status=shipped | scope=v1-build -->

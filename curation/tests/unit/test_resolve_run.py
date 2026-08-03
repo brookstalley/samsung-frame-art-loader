@@ -11,6 +11,7 @@ Everything runs on the calling thread via the `spawn` seam, except where a test
 is specifically about a run being observable while it is in flight.
 """
 
+import logging
 import threading
 from decimal import Decimal
 
@@ -215,7 +216,7 @@ def test_a_re_search_is_priced_on_the_works_it_covers_not_the_ids_it_was_sent(se
 
 @pytest.mark.parametrize("verdict", [Verdict.ACCEPTED, Verdict.REJECTED])
 def test_a_verdict_reached_while_the_re_search_ran_is_reported_and_not_applied(
-    services, engine, settings, museum, previews, reviewed, runner, verdict
+    services, engine, settings, museum, previews, reviewed, runner, verdict, caplog
 ):
     """Only the curator's verdict is authoritative, and the guard is at the write.
 
@@ -238,12 +239,57 @@ def test_a_verdict_reached_while_the_re_search_ran_is_reported_and_not_applied(
 
     museum.find_images = decide_mid_flight
 
-    resolve = re_search(runner, work)
+    with caplog.at_level(logging.INFO):
+        caplog.clear()
+        resolve = re_search(runner, work)
 
     assert services.discovery.get_run(resolve.id).status is RunStatus.COMPLETED
     settled = services.discovery.get_candidate_work(work.id)
     assert settled.verdict is verdict, "the curator's decision stands"
     assert settled.resolution_status is ResolutionStatus.RESOLVED, "and the re-search's result is still reported"
+    # Reported apart from what the run resolved, on the race path as well as the
+    # already-decided one. An instance *was* found here, so folding it into
+    # `resolved` is the tempting and wrong answer: nothing was written to the
+    # work, and the run would be claiming a change it did not make.
+    closing = [record for record in caplog.records if getattr(record, "event", None) == "run.completed"]
+    assert [(record.works_resolved, record.works_verdict_stood) for record in closing] == [(0, 1)]
+
+
+def test_a_work_the_curator_already_decided_is_not_searched_and_is_reported_apart(services, runner, reviewed, museum, caplog):
+    """Two things a re-search must not do to a work whose verdict is already in.
+
+    It must not record instances against it — an accepted work's images became
+    catalogue sources when it was accepted, so rows added afterwards are
+    reachable from no surface at all. And it must not count the work among what
+    it resolved: nothing was written to that work, and a tally that folds it in
+    reports the re-search as having changed something it did not.
+
+    The work's own `resolution_status` legitimately stays `resolved` — it has an
+    image, found by the run that first proposed it. What this asserts is the
+    *run's* account of its own execution, which is the thing that would otherwise
+    be silently overstated.
+    """
+    _, works = reviewed("The Elephants", "Swans Reflecting Elephants")
+    decided = works["The Elephants"]
+    services.discovery.set_verdict(decided.id, Verdict.ACCEPTED)
+    before = len(services.discovery.list_candidate_images(decided.id))
+    museum.asked.clear()
+    museum.holdings = {title: (an_image(title, url=f"https://artic.edu/{title}-new"),) for title in works}
+
+    with caplog.at_level(logging.INFO):
+        # Cleared inside the block: the fixture above ran a discovery run to
+        # completion, so its own `run.completed` is already on the handler and
+        # this test would otherwise read the wrong run's tally — which it did,
+        # passing alone and failing in the suite.
+        caplog.clear()
+        re_search(runner, *works.values())
+
+    assert museum.asked == ["Swans Reflecting Elephants"], "the decided work was not searched at all"
+    assert len(services.discovery.list_candidate_images(decided.id)) == before, "and gained no unreachable rows"
+    closing = [record for record in caplog.records if getattr(record, "event", None) == "run.completed"]
+    assert len(closing) == 1, "exactly one run finished inside this block"
+    assert closing[0].works_resolved == 1, "only the work this run actually resolved"
+    assert closing[0].works_verdict_stood == 1
 
 
 def test_no_re_search_ever_leaves_a_work_holding_an_artwork_id_and_a_non_accepted_verdict(services, museum, reviewed, runner):

@@ -22,6 +22,7 @@ every failure path here reports absence rather than raising.
 import hashlib
 import logging
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -116,18 +117,31 @@ class PreviewCache:
             # the seam reports both as `None`, and neither is worth failing a
             # work over.
             return self._absent(url, "the provider returned no bytes")
+        # Written beside the target and renamed, so a process that dies mid-write
+        # leaves no half-file that the `exists()` check above would later treat as
+        # a valid cache hit.
+        staging = destination.with_name(f"{destination.name}.partial")
         try:
             destination.parent.mkdir(parents=True, exist_ok=True)
-            # Written beside the target and renamed, so a process that dies
-            # mid-write leaves no half-file that the `exists()` check above would
-            # later treat as a valid cache hit.
-            staging = destination.with_name(f"{destination.name}.partial")
             staging.write_bytes(payload)
             staging.replace(destination)
         except OSError as exc:
             # A full or read-only disk is a real operational condition, and it
             # must degrade the review card rather than end a run that has already
             # found the images it went looking for.
+            #
+            # The partial is removed on the way out. Its name is derived from the
+            # destination, so every retry for this preview writes the same path —
+            # a leftover is never read (nothing looks for `.partial`) and never
+            # reclaimed either, and on the one failure this handles, a full disk,
+            # the stranded bytes are the last thing the device can afford.
+            #
+            # The cleanup can fail for the same reason the write did, and if it
+            # does the original failure is still the one worth reporting —
+            # replacing it with the tidy-up's would name the second-order problem
+            # and lose the first.
+            with suppress(OSError):
+                staging.unlink(missing_ok=True)
             return self._absent(url, f"the bytes could not be written: {exc}")
         log.info(
             "cached a preview",

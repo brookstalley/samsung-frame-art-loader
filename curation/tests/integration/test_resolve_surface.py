@@ -66,13 +66,45 @@ def services(store, discovery_store, wall, thumbnail_settings, settings, engine,
 
 
 async def a_work_needing_a_better_scan(server_url: str, services: Services):
-    """Run discovery, then turn down the instance it found. The acceptance criterion's setup."""
+    """Run discovery, then turn down the instance it found. The acceptance criterion's setup.
+
+    **The work id comes off the surface**, not out of the service. Reaching past
+    the tool for it would leave every test here passing while a real client had
+    no way to obtain the one argument `resolve_images` requires — which is
+    exactly the gap that hid for a whole chunk. Rejecting the image still goes
+    through the service, because `art_review` owns `reject_image` and is not
+    built yet; that one is a stated dependency rather than a hidden hole.
+    """
     started, errored = await call(server_url, "art_discovery", action="start", intent="Dalí, elephants")
     assert errored is False, started
-    await finished(server_url, started["run_id"])
-    work = services.discovery.list_candidate_works(started["run_id"])[0]
+    payload = await finished(server_url, started["run_id"])
+    work_id = payload["works"]["each"][0]["work_id"]
+    work = services.discovery.get_candidate_work(work_id)
     services.discovery.reject_image(services.discovery.list_candidate_images(work.id)[0].id)
     return started["run_id"], work
+
+
+async def test_a_client_can_obtain_the_work_ids_the_actions_taking_one_require(server_url):
+    """An advertised action whose argument nothing yields is one a model cannot invoke.
+
+    `resolve_images` takes work ids and this is the only built surface that
+    produces them, so a run reporting counts alone would leave a fully described
+    action with no reachable path to it — the model either fabricates an id or
+    stalls. The counts and the works are both here, and the counts are derived
+    from the works so the two cannot disagree.
+    """
+    started, _ = await call(server_url, "art_discovery", action="start", intent="Dalí, elephants")
+
+    payload = await finished(server_url, started["run_id"])
+
+    works = payload["works"]
+    assert len(works["each"]) == works["total"] == 1
+    only = works["each"][0]
+    assert only["work_id"] and only["title"] == "The Elephants"
+    assert only["verdict"] and only["resolution_status"]
+    # The id is usable as sent, which is the whole claim.
+    handle, errored = await call(server_url, "art_discovery", action="resolve_images", work_ids=[only["work_id"]])
+    assert errored is False, handle
 
 
 # -- the acceptance criterion ----------------------------------------------------
