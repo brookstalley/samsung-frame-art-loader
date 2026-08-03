@@ -470,6 +470,16 @@ exactly like a finding. `curation/tools/mutation_sweep.py` now refuses an ambigu
 pattern; the no-op case it cannot detect, so confirm your mutation breaks something
 before writing a test for it.
 
+## Assert what must be absent, not only what must be present
+
+**A conditional clause needs the case where it must not appear.** Two sweep
+survivors in one function were both this: nothing checked that a card still
+holding choosable scans does *not* announce none are open, and nothing checked
+that a clause naming refused scans is absent when there are none — where the
+unconditional version would have shipped "the 0 you have already turned down".
+Present-only assertions pass under every over-firing bug, which is the whole class
+a notice built from branches is prone to.
+
 ## A fixture that reaches the branch is not a fixture that can falsify its claim
 
 **Build the member that would make the claim false, not just enough members to
