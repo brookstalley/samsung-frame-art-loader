@@ -590,15 +590,10 @@ Also 2026-07-19, verified by reading the source — not assumed:
   "the seam that makes a non-SQL durable backend possible", and scriob's
   `GitL3Backend` is a working precedent.
 - **`3tears-models` needs no core at all** — only `media-contracts` and `observe`.
-  **Superseded as an adoption argument on 2026-08-02, and left here because the
-  fact is still true while the conclusion is not.** "No core" is not "no weight":
-  the package was measured pulling `3tears-observe`, `3tears-media-contracts`,
-  `anthropic`, `langchain-anthropic`, `langchain-openai`, `langchain-openrouter`
-  and `jsonschema` into the default install, and was declined on exactly that —
-  it is now an optional dependency group nothing in the default run imports. See
-  `openrouter-api-findings.md` § The install lands on the Pi. Read alone, this
-  bullet says adopting it is nearly free, which is the conclusion the measurement
-  retired.
+  **Still true as a fact; retired as an adoption argument on 2026-08-02, because
+  "no core" is not "no weight".** Measured and declined on its install size; it
+  is an optional dependency group now. `learnings-detail.md`,
+  `openrouter-api-findings.md` § The install lands on the Pi.
 - **`3tears-agent-memory` is the exception**: it depends on `pgvector`, so it
   genuinely requires Postgres. Deferring it is what keeps the curation plane
   infrastructure-free.

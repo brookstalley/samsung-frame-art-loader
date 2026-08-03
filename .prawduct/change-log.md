@@ -48,6 +48,46 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-03: The list nothing bounded, and the race the guard only described
+
+<!-- prawduct: chunks=16B | status=shipped | scope=v1-build -->
+
+**Why:** the `verify-resolutions` pass confirmed all six prior warnings fixed and
+found one more — created by the fix for the first. Putting the works on the run
+view made `resolve_images` invokable and made `status` unbounded: **phase 1 is
+deliberately uncapped** (`phase_one.py` is written for "you asked for Dalí and I
+found 200 works") and the approval gate is computed *after* the whole list is
+recorded, so it pauses a run without shortening it. The run that stops for a
+human decision is therefore the broad one by construction, and the human decides
+it by reading exactly this payload — ~12–16k tokens at 200 works, past the 10,000
+at which a client warns.
+
+`works.each` now caps at 100 and says what it left out, which is the rule
+`api-contract.md` § Token budget already states: *truncation is always explicit, a
+result that omits rows says so and says how many.* The cap is deliberately not
+shared with the catalogue's list ceiling — that one bounds a limit a caller chose,
+this one bounds a list nobody asked for the length of, and one number serving both
+would move for two reasons. The notice names no way to fetch the rest, because
+there is none; a paged listing of a run's works arrives with the review surface,
+and promising an affordance that does not exist is what the withheld action was
+withheld to avoid.
+
+**The race is now closed rather than documented.** A work decided while its own
+search ran still gained CandidateImage rows — reachable from no surface, since its
+images became catalogue `Source`s at acceptance. `record_image` declines a work
+whose verdict is terminal, on the same ground `reject_image` already refuses one:
+a decided work's images are not under review. The runner also re-reads each work
+as it reaches it, because the list is gathered before the first provider call and
+is minutes stale by the last — that spares a provider call whose result could not
+be applied, and it is what makes the docstring's claim true rather than nearly
+true.
+
+**Verified:** both suites green; counts in `.test-evidence.json`. Four more
+branches deleted and watched go red, one of which needed a test written to be
+observable at all. A new test also passed alone and failed in the suite by
+assuming the order a run's works come back in — the same assumption already fixed
+once in this file's fixture, reintroduced twelve tests later.
+
 ## 2026-08-03: An advertised action nothing could supply an argument to
 
 <!-- prawduct: chunks=16B | status=shipped | scope=v1-build -->
@@ -92,7 +132,8 @@ sitting above the wrong field on an external contract surface, two stale
 learnings cross-references, and the dead `uploaded_files` dict in `tvart.py`
 whose comment asserted a clearing effect Python made a local rebind.
 
-**Verified:** both suites green (curation 1067 → 1073). The mutation sweep ran
+**Verified:** both suites green, with the counts in `.test-evidence.json` rather
+than copied here where nothing would ever re-check them. The mutation sweep ran
 twice more and found **three more undefended branches on the first pass** —
 `verdict_stood`'s race path, the run-death line's `run_id`, and the partial's
 unlink — all now red when broken. That is five undefended branches caught this

@@ -531,8 +531,12 @@ class DiscoveryService:
         rights_status: RightsStatus | None = None,
         quality_score: float | None = None,
         selection_rationale: str | None = None,
-    ) -> CandidateImage:
-        """Record one image instance found for a work.
+    ) -> CandidateImage | None:
+        """Record one image instance found for a work, or decline to.
+
+        `None` means nothing was written and nothing is wrong: the work's
+        curator has already decided it, so its instances are closed. Every other
+        path returns the instance the work now holds for that URL.
 
         The first surviving instance a work has becomes its selection, so a work
         with instances is never selectionless; a later choice moves the selection
@@ -557,6 +561,21 @@ class DiscoveryService:
         with self._store.transaction():
             work = self.get_candidate_work(candidate_work_id)
             found_at = require_text(url, field="url")
+            if work.verdict.is_terminal:
+                # A decided work's images are no longer under review — the same
+                # ground `reject_image` refuses on. On an accepted work they
+                # became catalogue `Source`s at acceptance, and nothing promotes
+                # a row added afterwards, so it would be reachable from no
+                # surface at all. Declined rather than raised, because the caller
+                # that reaches this is a re-search whose subject the curator
+                # decided while it was searching — an ordinary race, not a fault,
+                # and this is the write that makes losing it harmless.
+                log.info(
+                    "not recording an instance for %r: the curator decided it while the search was running",
+                    work.proposed_title,
+                    extra={"event": "image.work_decided", "verdict": str(work.verdict)},
+                )
+                return None
             held = self._store.list_candidate_images(work.id)
             already = next((instance for instance in held if instance.url == found_at), None)
             if already is not None:

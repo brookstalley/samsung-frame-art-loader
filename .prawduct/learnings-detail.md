@@ -484,3 +484,24 @@ sessions of it did not. Before asserting a quantity or a location about the tree
 in a durable artifact, run the command that produces it, in that moment. Prefer
 the invariant that cannot go stale; where a number is unavoidable, compute it as
 you write it and never copy one from an adjacent line.
+
+## 3tears can run with zero infrastructure
+
+### `3tears-models` needs no core — and that stopped being the argument
+
+The 2026-07-19 reading of the source was right and remains right: the package
+imports no 3tears core. What changed on 2026-08-02 is that "no core" was being
+used as "nearly free to adopt", and the measurement said otherwise — it pulls
+`3tears-observe`, `3tears-media-contracts`, `anthropic`, `langchain-anthropic`,
+`langchain-openai`, `langchain-openrouter` and `jsonschema` into the default
+install, which is the heaviest install in the repo. It was declined on exactly
+that weight and now sits in its own dependency group that nothing in the default
+run imports.
+
+The shape worth keeping is not the dependency list, which will move. It is that
+**a true fact can be the surviving half of a retired argument**, and a reader of
+the index alone would have reconstructed the conclusion the measurement killed.
+Superseding a decision means marking the evidence that supported it, not only
+recording the new decision somewhere else — the evidence is what the next reader
+reasons from. Found by Critic cross-check (`rev-20260803T032431Z-f8474689` R-13),
+not by the sweep that followed the decision.

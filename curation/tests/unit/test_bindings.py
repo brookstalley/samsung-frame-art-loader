@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from curation.mcp.bindings import _run_notice, _truncation_notice
+from curation.mcp.bindings import MAX_WORKS_LISTED, _run_notice, _run_view, _truncation_notice
 from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, ResolutionStatus, RunKind, RunStatus
 from curation.services.catalogue import MAX_LIST_LIMIT
 from curation.services.runner import RunView
@@ -186,6 +186,38 @@ def _resolving(kind: RunKind) -> RunView:
         search_allowance=4,
         image_resolution_available=True,
     )
+
+
+def test_a_long_work_list_is_capped_and_says_how_much_it_left_out():
+    """The contract's rule where it bites hardest: truncation is never silent.
+
+    Phase 1 is deliberately uncapped and the approval gate is computed after the
+    whole list is recorded — it pauses the run without shortening it. So the run
+    that stops for a human decision is the broad one by construction, and the
+    human decides it by reading this payload. A short list read as a complete one
+    is worse here than in a catalogue listing, because the run's own count sits
+    beside it and the two would disagree inside one result.
+    """
+    view = replace(_resolving(RunKind.DISCOVERY), works=_works(pending=MAX_WORKS_LISTED + 12))
+
+    payload = _run_view(view)
+
+    works = payload["works"]
+    assert works["total"] == MAX_WORKS_LISTED + 12
+    assert len(works["each"]) == works["listed"] == MAX_WORKS_LISTED
+    assert works["truncated"] is True
+    assert f"first {MAX_WORKS_LISTED} of this run's {MAX_WORKS_LISTED + 12} works" in payload["notice"]
+    # The state guidance survives alongside it rather than being replaced.
+    assert "Call status again" in payload["notice"]
+
+
+def test_a_list_that_fits_says_nothing_about_truncation():
+    """Saying nothing is the honest answer when nothing was left behind."""
+    payload = _run_view(_resolving(RunKind.DISCOVERY))
+
+    assert payload["works"]["truncated"] is False
+    assert payload["works"]["listed"] == payload["works"]["total"] == 2
+    assert "omitted" not in payload["notice"]
 
 
 def test_a_re_search_is_not_told_its_work_list_has_settled():

@@ -801,11 +801,17 @@ class DiscoveryRunner:
         **A work the curator has already decided is not searched at all.** The
         result could not be applied to it, and recording instances against a work
         already promoted to the catalogue would leave rows no surface reaches —
-        its images became `Source`s when it was accepted. A verdict landing
-        *during* the search is still possible and is caught at the write by
-        `record_resolution`, which is the authoritative guard; this only spares
-        the case that was already true before the work was reached.
+        its images became `Source`s when it was accepted.
+
+        The verdict is re-read here rather than trusted from the list, which was
+        gathered before the first work was searched: on a long run that value is
+        minutes stale by the time the last work is reached, so trusting it would
+        make this check answer about the past. A verdict landing *during* this
+        work's own search is narrower still and is refused at the write, by
+        `record_image` declining a decided work and `record_resolution` declining
+        to apply the outcome — so nothing here depends on winning the race.
         """
+        work = self._discovery.get_candidate_work(work.id)
         if work.verdict.is_terminal:
             log.info(
                 "not re-searching a work the curator has already decided; its result could not be applied",

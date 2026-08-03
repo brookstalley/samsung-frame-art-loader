@@ -459,6 +459,21 @@ def _run_fields(run: DiscoveryRun) -> dict[str, Any]:
     }
 
 
+#: How many of a run's works one result may carry. **The list this caps is not
+#: bounded by anything else**: phase 1 is deliberately uncapped — "you asked for
+#: Dalí and I found 200 works" is the case it is written for — and the approval
+#: gate is computed *after* the whole list is recorded, so it pauses the run
+#: without shortening it. The run that stops at the gate is therefore the broad
+#: one by construction, and a human decides it by reading exactly this payload.
+#:
+#: 100 because a work here is five short fields, about sixty tokens, so a full
+#: page is ~6,000 — under the 10,000 at which a client warns, with room for the
+#: rest of the result. Deliberately not shared with the catalogue's list ceiling:
+#: that one bounds a limit a caller chose, this one bounds a list nobody asked
+#: for the length of, and one number serving both would move for two reasons.
+MAX_WORKS_LISTED: Final[int] = 100
+
+
 def _work_summary(work: CandidateWork) -> dict[str, Any]:
     """One proposed work, in the fields an action taking a work id needs.
 
@@ -480,6 +495,7 @@ def _work_summary(work: CandidateWork) -> dict[str, Any]:
 
 def _run_view(view: RunView) -> dict[str, Any]:
     """One run in full, with its works and what it has used of its search cap."""
+    listed = list(view.works[:MAX_WORKS_LISTED])
     return ok(
         **_run_fields(view.run),
         works={
@@ -487,10 +503,11 @@ def _run_view(view: RunView) -> dict[str, Any]:
             "resolved": view.resolved,
             "unresolved": view.unresolved,
             "pending": view.pending,
-            # The works themselves, because the counts alone cannot be acted on.
-            # Bounded by the approval gate: a run proposing more than the
-            # threshold stops for a decision before it can grow further.
-            "each": [_work_summary(work) for work in view.works],
+            # The works themselves, because the counts alone cannot be acted on —
+            # every action taking a work id has this as its only reachable source.
+            "each": [_work_summary(work) for work in listed],
+            "listed": len(listed),
+            "truncated": len(listed) < view.work_count,
         },
         # Reported as two numbers rather than one verdict: the usage is this
         # run's own history and the allowance is the deployment's current
@@ -501,7 +518,33 @@ def _run_view(view: RunView) -> dict[str, Any]:
             "allowance": view.search_allowance,
             "exhausted": view.searches_exhausted,
         },
-        notice=_run_notice(view),
+        notice=_joined(_run_notice(view), _works_truncation_notice(view, len(listed))),
+    )
+
+
+def _joined(*sentences: str | None) -> str:
+    return " ".join(sentence for sentence in sentences if sentence)
+
+
+def _works_truncation_notice(view: RunView, listed: int) -> str | None:
+    """Say what `each` left out, or say nothing.
+
+    The contract's rule, applied where it bites hardest: a result that omits rows
+    says so and says how many, never a silent cut. A short list read as a
+    complete one is worse here than in a catalogue listing, because the count
+    beside it is the *run's* count — so the two disagree in the same payload and
+    a caller has no way to tell which is the whole truth.
+
+    It names no way to fetch the rest, because there is none: `status` takes no
+    offset, and a paged listing of a run's works arrives with the review surface.
+    Promising an affordance that does not exist is the failure the withheld
+    action was withheld to avoid.
+    """
+    if listed >= view.work_count:
+        return None
+    return (
+        f"Only the first {listed} of this run's {view.work_count} works are listed; the rest are omitted to "
+        "keep the result inside a client's token budget, not because anything is wrong with them."
     )
 
 

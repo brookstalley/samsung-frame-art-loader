@@ -292,6 +292,67 @@ def test_a_work_the_curator_already_decided_is_not_searched_and_is_reported_apar
     assert closing[0].works_verdict_stood == 1
 
 
+def test_a_work_decided_after_the_list_was_read_is_still_not_searched(services, museum, reviewed, runner):
+    """The work list is gathered once, before the first provider call.
+
+    On a run of any size that value is stale by the time the last work is
+    reached — a re-search takes minutes and the curator is looking at these
+    works while it runs. Re-reading each work as it comes up is what keeps
+    "already decided" a question about now rather than about when the loop
+    started, and it spares a provider call whose result could not be applied.
+    """
+    _, works = reviewed("The Elephants", "Swans Reflecting Elephants")
+    museum.asked.clear()
+    ask = museum.find_images
+    decided: list[str] = []
+
+    def decide_whichever_comes_second(query):
+        # Keyed on whichever work the loop reaches first rather than on a title,
+        # because nothing promises the order a run's works come back in — an
+        # assumption about that is how this test passed alone and failed in the
+        # suite the first time it was written.
+        if not decided:
+            other = next(work for title, work in works.items() if title != query.title)
+            services.discovery.set_verdict(other.id, Verdict.ACCEPTED)
+            decided.append(other.proposed_title)
+        return ask(query)
+
+    museum.find_images = decide_whichever_comes_second
+
+    re_search(runner, *works.values())
+
+    assert len(museum.asked) == 1, f"the work decided mid-run was asked about anyway: {museum.asked}"
+    assert decided[0] not in museum.asked
+
+
+def test_a_verdict_landing_mid_search_still_writes_no_instances_to_the_decided_work(services, museum, reviewed, runner):
+    """The race the pre-check cannot cover, closed at the write instead of documented.
+
+    Checking the verdict before searching answers about the moment it was
+    checked. A curator deciding *while* the provider is being asked is narrower
+    but not rarer than it sounds — a re-search takes minutes and the curator is
+    looking at the work. `record_image` declining a decided work is what makes
+    losing that race cost nothing, rather than leaving rows on a work whose
+    images already became catalogue sources.
+    """
+    _, works = reviewed("The Elephants", holdings={"The Elephants": _two_scans("The Elephants")})
+    work = works["The Elephants"]
+    services.discovery.reject_image(services.discovery.list_candidate_images(work.id)[0].id)
+    before = {image.id for image in services.discovery.list_candidate_images(work.id)}
+
+    def accept_while_searching(query):
+        services.discovery.set_verdict(work.id, Verdict.ACCEPTED)
+        return (an_image("The Elephants", url="https://artic.edu/arrived-too-late"),)
+
+    museum.find_images = accept_while_searching
+
+    re_search(runner, work)
+
+    after = {image.id for image in services.discovery.list_candidate_images(work.id)}
+    assert after == before, "an instance was written to a work the curator had decided"
+    assert services.discovery.get_candidate_work(work.id).verdict is Verdict.ACCEPTED
+
+
 def test_no_re_search_ever_leaves_a_work_holding_an_artwork_id_and_a_non_accepted_verdict(services, museum, reviewed, runner):
     """The combination the guard exists to prevent — nothing in this model can repair it.
 
