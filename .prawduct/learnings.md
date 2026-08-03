@@ -458,6 +458,23 @@ sentence describes, and expecting it to fail.
 
 ## An action is only usable if its arguments are obtainable from something built
 
+## When a result gains a collection, name what bounds it before deciding it needs no cap
+
+**Write the bound down as a comment, and the false ones announce themselves.** A
+list added to a payload is unbounded until something specific bounds it, and the
+near-miss is naming a mechanism that gates rather than caps — an approval
+threshold computed *after* a list is recorded pauses the work without shortening
+the list. Where a caller cannot page, truncation still beats a blown budget, and
+the notice must not promise an affordance that does not exist.
+
+## A test that indexes an unordered read is wrong even while it passes
+
+**Key on identity, not position, whenever a store read promises no order — and
+treat `caplog` the same way, since `at_level` scopes the level and not the
+buffer.** Both failures look identical: green alone, red in the suite. Fixing one
+as a fixture concern does not generalise; the rule belongs to the *data*, so the
+next test written against the same read reintroduces it.
+
 **Before advertising an action, construct a real call to it using only surfaces
 that ship — and if a test needs a service-layer call to build a tool argument,
 that is the finding, not a convenience.** Withholding an action until it works is
