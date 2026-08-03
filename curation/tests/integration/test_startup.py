@@ -345,6 +345,31 @@ def test_uvicorn_is_given_no_logging_config_of_its_own(tmp_path, monkeypatch):
     assert passed["log_config"] is None
 
 
+def test_the_configured_sweep_interval_reaches_the_application(tmp_path, monkeypatch):
+    """Sweeping is off unless a caller asks, and this entry point is the caller.
+
+    `create_app` defaults the interval to zero so a test harness cannot acquire a
+    file-deleting thread by accident. The consequence is that a deployment sweeps
+    only because `main` passes its setting through — one line, whose deletion
+    leaves every sweep test green and the plane never reclaiming anything.
+    """
+    art_root = tmp_path / "art"
+    art_root.mkdir()
+    _stub_settings(monkeypatch, art_root, preview_sweep_interval_seconds=900)
+    built: dict = {}
+
+    def capture(services, **kwargs):  # noqa: ANN001, ANN003 - the real signature
+        built.update(kwargs)
+        return object()
+
+    monkeypatch.setattr(entry_point, "create_app", capture)
+    monkeypatch.setattr(entry_point.uvicorn, "run", lambda app, **kwargs: None)
+
+    entry_point.main()
+
+    assert built["preview_sweep_interval_seconds"] == 900
+
+
 def test_uvicorns_own_default_is_what_makes_that_argument_necessary():
     """Read from uvicorn itself, so the reason cannot outlive the behaviour.
 
