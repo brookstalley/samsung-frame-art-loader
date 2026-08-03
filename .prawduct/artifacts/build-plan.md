@@ -76,13 +76,23 @@ identities, and their detailed sections stay in numeric order below. The list wa
 re-ordered on 2026-07-31; the two changes and why are recorded in the Context
 block under "Re-sequenced 2026-07-31".
 
-The hardware-gated chunks sit **after** the discovery chunks again, because bench
-access lapsed on 2026-08-02 and 05, 04 and 03 need the Pi and panel in hand. This
-is the same rule that parked them originally, applied a second time: the tooling
-takes the first unchecked box as the current chunk, and a blocked chunk ahead of
-active work silently hands its `Critic mode:` and `Type:` to every chunk after
-it. They keep their numbers and their specs; only their position moved, and it
-moves back the moment the bench returns.
+**Every chunk that needs the bench sits behind every chunk that does not**, because
+bench access lapsed on 2026-08-02 and has not returned. This is the same rule that
+parked 05, 04 and 03 originally, applied a third time: the tooling takes the first
+unchecked box as the current chunk, and a blocked chunk ahead of active work
+silently hands its `Critic mode:` and `Type:` to every chunk after it. Chunks keep
+their numbers and their specs; only their position moves, and it moves back the
+moment the bench returns.
+
+The block moved on 2026-08-03 is **05, 04, 03, 12 and 13**, not the three named
+before. The earlier arrangement placed the hardware chunks after the discovery
+chunks, which was correct until the discovery chunks finished — at which point 05
+became the first unchecked box and the hazard the rule exists to prevent arrived
+anyway. The count grew because 12 and 13 are gated by the same bench at one
+remove: Chunk 12 declares **"Depends on: Chunk 05 (verified library)"** and its
+acceptance criteria call for a live pass on the Pi, and Chunk 13 is the e-paper
+panel and its systemd units. Ordering them ahead of the curation chunks would have
+re-created the same silence one line further down.
 
 - [x] Chunk 01: Untrack the TV pairing token; drop the catalogue backups (issue #4)
 - [x] Chunk 02: Deployment values out of source (issue #5) + `art.py` defect dispositions (issue #6)
@@ -100,14 +110,14 @@ moves back the moment the bench returns.
 - [x] Chunk 15: Spikes — search-engine choice and `work_dedup_key` derivation (issue #18)
 - [x] Chunk 16A: Discovery phase 2 — works to instances, over a real museum API
 - [x] Chunk 16B: `resolve_images` — the re-search, its coverage and its rollup
+- [ ] Chunk 17: Review and acceptance — `art_review`, thumbnails inline, promotion
+- [ ] Chunk 18: Acquisition and preparation — fetch, metadata, mat engine, 4K render
+- [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [ ] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
-- [ ] Chunk 17: Review and acceptance — `art_review`, thumbnails inline, promotion
-- [ ] Chunk 18: Acquisition and preparation — fetch, metadata, mat engine, 4K render
-- [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
 Context: Plan authored 2026-07-20. Chunks 01, 02 and 06 landed 2026-07-27 in one
