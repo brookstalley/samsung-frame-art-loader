@@ -165,6 +165,15 @@
   sweeping immediately at start and then on `PREVIEW_SWEEP_INTERVAL_SECONDS`
   (hourly by default, 0 to disable): a start-only sweep would reclaim nothing on
   an always-on plane, which is the deployment this exists for.
+- **What it reclaims is bounded by the rows, and the shipped sweep is only half
+  of what the decision above promised.** Every path it considers comes from a
+  `CandidateImage.preview_path`, so a file written by a phase-2 run that died
+  before recording its row is invisible to it — permanently, since nothing else
+  ever looks at that directory. That is exactly the case a hook could not cover
+  and the sweep was chosen to cover, so it is the half still owed rather than a
+  limitation of the approach. Unbuilt and filed; `operational-spec.md` § Add disk
+  headroom names hand-deletion as the interim reclamation, which is safe because
+  a preview is re-fetchable from a URL the catalogue holds.
 - **The unit of deletion is the *path*, not the row**, because a preview file is
   named by a digest of its URL and two candidate works can therefore share one.
   A file survives while any work still under review references it. The producer

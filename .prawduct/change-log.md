@@ -109,6 +109,20 @@ about its `run_id`, and for the same reason: a field whose only possible defence
 a test written to defend it is a field to delete. The test now asks the record
 whether the instance is on offer, which is the claim worth making.
 
+**The sweep ships half of what the decision promised, and the PR review is what
+noticed.** Issue #29 — the item this chunk closes — asked for the sweep-vs-hook
+decision *and* named the case a hook could never cover: a crash between writing a
+preview and recording its row. `_references` derives every path from a
+`CandidateImage.preview_path`, so a file no row names is invisible to it forever,
+and nothing anywhere in the plane so much as lists that directory. The shipped
+sweep therefore reclaims exactly the class an on-verdict hook would have, which is
+not the argument that chose it. #62 carries the rest, at `stage: design` because
+the obvious fix is wrong — a bare directory walk cannot tell an orphan from a file
+a live run wrote seconds ago, and would delete previews out from under the writer.
+`operational-spec.md` and `boundary-patterns.md` now name both things the sweep
+does not reclaim rather than one, which matters most in the disk-headroom row an
+operator reads while the card is filling.
+
 **One acceptance-criterion clause is met below the wire, and that is stated rather
 than glossed.** "Accepted works appear in the catalogue with sources … intact" is
 asserted through the service, because **no action on `art_catalogue` returns
