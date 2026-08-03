@@ -10,6 +10,43 @@ each entry, which is the durable form.
 
 ## Pending
 
+### A curator can see the candidate images in their own client — added 2026-08-03
+
+**Visual, and it is the one thing this chunk's tests cannot prove.** Chunk 17A
+returns candidate thumbnails as MCP image content blocks. The suite asserts the
+blocks are present, correctly sized, and correctly correlated to their rows — but
+what a *client* does with them is the client's business, and the whole safety
+argument (`security-model.md` § Content Appropriateness) rests on the picture
+actually being visible at the moment of judgement. A block that every test
+accepts and Claude Code renders as a broken box would satisfy the suite and
+defeat the gate.
+
+Point a real MCP client at the running plane and look:
+
+```
+art_discovery(action='list_runs')                  # take a run_id
+art_review(action='list_works', run_id='<that>')   # expect: pictures, inline
+art_review(action='list_images', work_id='<one>')  # expect: the alternates
+```
+
+What to check with your eyes, beyond "images appeared":
+
+- **The pictures render inline**, not as attachments or placeholders.
+- **Each work's picture is its own.** Rows carry `image_block_index`; a client
+  that reorders or drops a block would pair the wrong scan with the wrong
+  painting, and nothing below the wire can detect that.
+- **A work with no local copy still lists**, with `preview_note` saying why —
+  rather than vanishing or rendering blank.
+- **The size beside each picture is legible and useful.** `renders_at_inches` is
+  the number a thumbnail cannot convey, and it is what stops a postage stamp
+  reaching the wall; if it reads as noise in a real client, say so — the
+  presentation is worth changing.
+
+Verified so far *without* a real client: the plane was booted from its own entry
+point against a scratch tree on 2026-08-03 and a real MCP client session returned
+1 text + 2 image blocks, each index resolving to a decodable 400x400-box JPEG,
+with the below-floor work pictured and marked `is_on_offer: false`.
+
 ### The loader unit starts clean with its declared `EnvironmentFile=` — added 2026-08-02
 
 **Not visual — this needs the Pi, and it is quick.** The unit now declares
