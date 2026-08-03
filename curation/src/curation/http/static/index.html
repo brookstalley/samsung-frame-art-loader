@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Curation</title>
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#view">Skip to content</a>
+    <header class="masthead">
+      <h1>Curation</h1>
+      <nav class="tabs" aria-label="Sections">
+        <button type="button" data-view="works">Works</button>
+        <button type="button" data-view="themes">Themes</button>
+        <button type="button" data-view="manifest">On the wall</button>
+        <button type="button" data-view="health">Health</button>
+      </nav>
+    </header>
+    <main>
+      <!-- Failures are announced, not only shown: a curator who learns about a
+           refused operation by noticing a colour is a curator who misses it. -->
+      <p class="note error" id="error" role="alert" hidden></p>
+      <div id="view" tabindex="-1">
+        <p class="muted">Loading the catalogue&hellip;</p>
+      </div>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

@@ -24,7 +24,12 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
+# Anchored to the repo root. Unanchored, this pattern also matched
+# `curation/src/curation/manifest/` on a case-insensitive filesystem (macOS),
+# silently excluding the theme-manifest builder — the only channel between the
+# curation and display planes — from every commit. Caught 2026-07-27; guarded by
+# tests/test_repo_hygiene.py.
+/MANIFEST
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -160,3 +165,58 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# macOS Finder metadata. Untracked 2026-08-02: the root `.DS_Store` had been
+# committed since the initial commit and no rule excluded it, so the stock
+# Python .gitignore this file was seeded from simply never covered the platform
+# every session here runs on. Unanchored on purpose — Finder writes one per
+# directory it has been opened in, not just the root. This rule is the whole
+# mechanism: once ignored, `git add .` cannot stage one again, so no test is
+# owed on top of it.
+.DS_Store
+
+# Prawduct session files
+.claude/settings.local.json
+.prawduct/.bug-inbox
+.prawduct/.critic-active
+.prawduct/.critic-findings.json
+.prawduct/.critic-partials/
+.prawduct/.governance-ledger.jsonl
+.prawduct/.test-evidence.json
+.prawduct/.pr-reviews/
+.prawduct/.session-base-tree
+.prawduct/.session-git-baseline
+.prawduct/.session-handoff.md
+.prawduct/.session-reflected
+.prawduct/.session-start
+.prawduct/.subagent-briefing.md
+.prawduct/.gates-waived
+.prawduct/.advisories.json
+.prawduct/.work-model-index.json
+.prawduct/reflections.md
+
+# Prawduct plugin version marker (per-repo last-seen)
+.prawduct/.prawduct-version
+
+# Backlog service export — full-fidelity cutover backup, regenerable via
+# `prawduct-hook backlog export`. Tracked copy would duplicate GitHub Issues.
+.prawduct/backlog-export/
+
+# Samsung TV pairing token. Untracked 2026-07-27 (issue #4); this entry is now
+# live. The leaked token was confirmed expired by the operator, so no re-pair
+# was needed. The token's path is now configurable (TV_TOKEN_FILE, defaulting
+# under ART_ROOT) rather than a bare relative path, so it no longer depends on
+# the process CWD or on living inside the checkout.
+token_file
+
+# Legacy catalogue snapshots (issue #4). `all.json` itself stays tracked — it is
+# the input to the Chunk 10 seeding path and the mat regression corpus.
+all.backup
+all.json.backup
+all.json.backup2
+
+# Prawduct session files
+.prawduct/.handoff-notes.md
+
+# Prawduct session files
+.prawduct/.critic-partials-archive/

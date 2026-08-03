@@ -1,16 +1,23 @@
-import os
-import logging
-
-import config
 import json
+import logging
+import os
 
-from colour import Color
-from image_utils import ResizeOptions, ImageSources
-from image_utils import crop_file, resize_file_with_matte, image_source, get_image, get_image_dimensions
-from metadata import google_metadata_for_artwork_url, get_file_metadata, get_artic_metadata, google_get_metadata
 import cairo
 import gi
+from colour import Color
 from PIL import Image
+
+import config
+from image_utils import (
+    ImageSources,
+    ResizeOptions,
+    crop_file,
+    get_image,
+    get_image_dimensions,
+    image_source,
+    resize_file_with_matte,
+)
+from metadata import get_artic_metadata, get_file_metadata, google_get_metadata
 
 gi.require_version("Pango", "1.0")
 gi.require_version("PangoCairo", "1.0")
@@ -282,7 +289,7 @@ class ArtLabel:
         if nationality_dates_line:
             label_text += f'<span size="large" color="#000000">{nationality_dates_line}\n</span>'
 
-        label_text += f'<span size="small" color="#000000">\n</span>'
+        label_text += '<span size="small" color="#000000">\n</span>'
 
         label_text += f'<span size="xx-large" color="#000000"><b><i>{self.metadata.get("title","*** No title")}</i></b>\n</span>'
 
@@ -327,13 +334,16 @@ class ArtLabel:
 class ArtSet:
     name: str = None
     default_resize: str = None
-    art: list[ArtFile] = []
+    art: list[ArtFile]
     source_file: str = None
 
-    def __init__(self, source_file=None, name=None, default_resize=None, art: list[ArtFile] = []):
+    def __init__(self, source_file=None, name=None, default_resize=None, art: list[ArtFile] | None = None):
         self.name = name
         self.default_resize = default_resize
-        self.art = art
+        # issue #6 defect 2: this was `art: list[ArtFile] = []`, a mutable default
+        # AND a class attribute, so every ArtSet built without an explicit list
+        # shared one object — appending to one set's art appended to all of them.
+        self.art = art if art is not None else []
         self.source_file = source_file
 
     def to_dict(self):
@@ -359,14 +369,14 @@ class ArtSet:
     def from_file(cls, source_file: str):
         logging.info(f"Loading art set from {source_file}")
         try:
-            with open(source_file, "r") as file:
+            with open(source_file) as file:
                 data = json.load(file)
         except FileNotFoundError:
             logging.error(f"File {source_file} not found")
-            raise e
+            raise
         except Exception as e:
             logging.error(f"Error loading file {source_file}: {e}")
-            raise e
+            raise
         data["source_file"] = source_file
         return cls.from_dict(data)
 

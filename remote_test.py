@@ -4,14 +4,16 @@ import logging
 from samsungtvws.async_remote import SamsungTVWSAsyncRemote
 from samsungtvws.remote import SendRemoteKey
 
+import config
+
 logging.basicConfig(level=logging.DEBUG)
 
-host = "10.23.17.77"
-port = 8002
+host = config.tv_address
+port = config.tv_port
 
 
 async def main():
-    tv = SamsungTVWSAsyncRemote(host=host, port=port, token_file="token_file")
+    tv = SamsungTVWSAsyncRemote(host=host, port=port, token_file=config.tv_token_file)
     logging.debug(f"Connecting to {host}:{port}")
     await tv.start_listening()
     logging.debug("Connected")

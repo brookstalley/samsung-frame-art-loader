@@ -1,0 +1,515 @@
+/* The curation surface's design tokens, and the components built from them.
+ *
+ * THREE CONSTRAINTS SHAPE EVERYTHING HERE, and they are recorded decisions
+ * rather than taste:
+ *
+ * 1. WCAG 2.1 AA. Every text pair below clears 4.5:1 and every control boundary
+ *    clears 3:1, in both schemes. That is asserted by a test that reads this
+ *    file — `tests/unit/test_design_tokens.py` — so a token edited to look
+ *    nicer fails the suite rather than quietly failing a reader.
+ * 2. Chrome never competes with the artwork. This is an image-review tool whose
+ *    whole job is judging colour, so surfaces are near-neutral with a slight
+ *    warm cast (a gallery wall, not a screen), saturation stays low, and nothing
+ *    but the images carries a strong hue.
+ * 3. Colour is never the sole carrier of state. Every state indicator pairs a
+ *    glyph and a word with its colour, so it survives greyscale, colour
+ *    blindness, and a curator who has turned the lights down.
+ *
+ * `--border` is deliberately soft and is NOT held to 3:1: it separates a card
+ * from the page, which WCAG 1.4.11 does not govern, and making it meet a
+ * contrast floor written for controls would put a hard line around every
+ * picture. `--border-strong` is the one controls use, and it does meet it.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces, recessive by design. */
+  --surface-0: #faf9f7;
+  --surface-1: #ffffff;
+  --surface-2: #efedea;
+  --border: #c9c4bc;
+  --border-strong: #6f6a62;
+
+  /* Text. */
+  --text-strong: #1c1a17;
+  --text: #3a3733;
+  --text-muted: #635e57;
+
+  /* The single accent: a muted ink blue, desaturated so it sits behind a
+     painting rather than in front of one. */
+  --accent: #2f5068;
+  --accent-text: #ffffff;
+  --focus: #1d4f7c;
+
+  /* Type scale, 1.25 from a 16px base. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+
+  /* Spacing, 4px base. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+
+  /* Radius: crisp. A museum label is not a pill. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+
+  /* Elevation: barely there, so a card reads as paper rather than as UI. */
+  --shadow-1: 0 1px 2px rgb(28 26 23 / 6%);
+  --shadow-2: 0 2px 8px rgb(28 26 23 / 10%);
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-label: ui-serif, Georgia, "Times New Roman", serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-0: #161513;
+    --surface-1: #1f1e1b;
+    --surface-2: #2a2825;
+    --border: #4a463f;
+    --border-strong: #8a847a;
+    --text-strong: #f5f3ef;
+    --text: #ddd9d2;
+    --text-muted: #aaa49a;
+    --accent: #9dc0da;
+    --accent-text: #10202b;
+    --focus: #9dc0da;
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 40%);
+    --shadow-2: 0 2px 8px rgb(0 0 0 / 50%);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-0);
+  color: var(--text);
+  font: var(--text-md) / 1.55 var(--font-ui);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+a {
+  color: var(--accent);
+}
+
+/* Skipped straight past by everyone with a mouse; the only way through for
+   someone tabbing, on a page whose first landmark is a forty-card grid. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: var(--space-2);
+  background: var(--surface-1);
+  color: var(--text-strong);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  z-index: 10;
+}
+
+.skip-link:focus {
+  left: var(--space-4);
+}
+
+/* -- chrome ---------------------------------------------------------------- */
+
+header.masthead {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-1);
+  padding: var(--space-4) var(--space-5) 0;
+}
+
+.masthead h1 {
+  margin: 0;
+  font: 400 var(--text-xl) / 1.2 var(--font-label);
+  letter-spacing: 0.01em;
+  color: var(--text-strong);
+}
+
+nav.tabs {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-4);
+}
+
+nav.tabs button {
+  appearance: none;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: none;
+  color: var(--text-muted);
+  font: var(--text-sm) / 1 var(--font-ui);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  cursor: pointer;
+}
+
+nav.tabs button:hover {
+  color: var(--text-strong);
+}
+
+/* The selected tab is marked three ways — weight, an underline rule, and
+   aria-current — so the tab bar reads correctly in greyscale and to a screen
+   reader, not only to someone who can see the accent. */
+nav.tabs button[aria-current="page"] {
+  color: var(--text-strong);
+  font-weight: 600;
+  border-color: var(--border);
+  background: var(--surface-0);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+main {
+  padding: var(--space-5);
+  max-width: 96rem;
+  margin: 0 auto;
+}
+
+h2 {
+  font: 400 var(--text-lg) / 1.3 var(--font-label);
+  color: var(--text-strong);
+  margin: 0 0 var(--space-4);
+}
+
+/* -- the work grid --------------------------------------------------------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: var(--space-5);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-image {
+  display: block;
+  width: 100%;
+  /* A fixed aspect box so forty cards line up in rows and do not reflow as
+     images arrive, with the work letterboxed inside it: cropping an artwork to
+     fill a tile is the one thing an art tool must not do. */
+  aspect-ratio: 4 / 3;
+  background: var(--surface-2);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  /* The image is taken out of flow rather than sized at 100%. A replaced child
+     at `height: 100%` of a box whose own height comes from `aspect-ratio` is
+     circular, and the browser resolves it by letting the content win — which
+     silently returns every tile to the shape of whatever picture is in it. */
+  position: relative;
+  overflow: hidden;
+}
+
+.card-image img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.card-image-absent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  height: 100%;
+}
+
+.card-body {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1;
+}
+
+.card-title {
+  font: 400 var(--text-md) / 1.3 var(--font-label);
+  color: var(--text-strong);
+  margin: 0;
+}
+
+.card-title button {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.card-title button:hover {
+  text-decoration: underline;
+}
+
+.card-artist,
+.card-meta {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.card-footer {
+  margin-top: auto;
+  padding-top: var(--space-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* -- state indicators ------------------------------------------------------
+   Every badge carries a glyph AND a word. The colour is the third signal, never
+   the first. */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  padding: 0.15rem var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+
+.badge .glyph {
+  font-size: var(--text-sm);
+  line-height: 1;
+}
+
+.badge-native {
+  border-style: solid;
+}
+
+.badge-matted_small {
+  border-style: dashed;
+}
+
+.badge-below_floor {
+  border-style: double;
+  border-width: 3px;
+  font-weight: 600;
+}
+
+.badge-unknown {
+  border-style: dotted;
+  color: var(--text-muted);
+}
+
+/* Catalogue status is a different axis from display fit, and it gets its own
+   block rather than borrowing `below_floor`'s. Sharing one would have made an
+   archived work and a too-small work paint identically, and would have made a
+   later change to one of them silently change the other. */
+.badge-archived {
+  border-style: solid;
+  border-width: 2px;
+  background: var(--surface-0);
+  font-weight: 600;
+}
+
+/* -- tables ---------------------------------------------------------------- */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+caption {
+  text-align: left;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  padding-bottom: var(--space-2);
+}
+
+th,
+td {
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+th {
+  color: var(--text-strong);
+  font-weight: 600;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* -- panels, forms, controls ----------------------------------------------- */
+
+.panel {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.panel h3 {
+  margin: 0 0 var(--space-3);
+  font: 400 var(--text-md) / 1.3 var(--font-label);
+  color: var(--text-strong);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+  max-width: 28rem;
+}
+
+label {
+  font-size: var(--text-sm);
+  color: var(--text-strong);
+}
+
+input[type="text"],
+select {
+  font: var(--text-md) / 1.4 var(--font-ui);
+  color: var(--text);
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+}
+
+button.action {
+  appearance: none;
+  font: var(--text-sm) / 1 var(--font-ui);
+  color: var(--accent-text);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+}
+
+button.action.quiet {
+  color: var(--accent);
+  background: var(--surface-1);
+  border-color: var(--border-strong);
+}
+
+button.action:hover {
+  filter: brightness(1.08);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-end;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.note {
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--surface-2);
+  border-left: 3px solid var(--border-strong);
+  padding: var(--space-3) var(--space-4);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin: 0 0 var(--space-4);
+}
+
+/* Announced as well as shown: a failure a curator only learns about by noticing
+   a colour is a failure that gets missed. */
+.error {
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+dl.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+dl.facts dt {
+  color: var(--text-muted);
+}
+
+dl.facts dd {
+  margin: 0;
+  color: var(--text);
+  /* Filesystem paths and content hashes have no spaces to break at, and one of
+     them is wide enough to push the whole page sideways. */
+  overflow-wrap: anywhere;
+}
+
+.detail-image {
+  display: block;
+  margin: 0 auto var(--space-4);
+  max-width: 100%;
+  max-height: 32rem;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+/* The badges belong under the picture they describe, not under the panel. */
+.panel .card-footer {
+  justify-content: center;
+  padding-top: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

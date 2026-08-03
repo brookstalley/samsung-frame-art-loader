@@ -1,35 +1,28 @@
 import argparse
 import asyncio
-from datetime import datetime
 import hashlib
-import io
 import json
 import logging
 import os
-from PIL import Image
-import time
+from datetime import datetime
 
+from PIL import Image
 from samsungtvws.async_art import SamsungTVAsyncArt
-from samsungtvws import exceptions
-from samsungtvws.remote import SendRemoteKey
 from samsungtvws.async_remote import SamsungTVWSAsyncRemote
 
-from art import ArtFile, ArtSet
 import config
+from art import ArtFile, ArtSet
 from display import DisplayLabel
 from local import SunInfo, perceived_brightness
-from image_utils import images_match
+from tv_delete import UPLOADED_CATEGORY, describe_removal, remove_from_tv
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
 # logging.getLogger().setLevel(logging.DEBUG)
 artsets = []
-uploaded_files = {}
 label_display: DisplayLabel = None
 last_tv_content_id = None
 previous_art_mode = False
 previous_auto_start = None
-
-UPLOADED_CATEGORY = "MY-C0002"
 
 
 def parse_args():
@@ -111,10 +104,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def update_uploaded_files(local_file, tv_content_id):
-    uploaded_files[local_file] = {"tv_content_id": tv_content_id}
-
-
 async def get_available(tv, category=None):
     # Retrieve available art
     return await tv.available(category=category)
@@ -129,14 +118,12 @@ async def show_available(tv, category=None):
 
 async def delete_all_uploaded(tv_art):
     available_art = await get_available(tv_art, UPLOADED_CATEGORY)
-    await tv_art.delete_list([art["content_id"] for art in available_art])
+    result = await remove_from_tv(tv_art, [art["content_id"] for art in available_art])
     # clear the tv_content_id from any artfiles that were uploaded
     for art_set in artsets:
         for art_file in art_set.art:
             art_file.tv_content_id = None
-    logging.info(f"Deleted {len(available_art)} uploaded images")
-    # Clear the list of uploaded filenames
-    uploaded_files = {}
+    logging.info(describe_removal(result, len(available_art)))
 
 
 async def upload_file(local_file: str, tv_art: SamsungTVAsyncArt) -> str:
@@ -144,19 +131,16 @@ async def upload_file(local_file: str, tv_art: SamsungTVAsyncArt) -> str:
     if not os.path.exists(local_file):
         raise FileNotFoundError(f"File {local_file} does not exist.")
     remote_filename = None
-    with open(local_file, "rb") as f:
-        data = f.read()
     try:
-        if local_file.endswith(".jpg"):
-            remote_filename = await tv_art.upload(data, file_type="JPEG", matte="none", portrait_matte="none")
-        elif local_file.endswith(".png"):
-            remote_filename = await tv_art.upload(data, file_type="PNG", matte="none", portrait_matte="none")
-        update_uploaded_files(local_file, remote_filename)
+        # The path, not the bytes. Given a path, samsungtvws streams the file to
+        # the set in 64 KiB chunks; given bytes, it holds the whole image in
+        # memory, and these are 4K composites. It takes the type from the
+        # suffix, so passing file_type alongside a path would be ignored.
+        if local_file.endswith((".jpg", ".png")):
+            remote_filename = await tv_art.upload(local_file, matte="none", portrait_matte="none")
         await tv_art.select_image(remote_filename)
     except Exception as e:
         logging.error("There was an error: " + str(e))
-    finally:
-        f.close()
 
     return remote_filename
 
@@ -169,7 +153,7 @@ async def get_thumbnails(tv_art: SamsungTVAsyncArt, content_ids):
         for tv_content_id, thumbnail_data in thumbnails.items():
             with open(f"{config.art_folder_tv_thumbs}/{tv_content_id}.jpg", "wb") as f:
                 f.write(thumbnail_data)
-    logging.info("got {} thumbnails".format(len(thumbnails)))
+    logging.info(f"got {len(thumbnails)} thumbnails")
     return thumbnails
 
 
@@ -199,7 +183,6 @@ async def upload_art_files(tv_art: SamsungTVAsyncArt, art_files: list[ArtFile]):
         while not success and retries < retry_limit:
             try:
                 tv_content_id = await upload_file(art_file.ready_fullpath, tv_art)
-                update_uploaded_files(art_file.ready_fullpath, tv_content_id)
                 art_file.tv_content_id = tv_content_id
                 try:
                     md5 = await get_thumbnail_md5(tv_art, tv_content_id)
@@ -251,7 +234,6 @@ async def sync_artsets_to_tv(tv_art: SamsungTVAsyncArt):
                     tv_thumb_md5 = hashlib.md5(thumbnail_data).hexdigest()
                     if tv_thumb_md5 == art_file.tv_content_thumb_md5:
                         logging.info(f"Found match for {art_file.ready_fullpath} in TV image {tv_content_id}")
-                        update_uploaded_files(art_file.ready_fullpath, tv_content_id)
                         art_file.tv_content_id = tv_content_id
                         matched += 1
                 checked += 1
@@ -262,9 +244,10 @@ async def sync_artsets_to_tv(tv_art: SamsungTVAsyncArt):
         tv_ids_not_used = [tv_content_id for tv_content_id in tv_thumbnails.keys() if tv_content_id not in tv_ids_in_use]
         if tv_ids_not_used:
             logging.info(f"Deleting {len(tv_ids_not_used)} images from TV that are not in an active artset: {tv_ids_not_used}")
-            await tv_art.delete_list(tv_ids_not_used)
+            result = await remove_from_tv(tv_art, tv_ids_not_used)
+            logging.info(describe_removal(result, len(tv_ids_not_used)))
         else:
-            logging.info(f"No images to delete from TV")
+            logging.info("No images to delete from TV")
 
     # upload art_files that do not have a tv_content_id yet
     art_files_to_upload = [art_file for art_set in artsets for art_file in art_set.art if not art_file.tv_content_id]
@@ -272,7 +255,7 @@ async def sync_artsets_to_tv(tv_art: SamsungTVAsyncArt):
         logging.info(f"Uploading {len(art_files_to_upload)} new images to TV")
         await upload_art_files(tv_art, art_files_to_upload)
     else:
-        logging.info(f"No new images to upload to TV")
+        logging.info("No new images to upload to TV")
 
 
 async def set_brightness_for_local(tv_art: SamsungTVAsyncArt):
@@ -345,7 +328,7 @@ async def set_correct_mode(tv_art: SamsungTVAsyncArt, tv_remote: SamsungTVWSAsyn
     if art_mode and not previous_art_mode:
         # Artmode was switched on since last time we checked
         info = await tv_art.get_artmode_settings()
-        logging.info("current artmode settings: {}".format(info))
+        logging.info(f"current artmode settings: {info}")
         # Get the relative brightness based on current time, day of year, latitude, and longitude
         # Get current datetime
         slideshow_duration = 3
@@ -371,7 +354,7 @@ async def set_brightness(tv_art: SamsungTVAsyncArt, brightness: str):
 async def image_callback(event, response):
     global label_display, last_tv_content_id
 
-    logging.debug("CALLBACK: image callback: {}, {}".format(event, response))
+    logging.debug(f"CALLBACK: image callback: {event}, {response}")
     data_str = response["data"]
     data = json.loads(data_str)
     event = data.get("event", None)
@@ -408,8 +391,8 @@ async def image_callback(event, response):
 
 async def ensure_folders_exist():
     # Ensure that the folders exist
-    if not os.path.exists(config.base_folder):
-        raise FileNotFoundError(f"Base folder {config.base_folder} does not exist.")
+    if not os.path.exists(config.ART_ROOT):
+        raise FileNotFoundError(f"Base folder {config.ART_ROOT} does not exist.")
 
     for folder in [
         config.art_folder_raw,
@@ -432,10 +415,11 @@ async def main():
 
     logging.info("Starting art.py!")
     logging.debug("Logging in debug mode")
+    config.log_resolved_config()
     try:
         await ensure_folders_exist()
-    except FileNotFoundError as e:
-        logging.error(f"Base folder {config.base_folder} does not exist.")
+    except FileNotFoundError:
+        logging.error(f"Base folder {config.ART_ROOT} does not exist.")
         return
 
     if args.setfile:
@@ -454,17 +438,17 @@ async def main():
             artsets.append(loaded_set)
 
     if args.no_tv:
-        logging.info(f"Not connecting to TV, exiting")
+        logging.info("Not connecting to TV, exiting")
         return
 
     logging.info(f"Creating TV object for {config.tv_address}")
 
-    tv_art = SamsungTVAsyncArt(host=config.tv_address, port=config.tv_port, name="tvpi", token_file="token_file")
+    tv_art = SamsungTVAsyncArt(host=config.tv_address, port=config.tv_port, name="tvpi", token_file=config.tv_token_file)
     logging.info(f"Starting art listening on {config.tv_address}:{config.tv_port}")
     await tv_art.start_listening()
     logging.info(f"Listening on {config.tv_address} started")
 
-    tv_remote = SamsungTVWSAsyncRemote(host=config.tv_address, port=config.tv_port, token_file="token_file")
+    tv_remote = SamsungTVWSAsyncRemote(host=config.tv_address, port=config.tv_port, token_file=config.tv_token_file)
     logging.debug(f"Connecting to {config.tv_address}:{config.tv_port}")
     await tv_remote.start_listening()
     logging.debug("Connected")
@@ -519,7 +503,7 @@ async def main():
                 art_set.save()
 
     if args.stay:
-        logging.info(f"Staying alive. Ctrl-c to exit")
+        logging.info("Staying alive. Ctrl-c to exit")
         label_display = DisplayLabel()
         exit_requested = False
         while not exit_requested:

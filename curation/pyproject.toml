@@ -1,0 +1,169 @@
+[project]
+name = "curation"
+version = "0.1.0"
+description = "Curation plane — discovery, acquisition, catalogue, and the MCP + HTTP surfaces."
+# Nothing in the default install requires 3.14. This floor used to be held by
+# `3tears-models`, which declares the same one — but that package was confined to
+# the opt-in `eval` group on 2026-08-02 (see the group below), so the only
+# declared holder of the floor is now a test-only dependency. What still supports
+# it is weaker and worth stating plainly: the whole declared set was verified to
+# resolve and import on CPython 3.14.4 (2026-07-27), and nothing has asked for a
+# lower one. Lowering it is therefore a decision available to whoever needs it,
+# not a correction — but check the `eval` group still resolves before doing so.
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi",
+    # Imported directly by the ASGI app for its request types. It arrives
+    # transitively via fastapi, but the declared set has to describe what the
+    # code imports — fastapi is free to change how it vendors starlette.
+    "starlette",
+    # Plain, not `[standard]`. That extra pulls httptools, uvloop, watchfiles,
+    # websockets and pyyaml — none imported by any module here, and the same
+    # ground on which pydantic and httpx were kept out below. It also carried a
+    # reload watcher this plane never starts and a websocket implementation the
+    # MCP transport does not use, while silently deciding the HTTP parser for an
+    # always-on-but-idle plane on a Pi. Dropped 2026-08-01; add it back with the
+    # named component and the measurement that wanted it.
+    "uvicorn",
+    # The floor is the version this code is actually verified against, not the
+    # one the design was first written for. `app.py` passes `session_idle_timeout`
+    # to `StreamableHTTPSessionManager`, and that parameter is confirmed present
+    # here and nowhere earlier — a resolve below it raises TypeError while the
+    # application is being built, so every request fails and the plane never
+    # serves. The old `>=1.27` was a claim nobody had checked.
+    "mcp>=1.28.1",
+    "python-dotenv",
+    # The typed response models the HTTP API returns. It resolves transitively
+    # via mcp, but this code imports it directly now, and the rule below cuts
+    # both ways: what the code imports belongs in this list.
+    "pydantic",
+    # Thumbnails. Arrived ahead of the acquisition work below because a grid of
+    # 4K renditions is not a page and nothing in the standard library decodes a
+    # JPEG — `seed/images.py` reads the SOF header for dimensions precisely
+    # because that needed no decoder, and downscaling does.
+    "pillow",
+    # The OpenRouter client's transport — the one thing in this plane that talks
+    # to a foreign API. Declared 2026-08-02 when that client landed: it resolves
+    # transitively through mcp today, so an undeclared install happens to work,
+    # and the day mcp vendors or drops it `__main__` fails at *import* and the
+    # whole plane stops serving rather than just discovery.
+    "httpx",
+]
+
+# 3tears core is deliberately absent and is not expected. The catalogue's durable
+# tier is first-party code matching that framework's DurableStore contract
+# structurally, so no framework code is imported and there is nothing to resolve;
+# its L1 tier is an in-memory cache that would not have persisted the catalogue
+# anyway. Recorded in full at project-state.yaml -> technical_decisions.technology.
+#
+# Confined to the opt-in `eval` group, where it is pinned (see below):
+#   3tears-models — the operator's own multi-provider model adapters. This used to
+#     say it "arrives with the discovery work that calls it" and sat in the list
+#     below as not-yet-pinned; that was reversed on 2026-08-02 and it is pinned in
+#     `eval` today, so it belongs here rather than there. The discovery engine
+#     talks to OpenRouter through a first-party client behind a narrow seam
+#     instead: all traffic goes to one provider (search included, via its web
+#     plugin), and this package would pull 3tears-observe, 3tears-media-contracts,
+#     anthropic, langchain-anthropic/openai/openrouter and jsonschema into the
+#     DEFAULT install — the plane that runs on the Pi beside display under a
+#     MemoryMax. Not a rejection: the seam makes adopting it a one-file change if
+#     a second provider ever earns it. Reasoning in `openrouter-api-findings.md`.
+#
+# Deliberately not pinned yet:
+#   opencv-python-headless, scikit-image, numpy — acquisition and the mat engine,
+#     which arrive with that work rather than being carried unused. Pillow was in
+#     this group until the browser surface needed to downscale a 4K rendition.
+#   (httpx was here until 2026-08-02 on the grounds that only the mcp *client*
+#     used it. The OpenRouter client imports it directly now, so it moved into
+#     the declared set above — see the note beside it there.)
+
+[dependency-groups]
+# httpx appears here *and* in `[project].dependencies`, deliberately. It is a
+# runtime import (the OpenRouter client's transport — see the note beside it
+# above) and the browser-surface tests also drive a booted server with it, so it
+# is pinned into `dev` for the test-only install path as well.
+#
+# **This comment argued the opposite until 2026-08-02**, when the client landed
+# and made "no first-party module imports it" false. Left as a correction rather
+# than deleted because the surviving version was actively dangerous: this file's
+# rule is that the declared set describes what the code imports, so a maintainer
+# applying the old comment would have removed httpx from the runtime list and put
+# the whole plane one `mcp` release away from failing at import.
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+    "black>=24",
+    "httpx",
+    # Same reasoning as httpx directly above, and it belongs in `dev` rather
+    # than `eval` for a reason worth stating: the evaluation driver imports
+    # `langchain_core.messages` directly, and the tests that prove that driver
+    # works are deterministic, free, and reach no provider. Declaring it only in
+    # `eval` left them skipping in the canonical suite — the one CI and the
+    # gates actually run — so the guards on hand-written harness code were green
+    # without ever executing. It arrives transitively via 3tears-models too, but
+    # that edge is an alpha package's transitive detail and this code imports
+    # the package by name.
+    #
+    # Bare, like httpx and pydantic above it. A `>=0.3` floor was written here
+    # first and removed: nothing verified it, `uv.lock` resolves 1.5.3, and this
+    # repo's own learning is that a declared floor is a claim — the samsungtvws
+    # move proved that the hard way when a library's own `websockets>=10.2`
+    # resolved fine and could not import. An unverified number is worse than no
+    # number, because the next reader takes it for evidence.
+    "langchain-core",
+]
+# Its own group, because it is the heaviest thing this repo would install —
+# langchain-anthropic, langchain-openai, langchain-openrouter and the anthropic
+# SDK arrive with it — and only the *paid* half of the evaluation needs it. The
+# free half runs on `dev` alone (see langchain-core above), so `uv run pytest`
+# stays fast and offline while still executing every deterministic guard.
+#
+# Pinned below 0.23 on purpose: 3tears is alpha and its own README says the
+# public API can shift between minor versions. `create_chat_model`'s signature
+# was verified against 0.22.5 rather than read from the checkout on this
+# machine, which was three minors behind and would not have been what installed.
+eval = ["3tears-models>=0.22.5,<0.23"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.black]
+target-version = ["py314"]
+line-length = 130
+
+[tool.ruff]
+line-length = 130
+target-version = "py314"
+
+[tool.ruff.lint]
+# The strict set. Unlike the root project there is no legacy carve-out here:
+# this plane is new code and every one of these rules applies to all of it.
+select = ["E", "F", "I", "UP", "B", "T20", "TRY", "ANN"]
+ignore = ["TRY003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "llm_eval: drives the tool surface with a real model over OpenRouter. Costs money, needs OPENROUTER_API_KEY, and is not deterministic — deselected by default, run with `-m llm_eval`.",
+    "live_api: re-verifies OpenRouter's recorded response shapes and prices against the live API. Costs money, needs OPENROUTER_API_KEY — deselected by default, run with `-m live_api`.",
+    "live_museum: re-verifies a museum API's recorded response shapes against the live API. Costs nothing and needs no key — the museum APIs are open — but needs the network, so it is deselected by default. Run with `-m live_museum`.",
+]
+# All three live suites are off unless asked for, but for two different reasons
+# and they are kept on separate markers because of it. `llm_eval` and `live_api`
+# spend money. `live_museum` spends nothing — the museum APIs are open — and is
+# deselected only because it needs the network, which a suite whose job is to be
+# green cannot depend on.
+#
+# **Separate markers so that opting into the free one does not opt into the paid
+# ones.** They shared `live_api` briefly, which meant the museum suite's own
+# instruction to run `-m live_api` would also spend real credit whenever a key
+# was in the environment — an invitation to spend money written in a file
+# arguing the suite was free. A command-line `-m` overrides this line, which is
+# how any of them is opted into.
+addopts = "-m 'not llm_eval and not live_api and not live_museum'"

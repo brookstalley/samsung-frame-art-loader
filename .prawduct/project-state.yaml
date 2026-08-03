@@ -1,0 +1,2720 @@
+# Project State — Samsung Frame Art Loader
+#
+# Single source of truth for all project decisions.
+# Read at session start to understand where things stand.
+#
+# Fields start as null and are filled during discovery.
+# Partially-populated state is normal throughout discovery.
+
+# =============================================================================
+# CLASSIFICATION
+# =============================================================================
+# Populated during discovery. Confirmed with the user before planning.
+
+classification:
+  # Product domain. Values: utility, social, marketplace, productivity, b2b,
+  # content, automation, developer-tool, education, health, finance,
+  # entertainment, communication. May be multiple for hybrid products.
+  domain: [content, automation, utility]
+
+  # Structural characteristics — architectural facts that determine what KINDS
+  # of artifacts a product needs. These are a small, stable set (6) that drive
+  # artifact generation. null = not applicable.
+  structural:
+    # User-facing interface. modality: screen|terminal|voice|spatial|minimal; platform: mobile|web|desktop|cross-platform
+    has_human_interface:
+      modality: screen
+      platform: web
+      # Confirmed 2026-07-19: a browser curation UI is the direction. Three
+      # distinct output surfaces exist and must not be conflated:
+      #   1. the curation web UI (the actual human interface)
+      #   2. the Frame TV in art mode (ambient output, no controls)
+      #   3. the e-paper label panel (ambient output, no controls)
+      # The pre-2024 CLI remains as an operator surface, not the product's UI.
+    # Runs without user interaction. trigger: scheduled|event-driven|always-on
+    runs_unattended:
+      trigger: always-on
+      # Display plane is a systemd daemon (Restart=always) reacting to TV
+      # websocket callbacks and a sun-position brightness loop. Silent failure
+      # is the default failure mode here — see observability_approach.
+    # Exposes or consumes APIs. consumers: internal|external|both
+    # When this exposes an interface, record the versioning + deprecation + error-model
+    # decisions in design_decisions (api_versioning_approach, api_error_model_approach);
+    # the api-versioning advisory nudges until they are recorded.
+    exposes_programmatic_interface:
+      consumers: both
+      # FLIPPED from `internal` on 2026-07-19 — a recorded classification change,
+      # not a detail. The product exposes an MCP tool surface covering all content
+      # management operations, and Claude Code (or any MCP client) drives it:
+      # "point Claude Code at the server and say 'add all of Salvador Dali's most
+      # famous works'". That is an EXTERNAL consumer — one not deployed from this
+      # repo.
+      #
+      # Surfaces exposed:
+      #   * MCP tool surface — external consumers (Claude Code, the in-UI agent)
+      #   * HTTP API backing the curation UI's direct controls — internal
+      #   * curation↔display plane contract — internal
+      # Consumes six foreign surfaces; see foreign_apis below.
+      #
+      # Consequences re-derived on the flip (methodology/discovery.md, "A
+      # structural characteristic flipped"):
+      #   1. api_versioning_approach's own revisit trigger FIRED — it said "any
+      #      consumer not deployed from this repo". Re-opened below.
+      #   2. api_error_model_approach can no longer stay deferred: agents bind to
+      #      tool error shapes.
+      #   3. An api-contract artifact is now owed (strategy-class coverage).
+      #   4. MCP became a CORE surface rather than optional, which promoted the
+      #      3tears-mcp/NATS question from medium to decisive. Resolved — see
+      #      technical_decisions.technology.
+      #   5. New security surface: untrusted web content reaches an agent holding
+      #      mutating, spend-incurring tools. See risk_profile.
+      #
+      # NOT flipped: has_multiple_party_types stays false. An agent is a
+      # CONSUMER, not a party type — there is still exactly one principal whose
+      # intent matters, and no per-party trust boundary or data isolation.
+    # Multiple distinct user types. parties: [list of distinct user types]
+    has_multiple_party_types: false
+      # Confirmed 2026-07-19: single operator. "Per-user preferences" means named
+      # profiles / theme sets that one curator switches between — NOT accounts.
+      # No authn, no per-party trust boundary, no data isolation in v1.
+      # If this flips, re-derive: auth, data isolation, audit (see norms guide).
+    # Handles sensitive information. categories: [PII, financial, health, etc.]; regulatory: [list]
+    handles_sensitive_data:
+      categories: [credentials]
+      regulatory: []
+      # No PII, no regulatory surface. Holds an OpenRouter/LLM API key (real
+      # spend) and the Samsung TV pairing token. `token_file` was untracked and
+      # gitignored 2026-07-27 (ba007cd) and the leaked token was confirmed already
+      # expired, so nothing live remains in history; the token now resolves under
+      # ART_ROOT, outside the checkout.
+    # Multiple processes or services communicating at runtime. topology: monolith-with-workers|client-server|microservices|pipeline
+    multi_process_distributed:
+      topology: shared-filesystem-pipeline
+      # AMENDED 2026-07-20. Previously `client-server`, described as "two planes on
+      # two machines, forced by an irreconcilable Python version constraint". Every
+      # part of that is now wrong:
+      #   * NOT two machines — both planes run on the one Pi 4 (8 GB), sharing
+      #     ART_ROOT. Operator's decision 2026-07-20.
+      #   * NOT forced — the 2026-07-19 audit found 3tears' >=3.14 requirement
+      #     removable in 16 mechanical sites. The split is a CHOICE, retained on
+      #     its own merits (see technical_decisions.architecture).
+      #   * NOT client-server — there is no request/response between the planes at
+      #     all. Curation writes one versioned JSON manifest; display reads it. The
+      #     display plane makes no network call to curation, by ratified norm.
+      # Still multi-process, and still warrants architecture.md: two processes that
+      # fail and restart independently. Multi-process but NOT distributed — which is
+      # why the resilience story is unusually short (no partition, no coordination
+      # protocol, no entity written by both).
+      #   * curation plane — Python 3.14, FastAPI, web UI + MCP + discovery + images
+      #   * display plane  — Python 3.13, TV websocket + e-paper + label rendering
+      # This flipped from `false` during discovery when the UX direction landed.
+
+  # Domain-specific characteristics — what makes THIS product unique in its domain.
+  # Dynamically identified, not from a predefined list.
+  # Each: { characteristic: string, implications: [string] }
+  domain_characteristics:
+    - characteristic: "Curation is intent-driven, not query-driven"
+      implications:
+        - "A curation request may be 'find recent award-winning art', not 'Monet's flowers'. The system must discover candidate works, not just filter a known set."
+        - "Discovery is an open-ended agentic search over the open web plus museum APIs — unbounded in cost and runtime unless deliberately bounded."
+        - "Results need provenance: which source, which licence, why this work matched the intent."
+    - characteristic: "Source images are gigapixel and licence-encumbered"
+      implications:
+        - "Acquisition is tiled (dezoomify-rs) and slow; partial-tile failures are normal and already handled."
+        - "Museum rate limits are real — the ARTIC path already throttles."
+        - "Rights metadata is captured but never enforced or surfaced; personal display keeps this low-stakes, but it should be a recorded decision, not an omission."
+    - characteristic: "Presentation quality is the product"
+      implications:
+        - "The mat-colour engine (LAB-space, vision-model-assisted) is the hardest-won logic in the codebase and must survive any rewrite."
+        - "Output geometry is per-device (4K for the TV, 1448x1072 for the e-paper), so derived artifacts are never portable between planes."
+    - characteristic: "Failure is silent by construction"
+      implications:
+        - "The only feedback channel is a picture on a wall. A stalled loader looks identical to a working one showing a static image."
+        - "Existing code makes this worse: upload_file swallows every exception and still reports success."
+
+  # Risk and complexity profile.
+  risk_profile:
+    # Overall risk: low, medium, high.
+    # Drives discovery depth (low: 5-8 questions, medium: 8-15, high: 15-25).
+    overall: medium
+    # Started low (household utility, no PII). Raised to medium on 2026-07-19 when
+    # the UX direction landed: unbounded LLM spend, an alpha framework dependency,
+    # and a two-plane topology are each a real failure surface.
+    # Specific risk factors identified during classification.
+    # Each: { factor, level (low/medium/high), rationale }
+    factors:
+      - factor: "Unbounded LLM spend on agentic art discovery"
+        level: high
+        rationale: "'Find recent award-winning art' is an open-ended agent loop, not a single call. Mitigated by a hard monthly cap that fails closed (confirmed 2026-07-19)."
+      - factor: "Samsung firmware may remove the art-mode API in a future update"
+        level: medium
+        rationale: >
+          RETIRED AS A BLOCKER 2026-07-19 — operator confirmed art mode still works.
+          Cause unknown: either the TV never took the firmware that removed Art Mode
+          on some units (1710, Sept 2025), or the model was unaffected. Downgraded
+          from high to medium because the risk is now prospective rather than
+          present, but NOT to low: the capability the whole product rests on is
+          controlled by a vendor who has already removed it from some units, and a
+          future auto-update could do the same here. Worth knowing whether TV
+          auto-update can be disabled.
+      - factor: "3tears is alpha with a shifting public API"
+        level: medium
+        rationale: "0.x line; README states the API can shift between minor versions. A 3tears breaking change becomes art-loader work. Mitigated by pinning."
+      - factor: "E-paper driver stack is dormant upstream"
+        level: medium
+        rationale: "omni-epd last touched 2024-11, IT8951 2023-11 with no releases and an unpinned dependency. Mitigated by the display-plane interface boundary. **The 9f13613 pin is NOT taken** (corrected 2026-08-03): `requirements.txt` pins omni_epd to a commit, and omni_epd declares `IT8951[rpi]` as a git dependency with no commit, so a rebuild resolves the driver to that repo's master on the day. 9f13613 is the commit the wall actually ran, recorded in `deploy/pi-freeze-2024.txt` and documented in `deploy/README.md` as the first thing to suspect after a rebuild — documented rather than pinned, because pinning a transitive git URL beside the parent's own unpinned declaration is resolver behaviour to verify on hardware, and the panel is off the bench. This row previously read as though the pin had been applied; it names the decision still owed, in `technical_decisions.operational`, and Chunk 04 is where it is verified."
+      - factor: "Two-plane topology introduces a contract to maintain"
+        level: low
+        rationale: >
+          DOWNGRADED from medium 2026-07-20, and its rationale corrected twice over.
+
+          It previously read "Forced by the Python 3.14 vs 3.13 constraint, not
+          chosen. Adds a real seam and a second always-on machine." Both halves were
+          stale: the 2026-07-19 audit established the split is a CHOICE (the 3.14
+          requirement is removable in 16 mechanical sites), and the 2026-07-20
+          co-location decision means there is no second machine — both planes run on
+          the one Pi. This is the third site where the "forced" phrasing outlived its
+          amendment; see learnings.md on retiring a claim being a repo-wide grep.
+
+          The seam is now a single versioned JSON file on a shared local filesystem,
+          written atomically and read one-way, with no network between the planes and
+          no entity written by both. That is close to the cheapest inter-process
+          contract available, which is why this drops to low rather than staying
+          medium.
+      - factor: "The norms nothing mechanically checks"
+        level: medium
+        rationale: >
+          RESOLVED as written 2026-07-27 and re-scoped 2026-08-01 by the norm sweep.
+          This read "No test suite exists" at level medium, rationale "Zero tests across
+          2,216 lines. Any rewrite has no behaviour-preservation net." Both halves are
+          false now: both planes have suites, and the root plane is ~2,700 lines rather
+          than the 2,216 it measured on 2026-07-19. `operational-spec.md` re-scoped this
+          exact risk the day the departure closed and this entry was not updated with
+          it, so the register carried a retired factor for eight days. What remains is
+          the narrower risk that artifact names — norms with no mechanical enforcement,
+          chiefly the plane-isolation test (issue #7), unbuildable until the `display/`
+          package exists.
+
+          LEVEL DELIBERATELY HELD AT MEDIUM, and it is the owner's to lower. The
+          re-scope above was owed — `operational-spec.md` had already recorded it — but
+          the level is a separate judgement that artifact does not make, and the first
+          version of this edit dropped it to low without argument. The evidence points
+          the other way: six index-vs-reality findings across three sessions, every one
+          found by accident. `tests/preferences/test_norm_index.py` reduces that rate
+          rather than closing it — it checks that a named test artifact resolves, not
+          that a named ruff rule is actually selected, which is where the two oldest
+          findings lived.
+      - factor: "A bad discovery run surfaces content unfit for a shared domestic space"
+        level: medium
+        rationale: >
+          Added 2026-07-19. Discovery searches the open web, so a mis-aimed intent
+          or a poisoned page can surface work that is explicit, disturbing, or
+          simply wrong for a living room. The consequence lands on the household
+          persona — people with no interface, who never opted in, and who see
+          whatever is on the wall.
+
+          Distinct from the prompt-injection factor below: that one is about an
+          attacker steering the agent, this one fires just as easily from an
+          honest search returning honest results the curator would not have
+          chosen. No adversary required.
+
+          CORRECTED 2026-07-19 by Critic review. This previously read "structurally
+          mitigated: agent-initiated additions always queue as candidates, so
+          nothing reaches the wall unreviewed" — voided the same day when the
+          verdict tool moved onto the MCP surface.
+
+          What mitigates it now: every reviewing surface MUST SHOW THE IMAGE, which
+          is what the gate was always really for. A curator accepting on a title and
+          a rationale alone is this factor's failure mode, not its mitigation. The
+          gate must not be relaxed later on convenience grounds — the spend argument
+          for it is weak, this one is not, and "the agent already looked at it" is
+          not a substitute for a person having looked.
+      - factor: "Untrusted web content reaches an agent holding mutating, spend-incurring tools"
+        level: medium
+        rationale: >
+          Added 2026-07-19 with the MCP flip. Discovery reads arbitrary gallery
+          sites, prize pages, and artist portfolios — attacker-influencable text —
+          and feeds it into an agent whose MCP tools can mutate the catalogue and
+          spend real money. That is the classic prompt-injection shape.
+
+          Genuinely bounded here, and worth being honest about why rather than
+          inflating it: there is no PII, no multi-tenancy, no payment surface, and
+          the LAN-only/overlay-network exposure means the attacker must first get
+          content in front of a discovery run. The realistic worst case is a
+          poisoned page steering candidate selection or burning budget — annoying
+          and visible, not a breach.
+
+          CORRECTED 2026-07-19 by Critic review. This paragraph previously read
+          "agents cannot auto-accept (every addition stops at curator review)" as
+          one of two structural mitigations. That bound was VOIDED the same day when
+          the review gate moved onto the MCP surface — see
+          technical_decisions.data_model — and leaving the sentence here while
+          correcting it in the api-contract is exactly the drift the correction was
+          supposed to prevent.
+
+          What actually bounds this now, in descending order of strength:
+            1. The spend cap fails closed. Unchanged, and the strongest.
+            2. Tool authority stays narrow — no filesystem, no shell, no arbitrary
+               fetch — so the blast radius stays inside the catalogue.
+            3. Acceptance is visible (it changes the wall) and fully reversible
+               (archive restores).
+            4. The curator is present in the session that issued the request.
+
+          Items 3 and 4 are materially weaker than "cannot", and 4 is a property of
+          how the operator works rather than something the system enforces.
+      - factor: "Contemporary sources are in-copyright and low-resolution"
+        level: medium
+        rationale: >
+          Added 2026-07-19 with the decision to search the contemporary web. Two
+          distinct problems wearing one hat. (a) Quality: web-resolution press
+          images cannot fill a 4K panel, and the mat engine assumes native
+          resolution inside a mat rather than upscaling into one. (b) Rights: the
+          corpus becomes deliberately in-copyright. Private household display
+          keeps the legal stakes genuinely low, but the product should record a
+          decision rather than inherit a gap.
+          BOTH DECISIONS LANDED 2026-07-20 (see technical_decisions.data_model):
+          the floor is a minimum rendered size in inches and nothing is ever
+          upscaled; rights are display-only and gate nothing. The risk factor
+          itself stands — web sources really are lower quality — but it is now a
+          managed risk rather than an unaddressed gap.
+      - factor: "No PII, no regulatory exposure"
+        level: low
+        rationale: "Single household, no accounts, credentials only, LAN-only surface reached via overlay network. Caps the blast radius of everything above."
+
+  # Prior art surfaced during discovery (via web search or domain knowledge).
+  # Informational — informs scope decisions, not a gate.
+  # Each: { name, url (optional), relevance, relationship (alternative|complement|reference) }
+  prior_art:
+    - name: "NickWaterton/gallery"
+      url: "https://github.com/NickWaterton/gallery"
+      relevance: "Flask web front-end on a Raspberry Pi for Frame TVs: kiosk vs display modes, a dedicated caption display for metadata, multi-TV, LLM-generated descriptions. By the author of the samsungtvws fork this project already depends on. Closest existing thing to the planned architecture — worth reading before designing the curation UI."
+      relationship: reference
+    - name: "NickWaterton/samsung-tv-ws-api"
+      url: "https://github.com/NickWaterton/samsung-tv-ws-api"
+      relevance: "The fork this project pins, and the only viable source: PyPI `samsungtvws` (the xchwarze upstream) ships no async art client and no event callbacks at all, so it cannot carry this product's TV boundary. Read 2026-08-01 — its Frame-generation support is a model-year branch in `remote.py` that mints a pairing token for 2024-or-later panels before the art channel will accept one; the LS03A/B/C/D list is a README claim and appears nowhere in code. Master last moved 2026-04-06."
+      relationship: complement
+    - name: "pacepace/3tears"
+      url: "https://github.com/pacepace/3tears"
+      relevance: "The user's own alpha framework. Agent-native primitives and multi-provider model adapters are a strong fit; the three-tier cache is sized for multi-pod deployments this product will never have. See artifacts/3tears-integration-findings.md."
+      relationship: complement
+    - name: "pacepace/scriob"
+      relevance: "The user's sibling project and the working precedent for this architecture: engine (CLI) + server (API) + frontend, on 3tears. Its GitL3Backend proves a non-SQL DurableStore L3 is viable, which is what makes a zero-infrastructure 3tears configuration possible here."
+      relationship: reference
+
+  # Foreign API surfaces this product consumes but does not own. Each becomes a
+  # `**Foreign API:** <name>` annotation on the chunk that first wraps it, which
+  # triggers the Critic's verify-api check (methodology/planning.md).
+  foreign_apis:
+    - name: "Samsung TV WebSocket art API (via samsungtvws fork)"
+      notes: >
+        Persistent connection, callback-driven. Pinned to a fork SHA on
+        NickWaterton/samsung-tv-ws-api, never PyPI — the PyPI package of the same
+        name has no async art client at all. Read against source 2026-07-19 and
+        re-read against the target 2026-08-01 (fork master fe95ef1); the facts
+        that constrain the design:
+          * ONE user-upload category exists (MY-C0002). Categories are 2=my
+            pictures, 4=favourites, 8=store; nothing creates new ones, and
+            upload() takes no category argument.
+          * set_slideshow_status accepts only duration/type/category_id — NO
+            content-id list. Native slideshow is whole-category or nothing.
+          * delete_image_list is the ONLY removal verb, and there is no album,
+            playlist, or non-destructive remove-from-rotation verb anywhere in
+            the request surface. Re-checked verb by verb on the target, which
+            added four (get_current_rotation, set_brightness_sensor_setting,
+            set_motion_sensitivity, set_motion_timer) and removed none — so
+            host-driven rotation and the disabled native slideshow still stand.
+            State the invariant, not a count: the count moves every release.
+          * Old vs new API split is version-numeric (<4000 = old): old uses
+            auto_rotation_*, new uses slideshow_*. Neither is deprecated; the
+            failure modes are asymmetric (old fails silently on new TVs, throws
+            AssertionError on older ones), so probing must be defensive. The
+            dual-callback registration in tvart.py is correct and the dispatch
+            mechanism behind it is unchanged on the target.
+          * async delete_list still has NO return statement on master — byte
+            for byte the same as the two-year-old pin — so it always yields None
+            and cannot confirm deletion. Bumping does not fix it. The SYNC path
+            proves the set does echo content_id_list back, so the response
+            carries the answer the async path throws away. Confirmed deletion is
+            this repo's own `tv_delete.delete_list_confirmed`, which verifies
+            against the set's content list rather than an echo.
+          * upload() on the target streams in 64 KiB chunks with a settable
+            timeout; the pin buffered whole files. But the chunker is chosen from
+            the ARGUMENT TYPE — a path streams, bytes do not — so a caller that
+            reads the file itself gets no benefit. This product passes the path.
+          * Constructing the async client performs BLOCKING network I/O: a REST
+            call for the model year, plus a websocket open/close to mint a token
+            on 2024-or-later panels, all inside __init__. It raises HttpApiError
+            when the set is unreachable. The pin did neither. A daemon must not
+            construct one on its event loop, and must expect construction — not
+            first use — to be where an asleep television surfaces.
+          * Importing samsungtvws calls urllib3.disable_warnings() at module
+            scope, silencing InsecureRequestWarning for the WHOLE process.
+          * The fork declares the same version string (3.0.5) as the materially
+            different PyPI package, so no installed-version check can tell them
+            apart.
+          * The library's async client signals a timed-out art request by
+            returning None from wait_for_response and then asserting on it, so
+            AssertionError is its timeout type.
+    - name: "Art Institute of Chicago API"
+      notes: "api.artic.edu. Already throttled in source_utils.py; responses cached to api-cache/."
+    - name: "Google Arts & Culture"
+      notes: "HTML scraping via BeautifulSoup, not an API. Breaks silently on markup changes — the most fragile metadata source."
+    - name: "OpenRouter (LLM)"
+      notes: "Chosen 2026-07-19 for multi-provider routing. Replaces the direct openai==1.37.1 gpt-4o call in ai.py."
+    - name: "dezoomify-rs"
+      notes: "External binary invoked via subprocess with shell=True. Not a network API, but an unowned interface with its own failure modes and output-parsing contract."
+    - name: "IT8951 / omni-epd e-paper drivers"
+      notes: "Dormant upstream, unpinned. Display plane only."
+
+# =============================================================================
+# PRODUCT DEFINITION
+# =============================================================================
+# Populated during discovery and definition.
+
+product_definition:
+  # One-sentence description of what this product is and why it exists.
+  vision: >
+    A curated art appliance for a Samsung Frame TV: the curator expresses intent
+    in natural language ("recent award-winning work", "American modernists"), an
+    LLM-assisted discovery layer finds and acquires matching artwork at gallery
+    resolution, and the system presents it on the wall with a museum-quality mat
+    and a physical label — without the curator managing files, URLs, or geometry.
+
+  # Measurable success criteria. What does "this worked" look like?
+  goals:
+    - "A curator can go from a natural-language intent to artwork on the wall without touching the filesystem, editing JSON, or SSHing into the Pi."
+    - "A discovery run proposes each WORK exactly once, with one selected image and its alternates behind it. Being shown the same painting several times and asked to pick counts as a failed run even if every instance is individually good."
+    - "A curator never accepts a work without having been SHOWN its image. (AMENDED 2026-07-20 from 'having seen its image — on any surface, including an agent's': the web UI enforces the strong form; over MCP the enforceable form is that the thumbnail is present in the transcript at the moment of acceptance — whether a human looked is a property of how the operator works. See security-model.md § Content Appropriateness.)"
+    - "Themes/groups are switchable from the web UI and materialise on the TV without a redeploy."
+    - "LLM spend stays under a declared monthly ceiling, and hitting the ceiling stops discovery rather than degrading it silently."
+    - "The display plane keeps showing art when the curation plane is down."
+    - "A failure in the unattended loader is visible without inspecting the wall — it reaches a log or surface a human actually reads."
+    - "Mat-colour quality is at least as good as the 2024 implementation. This is a subjective bar; the 41 existing artworks and their hand-tuned mats are the regression corpus."
+
+  # Who uses this product and what they need.
+  users:
+    # Each persona:
+    #   name: string
+    #   description: string
+    #   technical_level: none | basic | intermediate | advanced
+    #   primary_needs: [string]
+    #   constraints: [string]
+    personas:
+      - name: "The curator (operator)"
+        description: "The single operator. Owns the hardware, the API keys, and every decision. Technically expert — authors the 3tears framework this product may build on — so the UI must not be condescending, but curation is a leisure activity and must not feel like sysadmin work."
+        technical_level: advanced
+        primary_needs:
+          - "Express curatorial intent in natural language and get real candidate works back"
+          - "Review, accept, and reject discovered art before it reaches the wall"
+          - "Organise accepted work into themes/groups and switch what the TV is showing"
+          - "See what LLM discovery cost, before and after running it"
+        constraints:
+          - "Will not run Kubernetes, NATS, or heavy infrastructure for a household appliance (stated 2026-07-19)"
+          - "Curation happens in short sessions, not long ones"
+      - name: "The household (viewers)"
+        description: "Everyone who sees the TV. Non-interactive — they never log in, configure, or curate. They experience only the artwork and the physical label beside it."
+        technical_level: none
+        primary_needs:
+          - "Art that looks good on the wall at every time of day"
+          - "Enough context to know what they are looking at, via the e-paper label"
+        constraints:
+          - "No interface, no accounts, no controls — this is the accessibility surface that matters most and it is a physical one"
+
+  # Core user flows (UI), operations (API), or pipeline stages (automation).
+  # Each: { name, description, steps (optional), priority (must-have/nice-to-have) }
+  core_flows:
+    # UPDATED 2026-07-19 (second planning pass) to match artifacts/product-brief.md,
+    # which declares this block as its depends_on source. Caught by Critic review
+    # after the brief was revised and this was not.
+    - name: "Express curatorial intent"
+      description: "Curator states an intent — artist, style, prize, period — in the web UI or through an agent. The system interprets it into a discovery strategy."
+      priority: must-have
+    - name: "LLM-assisted discovery, in two phases"
+      description: >
+        Phase 1 resolves the intent to a set of WORKS (titles and artists, not
+        images). Phase 2 searches per work for image INSTANCES and selects one
+        canonical instance, recording why. The distinction is the product's central
+        requirement: ten copies of one painting presented for approval is a complete
+        failure even though nothing errors. Three consequences — the cost estimate
+        becomes computable once the work count is known; the work list IS the
+        candidate count, trimmable rather than preset; and phase 2 verifies phase 1,
+        because a work with no credible instance is probably invented.
+        The work list is gated for approval only when the WORK COUNT crosses a
+        configured threshold (amended 2026-07-20 from "the phase-2 estimate crosses
+        a configured cost threshold" — a run costs $0.16-0.49, so cost was gating
+        on the axis that does not matter; scope is what the curator judges).
+      priority: must-have
+    - name: "Review and accept a work with its selected image"
+      description: >
+        Curator reviews one card per WORK, showing the selected image, the alternates
+        found, and why this one was chosen. Three verdicts, not two: accept; reject
+        the work; or reject the IMAGE and re-search, which keeps the work. Suppression
+        therefore has two scopes that must never share a key. The human-in-the-loop
+        gate — its durable justification is content appropriateness, and what carries
+        it is that the reviewing surface SHOWS THE IMAGE, not that any surface is
+        withheld.
+      priority: must-have
+    - name: "Acquire and prepare"
+      description: "Fetch at gallery resolution (tiled where needed), extract and normalise metadata, choose a mat colour, and render the 4K TV image. Largely exists today in art.py / image_utils.py. The e-paper LABEL is NOT rendered here — corrected 2026-07-20; it belongs to the display plane, which owns the panel. Panel geometry in the curation catalogue is what the ratified data-model norm forbids, and why Rendition(kind='label') was removed."
+      priority: must-have
+    - name: "Organise into themes"
+      description: "Group accepted works into named themes/profiles. Switching the active theme changes what the TV shows."
+      priority: must-have
+    - name: "Display and sync"
+      description: >
+        Keep the accepted library uploaded to the TV and ROTATE THROUGH THE ACTIVE
+        THEME'S SUBSET FROM THE HOST, driving the label panel from the resulting
+        image_selected callbacks. Corrected 2026-07-19: the TV's native slideshow can
+        only be scoped to a whole category, so switching themes through it would mean
+        deleting and re-uploading every work. Host-driven rotation makes a theme
+        switch cost zero TV writes.
+      priority: must-have
+    - name: "Ambient adaptation"
+      description: "Brightness follows sun position; art mode follows time of day. Exists today in local.py; the auto art-mode logic is currently commented out."
+      priority: nice-to-have
+    - name: "Drive everything from an agent, over MCP"
+      description: >
+        Every content-management operation is available as an MCP tool, at parity
+        with the web UI. Worked example: point Claude Code at the server and say "add
+        all of Salvador Dali's most famous works". The same tools back the in-UI
+        agent, which is an MCP client rather than an in-process caller so that one
+        agent can manage art libraries on several systems. This is what flipped the
+        product to having external API consumers.
+      priority: must-have
+
+  # Scope decisions.
+  scope:
+    v1:                   # Must have for initial release
+      - "Verify the Frame TV art API still works on current firmware — DONE 2026-07-19, art mode confirmed working"
+      - "Two-plane split: curation plane (Python 3.14, uv-managed) and display plane (Python 3.13, system interpreter), BOTH co-located on the Pi since 2026-07-20"
+      - "Web UI for curation with two-phase LLM-assisted discovery, work-plus-image review, and themes"
+      - "MCP tool surface covering all content management, at parity with the web UI — five action-dispatch tools on the official `mcp` SDK, over a service layer both MCP tools and HTTP handlers bind"
+      - "New catalogue built by curation, seeded with the existing 41 artworks as worked examples"
+      - "Hard monthly LLM spend cap that fails closed"
+      - "OpenRouter multi-provider model access"
+      - "E-paper label rendering behind a display interface"
+      - "Test suite established — done 2026-07-27, one suite per plane, both declared as test_commands (this read 'none exists today' until 2026-08-01)"
+      - "Deployment values out of source (ART_ROOT first); token_file out of git"
+    accommodate:          # Design for but don't build yet
+      - "Multiple household accounts with per-user curation (explicitly not v1 — single operator with named profiles)"
+      - "Multiple TVs / multiple display planes"
+      - "Swapping the e-paper panel or driver without touching curation"
+    later:                # Not needed for v1 to be useful
+      - "Re-enabling automatic art-mode on/off scheduling (currently commented out in tvart.py)"
+      - "Weather-aware brightness (the weather_adjustments table in local.py is hardcoded to 'clear')"
+      - "3tears agent memory — DROPPED, not merely deferred. Operator confirmed 2026-07-19 that agents may be stateless across sessions. This removes the only 3tears capability that forces Postgres, so the curation plane is infrastructure-free by decision rather than by compromise."
+    never:                # Explicitly out of scope. Each: { item, rationale }
+      - item: "Kubernetes, NATS, or multi-pod deployment"
+        rationale: "Stated directly by the operator 2026-07-19. One household, one TV, one curation process — the coherence problems this infrastructure solves do not exist here."
+      - item: "Migrating the existing all.json schema"
+        rationale: "Decided 2026-07-19 to start over with curation rather than migrate. The 41 records have known defects (identity keyed on source URL, per-device TV state embedded, semi-structured artist_details) and all works are re-fetchable from their source URLs."
+      - item: "Public or third-party API consumers"
+        rationale: "The HTTP surface exists only to back this product's own UI and its display plane."
+
+  # Product identity.
+  product_identity:
+    name: "Samsung Frame Art Loader"
+    personality: >
+      Museum, not gadget. The curator-facing surface should feel like a private
+      collection management tool — calm, typographic, image-forward — and the
+      household-facing surface (TV + label) should disappear entirely into the
+      artwork. Nothing on the wall should read as software.
+    visual_preferences: >
+      Deferred to design. The one hard constraint from the existing product: the
+      TV output is the artwork plus a mat, with no chrome, no overlay, and no
+      branding — the mat-colour engine exists precisely so the bars look
+      deliberate rather than like letterboxing.
+
+  platform: >
+    Two processes, ONE machine. AMENDED 2026-07-20 — previously "curation
+    deployed wherever Docker or a long-running process is available (desktop,
+    NAS, or a second Pi)". The operator decided both planes run on the Pi,
+    sharing a data directory. See technical_decisions.architecture and
+    artifacts/architecture.md.
+
+    Host: Raspberry Pi 4 Model B, 8 GB, Raspberry Pi OS Trixie, booting from SD
+    card.
+      * Curation: Python 3.14 venv, FastAPI on uvicorn, systemd unit. Serves the
+        web UI, its HTTP API, and the MCP streamable-HTTP endpoint from one ASGI
+        application.
+      * Display: Python 3.13 venv, systemd daemon (Restart=always), driving a
+        Samsung Frame TV over LAN websocket and a Waveshare 6" HD e-paper HAT
+        (1448x1072) over SPI.
+    The two planes share ART_ROOT on local disk and communicate through exactly
+    one file: the theme manifest.
+
+  # Non-functional requirements, calibrated to risk.
+  nonfunctional:
+    performance: >
+      No latency budget on curation — discovery is expected to take minutes and
+      is explicitly human-triggered. The display plane must react to a TV
+      image-change callback fast enough that the e-paper label is not visibly
+      stale; the panel's own refresh (seconds) dominates.
+
+      CORRECTED 2026-07-20: this previously claimed "image preparation moves off
+      the Pi entirely, which is a substantial improvement over 2024". Both planes
+      now run on the Pi, so image preparation did NOT move off it — the claim is
+      withdrawn. It was also weaker than it looked: the 2024 code already
+      downsizes to 2048x2048 before the LAB/k-means work (image_utils.py:51-57,
+      :77), so peak memory is a few hundred MB rather than the gigabytes the
+      phrase implied. On an 8 GB Pi 4 this is comfortable. The real remaining
+      exposure is a genuine 1-2 gigapixel Google Arts &amp; Culture scan, which is
+      20-40x the measured corpus maximum; see artifacts/architecture.md
+      "Scaling Model".
+      The hard latency numbers in this product are INHERITED from the MCP client,
+      not chosen — see artifacts/nonfunctional-requirements.md "Performance".
+    scalability: >
+      Explicitly not a goal. Design target is one household, one TV, hundreds of
+      artworks. Anything that trades simplicity for scale is the wrong trade here.
+    uptime: >
+      Display plane: continuous, and must survive the curation plane being down —
+      that independence is the main structural benefit of the two-plane split.
+      Curation plane: on-demand; downtime is invisible to the household.
+    cost_constraints: >
+      Hard ceiling of USD 20/month on LLM spend, failing closed (confirmed
+      2026-07-19). No cloud hosting costs; both planes run on hardware already
+      owned. Note the cap's purpose is to bound an unbounded agent LOOP, not to
+      economise on token price — at the chosen models $20 buys far more discovery
+      than a household needs, so the cap should feel generous in normal use and
+      only bite when something has run away.
+
+  regulatory: []          # Each: { regulation, applicability, impact }
+  cost_estimates:         # Each: { item, estimated_monthly_cost, notes }
+    # Prices verified against OpenRouter model pages on 2026-07-19. LLM pricing
+    # moves fast — re-verify before relying on these figures.
+    - item: "LLM — agentic art discovery (text reasoning)"
+      estimated_monthly_cost: "$2-15 depending on run frequency"
+      notes: >
+        Operator selected GLM-5.2 ($0.2219/M in, $0.6974/M out) or DeepSeek V4 Pro
+        ($0.435/M in, $0.87/M out); both carry 1M-token context. A discovery run
+        estimated at ~500K input + ~20K output costs roughly $0.13 (GLM-5.2) or
+        $0.24 (V4 Pro), so $20 buys on the order of 85-160 runs a month. Even at
+        10x that estimate the ceiling holds. Cost per run matters far more than
+        cost per month and should be shown in the UI before the run.
+    - item: "LLM — mat colour selection (vision)"
+      estimated_monthly_cost: "negligible"
+      notes: >
+        One vision call per newly accepted artwork against a 1024x1024 thumbnail.
+        Bounded by acceptance rate, not by time. REQUIRES A DIFFERENT MODEL from
+        discovery — both models chosen for discovery are text-only (see
+        open_questions). Watch the retry loop: ai.py retries up to 5 times on
+        malformed JSON, so a persistently bad response costs 5x.
+    - item: "Web search during discovery"
+      estimated_monthly_cost: "$0.03-0.25 per run; inside the ceiling"
+      notes: >
+        RESOLVED 2026-07-20 against OpenRouter documentation, replacing an
+        "unknown — potentially the dominant cost" estimate that was wrong.
+        Parallel $0.001/request, Exa $0.005, Perplexity $0.005 — each including
+        10 results. A ~20-work run makes 30-50 searches. Worst case search
+        roughly DOUBLES per-run cost rather than exceeding tokens by an order of
+        magnitude; a full run is $0.16-0.49 and $20 buys 40-125 runs.
+        Routed through OpenRouter's web plugin rather than a direct provider
+        account: cheaper ($0.005 vs Exa's $0.007 direct) and bills as OpenRouter
+        credits, so one ceiling covers tokens and search together.
+    - item: "Museum APIs and image acquisition"
+      estimated_monthly_cost: "$0"
+      notes: "ARTIC is free and already throttled and cached. Google Arts & Culture is scraped. Bandwidth only."
+    - item: "Hosting and hardware"
+      estimated_monthly_cost: "$0 incremental"
+      notes: "Pi 4 and curation host already owned. Electricity only."
+
+# =============================================================================
+# TECHNICAL DECISIONS
+# =============================================================================
+# Every entry includes rationale.
+# Each: { decision, rationale, alternatives_considered, date }
+
+technical_decisions:
+  architecture:
+    - decision: "Split into a curation plane and a display plane, communicating over a defined contract."
+      rationale: >
+        AMENDED 2026-07-19, same day, after auditing the constraint that originally
+        forced this. The split stands; its justification changed.
+
+        Originally recorded as forced: every 3tears package declares
+        requires-python >=3.14, while the IT8951 e-paper driver compiles Cython
+        from 2023 sources and is targeted at 3.13/3.12, so the two could not share
+        an interpreter. The audit (artifacts/3tears-integration-findings.md)
+        confirmed 3.14 is genuinely required as shipped — but only by 16 mechanical
+        source sites, all trivially fixable, with no third-party dependency
+        imposing any floor above 3.10. The constraint is therefore REMOVABLE, and
+        "forced" is no longer an honest rationale.
+
+        The split is retained on its independent merits: the display plane does not
+        want 3tears at all (it needs an HTTP client, samsungtvws, PIL, and the
+        e-paper driver — three-tier entities are useless to it, and the
+        shared-catalogue case that would justify them is the multi-pod coherence
+        problem the operator ruled out); it matches the upstream/derived data
+        contract in learnings.md; it makes "e-paper behind an interface" a process
+        boundary; and it is what lets the display plane keep working when curation
+        is down.
+
+        AMENDED AGAIN 2026-07-20, second amendment. The clause "it moves gigapixel
+        fetching, k-means over LAB arrays, and 4K compositing off a Pi 4" is
+        RETIRED and must not be cited: the operator decided both planes run on the
+        Pi, sharing a data directory, so nothing moved off it. The claim was also
+        weaker than it read — the existing code downsizes to 2048x2048 before the
+        colour work, so peak memory is a few hundred MB against 8 GB.
+
+        What the co-location changes and does not change: the split's COST was the
+        distributed-systems tax (a network contract, sync, two deployments), and a
+        shared filesystem pays that down to near zero. Its BENEFIT — the display
+        plane surviving a curation restart, upgrade, or crash — matters MORE on one
+        box, not less, because the curation process gets restarted constantly
+        during development and a single-process design would blank the TV each
+        time. The split therefore got cheaper rather than less justified.
+        Accepted trade: one hardware failure domain, and the two processes now
+        compete for the Pi's resources.
+      alternatives_considered:
+        - "Single process on the Pi — no longer impossible once 3tears is relaxed, but rejected: it would put the whole curation stack, the LLM agent loop, and gigapixel image processing on a Pi 4, and forfeit the availability asymmetry that keeps art on the wall when curation breaks."
+        - "Drop 3tears to stay single-process on 3.13 — viable, but forfeits the agent primitives the discovery work wants."
+        - "Drop the e-paper panel to move the Pi to 3.14 — rejected; the operator chose to keep the panel behind an interface."
+      date: 2026-07-19
+    - decision: "Rotation is host-driven from the display plane (timed select_image calls), not delegated to the TV's native slideshow."
+      rationale: >
+        Decided 2026-07-19 after verifying the Samsung art API against
+        samsungtvws source. The TV holds exactly one user-upload category and its
+        native slideshow can only be scoped to a whole category — there is no
+        content-id list parameter and no non-destructive way to remove an image
+        from rotation. Using the native slideshow therefore forces
+        delete-and-re-upload on every theme switch, roughly 5 seconds per file by
+        the library examples' own budgeting: minutes of churn for the single
+        interaction this product exists to make easy.
+
+        Host-driven rotation — the pattern used by every production-grade example
+        in the library, none of which call set_slideshow_status — keeps the full
+        library on the TV and varies only which content ids the host selects.
+        Theme switching becomes zero TV writes.
+
+        The usual objection is that rotation becomes an availability dependency
+        on the Pi. This product ALREADY pays that cost: the e-paper label requires
+        the display plane to be running and reacting to image_selected callbacks,
+        so a stopped Pi already means a stale label. The added failure is benign —
+        the TV stays in art mode holding the last selected work.
+      alternatives_considered:
+        - "TV-native slideshow — no host dependency, but theme switching means delete + re-upload of every work."
+        - "TV favourites (MY-C0004) as the active set — the library author states favourites cannot be applied to user uploads on 2022+ sets (unconfirmed on real hardware), and it would support only ONE active subset, not named themes."
+      date: 2026-07-19
+    - decision: "The theme manifest file is the ONLY channel from curation to display."
+      rationale: >
+        Decided 2026-07-20 once both planes landed on one host. A JSON document in
+        the shared ART_ROOT, written atomically by curation (temp file + os.replace,
+        which is atomic within a filesystem) and read by display on an mtime poll.
+        It carries a schema version, the active theme, and an ordered list of
+        entries: work id, path to the prepared 4K render, and the label FIELDS.
+        Label text crosses; label rendering does not.
+
+        This makes the availability norm structurally true rather than carefully
+        maintained — there is nothing to be unreachable. The danger it guards
+        against is the plausible second channel ("just fetch the label text live",
+        "just ask curation which work is next"), each of which would work perfectly
+        in development and in every test, because curation is up in development and
+        in every test. The fallback path is the one never exercised until it
+        matters.
+
+        Consequence: single-writer per store falls out for free. Curation owns the
+        catalogue, the image tree, and the manifest; display owns
+        display-state.sqlite (TV content ids, upload status, panel geometry). No
+        entity is written by both, so there is no coordination protocol and no
+        conflict resolution — the hard part of two-writer systems is designed out
+        rather than solved.
+      alternatives_considered:
+        - "Full local mirror on the Pi — the display plane could switch themes offline, but it is a sync problem with a conflict story and nothing asks the Pi to make curatorial decisions."
+        - "Display polls curation over HTTP and caches the last good response — self-healing in principle, but it makes display a client of curation, so the norm is satisfied only by a fallback path that never gets exercised."
+      date: 2026-07-20
+    - decision: "The e-paper label is rendered on the display plane, not on curation."
+      rationale: >
+        Decided 2026-07-20 by the operator. Panel geometry stays owned by the plane
+        that owns the panel, which is what the ratified data-model norm
+        ("per-device runtime state never lives in the catalogue") already requires —
+        and whose cited anti-pattern is the 2024 `label_file` named `_w648_h480`.
+        Text rendering is cheap; it was gigapixel compositing that did not belong
+        on a Pi, and that argument is retired anyway now that both planes share one.
+        Secondary benefit: keeps the PyGObject/Pango/cairo system stack off the
+        curation venv, where pycairo has no aarch64 wheel and would need a source
+        build against libcairo2-dev.
+      alternatives_considered:
+        - "Render on curation alongside the 4K TV image — all image production in one place, but it puts panel geometry in the catalogue and couples curation to a specific device."
+      date: 2026-07-20
+    - decision: "Readiness is manifest membership, not a stored flag."
+      rationale: >
+        Decided 2026-07-20, resolving the open question by rejecting its premise —
+        there is no single readiness. Catalogue readiness (renderable: an original
+        exists, the fetch succeeded, the render is current, a mat colour is current)
+        is curation's and is evaluated at manifest-build time in exactly one place.
+        Device readiness (uploaded to the TV) is display's and lives in its own
+        store. Neither is materialised on the work, so neither can drift.
+
+        Because the manifest is the only thing display ever sees, it cannot select
+        an unrenderable work — the recorded failure mode becomes structurally
+        impossible rather than defended against. Theme membership reverts to being
+        a purely CURATORIAL statement.
+
+        Obligation accepted, and it is not optional: the manifest build REPORTS ITS
+        EXCLUSIONS, per work and with a reason, surfaced in the curation UI. A work
+        silently in a theme but not on the wall is exactly this product's
+        characteristic failure, so the design must not trade a loud failure for a
+        quiet one.
+      alternatives_considered:
+        - "A materialised is_displayable column recomputed on input change — cheap to query, but it is derived state that drifts the first time a recompute path is missed."
+        - "A readiness state machine on the work — rigorous, but machinery for a conjunction only one caller needs."
+      date: 2026-07-20
+    - decision: "art_display's interactive commands ride in the manifest as a sequence-nonce directive, not on a second channel."
+      rationale: >
+        Decided 2026-07-20 in response to Critic finding R-17, which caught that
+        api-contract's art_display actions (show_now, next) predated the ratified
+        manifest-only norm and had no route to the plane that would execute them —
+        unimplementable as written, and tool names are frozen, so cheap to settle
+        now and expensive later.
+
+        The manifest gains a directive block: a monotonically increasing `sequence`
+        integer plus an optional `pinned_work_id`. Display acts once per advance —
+        no pin steps to the next work, a pin jumps to that work and continues from
+        there. This reframes the manifest from "the list" to DESIRED DISPLAY STATE,
+        which is what makes commands expressible without a command channel.
+
+        The norm survives literally and in spirit: one channel, one direction, and
+        no availability coupling — display runs forever off the last manifest and
+        merely stops receiving directives if curation dies. Nothing can be lost in
+        transit because nothing is in transit; there is only state.
+
+        NON-OBVIOUS CONSEQUENCE, recorded because it inverts the earlier reasoning:
+        the manifest poll interval is now set by `next`, not by theme switching. A
+        theme change tolerates seconds happily; a human pressing "next" and waiting
+        three seconds concludes the product is broken. So the interval drops to ~1s
+        — one stat() per second, free — where the list-only design had justified "a
+        few calls a minute".
+
+        Also follows: these actions return "the directive is written", never "the
+        wall changed". Claiming the latter would assert something curation cannot
+        observe, which is the false-success pattern this product already refuses.
+      alternatives_considered:
+        - "A separate command file or socket — the obvious shape, and exactly the second channel the norm exists to prevent."
+        - "Drop show_now and next from the tool surface — honest, but it removes real capability to preserve a norm that turned out not to require the removal."
+      date: 2026-07-20
+    - decision: "The theme manifest carries a schema version; the curation-to-display stability exemption is narrowed."
+      rationale: >
+        Decided 2026-07-20, resolving a contradiction the Critic raised on
+        2026-07-19. api-contract exempted this channel from any stability
+        obligation as "single consumer, deployed together", which is incompatible
+        with the availability norm — deployed-together and survives-independently
+        cannot both be true without saying what display holds and how stale it may
+        be.
+
+        Resolution is neither exemption nor a full compatibility regime: the
+        manifest carries a schema version, additive changes are free, breaking
+        changes bump the major, and display REFUSES a manifest whose major it does
+        not recognise, keeping the one it has and logging at ERROR.
+
+        Skew is real even co-located: the two processes restart independently, so
+        an upgrade has a window where new curation has written a manifest that old
+        display is still reading, and a reboot mid-upgrade extends that window to
+        "until someone notices". Without the version field the failure is a
+        misparse rendering wrong art or a crash loop blanking the wall; with it,
+        the failure is a logged refusal and yesterday's theme still on the wall.
+      alternatives_considered:
+        - "Keep the blanket exemption — simplest, but it leaves the contradiction standing and the failure mode undefined."
+        - "Full compatibility regime with negotiation — disproportionate for one consumer on the same host."
+      date: 2026-07-20
+    - decision: "The display plane must keep functioning when the curation plane is unavailable."
+      rationale: "The household experiences only the TV. Curation downtime is invisible; display downtime is a blank wall. This asymmetry is the main reason the split is a benefit rather than a cost."
+      alternatives_considered: ["Display plane as a thin client that fails when the server is down — rejected; inverts the availability priority."]
+      date: 2026-07-19
+  technology:
+    - decision: "Build the catalogue's durable tier as first-party SQLite shaped to 3tears' DurableStore contract; do not adopt 3tears collections, and take no 3tears core dependency."
+      rationale: >
+        Verified against the source rather than assumed (artifacts/3tears-integration-findings.md):
+        CollectionRegistry initialises all three tiers to None and injects only what
+        is configured; BaseCollection guards every L2 use and emits a one-shot
+        warning when the client is absent — the anti-log-spam machinery proves the
+        no-broker path is designed for, not accidental. The L3 DurableStore protocol
+        is explicitly the seam for non-SQL backends, and scriob's GitL3Backend is a
+        working precedent. This satisfies the operator's "no NATS or anything crazy"
+        constraint while keeping the 3tears entity model.
+
+        AMENDED 2026-07-27 — still the destination, but NOT what the walking
+        skeleton was built on, and this record said otherwise for the length of
+        that build. Two defects made 3tears unconsumable from outside its own
+        workspace: uuid-utils was imported but declared by no package, and
+        threetears.nats eagerly imported the NATS client (whose nkeys dependency
+        publishes no wheels, so the Pi would source-build it). Both are fixed
+        upstream — pacepace/3tears#243 and #244, merged to develop 2026-07-27 —
+        and neither is in a release: v0.19.4 was cut the day before them.
+        The catalogue therefore ships on stdlib sqlite3 behind a CatalogueStore
+        Protocol; everything the slice proves (service layer, registry, tool
+        surface, error envelope) is identical under either backend.
+
+        SUPERSEDED 2026-07-27, and the heading above is the amended decision.
+        Reading the framework before building against it retired both the plan's
+        target configuration and its stated reason:
+
+        (1) L1 is an in-memory cache. cache/sqlite.py hardcodes
+        file:/{db_name}?vfs=memdb, so the "L1-only SQLite" configuration this
+        decision named holds the catalogue in RAM and loses it on restart.
+        (2) 3tears ships no SQLite DurableStore — only SqlL3Backend over
+        asyncpg — so the durable tier is this product's own code under EVERY
+        3tears configuration. Adopting collections would add layers above the
+        SQLite code, not replace it.
+        (3) Collections are async throughout (the *_sync methods read L1 only
+        and never pull through to L3), so adopting them converts store, service
+        and bindings to async — a departure from the ratified "async at the I/O
+        boundary, synchronous core" preference — while ordered, paged, counted
+        listing still bypasses the collection entirely, because BaseCollection
+        has no query API.
+        (4) The recorded reason to adopt — "the on-ramp to agents later" — does
+        not hold: 3tears-models depends only on media-contracts and observe,
+        never on core. That on-ramp is unaffected by what the catalogue sits on
+        and is decided at Chunk 14.
+
+        What is built instead (Chunk 07B): a first-party durable store matching
+        the DurableStore decomposition and naming
+        (fetch_one/upsert/delete/scan keyed by table + pk mapping), with
+        SqliteCatalogue as the domain adapter above it. No BaseCollection, no
+        BaseEntity, no CollectionRegistry, no L1 cache tier, no async
+        conversion, and NO 3tears dependency — which also withdraws, rather
+        than merely accepts, the develop-branch git reference the previous
+        record signed up for: an unreleased moving branch buys nothing when no
+        framework code is imported. Known gap, stated rather than discovered
+        later: our methods are synchronous where the contract is async, so a
+        future collection layer needs an asyncio.to_thread wrapper — which
+        blocking sqlite3 would require in an event loop regardless.
+      alternatives_considered:
+        - "Full 3tears stack with NATS + Postgres — rejected by the operator; solves multi-pod coherence problems this product does not have."
+        - "Adopt BaseCollection over a first-party SQLite DurableStore — rejected 2026-07-27; costs an async conversion of three layers and reverses the inert-records design, to gain a cache tier whose value (multi-process coherence) product-brief.md § Scope rules out."
+        - "Defer all persistence work and build Chunk 08 first — rejected; the twelve new entities would be written against a shape known to be changing."
+        - "No 3tears at all — viable and simplest, but forfeits shared foundation with the operator's other projects."
+      date: 2026-07-19
+    - decision: "Use 3tears-models for LLM access, routed through OpenRouter. — SUPERSEDED 2026-08-02, see below."
+      rationale: "3tears-models depends only on media-contracts and observe — no core, no infrastructure — and already carries langchain-openrouter. Multi-provider routing directly enables the cheap-by-default / escalate-on-request pattern that keeps discovery spend bounded."
+      alternatives_considered:
+        - "Direct Anthropic or OpenAI SDK — fewer layers, but no provider routing and no shared foundation."
+        - "Keep openai==1.37.1 / gpt-4o as in ai.py — rejected; the pin and the model are both from mid-2024."
+      date: 2026-07-19
+    - decision: "Discovery reaches OpenRouter through a first-party client behind a narrow seam, not through 3tears-models. Supersedes the 2026-07-19 entry above; 3tears-models stays, confined to the opt-in `eval` group, where it plays the curator driving the MCP surface from outside."
+      rationale: "Not a correctness argument — langchain-openrouter does surface `cost` and `cost_details`, which is what the ceiling depends on. Three things decided it. (1) Everything routes through one provider: search goes through OpenRouter's own web plugin rather than a direct search account, so a multi-provider abstraction carries no traffic. (2) The install lands on the Pi: 3tears-models pulls 3tears-observe, 3tears-media-contracts, anthropic, langchain-anthropic, langchain-openai, langchain-openrouter and jsonschema into the curation plane's DEFAULT install — the plane running co-located with display under a MemoryMax — where today that weight is opt-in. (3) The two model uses are not the same axis: the eval harness's model is the curator, the engine's is the discovery worker, and 'one model-construction path' reads like reuse while actually coupling unrelated roles. The seam is what makes it reversible: adopting create_chat_model later is a one-file change if a second provider ever earns it."
+      alternatives_considered:
+        - "3tears-models via langchain-openrouter — investigated properly rather than dismissed; it preserves the cost fields, and was declined on install weight and on carrying an abstraction with no second provider behind it."
+      date: 2026-08-02
+    - decision: "Build the MCP server on the official `mcp` SDK directly, not on `3tears-mcp`."
+      rationale: >
+        Decided 2026-07-19 when MCP became a core surface. `3tears-mcp` depends on
+        `3tears` core, `3tears-epoch`, and `3tears-nats`, and `mcp/auth.py`
+        imports `EpochClient`/`EpochListener` at module scope — so taking it would
+        drag NATS into a product whose operator explicitly ruled it out.
+
+        What `3tears-mcp` adds over the raw SDK is an RBAC-gated `McpServer` with
+        pluggable identity and authorizer protocols. This product has ONE
+        principal. There are no roles to gate, so the entire value-add is
+        inapplicable, and `3tears-mcp` depends on `mcp>=1.27` anyway — the same
+        official SDK, reachable directly.
+
+        This resolves the open question about running 3tears MCP without a broker
+        by making it moot rather than by answering it.
+      alternatives_considered:
+        - "3tears-mcp — brings RBAC this product cannot use, at the cost of NATS + Postgres."
+        - "Custom JSON-RPC surface instead of MCP — rejected; MCP is the requirement, and Claude Code speaks it natively."
+      date: 2026-07-19
+    - decision: "Defer 3tears agent memory."
+      rationale: "It depends on pgvector, a PostgreSQL extension — the one 3tears capability that genuinely forces infrastructure. Deferring it is what keeps the whole curation plane infrastructure-free. Revisit only if Postgres appears for another reason."
+      alternatives_considered: ["Run Postgres for agent memory — rejected as disproportionate for one household."]
+      date: 2026-07-19
+    - decision: "MCP transport is streamable HTTP, and the MCP server is mounted in the same ASGI application as the curation UI's HTTP API."
+      rationale: >
+        Decided 2026-07-19. The transport is effectively forced: Claude Code runs on
+        the operator's laptop while the catalogue and ART_ROOT live on the curation
+        host reached over an overlay network, and stdio requires the client to SPAWN
+        the server locally. Co-mounting is then the choice that makes the
+        thin-binding norm structurally easy — one process, both surfaces over the
+        same in-memory service layer — rather than a rule someone has to remember.
+        Cost accepted: the MCP surface goes down with the UI process, which is
+        tolerable because curation-plane downtime is already defined as invisible to
+        the household.
+
+        SCOPE OF THIS DECISION: it commits to co-mounting in ONE ASGI application,
+        not to a particular framework. No web framework has been chosen and none is
+        implied — see open_questions. Flagged on 2026-07-19 review after this
+        decision was written as though ASGI were already settled.
+      alternatives_considered:
+        - "stdio — impossible across the host boundary; the client cannot spawn a server on another machine."
+        - "Separate MCP process — needs its own path to the catalogue and reintroduces the divergence the service-layer norm exists to prevent."
+      date: 2026-07-19
+    - decision: "Five action-dispatch MCP tools with registry-generated definitions, rather than fine-grained per-operation tools."
+      rationale: >
+        Decided 2026-07-19 against three inputs: the operator's two production MCP
+        servers (cordyceps, public and in wide use, 7 tools; hallucinote, private,
+        13 tools), Anthropic's published tool-design guidance, and MCP spec revision
+        2025-11-25. Enumerating what "parity with the web UI" actually requires gave
+        ~28 operations; consolidating to five noun-shaped tools with a required
+        `action` parameter lands inside the 1-15 range Anthropic identifies as the
+        point where one-tool-per-action stops paying.
+
+        The decisive detail is that definitions are GENERATED from a registry —
+        one record per action carrying description, params, example and tips, from
+        which the wire schema, validation, help output and error messages are all
+        derived. That is what makes them provably consistent rather than consistent
+        by discipline, and it gives the service-layer norm a structural home
+        (declarative action records cannot contain logic; handlers do the work).
+
+        Consolidation is vertical only. A generic art_request(method=, path=)
+        multiplexer is the anti-pattern Anthropic's connector review rejects, and it
+        would put routing logic in the binding.
+      alternatives_considered:
+        - "Fine-grained tools, one per operation — ~28 tools; past the point where tool selection degrades, and rejected by the operator's own field experience."
+        - "Split read tools from write tools per Anthropic's Directory review criteria — not binding (this will never be listed), and the readOnlyHint auto-approve benefit it protects is retired by allowlisting the server once. The money-spending operation is isolated on its own tool instead, which is the carve-out that actually matters."
+      date: 2026-07-19
+    - decision: "FastAPI serves the curation plane, with the MCP app co-mounted in its ASGI application."
+      rationale: >
+        Decided 2026-07-20, after establishing that NEITHER of the operator's
+        production MCP servers is a precedent — hallucinote is stdio-only
+        (FastMCP with no transport arg), and cordyceps is C# on a hand-rolled
+        System.Net.HttpListener with if/else path dispatch. So this was decided on
+        merits rather than inherited, which is worth recording because the previous
+        session's pattern was to defer to those servers' practice.
+
+        FastAPI is Starlette underneath, so the SDK's documented mounting story
+        applies verbatim, and `FastMCP.session_manager`'s own docstring names
+        "mounting multiple FastMCP servers in a single FastAPI application" as the
+        supported advanced use case. The UI API is recorded as needing typed,
+        paginated, partial data — that is pydantic response models — and pydantic
+        is already in the tree via 3tears-models/langchain, so marginal cost is
+        small. Dependency injection makes the thin-binding norm structurally easy
+        rather than a rule to remember. It is a library, not infrastructure, so it
+        does not offend the "no NATS or anything crazy" constraint.
+
+        INTEGRATION HAZARD, recorded because it is silent and total: Starlette does
+        NOT run a mounted sub-app's lifespan, so Mount("/mcp",
+        app=mcp.streamable_http_app()) fails EVERY request with "RuntimeError: Task
+        group is not initialized" unless the host app enters session_manager.run()
+        in its own lifespan (mcp/server/streamable_http_manager.py:143-144). Two
+        related constraints: session_manager raises if touched before
+        streamable_http_app() has been called, and .run() may be entered only once
+        per instance.
+      alternatives_considered:
+        - "Starlette directly — minimal dependency and the SDK already hands back Starlette apps, but it means hand-writing validation and JSON shaping that pydantic gives free, and validation logic leaks into handlers, which the service-layer norm forbids."
+        - "FastMCP.custom_route alone, with no separate web framework — fewest moving parts and no mounting hazard, but it is a minimal API registered at lowest route precedence, making the UI surface a second-class citizen of the MCP server rather than a peer."
+      date: 2026-07-20
+    - decision: "The browser UI is a static client over the /api/* JSON surface — no server-side rendering, no template engine, no build step."
+      rationale: >
+        Decided 2026-08-01, building the first browser surface. The alternative
+        was server-rendered pages, which reads as simpler and is not: it leaves
+        /api/* either unused or carrying a second shape of every read, which is
+        the exact divergence the shared service layer exists to prevent,
+        reappearing one layer up. architecture.md had already drawn the UI and
+        its HTTP API as distinct things; this makes the API the UI's only source
+        rather than a parallel one.
+
+        It also collapses the dependency question. A template engine would have
+        been a new dependency whose job is escaping, on a surface whose data
+        comes from museum sites this product does not control; a client that sets
+        text with textContent gets that property from the DOM instead. Pydantic
+        arrives here as the FastAPI decision above anticipated ("typed,
+        paginated, partial data"), and nothing else does.
+
+        No framework and no bundler: a Node toolchain on a Raspberry Pi,
+        maintained for a single-operator tool on a private network, buys nothing
+        a curator can see. The cost accepted is that the surface requires
+        JavaScript, which is not a real cost for one operator with a modern
+        browser but would be if this were ever public — and it is LAN-only by a
+        recorded security decision, so it will not be.
+      alternatives_considered:
+        - "Server-rendered pages with Jinja2 — no client-side code and works without JavaScript, but /api/* then has no consumer and every read grows a second shape, and it adds a dependency whose main job (escaping) the DOM already does."
+        - "A framework (React/Svelte) with a build step — better ergonomics for the discovery screens still to come, but it puts a Node toolchain on the Pi and a build artifact in the deploy path for a four-section tool."
+      date: 2026-08-01
+    - decision: "Pillow arrives with the browser surface rather than with the mat engine, solely to make thumbnails."
+      rationale: >
+        Decided 2026-08-01. It was already the declared image dependency for this
+        plane's acquisition work, so what changed is its arrival, not the
+        dependency set. Forced rather than chosen: the seeded masters run to 47
+        megapixels and 40 MB, the television renditions are 4K, and nothing in
+        the standard library decodes a JPEG — seed/images.py reads only the SOF
+        header for dimensions precisely because measuring needed no decoder, and
+        downscaling does. Measured on the real corpus: 40 thumbnails in 6.6 s
+        cold and 0.23 s warm, 1.28 MB total against ~1.2 GB of masters.
+      date: 2026-08-01
+    - decision: "The in-UI agent is an MCP client, not an in-process caller."
+      rationale: >
+        Decided 2026-07-19 by the operator. Either way the agent must be taught a
+        surface, and MCP describes itself, so the teaching is free. The stronger
+        argument is scope: making the server the unit of "an art library on a
+        system" lets one agent manage several, promoting multiple libraries from an
+        accommodate-only concern toward a design driver.
+
+        Explicitly NOT implied: routing the web UI's own direct controls through
+        MCP. Tool results are shaped for a model to read while a UI wants typed,
+        paginated, partial data. Location transparency belongs in the service layer,
+        beneath both surfaces.
+      alternatives_considered:
+        - "In-process service calls for the in-UI agent — fewer layers and no serialization, but forfeits multi-library and means the agent binds a different surface than external clients, which is the parity split MCP exists to prevent."
+      date: 2026-07-19
+    - decision: "Long-running discovery uses start-and-poll with progress notifications, not MCP Tasks."
+      rationale: >
+        Decided 2026-07-19 after verifying client behaviour rather than assuming it.
+        MCP's Tasks primitive (SEP-1686) landed in spec revision 2025-11-25 marked
+        EXPERIMENTAL, and Claude Code closed the request to support it as NOT
+        PLANNED — so declaring execution.taskSupport "required" would break the
+        product's primary client outright.
+
+        Claude Code's actual behaviour sets the shape: a call that sends no response
+        and no progress notification for 5 minutes on HTTP transport is ABORTED, and
+        a call still running after 2 minutes is auto-backgrounded (>= 2.1.212). So
+        emitting notifications/progress during phase 2 is load-bearing — it is what
+        keeps the connection alive — and the run handle must come back immediately.
+        hallucinote reaches the same conclusion independently and supplies a
+        calibrated number: a 45s status long-poll sized under a 60s tool timeout.
+
+        AMENDED 2026-07-20. Start-and-poll STANDS; the claim that progress
+        notifications are "load-bearing — it is what keeps the connection alive" is
+        WITHDRAWN, on two pieces of evidence found while reading the SDK.
+
+        First, the mechanism can silently do nothing: Context.report_progress
+        no-ops if the client did not send a progressToken
+        (mcp/server/fastmcp/server.py:1170-1173). Relying on it to prevent a
+        5-minute abort means relying on client behaviour we do not control, with a
+        failure mode invisible until the call dies.
+
+        Second, it is unnecessary. The run handle returns immediately, so the only
+        long call is the status long-poll capped at 45s — nowhere near the
+        2-minute auto-background or 5-minute idle-abort thresholds. Nothing is ever
+        idle long enough to need keeping alive.
+
+        Corroboration: NEITHER of the operator's production servers emits progress
+        notifications. hallucinote backgrounds work and exposes a blocking `status`
+        action; cordyceps is stateless JSON with no SSE stream, so server-to-client
+        notifications mid-call are structurally impossible there. Both arrived at
+        polling independently.
+
+        Progress notifications may still be emitted as a UX nicety where a client
+        does send a token. They are not a correctness dependency, and nothing may be
+        designed as though they were.
+      alternatives_considered:
+        - "MCP Tasks (SEP-1686) — experimental, and unsupported by the primary client; taskSupport 'optional' is declared as forward-looking, 'required' would break Claude Code."
+        - "Blocking call for the duration of the run — killed by the 5-minute idle abort."
+      date: 2026-07-19
+    - decision: "Candidate thumbnails are returned inline as MCP image content blocks, capped at 400px on the long edge."
+      rationale: >
+        Decided 2026-07-19. This DEPARTS from both of the operator's own production
+        servers, which return file paths plus a "use Read tool to view" hint and
+        never emit image blocks — so the departure is recorded rather than assumed.
+
+        The reason the established pattern does not transfer: both of those servers
+        are LOCAL (cordyceps binds 127.0.0.1, hallucinote is stdio), so a returned
+        path works because client and server share a filesystem. This product's do
+        not. A path returned by the curation host is meaningless on the laptop, and
+        it fails by returning a plausible-looking result the client cannot act on.
+
+        The requirement behind it is the review gate: its justification is content
+        appropriateness, which only a person LOOKING AT THE PICTURE can judge.
+        Budget: image cost is about (w*h)/750 tokens against Claude Code's 25,000
+        token result cap (10,000 warning), and the per-tool ceiling raise via
+        _meta anthropic/maxResultSizeChars covers TEXT ONLY. At 400px a 40-work
+        batch costs roughly 6.4k tokens.
+      alternatives_considered:
+        - "File paths plus a read hint, as in cordyceps/hallucinote — breaks across the host boundary."
+        - "HTTP URLs to the curation plane — would need one client fetch per image, i.e. 40 extra round trips for a batch."
+        - "resource_link content blocks — spec-sanctioned and token-cheap, but client support is uneven and it still costs a read per image."
+      date: 2026-07-19
+  data_model:
+    - decision: "Curation reconciles runs left in a PROCESS-HELD state to a new terminal state `interrupted` at startup; awaiting_approval is excluded."
+      rationale: >
+        Decided 2026-07-20 after Critic review, then CORRECTED the same day after a
+        second review found the first version over-reached. Both halves are worth
+        recording because the error is instructive.
+
+        THE DEFECT. DiscoveryRun's state machine had no edge for process death:
+        every terminal state was written by the run's own process, which a crashed
+        process cannot do. Combined with constraint 14, a crash left the covered
+        works PERMANENTLY un-re-searchable, silently, on the only tool that spends
+        money. MemoryMax on the curation unit exists to cause exactly that kill and
+        a deploy is `systemctl restart`, so this was routine rather than exotic.
+
+        SELF-INFLICTED, AND THAT IS THE LESSON. The re-search decision REJECTED a
+        stored `resolving` verdict using the argument that "a crashed resolve run
+        would leave the work reading resolving forever with nothing to correct it" —
+        then moved the truth to the run row without re-asking that same question of
+        the run row. The argument was applied to the option being rejected and not
+        to the option being chosen. Two independent reviewers found it.
+
+        THE FIX: startup reconciliation. Chosen over timeouts or heartbeats because
+        a run in a process-held state only advances while its owning process lives,
+        and there is exactly one such process. If curation is starting, no
+        previously-recorded run is running — the inference is total rather than
+        heuristic, with no timer to tune and no liveness field to keep fresh.
+
+        THE CORRECTION: the first version reconciled EVERY non-terminal status,
+        justified by that same liveness argument. That argument is false for
+        `awaiting_approval`, which advances when the CURATOR calls approve — durable
+        human-held state that is supposed to outlive a restart. As first written, a
+        `systemctl restart` would have silently destroyed a pending approval and the
+        phase-1 spend behind it, and curation restarts constantly in development. A
+        rule justified by process liveness must apply only to the states process
+        liveness governs. Scope narrowed to {resolving_works, resolving_images}.
+
+        `interrupted` IS ITS OWN TERMINAL STATE, not a flavour of `failed`. "Stopped
+        underneath it" and "something broke" require different responses — re-run
+        versus investigate — which is the same discriminator test already applied to
+        halted_by_budget, and api-contract.md now carries it. Folding them together
+        would need a free-text reason field to tell them apart again, which is the
+        absorption the artifact's own terminal-state rule forbids.
+      alternatives_considered:
+        - "Reconcile every non-terminal status — the first version; rejected because awaiting_approval is human-held and a restart would destroy a pending decision plus its already-incurred phase-1 spend."
+        - "Lease/heartbeat on the run row — survives multiple curation processes, but there is only one systemd unit, so it adds a field to keep fresh in exchange for generality nothing needs."
+        - "Timeout-based expiry — no startup hook required, but the timeout is a tuning parameter that is wrong in both directions: too short kills live runs, too long leaves works blocked."
+        - "Fold interrupted into failed with a reason field — fewer states, but reintroduces the absorption the terminal-state rule forbids and makes callers parse prose to decide whether to retry."
+      date: 2026-07-20
+    - decision: "The mat is specified in physical units with a weighted bottom margin; panel geometry is a DEPLOYMENT VALUE; the resolution floor is a minimum rendered size in inches; display_fit is derived, never stored; nothing is ever upscaled."
+      rationale: >
+        Decided 2026-07-20 by the operator. One decision chain, because each part
+        forced the next.
+
+        MAT GEOMETRY. Specified in inches with the bottom margin weighted larger
+        than the top — the conservator's convention, since a true-centred image
+        reads as sitting low. This is what "museum-quality mat" has to mean if it
+        means anything. It is also a real change: the 2024 pipeline calls
+        image.thumbnail((3840,2160)), so the mat is aspect-ratio RESIDUE and a 16:9
+        source gets no mat at all — which directly contradicted data-model.md's
+        stated premise that "the artwork sits inside a mat, the mat is the
+        deliberate frame". The premise was aspirational and nothing implemented it.
+
+        PANEL GEOMETRY IS A DEPLOYMENT VALUE, not a constant. The operator's panel
+        is 42" and explicitly instructed that nothing may depend on that, because
+        other people will run this on other sizes. This falls under the existing
+        ratified "no hardcoded deployment values in source" norm, and it makes panel
+        dimensions the SECOND value both planes must agree on after ART_ROOT — a
+        quieter mismatch than ART_ROOT's and therefore worse, because nothing fails:
+        the mat is simply the wrong width.
+
+        THE FLOOR IS PHYSICAL, and this is why it was never answerable as filed. The
+        question asked for a minimum resolution; adequacy is defined against the
+        artwork box, the box is defined by panel and mat, and both are per
+        deployment. So there is no single number — there is a formula, expressed in
+        the same units as the mat: a minimum rendered size on the wall. It scales
+        with the panel automatically. On a 42" (~105 ppi) a 12" floor is ~1260 px on
+        the long edge; on a 75" (~59 ppi) the same 12" floor is ~708 px.
+
+        BELOW THE FLOOR: not rejected, not hidden. Phase 2 does not auto-select a
+        below-floor instance; the review grid shows it labelled with its rendered
+        physical size and the curator may select it anyway. If every instance is
+        below floor the work lands at resolution_status='unresolved' — already
+        first-class and never silently omitted (constraint 9) — and stays eligible
+        for re-search. The instance-vs-work suppression split this rests on is the
+        Q11 distinction and the machinery landed earlier the same day, so nothing
+        new was invented. The load-bearing detail: A THUMBNAIL CANNOT CONVEY
+        RESOLUTION — 900 px and 6000 px look identical in a grid — so the "a human
+        saw the artwork" review gate does not by itself prevent hanging a postage
+        stamp. The rendered-inches figure is what makes the judgement possible.
+
+        DISPLAY_FIT IS DERIVED, NEVER STORED, which AMENDS constraint 12. A verdict
+        computed once at acquisition is a stored judgement about a machine the
+        curation plane does not own, and it goes silently wrong when the TV changes.
+        width and height stay stored — they are panel-independent facts. The old
+        constraint's real intent ("policy in one place, not implicit in each
+        renderer") is now met by the service-layer norm ratified the same day rather
+        than by storage. Third application of derived-not-stored after readiness and
+        the re-search states; it is effectively a house pattern now.
+
+        NO UPSCALING. image.thumbnail already never upscaled and "acquisition at
+        gallery resolution" is a product promise. Upscaling is the one option that
+        actively misrepresents quality — it converts an honest "this image is small"
+        into an apparent rendering fault. Consequence: display_fit's `upscaled`
+        value is REMOVED rather than reserved, since a declared state with no
+        producer is the defect the re-search review flagged hours earlier.
+      alternatives_considered:
+        - "Fixed pixel border — simplest, needs no panel dimensions, but the number is arbitrary, means something different on every panel size, and cannot be described to anyone as a mat width."
+        - "Mat proportional to the artwork — keeps large works large, but inverts framing practice: conservators give SMALL works proportionally MORE mat, so it would look wrong exactly where matting matters most."
+        - "Keep 2024 fit-to-canvas — zero regression risk on the 41-work corpus since it IS current behaviour, but a 16:9 work gets no mat, 'museum-quality mat' stays false, and the floor stays uncomputable forever."
+        - "Hard-filter below-floor images at discovery — cleanest grid, but silently discards the only existing scan of an obscure work and the curator never learns it existed."
+        - "Keep display_fit stored with the panel it assumed, so staleness is detectable — rejected as storing a cached answer plus its cache key."
+        - "Keep display_fit stored and rebuild on panel change — preserves constraint 12 literally, but adds an operational step whose omission is silent, on a product whose defining constraint is silent failure."
+        - "Conventional Lanczos upscaling — fills the box, but a 900px source at 3316px is visibly soft at wall distance and a curator cannot tell a bad source from a bad renderer."
+      date: 2026-07-20
+    - decision: "Rights metadata is display-only and gates nothing; it is surfaced as a provenance and source-quality signal."
+      rationale: >
+        Decided 2026-07-20 by the operator, closing a question raised in priority on
+        2026-07-19 when the corpus became deliberately in-copyright.
+
+        Recording was never in question — constraint 13 already requires
+        rights_status on every source including 'unknown', because "we did not
+        check" and "we checked and could not tell" are different facts. What was
+        open was whether it GATES.
+
+        It does not. Private household display keeps the legal stakes genuinely low,
+        and the operator's own framing was that this wants a recorded decision
+        rather than a compliance regime. A hard filter would also contradict a
+        decision already made, since the corpus is deliberately in-copyright.
+
+        The reframing that makes it useful anyway: rights status is a PROVENANCE
+        signal, not merely a legal one. A holding institution's own public-domain
+        scan is usually the authoritative file; unknown-rights images are more often
+        downstream reproductions. So it earns its place in the review grid on source
+        quality grounds regardless of legal posture.
+
+        REOPEN TRIGGER, recorded so it is recognisable rather than rediscovered: the
+        product gaining sharing or export, or the catalogue itself becoming public.
+        Either changes the analysis.
+      alternatives_considered:
+        - "Warn and require override on restrictive or unknown rights — creates an audit trail, but rights are populated for 5 of 41 works today so nearly every acceptance would trip a warning that means nothing actionable."
+        - "Hard filter at discovery — most conservative legally, but guts the stated product and silently hides exactly the works the curator wants."
+      date: 2026-07-20
+    - decision: "The re-search is a DiscoveryRun with kind='resolve'; its three conflated situations are derived, not stored; and awaiting_better_image is reachable only via reject_image."
+      rationale: >
+        Decided 2026-07-20 by the operator, resolving three interacting defects the
+        Critic raised and the prior session deliberately deferred rather than
+        patching. They were one question because fixing any one alone just moves the
+        ambiguity — and in the event, fixing the first largely dissolved the second.
+
+        (1) THE RUN ROW. resolve_images was a paid, minutes-long operation creating
+        no row at all, so the one tool the design says is the only one that spends
+        money had no handle to poll, no cancel, no cost of its own, and no guard
+        against concurrent double-submission of the same work ids. It now creates a
+        DiscoveryRun with kind='resolve' and parent_run_id, entering directly at
+        resolving_images (phase 1 already happened on the parent). This reuses
+        status, cancel, spend attribution and halted_by_budget rather than inventing
+        a second, weaker handle beside them. Constraint 14 refuses work ids already
+        covered by an in-flight resolve run, naming them rather than silently
+        deduplicating.
+
+        (2) NO NEW STATES. awaiting_better_image was carrying "not yet re-searched",
+        "re-search running" and "re-search found nothing" as one value. The fix is
+        not more enum values but separating curator INTENT from job STATE:
+        awaiting_better_image now means exactly "the curator wants this work and the
+        current instance is not good enough", which does not change when a job
+        starts or ends. "Running" derives from the run row (1) made exist; "found
+        nothing" is resolution_status='unresolved', which constraint 9 already
+        forbids omitting or presenting as accepted-able.
+
+        This deliberately follows the ratified derived-not-stored readiness decision
+        rather than re-litigating it. A stored `resolving` verdict would be a second
+        truth beside the run row, and a crashed resolve run would strand a work in
+        it forever with nothing to reconcile against.
+
+        ACCEPTED COST, named rather than discovered later: resolution_status is
+        REDEFINED from "phase 2 found no credible instance" to "the latest
+        resolution attempt found none". Written into data-model.md explicitly,
+        because a widened meaning nobody records is how the next drift starts. It
+        only reaches unresolved when every instance is rejected; if unrejected
+        instances remain, constraint 8 selects the next and the work returns to
+        pending.
+
+        (3) SINGLE ENTRY POINT. set_verdict and reject_image both reached
+        awaiting_better_image and only reject_image set rejected_at — so a work sent
+        there by set_verdict had no suppressed instance and a re-search could
+        legitimately return the image just rejected. That is the Q11 suppression
+        failure reappearing on the instance scope. set_verdict no longer accepts the
+        value; reject_image is the only way in, so the path that sets the verdict and
+        the path that sets rejected_at are the same path. Impossible rather than
+        defended, and it matches the scope boundary the tools already draw.
+
+        Knock-on recorded in nonfunctional-requirements.md: the per-run search cap
+        now bounds each ATTEMPT rather than a work's lifetime, since re-searches are
+        runs. Accepted — each is a deliberate human act on named ids, a different
+        risk shape from an agent loop running away inside one run, and the monthly
+        ceiling still bounds the aggregate and cannot be multiplied by creating more
+        runs.
+      alternatives_considered:
+        - "Split into three verdicts (resolving, no_better_image) — most legible with zero derivation and no redefinition of resolution_status, but `resolving` duplicates the run row's truth and a crashed run strands the work there permanently."
+        - "Derive `running` but add a stored `no_better_image` terminal — avoids the redefinition, but uses two mechanisms for three situations and is harder to explain than either pure option."
+        - "Let set_verdict keep awaiting_better_image and set rejected_at implicitly — fixes the bug but leaves two entry points, so the next writer can reintroduce it."
+      date: 2026-07-20
+    - decision: "The review gate is that a human SAW THE ARTWORK — not that a surface was withheld. Accepting is available over MCP, and any reviewing surface must show the image."
+      rationale: >
+        AMENDED 2026-07-19, same day, superseding "agents never auto-accept" as
+        stated in the decision below. The two could not both hold: the product
+        brief promised that EVERY content-management operation is an MCP tool while
+        also declaring the review gate "not automatable by any surface, agent or
+        human". Accept/reject is a content-management operation.
+
+        Resolved in favour of the gate's actual content. Its durable justification
+        is content appropriateness (see the decision below, which is otherwise
+        unchanged and still correct), and the only thing that prevents inappropriate
+        work reaching a wall is a person LOOKING AT THE PICTURE. Withholding the
+        tool from agents does not achieve that; it just moves the click. Meanwhile
+        accepting on the strength of a title and a rationale — which is what a
+        text-only agent surface would permit — IS the failure the gate exists to
+        stop, and the web UI would never have allowed it.
+
+        So: art_review(action='set_verdict') exists, and the binding requirement
+        moves to the result shape — candidate listings return thumbnails. See
+        technical_decisions.technology on inline images.
+
+        HONEST COST, recorded because it voids a security bound: the api-contract's
+        prompt-injection analysis previously opened with "agents cannot auto-accept,
+        every addition stops at curator review". That is no longer true. The
+        replacement bounds are weaker and are stated as weaker — the spend cap still
+        fails closed, tool authority is still narrow, and acceptance is visible and
+        fully reversible with the curator present in the session. "Visible and
+        reversible" is a smaller claim than "cannot", and leaving the old sentence
+        in place would have let a future reader build on a stale guarantee.
+      alternatives_considered:
+        - "No verdict tool on MCP — strongest injection story, but parity gets a hole and 'every operation' becomes a lie needing rewrite."
+        - "Reject-only on MCP — asymmetric (declining can never put art on a wall); triages a batch but leaves half of parity gone and is odd to explain."
+        - "Verdict tool, text-only results — simplest and cheapest, but the curator accepts on titles alone, which is precisely the named failure."
+      date: 2026-07-19
+    - decision: "Agent-initiated additions always queue as candidates; agents never auto-accept into the active collection."
+      rationale: >
+        SUPERSEDED IN PART 2026-07-19 by the decision above — agents DO now hold a
+        verdict tool, so the "never auto-accept" clause no longer holds. Everything
+        below about WHY the gate exists survives intact and is the reasoning the
+        amendment was decided against; it is retained rather than rewritten because
+        the three-reason analysis is what made the correct resolution findable.
+
+        Confirmed 2026-07-19, and reframed by the operator the same day in a way
+        that strengthens it. "Add all of Salvador Dali's most famous works" is a
+        statement that the curator WANTS this, not an expectation that it appears
+        on the TV without further steps — the same shape as an agent confirming
+        before deleting a batch of files.
+
+        THREE reasons the gate exists, in ascending order of durability:
+
+        1. Spend. Weakest on its own — the ceiling is USD 20 and a run costs
+           roughly USD 0.13, so this argument would not survive someone arguing
+           that auto-accept is cheap and convenient.
+        2. Taste. The curator's judgement is the product; delegating it defeats
+           the point of curation.
+        3. CONTENT APPROPRIATENESS — the load-bearing one. Discovery searches the
+           open web, so a bad search can surface work that is explicit,
+           disturbing, or simply wrong for a domestic space. That work would then
+           appear on a wall in a shared home, seen by household members and
+           guests who never opted in, possibly while the curator is not present
+           to notice.
+
+        Note the failure class is unlike data loss: fully reversible, but
+        PUBLICLY VISIBLE for as long as it lasts, and visible to people who have
+        no interface with which to object. That asymmetry is why the gate is not
+        a spend control that could be relaxed once spend looks safe.
+
+        The honest cost: an agent cannot finish that request end to end. It gets
+        works found and staged, but the wall does not change until the curator
+        looks. Accepted deliberately, and the operator's own framing is that this
+        is correct behaviour rather than a limitation.
+
+        No new entity is needed — `Candidate.verdict = pending` already expresses
+        this. What the model gains is provenance: a DiscoveryRun must record which
+        client initiated it, so "why did 40 Dali candidates appear" is answerable.
+
+        HISTORICAL NAMES: `Candidate` was split into `CandidateWork` and
+        `CandidateImage` later the same day; the equivalent of the state named here
+        is `CandidateWork.verdict = pending`. Left unrewritten because this block is
+        retained as the reasoning the amendment above was decided against, not as a
+        description of the current model.
+      alternatives_considered:
+        - "Bounded auto-accept behind an explicit flag — completes the request, but changes the wall without the curator seeing it."
+        - "Auto-accept into a non-active staging theme — keeps the gate while letting the agent finish; rejected as a third state duplicating what `candidate` already means."
+        - "Trust by caller (Claude Code auto-accepts, in-UI agent queues) — rejected: exactly the parity split the MCP requirement exists to avoid."
+      date: 2026-07-19
+    - decision: "Rebuild the catalogue through curation rather than migrating all.json."
+      rationale: >
+        The existing 41 records have three known defects (identity keyed on the
+        source URL, per-device TV state embedded in the record, semi-structured
+        artist_details), and every work is re-fetchable from its source URL. The
+        existing artworks become worked examples that seed curation, and their
+        hand-tuned mat colours become the regression corpus for the mat engine.
+      alternatives_considered:
+        - "Full schema migration with re-identity — more up-front cost for data that is cheaply re-derivable."
+        - "Leave all.json as-is — carries all three defects into the new design."
+      date: 2026-07-19
+    - decision: "Per-device runtime state never lives in the catalogue."
+      rationale: "tv_content_id, tv_content_thumb_md5, and geometry-stamped label filenames are facts about one specific television and one specific panel, not about the artwork. Keeping them out is what lets the catalogue be plane-independent and lets derived artifacts regenerate per-device (learnings.md, Data and cache contract)."
+      alternatives_considered: ["Keep them in the record as today — the defect being corrected."]
+      date: 2026-07-19
+    - decision: "A WORK is distinct from an IMAGE of it, at every stage. Discovery is two-phase: intent resolves to works, then each work is searched for image instances and one is selected as canonical."
+      rationale: >
+        Stated by the operator 2026-07-19 as a central product requirement, not an
+        implementation detail: "if I say Dali's persistence of memory, it is a
+        complete failure if I get 10 copies of it and am supposed to only check
+        approve on one."
+
+        The distinction must hold PRE-acceptance, because that is exactly where the
+        duplication appears. So Candidate splits into CandidateWork (produced by
+        phase 1) and CandidateImage (produced by phase 2), mirroring the
+        Artwork/Source shape the catalogue already had — which makes acceptance a
+        promotion rather than a transformation.
+
+        Three consequences beyond the obvious one:
+
+        1. The cost estimate stops being a guess. Phase 2 costs roughly one search
+           per work, so the moment phase 1 finishes the count is known and the
+           estimate is COMPUTED against a real list.
+        2. It resolves the target_candidate_count deferral with an option none of
+           the three recorded ones anticipated: the work list IS the count, and it
+           is trimmable rather than set in advance. Nothing is stored.
+        3. Phase 2 VERIFIES phase 1. Models invent plausible artwork titles; a work
+           with no credible instance is evidence of exactly that, so unresolved is a
+           first-class outcome rather than an absent row.
+
+        Collapse bias: aggressive, but nothing is discarded — losing instances are
+        retained as non-primary rows. That is what makes over-merging recoverable
+        and inspectable, which in turn makes biasing toward collapse safe. The
+        residual hard case (same title, same artist, genuinely different object —
+        Munch's four Screams, Monet's Haystacks) is handled by declining to collapse
+        when institution AND dimensions AND date all differ.
+      alternatives_considered:
+        - "One flat Candidate per found image, as originally modelled — the failure the operator named."
+        - "Resolve instances only after acceptance — cheaper, but the curator would approve a work without seeing what they are getting, which the review gate forbids."
+      date: 2026-07-19
+    - decision: "Review carries a third verdict — accept the work, reject the IMAGE, re-search — and suppression therefore has two scopes."
+      rationale: >
+        Decided 2026-07-19. Approving a work bundles two judgements that fail
+        independently: do I want this work, and is this image good enough. "Yes,
+        Persistence of Memory, but not that 900px poster scan" is ordinary, and an
+        accept/reject binary cannot express it.
+
+        The trap this creates is the important part. Rejecting a WORK must suppress
+        the work; rejecting an IMAGE must suppress only that image and explicitly
+        leave the work eligible. One suppression key for both means asking for a
+        better scan silently blacklists the painting — invisible until a curator
+        wonders why something they asked to keep never came back. Modelled as
+        CandidateWork.work_dedup_key versus CandidateImage.rejected_at, and stated
+        as a constraint so the two cannot be unified later by someone tidying up.
+      alternatives_considered:
+        - "Reject-and-re-add manually — puts the curator back in the position of re-issuing an intent to recover a work they already approved of."
+      date: 2026-07-19
+    - decision: "The phase-1 work list is gated for approval only when the resolved WORK COUNT crosses a configured threshold."
+      rationale: >
+        AMENDED 2026-07-20. This decision originally read "...when the phase-2 COST
+        ESTIMATE crosses a configured threshold". The gate stands; what it triggers
+        on changed, and this canonical entry was missed when the amendment was
+        applied elsewhere (caught by Critic finding R-3).
+
+        Why count and not cost: once real per-run costs were measured ($0.16-0.49),
+        a dollar threshold was gating on the axis that does not matter — it either
+        never fires, or fires at a number that means nothing to a curator. The
+        judgement the gate exists to invite is SCOPE: "you asked for Dali and I
+        found 200 works — really?" Count is what a curator can act on at a glance;
+        "$1.00" does not tell them the run found 200 works.
+
+        The cost estimate is still computed and still shown (it is what makes phase
+        2 authorisable at all) — it is simply not what opens the gate.
+
+        Chosen by the operator 2026-07-19 from four options. Always-gate gives the
+        strongest cost control but demands two review passes per run, cutting
+        against the recorded constraints that curation happens in short sessions and
+        must never feel like sysadmin work. Never-gate means paying to resolve images
+        for works that would have been struck from the list. The threshold keeps
+        cheap runs frictionless and stops the expensive ones.
+
+        Two consequences. DiscoveryRun gains an awaiting_approval state and a
+        DECLINED terminal state — distinct from both failed (something broke) and
+        halted_by_budget (the cap fired), because collapsing a deliberate choice
+        into a malfunction is the same mistake this model already refuses to make
+        for halted_by_budget. And approval_required is STORED per run rather than
+        re-derived, because the threshold is configuration and configuration changes;
+        a run that stopped last month must still read as having stopped.
+
+        The threshold value itself is a deployment value and must not be hardcoded —
+        see the project-preferences norm. Open question recorded.
+      alternatives_considered:
+        - "Always two gates — strongest control, worst fit for short leisure sessions."
+        - "One gate at the end — simplest, matches the committed one-batch-reviewed-as-a-grid decision, but pays for image resolution on works that would have been cut."
+        - "No gate, but phase 1 exposed as its own operation — pushes the discipline onto the caller rather than the system."
+      date: 2026-07-19
+  integrations:
+    - decision: "Discovery searches museum/public-domain collections AND the contemporary web (gallery sites, prize announcements, artist portfolios)."
+      rationale: >
+        Confirmed 2026-07-19. The curator's motivating example — "find recent
+        award-winning art" — cannot be satisfied from institutional collections
+        alone, so restricting to museums would defeat the product's purpose.
+      alternatives_considered:
+        - "Museum/public-domain only — keeps the existing gigapixel + IIIF + metadata-API pipeline intact and rights trivial, but makes 'recent award-winning' undeliverable."
+        - "Contemporary-first — rejected; would forfeit the gigapixel museum path that produces the best output."
+      consequences: >
+        This is a genuine scope expansion, not a source list. The existing
+        acquisition pipeline assumes public domain, IIIF tile servers, structured
+        metadata APIs, and gigapixel originals. Contemporary web sources satisfy
+        NONE of those: typically web-resolution JPEGs, in copyright, no metadata
+        API, no tile server. Three things follow:
+          1. A second acquisition path with different resolution expectations.
+          2. A minimum-resolution policy — the mat engine's premise is that the
+             artwork sits INSIDE a mat at native resolution rather than being
+             upscaled into one. A 1200px press image on a 3840x2160 canvas either
+             occupies a small island or must be upscaled.
+          3. Rights handling stops being cosmetic. Personal display keeps the
+             stakes low, but "captured and ignored" is no longer a defensible
+             default when the corpus is deliberately in-copyright.
+          CONSEQUENCES 2 AND 3 WERE RESOLVED 2026-07-20; see
+          technical_decisions.data_model. Note that (2)'s stated premise — "the mat
+          engine assumes native resolution inside a mat" — was ASPIRATIONAL when
+          written: the 2024 code's image.thumbnail() makes the mat aspect-ratio
+          residue, so a 16:9 source got no mat at all. The mat geometry had to be
+          decided before the resolution floor could be, and neither was filed as a
+          question until 2026-07-20.
+      date: 2026-07-19
+    - decision: "Curation UI is LAN-only, reached remotely via an overlay network (Tailscale/VPN) rather than by public exposure."
+      rationale: >
+        Confirmed 2026-07-19. The network layer carries the trust boundary, so the
+        application does not need authentication, TLS termination, rate limiting,
+        or public-surface hardening. For a single-operator household tool this is
+        the proportionate answer and it keeps the security model genuinely short.
+      alternatives_considered:
+        - "Public internet exposure — would make authn, TLS, rate limiting, and API-key protection real requirements for one user."
+        - "Strictly LAN with no remote access — simpler still, but no access while away."
+      date: 2026-07-19
+  operational:
+    - decision: "uv is the dependency manager for both planes, structured as two SIBLING uv projects (AMENDED 2026-07-20: not a uv workspace)."
+      rationale: >
+        Decided 2026-07-20 by the operator. Recorded here after Critic review found
+        it stated as DECIDED in project-preferences.md while this file still said it
+        was "deliberately NOT decided" — a contradiction created by recording a
+        decision in only one of its two homes.
+
+        uv was already a required install on the Pi to provision curation's
+        interpreter, so it is the incumbent rather than a new dependency. uv.lock
+        provides real lockfiles while preserving the exact pinning requirements.txt
+        has today, which project-preferences.md said should survive whatever
+        replaced it.
+
+        THE PER-PLANE SPLIT IS THE LOAD-BEARING PART. The two planes are genuinely
+        different projects — different interpreters (3.14 vs 3.13), different
+        dependency sets, and no single tool setting can describe both. Each needs
+        its own interpreter, its own lock, and its own pyproject.toml, which also
+        resolves the long-standing target-version
+        departure: black's target-version is a FLOOR, so py312 is right for display
+        and wrong for curation, and the split lets each carry its own rather than
+        forcing one number to be wrong somewhere.
+
+        AMENDED 2026-07-20 — "workspace" was the wrong mechanism and is struck.
+        A uv workspace has ONE lockfile and ONE resolved interpreter shared by all
+        members, which is precisely what this product cannot have. Verified
+        empirically against uv 0.11.8 rather than inferred: a workspace whose
+        members declare requires-python >=3.14 and ==3.13.* fails to lock at all,
+        with "error: Found conflicting Python requirements". The DECISION'S
+        SUBSTANCE IS UNCHANGED and was always the per-plane interpreter and
+        per-plane lock; only the mechanism changes, to two independent sibling uv
+        projects (curation/ and display/), each locking itself. This is what the
+        build plan already hedged toward, now settled with evidence instead.
+
+        NAMED VERIFICATION ITEM: IT8951 compiles Cython from 2023-era .pyx sources,
+        and a setup.py of that vintage may not declare Cython in build-requires —
+        which PEP 517 build isolation would then not provide. Under uv this is the
+        one plausible failure. It is adjacent to, but NOT the same as, the existing
+        "IT8951 build is unverified" risk in platform-and-dependency-findings.md
+        (that one is about the interpreter version); an earlier draft claimed it
+        "folds into" that risk, which the Critic correctly called an overstatement.
+        Tracked as issue #9.
+      alternatives_considered:
+        - "uv for curation, pip for display — lowest risk to the fragile Cython build, but two toolchains and two lockfile formats, and every deployment doc must say which is which."
+        - "pip for both, uv only provisioning the interpreter — most conservative and matches the recovered 2024 venv, but no real lockfile, keeps a hand-maintained requirements.txt, and installs uv without taking most of its value."
+      date: 2026-07-20
+    - decision: "RATIFIED as a binding norm: operation logic lives only in the service layer; MCP tools and HTTP handlers are thin bindings."
+      rationale: >
+        Ratified by the owner 2026-07-20, after Critic review found it was being
+        CITED as binding and Critic-enforced in four artifacts, and leaned on five
+        times in this file, with no recorded ratification anywhere — no
+        technical_decisions entry, no Direction home, no dated marker, no
+        change-log birth record. Its three peer norms all had them. The trail was
+        also circular: product-brief pointed at project-preferences, which pointed
+        nowhere, under a banner declaring every row inferred from the 2024
+        codebase — which cannot be true of a norm about a service layer and MCP
+        surface that codebase does not contain.
+
+        The norm itself was never in dispute; what was missing was the vetoable
+        decision. Now given a Direction home in architecture.md with a dated
+        marker, and the preferences row demoted to the pointer it already claimed
+        to be.
+
+        WHY IT BINDS: the product requires the MCP surface at parity with the web
+        UI, but the UI's own controls call HTTP rather than MCP. Parity therefore
+        only holds if both are bindings over one implementation. Two
+        implementations of "accept a candidate" diverge within weeks and the
+        divergence is invisible until an agent and a click produce different
+        results on the same catalogue.
+
+        ENFORCEMENT IS JUDGEMENT, NOT STRUCTURE, and this is recorded rather than
+        implied: the enforcement column says "Critic", meaning a reviewer reading
+        handlers. No test fails when logic creeps into a binding. Same gap that
+        sent the manifest-channel norm to issue #7.
+
+        RETROACTIVITY, done artifact-shaped rather than code-shaped — the specific
+        correction from the 2026-07-20 learning that a "no existing code" answer
+        self-satisfies and hides the real question. Checked against every artifact
+        specifying handler or tool behaviour: api-contract's five action-dispatch
+        tools are specified as dispatch plus formatting, with isError derived from
+        the payload rather than decided in the tool; boundary-patterns places
+        validation at the service boundary. No specified behaviour violates the
+        norm. Forward-binding consequence noted: the registry-generated tool
+        definitions must not become a place where per-tool logic accretes.
+      alternatives_considered:
+        - "Ratify but record it as unenforced — folded in instead; the enforcement gap is recorded WITH the ratification rather than as a competing option."
+        - "Demote to a tracking preference like cost visibility — rejected: four artifacts already call it binding and Critic-enforced, and the MCP/UI parity requirement would lose its only structural guarantee."
+      date: 2026-07-20
+    - decision: "The curation plane's Python 3.14 is a uv-managed standalone build (`uv python install 3.14`); 3tears is NOT relaxed to 3.13."
+      rationale: >
+        RE-BASED 2026-07-27: the catalogue takes no 3tears core dependency at all,
+        so "3tears is not relaxed" is no longer this product's question — it is an
+        upstream one. RE-BASED AGAIN 2026-08-02: that revision said the floor now
+        rested on 3tears-models, "arrives with the discovery work". It did not
+        arrive — discovery reaches OpenRouter through a first-party client, and the
+        package is confined to the opt-in eval group — so no default dependency
+        requires 3.14 today. What holds the floor is stated once, in
+        artifacts/project-preferences.md § Language & Runtime, and is not restated
+        here. The build-vs-relax analysis below is retained as the reason the
+        floor is affordable, not as a live dependency claim.
+
+        Decided 2026-07-20 by the operator. This closes the open question opened the
+        same day by the co-location decision.
+
+        The recorded question rested on a premise that turned out to be false. It
+        framed a choice between a 30-45 minute pyenv compile per patch release,
+        relaxing 3tears to 3.13 (16 mechanical sites), or containerising from a
+        python:3.14 base — and the compile cost is what made the second option
+        attractive. But a prebuilt CPython for this exact target already exists:
+        cpython-3.14.4-linux-aarch64-gnu, distributed by Astral via
+        python-build-standalone. Verified 2026-07-20 with
+        `uv python list --all-platforms --all-arches --show-urls`. Installing it is a
+        download and extract, no compiler and no build dependencies. Trixie's glibc
+        is far above the build's baseline and the Pi is aarch64, which is the same
+        fact the earlier wheel audit established.
+
+        With the compile gone, relaxing 3tears buys nothing and costs a real
+        untested risk: the 2026-07-19 audit was STATIC, so behaviour under 3.13 —
+        asyncio internals, and pydantic/langchain annotation resolution under eager
+        vs lazy __annotations__ — was never exercised. Keeping 3tears unmodified
+        means that risk is never taken, and it preserves the Python version pin as
+        a live rationale for the two-plane split rather than leaving the split on
+        its other two legs.
+
+        Two consequences recorded rather than waved past. (1) Curation's interpreter
+        now comes from Astral's channel, not Debian's, so CPython security fixes
+        arrive via `uv python upgrade`, NOT `apt upgrade` — a CVE becomes a
+        two-plane action where an operator would reasonably assume one. Recorded in
+        security-model.md § Supply Chain and operational-spec.md § Routine
+        Operations. (2) A standalone interpreter cannot see distro site-packages.
+        That is survivable only because label rendering already moved to the display
+        plane: curation's stack is all wheels, and pycairo — the one source-only
+        aarch64 dependency — is on the display side. Adding anything to curation
+        that needs distro C bindings is what breaks this decision.
+
+        Knock-on: uv is now a required install on the Pi regardless, which makes it
+        the incumbent dependency manager rather than a new dependency. This was left
+        open here and DECIDED SEPARATELY LATER THE SAME DAY — see the dependency
+        manager entry below.
+      alternatives_considered:
+        - "Relax 3tears to 3.13 and use the system interpreter — simplest end state, one interpreter, but needs an upstream PR merged and carries untested behavioural risk under 3.13."
+        - "pyenv source build — same end state as the chosen option, but with a 30-45 minute compile per patch release. Strictly dominated once the prebuilt binary was found."
+        - "Container from a python:3.14 base — no compiling, but adds Docker against the operator's stated infrastructure constraint and complicates the shared ART_ROOT design the inter-plane contract rests on."
+      date: 2026-07-20
+    - decision: "The hard monthly spend ceiling is an OpenRouter per-key credit limit, not application-side metering."
+      rationale: >
+        Decided 2026-07-20 by the operator, against a recommendation for a
+        belt-and-braces design (app-side soft cap plus provider hard cap). The
+        operator's answer is the better one and the recommendation was withdrawn.
+
+        OpenRouter supports an optional per-key credit limit with daily/weekly/
+        monthly reset, returning 402 when exhausted, and search-plugin fees bill as
+        OpenRouter credits — so ONE number covers tokens and search together and
+        cannot be bypassed. An application meter that fails open is
+        indistinguishable from one that works: no error, no alert, just a bill.
+        That is the same defect shape this codebase already ships in `upload_file`
+        (catches every exception, reports success anyway).
+
+        The concern that this would degrade `halted_by_budget` from a designed
+        outcome to an exception was checked and does NOT hold. A 402 is
+        unambiguous, so the outcome is cleanly derivable; `GET /api/v1/key`
+        returns `limit_remaining` as an authoritative "budget left" that cannot
+        drift from a local tally; and per-generation `cost` covers "what did this
+        run cost". The UX need survives without owning a meter that can lie.
+
+        CORRECTED 2026-08-02, on the half that measurement reached: "authoritative"
+        was too strong. The figure cannot drift from a LOCAL TALLY — that part
+        stands and is the corollary's whole point — but it lags the provider's own
+        enforcement by minutes, and was observed reporting credit remaining while
+        live calls were already being refused. So it is authoritative about the
+        account and not about whether the next call will succeed. The decision
+        itself is unaffected (a provider-enforced ceiling is still right, and
+        `halted_by_budget` still derives from the refusal); what changes is that
+        showing this number to an operator needs a caveat, which is now an open
+        question rather than an assumed deliverable.
+
+        Two residuals recorded rather than waved past: the reset is midnight UTC
+        (so "month" is the UTC calendar month, not local), and a 402 arrives
+        mid-run, so a run can halt partially — which the error model already
+        declares normal, but which makes `halted_by_budget` a state the catalogue
+        must represent, not just an error string.
+
+        CORRECTION 2026-08-02, after driving a throwaway key to exhaustion: the
+        decision stands, and one sentence supporting it was wrong. "A 402 is
+        unambiguous" does not hold. Exhaustion is a **403** ("Key limit exceeded
+        (total limit)"); the 402 is a pre-flight check that a request's reserved
+        `max_tokens` is affordable, and it arrives with credit still in the
+        account. The outcome is still cleanly derivable — from 403 — but a client
+        keying on 402 would halt runs that still had money, and would never
+        recognise real exhaustion. Left in place rather than rewritten because
+        this records reasoning as it stood on 2026-07-20; the measured shapes are
+        in `openrouter-api-findings.md`.
+      alternatives_considered:
+        - "App-side soft cap at ~$18 plus provider hard cap at $20 — graceful halt before the ugly 402, at the cost of a second enforcement path that can itself fail open. Recommended, then withdrawn."
+        - "App-side metering only — full control of halt semantics, but the fail-closed guarantee is only as strong as our own code, which is the exact class of thing the 2024 codebase got wrong."
+      date: 2026-07-20
+    - decision: "Discovery carries a per-run search cap, separate from the monthly ceiling."
+      rationale: >
+        Decided 2026-07-20. A monthly ceiling does not bound a single runaway run,
+        and a pre-run cost estimate is not an estimate if the run can freely exceed
+        it. The cap is derived from the work count, is a deployment value (never
+        hardcoded), and hitting it is a distinguishable outcome rather than a
+        silent truncation of results.
+      alternatives_considered:
+        - "Monthly cap only — fewer knobs, but one bad intent can consume a meaningful slice of the month and the pre-run estimate becomes a guess rather than a bound."
+        - "Per-run DOLLAR cap covering tokens and searches together — more directly meaningful, but it cannot be checked before the run starts, only tripped during it."
+      date: 2026-07-20
+    - decision: "Back up the catalogue AND build an exercised restore path; treat the image tree as disposable."
+      rationale: >
+        Restore added 2026-07-20 at the operator's insistence, and they are right:
+        a backup path that has never been restored from is a hope, not a backup.
+        The restore path is a first-class deliverable with an exercise step —
+        restoring onto a scratch directory and confirming the system comes up —
+        not a documented procedure nobody has run.
+
+        The design makes this unusually cheap to test. Because the image tree is
+        deliberately disposable, RESTORE IS PARTIAL BY DESIGN: drop the catalogue
+        back with an empty image tree, and the readiness design in
+        artifacts/architecture.md produces a theme manifest that excludes
+        everything unrendered, reports why, and re-acquisition refills it. The
+        system self-heals visibly rather than failing opaquely or pretending to
+        be fine. Verifying a restore therefore does not require staging gigabytes.
+
+        Urgency raised the same day: the operator confirmed the Pi boots from SD
+        card, so the one irreplaceable asset lives on the most failure-prone
+        component in the system. SQLite plus unexpected power loss on consumer
+        flash is the classic Pi corruption story.
+
+        WHY THE CATALOGUE AND NOT THE IMAGES — this inverts the intuitive backup
+        priority and is worth stating because of that. Every source image is
+        re-fetchable from its source URL; the product already relies on this, and
+        it is the stated reason `all.json` can be replaced rather than migrated.
+        What is NOT re-fetchable is the curatorial layer: accept/reject verdicts,
+        which image instance was chosen canonical and why, hand-approved mat
+        colours, theme membership, and suppression scopes. Losing it means
+        re-running discovery, which costs real money and re-asks the curator every
+        judgement they already made. The catalogue is megabytes; the image tree is
+        gigabytes and reconstructible.
+      alternatives_considered:
+        - "Back up everything — simple, but ~10x the volume to protect the 1% that matters, and it obscures which artefact is actually irreplaceable."
+        - "Backup only, restore documented but never exercised — the default outcome, and the reason untested backups are a recurring class of incident."
+      date: 2026-07-20
+    - decision: "Pin the IT8951 driver to 9f13613 or vendor it."
+      rationale: "omni-epd declares it as an unpinned git dependency resolving to whatever master currently is. Builds are only reproducible today because the repo has not moved since 2023. Roughly 1,500 lines of frozen code the project depends on completely."
+      alternatives_considered: ["Leave unpinned — a silent reproducibility failure waiting on an upstream commit."]
+      date: 2026-07-19
+
+# =============================================================================
+# DESIGN DECISIONS
+# =============================================================================
+# UX, IA, and design decisions. Some fields (like error_handling_approach) apply
+# to all products; others (like visual_direction) only apply to products with a UI.
+# Each: { decision, rationale, date }
+
+design_decisions:
+  information_architecture:
+    - decision: >
+        The curation UI is four sections and one detail view: Works (the grid),
+        Themes, On the wall (the active theme's manifest with its exclusions),
+        and Health. A work opens into a detail view in place.
+      rationale: >
+        Decided 2026-08-01, at the UI checkpoint, against the operations that
+        exist rather than against the whole product. These four are what a
+        curator can actually do once a catalogue is seeded and themes are
+        buildable. The discovery half of the interface — intent entry, the run
+        view, the approval gate, cost display, and a review grid with alternates
+        behind each card — is NOT missing from this list by oversight; every one
+        of those binds a service not yet built, and each arrives with its
+        service.
+
+        "On the wall" is a section rather than a panel on Themes because it
+        answers a different question. Themes asks what a curator has assembled;
+        On the wall asks what the display plane was actually asked to show, and
+        the gap between those two is the product's most important disclosure.
+      date: 2026-08-01
+  interaction_patterns:
+    - decision: >
+        State is carried by a glyph and a word before it is carried by colour;
+        the wall's manifest always shows its exclusions section, including when
+        it is empty; refusals are announced through a live region rather than
+        only shown.
+      rationale: >
+        Decided 2026-08-01. The first is the accessibility constraint below,
+        applied: every badge (fit verdict, image source, theme active, rendition
+        staleness) pairs a distinct glyph with a distinct word, so it survives
+        greyscale, colour blindness, and a room with the lights down.
+
+        The second is the same rule that governs the tool surface's
+        `not_displayable` key and the sync notice: a section that appeared only
+        when something was wrong would train a reader to take its absence as
+        "everything is fine". On a product whose defining failure mode is
+        silence, an empty "Not showing (0)" is the point.
+
+        The third exists because a failure a curator learns about by noticing a
+        colour is a failure that gets missed.
+      date: 2026-08-01
+  accessibility_approach: >
+    Two surfaces with completely different accessibility profiles, and the
+    important one is physical.
+
+    Curation UI (LAN-only web app, single advanced operator): WCAG 2.1 AA as the
+    baseline — keyboard navigation, visible focus, meaningful labels, sufficient
+    contrast. One domain-specific caution: this is an image-review tool whose
+    whole job is judging colour, so the UI chrome must never sit at a contrast
+    ratio that competes with the artwork, and colour must never be the sole
+    carrier of state in a candidate grid (accept/reject needs a non-colour
+    indicator).
+
+    The e-paper label is the accessibility surface that actually matters. It is
+    read by household members and guests at standing distance, on a 16-level
+    greyscale panel with no backlight, in whatever ambient light the room has. It
+    has no interface to navigate — legibility IS the accessibility story:
+    type size at reading distance, contrast on a non-emissive panel, and line
+    length. The 2024 implementation hardcodes "Sans 18" for a panel geometry that
+    is no longer the target, so this needs re-deriving for the 1448x1072 panel
+    rather than carrying forward.
+
+    The TV surface has no accessibility affordances by deliberate design — it is
+    artwork on a wall, and adding overlays would violate the product's core
+    identity constraint.
+  error_handling_approach: >
+    Scaled to medium risk, and shaped by one dominant fact: on the display plane
+    a swallowed error is invisible, because the only feedback channel is a picture
+    on a wall that keeps looking fine.
+
+    Taxonomy the design must distinguish:
+      * Recoverable and expected — partial dezoomify tile fetches, museum rate
+        limiting, malformed LLM JSON, transient TV websocket drops. Retry with
+        backoff; these are normal operating conditions, not incidents.
+      * Recoverable but degrading — vision model unavailable so mat colour falls
+        back to the dominant-colour algorithm. Must be RECORDED (MatColor.method),
+        not silent: the 2024 code degrades invisibly.
+      * Fatal for one item — an artwork that cannot be acquired or rendered. Fails
+        that item, marks it, and continues the batch. Never aborts the run.
+      * Fatal for the run — budget ceiling reached, TV unreachable, ART_ROOT
+        missing. Terminates with a distinguishable state; `halted_by_budget` is a
+        first-class outcome, not an error.
+
+    Two rules that exist because the 2024 code broke them:
+      * Never report success on a failed operation. `upload_file` catches every
+        exception, logs it, and still returns — recording a null content id while
+        the retry loop sets success = True.
+      * Catch specific exception types. A genuinely necessary broad catch carries
+        `# prawduct:allow prawduct/broad-except -- reason`.
+
+    Curator-facing errors surface in the web UI with enough context to act on;
+    display-plane errors must reach somewhere a human actually looks, which the
+    systemd journal alone does not satisfy.
+  # API decisions — populate when classification.structural.exposes_programmatic_interface is set.
+  # These record the DECISION (including a deliberate "none — internal-only"), not a mandate to
+  # version. A deferral must be dated and carry a revisit trigger. See the api-contract artifact.
+  # api_versioning_approach: { scheme, deprecation_policy, stability_tiers,
+  #                            status: active|deferred, rationale, revisit_trigger (if deferred), date }
+  api_versioning_approach:
+    scheme: "none — no version negotiation. Tool names frozen; actions are the unit of evolution; changes additive-only."
+    deprecation_policy: "Announce, retire, annotate inline at the replacing site. No compatibility shims. Removals/renames of tools are not permitted; of actions, they are breaking and announced."
+    stability_tiers: "Tool names FROZEN. Action values, required params, descriptions STABLE. Optional params and result fields ADDITIVE."
+    status: active
+    rationale: >
+      SUPERSEDED 2026-07-19, same day, by its own revisit trigger firing. The
+      original decision — no versioning, internal-only — was sound while every
+      surface had exactly one first-party consumer deployed from this repo. The
+      MCP requirement invalidated that premise: Claude Code is an external
+      consumer, and an MCP tool surface is precisely the case where adding
+      versioning later breaks every bound client.
+
+      This is recorded as REOPENED rather than silently amended, because the
+      trigger doing its job is the evidence the mechanism works.
+
+      Two surfaces now need separate answers, and they are not the same problem:
+        * MCP tool surface — external. Tool names, argument schemas, and result
+          shapes are the contract. Needs a stance on adding/removing tools,
+          renaming arguments, and changing result shapes.
+        * curation↔display contract — AMENDED 2026-07-20: the original "none"
+          reasoning is RETIRED for this surface. Deployed-together and
+          survives-independently cannot both hold, and independent restarts open
+          a real skew window even on one host. The manifest carries a schema
+          version; additive changes are free; display refuses an unrecognised
+          major and keeps the manifest it has. See
+          technical_decisions.architecture and api-contract.md § Overview.
+          (This rationale previously asserted the un-made decision ~950 lines
+          below the technical_decisions entry that superseded it — Critic R-9.)
+      DECIDED 2026-07-19, after the reopening above. The specification offers
+      nothing to conform to: SEP-1575 (tool semantic versioning, proposed
+      2025-09-29) is a dormant proposal adopted into no spec revision. What the
+      protocol does give is notifications/tools/list_changed, which Claude Code
+      honours by refreshing automatically — and every client here is the operator's
+      own, so a breaking change means telling one person, not a migration window.
+
+      Two non-obvious rules fall out. Tool NAMES are frozen and pinned by test:
+      both of the operator's production servers learned this the hard way, and
+      cordyceps' one consolidation required follow-up sweeps through prompts,
+      guides, and a stale tool count in its own docs. And a DESCRIPTION change is
+      treated as breaking, because it alters tool-selection probability even when
+      the schema is untouched — sound reasoning rather than a measured finding, and
+      flagged as such in the artifact, but it puts descriptions under the same
+      review discipline as schemas.
+    revisit_trigger: "A consumer appears that is not deployed or configured by the operator — e.g. publishing the server for third parties, or listing it in a connector directory (whose review criteria would additionally forbid multiplexing reads and writes in one tool)."
+    date: 2026-07-19
+  # api_error_model_approach: { envelope (e.g. RFC-7807/problem+json), codes, status, rationale, date }
+  api_error_model_approach:
+    envelope: "Tool results with isError: true, derived from a boolean `success` field in the payload — never JSON-RPC protocol errors. Every error carries: what was wrong, the enumerated valid set, a correct example, and a pointer to action='help'. AMENDED 2026-07-27: the unknown-tool carve-out is retired; see rationale."
+    codes: "No numeric code space. Errors are self-describing strings plus structured valid_actions / required / optional / example / hint fields. A machine-readable discriminator is added only where a caller must branch — halted_by_budget being the standing example."
+    status: active
+    rationale: >
+      No longer safely deferrable. Agents bind to error shapes to decide whether
+      to retry, escalate, or stop, so an unstable or unstructured error model is
+      a correctness problem for every MCP client, not a nicety.
+
+      Already decided regardless of envelope choice:
+        * Errors must be explicit and typed. The display plane's failure mode is
+          a silently frozen picture, and the product's existing defect pattern is
+          operations reporting success on failure.
+        * `halted_by_budget` is a distinguishable outcome, not a generic error —
+          an agent must be able to tell "you are out of money" from "the fetch
+          failed" and stop rather than retry.
+        * Partial success is normal (partial dezoomify tiles, some candidates
+          acquired), so the model must express it rather than collapsing to
+          ok/fail.
+      DECIDED 2026-07-19. The MCP specification supports returning execution errors
+      as tool results directly: they are meant to carry "actionable feedback that
+      language models can use to self-correct and retry", and clients SHOULD feed
+      them back to the model. Protocol errors are reserved for the one case the
+      model cannot act on — a tool that does not exist.
+
+      Two details taken from the operator's production servers rather than invented.
+      isError is DERIVED from the payload rather than set by hand, because a
+      hand-set flag drifts from the body it describes. And there is deliberately NO
+      fuzzy nearest-match ("did you mean") — neither server implements it; the
+      substitute is always to enumerate the full valid set inline, which is more
+      useful to a model than a single guess and cannot mislead.
+
+      AMENDED 2026-07-27, on building it. The one carve-out — "an unknown TOOL
+      stays a protocol error" — is not implementable on the official SDK and is
+      retired rather than left standing as a rule the code silently breaks. The
+      SDK's `call_tool` request handler wraps the registered function in an
+      unconditional `except Exception` and converts anything raised into a
+      normal CallToolResult(isError=True); no exception of any kind survives
+      that boundary, so a protocol error cannot be produced from where a tool
+      name is first seen. Verified twice independently: read from
+      mcp/server/lowlevel/server.py at 1.28.1, and recorded in 3tears'
+      changelog as confirmed against the live dispatch path rather than by
+      reading source. The substitute enumerates the five real tool names in the
+      error result. The carve-out's own reasoning survives it — the case is
+      unreachable in practice, because a client only calls names that
+      list_tools returned.
+    revisit_trigger: "RESOLVED — the MCP tool surface was designed 2026-07-19 and the envelope decided with it."
+    date: 2026-07-19
+  observability_approach: >
+    The defining constraint is that failure is silent by construction — the only
+    feedback channel is a picture on a wall, and a stalled loader is
+    indistinguishable from a working one showing a static image. Scaled to medium
+    risk: structured logging with correlation context on both planes, and the
+    display plane must surface its health somewhere a human actually looks rather
+    than only to the systemd journal. Two specific defects to fix, not inherit:
+    upload_file catches every exception, logs, and still reports success; and
+    print() is used for operational output throughout, which produces journal
+    lines with no level and no timestamp. LLM spend is an observability signal
+    here, not just a cost control — the hard cap cannot fail closed without
+    metering. Both planes use stdlib logging and take no dependency for it
+    (corrected 2026-07-27: this previously named 3tears-observe, withdrawn with
+    every other 3tears dependency that day). Curation's structured shape is owed
+    by the chunk that first needs per-run correlation.
+  infrastructure_dependencies: >
+    Deliberately near-zero. Curation plane: SQLite on local disk; no database
+    server, no message broker, no container orchestration (see technical_decisions
+    and the operator's explicit "no NATS or anything crazy" constraint). Display
+    plane: the local filesystem and two devices — the Frame TV over LAN websocket
+    and the e-paper HAT over SPI.
+    Mock boundaries for testing: the six foreign APIs listed under
+    classification.foreign_apis are all mocked at their module boundary. The TV and
+    the e-paper panel are the two that CANNOT be meaningfully faked end-to-end —
+    they need either real hardware or an accepted gap, which is what makes the
+    "verify the TV still works" item gating rather than routine.
+  visual_direction: >
+    RESOLVED 2026-08-01 for the curation UI, at the UI checkpoint. Still deferred
+    for the TV output, which carries the one hard constraint recorded in
+    product_identity.visual_preferences (no chrome, no overlay, no branding) and
+    for the e-paper label, which is a legibility problem rather than a visual
+    direction.
+
+    A token layer, not a component inventory. Colour, type scale, spacing,
+    radius and elevation are defined in one stylesheet as custom properties;
+    light and dark are both authored, dark as an override of light. That is the
+    half of issue #2 that could be decided against a real screen. The half that
+    could not — a component inventory covering the candidate review grid and
+    intent entry — was NOT guessed at, because those screens' services do not
+    exist. #2 stays open at stage `design` for exactly that remainder.
+
+    Museum, not gadget, made concrete: near-neutral surfaces with a slight warm
+    cast (a gallery wall, not a screen), a serif for work titles and a system
+    sans for chrome, crisp 2-4px radii, and elevation barely present so a card
+    reads as paper rather than as UI. One accent — a desaturated ink blue —
+    because this is an image-review tool whose whole job is judging colour, and
+    nothing but the pictures may carry a strong hue.
+
+    ENFORCED, not asserted: every text pair clears WCAG AA 4.5:1 and every
+    control boundary clears 3:1, in both schemes, checked by a test that reads
+    the real token values out of the stylesheet
+    (curation/tests/unit/test_design_tokens.py). The same test refuses any colour
+    written outside the token blocks, since a literal in a component rule is a
+    colour nothing can check. A decorative rule between a card and the page is
+    deliberately NOT held to the 3:1 control floor — WCAG 1.4.11 does not govern
+    it, and holding it there would draw a hard line around every picture.
+
+# =============================================================================
+# OPEN QUESTIONS
+# =============================================================================
+# Unresolved decisions. Normal during discovery, shrinks toward zero
+# before artifact generation.
+# Each:
+#   question: string
+#   blocking: string (what can't proceed)
+#   waiting_on: "user" | "research"
+#   priority: high | medium | low
+
+open_questions:
+  - question: "Should the health panel surface `limit_remaining` at all, and if so with what caveat?"
+    blocking: "Chunk 19's health-panel half. Nothing before it — no surface reads the figure today."
+    waiting_on: operator
+    priority: medium
+    # RAISED 2026-08-02 by Critic verify-resolutions. The ratified corollary in
+    # nonfunctional-requirements.md § Direction says "budget remaining" is read from
+    # the authority (GET /api/v1/key -> limit_remaining), never from a local tally.
+    # That corollary answers WHERE the number comes from and is not in question.
+    # What is in question is whether to SHOW it, because two facts sit against it:
+    # nothing outside the OpenRouter client and its tests reads it today, and it
+    # lags by minutes — it was observed reporting credit remaining while live calls
+    # were already being refused. A panel built naively on it tells the operator
+    # they have money at the exact moment spending stops working.
+    #
+    # The options: (a) do not surface it — per-run spend and halted_by_budget carry
+    # the signal honestly; (b) surface it with the lag stated on screen, as an
+    # advisory figure rather than a budget indicator; (c) surface it plainly, per
+    # the corollary as written.
+    #
+    # Recorded as a question rather than settled because observability-strategy.md
+    # briefly asserted "do not ship it as the budget signal" — new normative content
+    # in an artifact that does not own the norm, against a ratified corollary. That
+    # is an amendment, and amendments are the owner's.
+  - question: "Which specific cheap vision model handles mat-colour selection?"
+    blocking: "Nothing structural — the two-tier model split is decided; only the specific model is open."
+    waiting_on: research
+    priority: low
+    # RESOLVED IN PRINCIPLE 2026-07-19: operator confirmed a separate cheap vision
+    # model is fine. Pick the model at planning time and re-verify pricing then.
+    # Background: both models chosen for discovery are text-only — GLM-5.2 is listed
+    # "text input and output", and DeepSeek V4 Pro's OpenRouter page declares no
+    # image modality — while ai_mat_color() sends a base64 PNG. Discovery and
+    # mat-colour therefore need different models, which is exactly what the
+    # OpenRouter multi-provider decision already enables. Vision volume is one call
+    # per accepted artwork, so the model choice barely moves the monthly total.
+  # RESOLVED 2026-07-20: "Does agentic discovery need paid web search, and is that
+  # inside or outside the $20 ceiling?" INSIDE, comfortably. Verified against
+  # OpenRouter documentation: Parallel $0.001/request, Exa $0.005, Perplexity
+  # $0.005, all including 10 results. A ~20-work run makes 30-50 searches, so
+  # search costs $0.03-0.25 against ~$0.13-0.24 of tokens. A run lands at
+  # $0.16-0.49 and $20 buys 40-125 runs a month.
+  #
+  # The original premise was WRONG and is retired: search cannot "dominate token
+  # spend by an order of magnitude" at this volume — worst case it roughly doubles
+  # per-run cost. See artifacts/nonfunctional-requirements.md § Cost Constraints.
+  #
+  # The meter question dissolved rather than being answered: search fees bill as
+  # OpenRouter credits, so token spend and search spend are ONE number under one
+  # ceiling. Routing search through OpenRouter's plugin rather than a direct Exa
+  # account is strictly better on both axes ($0.005 vs $0.007, and one meter
+  # instead of two).
+  # RESOLVED 2026-08-02 — discovery defaults to Parallel.
+  #
+  # Opened 2026-07-20 when the cost question resolved without discriminating
+  # between engines: the spread is $0.05 vs $0.25 per run, which against a $20
+  # ceiling is not decision-relevant. Choosing on price would be choosing on the
+  # one axis that does not matter. Deferred to a build-time spike, which had to
+  # compare on this product's actual hard cases — resolving a named work to a
+  # specific museum page, and answering a recency-bound intent ("recent
+  # award-winning art") — not on generic search relevance.
+  #
+  # The spike honoured that constraint and reversed the conclusion it was meant to
+  # support. Sixteen holding-museum cases and a recency-bound intent: Exa,
+  # Parallel and Perplexity each resolved every case and returned the same share
+  # of in-period citations. Quality is the axis that did not discriminate. Cost
+  # did, four to one, so price decided by being the only thing left that differed.
+  #
+  # The first eight cases were world-famous works — the generic relevance the
+  # constraint warned against — so it was re-run on mid-tier works with
+  # independently-known holdings. All three scored identically again.
+  #
+  # Scope of what was measured: phase 1's search (given a work, find its
+  # institution). Phase 2 retrieves image instances with rights and resolution,
+  # a different task that may separate these engines; Chunk 16 establishes that.
+  # DISCOVERY_SEARCH_ENGINE is a deployment value, so revising is configuration.
+  # Held by tests/live/test_search_engine_choice_still_holds.py.
+  - question: "Does relaxing 3tears to 3.13 survive a real test run under 3.13?"
+    blocking: "Merging the upstream relaxation PR. NOTHING in this product — see below."
+    waiting_on: research
+    priority: low
+    # NOW FULLY OFF THIS PRODUCT'S PATH, and doubly so as of 2026-07-27: curation
+    # runs a uv-managed 3.14, and the catalogue takes no 3tears core dependency at
+    # all, so this product never exercises 3tears under any interpreter. Retained as an upstream 3tears concern
+    # only. Avoiding this untested risk was part of why the decision went the way
+    # it did.
+    # The only gap left by the 2026-07-19 audit, which was static (syntax and
+    # stdlib-symbol level, high confidence, three converging methods). Residual
+    # risk is behavioural: asyncio internals, and pydantic/langchain annotation
+    # resolution under eager (3.13) vs lazy (3.14) __annotations__. A static PEP
+    # 649 reliance check found zero hits. Only a real 3.13 test run closes it.
+  # RESOLVED 2026-07-19: "What is the MCP tool surface — the operations, their
+  # granularity, and their error model?" Answered in full; see
+  # artifacts/api-contract.md and technical_decisions.technology below. Five
+  # action-dispatch tools, registry-generated definitions, errors as tool results
+  # with isError derived from the payload. The framing in the original question
+  # turned out to be partly wrong: the intention-versus-CRUD trade dissolved once
+  # it was noticed that the worked example ("add all of Dali") can never be one
+  # call — phase 2 takes minutes and review needs a human.
+  # RESOLVED 2026-07-20 by the operator: set_verdict REQUIRES EXPLICIT WORK IDS and
+  # refuses a bare "accept everything pending". Recorded in
+  # technical_decisions.technology; the artifact text is in api-contract.md
+  # § Security. (This entry sat stale after the decision was written into prose —
+  # caught by Critic review, and the same sweep failure the learnings entry names.)
+  # RESOLVED 2026-07-20: "What cost threshold triggers work-list approval before
+  # phase 2?" The gate triggers on WORK COUNT, not cost — the framing in the
+  # original decision was wrong and is amended.
+  #
+  # Once the cost research landed, a dollar threshold was gating on the axis that
+  # does not matter: a run costs $0.16-0.49, so any cost threshold either never
+  # fires or fires at a number too small to mean anything to a curator. What the
+  # gate is actually for is catching "you asked for Dali and I found 200 works" —
+  # a SCOPE judgement. Count is what a curator can judge at a glance; "$1.00"
+  # does not tell them the run found 200 works.
+  #
+  # The number itself remains a deployment value and must NOT be hardcoded.
+  # Setting it is a tuning exercise for first real use, not a blocking decision.
+  # RESOLVED 2026-07-20 by the operator: "How does Python 3.14 get onto the Pi for
+  # the curation plane — or should 3tears be relaxed to 3.13 instead?" A uv-managed
+  # standalone build; 3tears stays unmodified. Recorded in
+  # technical_decisions.operational; artifact text in operational-spec.md
+  # § The Curation Interpreter.
+  #
+  # This is the fifth question whose PREMISE was the thing that needed checking.
+  # It was framed as a cost tradeoff anchored on "3.14 on a Pi is a 30-45 minute
+  # source build per patch release" — true only of pyenv. A prebuilt
+  # cpython-3.14-linux-aarch64-gnu exists (python-build-standalone, via Astral),
+  # verified with `uv python list --all-platforms --all-arches`. The expensive
+  # option was never expensive, so the tradeoff the question posed did not exist.
+  # RESOLVED 2026-07-20 by the operator: "How is the re-search after reject_image
+  # modelled — its run row, its states, and its rejection record?" All three
+  # defects, as one design. Recorded in technical_decisions.data_model; artifact
+  # text in data-model.md (DiscoveryRun, CandidateWork, constraints 14-15) and
+  # api-contract.md.
+  #
+  #   1. resolve_images creates a DiscoveryRun with kind='resolve' and
+  #      parent_run_id. Reuses status/cancel/spend/halted_by_budget rather than
+  #      inventing a second handle. Constraint 14 refuses ids already covered by an
+  #      in-flight resolve run.
+  #   2. NO new states. "Running" derives from the run row; "found nothing" is
+  #      resolution_status='unresolved', widened to mean the LATEST attempt — a
+  #      redefinition written down explicitly rather than left implicit. Follows
+  #      the ratified derived-not-stored readiness decision: a stored `resolving`
+  #      would be a second truth beside the run row and could drift.
+  #   3. set_verdict no longer accepts awaiting_better_image; reject_image is the
+  #      only entry, so rejected_at can never be skipped. Structurally impossible
+  #      rather than defended against.
+  #
+  # Fixing (1) largely dissolved (2) — the run row IS the missing state. Same
+  # pattern as the questions that dissolved on 2026-07-19/20: the premise (that
+  # three situations needed three names) was the thing to check.
+  # RESOLVED 2026-07-20 by the operator: "Should the MCP surface expose resources
+  # in addition to tools?" NO RESOURCES IN v1. Tools cover every read, adding
+  # resources later is purely additive and breaks no client, so deferring costs
+  # nothing while building a second concept for the same data now costs real work.
+  # The one genuine candidate — "what's on the wall right now", which resources can
+  # make subscribable and tools cannot — was declined for v1: nothing needs it, and
+  # it would require display-plane state to reach the MCP server on the curation
+  # plane, across the one-directional manifest boundary. Reopen if a client wants
+  # to BROWSE rather than call. Original analysis retained below.
+  #   waiting_on: user / priority: low
+    # Claimed as carried in api-contract.md on 2026-07-19 but never actually filed;
+    # caught by Critic review. The MCP spec's tools/resources split is about CONTROL
+    # (who decides when something enters context), not mutability, and it never says
+    # read-only operations must be resources. Anthropic's guidance says a tool is
+    # right when the result depends on parameters the model chooses — which covers
+    # every read here. A stable browsable artifact (active theme, display state)
+    # could still earn a resource later.
+  # RESOLVED 2026-07-20, all five below, in artifacts/architecture.md.
+  #
+  # "What is the single source of truth for 'this artwork is ready to display'?"
+  #   The question contained the error. There is no single readiness, there are
+  #   TWO, and conflating them was the bug. CATALOGUE readiness (can this be
+  #   rendered?) is curation's, evaluated at manifest-build time in exactly one
+  #   place. DEVICE readiness (is it on the TV?) is display's, lives in
+  #   display-state.sqlite, and never enters the catalogue. Neither is a stored
+  #   flag, so neither can drift. Manifest membership IS catalogue readiness, and
+  #   because the manifest is the only thing display ever sees, the recorded
+  #   failure (display selecting an unrenderable work) becomes structurally
+  #   impossible rather than defended against. Theme membership stays a CURATORIAL
+  #   statement; a work may be in a theme and absent from the manifest.
+  #   Obligation accepted: the manifest build must report its exclusions per work
+  #   with reasons, or the design trades a loud failure for a silent one.
+  #
+  # "Where does the display plane's rotation list live when the curation plane is
+  # down?" In a theme manifest file in the shared ART_ROOT, written atomically by
+  #   curation (temp + os.replace) and read by display. Display makes NO network
+  #   call to curation at all. Staleness is unbounded by design: if curation is
+  #   stopped, display keeps showing the last manifest forever, which is normal
+  #   operation rather than a degraded mode.
+  #
+  # "Which web framework serves the curation plane?" FastAPI — see
+  #   technical_decisions.technology. Note that NEITHER of the operator's
+  #   production MCP servers turned out to be a precedent: hallucinote is
+  #   stdio-only, cordyceps is C# on a hand-rolled HttpListener. The question's
+  #   premise that progress notifications must be supported also dissolved; see
+  #   the amendment to the start-and-poll decision.
+  #
+  # "Where does the curation plane actually run, and is it always-on?" On the Pi,
+  #   alongside the display plane, always-on but usually idle. Operator's decision
+  #   2026-07-20. Storage was checked first and does not force otherwise (500
+  #   works is ~10 GB). Discovery can therefore be a background job.
+  #
+  # "Do opencv, scikit-image, and pycairo have working aarch64/current wheels on
+  # Python 3.14?" YES, verified against the PyPI JSON API 2026-07-20:
+  #   scikit-image 0.26.0 cp314 + manylinux aarch64; numpy 2.5.1 and scipy 1.18.0
+  #   cp314 aarch64; opencv-python-headless 5.0.0.93 ships cp37-abi3 aarch64
+  #   manylinux wheels (stable ABI, so forward-compatible to 3.14);
+  #   pydantic-core 2.47.0 cp314 aarch64. The one exception is pycairo 1.29.0,
+  #   which is source-only on Linux aarch64 and needs libcairo2-dev — and that no
+  #   longer touches the curation plane, because label rendering moved to the
+  #   display plane, which already has the GTK stack.
+  # RESOLVED 2026-07-20 by the operator: "What is the minimum acceptable source
+  # resolution, and what happens to works below it?" Recorded in
+  # technical_decisions.data_model; artifact text in nonfunctional-requirements.md
+  # § The mat is geometric, and the floor is physical.
+  #
+  # THE QUESTION WAS UNANSWERABLE AS FILED, and finding out why was the work. It
+  # asked for a minimum resolution. Adequacy is defined against the artwork box;
+  # the box is defined by panel geometry and mat width; the operator ruled that
+  # panel geometry is a DEPLOYMENT VALUE because other people run other panel
+  # sizes. So there is no single number — there is a formula, in the same physical
+  # units as the mat: a minimum rendered size on the wall, which scales with the
+  # panel automatically.
+  #
+  # A prerequisite had to be decided first and was not filed as a question at all:
+  # the mat geometry itself was specified NOWHERE, and the 2024 code's
+  # image.thumbnail() makes the mat aspect-ratio residue — so a 16:9 source gets no
+  # mat, contradicting data-model.md's "the mat is the deliberate frame".
+  #
+  # Below the floor: not rejected, not hidden. Phase 2 does not auto-select;
+  # the grid shows it labelled with rendered inches; the curator may take it. All
+  # instances below floor => resolution_status='unresolved', already first-class.
+  # RESOLVED 2026-07-20 by the operator: "Should discovery results carry
+  # licence/rights enforcement, or is rights metadata display-only?" DISPLAY-ONLY;
+  # it gates nothing. Recorded in technical_decisions.data_model; artifact text in
+  # data-model.md constraint 13 and api-contract.md.
+  # The reframing that made it useful anyway: rights status is a PROVENANCE and
+  # source-quality signal, not merely a legal one — a holding institution's own
+  # public-domain scan is usually the authoritative file. Reopen trigger recorded:
+  # sharing/export, or the catalogue becoming public.
+
+# =============================================================================
+# USER EXPERTISE PROFILE
+# =============================================================================
+# Inferred from conversation signals, never self-assessed.
+# Drives vocabulary, explanation depth, and involvement calibration.
+
+user_expertise:
+  product_thinking: advanced      # none | basic | intermediate | advanced
+  technical_depth: advanced
+  design_sensibility: advanced
+  domain_knowledge: advanced
+  operational_awareness: advanced
+  evidence:
+    - dimension: technical_depth
+      signal: "Authors 3tears, a three-tier caching and agent framework with NATS KV, asyncpg, protocol-based backend seams, and RBAC-gated MCP."
+      inferred_from: "/Users/brookstalley/source/3tears"
+    - dimension: technical_depth
+      signal: "Asked precisely the right question about the framework — 'is there really no way to avoid pulling in docker/postgres/nats' — rather than accepting the stack as given."
+      inferred_from: "discovery, 2026-07-19"
+    - dimension: operational_awareness
+      signal: "Interrupted mid-discovery to constrain scope ('we WILL NOT be deploying to k8s or using nats or anything crazy') before any design work had been committed."
+      inferred_from: "discovery, 2026-07-19"
+    - dimension: product_thinking
+      signal: "Framed the curation requirement by its hardest case — 'find recent award-winning art', not 'Monet's flowers' — which is the distinction between search and discovery."
+      inferred_from: "discovery, 2026-07-19"
+    - dimension: design_sensibility
+      signal: "The 2024 mat-colour prompt reasons in LAB colourspace, accounts for aspect-ratio-driven mat area, and constrains mat luminance against artwork luminance on an emissive display."
+      inferred_from: "ai.py mat_prompt2"
+    - dimension: domain_knowledge
+      signal: "Built museum-grade metadata normalisation across ARTIC and Google Arts & Culture, with artist nationality/lifespan parsing and Pango-typeset physical labels."
+      inferred_from: "metadata.py, art.py ArtLabel"
+    - dimension: operational_awareness
+      signal: "Chose a communication style preference: wants the expert take and the pushback, evidenced by engaging substantively with the 3tears scale critique rather than deflecting it."
+      inferred_from: "discovery, 2026-07-19"
+
+# =============================================================================
+# BUILD PREFERENCES
+# =============================================================================
+# Developer preferences captured during discovery (testing approach, code style,
+# tooling). Optional — only when the user expresses preferences.
+
+build_preferences:
+  file_path: artifacts/project-preferences.md
+  last_updated: 2026-07-19
+  source: inferred            # discovery | inferred | iteration
+  # Inferred from the 2024-era codebase, NOT confirmed by the owner. Entries
+  # marked (target) in that file are norms the existing code does not meet yet.
+  # Confirm during discovery.
+
+# =============================================================================
+# HEALTH CHECK
+# =============================================================================
+# Tracks periodic health check state. Health checks are triggered by
+# accumulating staleness signals, not by a fixed cadence.
+
+health_check:
+  last_full_check: null
+  last_check_findings: null
+  # The session banner's project-state.yaml compaction advisory was ASSESSED AND
+  # DECLINED 2026-07-20 by the operator. Do not re-investigate before a build plan
+  # exists; the reasoning does not change until then.
+  #   * Its three specific remedies do not apply here: no completed build-plan
+  #     chunks (no build plan yet), no test-history block, and the change log is
+  #     already a separate file.
+  #   * The bulk is technical_decisions (~818 lines, ~40%). At planning stage that
+  #     rationale IS the deliverable — there is no code — so compacting it destroys
+  #     the project's output rather than trimming overhead.
+  #   * It would not have fixed the slow review that prompted it. Of the 4,058-line
+  #     branch diff, project-state.yaml contributed 1,088 lines, ALL newly added.
+  #     Compacting pre-existing content removes nothing from a diff and adds a large
+  #     deletion to it.
+  # Verified while assessing: no prawduct hook or gate parses technical_decisions
+  # (only a template comment references it), so extracting it to an artifact is
+  # structurally safe IF the file becomes a problem later. Considered and not taken.
+
+# =============================================================================
+# ARTIFACT MANIFEST
+# =============================================================================
+# Tracks generated artifacts and their relationships.
+
+artifact_manifest:
+  # Each:
+  #   name: string
+  #   file_path: string (relative to project root)
+  #   version: integer
+  #   depends_on: [artifact names]
+  #
+  # Backfilled 2026-07-20. This block sat empty through six authored artifacts —
+  # a real gap, not a deliberate omission. Keep it current as artifacts land.
+  artifacts:
+    - name: product-brief
+      file_path: .prawduct/artifacts/product-brief.md
+      version: 1
+      depends_on: []
+    - name: project-preferences
+      file_path: .prawduct/artifacts/project-preferences.md
+      version: 1
+      depends_on: []
+    - name: data-model
+      file_path: .prawduct/artifacts/data-model.md
+      version: 1
+      depends_on: [product-brief]
+    - name: nonfunctional-requirements
+      file_path: .prawduct/artifacts/nonfunctional-requirements.md
+      version: 1
+      depends_on: [product-brief]
+    - name: architecture
+      file_path: .prawduct/artifacts/architecture.md
+      version: 1
+      depends_on: [product-brief, data-model, nonfunctional-requirements]
+    - name: api-contract
+      file_path: .prawduct/artifacts/api-contract.md
+      version: 1
+      depends_on: [product-brief, data-model]
+    - name: security-model
+      file_path: .prawduct/artifacts/security-model.md
+      version: 1
+      depends_on: [product-brief, data-model, api-contract]
+    - name: observability-strategy
+      file_path: .prawduct/artifacts/observability-strategy.md
+      version: 1
+      depends_on: [product-brief, architecture, nonfunctional-requirements]
+    - name: operational-spec
+      file_path: .prawduct/artifacts/operational-spec.md
+      version: 1
+      depends_on: [architecture, nonfunctional-requirements, observability-strategy]
+    - name: boundary-patterns
+      file_path: .prawduct/artifacts/boundary-patterns.md
+      version: 1
+      depends_on: [api-contract, data-model]
+    # Edges mirror build-plan.md's own `depends_on:` front matter. The plan is
+    # the most decision-dense artifact here: leaving it unedged would make every
+    # decision it rests on unreachable by a dependency walk — precisely the
+    # blind spot recorded under `findings` below.
+    - name: build-plan
+      file_path: .prawduct/artifacts/build-plan.md
+      version: 1
+      depends_on: [product-brief, data-model, architecture, api-contract,
+                   nonfunctional-requirements, security-model, operational-spec,
+                   observability-strategy, project-preferences, boundary-patterns]
+  # Research findings — inputs to the artifacts above, not artifacts themselves.
+  #
+  # depends_on ADDED 2026-07-20 after Critic review found these entries had no
+  # edges at all. That was not cosmetic: these two documents carry the most raw
+  # decision text in the repo, and with no edges the dependency-graph sweep
+  # prescribed by the sweep learning — and the check proposed in issue #8, since
+  # moved upstream to brookstalley/prawduct#136 — could
+  # not reach them. It is why the retired product-wide Python target survived here
+  # through four recurrences while being corrected everywhere else.
+  #
+  # The edges point at what each findings file's conclusions FEED, so a decision
+  # changing one of those artifacts walks back into the findings that argued for it.
+  findings:
+    - file_path: .prawduct/artifacts/platform-and-dependency-findings.md
+      depends_on: [operational-spec, architecture, project-preferences]
+    - file_path: .prawduct/artifacts/3tears-integration-findings.md
+      depends_on: [architecture, operational-spec, project-preferences]
+  # Strategy-class artifacts still owed: test-specifications.md. The build plan
+  # (Phase D) was authored 2026-07-20 and is registered above. The
+  # structural-coverage advisory's named set was cleared 2026-07-20.
+
+# =============================================================================
+# BUILD STATE
+# =============================================================================
+# Runtime tracking during building. Updated after each chunk.
+
+build_state:
+  source_root: null           # Where source code lives (e.g., "src/")
+
+# =============================================================================
+# ACTIVE BUILD PLAN (optional)
+# =============================================================================
+# Names the in-progress build plan when it isn't the conventional
+# `artifacts/build-plan.md` — scope-named plans (`artifacts/build-plan-<scope>.md`)
+# keep release-pending plans distinct under gitflow. The value is a path
+# relative to `.prawduct/` (a repo-relative `.prawduct/...` spelling is
+# tolerated). The Critic gate, plan-aware mode inference, regen-views, and
+# chunk-ref verification all resolve the plan through this pointer; unset →
+# `artifacts/build-plan.md`. A pointer to a file that doesn't exist means
+# governance sees NO active plan — the session briefing warns loudly until
+# it's fixed (STH-5P2W).
+#
+# active_build_plan: artifacts/build-plan-my-scope.md
+
+# =============================================================================
+# DERIVED VIEWS (enabled by default, v1.4+)
+# =============================================================================
+# When true (default), three derived views are regenerated from change-log.md
+# tagged entries (see that file for the tag format):
+#   * build-plan `## Status` block (checkboxes from `status=shipped` tags)
+#   * `.prawduct/release-notes.md` (from `release=` tags)
+#   * `scope_rollups:` block below (from `scope=` tags)
+# Run `prawduct-hook regen-views` to apply.
+# Set to `false` to opt out — Status becomes hand-edited and the other views
+# are not produced.
+
+views_enabled: true
+
+# Scope rollups — derived view, populated by regen-views when views_enabled is
+# true. Lists chunks (and releases) shipped under each scope rollup tag.
+# Do not hand-edit — overwritten on next regen.
+scope_rollups:
+  v1-build:
+    chunks: ["01", "02", "06", "07", "07B", "08A", "08B", "09", "10", "10B", "11", "14A", "14B", "15", "16A", "16B", "17A"]
+    releases: []
+
+# =============================================================================
+# COVERAGE EVIDENCE (opt-in, v1.4+)
+# =============================================================================
+# When true, the Critic requires every changed file the verifier can judge to
+# appear in `.test-evidence.json`'s `changes_referenced` list (files it can't
+# judge — non-code, symbol-less, deleted — are declared in `changes_unjudged`
+# and reported, not gated) and scales severity language to the declared
+# `coverage_level` (`referenced` floor vs. `executed` real). The reference
+# verifier at `bin/test-reference-verify` emits the floor; products with
+# non-trivial coverage concerns should plug in a stronger verifier. See
+# `/prawduct:methodology building` "Coverage Evidence".
+# Default off in v1.4 — schema is checked but content is not enforced.
+
+coverage_required: false
+
+# =============================================================================
+# TEST EXECUTION (optional, gate-soundness)
+# =============================================================================
+# `prawduct-hook test-evidence record` defaults to running
+# `sys.executable -m pytest` from the repo root and grepping a single `tests/`
+# dir. When the repo's real shape differs (uv/venv-managed interpreter, no
+# root pytest config, monorepo test trees), declare it — don't wrap it:
+#
+# test_command: uv run pytest --junit-xml={junit_xml} -q
+#   The canonical suite invocation (the exact command CI runs), shlex-split
+#   and run from the repo root. Must contain the `{junit_xml}` literal — the
+#   hook substitutes its report path there. Shell operators (&&, |, FOO=1)
+#   are not supported; point the command at a script for compound runs.
+#   Caveat: the value is read by a YAML-comment-aware scalar reader, so a
+#   literal `#` anywhere in the command truncates it — wrap such invocations
+#   in a script too.
+#
+# test_commands:
+#   - pipenv run pytest --junit-xml={junit_xml} -q
+#   - npm run test:ci -- --junit --outputFile={junit_xml}
+#   The multi-environment form (backend + web + mobile): one canonical
+#   invocation per environment, each run under the same rules as
+#   `test_command:` (shlex-split, mandatory `{junit_xml}`, `#` truncates);
+#   counts aggregate across all reports into ONE evidence record, and any
+#   launch failure or unparseable report fails the whole record. Declare it
+#   ONLY as this block-sequence-of-strings shape (flow style `[a, b]` and
+#   nested mappings are refused, not silently ignored). Mutually exclusive
+#   with `test_command:`. Ingest path: repeat `--from-junit` once per report.
+#
+# tests_dirs: engine/tests server/tests
+#   Whitespace-separated test trees for the coverage verifier (default:
+#   `tests`). One verifier run unions discovery across all of them.
+
+# Two independent projects, two interpreters, two suites — both must pass, and
+# the hook must run the real invocations rather than its `sys.executable -m
+# pytest` default, which resolves neither. The curation plane is uv-managed on
+# its own pinned interpreter, so it is reached with `--directory` (shell
+# operators are unsupported here, and `cd` is a shell operator).
+test_commands:
+  - uv run pytest tests --junit-xml={junit_xml} -q
+  - uv run --directory curation pytest --junit-xml={junit_xml} -q
+
+tests_dirs: tests curation/tests
+
+# =============================================================================
+# OPERATOR VERIFICATION (opt-in, v1.4+)
+# =============================================================================
+# When true, `/pr create` BLOCKS if `.prawduct/operator-verification.md`
+# has any entry with `**Status:** pending`. The queue records pre-merge
+# human-verification items for visual / live-integration changes that
+# automated tests can't fully cover. Drain via
+# `prawduct-hook verify-operator-verification <VRF-id>` or
+# override per-PR with `/pr create --accept-pending-verification "rationale"`.
+# Default off in v1.4 — opt-in by setting `operator_verification_required: true`.
+
+operator_verification_required: false
+
+# =============================================================================
+# API VERSIONING DECISION (advisory resolution fact, v2.2+)
+# =============================================================================
+# The committed "answer store" fact the `api-versioning` sync probe consults.
+# When the product exposes a programmatic interface (detected from the code —
+# web framework, OpenAPI/proto), the probe raises a dismissable, auto-resolving
+# session advisory until a versioning decision is recorded. Set this to the
+# decision summary (e.g. "uri-path-v1", "header", "none-internal-only",
+# "deferred:<revisit-trigger>") to resolve it — it mirrors
+# design_decisions.api_versioning_approach. Unset/absent = undecided. Recording
+# "none-internal-only" resolves it; this is NOT a mandate to version.
+#
+api_versioning_decided: "none — no version negotiation. MCP tool names frozen, actions additive-only; mirrors design_decisions.api_versioning_approach (recorded 2026-07-19, status active)."
+
+# =============================================================================
+# BACKLOG (structured backlog resolution conditions, v1.7+)
+# =============================================================================
+# The shared "answer store" (committed) that backlog sync probes consult to
+# know whether a migration nudge is still needed. The per-clone nag log lives
+# in .prawduct/.advisories.json; these committed facts auto-resolve a
+# teammate's advisory on next sync (see post-sync-advisory-spec.md §3.5, §7.1).
+#
+#   backlog_format_version  — set to 2 once `/backlog migrate` has converted
+#                             items to the [PFX-XXXX] structured format. Unset
+#                             (or absent) means legacy/unmigrated; the
+#                             `legacy-backlog-format` probe may nudge.
+#   backlog_prefixes        — OPTIONAL declared prefix vocabulary for /backlog
+#                             validation (e.g. [STH, CRT, SYN]). Emergent by
+#                             default; declare only if you want validation.
+#
+# Reserved for deferred backlog probes (v1.7 ships only legacy-backlog-format):
+#   backlog_external_imports — list of external backlog files already audited
+#                              via `/backlog import` (resolves external-detected).
+#   backlog_last_groomed_at  — ISO-8601 of the last /backlog list|pick (resolves
+#                              overdue-grooming).
+
+# backlog_format_version:
+# backlog_prefixes: []
+# backlog_external_imports: []
+
+backlog_last_groomed_at: 2026-08-02
+
+# -----------------------------------------------------------------------------
+# BACKLOG SERVICE CUTOVER (API §2.4)
+# -----------------------------------------------------------------------------
+# The live backlog is GitHub Issues, reached through `prawduct-hook backlog`.
+# `.prawduct/backlog.md` is FROZEN HISTORY from this point — do not edit it, and
+# do not read it as current state. Setting this key repoints the session briefing
+# to the GV2 snapshot and retires every markdown-premise advisory probe.
+#
+# Cut over 2026-07-19 per skills/backlog/migration-scrub.md:
+#   0. backup      — backlog.md is git-tracked; full-fidelity dump in
+#                    .prawduct/backlog-export/ (export-manifest.json + item-N.json)
+#   1-2. disposition — 2 items, both `keep`; no stale, no duplicates, empty archive
+#                    (so open/all archive scope was moot)
+#   2b. restructure — both titles exceeded the 72-char issue standard; rewritten
+#                    via a plan applied at create. Originals preserved verbatim in
+#                    each issue's ```prawduct block (original_title/original_body).
+#   3. import      — CUI-WT3K -> #2, TVW-4Q7M -> #3; 0 skipped, 0 collisions
+#   4. verify      — counts {total:2, open:2, design:2}; both id:PFX aliases
+#                    resolve; label taxonomy complete on both issues
+#   5. cut over    — this key
+#
+# Labels were provisioned by hand (`prawduct-hook backlog provision`) because
+# /prawduct:onboard does not do it — an unimplemented requirement
+# (backlog-service-requirements.md GV5/GV6) that this repo's greenfield
+# onboarding surfaced empirically. Before provisioning, the repo carried only
+# GitHub's 9 stock labels and none of the prawduct namespace.
+#
+# NARROWER THAN FIRST RECORDED: the adapter auto-creates any label a write
+# references, so `area:` / `kind:` / `effort:` / `impact:` / `source:` / `id:`
+# all appeared on their own during import — 7 provisioned, 9 self-created.
+# Untested whether `stage:` / `status:` would also have self-created, since
+# provision ran first. So the practical GV5/GV6 gap is a missing explicit
+# taxonomy step, not a broken backlog.
+#
+# Rollback is total and cheap: unset this key. backlog.md is unmodified in git.
+
+backlog_service_repo: brookstalley/samsung-frame-art-loader
+
+# =============================================================================
+# NORM HEALTH
+# =============================================================================
+# Written by /prawduct:janitor's Norm Health sweep. `norm_health_last_run` is the
+# fact that resolves the norm-lifecycle advisory; a manual `advisory resolve` is
+# not sticky and the probe re-fires against it.
+#
+# `norm_health` is APPEND-ONLY, one entry per sweep, newest last — the trend IS
+# the record. A norm dying by a hundred individually-defensible exceptions is
+# invisible in any single diff review and visible only across entries here.
+# Keep the last 3; git holds the rest.
+
+norm_health_last_run: 2026-08-02
+
+norm_health:
+  - date: 2026-08-02
+    note: >-
+      First sweep. Three prior norm-index audits ran under this name and none
+      stamped the fact, so the advisory kept re-firing; this is the first
+      recorded measurement. Distances are point-in-time — the next sweep reads
+      them as the baseline, not as a target.
+    measurements:
+      black-formatting: "0 violation sites. Root black config had no plane exclusion and was formatting the curation plane under py312; fixed this sweep, root run now 18 files not 103. The boundary is drawn twice in two syntaxes (ruff list, black regex) and Critic review noted nothing made them agree — tests/preferences/test_tool_config.py now does, mutation-verified three ways."
+      naming-conventions: "0 known violations. Critic-only by decision; ruff N deliberately unselected while the legacy modules live."
+      import-grouping: "0 violation sites. ruff I green on both planes."
+      logging-not-print: "39 print() calls across the 8 legacy modules, all under a per-file waiver with a dated end; 4 hand-run operator tools permanently exempt. 0 unwaived. Measured 39 at ba007cd^, ba007cd and HEAD — the disposition's own evidence said 19 and was never right."
+      type-annotations: "4 root modules carry no annotation of any kind, 2 more annotate params but never a return. Curation shipped code lint-enforced; curation tests exempt by a stated carve-out."
+      broad-except: "7 unwaived catches in the root plane, all in modules with a dated end. Curation: 3 catches, 2 of them unwaived until this sweep, now all 3 pragma'd. 0 unwaived product-wide. The index claimed curation had one — issue #33's cost was understated threefold."
+      no-hardcoded-deployment: "0 violation sites. Guard walks both planes but matches 5 known literals only, so it is a regression guard rather than a general one — adequate for the norm as scoped."
+      async-io-boundary: "4 root modules departed (art, image_utils, metadata, source_utils), including 2 functions that do no I/O at all. Curation 0. Departure row added this sweep; the norm had described the tree as conforming since it was written."
+      hardware-behind-interface: "Not yet measurable — the display plane is unwritten."
+      no-secret-in-log: "0 violation sites. 2 secrets declared; the guard asserted 1 until this sweep and now drives off the declaration, with a sibling failing if a declared secret is not cleared from the test environment and a third asserting every env name config.py reads is cleared at all. Two of the three are named in the index Enforcement column and the norm-index guard resolves them; the third (test_the_harness_clears_every_variable_config_reads) is deliberately NOT indexed and is therefore unguarded against rename or deletion. The line between them is scope, not subject: the indexed sibling reads _SECRET_KEYS and would be meaningless if this norm were retired, while the third protects every test in the file and would not. Critic caught an earlier version of this sentence claiming all three were indexed — the sweep's own failure class, in the sentence reporting the sweep's fix."
+      service-layer-only: "6 of 12 handlers in http/api.py depart from the norm's literal 'call one service method', counted by AST: 3 mutate-then-read-back (add_to_theme, remove_from_theme, move_in_theme, 3 calls each), 2 composite reads (get_theme, get_health, 2 each), and get_thumbnail, which makes one call but carries the HTTP conditional-request decisioning. Each has an in-code reason; NONE is recorded as an exception, and none is 'operation logic' in the sense the Why guards against, since MCP reaches the same services. UNRECONCILED — the fork was presented to the owner and deferred. Recorded as a Known-departures row 2026-08-02 (disposition explicitly open) after Critic review asked why the async departure got a row and this one did not."
+      provider-enforced-spend: "Not yet measurable — no paid path built. OPENROUTER_API_KEY, which IS the ceiling, is absent from .env.example; already a named deliverable of the discovery chunk."
+      display-independence: "Vacuous — the display plane is unwritten."
+      wcag-aa-curation-ui: "0 violation sites. Token test computes every pair in both colour schemes and refuses colour written outside the token blocks."
+      manifest-only-channel: "Vacuous — the display plane is unwritten. Correctly Critic-only until it exists; the test is a deliverable of the chunk that creates it (issue #7)."
+    deferred:
+      - "Four (target) preferences carry no mechanism against this artifact's own 'never leave a preference unassigned' rule: Coverage expectations, Testing strategies, Test location, and File organization."
+      - "File organization says 'decide during discovery whether to keep flat or move to a package'. Discovery closed 2026-07-20 and no decision was recorded, while the de-facto answer exists in the tree. Decayed why. RESOLVED 2026-08-02: decided per plane — root stays flat and is deleted at the legacy retirement, curation stays a src/ package, display becomes one when created; the binding half is 'nothing new is added at the root'. A package move for the root was never live, being a refactor of code with a scheduled death date. The decayed why ('the hardware and TV boundaries need real interfaces regardless') is retired in place rather than dropped: both got interfaces, from the two-plane split rather than any directory move. Still has no mechanism, so it stays in the item above."
+      - "Coverage expectations names image_utils, metadata, source_utils and the all.json round-trip; all four have zero tests, and they are the same modules the async departure lands in."
+      - "The service-layer fork (see service-layer-only above) — re-affirm with a named exception for the three shapes, or amend the norm. A Known-departures row now warns readers in the interval; the decision itself is still owed."
+      - "Issue #24 names the MCP layer importing persistence directly; http/api.py now does the same. The boundary eroded after the issue was filed and the issue's scope did not follow. RESOLVED 2026-08-02, in the record only: #24 is retitled to the surface layer generally and names all three import sites (mcp/bindings.py, mcp/tools.py, http/api.py:51), and its stale module path is corrected — the 07B split moved the records to curation.persistence.records. The ARCHITECTURE IS UNCHANGED and the item is still open at stage design; what was deferred was the issue lying about its own scope, not the erosion, which is real and still there."
+      - "Durable prose in this artifact anchors to build-plan chunk ids ('at Chunk 20'), which dangle once the plan ships. Weak form — the meaning survives — but it is the pattern the methodology names."
+
+# =============================================================================
+# CHANGE LOG
+# =============================================================================
+# Change log is in .prawduct/change-log.md (separate file to reduce merge conflicts).
+# See that file for format and instructions.
+
+# Distribution mode — set by /prawduct:migrate (v2.0.0 plugin cutover).
+# `plugin` tells the legacy file-sync hook to stand down (Chunk 8).
+distribution: plugin
