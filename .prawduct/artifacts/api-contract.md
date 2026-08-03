@@ -293,6 +293,31 @@ instead of the work scope. One entry point makes it impossible rather than
 defended against, and it matches the boundary the tools already draw: `set_verdict`
 is work-scoped, and "this scan is not good enough" is a judgement about an instance.
 
+### The arity of the three write actions (settled at build, 2026-08-03)
+
+The rules above specify what these actions *mean*; their argument shape was left
+open and is recorded here rather than only in a schema.
+
+**`set_verdict` judges one work per call.** "Requires explicit work ids" is
+satisfied by there being no action that omits one — a batch parameter would
+satisfy it too, and one call per work is chosen because the payload differs per
+work (an `artwork_id`, a minted artist, its near-misses) and a batch result would
+either flatten those or invent a per-item envelope this surface has nowhere else.
+The accepted cost is the friction the security section already accepts: accepting
+a good run's whole output is one call each. A UI's select-all sends the ids either
+way.
+
+**`set_canonical` and `reject_image` take an `image_id` and no second id.** An
+instance already carries its work, so accepting a `work_id` beside it would create
+a pair that can disagree and a rule about which wins — for an argument the caller
+would have to fetch anyway. `list_images` is where an `image_id` comes from, which
+is also the call that shows the picture being judged. `set_canonical` also takes
+an optional `rationale`, which is not an identifier but the curator's reason: it
+is persisted on the instance and carried onto the `Source` at promotion, so why
+this scan was chosen survives into the catalogue. `reject_image` takes no reason,
+and that asymmetry is deliberate — "this one" is a judgement worth keeping, while
+"not this one" is followed by a re-search whose result is the record.
+
 ### Why not split reads from writes
 
 Anthropic's connector Directory review criteria require read and write tools to be

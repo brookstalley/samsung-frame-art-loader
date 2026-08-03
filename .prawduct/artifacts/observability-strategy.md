@@ -164,6 +164,29 @@ between planes.
 > work it holds under a name the identity comparison did not match. The second is
 > a defect in the comparison; the first is the product working.
 
+> **The preview sweep's events, added 2026-08-03, and the failure they exist to
+> break the silence around.** The sweep is the plane's only periodic job, and its
+> characteristic failure is that it stops happening — which produces no error, no
+> refusal, and no user-visible symptom until an SD card fills weeks later.
+>
+> | Event | Level | Says |
+> |---|---|---|
+> | `preview.sweep_started` | DEBUG | a pass began. Only useful against `preview.swept`: a start with no finish is a wedged pass, which is a different fault from a plane that stopped sweeping |
+> | `preview.swept` | INFO | a pass finished, with what it deleted, what it cleared, what it freed, what it held back for works still under review, and what it could not remove |
+> | `preview.sweep_failed` | WARNING | one file could not be deleted — a read-only mount or a permissions problem. Its record still names it, so the next pass retries |
+> | `preview.forget_failed` | WARNING | one file went but its record could not be cleared, so a row names a file that is gone. The card degrades to "no picture" and the next pass retries |
+> | `preview.sweep_error` | ERROR | a whole pass raised, with its traceback. The loop continues; two of these in a row means every pass is failing |
+> | `preview.sweep_wedged` | WARNING | shutdown asked the sweep to stop and it did not within the bound. It holds the store lock, so the next generation of services will wait on it |
+>
+> **`preview.swept` logs at INFO on every pass, including the ones that reclaim
+> nothing**, and that is the point rather than noise: a job that logs only when it
+> acts is indistinguishable from a job that died. The question an operator has
+> about a periodic task is first "is it running at all", and this is the line that
+> answers it. At the shipped hourly interval it is 24 lines a day.
+>
+> The counterpart on the operations side is `operational-spec.md` § Add disk
+> headroom, which now points at this event rather than at a manual prune.
+
 ## What the museum is told about us
 
 The Art Institute's API is open — no key, no account — but asks callers to
@@ -299,6 +322,7 @@ signal exists:
 | Manifest references a missing file | WARNING per work, and the work is skipped — the run continues |
 | Manifest major version unrecognised | ERROR, previous manifest retained |
 | Budget exhausted | `halted_by_budget` outcome on the run, and the refusal text names the cause. *(Corrected 2026-08-02: this also promised "`limit_remaining` at zero in the UI" — a figure no surface exposes, and one that lags badly enough to read non-zero while calls are already being refused. See the note under the signals table.)* |
+| Preview sweep stopped running | **The only signal is a positive one, which is why it logs on empty passes**: `preview.swept` at INFO every interval, so what says the job died is its *absence* over one. A pass that hangs rather than stops reads differently — `preview.sweep_started` with no `preview.swept`, then `preview.sweep_wedged` at shutdown — and matters more, because that pass holds the store lock |
 | Disk nearly full | Guarded *before* acquisition starts, not discovered as an exception during it |
 | A work silently absent from a theme | **The manifest build reports exclusions** with a per-work reason — see `architecture.md`. Not a log line: a first-class UI surface |
 | Mat colour degraded to the dominant-colour fallback | Recorded on the record itself (`MatColor.method`), not merely logged. The 2024 code degrades invisibly |

@@ -104,20 +104,27 @@ async def test_help_works_without_arguments_and_without_the_catalogue(server_url
 
 
 async def test_help_reports_exactly_the_actions_a_tool_actually_serves(server_url):
-    # Replaces the unbuilt-tool assertions this test used to make about
-    # `art_review`, which stopped being unbuilt when its read actions landed;
-    # the mechanism itself is covered in the registry unit tests, which no
-    # longer depend on a shipped tool being incomplete.
-    #
-    # What matters on this surface is the rule that made a build-status column
-    # unnecessary: `help` answers the as-built question, so a model reading the
-    # menu cannot be steered at something that does not exist. The write half of
-    # review is deliberately absent here until it works.
+    # The rule that made a build-status column unnecessary: `help` answers the
+    # as-built question, so a model reading the menu cannot be steered at
+    # something that does not exist. Asserted here as an ordered list against a
+    # tool that grew in two stages — the reads first, the writes after — because
+    # what an incomplete surface looked like was exactly this, minus the last
+    # three, and nothing in a payload distinguishes "not built" from "not
+    # listed". `_check_bindings_match_registry` is the structural half at import;
+    # this is the half a client can see.
     payload, errored = await call(server_url, "art_review", action="help")
 
     assert errored is False
     assert payload["available"] is True
-    assert [action["action"] for action in payload["actions"]] == ["list_works", "get_work", "list_images", "help"]
+    assert [action["action"] for action in payload["actions"]] == [
+        "list_works",
+        "get_work",
+        "list_images",
+        "set_canonical",
+        "set_verdict",
+        "reject_image",
+        "help",
+    ]
 
 
 # -- errors teach, and they arrive as tool results ----------------------------

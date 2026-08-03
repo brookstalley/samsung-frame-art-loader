@@ -48,6 +48,159 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-03: The verdict reaches the surface, and previews stop accumulating
+
+<!-- prawduct: chunks=17B | status=shipped | scope=v1-build -->
+
+**17B's remaining three deliverables**, closing the chunk the previous entry
+deliberately left unchecked: `art_review`'s three write actions, the preview
+sweep, and a harness scenario that runs the worked example end to end. The
+acceptance criterion is met — a real MCP client turns an intent into a catalogued
+work, and the two calls carrying pictures are the two immediately before the
+verdict.
+
+**What the surface owed was the tool half only.** Every rule the write actions
+enforce already lived in the service layer with the discovery entities and was
+already pinned by the unit suite: a verdict is final, `awaiting_better_image` is
+reachable only by rejecting an instance, acceptance mints the artwork and promotes
+every scan into a source. What could not exist until the actions did is the
+property that is *about* the surface — that acceptance is one call past the
+pictures. `ACCEPTANCE_ROUTE` asserts it, extending the review route rather than
+restating it, so a shortcut that reached a verdict without a picture-bearing step
+fails there rather than passing a copy of its own steps.
+
+**Two interface decisions the contract had left open**, now recorded in
+`api-contract.md` rather than only in a schema. `set_verdict` judges **one work
+per call**: "explicit work ids" is satisfied by there being no action that omits
+one, and the payload differs per work — an artwork id, a minted artist, its
+near-misses — so a batch result would flatten those or invent a per-item envelope
+this surface has nowhere else. `set_canonical` and `reject_image` take an
+`image_id` and **nothing else**, because an instance already carries its work and
+a `work_id` beside it would create a pair that can disagree and a rule about which
+wins.
+
+**The preview sweep is a sweep, and the decision `boundary-patterns.md` left open
+is closed.** A periodic pass over terminal-verdict works, on a daemon thread
+inside the application's lifespan, sweeping immediately at start and then hourly.
+Immediately because a start-only sweep reclaims nothing on an always-on plane and
+a wait-first loop reclaims nothing on one that keeps restarting — which is what an
+SD-card-bound plane does when something goes wrong. It logs every pass whether or
+not it took anything, so a sweep that has stopped is visible in the journal rather
+than only in the free-space figure.
+
+**The sweep found a rule the design needed and nothing had written down.** A
+preview file is named by a digest of its **URL**, so the same museum scan resolved
+for two candidate works is two rows over one file — ordinary whenever phase 1
+proposes one painting under two titles. Deleting on the first work's verdict takes
+the picture out from under a work still being judged, and the review card would
+then report the file as unreadable when in fact the sweep removed it. The unit of
+deletion is therefore the **path**, and a path survives while any work still under
+review references it. Written into `data-model.md` beside the disposability rule,
+with its corollary: a row must not outlive the file it names, so the file goes
+first and `preview_path` is cleared after — an interruption strands a row the next
+pass finishes, rather than bytes nothing references and nothing would ever reclaim.
+
+**The mutation sweep found the one thing the diff did not.** `set_canonical`
+returned `is_on_offer`, which could only ever be `true`: the call either makes the
+instance the one on offer or raises, and a raise returns no payload. Replacing the
+field with the constant killed no test, because there is no reachable state where
+it differs. Removed rather than defended — the same call `InstanceListing` made
+about its `run_id`, and for the same reason: a field whose only possible defence is
+a test written to defend it is a field to delete. The test now asks the record
+whether the instance is on offer, which is the claim worth making.
+
+**The sweep ships half of what the decision promised, and the PR review is what
+noticed.** Issue #29 — the item this chunk closes — asked for the sweep-vs-hook
+decision *and* named the case a hook could never cover: a crash between writing a
+preview and recording its row. `_references` derives every path from a
+`CandidateImage.preview_path`, so a file no row names is invisible to it forever,
+and nothing anywhere in the plane so much as lists that directory. The shipped
+sweep therefore reclaims exactly the class an on-verdict hook would have, which is
+not the argument that chose it. #62 carries the rest, at `stage: design` because
+the obvious fix is wrong — a bare directory walk cannot tell an orphan from a file
+a live run wrote seconds ago, and would delete previews out from under the writer.
+`operational-spec.md` and `boundary-patterns.md` now name both things the sweep
+does not reclaim rather than one, which matters most in the disk-headroom row an
+operator reads while the card is filling.
+
+**One acceptance-criterion clause is met below the wire, and that is stated rather
+than glossed.** "Accepted works appear in the catalogue with sources … intact" is
+asserted through the service, because **no action on `art_catalogue` returns
+sources** — acquisition is their only consumer so far. Adding a reader would be
+this chunk widening a different tool's contract on its own authority, so it is
+filed instead. Everything else in the criterion runs over MCP.
+
+## 2026-08-03: What the Critic round changed about 17B
+
+<!-- prawduct: chunks=17B | status=shipped | scope=v1-build -->
+
+Fourteen findings, thirteen fixed in one pass and one accepted. Three are worth
+recording beyond the ledger, because each changed the design rather than tidying
+it.
+
+**Two reviewers found the same race independently, from opposite directions, and
+it was real.** The sweep read its references and then unlinked, holding nothing
+across the two. `PreviewCache.store` hands back a digest-named file it finds on
+disk *without re-fetching*, so a resolve run for a work still under review could
+attach a row to a path the pass had already judged reclaimable — and
+`record_image` never rewrites `preview_path` for a URL its work already holds, so
+that row would have named a deleted file for the rest of its review life. Exactly
+the outcome the path-shaped unit of deletion was built to prevent, re-entered
+through the write side instead of the verdict side. The pass now runs inside one
+store transaction, which is the lock `record_image` takes, and
+`DiscoveryService.transaction()` is exposed for that one caller.
+
+**That narrowed the race and did not close it, which the verify pass caught and
+this entry originally claimed otherwise.** The writer's own two halves straddle the
+lock: `PreviewCache.store` checks the file with no lock at all, and `record_image`
+takes one afterwards, so a resolve run can capture a path, have a whole sweep pass
+delete it, and then write the row. Closing that means the row write verifying the
+file inside the lock it already takes — a change to what the record layer depends
+on, and one that quietly rewrites how a good deal of the suite seeds previews, so
+it is filed rather than bolted on at the end of a review round. What did land is
+that the consequence stops lying: a `preview_path` with no file behind it now reads
+as an absent copy rather than an unreadable one, which is the difference between
+sending a reader after the sweep and sending them after a corrupt download.
+
+**The correction took two rounds, and the second one is recorded where it counts.**
+The first pass listed the places claiming the race closed, fixed them, and was
+short by one — `DiscoveryService.transaction()`'s docstring, the definition of what
+that exposure buys and the exact API anyone would change to close the residual, so
+the reader most in need of the corrected reasoning was the one still being
+misinformed. That is `learnings.md` § "Retiring a claim is a repo-wide grep, not a
+local edit", entry 19, which is where the recurrence log that makes the argument
+lives. Restating the lesson here rather than pointing at it would be the same
+mistake one level up.
+
+**A named deliverable was not shipped, and the surface — not the contract — was
+wrong.** `api-contract.md` requires the refusal of `verdict='awaiting_better_image'`
+to name `reject_image`; what shipped was the schema's enum error, which enumerates
+the valid set and names nothing. The service's teaching error is unreachable through
+the only caller it has, because validation runs before dispatch by design. Fixed by
+giving `Param` a `refused_hint` — a declarative pointer carried into the refusal
+message — rather than by amending the contract to match the code. The direction
+matters: a caller asking for that verdict has not mistyped a value, they want what
+another action does, and an enumeration alone sends them away without it.
+
+**The record half of the sweep had a weaker error posture than the file half.** A
+read-only mount cost one file and the pass continued; a refused *write* escaped
+`run` and cost every path after it, with no `SweepResult` to say how far it got.
+Symmetrical now, and the asymmetry is the kind only a reader looking for it finds
+— every test passed either way.
+
+Also fixed: `architecture.md` had not heard of `PreviewSweep` or of the plane's
+first timer-driven thread; `observability-strategy.md` had none of the six sweep
+events, which for a periodic job is the difference between "it is running" and
+silence; the review card told a swept work's curator that no copy was ever cached,
+pointing diagnosis at phase 2 rather than at the sweep; `api-contract.md`'s own
+new arity section said `set_canonical` takes an `image_id` "and nothing else"
+while the shipped action also takes `rationale`; the recorded test evidence
+predated every test in this chunk; and `possible_duplicate_artists` entered a
+payload with its bound unnamed.
+
+**Accepted, not fixed:** backlog reconciliation is dormant on the Issues backend.
+That is a known interim state with a standing advisory, not a defect in this work.
+
 ## 2026-08-03: Who painted it, and the slot a refused scan yields
 
 <!-- prawduct: status=shipped | scope=v1-build -->

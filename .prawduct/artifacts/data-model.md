@@ -75,6 +75,23 @@ synced between machines.
 > the accepted work's imagery comes from acquisition, not from the preview. Flagged
 > 2026-07-19 by Critic review, which noted the rows are deliberately permanent while
 > the files had no recorded lifecycle at all.
+>
+> **One file can belong to more than one work, so the rule is about the file and
+> not about the row** (added 2026-08-03, found in build). A preview's name is a
+> digest of its URL, so the same museum scan resolved for two candidate works is
+> two `CandidateImage` rows over one file on disk — which is what happens whenever
+> phase 1 proposes the same painting under two titles and phase 2 resolves both.
+> A preview is therefore reclaimable only when **every** work referencing it has
+> reached a terminal verdict; reclaiming on the first work's verdict takes the
+> picture out from under a work still being judged.
+>
+> **A row must not outlive the file it names.** Clearing `preview_path` is part of
+> reclaiming a preview rather than an optional tidy-up: a row still naming a
+> deleted file makes the review card report "the cached copy could not be read",
+> which is a corruption message for a routine reclamation. The file goes first and
+> the column is cleared after, so an interruption strands a row — which the next
+> pass finds and finishes — rather than bytes nothing references, which nothing
+> would ever reclaim.
 
 > **Why:** Recorded in `learnings.md` § Data and cache contract. Derived files
 > are rendered for whichever display was targeted; copying them between machines

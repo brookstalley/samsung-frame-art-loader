@@ -27,6 +27,7 @@ core keeps this logic testable without an event loop.
 import logging
 import uuid
 from collections.abc import Callable, Iterable, Sequence
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -147,6 +148,32 @@ class DiscoveryService:
         #: Optional so a caller with no deployment geometry gets the ranking
         #: without a floor rather than a constructor it cannot satisfy.
         self._artwork_box = artwork_box
+
+    def transaction(self) -> AbstractContextManager[None]:
+        """Apply a rule that spans several of this service's operations, atomically.
+
+        Exposed for the one caller whose correctness needs it: reclaiming
+        previews decides what to delete by reading rows and then deletes files,
+        and a writer landing between those two halves would attach a work still
+        under review to a file already gone. Holding the store's lock across both
+        is what stops that particular interleaving.
+
+        **It does not make the sweep and phase 2 race-free, and this is the site
+        that would have to change to get there.** `record_image` records a
+        `preview_path` without checking that the file exists, and its caller
+        evaluates that path before taking this lock — so a row can still be
+        written naming a file a sweep pass removed in the meantime. Closing that
+        means the row write verifying the file inside the lock it already takes,
+        which is a filesystem dependency this service has never had. Anyone
+        arriving here from `PreviewSweep.run` wanting to fix it has arrived at
+        the right place; `sweep.py`'s module docstring has the interleaving.
+
+        Nesting joins the outer group, so the operations composed inside still
+        commit exactly once. Every other caller should use the service method
+        that already wraps what it needs — this is not a general escape hatch,
+        and holding it across slow work would serialise the plane behind it.
+        """
+        return self._store.transaction()
 
     # -- reads: runs ----------------------------------------------------------
 
@@ -653,6 +680,40 @@ class DiscoveryService:
                 raise ServiceError(f"Image {candidate_image_id!r} was rejected for this work, so it cannot be selected again.")
             chosen = self._select(image, rationale=rationale)
         return chosen
+
+    def forget_preview(self, candidate_image_id: str) -> CandidateImage:
+        """Record that this instance no longer has a local copy of its picture.
+
+        The record half of reclaiming a preview. Deleting the file belongs to
+        whoever owns the directory; this is what stops the row from claiming a
+        picture that is not there, which a review card would otherwise report as
+        a file it could not read — a corruption message for a routine
+        reclamation.
+
+        **Refused while the work is still under review**, because a preview is
+        the picture that review shows and a work not yet decided may still be
+        looked at. The rule that only a decided work loses its previews is
+        enforced here rather than only in the caller that walks them: this is the
+        one write that can break it, and a second caller written later would
+        otherwise have to remember.
+
+        Already-forgotten is not an error. The state being converged on is "no
+        file, and no row pointing at one", and a caller re-running after a crash
+        must find the second half done rather than a refusal.
+        """
+        with self._store.transaction():
+            image = self._require_image(candidate_image_id)
+            work = self.get_candidate_work(image.candidate_work_id)
+            if not work.verdict.is_terminal:
+                raise ServiceError(
+                    f"Candidate work {work.id!r} is {work.verdict}, so it is still under review and its "
+                    "previews are what review shows. A preview is reclaimable once its work is accepted or rejected."
+                )
+            if image.preview_path is None:
+                return image
+            forgotten = replace(image, preview_path=None)
+            store_write(self._store.update_candidate_image, forgotten)
+        return forgotten
 
     def reject_image(self, candidate_image_id: str) -> CandidateWork:
         """Turn down an instance and ask for a better one. The work stays wanted.

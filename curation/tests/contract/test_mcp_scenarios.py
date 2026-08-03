@@ -16,7 +16,7 @@ from dataclasses import replace
 
 import pytest
 from fakes import a_museum_holding, a_work, a_work_list
-from scenarios import DISCOVERY_ROUTE, REFERENCE_ROUTE, REVIEW_ROUTE, connect
+from scenarios import ACCEPTANCE_ROUTE, DISCOVERY_ROUTE, REFERENCE_ROUTE, REVIEW_ROUTE, connect
 
 from curation.discovery.engine import WorkList
 from curation.mcp.registry import HELP_ACTION
@@ -382,3 +382,45 @@ class TestReviewingWhatDiscoveryFound:
         assert bare["count"] == 1, "the instance is still listed"
         assert caller.transcript.calls[-1].images == 0
         assert "list_images'" in str(caller.transcript.calls[-1]), "no image count is rendered when there are none"
+
+    async def test_an_intent_becomes_a_catalogued_work_judged_by_someone_who_saw_it(self, server_url):
+        """The worked example, end to end, through nothing but the tools.
+
+        This is the flow the product exists for, and the assertions are of two
+        kinds. The route says acceptance is **one call past the pictures**, with
+        the picture-bearing steps immediately before it — the arrangement
+        `security-model.md` § Content Appropriateness requires, and the one a
+        surface can lose by adding a convenient shortcut that reaches a verdict
+        without a step that carries images.
+
+        The rest is that the promotion happened: the work is in the catalogue
+        under the title that was proposed, attributed to the painter phase 1
+        named as free text, and reachable by the id acceptance handed back. Q9
+        is answerable for a discovered work, which it was not before the artist
+        was resolved at promotion.
+        """
+        async with connect(server_url) as caller:
+            started = await caller.ok("art_discovery", "start", intent="Dalí, elephants")
+            run_id = started["run_id"]
+
+            for _ in range(8):
+                watched = await caller.ok("art_discovery", "status", run_id=run_id)
+                if RunStatus(watched["status"]).is_terminal:
+                    break
+            else:
+                pytest.fail(f"the run never finished: {watched}")
+
+            works = await caller.ok("art_review", "list_works", run_id=run_id)
+            chosen = next(work for work in works["works"] if work["title"] == "The Elephants")
+            # Read before judging, and the id used below comes out of this call.
+            # A scenario that accepted straight off the listing would pass while
+            # describing a flow in which nobody looked at the alternates.
+            alternates = await caller.ok("art_review", "list_images", work_id=chosen["work_id"])
+            accepted = await caller.ok("art_review", "set_verdict", work_id=chosen["work_id"], verdict="accepted")
+            catalogued = await caller.ok("art_catalogue", "get", artwork_id=accepted["artwork_id"])
+
+        assert alternates["images"][0]["is_on_offer"] is True
+        assert catalogued["artwork"]["title"] == "The Elephants"
+        assert catalogued["artwork"]["artist"]["name"] == "Salvador Dalí"
+        assert tuple(caller.transcript.steps) == ACCEPTANCE_ROUTE
+        assert not caller.transcript.failures, f"a step failed: {caller.transcript}"
