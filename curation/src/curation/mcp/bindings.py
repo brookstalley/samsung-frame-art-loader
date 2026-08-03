@@ -618,20 +618,29 @@ def _instances_truncation_notice(listing: InstanceListing) -> str | None:
     useful than an affordance that does not exist, which is the failure the
     withheld action was withheld to avoid.
 
-    **The sentence is only true because the card fills with selectable instances
-    first**, so it names what was dropped rather than asserting a ranking. A
-    card that sliced a confidence order would omit choosable scans as soon as a
-    work collected a cardful of rejections, and this notice would then be telling
-    a curator that the only instances still open to them are not worth their
-    attention.
+    **It says what was dropped, and deliberately claims nothing about row order.**
+    Selectable instances get first claim on the card's slots, but the rows keep
+    the store's ranking — so a card can read [selectable, refused, …, selectable],
+    and a sentence promising the selectable ones "first" would send a caller to
+    the top of a list where the alternate they want sits last. Which rows are
+    still open is a per-row fact and is reported as one, on
+    `rejected_for_this_work`.
     """
     if not listing.truncated:
         return None
     shown_surviving = sum(1 for instance in listing.instances if not instance.rejected)
+    what_was_dropped = (
+        f"all {shown_surviving} scans still open to you are on this card — the ones omitted are scans you "
+        "have already turned down"
+        if listing.shows_every_choosable_instance
+        else f"this work has {listing.surviving_held} scans you could still choose and the card holds "
+        f"{shown_surviving} of them; the omitted ones rank below every scan shown"
+    )
     return (
-        f"Showing {len(listing.instances)} of {listing.held} scans found for this work, selectable ones "
-        f"first ({shown_surviving} here); the rest are not listed. There is no paging here — every scan "
-        "omitted is one you have already turned down, or ranks below one shown."
+        f"Showing {len(listing.instances)} of {listing.held} scans found for this work; "
+        f"{what_was_dropped}. Read rejected_for_this_work on each row rather than its position — "
+        "the rows keep their ranking, so a scan you can still choose may sit anywhere on the card. "
+        "There is no paging here."
     )
 
 

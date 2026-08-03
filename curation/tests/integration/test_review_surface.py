@@ -552,7 +552,8 @@ async def test_a_card_with_more_scans_than_it_can_carry_says_what_it_dropped(
     assert payload["truncated"] is True
     assert len(images_of(result)) == MAX_INSTANCES_LISTED, "a card never carries more pictures than rows"
     assert f"Showing {MAX_INSTANCES_LISTED} of {MAX_INSTANCES_LISTED + 4}" in payload["notice"]
-    assert f"({MAX_INSTANCES_LISTED} here)" in payload["notice"], "every scan on this card is still selectable"
+    assert f"this work has {MAX_INSTANCES_LISTED + 4} scans you could still choose" in payload["notice"]
+    assert f"the card holds {MAX_INSTANCES_LISTED} of them" in payload["notice"]
     assert "no paging" in payload["notice"]
     # What was dropped is the tail of the ranking, never the instance on offer.
     assert payload["images"][0]["is_on_offer"] is True
@@ -634,7 +635,51 @@ async def test_a_cardful_of_rejections_never_crowds_out_a_scan_still_on_offer(
     # The rejected scans are still evidence and still shown — they simply yield
     # their slots to the instances that can still be chosen.
     assert sum(1 for image in payload["images"] if image["rejected_for_this_work"]) == MAX_INSTANCES_LISTED - 2
-    assert "(2 here)" in payload["notice"], "the notice says how many of the shown scans are still selectable"
+    assert "all 2 scans still open to you are on this card" in payload["notice"]
+
+    # **The rows are ranked, not grouped, and the notice must not say otherwise.**
+    # Filling by preference and ordering by rank are different operations: the
+    # selected survivor leads on `is_selected`, the refused scans follow on
+    # confidence, and the unselected alternate — the one this whole fix exists to
+    # keep reachable — lands last. A notice promising the choosable scans "first"
+    # would send a curator to the top of the card, where exactly one of the two
+    # is. Asserted by position because that is the thing a sentence can lie about.
+    choosable_positions = [index for index, image in enumerate(payload["images"]) if not image["rejected_for_this_work"]]
+    assert choosable_positions == [0, MAX_INSTANCES_LISTED - 1], "a choosable scan sits at each end, refused ones between"
+    assert "first" not in payload["notice"], "the notice must claim nothing about row order"
+    assert "rather than its position" in payload["notice"]
+
+
+async def test_a_card_that_cannot_hold_every_choosable_scan_says_so_instead(
+    server_url, services, propose, add_image, preview_file
+):
+    """The other truncation case, which the first wording of the notice got wrong.
+
+    Giving choosable scans first claim on the slots does not make them fit. When
+    they alone outrun the cap the card really does withhold something actionable,
+    and a notice saying "every scan still open to you is on this card" would be
+    false — so it says which of the two situations this is rather than asserting
+    the reassuring one.
+    """
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    work = propose("A work with many good scans", run_id=run.id, dedup_key="many-good")
+    for index in range(MAX_INSTANCES_LISTED + 3):
+        add_image(
+            work,
+            url=f"https://museum.example/all-good-{index}",
+            confidence=0.9 - index / 1000,
+            preview_path=preview_file(f"all-good-{index}.jpg"),
+            estimated_width=4000,
+            estimated_height=3000,
+        )
+
+    payload = payload_of(await call(server_url, "art_review", action="list_images", work_id=work.id))
+
+    assert payload["truncated"] is True
+    assert all(not image["rejected_for_this_work"] for image in payload["images"])
+    assert f"{MAX_INSTANCES_LISTED + 3} scans you could still choose" in payload["notice"]
+    assert "rank below every scan shown" in payload["notice"]
+    assert "still open to you are on this card" not in payload["notice"]
 
 
 async def test_a_work_no_image_was_ever_found_for_says_what_to_do_about_it(server_url, services, propose):

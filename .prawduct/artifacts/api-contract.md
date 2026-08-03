@@ -426,11 +426,19 @@ for something better rather than by anything that stops. Measured 2026-08-03: a
 full card is about **3,600 tokens**, 1,920 of picture and 1,700 of text.
 
 **It offers no paging, and that is a different decision from the page's.** The
-instances are ordered best-first by the one ranking this product has, so a
-truncated card omits the *worst* candidates — where what falls off a page is
-arbitrary, and paging is the remedy. A caller told to page through scans ranked
-below the ones already shown would be sent to look at the least likely answers.
-The notice says so rather than offering an offset.
+still-choosable instances get first claim on the card's slots, so a truncated card
+omits scans the curator has already turned down, and reaches choosable ones only
+once those alone outrun the cap — where the omitted ones rank below every scan
+shown. Neither case leaves anything an offset would usefully reach, unlike a page,
+where what falls off is arbitrary and paging is the remedy. The notice says which
+case it is rather than offering an offset.
+
+**The rows keep the store's ranking, and the notice must not imply otherwise.**
+Filling by preference and ordering by rank are different operations: a card can
+legitimately read [choosable, refused, …, choosable], so a sentence promising the
+choosable ones "first" would send a caller to the top of a list where the
+alternate they want sits last. Which scans are still open is a per-row fact and is
+reported as one.
 
 Truncation is always explicit. A result that omits rows says so and says how many —
 never a silent cut. Where the action takes an `offset` the notice names paging as

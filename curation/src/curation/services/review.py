@@ -95,11 +95,14 @@ DEFAULT_REVIEW_LIMIT: Final[int] = 30
 #: smaller N.
 #:
 #: **There is deliberately no paging here**, and the notice does not offer any.
-#: The instances are ordered best-first by the one ranking this product has, so a
-#: truncated card omits the *worst* candidates — which is the opposite of the
-#: listing case, where what falls off a page is arbitrary and paging is the
-#: remedy. Promising an offset that does not exist is the failure the withheld
-#: action was withheld to avoid.
+#: What a truncated card omits is never something the caller could have acted on:
+#: `_fill` gives the still-choosable instances first claim on the slots, so the
+#: cut falls on scans already refused, and only reaches choosable ones once they
+#: alone outrun the cap — at which point the omitted ones rank below every scan
+#: shown. Either way there is nothing an offset would reach that is worth
+#: reaching, which is the opposite of the listing case, where what falls off a
+#: page is arbitrary and paging is the remedy. Promising an offset that does not
+#: exist is the failure the withheld action was withheld to avoid.
 MAX_INSTANCES_LISTED: Final[int] = 12
 
 
@@ -108,11 +111,20 @@ def _fill(held: Sequence[CandidateImage]) -> Sequence[CandidateImage]:
 
     Selectable instances claim the slots first and rejected ones take what is
     left, so a card can never be all refused scans while the choosable ones fall
-    off the end. Within that, the store's order is preserved rather than
-    rebuilt — the chosen set is read back out of `held` — because the instance
-    leading this card has to stay the instance `selection.best` would take, and a
-    second ordering here is exactly how a curator's card and the automatic choice
-    come to disagree about which scan is on offer.
+    off the end. Within that, the store's order is preserved rather than rebuilt —
+    the chosen set is read back out of `held` — because a second ordering here is
+    exactly how a curator's card and the automatic choice come to disagree about
+    which scan is on offer.
+
+    **Preserved, not established.** Where the work has a selection, that instance
+    leads both this card and `selection.best`, since `is_selected` heads the
+    store's order and a selected instance is never rejected. Where it has none —
+    every instance below the floor, or every one turned down, the two cases
+    `CandidateView` documents — the card leads with whatever the store ranks
+    first, which may be a refused scan. That is unchanged by this function and was
+    equally true of the slice it replaced; `shown_is_on_offer` is what tells a
+    caller which situation they are in, and it is why that field exists rather
+    than being inferred from position.
 
     A rejected scan is not filler: it is the evidence of a judgement already made,
     and dropping it silently would leave a curator wondering why a re-search
@@ -229,16 +241,32 @@ class InstanceListing:
     card shows. The two are reported separately so a truncated card cannot be read
     as a complete one — the failure a count omitted alongside a list always
     produces.
+
+    `surviving_held` is the same distinction one level in: how many of the work's
+    instances are still choosable, against how many of *those* fit. A card that
+    dropped only refused scans and one that also dropped choosable ones are
+    different things to tell a curator, and nothing else in the payload separates
+    them — `held` counts both kinds together.
     """
 
     work: CandidateWork
     instances: Sequence[InstanceView]
     held: int
+    surviving_held: int
 
     @property
     def truncated(self) -> bool:
         """True when the work holds instances this card does not show."""
         return len(self.instances) < self.held
+
+    @property
+    def shows_every_choosable_instance(self) -> bool:
+        """Whether every instance still open to the curator is on this card.
+
+        False only when the choosable instances alone outrun the cap, which is
+        the one case where a truncated card withholds something actionable.
+        """
+        return sum(1 for instance in self.instances if not instance.rejected) == self.surviving_held
 
 
 class ReviewService:
@@ -346,6 +374,7 @@ class ReviewService:
             work=work,
             instances=[self._instance(image) for image in _fill(held)],
             held=len(held),
+            surviving_held=sum(1 for image in held if image.rejected_at is None),
         )
 
     def _view(self, work: CandidateWork) -> CandidateView:
