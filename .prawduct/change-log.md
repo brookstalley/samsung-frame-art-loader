@@ -48,6 +48,66 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-03: The review surface, and the text that was half the picture budget
+
+<!-- prawduct: chunks=17A | status=shipped | scope=v1-build -->
+
+**Why:** the human gate has to show the image, and until now no surface did.
+`security-model.md` § Content Appropriateness makes the review gate the whole
+protection for the household — people with no interface who never opted in — and
+its entire content is that the reviewing surface displays the picture. `art_review`
+now answers `list_works`, `get_work` and `list_images`, each returning candidate
+thumbnails inline as image content blocks beside the two things a thumbnail cannot
+say: the fit verdict and the size the work would render at on this deployment's
+wall.
+
+**What the artifacts did not anticipate, found by measuring:** `api-contract.md`
+sized the 400 px cap from the images alone — 40 works × ~160 tokens = 6,400,
+comfortably inside the budget — and the *text* of the first listing shape came to
+~7,000 on top, taking a full page past the threshold at which a client warns with
+the images still innocent. Narrowing rows to what a caller needs in order to
+choose, and moving the instance record behind `list_images`, brought the page to
+10,200. **A cap sized from one component of a result is not a cap**, because
+everything else scales with the same batch. Two thresholds got two knobs: the
+ceiling is 40 against the 25,000 hard cap — where truncation takes the *pictures*
+and leaves the rows, quietly turning this into the metadata listing the security
+model forbids — and the default page is 30, at ~7,700, so a caller who asked for
+nothing never trips the warning.
+
+**A rule needed applying one level above where it was written.** "A below_floor
+image is shown, labelled, and selectable — never hidden" governs the image
+listing; a work whose only instances are below the floor has no selection, so a
+listing row keyed on the selected instance carried no picture at all — not
+withheld by any rule, just absent, and indistinguishable from a work no picture
+exists for. Rows now fall back to the best surviving instance and report
+`is_on_offer: false`.
+
+**Image blocks correlate by position and nothing else**, so every row carries
+`image_block_index`, null when it contributed none. The blocks are only the
+instances that had a local copy, so block *n* is not row *n* the moment one
+preview is missing — which is how the wrong picture gets accepted as the right
+painting. Found by mutation: a constant index left every other assertion green.
+
+**Four tests moved rather than being deleted.** `art_review` was the last unbuilt
+tool and three tests used it as the *subject* of the unbuilt-tool mechanism, which
+is unchanged and still covered — now against a synthetic record, so building a
+tool never again silently retires it. A fourth was parametrised over the unbuilt
+roster and had gone empty; an empty parametrisation skips rather than fails, so
+the file kept a test that had stopped asserting anything.
+
+**Also corrected, pre-existing:** `api-contract.md` said "three of the five tools
+declare fewer actions than they list here" and the true count was two — stale
+since before `art_discovery`'s last action landed, with nothing able to notice.
+Replaced with the shape of the claim, since `action='help'` is what actually
+answers it.
+
+**The mutation sweep became a tool** (`curation/tools/mutation_sweep.py`) rather
+than being re-derived from a session transcript for the third time. Its committed
+lesson is a trap that cost real time here: rewriting a source file and running
+pytest several times a second defeats CPython's `(mtime, size)` bytecode check, so
+a mutation that leaves a line the same length runs against stale bytecode, never
+executes, and reports as a survivor — indistinguishable from a finding.
+
 ## 2026-08-03: The list nothing bounded, and the race the guard only described
 
 <!-- prawduct: chunks=16B | status=shipped | scope=v1-build -->

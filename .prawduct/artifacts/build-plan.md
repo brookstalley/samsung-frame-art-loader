@@ -110,7 +110,7 @@ re-created the same silence one line further down.
 - [x] Chunk 15: Spikes — search-engine choice and `work_dedup_key` derivation (issue #18)
 - [x] Chunk 16A: Discovery phase 2 — works to instances, over a real museum API
 - [x] Chunk 16B: `resolve_images` — the re-search, its coverage and its rollup
-- [ ] Chunk 17A: The review surface — works, instances, and the image in the transcript
+- [x] Chunk 17A: The review surface — works, instances, and the image in the transcript
 - [ ] Chunk 17B: The verdict, the artist, and the preview's death
 - [ ] Chunk 18: Acquisition and preparation — fetch, metadata, mat engine, 4K render
 - [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
