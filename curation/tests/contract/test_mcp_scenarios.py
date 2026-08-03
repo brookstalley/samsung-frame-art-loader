@@ -16,7 +16,7 @@ from dataclasses import replace
 
 import pytest
 from fakes import a_museum_holding, a_work, a_work_list
-from scenarios import ACCEPTANCE_ROUTE, DISCOVERY_ROUTE, REFERENCE_ROUTE, REVIEW_ROUTE, connect
+from scenarios import ACCEPTANCE_ROUTE, DISCOVERY_ROUTE, REFERENCE_ROUTE, REVIEW_ROUTE, Call, Transcript, connect
 
 from curation.discovery.engine import WorkList
 from curation.mcp.registry import HELP_ACTION
@@ -38,6 +38,37 @@ ADVERTISED = [(tool.name, action) for tool in TOOLS for action in tool.action_na
 #: Answers that mean the surface is broken rather than the caller. None of them
 #: may ever come back for an action the surface advertises.
 _BROKEN_SURFACE = ("Unknown action:", "is declared but not wired up", "failed unexpectedly")
+
+
+def test_the_route_folds_a_poll_without_hiding_a_round_trip():
+    """The harness's own guard on the thing that made a route assertion flake.
+
+    `route` exists because a scenario that watches a run polls an unpredictable
+    number of times, and a fixed route compared against the raw call log fails
+    on whichever machine is slower. What it must not do is fold away a *real*
+    extra round trip, which is the only regression the routes are there to
+    catch — so both halves are pinned here rather than trusted.
+    """
+    transcript = Transcript()
+    for tool, action in [
+        ("art_discovery", "start"),
+        ("art_discovery", "status"),
+        ("art_discovery", "status"),
+        ("art_discovery", "status"),
+        ("art_review", "list_works"),
+        ("art_discovery", "status"),
+    ]:
+        transcript.calls.append(Call(tool, action, True, {}))
+
+    assert transcript.route == [
+        "art_discovery(action='start')",
+        "art_discovery(action='status')",
+        "art_review(action='list_works')",
+        # Re-entered after something else, so it is a second visit and not a
+        # poll — folding this would hide exactly the round trip that matters.
+        "art_discovery(action='status')",
+    ]
+    assert len(transcript.steps) == 6, "the raw log still carries every call, for failure messages"
 
 
 async def test_a_work_can_be_put_on_the_wall_through_the_tools_alone(server_url, ready_work):
@@ -422,5 +453,11 @@ class TestReviewingWhatDiscoveryFound:
         assert alternates["images"][0]["is_on_offer"] is True
         assert catalogued["artwork"]["title"] == "The Elephants"
         assert catalogued["artwork"]["artist"]["name"] == "Salvador Dalí"
-        assert tuple(caller.transcript.steps) == ACCEPTANCE_ROUTE
+        # `route`, not `steps`: the loop above asks `status` until the run is
+        # done, so the raw sequence carries however many polls this machine
+        # needed and comparing it to a fixed route is a flake, not a check.
+        # Collapsing adjacent repeats keeps what the route claims — that the goal
+        # takes these calls in this order — while letting a slow phase 2 poll
+        # twice.
+        assert tuple(caller.transcript.route) == ACCEPTANCE_ROUTE
         assert not caller.transcript.failures, f"a step failed: {caller.transcript}"

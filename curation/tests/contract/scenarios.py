@@ -95,6 +95,10 @@ REVIEW_ROUTE = (
 #: `artwork_id`, and a flow that ended at the verdict would prove the tool
 #: answered rather than that a work arrived where the rest of the product looks
 #: for it — which is the difference between a recorded decision and a promotion.
+#:
+#: One `status` here, because this is the *route* and not the call log: watching
+#: a run takes as many polls as it takes. Assert it against `Transcript.route`,
+#: which collapses adjacent repeats; against `steps` it is a flake.
 ACCEPTANCE_ROUTE = (
     *REVIEW_ROUTE,
     "art_review(action='set_verdict')",
@@ -139,8 +143,35 @@ class Transcript:
 
     @property
     def steps(self) -> list[str]:
-        """The call sequence, for asserting against and for failure messages."""
+        """Every call in order, for failure messages and for prefix assertions.
+
+        *Every* one, polls included — so a scenario that watches a run until it
+        finishes has as many `status` entries as it needed attempts. Compare a
+        whole route against `route` rather than this.
+        """
         return [str(call) for call in self.calls]
+
+    @property
+    def route(self) -> list[str]:
+        """The steps with consecutive repeats collapsed — the *distinct* path taken.
+
+        **A polling loop makes the raw sequence non-deterministic**, and a route
+        assertion written against it is a flake waiting for a loaded machine: a
+        run that answers `completed` on the first `status` gives one entry, and
+        the same run behind a slower phase 2 gives two. What the routes in this
+        module claim is that a goal takes these calls *in this order* — an extra
+        required round trip is the regression they exist to catch — and asking
+        the same question twice while waiting is not one.
+
+        Collapsing consecutive repeats keeps the claim intact: a second *distinct*
+        call still lands, and so does the same call re-entered after something
+        else, because only adjacent duplicates fold.
+        """
+        collapsed: list[str] = []
+        for step in self.steps:
+            if not collapsed or collapsed[-1] != step:
+                collapsed.append(step)
+        return collapsed
 
     def __str__(self) -> str:
         return " -> ".join(self.steps) or "(no calls)"

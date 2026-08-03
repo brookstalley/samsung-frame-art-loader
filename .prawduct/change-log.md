@@ -130,6 +130,31 @@ sources** — acquisition is their only consumer so far. Adding a reader would b
 this chunk widening a different tool's contract on its own authority, so it is
 filed instead. Everything else in the criterion runs over MCP.
 
+## 2026-08-03: The route assertion that counted polls
+
+<!-- prawduct: chunks=17B | status=shipped | scope=v1-build -->
+
+**A flake introduced by 17B's own acceptance scenario, found by running the merged
+suite rather than by reading it.** The scenario watches a run until it finishes,
+then asserted the whole call log equalled `ACCEPTANCE_ROUTE` — a fixed six-step
+tuple with one `status`. The loop polls until terminal, so on a machine where
+phase 2 answered on the second poll the log had seven entries and the test failed.
+It passed on the branch and failed on the first full run after the merge, which is
+the whole tell: nothing about the tree changed, only how busy the machine was.
+
+**The sibling test already knew.** `test_a_curator_reaches_the_pictures_from_an_intent_alone`
+asserts `steps[:2]` and the picture-bearing subset, never the whole tuple, for
+exactly this reason — and the new test copied the route idea without the reason
+behind its shape.
+
+`Transcript.route` now collapses *adjacent* repeats, and route assertions compare
+against that; `steps` still carries every call, which is what failure messages
+want. Only adjacent duplicates fold, so a call re-entered after something else is
+still a second visit — an extra required round trip remains the thing these routes
+catch, which is the property that had to survive the fix. Pinned by a test of the
+folding itself, since a loosened assertion that nobody checks is just a weaker
+assertion.
+
 ## 2026-08-03: What the Critic round changed about 17B
 
 <!-- prawduct: chunks=17B | status=shipped | scope=v1-build -->
