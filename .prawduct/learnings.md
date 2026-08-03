@@ -452,6 +452,39 @@ exactly like a finding. `curation/tools/mutation_sweep.py` now refuses an ambigu
 pattern; the no-op case it cannot detect, so confirm your mutation breaks something
 before writing a test for it.
 
+## A survivor says a branch is undefended, never that it deserves defending
+
+**Before writing the test a survivor asks for, check whether the branch does
+anything** — the reflex is to defend it, and twice on one surface the right answer
+was to delete it. A guard can be inert (a particle filter whose work a neighbouring
+rule already did) or actively harmful (a three-character token floor that excluded
+initials as advertised *and* discarded every short surname, so `Wu Li` reduced to
+nothing). Deleting both made the rule simpler and unbiased at once.
+
+## A guard's comment names what it excludes, not what it silently breaks
+
+**Treat an explanation as a claim about one category, never as coverage of the
+rest.** The comment is written by whoever chose the guard, so it can only name the
+cases they thought of — and it reads convincingly precisely because the category it
+names is real. Prose cannot flag an omission its author did not make. Where the
+claim is checkable in one line, check it rather than read it.
+
+## A verify pass verifies findings, not intervals
+
+**A fix that lands in the *base* of the reviewed interval is invisible to every
+pass over that interval** — the finding stays undispositioned and the next pass,
+starting later still, misses it for the same reason. Two consecutive passes did
+exactly this. When a pass says nothing about a finding you expected it to settle,
+check where the fix sits before concluding anything about the fix; naming the
+finding explicitly in the pass's arguments is what closes it.
+
+## A commit message is evidence about intent, never about content
+
+**Count the hunks.** A message says what its author believed they did, which is the
+thing under review — one claiming "three prose totals replaced" carried a diff with
+two, and repeating the claim put a false resolution into the ledger for work that
+was never done.
+
 ## A cap sized from one part of a result is not a cap
 
 **When you bound a result with an arithmetic, name every term that scales with the
