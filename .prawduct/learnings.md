@@ -262,8 +262,9 @@ the backlog is part of its sweep set.**
     below prescribes and the one this entry's own preamble was already an
     instance of.
 
-19. **2026-08-03, twenty-second recurrence — inside the commit that corrected the
-    twenty-second recurrence.** A preview-sweep docstring claimed a race was
+19. **2026-08-03, twenty-second recurrence — the sweep that retired a claim left
+    the claim standing at its most load-bearing site.** A preview-sweep docstring
+    claimed a race was
     closed when it was not, and the claim had been copied into five places. I
     fixed four, listed them in the change-log as "the module docstring, the
     inline comment, `architecture.md`, and this entry", and called the sweep
