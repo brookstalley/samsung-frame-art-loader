@@ -123,14 +123,20 @@ tool per action stops paying and consolidation starts.
 | `art_display` | `status`, `sync`, `show_now`, `next`, `help` | Every action goes through the theme manifest — see below. |
 
 **This table is the surface as designed, and no row states what is built.** That
-is deliberate rather than an omission: three of the five tools currently declare
-fewer actions than they list here, and annotating some rows and not others is
-worse than annotating none — a reader takes an unannotated row for a complete
-one. **The surface answers the as-built question itself, at runtime and without
-ambiguity:** `action='help'` returns exactly the actions a tool serves, and a
-tool with none carries `unavailable_note` saying so. A caller therefore cannot
-be misled into calling something that does not exist, which is the failure a
-build-status column would exist to prevent.
+is deliberate rather than an omission: while the build is in progress some tools
+declare fewer actions than they list here, and annotating some rows and not
+others is worse than annotating none — a reader takes an unannotated row for a
+complete one. **The surface answers the as-built question itself, at runtime and
+without ambiguity:** `action='help'` returns exactly the actions a tool serves,
+and a tool with none carries `unavailable_note` saying so. A caller therefore
+cannot be misled into calling something that does not exist, which is the failure
+a build-status column would exist to prevent.
+
+*The sentence above carried a count until 2026-08-03, and the count was wrong —
+it had said "three of the five" since before `art_discovery`'s last action landed,
+and nothing could notice. A tally in prose about work in progress is stale by
+construction; the shape of the claim is what belongs here, and `help` is what
+answers the question a number was pretending to.*
 
 **Unbuilt actions are never declared.** Action values are additive and a
 declaration is a promise, so an action appears in the registry on the day it
@@ -154,8 +160,24 @@ A `below_floor` image is **shown, labelled, and selectable** — never auto-sele
 by phase 2, and never hidden. The curator may take it anyway; that judgement is the
 product.
 
+**"Never hidden" binds the listing too, and that took a decision at build
+(2026-08-03).** `list_works` carries one picture per work, and the obvious choice —
+the *selected* instance — has no answer for a work where nothing was selected,
+which is exactly the below-floor case. Such a row would have arrived with no image
+at all: not withheld by any rule, just absent, and indistinguishable to a curator
+from a work no picture exists for. So the row falls back to the best surviving
+instance and reports `is_on_offer: false` beside it. The two states a curator must
+not confuse are then still distinct — "this is what you would accept" versus "this
+is all there is, and nothing chose it" — and the only row that carries no picture
+is one whose instances are all rejected or absent, where there is genuinely
+nothing to show.
+
 **`rights_status` is returned alongside**, as a provenance and source-quality
 signal. It gates nothing (`data-model.md` constraint 13).
+
+**Listings carry less per instance than `list_images` does**, by the same rule the
+catalogue already follows: enough to choose, with the record behind a second call.
+This is a budget constraint rather than a stylistic one — see § Token budget.
 
 ### How `art_display` reaches the display plane
 
@@ -372,8 +394,36 @@ batch comfortably inside the budget. That resolution is sufficient for the judge
 the gate exists to make; it is *not* sufficient for judging mat colour, which
 happens after acceptance on a real screen.
 
+**Measured at build, 2026-08-03 — and the text turned out to be half the bill.**
+A full 40-work page costs about **10,200 tokens**: 6,400 of picture, exactly as the
+table above predicts, and **3,800 of text**. The first shape of the listing put the
+text at ~7,000, which took the page past 10,000 with the images alone still inside
+it — so the row was narrowed to what a caller needs in order to *choose*, and the
+instance record moved behind `list_images`. The lesson generalises past this
+surface: a cap sized from the pictures alone is not a cap, because the rows scale
+with the same batch and nothing was watching them.
+
+**Two thresholds, held with two different knobs.** Above 25,000 the client
+truncates — which takes the *pictures* and leaves the rows, turning this surface
+into the metadata listing `security-model.md` § Content Appropriateness forbids —
+while above 10,000 it merely warns. So the page **ceiling** is 40, sized against
+the hard cap and served to any caller who asks for it; the **default** page is 30,
+about 7,700 tokens, sized so a caller who asked for nothing never trips the
+warning. The remaining 2% overshoot at the ceiling is deliberate: closing it means
+dropping `resolution_status` or `instances_held` from the row, and both carry the
+distinction between "nothing was found" and "we could not look".
+
+**Image content blocks correlate by position and by nothing else.** The protocol
+gives a block no identity, and a result's blocks are only the instances that had a
+local copy — so block *n* is not row *n* the moment one preview is missing. Every
+row therefore carries `image_block_index`, null when it contributed no block, and
+every result that carries pictures says so in its notice.
+
 Truncation is always explicit. A result that omits rows says so and says how many —
-never a silent cut.
+never a silent cut. Where the action takes an `offset` the notice names paging as
+the remedy; `art_discovery(action='status')` deliberately does not, because it has
+no offset to point at — `art_review(action='list_works')` is the paged listing it
+defers to.
 
 ### Long-running operations: start, then poll
 

@@ -21,15 +21,55 @@ guess, and it cannot mislead.
 """
 
 import json
-from collections.abc import Mapping
-from typing import Any
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any, Final
 
 import mcp.types as types
+
+#: Where a binding leaves the pictures its result carries. **Private, and
+#: stripped before anything is serialised** — base64 image data must reach the
+#: wire as image content blocks and nowhere else. In the JSON text it would be
+#: unreadable to a model and would cost the payload's whole token budget twice
+#: over; in `structuredContent` it would do the same to clients that parse it.
+#:
+#: A reserved key rather than a second return type, because every binding is a
+#: `Mapping -> dict` and widening that signature for the three actions that
+#: return pictures would change all twenty-seven. The leading underscore marks
+#: it as not-for-callers, and `to_call_tool_result` is the single place that
+#: knows the name.
+IMAGE_BLOCKS: Final[str] = "_image_blocks"
+
+
+@dataclass(frozen=True, slots=True)
+class ImageBlock:
+    """One picture travelling beside a result.
+
+    Deliberately not a service type. The wire layer knowing about
+    `InlinePreview` would make the envelope depend on the preview cache, and the
+    envelope is the one module in this package that has no business knowing what
+    the product stores.
+    """
+
+    data: str
+    media_type: str
 
 
 def ok(**fields: object) -> dict[str, Any]:
     """A successful result. `success` leads so the envelope reads at a glance."""
     return {"success": True, **fields}
+
+
+def with_images(payload: dict[str, Any], images: Sequence[ImageBlock]) -> dict[str, Any]:
+    """Attach pictures to a result, to be emitted as image content blocks.
+
+    **Nothing correlates a block with a row except its position**, because the
+    protocol gives an image block no identity to key on. So a payload using this
+    owes its caller the mapping in words: the rows it describes must be listed in
+    the same order as the blocks, and must say so. `bindings.py` states it in
+    every notice that carries pictures.
+    """
+    return {**payload, IMAGE_BLOCKS: list(images)}
 
 
 def failure(
@@ -78,10 +118,24 @@ def to_call_tool_result(payload: Mapping[str, Any]) -> types.CallToolResult:
     The payload goes out twice on purpose: as JSON text, which every client
     can read, and as `structuredContent`, which clients that understand it can
     consume without parsing.
+
+    Pictures go out once, as image content blocks after the text. They are
+    removed from the body first, so neither copy of the payload carries base64 —
+    this is the only place that name is known, which is what makes "the data
+    never reaches the JSON" a property of one function rather than a rule every
+    binding has to remember.
+
+    The text block leads. A model reads the rows and then the pictures they
+    describe, in the same order, which is the only correlation the protocol
+    offers.
     """
     body = dict(payload)
+    images: Sequence[ImageBlock] = body.pop(IMAGE_BLOCKS, ())
     return types.CallToolResult(
-        content=[types.TextContent(type="text", text=json.dumps(body, indent=2, default=str))],
+        content=[
+            types.TextContent(type="text", text=json.dumps(body, indent=2, default=str)),
+            *(types.ImageContent(type="image", data=image.data, mimeType=image.media_type) for image in images),
+        ],
         structuredContent=body,
         isError=is_error(body),
     )

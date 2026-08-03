@@ -29,6 +29,7 @@ from curation.services.display import DisplayService, WallSettings
 from curation.services.display_fit import ArtworkBox
 from curation.services.errors import ServiceError
 from curation.services.previews import PreviewCache, PreviewSettings
+from curation.services.review import ReviewService
 from curation.services.runner import DiscoveryRunner, DiscoverySettings
 from curation.services.survey import SurveyService
 from curation.services.thumbnails import ThumbnailService, ThumbnailSettings
@@ -47,6 +48,13 @@ class Services:
     #: three of them, and because both surfaces need the identical composition —
     #: which is the same reason the service layer exists at all.
     survey: SurveyService
+    #: The same composition on the other side of acceptance: proposed works and
+    #: the instances found for them, each with the size it would render at and a
+    #: picture small enough to travel. Separate from `survey` because they read
+    #: different entities entirely — one the catalogue, one the pipeline — and a
+    #: single service spanning both would hold the catalogue and discovery stores
+    #: at once for no shared logic.
+    review: ReviewService
     #: Running a discovery run, as distinct from recording one. It sits above
     #: `discovery` rather than inside it because the record layer is deliberately
     #: synchronous and knows nothing of processes, and everything about starting
@@ -104,6 +112,12 @@ class Services:
             display=display_service,
             thumbnails=thumbnail_service,
             survey=SurveyService(catalogue_service, display_service, thumbnail_service, artwork_box),
+            # `art_root` is read off the thumbnail settings rather than taken as
+            # an argument of its own. It is the same deployment value — every
+            # catalogue path is relative to it — and it is already required and
+            # validated there. A third copy would be a third chance for the
+            # copies to disagree, and nothing would notice which was right.
+            review=ReviewService(discovery_service, box=artwork_box, art_root=thumbnails.art_root),
             runner=DiscoveryRunner(
                 discovery_service,
                 engine,

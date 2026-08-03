@@ -16,16 +16,23 @@ acquisition, not from the preview that helped someone decide.
 **A preview that will not download is not a failure.** The instance is still
 real, still selectable, and still carries a source-side URL to fall back on.
 Losing a work over a missing thumbnail would be the tail wagging the dog, so
-every failure path here reports absence rather than raising.
+every failure path here reports absence rather than raising. `inline_preview`
+below holds the same posture for the same reason, one step further along: a file
+that will not decode costs its instance a picture, never its place in the
+listing.
 """
 
+import base64
 import hashlib
 import logging
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Final
+
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from curation.services.errors import ServiceError
 
@@ -42,6 +49,41 @@ _DEFAULT_SUFFIX: Final[str] = ".jpg"
 #: not a practical concern across a catalogue of this size, short enough that the
 #: directory stays readable when someone goes looking.
 _NAME_LENGTH: Final[int] = 24
+
+#: The box an inlined preview is fitted into, in pixels on its long edge.
+#:
+#: **This is a token budget, not a visual one.** An image costs a client roughly
+#: `width * height / 750` tokens, so 400 px on the long edge is about 160 tokens
+#: for a landscape scan and a forty-work batch is about 6,400 — under the 10,000
+#: at which Claude Code warns, and well under its 25,000 ceiling, with room left
+#: for the text beside it. Raising a client's own limit does not buy headroom
+#: here: `_meta["anthropic/maxResultSizeChars"]` governs text and images do not
+#: benefit from it.
+#:
+#: Deliberately smaller than the catalogue thumbnail's 480 px and deliberately
+#: not shared with it. That one is fitted to a browser grid on a retina display
+#: and is bounded by what looks right; this one is fitted to a model's context
+#: and is bounded by arithmetic. One constant serving both would be moved by
+#: whichever pressure spoke last, and the visual pressure only ever pushes up.
+#:
+#: It is sufficient for the judgement the review gate exists to make — is this
+#: the right painting, and is it appropriate for a living room. It is *not*
+#: sufficient for judging mat colour, which happens after acceptance on a real
+#: screen.
+INLINE_MAX_EDGE_PX: Final[int] = 400
+
+#: Quality for the re-encode. Lower than the browser thumbnail's, because every
+#: byte here is spent inside a model's context rather than on a screen, and the
+#: artefacts a curator would notice at 480 px on a retina panel are invisible in
+#: the judgement this image is for.
+INLINE_JPEG_QUALITY: Final[int] = 75
+
+#: What an inlined preview is declared as on the wire. Everything is re-encoded
+#: to JPEG on the way out — museums serve JPEG, PNG and the occasional TIFF, and
+#: a content block whose media type varied per instance would make the caller's
+#: cost per image vary with the museum's choice of format rather than with the
+#: picture.
+INLINE_MEDIA_TYPE: Final[str] = "image/jpeg"
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,3 +213,97 @@ class PreviewCache:
         digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:_NAME_LENGTH]
         suffix = Path(url.split("?", 1)[0]).suffix.lower()
         return self._settings.directory / f"{digest}{suffix if suffix in _KNOWN_SUFFIXES else _DEFAULT_SUFFIX}"
+
+
+@dataclass(frozen=True, slots=True)
+class InlinePreview:
+    """One cached preview, small enough to travel inside a tool result.
+
+    The bytes are base64 already, because that is the only form the wire takes
+    them in and handing a caller raw bytes it must encode is an invitation for
+    two call sites to encode them differently.
+
+    The dimensions are the *encoded* ones rather than the box that was asked
+    for: fitting preserves aspect ratio, so one edge comes out shorter, and a
+    caller reporting the box would state a size the picture does not have.
+    """
+
+    data: str
+    media_type: str
+    width: int
+    height: int
+
+
+def inline_preview(path: Path) -> InlinePreview | None:
+    """Downscale a cached preview into something a tool result can carry.
+
+    `None` means this instance travels without a picture, and it is never an
+    error: a preview is a disposable convenience, and the same reasoning that
+    makes a failed *download* report absence makes a failed *decode* report it
+    too. The instance is still real, still listed, and still carries its
+    source-side URL. Raising instead would lose a curator the other thirty-nine
+    works over one museum's malformed JPEG.
+
+    Nothing is cached on the way out. The input is already a preview — ARTIC's
+    default is 843 px on the long edge — and `draft` decodes it at a reduced
+    scale, so a full forty-work batch measured **under 300 ms** on the build
+    machine (2026-08-03), and a 3000 px input cost no more than an 843 px one
+    because the reduced-scale decode absorbs the difference. What a cache would
+    cost is a second disposable class: files derived from files that are
+    themselves deleted when a work is decided, needing their own place in that
+    sweep and their own answer to "is this one stale". The preview lifecycle is
+    deliberately the only one of its kind.
+    """
+    try:
+        with Image.open(path) as image:
+            # Reduced-scale DCT decode: a 3000 px museum preview never becomes a
+            # 3000 px bitmap on the way to a 400 px one. A no-op for formats
+            # that do not support it.
+            image.draft("RGB", (INLINE_MAX_EDGE_PX, INLINE_MAX_EDGE_PX))
+            upright = ImageOps.exif_transpose(image) or image
+            # CMYK and greyscale both appear in museum downloads and neither
+            # saves as a JPEG every client renders the same way.
+            frame = upright.convert("RGB")
+            frame.thumbnail((INLINE_MAX_EDGE_PX, INLINE_MAX_EDGE_PX), Image.Resampling.LANCZOS)
+            buffer = BytesIO()
+            frame.save(buffer, format="JPEG", quality=INLINE_JPEG_QUALITY, optimize=True)
+            width, height = frame.size
+    except Image.DecompressionBombError as exc:
+        # Pillow's own guard against a decompression bomb. Caught by name rather
+        # than swept up with the rest, because a file engineered to exhaust
+        # memory is worth a different log line from one that is merely corrupt.
+        return _no_inline(path, f"it is too large to open safely: {exc}")
+    except (OSError, UnidentifiedImageError, ValueError) as exc:
+        # `OSError` and `UnidentifiedImageError` are the ordinary two — a
+        # truncated download, a file that is not an image — and are what the
+        # tests exercise.
+        #
+        # `ValueError` is boundary defence rather than a covered path, and the
+        # measurement is worth recording so nobody re-derives it: Pillow raises
+        # it from `convert` for at least one mode (`La`, premultiplied greyscale
+        # alpha), but no image format round-trips to that mode through
+        # `Image.open`, so it was not reachable from a file on disk when this was
+        # written. It is caught anyway because the alternative is one museum's
+        # unusual file costing a curator the other thirty-nine works in the
+        # listing, which is the outcome this whole module exists to prevent.
+        return _no_inline(path, f"it could not be read: {exc}")
+    return InlinePreview(
+        data=base64.b64encode(buffer.getvalue()).decode("ascii"),
+        media_type=INLINE_MEDIA_TYPE,
+        width=width,
+        height=height,
+    )
+
+
+def _no_inline(path: Path, why: str) -> None:
+    """Report that no picture travels with this instance, with the reason.
+
+    One exit for every way an inline preview can fail to be produced, so the log
+    line cannot drift between them — the same shape `_absent` holds for the
+    download it mirrors.
+    """
+    log.info(
+        "a cached preview could not be inlined; the instance is listed without a picture",
+        extra={"event": "preview.not_inlined", "path": str(path), "reason": why},
+    )
+    return None

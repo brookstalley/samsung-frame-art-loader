@@ -23,7 +23,7 @@ from datetime import datetime
 from typing import Any, Final
 
 from curation.manifest.builder import ManifestBuild
-from curation.mcp.envelope import ok
+from curation.mcp.envelope import ImageBlock, ok, with_images
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
 from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, RunKind, RunStatus
@@ -31,6 +31,8 @@ from curation.persistence.records import Artist, Artwork, Directive, Theme
 from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing
 from curation.services.container import Services
 from curation.services.display import UNSET
+from curation.services.previews import InlinePreview
+from curation.services.review import MAX_REVIEW_LIMIT, CandidatePage, CandidateView, InstanceView
 from curation.services.runner import RunView
 
 #: A bound action: validated arguments in, a result payload out. Every binding
@@ -212,6 +214,60 @@ def _spend(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
     )
 
 
+def _list_candidate_works(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    page = services.review.list_works(
+        arguments["run_id"],
+        limit=arguments.get("limit"),
+        offset=arguments.get("offset", 0),
+    )
+    pictures = _Pictures()
+    works = [_candidate_summary(entry, pictures) for entry in page.entries]
+    return with_images(
+        ok(
+            run_id=page.run.id,
+            run_status=str(page.run.status),
+            works=works,
+            count=len(works),
+            total=page.total,
+            # Echoed so a page describes its own place in the set, exactly as the
+            # catalogue's listing does: a caller told to page needs to know which
+            # offset produced this one.
+            limit=page.limit,
+            offset=page.offset,
+            truncated=page.truncated,
+            notice=_joined(pictures.notice(), _review_truncation_notice(page)),
+        ),
+        pictures.blocks,
+    )
+
+
+def _get_candidate_work(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    dossier = services.review.get_work(arguments["work_id"])
+    pictures = _Pictures()
+    described = _candidate_detail(dossier.view, pictures)
+    return with_images(
+        ok(run_id=dossier.run.id, work=described, notice=pictures.notice()),
+        pictures.blocks,
+    )
+
+
+def _list_candidate_images(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    listing = services.review.list_images(arguments["work_id"])
+    pictures = _Pictures()
+    instances = [_instance_fields(instance, pictures) for instance in listing.instances]
+    return with_images(
+        ok(
+            run_id=listing.run.id,
+            work_id=listing.work.id,
+            title=listing.work.proposed_title,
+            images=instances,
+            count=len(instances),
+            notice=_joined(pictures.notice(), _no_instances_notice(instances)),
+        ),
+        pictures.blocks,
+    )
+
+
 def _wall_status(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
     reading = services.display.wall_status()
     return ok(
@@ -277,6 +333,9 @@ BINDINGS: Final[Mapping[tuple[str, str], Binding]] = {
     ("art_discovery", "resolve_images"): _resolve_images,
     ("art_discovery", "list_runs"): _list_runs,
     ("art_discovery", "spend"): _spend,
+    ("art_review", "list_works"): _list_candidate_works,
+    ("art_review", "get_work"): _get_candidate_work,
+    ("art_review", "list_images"): _list_candidate_images,
     ("art_catalogue", "list"): _list_artworks,
     ("art_catalogue", "get"): _get_artwork,
     ("art_theme", "list"): _list_themes,
@@ -490,6 +549,191 @@ def _work_summary(work: CandidateWork) -> dict[str, Any]:
         "artist": work.proposed_artist,
         "verdict": str(work.verdict),
         "resolution_status": str(work.resolution_status),
+    }
+
+
+class _Pictures:
+    """The image blocks one result carries, and each row's index into them.
+
+    **A row cannot name its picture, so it names its position.** The protocol
+    gives an image content block no identity to key on, and the blocks a result
+    carries are only the instances that actually had a local copy — so the index
+    a row needs is not its own position in the listing and cannot be derived from
+    it. Handing out the index at the moment a block is appended is what keeps the
+    two in step; computing it afterwards from a filtered list is the same fact
+    derived twice, and the second derivation is the one that goes wrong when an
+    instance's preview fails to decode.
+    """
+
+    def __init__(self) -> None:
+        self.blocks: list[ImageBlock] = []
+
+    def index_of(self, preview: InlinePreview | None) -> int | None:
+        """Add this instance's picture and return its block index, or None for no picture."""
+        if preview is None:
+            return None
+        self.blocks.append(ImageBlock(data=preview.data, media_type=preview.media_type))
+        return len(self.blocks) - 1
+
+    def notice(self) -> str | None:
+        """State how the pictures line up with the rows, or that none came.
+
+        Never silent when blocks are present: a model that has to infer the
+        pairing will infer it from position in the *listing* rather than position
+        in the blocks, which is right until the first instance without a local
+        copy and wrong from then on.
+        """
+        if not self.blocks:
+            return (
+                "No images accompany this result — none of these instances has a local copy cached. "
+                "Each row says why beside its preview_note."
+            )
+        return (
+            f"{len(self.blocks)} image(s) follow the text, in the order the rows list them; each row's "
+            "image_block_index says which is its own."
+        )
+
+
+def _no_instances_notice(instances: list[dict[str, Any]]) -> str | None:
+    """Say that a work has no instances at all, which is a different thing from no pictures."""
+    if instances:
+        return None
+    return (
+        "No image instances have been found for this work. It is reported unresolved rather than "
+        "dropped, because that is the signal a proposed work may not exist; art_discovery("
+        "action='resolve_images') looks again."
+    )
+
+
+def _review_truncation_notice(page: CandidatePage) -> str | None:
+    """Say what the page left out, and how to reach it.
+
+    Unlike a run's status view — which caps its work list and can only report the
+    omission — this listing takes an offset, so the notice names a remedy that
+    exists. That is the paged listing the status notice points at.
+    """
+    if not page.truncated:
+        return None
+    first = page.offset + 1
+    last = page.offset + len(page.entries)
+    remedy = "page with offset" if page.limit >= MAX_REVIEW_LIMIT else "raise limit or page with offset"
+    ceiling = ", the maximum" if page.limit >= MAX_REVIEW_LIMIT else ""
+    return f"Showing {first}-{last} of {page.total} works at limit {page.limit}{ceiling}; {remedy} to see the rest."
+
+
+def _candidate_summary(view: CandidateView, pictures: _Pictures) -> dict[str, Any]:
+    """One proposed work as a *listing* shows it: enough to choose, and one picture.
+
+    **Deliberately narrower than the detail view, and the budget is why.** Every
+    row here carries an image block, so a page's cost is dominated by pictures —
+    but only until the rows get wide enough to compete. Measured at forty works:
+    the full instance shape put the text at ~7,000 tokens against the images'
+    6,400, which together sit past the 10,000 at which a client warns. The same
+    split the catalogue already draws — listings carry what is needed to choose,
+    `get` returns the record — is what keeps a full page inside the budget.
+    """
+    return {
+        "work_id": view.work.id,
+        "title": view.work.proposed_title,
+        # As phase 1 wrote it, unparsed. Matching it to a catalogue artist is
+        # acceptance's job and does not happen until a work is promoted.
+        "artist": view.work.proposed_artist,
+        "verdict": str(view.work.verdict),
+        "resolution_status": str(view.work.resolution_status),
+        "instances_held": view.instances_held,
+        "shown_image": None if view.shown is None else _shown_fields(view.shown, pictures),
+    }
+
+
+def _candidate_detail(view: CandidateView, pictures: _Pictures) -> dict[str, Any]:
+    """One proposed work in full: why it was proposed, and its picture in full detail.
+
+    Built field by field rather than by widening the listing shape, because
+    `_shown_fields` *appends a block* as a side effect of assigning an index.
+    Composing the two would picture this work twice — one instance, two identical
+    blocks, and a caller charged for both.
+    """
+    return {
+        "work_id": view.work.id,
+        "title": view.work.proposed_title,
+        "artist": view.work.proposed_artist,
+        "verdict": str(view.work.verdict),
+        "resolution_status": str(view.work.resolution_status),
+        "instances_held": view.instances_held,
+        "instances_surviving": view.instances_surviving,
+        "shown_image": None if view.shown is None else _instance_fields(view.shown, pictures),
+        # The engine's account of why this work answers the intent. A curator
+        # judges a work against the reading of their request rather than against
+        # its wording, which is what makes a surprising proposal explicable
+        # instead of merely wrong. Too long to repeat on every row of a listing,
+        # which is the other half of why the two shapes differ.
+        "rationale": view.work.rationale,
+        "discovery_run_id": view.work.discovery_run_id,
+        "artwork_id": view.work.artwork_id,
+        "decided_at": _moment(view.work.decided_at),
+    }
+
+
+def _shown_fields(instance: InstanceView, pictures: _Pictures) -> dict[str, Any]:
+    """The pictured instance, as a listing row carries it.
+
+    Carries the pair `api-contract.md` requires of a review surface — the fit
+    verdict and the size on the wall — because those are exactly what a picture
+    cannot say, and dropping them to save tokens would leave the rows looking
+    complete while removing the reason the gate works.
+
+    `is_on_offer` is here rather than inferred, because it is false in two very
+    different situations a curator must not confuse with each other: a work whose
+    only scans are below the floor, and one whose scans were all turned down.
+
+    **No `image_id`.** Nothing a caller does from a listing takes one — the row's
+    `work_id` is what every action here accepts — and choosing among a work's
+    scans means reading them first, where `list_images` returns the id beside
+    each. A uuid on forty rows is about 600 tokens spent on an argument no action
+    at this level would accept.
+    """
+    fit = instance.fit
+    return {
+        "is_on_offer": instance.image.is_selected,
+        "display_fit": None if fit is None else str(fit.fit),
+        "renders_at_inches": None if fit is None else round(fit.rendered_long_edge_inches, 1),
+        "image_block_index": pictures.index_of(instance.preview),
+        # Both omitted when there is nothing to say, which is the common case.
+        # A null repeated on forty rows is pure cost.
+        **({} if instance.fit_note is None else {"fit_note": instance.fit_note}),
+        **({} if instance.preview_note is None else {"preview_note": instance.preview_note}),
+    }
+
+
+def _instance_fields(instance: InstanceView, pictures: _Pictures) -> dict[str, Any]:
+    """One image instance in full — what `list_images` shows about an alternate.
+
+    Everything a curator weighing one scan against another needs: where it came
+    from, how sure the match is, how good the file is, and why it was chosen. A
+    listing carries a subset of this; the split is `_candidate_summary`'s.
+    """
+    image = instance.image
+    fit = instance.fit
+    return {
+        # The id lives here and not on a listing row, because this is the level
+        # at which a caller picks one scan out of several and needs to name it.
+        "image_id": image.id,
+        **_shown_fields(instance, pictures),
+        "url": image.url,
+        "provider": image.provider,
+        # Reported as a fact about this work only. A rejected scan is excluded
+        # from re-selection here and from nothing else — the painting stays
+        # wanted, which is the whole reason instance suppression and work
+        # suppression are different keys.
+        "rejected_for_this_work": instance.rejected,
+        "renders_at_pixels": None if fit is None else f"{fit.rendered_width}x{fit.rendered_height}",
+        "estimated_width": image.estimated_width,
+        "estimated_height": image.estimated_height,
+        # Provenance and source quality, returned alongside. It gates nothing.
+        "rights_status": None if image.rights_status is None else str(image.rights_status),
+        "confidence": image.confidence,
+        "quality_score": image.quality_score,
+        "selection_rationale": image.selection_rationale,
     }
 
 

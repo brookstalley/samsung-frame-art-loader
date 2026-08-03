@@ -103,12 +103,21 @@ async def test_help_works_without_arguments_and_without_the_catalogue(server_url
     assert {action["action"] for action in payload["actions"]} == {"list", "get", "help"}
 
 
-async def test_help_is_available_on_a_tool_whose_actions_are_not_built(server_url):
+async def test_help_reports_exactly_the_actions_a_tool_actually_serves(server_url):
+    # Replaces the unbuilt-tool assertions this test used to make about
+    # `art_review`, which stopped being unbuilt when its read actions landed;
+    # the mechanism itself is covered in the registry unit tests, which no
+    # longer depend on a shipped tool being incomplete.
+    #
+    # What matters on this surface is the rule that made a build-status column
+    # unnecessary: `help` answers the as-built question, so a model reading the
+    # menu cannot be steered at something that does not exist. The write half of
+    # review is deliberately absent here until it works.
     payload, errored = await call(server_url, "art_review", action="help")
 
     assert errored is False
-    assert payload["available"] is False
-    assert [action["action"] for action in payload["actions"]] == ["help"]
+    assert payload["available"] is True
+    assert [action["action"] for action in payload["actions"]] == ["list_works", "get_work", "list_images", "help"]
 
 
 # -- errors teach, and they arrive as tool results ----------------------------
@@ -166,12 +175,21 @@ async def test_an_unknown_work_is_reported_as_a_failure_never_an_empty_success(s
     assert "does-not-exist" in payload["error"]
 
 
-async def test_an_unbuilt_tool_refuses_its_action_and_says_what_it_does_answer(server_url):
-    payload, errored = await call(server_url, "art_review", action="set_verdict")
+async def test_an_action_a_tool_does_not_serve_is_refused_with_the_set_it_does(server_url):
+    # An action that exists in the designed surface but has not been built is
+    # indistinguishable, to a caller, from one that never will be — and both
+    # deserve the same answer: here is what this tool actually takes. Written as
+    # an invariant over the advertised set rather than against a hardcoded list,
+    # so building the rest of `art_review` moves the assertion with the surface
+    # instead of failing it.
+    advertised, _ = await call(server_url, "art_review", action="help")
+    served = [action["action"] for action in advertised["actions"]]
+
+    payload, errored = await call(server_url, "art_review", action="no_such_action")
 
     assert errored is True
-    assert "not available yet" in payload["error"]
-    assert payload["valid_actions"] == ["help"]
+    assert payload["error"] == "Unknown action: 'no_such_action'"
+    assert payload["valid_actions"] == served
 
 
 async def test_an_unknown_tool_is_reported_with_the_names_that_do_exist(server_url):

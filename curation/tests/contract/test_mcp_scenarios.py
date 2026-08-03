@@ -25,8 +25,15 @@ from curation.mcp.tools import TOOLS
 #: what makes a newly-registered tool arrive already covered.
 TOOL_NAMES = [tool.name for tool in TOOLS]
 
-#: The tools registered but not yet wired: they answer `help` and say why.
-UNBUILT = [tool.name for tool in TOOLS if not tool.available]
+#: Every (tool, action) pair the surface advertises, help excluded. Derived for
+#: the reason the roster above is: an action added to a record arrives here
+#: already covered, and one that is declared without being wired fails at the
+#: wire rather than on the first caller.
+ADVERTISED = [(tool.name, action) for tool in TOOLS for action in tool.action_names if action != HELP_ACTION]
+
+#: Answers that mean the surface is broken rather than the caller. None of them
+#: may ever come back for an action the surface advertises.
+_BROKEN_SURFACE = ("Unknown action:", "is declared but not wired up", "failed unexpectedly")
 
 
 async def test_a_work_can_be_put_on_the_wall_through_the_tools_alone(server_url, ready_work):
@@ -130,22 +137,33 @@ async def test_an_unknown_action_teaches_the_whole_valid_set(server_url, tool):
     assert tool in payload["hint"]
 
 
-@pytest.mark.parametrize("tool", UNBUILT)
-async def test_a_tool_that_is_not_built_yet_says_so(server_url, tool):
-    """Distinct from an unknown action, and the difference is the whole point.
+@pytest.mark.parametrize(("tool", "action"), ADVERTISED)
+async def test_every_advertised_action_is_really_there(server_url, tool, action):
+    """Calling anything the menu offers reaches its implementation, not a denial.
 
-    These tools are registered with no actions, so a real action name would
-    otherwise come back as "unknown action" — telling a caller the action is
-    wrong when the truth is that the tool does not serve it yet.
+    **This replaces a test parametrised over the unbuilt tools** (2026-08-03).
+    That roster went empty when the review surface landed, and an empty
+    parametrisation does not fail — it skips, so the file kept a test that had
+    quietly stopped asserting anything. This says the same thing from the side
+    that cannot empty: whatever the surface advertises, it serves.
+
+    **What it proves is uneven, and the reason is worth knowing before trusting
+    it.** Every action is called with no arguments, so for any action with a
+    required parameter the registry refuses first and the binding is never
+    reached — there, this proves the *refusal* is a teaching one rather than a
+    denial that the action exists. Only actions that require nothing get their
+    binding executed. Measured rather than assumed: planting `arguments[
+    "undeclared_param"]` in `list_images` left this green, because `work_id` is
+    required and validation answered before the binding ran. A binding's own
+    behaviour is pinned by the tests that call it with real arguments; this pins
+    the menu against the dispatcher.
     """
     async with connect(server_url) as caller:
-        payload = await caller.call(tool, "start")
+        payload = await caller.call(tool, action)
 
-    assert payload["success"] is False
-    assert "not available yet" in payload["error"]
-    # Naming the action it refused proves the refusal is about availability
-    # rather than a generic rejection of anything this tool is sent.
-    assert "start" in payload["error"]
+    error = payload.get("error", "")
+    for denial in _BROKEN_SURFACE:
+        assert denial not in error, f"{tool}(action={action!r}) is advertised but answers: {error}"
 
 
 async def test_a_curator_can_jump_the_wall_to_one_work_and_step_off_it(server_url, ready_work):

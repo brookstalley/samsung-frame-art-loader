@@ -9,7 +9,7 @@ import pytest
 from curation.mcp import registry
 from curation.mcp.bindings import BINDINGS
 from curation.mcp.registry import HELP_ACTION, Action, ArgumentError, Param, RegistryError, ToolRecord
-from curation.mcp.tools import ART_CATALOGUE, ART_DISCOVERY, ART_REVIEW, TOOLS
+from curation.mcp.tools import ART_CATALOGUE, ART_DISCOVERY, TOOLS
 
 
 def _tool(**overrides) -> ToolRecord:
@@ -22,6 +22,19 @@ def _tool(**overrides) -> ToolRecord:
         "open_world": False,
     }
     return ToolRecord(**{**defaults, **overrides})
+
+
+#: A tool whose actions have not been built, which the shipped surface no longer
+#: contains — `art_review` was the last one and its read actions landed with the
+#: review surface. The mechanism outlives its subjects: tool names are claimed
+#: all at once and stay frozen, so the next tool added is unbuilt on the day it
+#: is named, and these tests are what say it behaves then. Declared here rather
+#: than pointed at whichever real tool happens to be incomplete, so building one
+#: never again silently retires the coverage for the other.
+_UNBUILT = _tool(
+    name="art_unbuilt",
+    unavailable_note="Not available yet: this tool answers action='help' and returns an error naming that for anything else.",
+)
 
 
 # -- generation ---------------------------------------------------------------
@@ -59,7 +72,7 @@ def test_the_description_lists_every_action():
 
 
 def test_an_unbuilt_tool_says_so_in_its_description():
-    assert "Not available yet" in registry.description(ART_REVIEW)
+    assert "Not available yet" in registry.description(_UNBUILT)
 
 
 def test_help_reports_required_and_optional_parameters_separately():
@@ -160,10 +173,26 @@ def test_an_unknown_action_quotes_it_back_without_guessing_a_correction():
 
 
 def test_an_unbuilt_tool_refuses_every_action_but_help():
+    # Checked before the action lookup, so a caller naming a real action of a
+    # tool that is not serving it yet is told the tool is unbuilt — not that
+    # their action does not exist, which is a different problem with a different
+    # fix.
     with pytest.raises(ArgumentError, match="not available yet"):
-        registry.resolve_action(ART_REVIEW, {"action": "set_verdict"})
+        registry.resolve_action(_UNBUILT, {"action": "set_verdict"})
 
-    assert registry.resolve_action(ART_REVIEW, {"action": "help"}).name == "help"
+    assert registry.resolve_action(_UNBUILT, {"action": "help"}).name == "help"
+
+
+def test_an_unbuilt_tools_help_reports_it_as_unavailable_and_offers_only_help():
+    # Moved here from the integration suite when `art_review` was built: the
+    # surface has no unbuilt tool left for a real server to serve, and the branch
+    # is in the generator either way. Dispatch reaching this generator is still
+    # covered by every other error test that goes over HTTP.
+    payload = registry.help_payload(_UNBUILT)
+
+    assert payload["available"] is False
+    assert payload["note"] is not None
+    assert [action["action"] for action in payload["actions"]] == ["help"]
 
 
 def test_a_missing_required_parameter_is_named():

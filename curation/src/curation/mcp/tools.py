@@ -25,8 +25,7 @@ from curation.mcp.registry import Action, Param, ToolRecord
 from curation.persistence.discovery_records import RunKind, RunStatus
 from curation.persistence.records import ArtworkStatus
 from curation.services.catalogue import MAX_LIST_LIMIT
-
-_UNBUILT = "Not available yet: this tool answers action='help' and returns an error naming that for anything else."
+from curation.services.review import MAX_REVIEW_LIMIT
 
 _STATUS = Param(
     name="status",
@@ -260,6 +259,28 @@ ART_DISCOVERY: Final = ToolRecord(
     ),
 )
 
+#: The work a review action is about. Required by all three, so one description
+#: governs every use of it and there is no optional-vs-required split to write
+#: around, as there is for `run_id` on art_discovery.
+_WORK_ID = Param(
+    name="work_id",
+    type="string",
+    description="A proposed work's id, as returned by action='list_works'.",
+    required=True,
+)
+
+#: The tip every action returning pictures carries, verbatim. The protocol gives
+#: an image content block no identity, so position is the only correlation there
+#: is — and a caller that does not know the rule will pair the wrong picture with
+#: the wrong painting on the first result where one instance had no local copy.
+#: One constant rather than three near-identical sentences, because three would
+#: drift and the drift would be invisible until a curator accepted the wrong work.
+_BLOCK_ORDER_TIP = (
+    "Images arrive as image blocks after the text, in the order the rows list them. Each row carries "
+    "image_block_index saying which block is its own; a row whose index is null has no picture and "
+    "contributes no block."
+)
+
 ART_REVIEW: Final = ToolRecord(
     name="art_review",
     title="Art review",
@@ -267,7 +288,71 @@ ART_REVIEW: Final = ToolRecord(
     read_only=False,
     destructive=True,
     open_world=False,
-    unavailable_note=_UNBUILT,
+    actions=(
+        Action(
+            name="list_works",
+            description="Page through a run's proposed works, each with the image currently on offer.",
+            example="art_review(action='list_works', run_id='<a run_id from art_discovery(action=list_runs)>')",
+            params=(
+                Param(
+                    name="run_id",
+                    type="string",
+                    description="Which run's proposed works to review, as returned by art_discovery(action='list_runs').",
+                    required=True,
+                ),
+                Param(
+                    name="limit",
+                    type="integer",
+                    description=f"How many works to return, 1 to {MAX_REVIEW_LIMIT}.",
+                    minimum=1,
+                    maximum=MAX_REVIEW_LIMIT,
+                ),
+                Param(
+                    name="offset",
+                    type="integer",
+                    description="How many works to skip, for paging through a large run.",
+                    minimum=0,
+                ),
+            ),
+            tips=(
+                _BLOCK_ORDER_TIP,
+                "Works with an image found for them come first, then ones nothing was found for. A work "
+                "reported unresolved is not a defect: it is the signal that a proposed work may not exist.",
+                f"The page is capped at {MAX_REVIEW_LIMIT} works because each one carries a picture, and pictures "
+                "dominate the result's size. A truncated page says so and how many remain; page with offset.",
+                "Every image is shown at 400px on its long edge, which is enough to judge whether this is the "
+                "right painting and whether it belongs in a living room. It is not enough to judge mat colour.",
+            ),
+        ),
+        Action(
+            name="get_work",
+            description="Return one proposed work with the image standing for it, and why it was proposed.",
+            example="art_review(action='get_work', work_id='<a work_id from action=list_works>')",
+            params=(_WORK_ID,),
+            tips=(
+                _BLOCK_ORDER_TIP,
+                "This carries the one image on offer. Use action='list_images' to see the alternates found " "for the same work.",
+                "rationale is the engine's account of why this work matched the intent. A work is judged "
+                "against that reading of the request rather than against its wording.",
+            ),
+        ),
+        Action(
+            name="list_images",
+            description="Return every image instance found for one work, best first, each with its size on the wall.",
+            example="art_review(action='list_images', work_id='<a work_id from action=list_works>')",
+            params=(_WORK_ID,),
+            tips=(
+                _BLOCK_ORDER_TIP,
+                "The instance on offer leads. The rest are alternates, kept rather than discarded so an "
+                "over-eager match stays inspectable.",
+                "display_fit says how an instance would meet the wall: 'native', 'matted_small', or "
+                "'below_floor'. A below_floor instance is shown and may be chosen — it is labelled with the "
+                "size it would appear at, never hidden.",
+                "renders_at_inches is the number a thumbnail cannot convey. A 900-pixel scan and a "
+                "6000-pixel scan look identical here and are not the same thing on a wall.",
+            ),
+        ),
+    ),
 )
 
 _THEME_ID = Param(
