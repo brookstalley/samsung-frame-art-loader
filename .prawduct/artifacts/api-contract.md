@@ -428,10 +428,15 @@ full card is about **3,600 tokens**, 1,920 of picture and 1,700 of text.
 **It offers no paging, and that is a different decision from the page's.** The
 still-choosable instances get first claim on the card's slots, so a truncated card
 omits scans the curator has already turned down, and reaches choosable ones only
-once those alone outrun the cap — where the omitted ones rank below every scan
-shown. Neither case leaves anything an offset would usefully reach, unlike a page,
-where what falls off is arbitrary and paging is the remedy. The notice says which
-case it is rather than offering an offset.
+once those alone outrun the cap. **The invariant is not that what fell off ranks
+lowest — it is that nothing omitted is both choosable and better than what is
+shown.** Those differ, and only the weaker one is true: once the choosable scans
+fill the card no refused scan is on it at all, and a refused scan is typically the
+*highest*-confidence one there is, since being the best on offer is why it was
+offered and turned down. A notice claiming the omitted scans rank below the shown
+ones is therefore false in exactly that state. It names the two kinds of omission
+separately instead, which is also what makes an offset not worth having — unlike a
+page, where what falls off is arbitrary and paging is the remedy.
 
 **The rows keep the store's ranking, and the notice must not imply otherwise.**
 Filling by preference and ordering by rank are different operations: a card can

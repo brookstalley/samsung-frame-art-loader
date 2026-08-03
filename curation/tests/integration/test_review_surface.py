@@ -553,7 +553,7 @@ async def test_a_card_with_more_scans_than_it_can_carry_says_what_it_dropped(
     assert len(images_of(result)) == MAX_INSTANCES_LISTED, "a card never carries more pictures than rows"
     assert f"Showing {MAX_INSTANCES_LISTED} of {MAX_INSTANCES_LISTED + 4}" in payload["notice"]
     assert f"this work has {MAX_INSTANCES_LISTED + 4} scans you could still choose" in payload["notice"]
-    assert f"the card holds {MAX_INSTANCES_LISTED} of them" in payload["notice"]
+    assert f"the card holds the {MAX_INSTANCES_LISTED} best of them" in payload["notice"]
     assert "no paging" in payload["notice"]
     # What was dropped is the tail of the ranking, never the instance on offer.
     assert payload["images"][0]["is_on_offer"] is True
@@ -673,13 +673,68 @@ async def test_a_card_that_cannot_hold_every_choosable_scan_says_so_instead(
             estimated_height=3000,
         )
 
+    # **The refused scan that makes this state falsifiable.** Once the choosable
+    # scans alone fill the card, no refused scan is on it — the fill loop never
+    # runs — so every one is omitted. And a refused scan is typically the
+    # *highest*-confidence one there is, because being the best on offer is why it
+    # was offered and turned down. A notice claiming the omitted scans rank below
+    # the shown ones is false exactly here, and a fixture with no rejections at
+    # all cannot tell.
+    outranking = add_image(
+        work,
+        url="https://museum.example/turned-down-but-best",
+        confidence=0.99,
+        preview_path=preview_file("turned-down-but-best.jpg"),
+        estimated_width=4000,
+        estimated_height=3000,
+    )
+    services.discovery.reject_image(outranking.id)
+
     payload = payload_of(await call(server_url, "art_review", action="list_images", work_id=work.id))
 
     assert payload["truncated"] is True
-    assert all(not image["rejected_for_this_work"] for image in payload["images"])
+    assert all(
+        not image["rejected_for_this_work"] for image in payload["images"]
+    ), "the choosable scans fill the card, so no refused one is on it"
+    assert outranking.id not in [image["image_id"] for image in payload["images"]]
     assert f"{MAX_INSTANCES_LISTED + 3} scans you could still choose" in payload["notice"]
-    assert "rank below every scan shown" in payload["notice"]
+    assert "rank below every scan shown" in payload["notice"], "true of the omitted choosable scans"
+    assert (
+        "every scan you have already turned down" in payload["notice"]
+    ), "the omitted refused scans are named separately, because they do not rank below what is shown"
     assert "still open to you are on this card" not in payload["notice"]
+
+
+async def test_a_work_whose_every_scan_was_turned_down_is_not_reassured_about_it(
+    server_url, services, propose, add_image, preview_file
+):
+    """The empty case of "every choosable scan is on this card".
+
+    True, and the wrong thing to say: there is nothing left to choose, and the
+    curator's next move is not on this surface at all. The notice names the paid
+    action that finds more rather than reporting a full card of dead ends as
+    completeness.
+    """
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    work = propose("A work nothing survived for", run_id=run.id, dedup_key="all-refused")
+    for index in range(MAX_INSTANCES_LISTED + 2):
+        image = add_image(
+            work,
+            url=f"https://museum.example/all-refused-{index}",
+            confidence=0.9 - index / 1000,
+            preview_path=preview_file(f"all-refused-{index}.jpg"),
+            estimated_width=4000,
+            estimated_height=3000,
+        )
+        services.discovery.reject_image(image.id)
+
+    payload = payload_of(await call(server_url, "art_review", action="list_images", work_id=work.id))
+
+    assert payload["truncated"] is True
+    assert all(image["rejected_for_this_work"] for image in payload["images"])
+    assert "none of these are still open to you" in payload["notice"]
+    assert "resolve_images" in payload["notice"], "the curator is pointed at what actually finds more"
+    assert "all 0 scans" not in payload["notice"]
 
 
 async def test_a_work_no_image_was_ever_found_for_says_what_to_do_about_it(server_url, services, propose):

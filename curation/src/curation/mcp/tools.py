@@ -338,13 +338,18 @@ ART_REVIEW: Final = ToolRecord(
         ),
         Action(
             name="list_images",
-            description="Return every image instance found for one work, best first, each with its size on the wall.",
+            description="Return the image instances found for one work, ranked, each with its size on the wall.",
             example="art_review(action='list_images', work_id='<a work_id from action=list_works>')",
             params=(_WORK_ID,),
             tips=(
                 _BLOCK_ORDER_TIP,
-                "The instance on offer leads. The rest are alternates, kept rather than discarded so an "
-                "over-eager match stays inspectable.",
+                "Where a work has an instance on offer it leads; a work whose scans are all below the floor "
+                "or all turned down has none, and then the first row is simply the highest-ranked. Read "
+                "is_on_offer rather than position. The rest are alternates, kept rather than discarded so "
+                "an over-eager match stays inspectable.",
+                "A card you can still act on may hold rows you cannot: rejected scans stay on it as the "
+                "record of a judgement, and they keep their rank rather than sorting last. Read "
+                "rejected_for_this_work on each row.",
                 "display_fit says how an instance would meet the wall: 'native', 'matted_small', or "
                 "'below_floor'. A below_floor instance is shown and may be chosen — it is labelled with the "
                 "size it would appear at, never hidden.",

@@ -629,13 +629,33 @@ def _instances_truncation_notice(listing: InstanceListing) -> str | None:
     if not listing.truncated:
         return None
     shown_surviving = sum(1 for instance in listing.instances if not instance.rejected)
-    what_was_dropped = (
-        f"all {shown_surviving} scans still open to you are on this card — the ones omitted are scans you "
-        "have already turned down"
-        if listing.shows_every_choosable_instance
-        else f"this work has {listing.surviving_held} scans you could still choose and the card holds "
-        f"{shown_surviving} of them; the omitted ones rank below every scan shown"
-    )
+    if listing.surviving_held == 0:
+        # Reached when a work's every instance has been turned down and it holds
+        # more than a cardful. Branch A is true here in the empty sense — no
+        # choosable scan is missing because none exists — and saying so as
+        # reassurance would be the wrong sentence in the one state where the
+        # curator's next move is not on this surface at all.
+        what_was_dropped = (
+            "none of these are still open to you; every scan found for this work has been turned down, so "
+            "art_discovery(action='resolve_images') is what finds more"
+        )
+    elif listing.shows_every_choosable_instance:
+        what_was_dropped = (
+            f"all {shown_surviving} scans still open to you are on this card — the ones omitted are scans "
+            "you have already turned down"
+        )
+    else:
+        # Reached only when the choosable scans alone fill the card, which means
+        # no refused scan is on it and every one of them was omitted. Their rank
+        # is *not* below what is shown — a refused scan is typically the
+        # highest-confidence one there is, which is why it was offered and
+        # refused — so the two kinds of omission are named separately rather than
+        # under one claim about ranking.
+        what_was_dropped = (
+            f"this work has {listing.surviving_held} scans you could still choose and the card holds the "
+            f"{shown_surviving} best of them; what is omitted is the rest of those, which rank below every "
+            "scan shown, together with every scan you have already turned down"
+        )
     return (
         f"Showing {len(listing.instances)} of {listing.held} scans found for this work; "
         f"{what_was_dropped}. Read rejected_for_this_work on each row rather than its position — "

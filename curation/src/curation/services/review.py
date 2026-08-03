@@ -95,14 +95,18 @@ DEFAULT_REVIEW_LIMIT: Final[int] = 30
 #: smaller N.
 #:
 #: **There is deliberately no paging here**, and the notice does not offer any.
-#: What a truncated card omits is never something the caller could have acted on:
 #: `_fill` gives the still-choosable instances first claim on the slots, so the
-#: cut falls on scans already refused, and only reaches choosable ones once they
-#: alone outrun the cap — at which point the omitted ones rank below every scan
-#: shown. Either way there is nothing an offset would reach that is worth
-#: reaching, which is the opposite of the listing case, where what falls off a
-#: page is arbitrary and paging is the remedy. Promising an offset that does not
-#: exist is the failure the withheld action was withheld to avoid.
+#: cut falls on scans already refused until those choosable ones alone outrun the
+#: cap. The two states omit different things and the notice names which: refused
+#: scans in the first, and in the second the *lower-ranked* choosable scans
+#: together with every refused one. Only the first of those is ordered — a refused
+#: scan is usually the highest-confidence one there is, since that is why it was
+#: offered and turned down — so "what fell off ranks lowest" is true of a page and
+#: is not true here. What holds instead is that nothing omitted is both choosable
+#: and better than what is shown, which is what makes an offset not worth having,
+#: unlike the listing case where what falls off a page is arbitrary and paging is
+#: the remedy. Promising an offset that does not exist is the failure the withheld
+#: action was withheld to avoid.
 MAX_INSTANCES_LISTED: Final[int] = 12
 
 
@@ -225,7 +229,13 @@ class CandidatePage:
 
 @dataclass(frozen=True, slots=True)
 class InstanceListing:
-    """A work's instances, best first, capped at what one card can carry.
+    """A work's instances in the store's ranking, capped at what one card carries.
+
+    Not "best first": the ranking is `is_selected`, then confidence, and a
+    rejected scan keeps its place in it — usually near the top, since being the
+    best on offer is why it was offered and turned down. Which rows are still
+    choosable is a per-row fact, and `_fill` is what stops the cap from spending
+    every slot on refused ones.
 
     Carries the work as well as the instances, because a caller that had to ask
     twice — once for the pictures and once for the title they belong to — is the
