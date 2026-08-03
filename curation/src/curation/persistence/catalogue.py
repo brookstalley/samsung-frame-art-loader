@@ -65,6 +65,16 @@ class CatalogueStore(Protocol):
         """Return the artist, or None if no such id is stored."""
         ...
 
+    def list_artists(self) -> Sequence[Artist]:
+        """Every artist held, in a stable order.
+
+        Unpaged, unlike works: this answers "which painter is this", which is a
+        question about the whole set — a page of it would match against whichever
+        artists happened to sort first. The table grows by one row per painter
+        the catalogue has never seen, against a collection sized by one wall.
+        """
+        ...
+
     # -- artworks -------------------------------------------------------------
 
     def add_artwork(self, artwork: Artwork) -> None:

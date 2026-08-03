@@ -232,6 +232,9 @@ class SqliteCatalogue(TableAdapter):
     def get_artist(self, artist_id: str) -> Artist | None:
         return self._get("artists", {"id": artist_id}, _artist)
 
+    def list_artists(self) -> Sequence[Artist]:
+        return self._list("artists", None, _BY_NAME, _artist)
+
     # -- artworks -------------------------------------------------------------
 
     def add_artwork(self, artwork: Artwork) -> None:

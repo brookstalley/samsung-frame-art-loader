@@ -210,7 +210,7 @@ def test_a_work_with_one_surviving_image_can_still_be_accepted(discovery, resolv
     add_image(work)
     discovery.reject_image(discovery.list_candidate_images(work.id)[0].id)
 
-    assert discovery.set_verdict(work.id, Verdict.ACCEPTED).verdict is Verdict.ACCEPTED
+    assert discovery.set_verdict(work.id, Verdict.ACCEPTED).work.verdict is Verdict.ACCEPTED
 
 
 def test_an_unresolved_work_can_still_be_rejected(discovery, propose):
@@ -218,7 +218,7 @@ def test_an_unresolved_work_can_still_be_rejected(discovery, propose):
     work = propose("A Work That Does Not Exist")
     discovery.record_resolution(work.id)
 
-    assert discovery.set_verdict(work.id, Verdict.REJECTED).verdict is Verdict.REJECTED
+    assert discovery.set_verdict(work.id, Verdict.REJECTED).work.verdict is Verdict.REJECTED
 
 
 def test_an_unresolved_work_is_reported_rather_than_dropped(discovery, run, propose, add_image):

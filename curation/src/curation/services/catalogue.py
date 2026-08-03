@@ -221,6 +221,10 @@ class CatalogueService:
 
     # -- writes: artists and works --------------------------------------------
 
+    def list_artists(self) -> Sequence[Artist]:
+        """Every artist held, in a stable order by name."""
+        return self._store.list_artists()
+
     def add_artist(
         self,
         *,

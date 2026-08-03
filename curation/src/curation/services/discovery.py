@@ -45,8 +45,8 @@ from curation.persistence.discovery_records import (
     SpendRecord,
     Verdict,
 )
-from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
-from curation.services import selection
+from curation.persistence.records import AcquisitionMethod, Artist, RightsStatus, SourceClass
+from curation.services import attribution, selection
 from curation.services.catalogue import CatalogueService
 from curation.services.display_fit import ArtworkBox
 from curation.services.errors import ServiceError
@@ -54,6 +54,26 @@ from curation.services.fields import relative_path, require_member, require_text
 from curation.services.store import store_write
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class VerdictOutcome:
+    """A recorded verdict, and what recording it did beyond the verdict itself.
+
+    Acceptance mints an artwork and may mint an artist, and the artist is the one
+    part a curator can neither see nor undo from the work alone: a new `Artist`
+    row that duplicates a painter already held looks, in the catalogue, exactly
+    like a painter newly encountered. `minted_artist` and `duplicate_candidates`
+    are how that reaches them at the moment it happens.
+
+    Both are empty for a rejection, and for an acceptance that matched an artist
+    already held or named none — the three cases where nothing was decided that a
+    reader could not work out from the work.
+    """
+
+    work: CandidateWork
+    minted_artist: Artist | None = None
+    duplicate_candidates: Sequence[Artist] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -471,7 +491,7 @@ class DiscoveryService:
             store_write(self._store.add_candidate_work, work)
         return work
 
-    def set_verdict(self, candidate_work_id: str, verdict: Verdict, *, reason: str | None = None) -> CandidateWork:
+    def set_verdict(self, candidate_work_id: str, verdict: Verdict, *, reason: str | None = None) -> VerdictOutcome:
         """Record the curator's decision about a work: accepted or rejected.
 
         **`awaiting_better_image` is refused here on purpose.** That verdict is a
@@ -501,7 +521,7 @@ class DiscoveryService:
                 return self._accept(work)
             rejected = replace(work, verdict=target, rejected_reason=reason, decided_at=datetime.now(UTC))
             store_write(self._store.update_candidate_work, rejected)
-        return rejected
+        return VerdictOutcome(work=rejected)
 
     # -- reads and writes: image instances ------------------------------------
 
@@ -792,7 +812,7 @@ class DiscoveryService:
 
     # -- internals ------------------------------------------------------------
 
-    def _accept(self, work: CandidateWork) -> CandidateWork:
+    def _accept(self, work: CandidateWork) -> VerdictOutcome:
         """Mint the artwork this candidate becomes, and promote its instances.
 
         Acceptance is the only way into the catalogue, and it is a promotion
@@ -820,7 +840,15 @@ class DiscoveryService:
                 f"Candidate work {work.id!r}: {cause}, so there is no image to accept it on. "
                 "Re-search it with resolve_images, or reject it."
             )
-        artwork = self._catalogue.add_artwork(title=work.proposed_title)
+        # Resolved before the artwork is minted, because `add_artwork` refuses an
+        # `artist_id` the catalogue does not hold — so the row has to exist first,
+        # and both writes have to land inside the transaction this runs in.
+        attributed = attribution.resolve(work.proposed_artist, self._catalogue.list_artists())
+        minted: Artist | None = None
+        if attributed.mint is not None:
+            minted = self._catalogue.add_artist(name=attributed.mint)
+        artist = attributed.matched if minted is None else minted
+        artwork = self._catalogue.add_artwork(title=work.proposed_title, artist_id=None if artist is None else artist.id)
         for image in images:
             self._catalogue.add_source(
                 artwork_id=artwork.id,
@@ -838,7 +866,14 @@ class DiscoveryService:
             )
         accepted = replace(work, verdict=Verdict.ACCEPTED, artwork_id=artwork.id, decided_at=datetime.now(UTC))
         store_write(self._store.update_candidate_work, accepted)
-        return accepted
+        return VerdictOutcome(
+            work=accepted,
+            minted_artist=minted,
+            # Only alongside a mint: a matched artist raised none by construction,
+            # and reporting them on every acceptance would train a reader to skip
+            # the sentence that matters.
+            duplicate_candidates=attributed.near_misses if minted is not None else (),
+        )
 
     def _below_floor(self, image: CandidateImage) -> bool:
         """Whether this instance is too small to be selected without being asked for.

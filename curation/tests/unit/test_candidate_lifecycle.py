@@ -40,7 +40,7 @@ def test_a_proposal_without_a_reason_is_refused(discovery, run):
 def test_accepting_a_work_mints_the_artwork_it_becomes(discovery, resolved_work, service):
     work = resolved_work("Nighthawks")
 
-    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED)
+    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED).work
 
     assert accepted.verdict is Verdict.ACCEPTED
     assert accepted.decided_at is not None
@@ -49,10 +49,119 @@ def test_accepting_a_work_mints_the_artwork_it_becomes(discovery, resolved_work,
     assert artwork.status is ArtworkStatus.ACCEPTED
 
 
+# -- the artist an accepted work is attributed to -------------------------------
+#
+# Q9 — who is the artist, for the physical label — has no answer for a discovered
+# work until acceptance resolves one. The label renders what is stored here, and
+# nothing downstream re-checks it, so the cases that matter are the ones where two
+# names must not become one painter.
+
+
+def test_an_accepted_work_carries_the_artist_that_was_proposed_for_it(discovery, resolved_work, service):
+    """Q9, answerable for a discovered work — which it is not before acceptance."""
+    work = resolved_work("Nighthawks", proposed_artist="Edward Hopper")
+
+    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED).work
+
+    detail = service.get_artwork(accepted.artwork_id)
+    assert detail.artist is not None, "an accepted work with no artist cannot be labelled"
+    assert detail.artist.name == "Edward Hopper"
+
+
+def test_two_works_by_one_painter_share_one_artist_row(discovery, resolved_work, service):
+    """The reason Artist is a row and not a string on the work."""
+    first = resolved_work("Nighthawks", dedup_key="nighthawks", proposed_artist="Edward Hopper")
+    second = resolved_work("Chop Suey", dedup_key="chop-suey", proposed_artist="Edward Hopper")
+
+    one = discovery.set_verdict(first.id, Verdict.ACCEPTED).work
+    two = discovery.set_verdict(second.id, Verdict.ACCEPTED).work
+
+    assert service.get_artwork(one.artwork_id).artist.id == service.get_artwork(two.artwork_id).artist.id
+
+
+def test_a_painter_named_a_second_way_still_lands_on_one_row(discovery, resolved_work, service):
+    """`El Greco` and its parenthesised alias are one painter, decided in `dedup`."""
+    first = resolved_work("View of Toledo", dedup_key="toledo", proposed_artist="El Greco")
+    second = resolved_work(
+        "The Disrobing of Christ", dedup_key="disrobing", proposed_artist="El Greco (Domenikos Theotokopoulos)"
+    )
+
+    one = discovery.set_verdict(first.id, Verdict.ACCEPTED).work
+    two = discovery.set_verdict(second.id, Verdict.ACCEPTED).work
+
+    assert service.get_artwork(one.artwork_id).artist.id == service.get_artwork(two.artwork_id).artist.id
+
+
+def test_a_work_naming_no_artist_is_accepted_and_attributed_to_nobody(discovery, resolved_work, service):
+    """An anonymous work is a real thing, not a failure to match."""
+    work = resolved_work("Untitled")
+
+    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED).work
+
+    detail = service.get_artwork(accepted.artwork_id)
+    assert detail.artwork.artist_id is None
+    assert detail.artist is None
+
+
+def test_two_unattributed_works_do_not_become_one_painter(discovery, resolved_work, service):
+    """The merge that needs no two names to resemble each other.
+
+    Both proposals normalise to the empty key. Treating that as an identity would
+    attribute every anonymous work in the catalogue to one artist named nothing.
+    """
+    first = resolved_work("Untitled", dedup_key="untitled-1")
+    second = resolved_work("Study", dedup_key="study", proposed_artist="   ")
+
+    one = discovery.set_verdict(first.id, Verdict.ACCEPTED).work
+    two = discovery.set_verdict(second.id, Verdict.ACCEPTED).work
+
+    assert service.get_artwork(one.artwork_id).artwork.artist_id is None
+    assert service.get_artwork(two.artwork_id).artwork.artist_id is None
+    assert list(service.list_artists()) == []
+
+
+def test_a_probable_duplicate_artist_is_reported_at_the_moment_it_is_minted(discovery, resolved_work):
+    """The split is deliberate; leaving it silent is what would not be.
+
+    A duplicate row is the reversible failure and is taken on purpose, because
+    every rule that would merge these two also merges painters who are genuinely
+    different. What must not happen is that it passes unremarked.
+    """
+    first = resolved_work("The Mill", dedup_key="mill", proposed_artist="Jacob van Ruisdael")
+    discovery.set_verdict(first.id, Verdict.ACCEPTED)
+    second = resolved_work("Wheatfields", dedup_key="wheatfields", proposed_artist="Jacob Isaacksz van Ruisdael")
+
+    outcome = discovery.set_verdict(second.id, Verdict.ACCEPTED)
+
+    assert outcome.minted_artist is not None
+    assert [artist.name for artist in outcome.duplicate_candidates] == ["Jacob van Ruisdael"]
+
+
+def test_matching_a_held_artist_reports_no_duplicate(discovery, resolved_work):
+    first = resolved_work("Nighthawks", dedup_key="nighthawks", proposed_artist="Edward Hopper")
+    discovery.set_verdict(first.id, Verdict.ACCEPTED)
+    second = resolved_work("Chop Suey", dedup_key="chop-suey", proposed_artist="Edward Hopper")
+
+    outcome = discovery.set_verdict(second.id, Verdict.ACCEPTED)
+
+    assert outcome.minted_artist is None
+    assert outcome.duplicate_candidates == ()
+
+
+def test_a_rejection_mints_no_artist(discovery, resolved_work, service):
+    """Attribution is a consequence of entering the catalogue, not of being judged."""
+    work = resolved_work("Nighthawks", proposed_artist="Edward Hopper")
+
+    outcome = discovery.set_verdict(work.id, Verdict.REJECTED)
+
+    assert outcome.minted_artist is None
+    assert list(service.list_artists()) == []
+
+
 def test_rejecting_a_work_records_the_note_and_when_it_was_decided(discovery, resolved_work):
     work = resolved_work()
 
-    rejected = discovery.set_verdict(work.id, Verdict.REJECTED, reason="Too well known.")
+    rejected = discovery.set_verdict(work.id, Verdict.REJECTED, reason="Too well known.").work
 
     assert rejected.verdict is Verdict.REJECTED
     assert rejected.rejected_reason == "Too well known."
@@ -85,7 +194,7 @@ def test_the_curator_is_never_blocked_by_a_re_search_in_flight(discovery, resolv
     add_image(work, confidence=0.4)
     discovery.reject_image(rejected_image.id)
 
-    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED)
+    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED).work
 
     assert accepted.verdict is Verdict.ACCEPTED
 
@@ -103,7 +212,7 @@ def test_every_instance_becomes_a_source_with_the_selected_one_primary(discovery
     first = discovery.list_candidate_images(work.id)[0]
     add_image(work, url="https://other.example/1", confidence=0.5)
 
-    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED)
+    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED).work
 
     sources = service.list_sources(accepted.artwork_id)
     assert len(sources) == 2
@@ -115,7 +224,7 @@ def test_a_candidate_without_established_rights_promotes_as_unknown(discovery, r
     """Absence is not permitted on a source: 'unknown' is the honest reading."""
     work = resolved_work()
 
-    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED)
+    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED).work
 
     assert service.list_sources(accepted.artwork_id)[0].rights_status is RightsStatus.UNKNOWN
 
@@ -125,7 +234,7 @@ def test_established_rights_survive_the_promotion(discovery, propose, add_image,
     add_image(work, rights_status=RightsStatus.PUBLIC_DOMAIN)
     discovery.record_resolution(work.id)
 
-    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED)
+    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED).work
 
     assert service.list_sources(accepted.artwork_id)[0].rights_status is RightsStatus.PUBLIC_DOMAIN
 
@@ -139,7 +248,7 @@ def test_how_to_fetch_the_bytes_travels_with_the_instance(discovery, resolved_wo
     work = resolved_work()
     found = discovery.list_candidate_images(work.id)[0]
 
-    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED)
+    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED).work
 
     assert service.list_sources(accepted.artwork_id)[0].acquisition_method is found.acquisition_method
 
@@ -147,7 +256,7 @@ def test_how_to_fetch_the_bytes_travels_with_the_instance(discovery, resolved_wo
 def test_a_rejected_work_never_becomes_an_artwork(discovery, resolved_work, service):
     work = resolved_work()
 
-    rejected = discovery.set_verdict(work.id, Verdict.REJECTED)
+    rejected = discovery.set_verdict(work.id, Verdict.REJECTED).work
 
     assert rejected.artwork_id is None
     assert service.list_artworks().total == 0
@@ -208,7 +317,7 @@ def test_a_re_search_finishing_after_an_acceptance_reports_but_does_not_apply(di
     a combination nothing else in this model can produce or repair.
     """
     work = resolved_work()
-    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED)
+    accepted = discovery.set_verdict(work.id, Verdict.ACCEPTED).work
     add_image(work, url="https://later.example/1", confidence=0.99)
 
     outcome = discovery.record_resolution(work.id)
