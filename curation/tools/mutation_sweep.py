@@ -19,6 +19,16 @@ curation project root), `find` and `replace`. `find` must appear in the file; a
 mutation whose pattern has drifted is reported rather than silently skipped,
 because a sweep that quietly tests nothing is worse than no sweep.
 
+**Write mutations that change behaviour, and check that yours did.** A `replace`
+that only edits a comment, adds a `# noqa`, or renames an unused local cannot
+fail any test, so it always survives — and a survivor is exactly what a real
+finding looks like. Nothing here can tell the two apart: from the outside, "no
+test covers this branch" and "this mutation was never a defect" are the same
+green run. Two of the first five mutations written against the review surface
+were this, and both were investigated as findings before the mistake was
+spotted. If a survivor surprises you, confirm the mutation actually breaks
+something before you go writing a test for it.
+
 **Bytecode caching is disabled for the child runs, and that is not a detail.**
 This rewrites a source file, runs pytest, and restores it, often several times a
 second. CPython decides a `.pyc` is current by comparing the source's

@@ -271,6 +271,8 @@ async def test_one_work_in_full_carries_one_picture_and_the_record_behind_it(ser
     assert work["shown_image"]["url"] == "https://artic.edu/elephants"
     assert work["shown_image"]["confidence"] is not None
     assert work["rationale"]
+    # The run reaches the caller as a property of the work, and only there.
+    assert work["discovery_run_id"] == started["run_id"]
 
 
 async def test_the_size_a_work_would_render_at_reaches_the_caller(server_url):
@@ -399,7 +401,69 @@ async def test_a_truncated_page_says_so_and_names_a_remedy_that_exists(server_ur
     assert payload["count"] == 2
     assert payload["total"] == 4
     assert "Showing 1-2 of 4" in payload["notice"]
+    assert "raise limit" in payload["notice"], "below the ceiling, a bigger page is still available"
     assert "offset" in payload["notice"]
+
+
+async def test_at_the_ceiling_the_notice_stops_advising_a_bigger_page(server_url, a_run_of):
+    """Advice a caller cannot follow is worse than none.
+
+    Below the cap, "raise limit" is the cheapest remedy and the notice says so.
+    At the cap it is a refusal waiting to happen — the very next thing that
+    caller does is ask for 41 and get the bounds error. So the notice drops it
+    and names the one that still works.
+    """
+    run = a_run_of(MAX_REVIEW_LIMIT + 5)
+
+    payload = payload_of(await call(server_url, "art_review", action="list_works", run_id=run.id, limit=MAX_REVIEW_LIMIT))
+
+    assert payload["truncated"] is True
+    assert "raise limit" not in payload["notice"]
+    assert "the maximum" in payload["notice"]
+    assert "offset" in payload["notice"]
+
+
+async def test_a_result_with_no_pictures_at_all_says_so_rather_than_going_quiet(server_url, services, propose, add_image):
+    """Silence about the images is the one thing this surface may never do.
+
+    A listing whose rows carry no picture is indistinguishable, to a model, from
+    one whose pictures the client dropped — and the second is the failure the
+    whole gate is built against. So the notice states the absence and the rows
+    each say why, rather than the result simply arriving with no blocks and no
+    comment.
+    """
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    for index in range(2):
+        add_image(propose(f"Work {index}", run_id=run.id, dedup_key=f"bare-{index}"), preview_path=None)
+
+    result = await call(server_url, "art_review", action="list_works", run_id=run.id)
+    payload = payload_of(result)
+
+    assert images_of(result) == []
+    assert "No images accompany this result" in payload["notice"]
+    for work in payload["works"]:
+        assert work["shown_image"]["image_block_index"] is None
+        assert work["shown_image"]["preview_note"]
+
+
+async def test_a_work_no_image_was_ever_found_for_says_what_to_do_about_it(server_url, services, propose):
+    """An empty instance list is a reportable outcome, not an empty success.
+
+    "We looked and found nothing" is the signal that a proposed work may not
+    exist, and it has a remedy the curator can act on. Returning an empty array
+    with no comment would read as a surface that failed to load something.
+    """
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    work = propose("A work with no scans", run_id=run.id, dedup_key="none")
+
+    result = await call(server_url, "art_review", action="list_images", work_id=work.id)
+    payload = payload_of(result)
+
+    assert payload["success"] is True
+    assert payload["images"] == []
+    assert payload["count"] == 0
+    assert "No image instances have been found" in payload["notice"]
+    assert "resolve_images" in payload["notice"], "the remedy is named, and it is on the tool that owns it"
 
 
 async def test_a_limit_beyond_the_page_cap_reports_the_bounds(server_url, services):

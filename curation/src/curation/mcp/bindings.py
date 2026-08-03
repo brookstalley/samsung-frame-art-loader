@@ -242,13 +242,12 @@ def _list_candidate_works(services: Services, arguments: Mapping[str, Any]) -> d
 
 
 def _get_candidate_work(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    dossier = services.review.get_work(arguments["work_id"])
     pictures = _Pictures()
-    described = _candidate_detail(dossier.view, pictures)
-    return with_images(
-        ok(run_id=dossier.run.id, work=described, notice=pictures.notice()),
-        pictures.blocks,
-    )
+    described = _candidate_detail(services.review.get_work(arguments["work_id"]), pictures)
+    # No `run_id` beside the work: the work carries `discovery_run_id`, and one
+    # fact under two names in one payload is a fact that can be read twice and
+    # believed once.
+    return with_images(ok(work=described, notice=pictures.notice()), pictures.blocks)
 
 
 def _list_candidate_images(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -257,7 +256,6 @@ def _list_candidate_images(services: Services, arguments: Mapping[str, Any]) -> 
     instances = [_instance_fields(instance, pictures) for instance in listing.instances]
     return with_images(
         ok(
-            run_id=listing.run.id,
             work_id=listing.work.id,
             title=listing.work.proposed_title,
             images=instances,

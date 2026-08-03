@@ -62,7 +62,7 @@ def test_a_below_floor_instance_is_offered_rather_than_withheld(services, propos
     add_image(work, estimated_width=600, estimated_height=450)
 
     listing = services.review.list_images(work.id)
-    view = services.review.get_work(work.id).view
+    view = services.review.get_work(work.id)
 
     assert [str(instance.fit.fit) for instance in listing.instances] == ["below_floor"]
     assert view.shown_is_on_offer is False, "a below-floor instance is never selected automatically"
@@ -175,7 +175,7 @@ def test_a_work_with_a_selection_shows_that_instance_and_says_it_is_on_offer(ser
         estimated_height=3000,
     )
 
-    view = services.review.get_work(work.id).view
+    view = services.review.get_work(work.id)
 
     assert view.shown.image.url == "https://museum.example/best"
     assert view.shown_is_on_offer is True
@@ -199,7 +199,7 @@ def test_a_work_nothing_could_be_selected_for_is_still_pictured(services, propos
             estimated_height=450,
         )
 
-    view = services.review.get_work(work.id).view
+    view = services.review.get_work(work.id)
 
     assert view.instances_held == 3
     assert view.shown is not None, "a work with instances is never shown picture-less"
@@ -219,7 +219,7 @@ def test_a_work_whose_every_instance_was_rejected_shows_nothing(services, discov
     only = add_image(work, preview_path=preview())
     discovery.reject_image(only.id)
 
-    view = services.review.get_work(work.id).view
+    view = services.review.get_work(work.id)
 
     assert view.shown is None
     assert (view.instances_held, view.instances_surviving) == (1, 0)
@@ -239,7 +239,7 @@ def test_a_rejected_instance_stays_on_the_card_labelled(services, discovery, pro
     # is how a curator concludes the surface lost something.
     assert by_url["https://museum.example/first"].rejected is True
     assert by_url["https://museum.example/second"].rejected is False
-    assert services.review.get_work(work.id).view.instances_surviving == 1
+    assert services.review.get_work(work.id).instances_surviving == 1
 
 
 # -- paging, and the bound on the pictures --------------------------------------

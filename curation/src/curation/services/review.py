@@ -154,24 +154,21 @@ class CandidatePage:
 
 
 @dataclass(frozen=True, slots=True)
-class CandidateDossier:
-    """One proposed work in full — what a detail view shows."""
-
-    view: CandidateView
-    run: DiscoveryRun
-
-
-@dataclass(frozen=True, slots=True)
 class InstanceListing:
     """Every instance found for one work, best first.
 
     Carries the work as well as the instances, because a caller that had to ask
     twice — once for the pictures and once for the title they belong to — is the
     composite read this layer exists to prevent.
+
+    It does **not** carry the run. That was here, cost a `get_run` on every call,
+    and reached the payload as a `run_id` nothing needed: a caller arrives at this
+    action holding a work id they got from a run-scoped listing, so they already
+    know the run. Removed rather than pinned by a test — a field whose only
+    defence would be a test written to defend it is a field to delete.
     """
 
     work: CandidateWork
-    run: DiscoveryRun
     instances: Sequence[InstanceView]
 
 
@@ -231,16 +228,20 @@ class ReviewService:
             offset=offset,
         )
 
-    def get_work(self, candidate_work_id: str) -> CandidateDossier:
+    def get_work(self, candidate_work_id: str) -> CandidateView:
         """One proposed work with the instance standing for it.
 
         The alternates are `list_images`' answer, not this one's. Returning every
         instance here would make the two actions differ only in what a caller
         ignores, and would put a work's whole picture set inside a call a caller
         makes to read one title.
+
+        Returns the view itself rather than a wrapper carrying the run beside it.
+        The wrapper existed to supply a top-level `run_id`, which was the same
+        value the work already carries as `discovery_run_id` — one fact under two
+        names in one payload, and a `get_run` per call to produce the duplicate.
         """
-        work = self._discovery.get_candidate_work(candidate_work_id)
-        return CandidateDossier(view=self._view(work), run=self._discovery.get_run(work.discovery_run_id))
+        return self._view(self._discovery.get_candidate_work(candidate_work_id))
 
     def list_images(self, candidate_work_id: str) -> InstanceListing:
         """Every instance found for a work, in the order the review card offers them.
@@ -258,7 +259,6 @@ class ReviewService:
         work = self._discovery.get_candidate_work(candidate_work_id)
         return InstanceListing(
             work=work,
-            run=self._discovery.get_run(work.discovery_run_id),
             instances=[self._instance(image) for image in self._discovery.list_candidate_images(work.id)],
         )
 
