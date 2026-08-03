@@ -411,7 +411,7 @@ def _check_value(param: Param, value: object, action: Action) -> None:
             example=action.example,
         )
     if param.items is not None and isinstance(value, list):
-        _check_elements(param, value, action)
+        _check_elements(param, param.items, value, action)
     if param.choices is not None and value not in param.choices:
         raise ArgumentError(
             f"Invalid value for {param.name!r}: {_render(value)}.",
@@ -428,21 +428,25 @@ def _check_value(param: Param, value: object, action: Action) -> None:
         )
 
 
-def _check_elements(param: Param, values: list[object], action: Action) -> None:
+def _check_elements(param: Param, element_type: str, values: list[object], action: Action) -> None:
     """Check every element, and say which one was wrong.
 
     The position is in the message because a list of forty ids with one integer
     in it is a caller error nobody can find from "must be an array of string".
     A `bool` is refused for an integer element for the same reason it is at the
     top level: it is an `int` in Python and would go on to behave as 1.
+
+    The element type is passed rather than read off the param, so the caller's
+    "this one has elements" check is the same fact this function relies on —
+    there is no second, unreachable branch here for the case it already ruled out.
     """
-    expected = _JSON_TYPES[param.items]  # type: ignore[index]
+    expected = _JSON_TYPES[element_type]
     for position, element in enumerate(values):
-        if isinstance(element, expected) and not (param.items == "integer" and isinstance(element, bool)):
+        if isinstance(element, expected) and not (element_type == "integer" and isinstance(element, bool)):
             continue
         raise ArgumentError(
-            f"Parameter {param.name!r} must be an array of {param.items}, " f"but item {position} is {_render(element)}.",
-            enumeration={"parameter_types": {param.name: f"array of {param.items}"}},
+            f"Parameter {param.name!r} must be an array of {element_type}, but item {position} is {_render(element)}.",
+            enumeration={"parameter_types": {param.name: f"array of {element_type}"}},
             example=action.example,
         )
 

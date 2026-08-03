@@ -297,6 +297,58 @@ def test_a_curator_who_rejected_a_scan_is_never_handed_it_back(services, runner,
     assert settled.resolution_status is ResolutionStatus.UNRESOLVED
 
 
+# -- a re-search is a run, and every run-shaped action takes it ------------------
+
+
+def test_a_re_search_can_be_cancelled_and_stops_where_it_was(services, runner, reviewed, museum):
+    """`cancel` takes a re-search id, which the action's own tips promise a caller.
+
+    Driven rather than asserted from the wording: a run stopped partway must
+    actually stop, or the promise is that the call returns rather than that it
+    does anything. The works not yet reached are left alone, and what was spent
+    before the decision stays recorded.
+    """
+    _, works = reviewed("The Elephants", "Swans Reflecting Elephants")
+    museum.asked.clear()
+    resolve_id: dict[str, str] = {}
+    ask = museum.find_images
+
+    def cancel_after_the_first(query):
+        result = ask(query)
+        if len(museum.asked) == 1:
+            services.discovery.cancel_run(resolve_id["id"])
+        return result
+
+    original = services.discovery.start_resolve_run
+
+    def remember(**kwargs):
+        run = original(**kwargs)
+        resolve_id["id"] = run.id
+        return run
+
+    services.discovery.start_resolve_run = remember
+    museum.find_images = cancel_after_the_first
+
+    resolve = re_search(runner, *works.values())
+
+    assert services.discovery.get_run(resolve.id).status is RunStatus.CANCELLED
+    assert len(museum.asked) == 1, "it stopped rather than working through the rest"
+    # And cancelling is terminal, which is what releases the coverage — a curator
+    # who stopped a re-search must be able to start another over the same works.
+    services.discovery.start_resolve_run = original
+    assert re_search(runner, *works.values()).id
+
+
+def test_a_re_search_appears_in_a_listing_narrowed_to_re_searches(services, runner, reviewed):
+    """`list_runs(kind=...)` is how a curator finds the re-searches under an intent."""
+    parent, works = reviewed("The Elephants")
+
+    resolve = re_search(runner, works["The Elephants"])
+
+    assert [run.id for run in runner.list_runs(kind=RunKind.RESOLVE)] == [resolve.id]
+    assert parent.id in [run.id for run in runner.list_runs(kind=RunKind.DISCOVERY)]
+
+
 # -- being watched while it works ------------------------------------------------
 
 
