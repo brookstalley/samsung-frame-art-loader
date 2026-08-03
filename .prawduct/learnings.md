@@ -228,6 +228,26 @@ the backlog is part of its sweep set.**
     in that commit, is the escalation arguing that attention has stopped working;
     it did not survive its own commit.
 
+17. **2026-08-02, nineteenth and twentieth recurrences — with the rule read at
+    session start and not applied.** Chunk 16A corrected the phase-1 token basis
+    across `config.py`, six artifacts and the tests, and stopped at `.env.example`,
+    which pinned the superseded values *and* carried the superseded reasoning.
+    Found by booting the product, which printed the old estimate — not by any
+    review. Then, in the fix for a Critic finding about a test marker, the split
+    reached the test file, `pyproject.toml` and the docstring, and missed
+    `boundary-patterns.md`, which still quoted the old `addopts` verbatim. The
+    Critic's phrasing is the sharpest statement of this rule yet: **"the fix
+    corrected every site the finding named and none it did not."**
+
+    Two things make this pair worth recording rather than being two more tallies.
+    First, **the deployment surface was the miss both times that mattered** —
+    `.env.example` is what a curator's `.env` is copied from, so the correction
+    reached everything except the file that decides what anyone actually sees.
+    Second, **the remedy for that one is entry 15's, applied**: the pins are now
+    commented out rather than corrected, because a value pinned in `.env.example`
+    is a value copied into every `.env` where no later correction can reach it.
+    A default in one place beats a correct value in two.
+
 **The correction that follows: stop sweeping a duplicated claim, stop duplicating
 it.** Every remedy above escalates *how well you look* — grep, then walk the
 decision graph, then do not exclude the files you edited, then treat the finding's

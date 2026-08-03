@@ -206,9 +206,18 @@ rather than wrong, its per-work progress is visible in the log, and the run's ow
 status long-poll keeps a client from hanging on it. **Backlog issue #47** carries
 the fix.
 
-This is also why the live suite (`tests/live/test_artic_shapes_are_still_real.py`)
-is deselected by default: it is free, but it is at the mercy of whatever the
-local network is doing.
+This is also why the live suite is deselected by default: it is free, but it is at
+the mercy of whatever the local network is doing.
+
+```
+cd curation && uv run pytest -m live_museum
+```
+
+**`live_museum`, not `live_api`** — the two are separate markers precisely so that
+running this free suite does not also run the OpenRouter ones, which spend real
+credit. `tests/live/test_artic_shapes_are_still_real.py` is the durable form of
+everything above: the shapes here are prose, and prose nobody re-runs quietly
+stops describing the API.
 
 ## What this hands off
 
