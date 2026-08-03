@@ -51,3 +51,10 @@ The curation suite boots a real uvicorn server per test class of surface work.
 Do not replace that with an in-process ASGI transport: Starlette does not run a
 mounted sub-app's lifespan, and the lifespan is what makes the MCP mount work,
 so an in-process test would pass against an app that fails every real request.
+
+**A green suite says nothing about a branch no test reaches.** Before believing
+new branches are covered, break them on purpose:
+`cd curation && uv run python tools/mutation_sweep.py <mutations.json> <test paths>`.
+Its docstring has the format. It has found something on every change it has been
+run on, and it is the check that a diff review does not substitute for — the
+undefended branches all looked right when read.
