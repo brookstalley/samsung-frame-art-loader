@@ -2065,10 +2065,32 @@ design_decisions:
 #   priority: high | medium | low
 
 open_questions:
-  - question: "Should the health panel surface `limit_remaining` at all, and if so with what caveat?"
-    blocking: "Chunk 19's health-panel half. Nothing before it — no surface reads the figure today."
-    waiting_on: operator
-    priority: medium
+  # RESOLVED 2026-08-04 by the operator: option (a) — the health panel does NOT
+  # surface `limit_remaining`, in any form. Chunk 19's health-panel half is
+  # unblocked and builds without it.
+  #
+  # The reasoning the operator endorsed: the panel's own governing rule is "never
+  # a green dot — state the observation and its age, not a verdict", and a lagging
+  # balance is a green dot wearing a timestamp. Option (b), showing it with the lag
+  # on screen, was the real contender precisely because it looks like it satisfies
+  # that rule; it was declined because the figure's failure mode is not staleness
+  # but INVERSION — it was observed reading credit-remaining while live calls were
+  # already refused, so a caveat about age does not warn about the case that
+  # actually bites. The honest signals were already built: recorded per-run spend
+  # and the `halted_by_budget` outcome, both of which report what happened rather
+  # than what the provider's cache believes is possible.
+  #
+  # The ratified corollary in nonfunctional-requirements.md § Direction is
+  # UNTOUCHED by this: it says where "budget remaining" comes from IF shown
+  # (the authority, never a local tally), and the answer here is that no surface
+  # shows it. Nothing about this resolution amends that norm.
+  #
+  # The original question, kept for the trail:
+  #
+  # - question: "Should the health panel surface `limit_remaining` at all, and if so with what caveat?"
+  #   blocking: "Chunk 19's health-panel half. Nothing before it — no surface reads the figure today."
+  #   waiting_on: operator
+  #   priority: medium
     # RAISED 2026-08-02 by Critic verify-resolutions. The ratified corollary in
     # nonfunctional-requirements.md § Direction says "budget remaining" is read from
     # the authority (GET /api/v1/key -> limit_remaining), never from a local tally.
