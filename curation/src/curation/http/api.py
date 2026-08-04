@@ -344,6 +344,7 @@ def _source(source: Source) -> SourceOut:
         confidence=source.confidence,
         selection_rationale=source.selection_rationale,
         last_fetch_status=None if source.last_fetch_status is None else str(source.last_fetch_status),
+        last_fetched_at=source.last_fetched_at,
     )
 
 

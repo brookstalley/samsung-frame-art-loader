@@ -232,3 +232,202 @@ async def test_an_unknown_tool_is_reported_with_the_names_that_do_exist(server_u
     # server — and a model following it makes a second unknown-tool call.
     assert "samsung-frame-art-loader" not in payload["hint"]
     assert "valid_tools" in payload["hint"]
+
+
+# -- provenance and the acquisition actions, over the wire ---------------------
+
+
+def _a_work_with_sources(services):
+    """A catalogued work with two sources, one of them primary and fetched.
+
+    Built through the service the surface itself uses, so the test's setup cannot
+    disagree with what the catalogue would hold in production.
+    """
+    from curation.persistence.records import AcquisitionMethod, FetchStatus, RightsStatus, SourceClass
+
+    catalogue = services.catalogue
+    work = catalogue.add_artwork(title="Fog Horn")
+    primary = catalogue.add_source(
+        artwork_id=work.id,
+        url="https://www.artic.edu/iiif/2/abc/info.json",
+        provider="artic",
+        source_class=SourceClass.INSTITUTIONAL,
+        acquisition_method=AcquisitionMethod.DEZOOMIFY,
+        rights_status=RightsStatus.PUBLIC_DOMAIN,
+        is_primary=True,
+        confidence=0.94,
+        selection_rationale="the only scan at gallery resolution",
+    )
+    catalogue.add_source(
+        artwork_id=work.id,
+        url="https://gallery.example.com/fog-horn.jpg",
+        provider="gallery_site",
+        source_class=SourceClass.CONTEMPORARY_WEB,
+        acquisition_method=AcquisitionMethod.DIRECT_HTTP,
+        rights_status=RightsStatus.UNKNOWN,
+    )
+    # A partial fetch, because it is the outcome most easily mistaken for an
+    # error and the one a caller most needs to read back.
+    catalogue.record_fetch(primary.id, status=FetchStatus.PARTIAL_TILES)
+    return work, primary
+
+
+async def test_an_mcp_caller_can_read_where_a_work_came_from(server_url, services):
+    work, primary = _a_work_with_sources(services)
+
+    payload, errored = await call(server_url, "art_catalogue", action="sources", artwork_id=work.id)
+
+    assert errored is False
+    assert payload["success"] is True
+    assert payload["artwork_id"] == work.id
+    assert payload["count"] == 2
+    by_id = {source["source_id"]: source for source in payload["sources"]}
+    held = by_id[primary.id]
+    assert held["url"] == "https://www.artic.edu/iiif/2/abc/info.json"
+    assert held["provider"] == "artic"
+    assert held["source_class"] == "institutional"
+    assert held["acquisition_method"] == "dezoomify"
+    assert held["rights_status"] == "public_domain"
+    assert held["is_primary"] is True
+    assert held["confidence"] == 0.94
+    assert held["selection_rationale"] == "the only scan at gallery resolution"
+    # The outcome the data model calls normal, surviving all the way out.
+    assert held["last_fetch_status"] == "partial_tiles"
+    assert held["last_fetched_at"] is not None
+
+
+async def test_the_other_source_is_listed_and_is_not_primary(server_url, services):
+    work, _ = _a_work_with_sources(services)
+
+    payload, _errored = await call(server_url, "art_catalogue", action="sources", artwork_id=work.id)
+
+    alternates = [source for source in payload["sources"] if not source["is_primary"]]
+    assert [source["provider"] for source in alternates] == ["gallery_site"]
+    # Never fetched, which is a different fact from "fetched and failed".
+    assert alternates[0]["last_fetch_status"] is None
+
+
+async def test_a_work_with_no_source_says_so_rather_than_returning_a_bare_empty_list(server_url, services):
+    work = services.catalogue.add_artwork(title="Untraceable")
+
+    payload, errored = await call(server_url, "art_catalogue", action="sources", artwork_id=work.id)
+
+    assert errored is False
+    assert payload["sources"] == []
+    assert "nothing to re-acquire it from" in payload["notice"]
+
+
+async def test_sources_for_an_unknown_work_is_an_error_result(server_url):
+    payload, errored = await call(server_url, "art_catalogue", action="sources", artwork_id="not-a-work")
+
+    assert errored is True
+    assert payload["success"] is False
+
+
+async def test_archiving_and_restoring_round_trips_over_the_wire(server_url, services):
+    work, _ = _a_work_with_sources(services)
+
+    archived, errored = await call(server_url, "art_catalogue", action="archive", artwork_id=work.id)
+    assert errored is False
+    assert archived["artwork"]["status"] == "archived"
+    assert "Nothing is deleted" in archived["notice"]
+
+    listed, _ = await call(server_url, "art_catalogue", action="list", status="archived")
+    assert work.id in {entry["artwork_id"] for entry in listed["artworks"]}
+
+    restored, errored = await call(server_url, "art_catalogue", action="restore", artwork_id=work.id)
+    assert errored is False
+    assert restored["artwork"]["status"] == "accepted"
+
+
+async def test_archiving_an_archived_work_is_an_error_result_that_says_why(server_url, services):
+    work, _ = _a_work_with_sources(services)
+    await call(server_url, "art_catalogue", action="archive", artwork_id=work.id)
+
+    payload, errored = await call(server_url, "art_catalogue", action="archive", artwork_id=work.id)
+
+    assert errored is True
+    assert "already archived" in payload["error"]
+
+
+async def test_retry_acquisition_reaches_the_service_and_reports_its_outcome(server_url, services):
+    # This deployment wires no HTTP transport, so the fetch cannot succeed — and
+    # that is the point: the action is exercised end to end and its failure is a
+    # structured outcome rather than a crash, which is what the surface promises.
+    work, _ = _a_work_with_sources(services)
+    direct = next(s for s in services.catalogue.list_sources(work.id) if not s.is_primary)
+
+    payload, errored = await call(
+        server_url, "art_catalogue", action="retry_acquisition", artwork_id=work.id, source_id=direct.id
+    )
+
+    assert errored is False
+    assert payload["success"] is True
+    assert payload["artwork_id"] == work.id
+    assert payload["source_id"] == direct.id
+    assert payload["outcome"] == "failed"
+    assert "replaces nothing" in payload["notice"]
+
+
+async def test_a_failed_retry_is_readable_afterwards_through_sources(server_url, services):
+    # The multi-hop half: the outcome of one action has to be visible to the read
+    # that a curator would use to decide what to do next.
+    work, _ = _a_work_with_sources(services)
+    direct = next(s for s in services.catalogue.list_sources(work.id) if not s.is_primary)
+    await call(server_url, "art_catalogue", action="retry_acquisition", artwork_id=work.id, source_id=direct.id)
+
+    payload, _ = await call(server_url, "art_catalogue", action="sources", artwork_id=work.id)
+
+    after = {source["source_id"]: source for source in payload["sources"]}[direct.id]
+    assert after["last_fetch_status"] == "failed"
+    assert after["last_fetched_at"] is not None
+
+
+async def test_retry_acquisition_on_a_work_with_no_source_is_an_error_result(server_url, services):
+    work = services.catalogue.add_artwork(title="Untraceable")
+
+    payload, errored = await call(server_url, "art_catalogue", action="retry_acquisition", artwork_id=work.id)
+
+    assert errored is True
+    assert "no source" in payload["error"]
+
+
+async def test_a_missing_tile_binary_reaches_the_caller_with_its_remedy(server_url, services, monkeypatch):
+    # The two conditions acquisition raises for rather than records are the two no
+    # source is at fault in. A caller told only "failed unexpectedly" would go and
+    # look at the museum, so each names what actually fixes it.
+    from dataclasses import replace
+
+    work, primary = _a_work_with_sources(services)
+    monkeypatch.setattr(
+        services.acquisition,
+        "_settings",
+        replace(services.acquisition._settings, tile_binary="/nonexistent/dezoomify-rs"),
+    )
+
+    payload, errored = await call(
+        server_url, "art_catalogue", action="retry_acquisition", artwork_id=work.id, source_id=primary.id
+    )
+
+    assert errored is True
+    assert "deployment problem" in payload["error"]
+    assert "DEZOOMIFY_PATH" in payload["error"]
+
+
+async def test_a_full_disk_reaches_the_caller_with_its_remedy(server_url, services, monkeypatch):
+    from dataclasses import replace
+
+    work, primary = _a_work_with_sources(services)
+    monkeypatch.setattr(
+        services.acquisition,
+        "_settings",
+        replace(services.acquisition._settings, min_free_bytes=2**62),
+    )
+
+    payload, errored = await call(
+        server_url, "art_catalogue", action="retry_acquisition", artwork_id=work.id, source_id=primary.id
+    )
+
+    assert errored is True
+    assert "did not start" in payload["error"]
+    assert "MIN_FREE_BYTES" in payload["error"]

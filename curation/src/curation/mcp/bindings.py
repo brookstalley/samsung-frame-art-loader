@@ -22,7 +22,9 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Final
 
+from curation.acquisition.dezoomify import DezoomifyUnavailable
 from curation.acquisition.service import AcquisitionOutcome, AcquisitionResult
+from curation.acquisition.space import NotEnoughSpace
 from curation.manifest.builder import ManifestBuild
 from curation.mcp.envelope import ImageBlock, ok, with_images
 from curation.mcp.registry import HELP_ACTION, RegistryError
@@ -33,6 +35,7 @@ from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkLi
 from curation.services.container import Services
 from curation.services.discovery import VerdictOutcome
 from curation.services.display import UNSET
+from curation.services.errors import ServiceError
 from curation.services.previews import InlinePreview
 from curation.services.review import MAX_REVIEW_LIMIT, CandidatePage, CandidateView, InstanceListing, InstanceView
 from curation.services.runner import RunView
@@ -94,10 +97,27 @@ def _restore_artwork(services: Services, arguments: Mapping[str, Any]) -> dict[s
 
 
 def _retry_acquisition(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    result = services.acquisition.acquire(
-        arguments["artwork_id"],
-        source_id=arguments.get("source_id"),
-    )
+    try:
+        result = services.acquisition.acquire(
+            arguments["artwork_id"],
+            source_id=arguments.get("source_id"),
+        )
+    except NotEnoughSpace as exc:
+        # Translated rather than allowed to reach the generic handler. These two
+        # are the conditions acquisition deliberately raises for instead of
+        # recording, because no source is at fault — and a caller told only that
+        # the call "failed unexpectedly" would go looking at the museum. Each
+        # carries the remedy that actually fixes it.
+        raise ServiceError(
+            f"Acquisition did not start: {exc} Free space on the art tree's disk, or lower MIN_FREE_BYTES "
+            "if this deployment means to run closer to full."
+        ) from exc
+    except DezoomifyUnavailable as exc:
+        raise ServiceError(
+            f"Acquisition did not start: {exc} This is a deployment problem rather than a bad source — "
+            "install dezoomify-rs, or set DEZOOMIFY_PATH to where it lives. Every source using "
+            "acquisition_method='dezoomify' is affected, and no source is at fault."
+        ) from exc
     return ok(
         artwork_id=result.artwork_id,
         source_id=result.source_id,
@@ -136,7 +156,8 @@ def _sources_notice(sources: Sequence[Source]) -> str | None:
     if not any(source.is_primary for source in sources):
         return (
             "No source is marked primary, so nothing records which one produced the held image. "
-            "action='retry_acquisition' needs source_id until one has succeeded."
+            "With more than one source, action='retry_acquisition' needs source_id until one has succeeded; "
+            "with a single source it uses that one."
         )
     return None
 

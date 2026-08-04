@@ -11,10 +11,13 @@ the free-space guard runs *before* a fetch rather than during one. So the ceilin
 is enforced here, on the way in, and a body that exceeds it is a failed fetch
 rather than a partial file.
 
-**Bytes land at their final path only once they are all present.** The download
-writes beside the destination and renames, so a process that dies mid-fetch leaves
-no truncated file for a later step to mistake for an image. That is the same rule
-`PreviewCache` follows, for the same reason.
+**This never writes the destination.** It fetches to a staging file beside it and
+hands that back; promoting it over whatever the work already holds is the caller's
+step, taken only once the bytes have been proved to be a readable image. The rule
+is one rule in one place because both fetch paths need it and the failure it
+prevents is the same either way — a failed *re*-fetch must not cost a work the
+image it was already displaying, and `Original` must never name a file that is not
+there.
 """
 
 import hashlib
@@ -53,7 +56,10 @@ def direct_fetch(
     open_stream: StreamOpener,
     max_bytes: int,
 ) -> DirectResult:
-    """Fetch `url` to `destination`, bounded at `max_bytes`.
+    """Fetch `url` beside `destination`, bounded at `max_bytes`.
+
+    Returns the **staged** path, not `destination`; see the module docstring for
+    why nothing here promotes it.
 
     `url` must already have passed the fetch policy. The hash is computed while
     the bytes stream past rather than by re-reading the file afterwards: the file
@@ -118,9 +124,8 @@ def direct_fetch(
         _discard(staging)
         return DirectResult(path=None, byte_size=0, content_hash=None, detail="the source returned no bytes")
 
-    staging.replace(destination)
     return DirectResult(
-        path=destination,
+        path=staging,
         byte_size=written,
         content_hash=digest.hexdigest(),
         detail=f"{written} bytes arrived",

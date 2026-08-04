@@ -824,8 +824,14 @@ material that advertises the seam.
 Established 2026-07-19. The `art/` tree is not one thing, and the two halves are
 transported differently:
 
-- **Upstream, expensive, device-independent** — `raw/`, `api-cache/`,
-  `tile-cache/`. Costs network fetches and real API spend to regenerate.
+- **Upstream, expensive, device-independent** — `raw/`. Costs network fetches and
+  real API spend to regenerate. *(Narrowed 2026-08-03, when acquisition was built:
+  this list also named `tile-cache/` and `api-cache/`, and neither belongs.
+  `tile-cache/` is transient working space — it holds a **partial** fetch's tiles
+  so a retry can resume, and is reclaimed per source the moment that work holds a
+  complete image, so transporting it would carry the debris of an interrupted
+  download. `api-cache/` has no producer at all: it exists only in the 2024
+  `config.py`, and the curation plane caches no API response on disk.)*
 - **Derived, cheap, device-specific** — `ready/`, `tv-thumbs/`, `label/`.
   Rendered for a particular target geometry (4K for the TV, 1448x1072 for the
   e-paper). *(Annotated 2026-07-20: `label/` described the 2024 single-plane

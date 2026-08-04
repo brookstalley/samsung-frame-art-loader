@@ -188,23 +188,25 @@ class AcquisitionService:
         if not result.usable:
             return self._record_failure(source, result.detail)
 
-        if result.outcome is TileOutcome.COMPLETE:
-            # Nothing left to resume, so the tiles are dead weight on the device
-            # this deployment's top operational risk is about. A partial fetch
-            # keeps them, which is the only case they are worth their disk.
-            reclaim_tile_cache(tile_cache)
-
         status = FetchStatus.OK if result.outcome is TileOutcome.COMPLETE else FetchStatus.PARTIAL_TILES
         outcome = AcquisitionOutcome.ACQUIRED if status is FetchStatus.OK else AcquisitionOutcome.PARTIAL
-        return self._record_success(
+        recorded = self._record_success(
             source,
-            path=result.path,
+            staged=result.path,
+            destination=destination,
             byte_size=result.byte_size,
             content_hash=_hash_file(result.path),
             status=status,
             outcome=outcome,
             detail=result.detail,
         )
+        if recorded.acquired and result.outcome is TileOutcome.COMPLETE:
+            # After the image is held, not before: a promotion that fails on
+            # unreadable bytes leaves the work wanting a retry, and the tiles are
+            # what makes that retry cheap. Reclaimed only when there is genuinely
+            # nothing left to resume.
+            reclaim_tile_cache(tile_cache)
+        return recorded
 
     def _acquire_direct(self, source: Source, *, url: str, destination: Path) -> AcquisitionResult:
         result = direct_fetch(
@@ -217,7 +219,8 @@ class AcquisitionService:
             return self._record_failure(source, result.detail)
         return self._record_success(
             source,
-            path=result.path,
+            staged=result.path,
+            destination=destination,
             byte_size=result.byte_size,
             content_hash=result.content_hash,
             status=FetchStatus.OK,
@@ -229,25 +232,48 @@ class AcquisitionService:
         self,
         source: Source,
         *,
-        path: Path | None,
+        staged: Path | None,
+        destination: Path,
         byte_size: int,
         content_hash: str | None,
         status: FetchStatus,
         outcome: AcquisitionOutcome,
         detail: str,
     ) -> AcquisitionResult:
-        assert path is not None and content_hash is not None  # noqa: S101 - guarded by `usable` above
+        """Promote a staged fetch to the held original, or discard it and say why.
+
+        **Nothing before this point may touch `destination`, and this is why.** A
+        re-fetch is an ordinary operation — the surface actively invites one after
+        a partial result — so a failing retry must cost the work nothing. Both
+        fetch paths therefore stage, and the file the work is displaying is
+        replaced only once the new bytes have been proved readable. Otherwise a
+        failed retry leaves an `Original` row naming a file that was deleted to
+        make room for bytes that never arrived, and the tool tip promising "a
+        failed fetch replaces nothing" is false at exactly the moment a curator
+        relies on it.
+        """
+        assert staged is not None and content_hash is not None  # noqa: S101 - guarded by `usable` above
         try:
-            width, height = measure(path)
-        except OSError as exc:
-            # Bytes arrived and are not an image this process can read. That is a
-            # failed acquisition rather than a held original, because a row
-            # naming an undecodable file would pass every later check by size
-            # and fail at render time.
-            _discard(path)
+            width, height = measure(staged)
+        except Exception as exc:  # prawduct:allow prawduct/broad-except -- attacker-influenced bytes, reported not raised
+            # Bytes arrived and are not an image this process can read. A failed
+            # acquisition rather than a held original: a row naming an undecodable
+            # file passes every later check by size and fails at render time.
+            #
+            # Broad on purpose. The imaging seam raises what Pillow raises, and
+            # that is deliberately not one family — `UnidentifiedImageError` and a
+            # truncated file give `OSError`, a `La`-mode image gives `ValueError`,
+            # and an image engineered to exhaust memory gives
+            # `DecompressionBombError`, which derives straight from `Exception`.
+            # These bytes came from a URL discovery found, which the security model
+            # treats as attacker-influenceable, so the one that is *chosen* by an
+            # attacker is the one a narrower catch would let escape — orphaning the
+            # staged file and failing the call instead of the work.
+            _discard(staged)
             return self._record_failure(source, f"the fetched bytes are not a readable image: {exc}")
 
-        relative = str(path.relative_to(self._settings.art_root))
+        staged.replace(destination)
+        relative = str(destination.relative_to(self._settings.art_root))
         self._catalogue.record_original(
             artwork_id=source.artwork_id,
             source_id=source.id,

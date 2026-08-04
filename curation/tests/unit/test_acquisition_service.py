@@ -81,6 +81,17 @@ def _acquisition(service, acq_settings, open_stream, *, resolve=_resolves_public
     return AcquisitionService(service, acq_settings, open_stream=open_stream, resolve=resolve)
 
 
+#: The stand-in binary's output path is its last argument, which is awkward to
+#: build inside an f-string because the shell expansion uses the same braces.
+_LAST_ARG = '"$(eval echo \\${$#})"'
+
+_WRITES_ZERO_BYTES_THEN_FAILS = ": > " + _LAST_ARG + '\necho "[ERROR] Could not get any tile for the image." >&2\nexit 1\n'
+
+
+def _copies_to_last_arg(seed) -> str:
+    return 'cp "' + str(seed) + '" ' + _LAST_ARG + "\nexit 0\n"
+
+
 def _work_with_source(service, *, method=AcquisitionMethod.DIRECT_HTTP, url="https://gallery.example.com/a.jpg", primary=True):
     work = service.add_artwork(title="Nighthawks")
     source = service.add_source(
@@ -508,3 +519,110 @@ class TestWiring:
                 max_image_bytes=1,
                 min_free_bytes=1,
             )
+
+
+class TestAFailedRetryCostsTheWorkNothing:
+    """The promise `retry_acquisition`'s tip makes, asserted on both fetch paths.
+
+    The surface tells a curator that "a failed attempt replaces nothing", and the
+    partial-result notice actively invites the retry that would test it. Both
+    routes are covered here because the guarantee held on one path only by
+    accident of where staging happened to live.
+    """
+
+    @staticmethod
+    def _binary(tmp_path: Path, body: str) -> str:
+        script = tmp_path / "fake-dezoomify-retry"
+        script.write_text("#!/bin/sh\n" + body)
+        script.chmod(script.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        return str(script)
+
+    def test_a_failed_direct_retry_keeps_the_held_image_and_its_row(self, service, acq_settings):
+        work, _ = _work_with_source(service)
+        _acquisition(service, acq_settings, _serves(_jpeg_bytes(300, 200))).acquire(work.id)
+        held = service.get_original(work.id)
+        held_file = acq_settings.art_root / held.relative_path
+
+        _acquisition(service, acq_settings, _refuses(RuntimeError("museum went away"))).acquire(work.id)
+
+        assert held_file.exists(), "the row still names this file, so deleting it strands the record"
+        assert service.get_original(work.id).content_hash == held.content_hash
+
+    def test_a_failed_tiled_retry_keeps_the_held_image_and_its_row(self, service, acq_settings, tmp_path):
+        from dataclasses import replace
+
+        work, source = _work_with_source(
+            service,
+            method=AcquisitionMethod.DEZOOMIFY,
+            url="https://www.artic.edu/iiif/2/abc/info.json",
+        )
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(300, 200))
+        succeeds = replace(
+            acq_settings,
+            tile_binary=self._binary(tmp_path, _copies_to_last_arg(tmp_path / "seed.jpg")),
+        )
+        _acquisition(service, succeeds, _serves(b"")).acquire(work.id)
+        held = service.get_original(work.id)
+        held_file = acq_settings.art_root / held.relative_path
+        assert held_file.exists()
+
+        fails = replace(
+            acq_settings,
+            tile_binary=self._binary(tmp_path, _WRITES_ZERO_BYTES_THEN_FAILS),
+        )
+        result = _acquisition(service, fails, _serves(b"")).acquire(work.id, source_id=source.id)
+
+        assert result.outcome is AcquisitionOutcome.FAILED
+        assert held_file.exists(), "the failing retry deleted the image the work was displaying"
+        assert service.get_original(work.id).content_hash == held.content_hash
+
+    def test_unreadable_new_bytes_leave_the_held_image_in_place(self, service, acq_settings):
+        # The other route to the same divergence: the fetch succeeds, the bytes
+        # turn out not to be an image, and the promotion must not have happened.
+        work, _ = _work_with_source(service)
+        _acquisition(service, acq_settings, _serves(_jpeg_bytes(300, 200))).acquire(work.id)
+        held = service.get_original(work.id)
+        held_file = acq_settings.art_root / held.relative_path
+
+        result = _acquisition(service, acq_settings, _serves(b"a 200 response that is not an image" * 5)).acquire(work.id)
+
+        assert result.outcome is AcquisitionOutcome.FAILED
+        assert held_file.read_bytes(), "the held image was replaced by bytes that are not an image"
+        assert service.get_original(work.id).content_hash == held.content_hash
+
+    def test_a_decompression_bomb_is_recorded_rather_than_raised(self, service, acq_settings):
+        # `DecompressionBombError` derives from `Exception`, not `OSError`, and the
+        # bytes that trigger it are chosen by whoever controls the source — so a
+        # narrower catch fails the call and strands the staged file.
+        from PIL import Image
+
+        work, _ = _work_with_source(service)
+        original_limit = Image.MAX_IMAGE_PIXELS
+        Image.MAX_IMAGE_PIXELS = 16
+        try:
+            result = _acquisition(service, acq_settings, _serves(_jpeg_bytes(400, 400))).acquire(work.id)
+        finally:
+            Image.MAX_IMAGE_PIXELS = original_limit
+
+        assert result.outcome is AcquisitionOutcome.FAILED
+        assert "not a readable image" in result.detail
+        assert list(acq_settings.originals_path.glob("*")) == [], "the staged file was orphaned"
+
+    def test_a_failing_promotion_keeps_the_tiles_a_retry_would_use(self, service, acq_settings, tmp_path):
+        from dataclasses import replace
+
+        work, source = _work_with_source(
+            service,
+            method=AcquisitionMethod.DEZOOMIFY,
+            url="https://www.artic.edu/iiif/2/abc/info.json",
+        )
+        (tmp_path / "junk").write_bytes(b"not an image at all" * 5)
+        settings = replace(
+            acq_settings,
+            tile_binary=self._binary(tmp_path, _copies_to_last_arg(tmp_path / "junk")),
+        )
+
+        result = _acquisition(service, settings, _serves(b"")).acquire(work.id)
+
+        assert result.outcome is AcquisitionOutcome.FAILED
+        assert (acq_settings.tile_cache_path / source.id).is_dir(), "the retry lost its head start"

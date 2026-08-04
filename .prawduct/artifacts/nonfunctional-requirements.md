@@ -203,8 +203,8 @@ curator every judgement they have already made. So:
 - **The SQLite catalogue is backed up.** It is small (megabytes), it is the entire
   product's memory, and it is the only artefact whose loss cannot be repaired by
   spending time instead of money.
-- **The image tree is disposable.** `raw/`, `ready/`, `tv-thumbs/`,
-  `tile-cache/`, `api-cache/` are all reconstructible. They are excluded from
+- **The image tree is disposable.** `raw/`, `ready/`, `tv-thumbs/` and
+  `tile-cache/` are all reconstructible. They are excluded from
   backup deliberately, not by oversight — this is the upstream/derived split
   already recorded in `learnings.md`, applied to durability. (`label/` was listed
   here from the 2024 layout; it is retired from the prospective `ART_ROOT`

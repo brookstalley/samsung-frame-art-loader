@@ -45,9 +45,12 @@ class TestTheHappyPath:
         result = _run(tmp_path, _serves(b"x"))
         assert result.path.parent.is_dir()
 
-    def test_no_staging_file_survives_a_success(self, tmp_path):
-        _run(tmp_path, _serves(b"x"))
-        assert list((tmp_path / "raw").glob("*.partial")) == []
+    def test_the_destination_is_never_written_here(self, tmp_path):
+        # Promotion is the caller's step, taken only once the bytes are proved
+        # readable — so a failing fetch can never cost a work the image it holds.
+        result = _run(tmp_path, _serves(b"x"))
+        assert result.path != tmp_path / "raw" / "work.jpg"
+        assert not (tmp_path / "raw" / "work.jpg").exists()
 
 
 class TestTheZeroByteGuard:
@@ -113,18 +116,22 @@ class TestFailures:
         assert result.byte_size == 0
 
 
-class TestOverwriting:
-    def test_a_refetch_replaces_the_previous_file(self, tmp_path):
+class TestRefetching:
+    def test_a_second_fetch_replaces_what_the_first_staged(self, tmp_path):
         _run(tmp_path, _serves(b"old"))
         result = _run(tmp_path, _serves(b"newer bytes"))
         assert result.path.read_bytes() == b"newer bytes"
 
-    def test_a_failed_refetch_leaves_the_previous_file_alone(self, tmp_path):
-        # Staging is what buys this: the destination is only replaced once every
-        # byte is present, so a failed retry does not cost the image already held.
-        first = _run(tmp_path, _serves(b"good bytes"))
+    def test_a_failed_fetch_leaves_an_already_held_image_untouched(self, tmp_path):
+        # The destination stands in for an image a previous acquisition promoted.
+        # Nothing here may reach it, on success or on failure.
+        held = tmp_path / "raw" / "work.jpg"
+        held.parent.mkdir(parents=True)
+        held.write_bytes(b"the image the work is displaying")
+
         _run(tmp_path, _serves(b"partial", raises=RuntimeError("boom")))
-        assert first.path.read_bytes() == b"good bytes"
+
+        assert held.read_bytes() == b"the image the work is displaying"
 
 
 @pytest.mark.parametrize("chunks", [(b"a",), (b"a", b"b"), (b"a" * 1000,)])

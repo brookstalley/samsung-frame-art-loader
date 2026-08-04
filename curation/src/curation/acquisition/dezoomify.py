@@ -22,6 +22,12 @@ went.
 which discarded a real image built from most of its tiles and made
 `Source.last_fetch_status = 'partial_tiles'` unreachable in practice.
 
+**The destination is never written or removed here.** The binary fetches to a
+staging path beside it, and promoting that is the caller's step. Clearing the
+destination up front — which the binary's refusal to overwrite invites — would mean
+a re-fetch that then failed had already destroyed the image the work was
+displaying, while its `Original` row went on naming the deleted file.
+
 **The binary is never given a shell, and never an unvalidated argument.** Its input
 argument accepts a local path as readily as a URL, so callers pass URLs that have
 already been through the fetch policy. `stdin` is closed and `--image-index` is
@@ -96,7 +102,10 @@ def tile_fetch(
     timeout_seconds: int,
     referer: str | None = None,
 ) -> TileResult:
-    """Fetch a tiled image to `destination`, reporting what actually arrived.
+    """Fetch a tiled image beside `destination`, reporting what actually arrived.
+
+    Returns the **staged** path, not `destination`. Promoting it is the caller's
+    step; see the module docstring.
 
     `url` must already have passed the fetch policy; nothing here re-checks it,
     because a second opinion in a second place is how the two come to disagree.
@@ -106,15 +115,18 @@ def tile_fetch(
         raise DezoomifyUnavailable(f"{binary!r} is not on PATH; tiled acquisition cannot run in this deployment.")
 
     destination.parent.mkdir(parents=True, exist_ok=True)
+    # Beside the destination, never the destination itself.
+    staged = destination.with_name(f"{destination.name}.partial")
     # Observed: given a cache directory that does not exist, the binary warns once
     # per tile and completes with an empty cache — losing exactly the
     # retry-without-refetching this directory exists for, and saying so only in
     # warnings nobody reads.
     tile_cache.mkdir(parents=True, exist_ok=True)
-    if destination.exists():
-        # The binary refuses to overwrite. A re-fetch is a normal operation here,
-        # so the stale file is cleared rather than the retry being refused.
-        destination.unlink()
+    if staged.exists():
+        # The binary refuses to overwrite. A retry is a normal operation here, so
+        # a staged file left by an earlier attempt is cleared — the destination
+        # itself is not touched, so the image the work holds is never at risk.
+        staged.unlink()
 
     argv = [
         resolved,
@@ -134,7 +146,7 @@ def tile_fetch(
     # The URL is the last option-free argument and is passed as one element. That
     # is what makes a URL carrying `;`, `$(...)` or a quote inert: it reaches the
     # binary as data, never as anything a shell reads.
-    argv += [url, str(destination)]
+    argv += [url, str(staged)]
 
     try:
         completed = subprocess.run(  # noqa: S603 - argv list, no shell, resolved binary
@@ -145,7 +157,7 @@ def tile_fetch(
             check=False,
         )
     except subprocess.TimeoutExpired:
-        _discard(destination)
+        _discard(staged)
         return TileResult(
             outcome=TileOutcome.FAILED,
             path=None,
@@ -157,13 +169,13 @@ def tile_fetch(
 
     messages = completed.stderr.decode("utf-8", errors="replace")
     fetched, expected = _tile_counts(messages)
-    size = destination.stat().st_size if destination.exists() else 0
+    size = staged.stat().st_size if staged.exists() else 0
 
     if size <= 0:
         # Observed on total failure: exit 1 *and* a zero-byte file left behind.
         # Recording that path would persist a row naming an empty image, which is
         # the constraint the catalogue enforces on the way in.
-        _discard(destination)
+        _discard(staged)
         return TileResult(
             outcome=TileOutcome.FAILED,
             path=None,
@@ -177,16 +189,40 @@ def tile_fetch(
         log.info("tile fetch returned %s of %s tiles for %s", fetched, expected, url)
         return TileResult(
             outcome=TileOutcome.PARTIAL,
-            path=destination,
+            path=staged,
             byte_size=size,
             tiles_fetched=fetched,
             tiles_expected=expected,
             detail=f"{fetched} of {expected} tiles arrived; the image has gaps",
         )
 
+    if completed.returncode != 0:
+        # An image, a non-zero exit, and no tile counts to read. The binary said
+        # something went wrong in wording this code does not recognise — a
+        # rephrased message in a later release is the likely cause, and this is
+        # the branch that decides what a rephrasing costs.
+        #
+        # Called PARTIAL rather than COMPLETE deliberately. Complete is the
+        # claim that would be *silently* wrong: it records a gappy image as
+        # `ok` and reclaims the tiles that would have made the retry cheap.
+        # Partial overstates at worst — the work is still held and still shown,
+        # and the curator is told a retry may improve it.
+        log.warning("tile fetch of %s exited %s with an image and no tile counts", url, completed.returncode)
+        return TileResult(
+            outcome=TileOutcome.PARTIAL,
+            path=staged,
+            byte_size=size,
+            tiles_fetched=None,
+            tiles_expected=None,
+            detail=(
+                f"the fetch reported a problem this version does not recognise "
+                f"(exit {completed.returncode}); the image may have gaps"
+            ),
+        )
+
     return TileResult(
         outcome=TileOutcome.COMPLETE,
-        path=destination,
+        path=staged,
         byte_size=size,
         tiles_fetched=fetched,
         tiles_expected=expected,

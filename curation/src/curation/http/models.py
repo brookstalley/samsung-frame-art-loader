@@ -16,6 +16,8 @@ consumer and both deploy together (`api-contract.md`). Nothing outside this
 repository may bind to it.
 """
 
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -103,6 +105,10 @@ class SourceOut(BaseModel):
     confidence: float | None
     selection_rationale: str | None
     last_fetch_status: str | None
+    #: When that status was recorded. Present for the same reason the MCP shape
+    #: carries it: "failed" with no date cannot be told from "failed months ago
+    #: and since fixed", which is the question a curator asks before retrying.
+    last_fetched_at: datetime | None
 
 
 class OriginalOut(BaseModel):

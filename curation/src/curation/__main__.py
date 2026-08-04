@@ -1,6 +1,7 @@
 """Run the curation plane: `uv run python -m curation`."""
 
 import logging
+import shutil
 
 import uvicorn
 
@@ -144,6 +145,20 @@ def main() -> None:
         # that reclaims it are one operational fact, and a deployment reading
         # `previews=<path>` with no sweep beside it is the state § Risks names.
         f"every {settings.preview_sweep_interval_seconds}s" if settings.preview_sweep_interval_seconds else "disabled",
+    )
+
+    # Whether tiled acquisition can run at all, and where the master images go.
+    # Logged for the same reason the key's presence and the image provider are: the
+    # binary is the one dependency this plane does not install, it is resolved off
+    # PATH at call time, and a deployment missing it fails every tiled fetch at
+    # once — a state worth reading at startup rather than discovering per work.
+    tile_binary = shutil.which(settings.tile_binary)
+    log.info(
+        "acquisition originals=%s tile_cache=%s tile_binary=%s min_free=%.1fGiB",
+        settings.originals_path,
+        settings.tile_cache_path,
+        tile_binary or f"MISSING ({settings.tile_binary} is not on PATH; tiled acquisition will refuse)",
+        settings.min_free_bytes / (1024**3),
     )
 
     settings.art_root.mkdir(parents=True, exist_ok=True)

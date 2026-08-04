@@ -213,6 +213,14 @@ properties, and each is weaker than "the tool cannot do this":
    list, no shell, `stdin` at `/dev/null`, an explicit `--image-index` so no input
    path can reach an interactive prompt.
 
+**Redirects are the door a host check normally leaves open, and it is closed.**
+The check runs against the URL the catalogue recorded; a client left to follow
+redirects itself would let a source answer a checked public URL with a `Location:`
+naming `127.0.0.1`, reaching the operator's network through the one hop nobody
+validated. The transport therefore follows one hop at a time and puts every
+`Location` through the same check, resolving relative ones first so the string
+checked is the string requested.
+
 **What this deliberately does not do is allowlist hosts.** `data-model.md` scopes
 `source_class = contemporary_web` with an open provider vocabulary — galleries,
 prize sites, artist portfolios — so a registry of permitted hosts would make every

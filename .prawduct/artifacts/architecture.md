@@ -94,7 +94,7 @@ recorded plan (curation on a desktop, NAS, or second Pi) — see Decision Log.
                     │  │  discovery · acquisition │   │   catalogue.sqlite  (C)  │ │
                     │  │  image prep · mat colour │   │   theme-manifest.json(C) │ │
                     │  └───────────┬──────────────┘   │   raw/ ready/ tv-thumbs/ │ │
-                    │              │                  │   api-cache/ tile-cache/ │ │
+                    │              │                  │   tile-cache/ previews/  │ │
                     │              │ HTTPS            │                          │ │
                     │              ▼                  │   display-state.sqlite(D)│ │
                     │   OpenRouter, museum APIs,      └────────────┬─────────────┘ │
@@ -198,12 +198,26 @@ is no network between planes.
   Discovery ── ReviewService                  │          the pre-acceptance twin of SurveyService
   Service ──── PreviewSweep                   │          reclaims the previews of decided works;
         │       │              │              │          the plane's second background thread
+        │       │   AcquisitionService        │          fetches the master a work was accepted for.
+        │       │    ├─ StreamOpener (seam)   │          the only service that runs a subprocess; its
+        │       │    └─ Resolver   (seam)     │          transport and its resolver are both injected,
+        │       │              │              │          so the policy above them runs offline
         │       └── CatalogueService ─────────┘
         │              │
   SqliteDiscovery  SqliteCatalogue                domain adapters: schema, record↔row, ordering
         └──────────────┬──────────────┘           and paging — the product judgements
               SqliteDurableStore                  generic: tables, keys, rows. Knows no artwork
   ```
+
+  **`AcquisitionService` is the one service that leaves the machine to do its
+  job**, and its two foreign edges are injected rather than reached for: an HTTP
+  stream opener and a name resolver. That is the same arrangement `DiscoveryEngine`
+  and `ImageSearch` have one row up, for the same reason — the rules worth testing
+  exhaustively (which source is used, what a refusal is recorded as, whether a
+  host may be fetched at all) then run with no network. The subprocess is not
+  behind a Protocol: there is one binary, its contract is captured in
+  `dezoomify-cli-findings.md`, and a second implementation would be a second
+  fiction rather than a second provider.
 
   **`ReviewService` is `SurveyService`'s counterpart on the other side of
   acceptance, and they are deliberately two classes rather than one.** Both

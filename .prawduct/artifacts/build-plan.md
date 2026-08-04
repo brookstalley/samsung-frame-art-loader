@@ -112,7 +112,7 @@ re-created the same silence one line further down.
 - [x] Chunk 16B: `resolve_images` — the re-search, its coverage and its rollup
 - [x] Chunk 17A: The review surface — works, instances, and the image in the transcript
 - [x] Chunk 17B: The verdict, the artist, and the preview's death
-- [ ] Chunk 18A: Acquisition — the fetch paths, the guards, and a work's sources
+- [x] Chunk 18A: Acquisition — the fetch paths, the guards, and a work's sources
 - [ ] Chunk 18B: Preparation — the mat engine, the 4K render, and the corpus look
 - [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
@@ -1829,7 +1829,8 @@ stalls on the binary or the network.
 ### Chunk 18A: Acquisition — the fetch paths, the guards, and a work's sources
 
 - **Description:** An accepted work acquires its master image. Fetch by
-  `acquisition_method` (dezoomify tiles / direct / API) with the zero-byte guard
+  `acquisition_method` (dezoomify tiles / direct HTTP; `api` has no producer and
+  is refused by name — see the acceptance criteria) with the zero-byte guard
   (constraint 5), `partial_tiles` as a normal recorded outcome, and the
   **free-space guard before acquisition starts** — disk-full is the one shared
   failure and it must be prevented, not caught. **Source URLs are untrusted
@@ -1852,11 +1853,17 @@ stalls on the binary or the network.
 - **Foreign API:** dezoomify (external binary) and museum image endpoints
   <!-- Its CLI contract is unowned and unversioned: capture it at step 0 below
        rather than inferring it from the 2024 call site. -->
-- **Carried finding:** `tile-cache/` and `api-cache/` are created here and have
-  no lifecycle owner. "Transient working space" holds only if something reclaims
-  them — on the device already named the top operational risk. Give them a
-  reclaim rule, or record that the operator prunes them and surface it on the
-  health panel.
+- **Carried finding — closed at build.** The tile cache directory under ART_ROOT
+  has a reclaim rule rather than an operator chore: tiles are cached per source
+  and removed when that work holds a complete image, so what survives is exactly a
+  partial fetch's tiles, which is when they are worth their disk. The API cache
+  directory needed no rule — the curation plane never creates one, and it exists
+  only in the 2024 root-plane config. Both corrections landed in
+  `operational-spec.md`, `boundary-patterns.md` and `learnings.md`, which had all
+  been listing that second directory as an upstream artifact to transport.
+  <!-- Both are runtime directories under ART_ROOT, not repo paths; named in prose
+       rather than backticked so the deliverable check does not read them as files
+       this chunk was meant to add. -->
 - **Visual change:** no
 - **Deliverables:** new `curation/src/curation/acquisition/` (fetch paths, the
   guards, metadata normalisation); `art_catalogue` actions `sources`, `archive`,
@@ -1869,10 +1876,18 @@ stalls on the binary or the network.
   crash); contract — an MCP caller reads a catalogued work's sources, including
   `is_primary` and `last_fetch_status`; integration — an accepted work acquires
   on the dev machine and holds an `Original`
-- **Acceptance criteria:** an accepted work acquires by each of the three
-  methods, its `Original` names bytes that exist and are non-empty, a failed or
-  partial fetch is recorded on the `Source` rather than raised, and an MCP caller
-  can read where the work came from and ask for the fetch again
+- **Acceptance criteria:** an accepted work acquires by **the two methods any
+  source in this deployment records** — `dezoomify` and `direct_http` — its
+  `Original` names bytes that exist and are non-empty, a failed or partial fetch
+  is recorded on the `Source` rather than raised, and an MCP caller can read where
+  the work came from and ask for the fetch again.
+  <!-- The criterion said "each of the three methods" until 2026-08-03. `api` is a
+       declared `AcquisitionMethod` with no producer: the one museum client in the
+       product resolves to tiled URLs, so no `Source` carries it and a fetch path
+       for it could not be written against a real response, let alone tested. It is
+       refused by name rather than silently mishandled, and the criterion is
+       corrected rather than left claiming coverage of a path that does not exist.
+       Building it belongs with the provider that first needs it. -->
 - **Done when:**
   0. verify-api — dezoomify's CLI contract (arguments, exit codes, output layout,
      partial-tile behaviour) captured from the installed binary rather than

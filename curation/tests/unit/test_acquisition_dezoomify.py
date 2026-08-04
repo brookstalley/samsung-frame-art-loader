@@ -169,6 +169,24 @@ class TestClassification:
         result = _run(tmp_path, script)
         assert "Could not get any tile" in result.detail
 
+    def test_an_unrecognised_failure_message_is_called_partial_not_complete(self, tmp_path):
+        # An image, a non-zero exit, and no tile counts to read — the shape a
+        # reworded message in a later release produces. Complete is the claim
+        # that would be silently wrong, recording a gappy image as `ok` and
+        # reclaiming the tiles a retry would have used.
+        rephrased = _fake_binary(
+            tmp_path,
+            'printf "x%.0s" $(seq 1 100) > "$(eval echo \\${$#})"\n'
+            'echo "[WARN ] 120/238 tiles retrieved; output written with gaps." >&2\n'
+            "exit 1\n",
+        )
+        result = _run(tmp_path, rephrased)
+
+        assert result.outcome is TileOutcome.PARTIAL
+        assert result.usable
+        assert (result.tiles_fetched, result.tiles_expected) == (None, None)
+        assert "does not recognise" in result.detail
+
     def test_a_timeout_is_a_failure_and_says_so(self, tmp_path):
         script = _fake_binary(tmp_path, "sleep 5\nexit 0\n")
         result = _run(tmp_path, script, timeout_seconds=1)
@@ -204,13 +222,36 @@ class TestTheTileCache:
 
 
 class TestDestination:
-    def test_an_existing_destination_is_cleared_so_a_refetch_is_not_refused(self, tmp_path):
-        # The stand-in refuses to overwrite, which is what the real binary does.
-        # A fake that overwrote happily would pass with the clearing removed, so
-        # the refusal is the whole point of this fixture.
+    def test_the_destination_is_never_touched(self, tmp_path):
+        # A held image stands at the destination. Nothing here may remove it or
+        # write over it: a retry that fails must cost the work nothing, and
+        # promotion is the caller's step.
         destination = tmp_path / "out" / "work.jpg"
         destination.parent.mkdir(parents=True)
-        destination.write_bytes(b"stale bytes from a previous fetch")
+        destination.write_bytes(b"the image the work is displaying")
+
+        result = _run(tmp_path, _fake_binary(tmp_path, SAVES_IMAGE), destination=destination)
+
+        assert result.outcome is TileOutcome.COMPLETE
+        assert result.path != destination
+        assert destination.read_bytes() == b"the image the work is displaying"
+
+    def test_a_failed_retry_leaves_the_held_image_alone(self, tmp_path):
+        destination = tmp_path / "out" / "work.jpg"
+        destination.parent.mkdir(parents=True)
+        destination.write_bytes(b"the image the work is displaying")
+
+        result = _run(tmp_path, _fake_binary(tmp_path, ZERO_BYTE_THEN_FAIL), destination=destination)
+
+        assert result.outcome is TileOutcome.FAILED
+        assert destination.read_bytes() == b"the image the work is displaying"
+
+    def test_a_stale_staged_file_is_cleared_so_a_retry_is_not_refused(self, tmp_path):
+        # The stand-in refuses to overwrite, which is what the real binary does.
+        # A fake that overwrote happily would pass with the clearing removed.
+        destination = tmp_path / "out" / "work.jpg"
+        destination.parent.mkdir(parents=True)
+        (destination.parent / "work.jpg.partial").write_bytes(b"debris from an interrupted attempt")
         refuses_to_overwrite = _fake_binary(
             tmp_path,
             'if [ -e "$(eval echo \\${$#})" ]; then\n'
@@ -222,7 +263,7 @@ class TestDestination:
         result = _run(tmp_path, refuses_to_overwrite, destination=destination)
 
         assert result.outcome is TileOutcome.COMPLETE
-        assert destination.stat().st_size == 100
+        assert result.byte_size == 100
 
 
 class TestDeploymentFailures:

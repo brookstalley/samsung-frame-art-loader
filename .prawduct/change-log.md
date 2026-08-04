@@ -48,6 +48,84 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-03: Acquisition, and a probe that rewrote the fetch path before it was written
+
+<!-- prawduct: chunks=18A | scope=v1-build -->
+
+**Chunk 18 was split into 18A and 18B** at the operator's call, at the seam the
+data model already draws: everything in 18A produces an `Original`, everything in
+18B consumes one. The halves share no foreign interface, no entity and no failure
+mode, so neither Critic round reads the other's code — the same reason 08, 14 and
+16 were split, and this chunk was larger than any of them.
+
+**Three claims in the chunk entry were stale and were corrected rather than
+inherited.** The bottom-weight carried finding had been settled on 2026-08-01
+(`MAT_BOTTOM_WEIGHT`, pinned by `test_config.py`). "The legacy `shell=True`
+invocation is not ported forward" described code that does not exist —
+`image_utils.py` has been argv-based since `4fddf36`. And the acceptance criterion
+ended "and reaches the wall", which nothing here can meet: the display plane is
+Chunks 12 and 13, both bench-blocked. That half is descoped explicitly rather than
+left as four fifths of a criterion that reads met.
+
+**Step 0 changed the design rather than confirming it**, which is the thing worth
+carrying forward. `dezoomify-cli-findings.md` records the probe against 2.18.1.
+The load-bearing finding is that **exit codes classify nothing**: `0` also means
+"read no input and wrote nothing", and `1` covers total failure and partial tiles
+alike — the two outcomes the data model holds apart. So the fetch path classifies
+on the produced file, which is the zero-byte guard answering both questions at
+once. Two further behaviours would have been inherited as bugs: the saved-file
+name is announced on **stderr**, where the 2024 code parses stdout and would
+`IndexError` on every success, and the 2024 code **deletes a usable partial image**
+on any non-zero exit, which made `partial_tiles` unrecordable in practice.
+
+**The probe also fired a trigger this repo had written down in advance.**
+`security-model.md` said its assessment must be *re-derived* if a tool fetches an
+arbitrary URL. Acquisition does, with a binary whose input argument reads local
+paths as readily as URLs and which reaches loopback. Bound 2 is re-derived rather
+than extended: it no longer rests on the capability being absent, but on three
+weaker properties — a fetch is reachable only through a URL a curator already
+accepted, scheme and resolved host are checked before invocation, and the binary
+never receives a shell or an inherited stdin. The residual an accepted-but-poisoned
+candidate leaves is stated rather than implied.
+
+**Hosts are judged by what they are, never by which they are.** A registry of
+permitted hosts would make every new gallery a code change and quietly re-scope a
+product whose provider vocabulary `data-model.md` deliberately leaves open, so the
+check is "publicly routable" — loopback, link-local, RFC1918 and `.local` refused.
+
+**Issue #60 is settled where its rule lives.** `art_catalogue(action='sources')` is
+its own action rather than a field folded into `get`: folding was compatible and
+would have cost no round trip, but `get` is the payload every list-then-detail hop
+pulls and provenance is not what that hop is for. It reads through the same
+`CatalogueService.list_sources()` the browser detail view uses, so no second
+projection of "a work's sources" exists to drift.
+
+**The carried finding about the caches is closed with a rule, not a chore.**
+`tile-cache/` earns its disk only while a fetch might be resumed, so tiles are
+cached per source and reclaimed the moment that work holds a complete image — and
+kept when it does not, which is exactly when a retry wants them. `api-cache/`
+needed no rule: nothing creates it. That second half corrected four artifacts and
+`learnings.md`, all of which had been listing it as an upstream artifact to
+transport.
+
+**What the mutation sweep caught, and the one thing it got wrong.** Two of the new
+tests could not fail: one asserted stdin was closed using a fake that returns
+immediately under pytest either way, and one asserted a stale destination is
+cleared using a fake that overwrites happily where the real binary refuses. Both
+are now able to fail. The sweep then reported the IPv4-mapped-address unwrap as
+unreachable, so it was removed — and `ipaddress` turns out to classify
+`::ffff:8.8.8.8` as `is_reserved` on 3.12 and `is_global` on 3.14. The branch
+defends against an interpreter change rather than an input, so no mutation over
+inputs can kill it. Restored, with the reason written where the next reader finds
+it before deleting it again.
+
+**Constraint 10 needed no code.** `description_markup` already existed in
+`services/fields.py` and was already wired into `add_artwork` — a second one was
+started before a truncated grep was noticed to have hidden the first. What the
+constraint actually lacked was evidence, so the 41 real corpus descriptions are now
+asserted to normalise and to **parse as XML**, which is Pango's real bar and what
+no existing test checked.
+
 ## 2026-08-03: The verdict reaches the surface, and previews stop accumulating
 
 <!-- prawduct: chunks=17B | status=shipped | scope=v1-build -->
