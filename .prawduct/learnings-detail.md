@@ -562,3 +562,201 @@ Superseding a decision means marking the evidence that supported it, not only
 recording the new decision somewhere else — the evidence is what the next reader
 reasons from. Found by Critic cross-check (`rev-20260803T032431Z-f8474689` R-13),
 not by the sweep that followed the decision.
+
+## Data and cache contract
+
+**`tile-cache/` is on neither side of this contract** *(classified 2026-08-03,
+when acquisition was built)*. It is transient working space holding the tiles of
+a **partial** download so a retry can resume, and it is removed per source as
+soon as that work holds a complete image. Transporting it would carry the debris
+of an interrupted fetch to another machine. `api-cache/`, which the 2024
+`config.py` names, has no producer at all: the curation plane asks museums over
+HTTP and caches nothing on disk.
+
+**Narrowed 2026-08-03, when acquisition was actually built.** The upstream list
+had named `raw/`, `tile-cache/` and `api-cache/`, and only the first belongs.
+
+`tile-cache/` is **transient working space**, not an upstream artifact. It holds a
+*partial* fetch's tiles so a retry can resume without re-downloading what already
+arrived, and it is reclaimed per source the moment that work holds a complete
+image. Transporting it would carry the debris of an interrupted download to
+another machine, which is the opposite of what the upstream class means.
+
+`api-cache/` has **no producer at all**. It exists only in the 2024 root-plane
+`config.py`; the curation plane asks museums over HTTP and caches no response on
+disk. It had been listed in five places as something to transport.
+
+The general shape is worth keeping: a directory named in a contract is not
+evidence that anything creates it, and "upstream vs derived" has a third case —
+working space, which is neither transported nor regenerated because it is only
+ever meaningful mid-operation.
+
+## When a fixture seeds a file at a path the code DERIVES, learn that path from an observed run instead of spelling it out — a rename leaves the fixture pointing at nothing, and the test stays green while the branch it guards goes undefended
+
+The failure has two halves and the second is what makes it dangerous. A fixture
+that writes its seed to a path the code *computes* — a staged name, a cache key,
+a derived filename — stops reaching the code the moment that computation changes.
+The rename itself looks correct in review, and the suite stays green, because a
+test whose setup no longer lands anywhere the code reads simply exercises the
+empty case and passes.
+
+So after a rename the question is not "do the tests still pass" but "does
+anything still *reach* what they claim to guard". A green suite answers the first
+and is silent on the second.
+
+**Found 2026-08-03, by a Critic round reviewing the fix from the round before it.**
+
+A wrapper staged its fetches at `<name>.partial`. That turned out to be
+deployment-fatal — the binary picks its output encoder from the file extension —
+so the staging expression changed to `<stem>.partial<suffix>`. One test seeded
+debris at the staged path to prove a stale file gets cleared before a retry, and
+it spelled that path by hand: `work.jpg.partial`.
+
+After the rename the code staged at `work.partial.jpg`. The seeded debris now sat
+somewhere nothing looked. The test's fake refused to overwrite only if its output
+already existed; it no longer did, so the fake never refused, the run succeeded,
+and **the test passed identically with the clearing branch deleted outright** —
+which its own comment said had to be impossible.
+
+Nothing flagged it. The rename touched no test file, so no diff review had reason
+to look; the suite was green; and a mutation sweep run *before* the rename had
+found the branch defended, because it was.
+
+**The fix that generalises is not "update the string".** The test now performs one
+ordinary run and takes the staged path off the result, then seeds debris there. It
+cannot be disarmed by a rename, because it never claims to know the name. The name
+itself is pinned by a separate, single-purpose assertion — which is the right split:
+one test owns the naming rule, and the other owns the clearing branch and merely
+needs *a* staged path.
+
+**Where to apply it.** Any fixture that seeds, deletes or asserts on a path the
+production code computes. Derived filenames, cache keys, staging suffixes, temp
+names. If the test and the code both spell the same rule, they are two copies of
+it, and the copy in the test is the one nothing enforces.
+
+**The tell at review time**: a test comment that says "this would pass if X were
+removed" beside a fixture built from a literal the code also builds. That comment
+is a claim about coverage, and a hand-written path is exactly what makes it stop
+being true without anyone noticing.
+
+
+
+## A claim repeated in three artifacts is ONE piece of evidence copied twice — when a property is asserted in prose, verify it against the code before adding the third statement of it, because every later text inherits it from the earlier prose rather than from the behaviour
+
+Chunk 18B published "regenerate spends nothing" in a tool tip, a parameter
+description and an `api-contract.md` correction block, while
+`PreparationService.prepare()` called the mat chooser *before* its
+already-current branch — so the first call on every acquired work made a paid
+vision call. Two Critic reviewers found it independently through different goals.
+
+The confident sentence was the reason nobody re-checked. The free-re-render
+property went into the module docstring early, and each later text was written
+from that prose rather than from the code, so three statements agreed with each
+other and none of them with the behaviour. Repetition reads as corroboration and
+is not: the second and third statements carry no independent evidence at all.
+
+The check that would have caught it is cheap and specific — before writing a
+property into a *second* artifact, read the code path that makes it true. Not the
+first statement of it, which is usually written while the code is in mind; the
+second, which is written from the first.
+
+## When a module's docstring says it exists to stop two callers drifting, adding a caller is the moment to READ that docstring — the drift it warns about reappears in the new caller, and the escaping case will be the common path rather than the one being written
+
+`services/imaging.py` opens with "The one downscale this product does, so its two
+callers cannot drift apart… the copies had already diverged on which exceptions
+they name." Chunk 18B then added a third and fourth caller of the same decode —
+the mat engine and the compositor — one translating Pillow's failures into a
+named refusal and one letting them escape.
+
+The escaping case was the *common* one, which is the part worth carrying. A work
+that already has a mat skips the mat engine entirely and reaches the compositor
+first, and every `set_mat()` does the same, so the path with no translation was
+the path most calls took. The path that was correctly guarded was the rarer one.
+
+This is the third consecutive chunk whose review turned up "the second caller of
+the same idea" — 17B, 18A and 18B. The habit that closes it is not a checklist
+item at review time but a reading habit at write time: a docstring that names a
+past divergence is a warning addressed to whoever adds the next caller.
+
+
+## At the moment of a fix, ask what the change now COVERS that it did not before — a wrapper added to translate a read will also catch the write beside it, and a claim added to one payload will be published by the branch that shares it
+
+Chunk 18B's review ran to four rounds, and two of the middle ones found defects
+in the previous round's *fix* rather than in the original work. The chain:
+`regenerate` was documented as free while it paid for a first mat; the fix
+threaded the cost through and wrapped `compose` in the decode translation; the
+wrapper also caught `compose`'s **write**, so a full disk came back as "the image
+could not be read", pointing at the museum for a fault on the host; fixing that
+added caller-facing fields; the fields were asserted by nothing; asserting them
+left the one notice state the join exists for unpinned; pinning that left the
+separator unpinned, which a mutation then proved.
+
+Every link was a small, correct-looking edit, and none was careless in isolation.
+What they share is scope blindness at the moment of the fix: the thing named in
+the finding got changed, and nothing asked what *else* the change now reached.
+`reading()` was written to translate a decode and was applied to a function that
+also writes. `cost_usd` was added to a payload and the service that produces it
+was tested rather than the surface that publishes it.
+
+One question at fix time closes most of it — not at review time, where it is the
+reviewer's job anyway: **what does this change now cover that it did not before,
+and which of those did I mean?** A wrapper covers everything inside it. A claim
+in a tool tip covers every branch that returns that payload.
+
+## A comment that justifies code by naming a constraint is a CLAIM — check the constraint before inheriting the workaround, because a false reason usually sits on top of wrong behaviour
+
+**Two instances in one review round, and the second is why this is a rule rather
+than an anecdote.**
+
+Three `curation.config` imports sat at function scope in `services/container.py`,
+explained as "config reads this package to compose its settings objects, so a
+top-level import would close the loop". Walking config's module-scope import graph
+takes about ten lines and shows no loop: it reaches `manifest.builder`,
+`manifest.heartbeat`, `services.display_fit` and `services.runner`, and none of
+those reaches `container`. The workaround was inherited by everyone who read it,
+and it hid a container→config edge from anything reading the import graph.
+
+The costlier one had the same shape. A comment on the refused-promotion branch of
+`AcquisitionService._record_success` said omitting `record_fetch` avoided
+overwriting "the fact the next comparison reads". The next comparison reads
+`Original.fetch_status`; `record_fetch` writes only the `Source` row and cannot
+affect the guard at all. **The wrong reason was not a documentation slip — it was
+load-bearing.** The behaviour it justified was also wrong: skipping the write left
+`sources` reporting a fetch date older than the retry the curator had just been
+told to make, on the very outcome whose notice sends them to that read. Correcting
+the comment meant correcting the code.
+
+That is the asymmetry worth carrying. A comment that merely describes can be
+stale harmlessly. A comment that *justifies* is the record of a decision, so when
+its premise is false the decision was made on that false premise — and the code is
+suspect, not just the sentence. Distinct from the rule "A guard's comment names
+what it excludes, not what it silently breaks", which is about what a *true*
+comment leaves out; this is about the comment that is not true.
+
+## A decision that DESCOPES something has to be walked back through every artifact that promised it — the promising artifacts are never the one you are editing when you make the call
+
+**Chunk 18B was explicitly delegated the call on whether to extract the 41
+hand-tuned mat colours into `tests/fixtures/mat_corpus.json`, and decided not to.**
+The decision reached the code — a test docstring — and the chunk's own change-log
+entry, and stopped there. Three artifacts kept promising the opposite for a day:
+`nonfunctional-requirements.md` said `all.json` must survive only "before the
+regression fixture is extracted", Chunk 06 still carried the fixture as a
+deliverable and as an acceptance criterion that could never come true, and the
+backlog item asking for the extraction was still open and still `stage:ready`.
+
+**The mechanism is positional, which is what makes it recur.** You make a descope
+decision while editing the thing you decided *not* to build — a test, a module, the
+chunk you are in. Every artifact that promised the thing is somewhere else by
+construction: an earlier chunk's entry, a requirements section written months
+before, a backlog item filed by someone else. Nothing you are looking at while
+deciding contains the promise, so nothing prompts the sweep.
+
+The residue is worse than an ordinary stale doc. A landed chunk asserting an
+acceptance criterion that can never come true reads to an auditor as a missed
+deliverable, and an open backlog item instructs the next person to build the thing
+the product decided against — with the reasoning nowhere they will look.
+
+The check is one grep on the *thing's name* at the moment of deciding, not later:
+every artifact naming it, plus the backlog. Sibling of the rule "When a behaviour
+is retired, grep the sentences that justified it, not just the code", which covers
+retiring a behaviour that exists; this covers retiring one that never will.

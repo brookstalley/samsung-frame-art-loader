@@ -335,6 +335,13 @@ def _attach_images(record: LegacyRecord, *, work_id: str, catalogue: CatalogueSe
                 height=facts.height,
                 byte_size=facts.byte_size,
                 content_hash=facts.content_hash,
+                # Unrecorded, and deliberately not asserted as complete. These
+                # files were produced by the 2024 pipeline and are being adopted,
+                # not fetched — nothing observed whether their tiles all arrived,
+                # and a seed that claimed `ok` would be inventing the fact rather
+                # than reading it. Readers treat unrecorded as complete, so the
+                # corpus is still protected from a gappy re-fetch replacing it.
+                fetch_status=None,
             )
 
     render = art_root / record.ready_path

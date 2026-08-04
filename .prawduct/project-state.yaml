@@ -362,7 +362,15 @@ classification:
     - name: "OpenRouter (LLM)"
       notes: "Chosen 2026-07-19 for multi-provider routing. Replaces the direct openai==1.37.1 gpt-4o call in ai.py."
     - name: "dezoomify-rs"
-      notes: "External binary invoked via subprocess with shell=True. Not a network API, but an unowned interface with its own failure modes and output-parsing contract."
+      notes: >
+        External binary invoked as an argv list with no shell, stdin at DEVNULL and an explicit
+        --image-index. Not a network API, but an unowned interface with its own failure modes and
+        output-parsing contract — captured in artifacts/dezoomify-cli-findings.md from the installed
+        binary rather than inferred. CORRECTED 2026-08-04: this said "invoked via subprocess with
+        shell=True", which was false in both planes — the 2024 root call site was already argv-based
+        and the curation plane has never used a shell. security-model.md rests a bound on exactly that
+        property, so a reader starting from this register would have re-derived a shell-injection
+        surface that does not exist.
     - name: "IT8951 / omni-epd e-paper drivers"
       notes: "Dormant upstream, unpinned. Display plane only."
 
@@ -595,10 +603,18 @@ product_definition:
       estimated_monthly_cost: "negligible"
       notes: >
         One vision call per newly accepted artwork against a 1024x1024 thumbnail.
-        Bounded by acceptance rate, not by time. REQUIRES A DIFFERENT MODEL from
-        discovery — both models chosen for discovery are text-only (see
-        open_questions). Watch the retry loop: ai.py retries up to 5 times on
-        malformed JSON, so a persistently bad response costs 5x.
+        Bounded by acceptance rate, not by time. SETTLED 2026-08-03 (Chunk 18B):
+        the model is `qwen/qwen3.7-flash`, measured at $0.000063 a call — a
+        different model from discovery's, because those are text-only. Comparison
+        in artifacts/openrouter-api-findings.md; price in
+        nonfunctional-requirements.md's cost table.
+        Two things this row used to say are retired rather than edited quietly.
+        It pointed at `open_questions` for the model choice, which is now closed
+        there. And it warned "ai.py retries up to 5 times on malformed JSON, so a
+        persistently bad response costs 5x" — that is the 2024 module's behaviour;
+        the new engine does not retry at all. It falls back to the mechanical
+        producer and records `MatMethod.DOMINANT_COLOR_FALLBACK`, so a bad
+        response costs one call and is visible in the data rather than repeated.
     - item: "Web search during discovery"
       estimated_monthly_cost: "$0.03-0.25 per run; inside the ceiling"
       notes: >
@@ -2065,10 +2081,32 @@ design_decisions:
 #   priority: high | medium | low
 
 open_questions:
-  - question: "Should the health panel surface `limit_remaining` at all, and if so with what caveat?"
-    blocking: "Chunk 19's health-panel half. Nothing before it — no surface reads the figure today."
-    waiting_on: operator
-    priority: medium
+  # RESOLVED 2026-08-04 by the operator: option (a) — the health panel does NOT
+  # surface `limit_remaining`, in any form. Chunk 19's health-panel half is
+  # unblocked and builds without it.
+  #
+  # The reasoning the operator endorsed: the panel's own governing rule is "never
+  # a green dot — state the observation and its age, not a verdict", and a lagging
+  # balance is a green dot wearing a timestamp. Option (b), showing it with the lag
+  # on screen, was the real contender precisely because it looks like it satisfies
+  # that rule; it was declined because the figure's failure mode is not staleness
+  # but INVERSION — it was observed reading credit-remaining while live calls were
+  # already refused, so a caveat about age does not warn about the case that
+  # actually bites. The honest signals were already built: recorded per-run spend
+  # and the `halted_by_budget` outcome, both of which report what happened rather
+  # than what the provider's cache believes is possible.
+  #
+  # The ratified corollary in nonfunctional-requirements.md § Direction is
+  # UNTOUCHED by this: it says where "budget remaining" comes from IF shown
+  # (the authority, never a local tally), and the answer here is that no surface
+  # shows it. Nothing about this resolution amends that norm.
+  #
+  # The original question, kept for the trail:
+  #
+  # - question: "Should the health panel surface `limit_remaining` at all, and if so with what caveat?"
+  #   blocking: "Chunk 19's health-panel half. Nothing before it — no surface reads the figure today."
+  #   waiting_on: operator
+  #   priority: medium
     # RAISED 2026-08-02 by Critic verify-resolutions. The ratified corollary in
     # nonfunctional-requirements.md § Direction says "budget remaining" is read from
     # the authority (GET /api/v1/key -> limit_remaining), never from a local tally.
@@ -2088,10 +2126,25 @@ open_questions:
     # briefly asserted "do not ship it as the budget signal" — new normative content
     # in an artifact that does not own the norm, against a ratified corollary. That
     # is an amendment, and amendments are the owner's.
-  - question: "Which specific cheap vision model handles mat-colour selection?"
-    blocking: "Nothing structural — the two-tier model split is decided; only the specific model is open."
-    waiting_on: research
-    priority: low
+  # RESOLVED 2026-08-03 by Chunk 18B, which is the "planning time" the note below
+  # deferred to: the model is `qwen/qwen3.7-flash`, chosen on the operator's stated
+  # criterion — cheapest that does the job — after thirty-one probe calls over real
+  # corpus images. It was the only candidate to answer every call usably; the two
+  # cheaper ones proposed a near-white mat over a Rothko and a Mondrian, which is
+  # the single failure that glares on an emissive panel. Measured at $0.000063 per
+  # call. The comparison is in artifacts/openrouter-api-findings.md and the price is
+  # in nonfunctional-requirements.md's cost table.
+  #
+  # Closed rather than left open because the note below says "pick the model at
+  # planning time and re-verify pricing then", and both halves are now done — an
+  # open entry invites a future round to re-open a shipped, measured decision.
+  #
+  # The original question, kept for the trail:
+  #
+  # - question: "Which specific cheap vision model handles mat-colour selection?"
+  #   blocking: "Nothing structural — the two-tier model split is decided; only the specific model is open."
+  #   waiting_on: research
+  #   priority: low
     # RESOLVED IN PRINCIPLE 2026-07-19: operator confirmed a separate cheap vision
     # model is fine. Pick the model at planning time and re-verify pricing then.
     # Background: both models chosen for discovery are text-only — GLM-5.2 is listed
@@ -2509,7 +2562,7 @@ views_enabled: true
 # Do not hand-edit — overwritten on next regen.
 scope_rollups:
   v1-build:
-    chunks: ["01", "02", "06", "07", "07B", "08A", "08B", "09", "10", "10B", "11", "14A", "14B", "15", "16A", "16B", "17A", "17B"]
+    chunks: ["01", "02", "06", "07", "07B", "08A", "08B", "09", "10", "10B", "11", "14A", "14B", "15", "16A", "16B", "17A", "17B", "18A", "18B"]
     releases: []
 
 # =============================================================================
@@ -2624,7 +2677,7 @@ api_versioning_decided: "none — no version negotiation. MCP tool names frozen,
 # backlog_prefixes: []
 # backlog_external_imports: []
 
-backlog_last_groomed_at: 2026-08-02
+backlog_last_groomed_at: 2026-08-04
 
 # -----------------------------------------------------------------------------
 # BACKLOG SERVICE CUTOVER (API §2.4)

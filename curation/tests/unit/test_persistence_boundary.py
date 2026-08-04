@@ -70,6 +70,16 @@ _MAY_REACH_THE_NETWORK = {
     # request is made; the module is listed because the guard matches on the
     # top-level name rather than pretending to know which submodule is inert.
     "curation.seed.legacy",
+    # The acquisition transport — the far side of the image-fetch seam, the same
+    # arrangement as the two clients above. `direct.py` holds the ceilings, the
+    # staging and the zero-byte guard and takes its stream opener as an argument,
+    # which is what keeps the part worth testing exhaustively testable offline.
+    "curation.acquisition.transport",
+    # The fetch policy. It resolves names on purpose — deciding whether a host is
+    # publicly routable is not answerable without asking what it resolves to —
+    # and `urllib.parse` splits the URL. It sends no request, and its resolver is
+    # an argument so the rules can be exercised against stated answers.
+    "curation.acquisition.urls",
 }
 
 _REACHES_THE_NETWORK = {"httpx", "requests", "urllib", "urllib3", "http", "socket", "aiohttp", "openai", "anthropic"}

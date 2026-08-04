@@ -80,10 +80,26 @@ it the distro C bindings the e-paper driver needs.
 
 **A standalone interpreter cannot see distro site-packages.** That is fine here, and
 only because label rendering already moved to the display plane: curation's stack
-(FastAPI, opencv, scikit-image, numpy, pydantic) is all wheels, verified against the
-PyPI JSON API. `pycairo` — the one source-only aarch64 dependency — is on the
-display side, where the GTK stack already lives. **If anything needing distro C
-bindings is ever added to curation, this decision is what it breaks.**
+(FastAPI, starlette, uvicorn, mcp, python-dotenv, pydantic, pillow, httpx) is all
+wheels, verified against the PyPI JSON API. `pycairo` — the one source-only aarch64
+dependency — is on the display side, where the GTK stack already lives. **If
+anything needing distro C bindings is ever added to curation, this decision is what
+it breaks.**
+
+> **Corrected 2026-08-04, and the correction makes the argument stronger rather
+> than weaker.** This sentence named *opencv, scikit-image and numpy* as part of
+> curation's stack. They were forecast for "acquisition and the mat engine" and
+> never declared: both landed 2026-08-03 needing none of the three, and
+> `curation/pyproject.toml` now records that as **a rejection rather than a
+> deferral** — the LAB conversion and CIEDE2000 distance are thirty lines of
+> fully-specified arithmetic in `acquisition/color.py`, and the dominant-colour
+> fallback uses Pillow's median-cut quantiser where 2024 used OpenCV k-means.
+>
+> Worth noting how this survived: the same bundle that made the rejection wrote
+> the rule that a descope must be walked back through every artifact that promised
+> it, walked back the *fixture* descope, and left this one. The forecast lived in
+> a sentence about interpreters, which is not where anyone looks when deciding a
+> dependency.
 
 ## Process Management
 
@@ -184,6 +200,18 @@ Panel geometry was briefly listed as a second shared value; it is not, because
   deployment's figure, and the resolved box is logged at startup beside the panel
   it came from, because a wrong mat is otherwise visible only as works being
   labelled oddly in the review grid.)*
+
+  *(**Three more joined them on 2026-08-03**, when the mat engine landed, and are
+  curation-only for a different reason — display never asks a model anything:
+  `MAT_MODEL`, `MAT_MAX_OUTPUT_TOKENS` and `MAT_IMAGE_MAX_EDGE`. The middle one
+  is a correctness value rather than a limit: a reservation that does not clear
+  the model's *reasoning* budget returns empty content billed in full, and the
+  work is then matted by the mechanical fallback with only `MatColor.method`
+  recording that anything went wrong. The model is logged at startup alongside
+  the discovery model, and a deployment with no `OPENROUTER_API_KEY` logs that
+  every mat will come from the dominant colour — which is a supported deployment,
+  not a failure, but one worth reading in the journal rather than inferring from
+  forty rows.)*
 - **E-paper panel geometry** (1448×1072) — **display only**, for label typesetting.
 
 Because neither is shared, neither can drift between planes. A wrong TV size is
@@ -266,7 +294,7 @@ that will actually get run rather than skipped.
 | Deploy | `git pull`, then `systemctl restart` each unit. No migration spans the planes — the manifest is regenerated, never migrated |
 | Rollback | `git checkout` the previous commit, restart both |
 | Restart one plane | Safe at any time, in either order. The other is unaffected by design |
-| Add disk headroom | Prune `tile-cache/` and `temp/` — working space, not steady-state storage, sized by the largest single work in flight. **`previews/` reclaims itself since 2026-08-03**: the plane sweeps it hourly (`PREVIEW_SWEEP_INTERVAL_SECONDS`, 0 to disable), deleting the cached thumbnails of candidate works the curator has accepted or rejected, and logging `preview.swept` every pass whether or not it took anything — a plane that has stopped sweeping is therefore visible in the journal rather than only in the free-space figure. **Two things it does not reclaim, and the second is why deleting the directory by hand is still a listed remedy.** The previews of works nobody has judged yet — those are the ones review still needs, so a backlog of undecided candidates is a state in which this directory legitimately grows, and deciding them is the remedy. And **files no row names**: the sweep derives every path it considers from `CandidateImage.preview_path`, so bytes written by a phase-2 run that died between writing the file and recording the row are invisible to it permanently. That is not hypothetical — it is the case an on-verdict hook could never have covered, which is part of why the sweep exists — and it is unbuilt, filed rather than glossed. Until it is built, **`rm -rf` on `previews/` is the only thing that reclaims an orphan**, and it costs more than the word "disposable" suggests: **nothing re-fetches a preview.** `PreviewCache.store` is called once, by phase 2 when an instance is first recorded, and a re-search does not restore the file either — `record_image` returns the instance a work already holds for that URL without rewriting `preview_path`. So deleting the directory permanently costs the inline picture of every candidate **still under review**, whose cards fall back to reporting a source URL a curator would have to open by hand; works already decided lose nothing, since their previews were the sweep's to take anyway. Safe on a full card, and not free — prefer deciding the outstanding candidates first, which lets the sweep reclaim them properly. It matters here because § Risks opens with the SD card as the top operational risk |
+| Add disk headroom | **`tile-cache/` reclaims itself since 2026-08-03** and is no longer an operator chore: tiles are cached under the id of the source being fetched, and that directory is removed the moment the work holds a complete image. What survives a pass is exactly the tiles of a **partial** fetch, which is the one case they are worth their disk — they are what lets `art_catalogue(action='retry_acquisition')` finish the image without re-downloading what already arrived. So a `tile-cache/` that is large is a report that works are sitting partially fetched, and the remedy is to retry them rather than to delete the directory; deleting it is safe and costs those retries their head start. `temp/` belongs to the 2024 modules and is still pruned by hand until they are retired. **`api-cache/` needs no rule: the curation plane never creates one** — phase 2 asks museums over HTTP with no on-disk cache, and the directory exists only in the 2024 `config.py`. **`previews/` reclaims itself since 2026-08-03**: the plane sweeps it hourly (`PREVIEW_SWEEP_INTERVAL_SECONDS`, 0 to disable), deleting the cached thumbnails of candidate works the curator has accepted or rejected, and logging `preview.swept` every pass whether or not it took anything — a plane that has stopped sweeping is therefore visible in the journal rather than only in the free-space figure. **Two things it does not reclaim, and the second is why deleting the directory by hand is still a listed remedy.** The previews of works nobody has judged yet — those are the ones review still needs, so a backlog of undecided candidates is a state in which this directory legitimately grows, and deciding them is the remedy. And **files no row names**: the sweep derives every path it considers from `CandidateImage.preview_path`, so bytes written by a phase-2 run that died between writing the file and recording the row are invisible to it permanently. That is not hypothetical — it is the case an on-verdict hook could never have covered, which is part of why the sweep exists — and it is unbuilt, filed rather than glossed. Until it is built, **`rm -rf` on `previews/` is the only thing that reclaims an orphan**, and it costs more than the word "disposable" suggests: **nothing re-fetches a preview.** `PreviewCache.store` is called once, by phase 2 when an instance is first recorded, and a re-search does not restore the file either — `record_image` returns the instance a work already holds for that URL without rewriting `preview_path`. So deleting the directory permanently costs the inline picture of every candidate **still under review**, whose cards fall back to reporting a source URL a curator would have to open by hand; works already decided lose nothing, since their previews were the sweep's to take anyway. Safe on a full card, and not free — prefer deciding the outstanding candidates first, which lets the sweep reclaim them properly. It matters here because § Risks opens with the SD card as the top operational risk |
 | **Verify the spend ceiling** | In the OpenRouter console, confirm the key in `OPENROUTER_API_KEY` still carries a **USD 20 credit limit with a monthly reset**. **This setting is the entire cap** — nothing in this repository enforces one, by ratified decision, because an application-side meter that fails open is indistinguishable from one that works. A key whose limit was cleared, or a key swapped for an uncapped one, looks identical on every surface the product exposes right up to the bill. `cd curation && uv run pytest -m live_api` asserts it mechanically (`test_the_key_reports_a_monthly_ceiling`) and costs a few cents to run |
 | Bound the journal | `SystemMaxUse=` in `journald.conf`. **Set this explicitly** — see below |
 | Patch curation's CPython | `uv python upgrade 3.14`, then rebuild the venv and restart. **`apt upgrade` does not do this** — it patches the display plane's 3.13 only |
@@ -283,7 +311,9 @@ Mostly automatic; the table below is what a human would do when it is not.
 | A theme shows fewer works than expected | The manifest build's exclusion report | It names the per-work reason. This is the designed surface, not a diagnostic dead end |
 | Discovery refuses to start | The refusal text itself — it names the cause | *(Corrected 2026-08-02: this row sent the operator to `limit_remaining` on the health panel, a figure no surface exposes and which may not be trusted anyway — it lags by minutes, and was observed reporting credit remaining while live calls were already being refused.)* Two different refusals: **no key configured** says so and names `.env`; a run that started and then **halted_by_budget** means the provider refused the spend, for which the answer is the monthly UTC reset or a raised key limit |
 | `resolve_images` refuses work ids as "already in flight" | The named run's status | It is always a `resolve` run, and a live one is always `resolving_images`. If it is genuinely searching, wait or `cancel` it. If nothing is actually working, startup reconciliation should have moved it to `interrupted`; that it did not is a bug, not an operator action. *(Corrected 2026-07-27: this row previously told the operator to approve or decline an `awaiting_approval` run to free the ids — a state a resolve run can never reach, so the advice named a run that cannot exist.)* |
-| Acquisition fails on every work | Free disk space | The pre-acquisition guard should have caught it; if it did not, that is a bug in the guard |
+| Acquisition fails on every work | Free disk space | The pre-acquisition guard should have caught it; if it did not, that is a bug in the guard. It refuses **before** a fetch begins and names the shortfall in GiB, so the refusal itself says whether disk is the cause. `MIN_FREE_BYTES` (default 2 GiB) is the floor, and it protects `catalogue.sqlite` on the same device rather than the fetch |
+| Acquisition fails on one work with a refused URL | `art_catalogue(action='sources')` for that work | The fetch policy refused the URL and the reason is recorded on the source. Schemes other than `http`/`https`, and hosts that resolve to this network rather than the open internet, are refused by design (`security-model.md` § The fetch trigger fired) — a source that needs one of those is a source this product will not fetch |
+| Every tiled acquisition fails at once | `dezoomify-rs` on the unit's `PATH` | Acquisition raises rather than recording a failed fetch when the binary is absent, precisely so this is not mistaken for museums going away. Install it, or set `DEZOOMIFY_PATH` to where it lives |
 | Neither plane starts after a reboot | Both planes' resolved `ART_ROOT` in the journal | Mismatched or missing `ART_ROOT` is the likely cause |
 
 ## Risks

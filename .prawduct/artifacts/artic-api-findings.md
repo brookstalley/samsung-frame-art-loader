@@ -227,5 +227,5 @@ stops describing the API.
 | Phase-2 engine | One search request per work returns dimensions, rights and preview URL together |
 | `CandidateImage` | `estimated_width`/`estimated_height` from `thumbnail.width`/`height`; `rights_status` from `is_public_domain`; `acquisition_method = dezoomify`; `provider = artic` |
 | Preview caching | `{iiif_url}/{image_id}/full/843,/0/default.jpg`, one GET, no size negotiation |
-| Acquisition (Chunk 18) | Full resolution requires walking an 843-pixel region grid; the advertised `maxArea` is not honoured |
+| Acquisition | Full resolution requires walking an 843-pixel region grid; the advertised `maxArea` is not honoured |
 | Client conventions | Send `AIC-User-Agent`; read the IIIF base from `config.iiif_url`; no rate-limit headers exist to read |

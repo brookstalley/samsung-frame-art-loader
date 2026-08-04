@@ -15,12 +15,18 @@ preview's is a picture that simply does not travel, and flattening those into on
 behaviour here would make the wrong one right somewhere.
 """
 
+import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import Final
 
 from PIL import Image, ImageOps
+
+from curation.services.errors import ServiceError
+
+log = logging.getLogger(__name__)
 
 #: JPEG, always. Both callers produce something a client renders immediately
 #: rather than an archival copy, and the source is already whatever the museum
@@ -66,3 +72,66 @@ def encode_downscaled(source: Path, *, max_edge: int, quality: int) -> EncodedFr
         frame.save(buffer, format=_FORMAT, quality=quality, optimize=True)
         width, height = frame.size
     return EncodedFrame(data=buffer.getvalue(), width=width, height=height)
+
+
+def measure(source: Path) -> tuple[int, int]:
+    """The size an image would display at, without decoding it.
+
+    Reads the header rather than the pixels, so asking a gigapixel master how
+    large it is costs no memory — which matters because acquisition asks this of
+    every image it writes, on the smallest machine in the deployment.
+
+    **EXIF orientation is applied**, so a portrait photograph stored as a rotated
+    landscape reports portrait dimensions. The catalogue's width and height feed
+    the display-fit verdict and the mat geometry, both of which are judgements
+    about the picture as a viewer sees it; reporting the stored orientation would
+    make a work that renders tall get judged as though it were wide.
+
+    Raises whatever Pillow raises for a file that is not a readable image, on the
+    same terms as `encode_downscaled` above.
+    """
+    with Image.open(source) as image:
+        width, height = image.size
+        # `exif_transpose` would decode; the orientation tag alone answers the
+        # question, and values 5 through 8 are the four that transpose the axes.
+        orientation = image.getexif().get(0x0112)
+        if orientation in (5, 6, 7, 8):
+            width, height = height, width
+    return width, height
+
+
+def reading[T](source: Path, read: Callable[[], T]) -> T:
+    """Run a read of `source`, turning any decode failure into one named refusal.
+
+    **The translation lives here for the same reason the decode does**: every
+    caller that opens an image needs it, and the copies drift. This module's own
+    history is the argument — its two original callers had already diverged on
+    which exceptions they named before it existed — and the mat engine and the
+    compositor reproduced exactly that, one translating Pillow's failures and one
+    letting them escape, so an undecodable original raised a bare
+    `UnidentifiedImageError` from whichever path happened to reach it first.
+
+    **This raises where the callers above it may fall back**, and the distinction
+    is worth keeping: a work whose bytes will not decode has no mat *and* no
+    canvas, because both are read from the same file. A caller that fell back
+    here would raise the identical exception a few lines later from a site whose
+    message names something unrelated.
+
+    Broad on purpose. The decode seam raises what Pillow raises, and that is
+    deliberately not one family — `UnidentifiedImageError` and a truncated file
+    give `OSError`, a `La`-mode image gives `ValueError`, and an image engineered
+    to exhaust memory gives `DecompressionBombError`, straight from `Exception`.
+    These bytes came from a URL discovery found, which the security model treats
+    as attacker-influenceable, so the one an attacker *chooses* is the one a
+    narrower catch would let escape untranslated.
+    """
+    try:
+        return read()
+    except Exception as exc:  # prawduct:allow prawduct/broad-except -- attacker-influenced bytes, translated not swallowed
+        # Logged with its type and traceback before it becomes a ServiceError, so
+        # a `TypeError` from a future edit to a caller does not read in the
+        # journal as a museum having served bad bytes.
+        log.warning("reading the image at %s raised %s", source.name, type(exc).__name__, exc_info=True)
+        raise ServiceError(
+            f"The image at {source.name} could not be read, so it cannot be given a mat or rendered: {exc}"
+        ) from exc

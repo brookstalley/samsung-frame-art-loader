@@ -21,6 +21,7 @@ from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import (
     AcquisitionMethod,
     ArtworkStatus,
+    FetchStatus,
     MatMethod,
     RenditionKind,
     RightsStatus,
@@ -53,6 +54,7 @@ def _a_showable_work(catalogue):
         height=4000,
         byte_size=90_000_000,
         content_hash="hash-1",
+        fetch_status=FetchStatus.OK,
     )
     catalogue.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)
     catalogue.record_rendition(

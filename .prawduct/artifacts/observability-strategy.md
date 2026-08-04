@@ -27,7 +27,7 @@ reader should not conclude these were forgotten.
 |---|---|---|
 | Structured logs | **Yes** — the primary signal | Both planes, to the systemd journal |
 | Health/heartbeat state | **Yes** | Display writes it; the curation UI reads and displays it |
-| Spend | **Per run, yes; as a live balance, no** | Recorded spend is on the run and reported by the discovery surface. **`limit_remaining` is deliberately not surfaced** — see the note below the table |
+| Spend | **Per run, yes; as a live balance, never** | Recorded spend is on the run and reported by the discovery surface. **`limit_remaining` is not surfaced, and the operator settled that it will not be** — see the note below the table |
 | Metrics (time series) | No | No store, no query surface, nobody to read them. Revisit only if a real question needs a trend |
 | Distributed tracing | No | Two processes with no request/response between them. There is no distributed call to trace |
 | Uptime monitoring (external) | No | Follows from the operator's alerting decision below |
@@ -41,13 +41,26 @@ reader should not conclude these were forgotten.
 > refused. A panel built naively from it would tell the operator they had money at
 > the exact moment spending stopped working. The signals that do not have that
 > failure mode are recorded per-run spend and the `halted_by_budget` outcome.
-> **Whether to surface it anyway, as a lagging advisory figure with the lag stated
-> on screen, is an open question for the operator** — see § Spend as an
-> Observability Signal below, and `project-state.yaml` → `open_questions`. It is
-> not settled here, because the norm that governs it lives in
-> `nonfunctional-requirements.md` § Direction and was ratified.
 > (`operational-spec.md` § Troubleshooting corrected the same claim the same day;
 > this artifact was the copy that sweep did not reach.)
+>
+> **Settled 2026-08-04 by the operator: it is not surfaced, in any form.** The
+> question left open here was whether to show it anyway as a lagging advisory
+> figure with its age on screen. That option was the serious one — it appears to
+> satisfy this artifact's own panel rule, *state the observation and its age, not a
+> verdict* — and it was declined because **the figure's failure mode is inversion,
+> not staleness.** A caveat about age warns that the number may be old; what was
+> measured is a number that was *wrong in the reassuring direction*, reading credit
+> remaining while live calls were already refused. Age-stamping does not caution
+> against that, so the panel would carry a figure whose one dangerous reading is
+> the one the caveat does not cover. A lagging balance is a green dot wearing a
+> timestamp, and § The panel shows staleness in absolute terms forbids green dots.
+>
+> **This settles display, not provenance.** The ratified corollary in
+> `nonfunctional-requirements.md` § Direction — "budget remaining" is read from the
+> authority, never from a local tally — is untouched and was never in question; it
+> governs where the number comes from *if* shown, and the answer here is that no
+> surface shows it. Nothing in this resolution amends that norm.
 
 **Both planes use stdlib `logging`, and neither takes a dependency for it.**
 
@@ -277,21 +290,22 @@ provider's own figure for budget left. A local counter would be a second source 
 truth for a number the provider owns, and the two would drift — which is the
 reasoning behind the ratified provider-enforced-ceilings norm.
 
-> **`limit_remaining` is not surfaced today, and there is an open question about
-> whether it should be (raised 2026-08-02).** Two measured facts sit against it:
-> nothing outside the client and its tests reads it, and it lags by minutes — it
-> was observed reporting credit remaining while live calls were already being
-> refused. A panel built naively on it would tell the operator they had money at
-> the moment spending stopped working.
+> **`limit_remaining` is not surfaced, and as of 2026-08-04 that is settled rather
+> than pending.** Two measured facts stand against it: nothing outside the client
+> and its tests reads it, and it lags by minutes — it was observed reporting credit
+> remaining while live calls were already being refused. A panel built on it would
+> tell the operator they had money at the moment spending stopped working.
+>
+> The question raised 2026-08-02 — show it anyway, as an advisory figure with its
+> lag on screen? — **was answered no by the operator.** The reasoning is under the
+> signals table: the figure fails by inversion rather than by staleness, so stating
+> its age does not warn about the case that bites.
 >
 > This does **not** overturn the corollary above, which is a ratified norm owned by
 > `nonfunctional-requirements.md` § Direction and is not this artifact's to amend.
 > The corollary answers "where does budget-left come from if you show it" —
-> authority, never a local tally — and that answer is untouched. The open question
-> is the separate one of **whether to show it at all, and with what caveat**; it is
-> recorded in `project-state.yaml` → `open_questions` and is the operator's call.
-> Until it is answered, the honest budget signals are recorded per-run spend and
-> the `halted_by_budget` outcome.
+> authority, never a local tally — and that answer is untouched. The honest budget
+> signals remain recorded per-run spend and the `halted_by_budget` outcome.
 
 Surfaced in two places: before a run (the estimate, so the curator can decline)
 and after (the actual). `halted_by_budget` is a first-class outcome that must be

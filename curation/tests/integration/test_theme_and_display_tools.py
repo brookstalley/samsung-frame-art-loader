@@ -17,6 +17,7 @@ from mcp.client.streamable_http import streamable_http_client
 
 from curation.persistence.records import (
     AcquisitionMethod,
+    FetchStatus,
     MatMethod,
     RenditionKind,
     RightsStatus,
@@ -243,6 +244,7 @@ async def test_activating_publishes_exactly_the_readiness_filtered_theme(server_
         height=4000,
         byte_size=90_000_000,
         content_hash="hash-1",
+        fetch_status=FetchStatus.OK,
     )
     service.record_mat_color(artwork_id=ready, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)
     service.record_rendition(

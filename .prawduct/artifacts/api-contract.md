@@ -116,9 +116,9 @@ tool per action stops paying and consolidation starts.
 
 | Tool | Actions | Notes |
 |---|---|---|
-| `art_discovery` | `estimate`, `start`, `status`, `approve`, `decline`, `cancel`, `resolve_images`, `list_runs`, `spend`, `help` | **The only tool that spends money.** |
+| `art_discovery` | `estimate`, `start`, `status`, `approve`, `decline`, `cancel`, `resolve_images`, `list_runs`, `spend`, `help` | **The only tool that spends money in amounts worth authorising** — see the correction below. |
 | `art_review` | `list_works`, `get_work`, `list_images`, `set_canonical`, `set_verdict`, `reject_image`, `help` | Returns thumbnails; see Inputs & Outputs. Never spends. |
-| `art_catalogue` | `list`, `get`, `archive`, `restore`, `retry_acquisition`, `set_mat_color`, `regenerate`, `help` | |
+| `art_catalogue` | `list`, `get`, `sources`, `archive`, `restore`, `retry_acquisition`, `set_mat_color`, `regenerate`, `help` | `sources` is the provenance read; see below. |
 | `art_theme` | `list`, `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`, `help` | `activate` changes the wall immediately. |
 | `art_display` | `status`, `sync`, `show_now`, `next`, `help` | Every action goes through the theme manifest — see below. |
 
@@ -318,6 +318,35 @@ this scan was chosen survives into the catalogue. `reject_image` takes no reason
 and that asymmetry is deliberate — "this one" is a judgement worth keeping, while
 "not this one" is followed by a re-search whose result is the record.
 
+### `sources` is its own action, not a field on `get` (settled at build, 2026-08-03)
+
+`art_catalogue` had no way to read where a catalogued work came from. The gap was
+not an unbuilt action but a missing one: the table above listed none, so `get`
+returned artwork fields and the resolved artist, and `url`, `provider`,
+`rights_status`, `is_primary`, `confidence`, `selection_rationale` and
+`last_fetch_status` were unreachable over MCP while `GET /api/works/{id}` had been
+returning them to the browser all along.
+
+The blind spot opened exactly at acceptance. Before it, scans are inspectable via
+`art_review(list_images)` under a run's `work_id`; the promotion that mints an
+`Artwork` re-keys them by `artwork_id`, and at that moment they left the surface.
+So an agent could not say which source is primary or whether the last fetch failed
+— and `retry_acquisition` would have acted on a source its caller could not read.
+
+**Two shapes were available and the round trip is not what decided it.** Folding
+`sources` into `get`'s result is *Additive* under the compatibility table below, so
+it was compatible and would have cost no extra call. It was rejected because `get`
+is the payload every list-then-detail hop pulls, and provenance is not what that
+hop is for: rights, fetch status and primacy are acquisition-time concerns, read
+when a caller is about to act on a source, not when it is reading a title and a
+date. Fattening the common read to spare a call on the rare one is the wrong trade
+in a surface whose § Token budget is a standing constraint.
+
+**It reads through `CatalogueService.list_sources()` — the same service method the
+browser detail view already uses.** No second projection of "a work's sources"
+exists, which is the service-layer norm doing its job: the two surfaces cannot
+drift because there is nothing to drift.
+
 ### Why not split reads from writes
 
 Anthropic's connector Directory review criteria require read and write tools to be
@@ -337,6 +366,37 @@ only tool with a cost, so it can be gated independently without splitting anythi
 else. Note the consequence — because MCP annotations are per *tool*, not per
 action, an operation needing its own confirmation must be its own tool. That is the
 real constraint on how far consolidation can go.
+
+> **Corrected 2026-08-03, when the mat engine landed: `art_discovery` is no
+> longer the only tool with a cost.** `art_catalogue(action='set_mat_color')`
+> asks a vision model whenever it is given no `hex_rgb`, at about $0.000063 a
+> call — **and so does `action='regenerate'`, for a work that has never had a
+> mat**. That second path was missed when this block was first written and two
+> Critic reviewers found it independently: a work cannot be rendered without a
+> mat, `acquire` does not prepare, so the first `regenerate` on every acquired
+> work is the paying one. It is the *normal* case, not an edge, which is what
+> made the omission worth correcting rather than footnoting. Both actions now
+> report `cost_usd` on every answer, including the zeroes. The paragraph above is left standing because its *reasoning* survives
+> intact and only its premise moved, and because the reasoning is what a reader
+> needs: a boundary is worth drawing where an operation needs its own
+> confirmation.
+>
+> **A mat call does not need one, and the difference is four orders of
+> magnitude.** A discovery run is the operation with an approval gate, a run
+> handle, a stored estimate and a monthly ceiling behind it; a mat call is a
+> fraction of a cent spent on one work at the curator's explicit request, and
+> re-preparing an entire collection spends nothing at all because a work that
+> already has a mat keeps it. Splitting `set_mat_color` onto its own tool to
+> carry an annotation would buy a confirmation prompt nobody wants and a seventh
+> tool on a surface this artifact argues should be small.
+>
+> **What did have to change is `openWorldHint`.** `art_catalogue` declared a
+> closed world while `retry_acquisition` was already fetching arbitrary museum
+> URLs — understating it to every client that reads the hint, since Chunk 18A.
+> It is now `true`. The lesson generalises past this instance: an annotation is
+> per tool, so **adding an action can falsify a flag the tool has carried
+> correctly for months**, and nothing about the new action's own code review
+> would look at that flag.
 
 ### Argument shape
 
@@ -739,9 +799,33 @@ breaking change is recoverable in a way a public API's would not be.
 | Add an optional parameter | Additive. Safe. |
 | Add a **required** parameter | Breaking. Add it optional with a default instead. |
 | Add a field to a result | Additive — readers tolerate unknown keys, the discipline `3tears` already uses for its `--json` envelopes. |
+| Add a **value** to a result field that reads as an enum | Additive, **on the condition that the new value's own meaning is carried in prose beside it** — see below. |
 | Remove or rename a **tool** | **Not permitted.** |
 | Remove or rename an **action** | Breaking. Announce, then retire with the retirement noted inline at the old name's site. |
 | Change a tool or action **description** | **Treat as breaking.** |
+
+**On the enum row, added 2026-08-04 when `acquire` first grew a value.** The table
+had no verdict for this and the answer is not the same as adding a *field*. An
+unknown key is ignored by a reader that does not know it; an unknown **value** in a
+key the reader already switches on falls through every branch it has, so the caller
+carries on as though nothing happened — which is the failure mode
+`retry_acquisition`'s new `kept_held` would produce exactly when it matters, a
+curator told nothing while their re-fetch was refused. It is Additive only because
+this surface pairs every outcome with a `notice` in prose, so a client that
+understands no outcome values at all still relays a sentence saying what happened.
+**A result field that reads as an enum and has no prose companion cannot grow a
+value additively** — give it the companion first.
+
+> **A related correction, same date.** `retry_acquisition`'s tip said *"A failed
+> attempt replaces nothing — the work keeps whatever image it already held."* That
+> was true and was read as more than it said: paired with the tip above it
+> recommending retry *after a partial fetch*, it implied retrying was safe, while a
+> partial re-fetch overwrote a complete master. The tip now states what the code
+> enforces. By the last row of the table this is a breaking description change, and
+> it is made anyway: the alternative is keeping wording whose plain reading is false,
+> and the compatibility rule exists to protect callers rather than to preserve
+> sentences that mislead them. (The behaviour it now describes is constraint 16 in
+> `data-model.md`.)
 
 **Tool names never change.** hallucinote states the rule as *"stable surface — never
 rename, only alias"* and enforces it at import time; cordyceps pins its seven tool

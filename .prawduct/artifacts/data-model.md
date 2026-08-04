@@ -208,7 +208,7 @@ may exist at several institutions, and a broken source does not break the work.
 | `url` | string | required | The source URL. An attribute here, never an identity. |
 | `provider` | string | required | e.g. `artic`, `google_arts`, `gallery_site`, `prize_site`, `artist_portfolio`, `http`. Open vocabulary — the contemporary web has no fixed provider list. |
 | `source_class` | enum | required | `institutional` \| `contemporary_web`. The load-bearing distinction; see below. |
-| `acquisition_method` | enum | required | `dezoomify` \| `direct_http` \| `api`. Determines the fetch path. |
+| `acquisition_method` | enum | required | `dezoomify` \| `direct_http` \| `api`. Determines the fetch path. **`api` has no producer and no fetch path as of 2026-08-03**: the one museum client in the product resolves to tiled URLs, so nothing records it, and acquisition refuses it by name rather than guessing at a shape no response has ever exercised. The value is kept because a provider serving images through an API rather than a tile grid is a real thing this model should be able to say — building the path belongs with the provider that first needs it. |
 | `rights_status` | enum | required | `public_domain` \| `in_copyright` \| `unknown`. |
 | `is_primary` | boolean | default false | Which source was actually used for the held original. |
 | `confidence` | float | nullable | Carried from `CandidateImage.confidence` at acceptance. |
@@ -250,6 +250,27 @@ the art tree that rsync carries and git does not.
 | `height` | integer | required | |
 | `byte_size` | integer | required | Zero-byte files are a known failure mode; see Constraints. |
 | `content_hash` | string | required | Identifies the bytes; lets a rendition detect a stale parent. |
+| `fetch_status` | enum | nullable | How the fetch that produced *these bytes* ended — `ok` or `partial_tiles`. Read by constraint 16. Null means the row predates the column. |
+
+> **Why `fetch_status` is stored when `display_fit` was removed (added 2026-08-04).**
+> The note below argues that a *verdict* must not be stored, and a reader arriving
+> at this row is owed why the same argument does not retire it. It is the same
+> distinction `width` and `height` sit on: `display_fit` is a judgement about a
+> deployment's panel, and it goes silently wrong when the TV changes; `fetch_status`
+> is a **fact about an event that already happened** — this file came back with
+> gaps, or it did not — and no later change to any deployment can make it untrue.
+>
+> **It cannot be derived, which is the other half.** The obvious derivation is
+> `Source.last_fetch_status` for the source named by `source_id`, and it is wrong:
+> that column holds the source's *most recent* attempt, not the attempt that
+> produced the held bytes. One failed re-fetch overwrites it to `failed` while the
+> held original — protected by staging — is still the complete image from before.
+> A guard reading it would then see "held quality: failed", conclude anything is an
+> improvement, and let a partial overwrite a complete master, which is the exact
+> defect constraint 16 exists to prevent.
+>
+> `failed` is not among the values. A failed fetch produces no bytes to record, so
+> no Original can carry it.
 
 > **`display_fit` is NOT a column — it is derived (decided 2026-07-20).** It was
 > previously stored here, computed once at acquisition. That became wrong the moment
@@ -893,7 +914,7 @@ path consults it before spending.
 | `id` | UUID | PK | |
 | `discovery_run_id` | UUID | FK → DiscoveryRun, nullable | Null for non-discovery spend, e.g. mat colour. |
 | `artwork_id` | UUID | FK → Artwork, nullable | Set for per-artwork spend. |
-| `category` | enum | required | `discovery_tokens` \| `web_search` \| `image_research` \| `mat_color_vision`. |
+| `category` | enum | required | `discovery_tokens` \| `web_search` \| `image_research` \| `mat_color_vision` — **the last of these has a producer but writes no row today; see the deferral below.** |
 | `model_id` | string | nullable | |
 | `input_tokens`, `output_tokens` | integer | nullable | Null where the unit is not tokens. |
 | `units` | integer | nullable | e.g. number of web searches. |
@@ -911,6 +932,26 @@ path consults it before spending.
 > What this table *is* for: per-run and per-surface cost attribution, the
 > after-the-fact "what did this run cost", and monthly reporting. Those are real
 > needs and none of them is enforcement.
+>
+> **`mat_color_vision` is declared and unwritten, recorded here so the row does not
+> read as implemented (2026-08-04).** The category and its two nullable-key columns
+> predate any producer. Chunk 18B shipped the producer — a vision call per accepted
+> work through `MatEngine` — and it writes no SpendRecord: the cost is returned to
+> the caller on `cost_usd`, reported in the tool result, and then discarded. So the
+> monthly total from `art_discovery(action='spend')` omits every mat call. The
+> figures are small (about $0.000063 a call, one per accepted work) and the ceiling
+> is unaffected either way, because the ceiling is the provider's and this table
+> never enforced it — but a month total that silently excludes a whole paid path is
+> the wrong kind of small.
+>
+> **It is deferred rather than merely missing, and the reason is where the writer
+> would have to live.** `record_spend` belongs to `DiscoveryService`, so recording
+> mat spend today means `PreparationService` taking a dependency on the discovery
+> service to reach an accounting concern that has nothing to do with discovery —
+> deepening precisely the coupling that is already filed for removal. Spend
+> accounting is separable on its own records and its own aggregation, and the mat
+> path is the second caller that proves it. The writer lands with that split, and
+> both are tracked in the backlog.
 >
 > **Q4.** `category` separates `web_search` because it is billed per search rather
 > than per token, so a token-only breakdown would misattribute cost. The earlier
@@ -1353,6 +1394,36 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
     The path that sets `rejected_at` and the path that sets the verdict are the same
     path, so instance suppression can never be skipped. `set_verdict` rejects the
     value with an error naming `reject_image` — see `api-contract.md`.
+16. **A re-fetch never lowers the quality of the image a work already holds: a
+    `partial_tiles` result does not replace a held Original unless that Original is
+    itself recorded as `partial_tiles`.** *(Added 2026-08-04.)* Re-acquisition is an
+    ordinary operation the surface actively invites after a partial result, so the
+    guarantee a curator needs is that asking again cannot cost them what they have.
+    Chunk 18A's staging discipline established half of it — a fetch that *fails*
+    replaces nothing — and this is the other half: a fetch that *succeeds partially*
+    must not either. Without it `Original.fetch_status` and `Source.last_fetch_status`
+    are written and displayed while no decision reads them, and the tool tip on
+    `retry_acquisition` promising that a retry is safe is true only for the failure
+    case it happens to name.
+
+    **The comparison is quality, not recency, and it is deliberately coarse.** Only
+    the complete/partial distinction is read. Pixel count is *not* consulted: a
+    complete fetch from a smaller scan is a legitimate re-acquisition — a curator
+    switching to a different institution's file — and refusing it would make the
+    guard second-guess a choice acceptance already made. Two partials replace each
+    other freely, because neither is authoritative and the second may hold more
+    tiles; nothing in a tile count is comparable across two runs.
+
+    **A null `fetch_status` counts as complete.** Rows written before the column
+    existed cannot be distinguished, and the protective reading costs nothing real:
+    a partial replacing an unknown was never an improvement worth having, while the
+    permissive reading reintroduces the data loss for exactly the oldest rows.
+
+    A refused promotion is **not** a failed fetch. The staged file is discarded, the
+    held original and its `Source` row are untouched, and the result says plainly
+    that the work kept the better image it already had — recording it as a failure
+    would put a `failed` status on a source that just answered correctly, and send
+    whoever read it to a museum that is working.
 
 ## Rotation is host-driven, and the product owns its timing
 

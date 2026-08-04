@@ -16,7 +16,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from curation.mcp.bindings import MAX_WORKS_LISTED, _run_notice, _run_view, _truncation_notice
+from curation.acquisition.service import AcquisitionOutcome, AcquisitionResult
+from curation.mcp.bindings import MAX_WORKS_LISTED, _acquisition_notice, _run_notice, _run_view, _truncation_notice
 from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, ResolutionStatus, RunKind, RunStatus
 from curation.services.catalogue import MAX_LIST_LIMIT
 from curation.services.runner import RunView
@@ -243,3 +244,46 @@ def test_a_deployment_with_no_provider_says_so_whichever_kind_of_run_is_asking()
         notice = _run_notice(replace(view, image_resolution_available=False))
 
         assert "no image provider is configured" in notice
+
+
+# -- what an acquisition outcome means, when the outcome word understates it ----
+
+
+def _acquisition(outcome):
+    return AcquisitionResult(artwork_id="w1", source_id="s1", outcome=outcome, detail="whatever the service said")
+
+
+def test_a_clean_acquisition_needs_no_explaining():
+    assert _acquisition_notice(_acquisition(AcquisitionOutcome.ACQUIRED)) is None
+
+
+def test_a_partial_result_says_the_work_is_on_the_wall_anyway():
+    """`partial` reads like a failure and is not one."""
+    notice = _acquisition_notice(_acquisition(AcquisitionOutcome.PARTIAL))
+
+    assert "the work holds it" in notice
+    assert "Retrying" in notice
+
+
+def test_a_refused_promotion_is_told_apart_from_a_failure():
+    """The two outcomes that both leave the work unchanged say different things,
+    because the next move differs: a failure invites a retry, and a refusal is
+    what a retry already produced."""
+    kept = _acquisition_notice(_acquisition(AcquisitionOutcome.KEPT_HELD))
+    failed = _acquisition_notice(_acquisition(AcquisitionOutcome.FAILED))
+
+    assert kept != failed
+    # Says the fetch worked, so nobody goes looking for a broken source.
+    assert "The fetch worked" in kept
+    assert "nothing was replaced" in kept
+    # And does not repeat the advice that produced this outcome in the first place.
+    assert "Retrying repeats this" in kept
+
+
+def test_every_acquisition_outcome_is_accounted_for():
+    """A new outcome with no branch here returns `None`, which reads to a caller
+    as "nothing worth saying" rather than as an unhandled case."""
+    explained = {AcquisitionOutcome.PARTIAL, AcquisitionOutcome.FAILED, AcquisitionOutcome.KEPT_HELD}
+    for outcome in AcquisitionOutcome:
+        notice = _acquisition_notice(_acquisition(outcome))
+        assert (notice is not None) == (outcome in explained), f"{outcome} lost or gained its notice"

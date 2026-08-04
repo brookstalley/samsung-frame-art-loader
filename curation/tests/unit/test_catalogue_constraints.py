@@ -53,6 +53,7 @@ def _original(service, artwork_id, source_id, *, content_hash="sha256:aaa", byte
         height=4000,
         byte_size=byte_size,
         content_hash=content_hash,
+        fetch_status=FetchStatus.OK,
     )
 
 
@@ -312,8 +313,66 @@ def test_an_original_with_no_pixels_is_refused(service):
 
     with pytest.raises(ServiceError, match="positive width and height"):
         service.record_original(
-            artwork_id=work.id, source_id=source.id, path="originals/w1.tif", width=0, height=4000, byte_size=1, content_hash="h"
+            artwork_id=work.id,
+            source_id=source.id,
+            path="originals/w1.tif",
+            width=0,
+            height=4000,
+            byte_size=1,
+            content_hash="h",
+            fetch_status=FetchStatus.OK,
         )
+
+
+# -- 16. A re-fetch never lowers the quality of what is held -------------------
+#
+# The comparison itself lives in the acquisition service, because the file and the
+# row have to be refused together. What the catalogue owns is the fact the
+# comparison reads, and the one value that fact may never take.
+
+
+def test_an_original_cannot_record_a_failed_fetch(service):
+    """A failed fetch produces no bytes, so a row claiming one is a contradiction.
+
+    It is refused rather than merely unused because of how it would be read back:
+    "held quality: failed" makes every later result look like an improvement, which
+    is precisely the reasoning constraint 16 exists to prevent.
+    """
+    work = _work(service)
+    source = _source(service, work.id)
+
+    with pytest.raises(ServiceError, match="failed fetch produces no image"):
+        service.record_original(
+            artwork_id=work.id,
+            source_id=source.id,
+            path="originals/w1.tif",
+            width=6000,
+            height=4000,
+            byte_size=4096,
+            content_hash="h",
+            fetch_status=FetchStatus.FAILED,
+        )
+
+
+@pytest.mark.parametrize("status", [FetchStatus.OK, FetchStatus.PARTIAL_TILES, None])
+def test_how_the_bytes_came_back_survives_the_round_trip(service, status):
+    """Including `None`, which is a recorded answer — "nobody observed this" — and
+    is what the seed writes for files the 2024 pipeline left on disk."""
+    work = _work(service)
+    source = _source(service, work.id)
+
+    service.record_original(
+        artwork_id=work.id,
+        source_id=source.id,
+        path="originals/w1.tif",
+        width=6000,
+        height=4000,
+        byte_size=4096,
+        content_hash="h",
+        fetch_status=status,
+    )
+
+    assert service.get_original(work.id).fetch_status is status
 
 
 def test_an_original_must_belong_to_the_source_it_names(service):

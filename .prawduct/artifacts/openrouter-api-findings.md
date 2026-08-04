@@ -330,6 +330,95 @@ while this product's gate sits *between phases* and is already durable in the
 `DiscoveryRun` record with startup reconciliation behind it. Adopting a
 checkpointer would give "where is this run" a second owner.
 
+## The vision call, and the model that makes it (measured 2026-08-03)
+
+Probed before any mat client was written, with **real corpus images** rather than
+a synthetic swatch: five works pulled as ARTIC IIIF derivatives, spanning a dark
+blue, a sky blue, a warm Rothko, a pure-grey Mondrian and a near-black Hokusai.
+Two rounds, thirty-one calls, **$0.0046 in total.**
+
+### An image goes as a data URI on a content part, and costs nothing extra
+
+The request differs from a text completion in one place — `content` becomes a
+list of parts instead of a string:
+
+```
+messages[0].content = [
+  {"type": "text",      "text": <the prompt>},
+  {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,<...>"}},
+]
+```
+
+The response shape is **identical to the text path** — same `choices[0].message.content`,
+same `usage.cost`, same `finish_reason`. So the existing client's response reader
+needed no change at all; only the request builder did.
+
+**`usage.prompt_tokens_details.image_tokens` came back `None` on every model
+probed.** Images bill inside `prompt_tokens`, so a cost estimate that added a
+separate image charge would double-count. A 768-px JPEG lands in the low hundreds
+of prompt tokens.
+
+### An empty answer with `finish_reason: "length"` is a client fault, not a model one
+
+**The finding that cost the most to learn, and the one most likely to recur.**
+Round 1 reserved 700 output tokens for every candidate. Two models returned
+**empty content, billed in full**, and read as "this model cannot follow the
+schema". They are reasoning models: the reservation was spent entirely on
+reasoning tokens before a single character of the answer was emitted.
+
+```
+openai/gpt-5-nano   max_tokens=700   ->  content "", finish_reason=length, 0/5 valid
+openai/gpt-5-nano   max_tokens=3000  ->  1,600-2,048 reasoning tokens, 5/5 valid
+```
+
+So `max_output_tokens` has to clear a model's *reasoning* budget, not just its
+answer, and the failure it produces when it does not is silent and expensive —
+a billed call that returns nothing. **`finish_reason` is what distinguishes the
+two**, and the mat client treats `length` as its own diagnosable case rather than
+folding it into "the model did not answer".
+
+### The choice: `qwen/qwen3.7-flash`
+
+Cost is the operator's stated criterion at this stage — cheapest that does the
+job, with evals and price/performance tuning deferred. Measured across both
+rounds:
+
+| model | valid JSON | mean ΔE to corpus | per call | note |
+|---|---|---|---|---|
+| **qwen/qwen3.7-flash** | **10/10** | **26.3** | **$0.000063** | ~160 reasoning tokens; never chose a bright mat |
+| google/gemma-3-4b-it | 4/10 | 40.4 | $0.000037 | cheapest, but 429s on its provider and chose light mats |
+| google/gemma-3-12b-it | 5/5 | 48.6 | $0.000041 | valid, but light greys and oranges |
+| mistral-small-3.2-24b | 5/5 | 26.1 | $0.000093 | chose `#f5f5dc` — a near-white mat on a Mondrian |
+| nex-agi/nex-n2-mini | 6/10 | 30.4 | $0.000142 | one answer omitted the leading `#` |
+| openai/gpt-5-nano | 5/10 | 33.1 | $0.000821 | 13x the price, on reasoning tokens |
+
+It is the only candidate that answered **every** call validly, it is the cheapest
+of those that did, and its choices were the most conservative in the way this
+product cares about: across ten images it never proposed a mat lighter than the
+work, which is the one failure that glares on an emissive panel. The two cheaper
+models both did — `#d8c69f` on a Rothko, `#f5f5dc` on a Mondrian.
+
+**ΔE to the corpus is reported, not optimised against.** It is CIE76 distance to
+the colour the 2024 pipeline chose and the operator kept, and a mean near 26 means
+"a visibly different colour", which is what a different model choosing a mat
+*should* produce. Ranking on it would be fitting a subjective judgement to one
+prior sample of it. It earns its place as the sanity floor — a model answering
+with distance 70 is not disagreeing about taste — and as the figure the operator's
+corpus look starts from.
+
+### Strict schema is honoured but **not guaranteed**, so the fallback is load-bearing
+
+`qwen/qwen3.7-flash` advertises `response_format` but **not** `structured_outputs`
+in `supported_parameters`, and still returned schema-conforming JSON on all ten
+calls. Both facts matter: sending the schema is worth it, and *depending* on it is
+not. The probe saw the concrete failures a client has to survive — content that is
+empty, content that is truncated mid-string, and a hex triplet returned as
+`3F6F7A` with no leading `#`.
+
+This is why `MatColor.method` carries `dominant_color_fallback` as a first-class
+recorded value rather than the mat engine retrying until the model complies. An
+unparseable answer is a normal outcome of an unenforced schema, not an incident.
+
 ## Re-verification
 
 Prices and endpoint shapes both move, so **this file is no longer the durable

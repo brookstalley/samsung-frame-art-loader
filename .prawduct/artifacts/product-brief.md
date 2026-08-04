@@ -391,11 +391,16 @@ justify them is exactly the multi-pod coherence problem ruled out of scope.
 The separation therefore stands on its own merits:
 
 - It matches the data contract already recorded in `learnings.md` — upstream
-  artifacts (`raw/`, `api-cache/`, `tile-cache/`) are expensive and
-  device-independent; derived artifacts (`ready/`, `tv-thumbs/`) are cheap and
-  device-specific and must never be transported. (`label/` belonged to this list
-  in the 2024 layout; it is retired from the prospective contract — labels render
-  on the display plane. See `boundary-patterns.md`.)
+  artifacts (`raw/`) are expensive and device-independent; derived artifacts
+  (`ready/`, `thumbs/`, `tv-thumbs/`) are cheap and device-specific and must
+  never be transported. (`label/` belonged to this list in the 2024 layout; it is
+  retired from the prospective contract — labels render on the display plane.
+  `tile-cache/` was listed here as upstream until 2026-08-03, when acquisition
+  was built and it turned out to be neither: it is transient working space
+  holding the tiles of a *partial* download so a retry can resume, removed per
+  source as soon as that work holds a complete image. Transporting it would carry
+  the debris of an interrupted fetch to another machine. See
+  `boundary-patterns.md`.)
 - It makes "e-paper behind an interface" a process boundary rather than a
   convention.
 - It is what lets the display plane keep working when curation is down — the

@@ -17,7 +17,36 @@ they are settled in one place instead of per constructor.
 """
 
 from dataclasses import dataclass
+from pathlib import Path
 
+from curation.acquisition.direct import StreamOpener
+from curation.acquisition.mat import MatEngine
+from curation.acquisition.preparation import PreparationService, PreparationSettings
+from curation.acquisition.service import AcquisitionService, AcquisitionSettings
+from curation.acquisition.transport import no_transport
+
+# Module scope, and the three `_default_*` helpers below used to import this at
+# function scope instead, explained as breaking a cycle: "config reads this
+# package to compose its settings objects". It does not. `curation.config`
+# imports `manifest.builder`, `manifest.heartbeat`, `services.display_fit` and
+# `services.runner`, and none of those reaches this module — `services/__init__`
+# is a docstring. The deferral hid container→config from anything reading the
+# import graph while teaching a pattern on a premise that was never true. If a
+# real cycle ever appears, the fix is to move the constants, not to hide the edge.
+from curation.config import (
+    DEFAULT_ACQUISITION_USER_AGENT,
+    DEFAULT_MAT_IMAGE_MAX_EDGE,
+    DEFAULT_MAX_IMAGE_BYTES,
+    DEFAULT_MIN_FREE_BYTES,
+    DEFAULT_TILE_BINARY,
+    DEFAULT_TILE_MAX_PIXELS,
+    DEFAULT_TILE_TIMEOUT_SECONDS,
+    DEFAULT_TV_PANEL_HEIGHT_PX,
+    DEFAULT_TV_PANEL_WIDTH_PX,
+    ORIGINALS_DIRNAME,
+    READY_DIRNAME,
+    TILE_CACHE_DIRNAME,
+)
 from curation.discovery.engine import DiscoveryEngine
 from curation.discovery.images import ImageSearch
 from curation.discovery.phase_two import PhaseTwoEngine
@@ -68,6 +97,17 @@ class Services:
     #: a deployment could disable phase 2, keep the files it already wrote, and
     #: lose the only thing that reclaims them.
     sweep: PreviewSweep
+    #: Acquiring the master image a work was accepted for. Held beside the
+    #: catalogue rather than inside it because it is the one service that reaches
+    #: outside the machine to do its job — a subprocess and an HTTP transport —
+    #: and the record layer is deliberately free of both.
+    acquisition: AcquisitionService
+    #: Turning a held original into a mat and a television canvas. Its own service
+    #: rather than the tail of acquisition: a work is prepared repeatedly over its
+    #: life — whenever the panel changes, the mat is re-chosen, or a rendition
+    #: goes stale — while it is acquired once. Folding the two together would make
+    #: every re-render look like a re-fetch to whatever reads the journal.
+    preparation: PreparationService
 
     @classmethod
     def bind(
@@ -82,6 +122,10 @@ class Services:
         discovery_settings: DiscoverySettings,
         image_search: ImageSearch | None = None,
         previews: PreviewSettings | None = None,
+        acquisition: AcquisitionSettings | None = None,
+        open_stream: StreamOpener | None = None,
+        preparation: PreparationSettings | None = None,
+        mat_engine: MatEngine | None = None,
     ) -> Services:
         """Assemble the services over an already-open file.
 
@@ -137,6 +181,25 @@ class Services:
             # takes it from there: it is one deployment value, already validated,
             # and a second copy is a second chance for the two to disagree.
             sweep=PreviewSweep(discovery_service, art_root=thumbnails.art_root),
+            acquisition=AcquisitionService(
+                catalogue_service,
+                acquisition or _default_acquisition(thumbnails.art_root),
+                # Defaults to a transport that refuses rather than to a live one.
+                # A plane assembled without wiring one has a wiring mistake, and
+                # a real client here would let that mistake reach a museum from a
+                # test suite instead of failing where it was made.
+                open_stream=open_stream or no_transport,
+            ),
+            preparation=PreparationService(
+                catalogue_service,
+                # Defaults to an engine with no client, which is not a stub: it is
+                # exactly the keyless deployment, and it produces recorded
+                # dominant-colour mats. A real client here would let a wiring
+                # mistake spend money from a test suite rather than failing where
+                # it was made — the same reason `open_stream` defaults to refusing.
+                mat_engine or _default_mat_engine(),
+                preparation or _default_preparation(thumbnails.art_root, artwork_box),
+            ),
         )
 
     def reconcile(self) -> None:
@@ -150,3 +213,52 @@ class Services:
         """
         self.display.reconcile()
         self.discovery.reconcile()
+
+
+def _default_acquisition(art_root: Path) -> AcquisitionSettings:
+    """Acquisition settings for a caller that expressed no preference.
+
+    Every value here is a library default rather than a deployment value, which
+    is right for a test and wrong for the Pi — so the entry point passes its own,
+    resolved from the environment like everything else it configures.
+    """
+    return AcquisitionSettings(
+        art_root=art_root,
+        originals_path=art_root / ORIGINALS_DIRNAME,
+        tile_cache_path=art_root / TILE_CACHE_DIRNAME,
+        user_agent=DEFAULT_ACQUISITION_USER_AGENT,
+        tile_binary=DEFAULT_TILE_BINARY,
+        tile_max_pixels=DEFAULT_TILE_MAX_PIXELS,
+        tile_timeout_seconds=DEFAULT_TILE_TIMEOUT_SECONDS,
+        max_image_bytes=DEFAULT_MAX_IMAGE_BYTES,
+        min_free_bytes=DEFAULT_MIN_FREE_BYTES,
+    )
+
+
+def _default_mat_engine() -> MatEngine:
+    """A mat engine for a caller that wired no model client.
+
+    **No client is a real deployment, not a stub.** A plane with no
+    `OPENROUTER_API_KEY` serves its whole catalogue and pays for nothing; works
+    acquired there get dominant-colour mats recorded as such. So the default is
+    that deployment rather than something that would fail if used.
+    """
+    return MatEngine(None, image_max_edge=DEFAULT_MAT_IMAGE_MAX_EDGE)
+
+
+def _default_preparation(art_root: Path, artwork_box: ArtworkBox) -> PreparationSettings:
+    """Preparation settings for a caller that expressed no preference.
+
+    The panel comes from the reference defaults, as every other value in this
+    file's defaults does. **A caller passing its own `artwork_box` and letting
+    the panel default would get a mismatched pair**, which is why the entry point
+    passes both from one resolved `Settings` — the box is *derived from* the
+    panel there, so the two cannot disagree.
+    """
+    return PreparationSettings(
+        art_root=art_root,
+        ready_path=art_root / READY_DIRNAME,
+        panel_width=DEFAULT_TV_PANEL_WIDTH_PX,
+        panel_height=DEFAULT_TV_PANEL_HEIGHT_PX,
+        box=artwork_box,
+    )

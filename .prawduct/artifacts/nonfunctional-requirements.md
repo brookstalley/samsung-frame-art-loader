@@ -203,8 +203,8 @@ curator every judgement they have already made. So:
 - **The SQLite catalogue is backed up.** It is small (megabytes), it is the entire
   product's memory, and it is the only artefact whose loss cannot be repaired by
   spending time instead of money.
-- **The image tree is disposable.** `raw/`, `ready/`, `tv-thumbs/`,
-  `tile-cache/`, `api-cache/` are all reconstructible. They are excluded from
+- **The image tree is disposable.** `raw/`, `ready/`, `tv-thumbs/` and
+  `tile-cache/` are all reconstructible. They are excluded from
   backup deliberately, not by oversight — this is the upstream/derived split
   already recorded in `learnings.md`, applied to durability. (`label/` was listed
   here from the 2024 layout; it is retired from the prospective `ART_ROOT`
@@ -260,7 +260,7 @@ each.
 | Web search — **Parallel** *(the default, chosen 2026-08-02)* | $0.001/request (10 results incl.) | $0.03–0.05 | **$0.010** |
 | Web search — Exa via OpenRouter | $0.005/request (10 results incl.) | $0.15–0.25 | $0.050 |
 | Web search — Perplexity | $0.005/request | $0.15–0.25 | $0.050 |
-| Mat-colour vision | one call per *accepted* work | negligible | negligible |
+| Mat-colour vision — **Qwen3.7 Flash** *(the default, chosen 2026-08-03)* | $0.000063/call, one call per *accepted* work | negligible | **$0.0013 per 20 works** |
 | Museum APIs, image acquisition | $0 | bandwidth only | bandwidth only |
 
 The search rows fall in the fourth column for a different reason from the token
@@ -590,10 +590,22 @@ is not polish; it is the requirement.
 explicitly a subjective bar, and the 41 existing artworks with their hand-tuned
 mats are the regression corpus. A new mat engine that scores well on any metric
 while producing visibly worse mats on those 41 has failed. The corpus's canonical
-record is `all.json` — replaced as a schema, but **retained as a test fixture**:
-it is the only place the hand-tuned mat colours exist, so repo-hygiene work
-(issue #4 untracks its *backups*) must not delete the file itself before the
-regression fixture is extracted.
+record is `all.json` — replaced as a schema, but **retained, tracked, and read
+directly**: it is the only place the hand-tuned mat colours exist, so repo-hygiene
+work (issue #4 untracks its *backups*) must not delete the file itself.
+
+> **Settled 2026-08-03: there is no extracted fixture, and this record is
+> permanent rather than interim.** This paragraph read "retained as a *test
+> fixture* … must not delete the file itself **before the regression fixture is
+> extracted**", which promised that `all.json` would hand its role to a copy under
+> `tests/fixtures/`. That copy is deliberately not created. A second file holding
+> the same 41 colours is a second place they live, free to drift from the one the
+> seed actually loads — and the drift is silent, because both files keep parsing
+> and neither fails. The regression test reads `all.json` through the product's
+> own `read_index` instead of a second parser, so the corpus and the seed cannot
+> disagree without a test failing. The consequence to accept knowingly: deleting
+> or untracking `all.json` destroys the corpus outright, with no successor to fall
+> back to, which is why `.gitignore` excludes only its backups and says so inline.
 
 **Rendered size must be adequate, and the current pipeline has no floor.**
 `resize_file_with_matte` uses PIL's `image.thumbnail()`, which **never upscales** —

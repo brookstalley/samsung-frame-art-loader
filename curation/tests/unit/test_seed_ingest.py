@@ -115,6 +115,21 @@ class TestSeedingOnce:
         assert original.byte_size > 0
         assert original.relative_path == "raw/Nighthawks.jpg"
 
+    def test_an_adopted_master_records_no_claim_about_how_its_fetch_went(self, service, record, tree):
+        """The seed adopts files the 2024 pipeline left on disk; it did not fetch them.
+
+        Both wrong answers cost something real. `ok` invents a fact nobody observed
+        — no tile count was ever recorded for these — while `partial_tiles` marks
+        the entire hand-tuned corpus as replaceable, so the first gappy re-fetch of
+        any of the 41 works overwrites the master it was judged against. `None` is
+        the honest reading, and acquisition treats it as complete, so the corpus is
+        protected without the seed asserting anything it cannot know.
+        """
+        entry = record()
+        report = seed([entry], service, tree(entry))
+
+        assert service.get_original(report.works[0].work_id).fetch_status is None
+
     def test_the_render_is_recorded_at_the_size_the_file_actually_is(self, service, record, tree):
         entry = record()
         report = seed([entry], service, tree(entry))

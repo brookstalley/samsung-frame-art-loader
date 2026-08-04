@@ -20,6 +20,7 @@ from curation.manifest.builder import (
     write_atomically,
 )
 from curation.persistence.records import (
+    FetchStatus,
     RenditionKind,
 )
 from curation.services.errors import ServiceError
@@ -104,6 +105,7 @@ def test_a_render_made_from_an_earlier_acquisition_is_excluded_as_stale(service,
         height=4000,
         byte_size=90_000_000,
         content_hash="hash-2",
+        fetch_status=FetchStatus.OK,
     )
 
     build = display.build_manifest(theme.id)
@@ -125,6 +127,7 @@ def test_regenerating_the_render_returns_the_work_to_the_wall(service, display, 
         height=4000,
         byte_size=90_000_000,
         content_hash="hash-2",
+        fetch_status=FetchStatus.OK,
     )
     assert display.build_manifest(theme.id).entries == []
 

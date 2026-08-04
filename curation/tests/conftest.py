@@ -20,9 +20,11 @@ import uvicorn
 from fakes import FakeEngine
 from PIL import Image
 
+from curation.acquisition.preparation import PreparationSettings
 from curation.app import create_app
 from curation.config import (
     CATALOGUE_FILENAME,
+    DEFAULT_ACQUISITION_USER_AGENT,
     DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
     DEFAULT_DISCOVERY_MAX_OUTPUT_TOKENS,
     DEFAULT_DISCOVERY_MODEL,
@@ -31,6 +33,8 @@ from curation.config import (
     DEFAULT_INPUT_COST_USD_PER_MTOK,
     DEFAULT_MAT_BOTTOM_WEIGHT,
     DEFAULT_MAT_WIDTH_INCHES,
+    DEFAULT_MAX_IMAGE_BYTES,
+    DEFAULT_MIN_FREE_BYTES,
     DEFAULT_OUTPUT_COST_USD_PER_MTOK,
     DEFAULT_PHASE1_INPUT_TOKENS,
     DEFAULT_PHASE1_OUTPUT_TOKENS,
@@ -42,6 +46,9 @@ from curation.config import (
     DEFAULT_ROTATION_INTERVAL_SECONDS,
     DEFAULT_ROTATION_SHUFFLE,
     DEFAULT_SEARCH_COST_USD,
+    DEFAULT_TILE_BINARY,
+    DEFAULT_TILE_MAX_PIXELS,
+    DEFAULT_TILE_TIMEOUT_SECONDS,
     DEFAULT_TV_PANEL_DIAGONAL_INCHES,
     DEFAULT_TV_PANEL_HEIGHT_PX,
     DEFAULT_TV_PANEL_WIDTH_PX,
@@ -54,6 +61,7 @@ from curation.persistence.durable import SqliteDurableStore
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import (
     AcquisitionMethod,
+    FetchStatus,
     MatMethod,
     RenditionKind,
     RightsStatus,
@@ -112,6 +120,12 @@ def settings(tmp_path) -> Settings:
         heartbeat_path=tmp_path / HEARTBEAT_FILENAME,
         host=DEFAULT_HOST,
         port=DEFAULT_PORT,
+        acquisition_user_agent=DEFAULT_ACQUISITION_USER_AGENT,
+        tile_binary=DEFAULT_TILE_BINARY,
+        tile_max_pixels=DEFAULT_TILE_MAX_PIXELS,
+        tile_timeout_seconds=DEFAULT_TILE_TIMEOUT_SECONDS,
+        max_image_bytes=DEFAULT_MAX_IMAGE_BYTES,
+        min_free_bytes=DEFAULT_MIN_FREE_BYTES,
         rotation_interval_seconds=DEFAULT_ROTATION_INTERVAL_SECONDS,
         rotation_shuffle=DEFAULT_ROTATION_SHUFFLE,
         preview_sweep_interval_seconds=DEFAULT_PREVIEW_SWEEP_INTERVAL_SECONDS,
@@ -187,6 +201,18 @@ def services(
         artwork_box=settings.tv_artwork_box,
         engine=engine,
         discovery_settings=settings.discovery_settings,
+        # Panel and box from the same resolved settings, as the entry point does
+        # it. Letting the panel default while passing a box derived from these
+        # settings is the one way the canvas and the mat can disagree about where
+        # the mat ends, and a test wired that way would assert against geometry no
+        # deployment produces.
+        preparation=PreparationSettings(
+            art_root=settings.art_root,
+            ready_path=settings.ready_path,
+            panel_width=settings.tv_panel_width_px,
+            panel_height=settings.tv_panel_height_px,
+            box=settings.tv_artwork_box,
+        ),
     )
 
 
@@ -253,6 +279,7 @@ def ready_work(service: CatalogueService):
                 height=4000,
                 byte_size=90_000_000,
                 content_hash=content_hash,
+                fetch_status=FetchStatus.OK,
             )
         if mat:
             service.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)

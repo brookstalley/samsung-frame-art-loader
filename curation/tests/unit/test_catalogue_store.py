@@ -25,6 +25,7 @@ from curation.persistence.records import (
     Artist,
     Artwork,
     ArtworkStatus,
+    FetchStatus,
     MatColor,
     MatMethod,
     Original,
@@ -68,7 +69,20 @@ _EXPECTED_SCHEMA = {
         "last_fetch_status",
         "last_fetched_at",
     },
-    "originals": {"id", "artwork_id", "source_id", "relative_path", "width", "height", "byte_size", "content_hash"},
+    "originals": {
+        "id",
+        "artwork_id",
+        "source_id",
+        "relative_path",
+        "width",
+        "height",
+        "byte_size",
+        "content_hash",
+        # Added after files existed on disk, so it is nullable and arrives through
+        # the widening step rather than through a rewritten file. A null means the
+        # row predates it, which readers treat as a complete fetch.
+        "fetch_status",
+    },
     "renditions": {
         "id",
         "artwork_id",
@@ -423,6 +437,68 @@ def test_an_earlier_catalogue_gains_columns_added_to_a_table_it_already_had(tmp_
         reread = catalogue.get_theme("t1")
         assert reread.rotation_interval_seconds == 930
         assert reread.shuffle is True
+    finally:
+        catalogue.close()
+
+
+def test_an_original_written_before_fetch_status_reads_back_as_unrecorded(tmp_path):
+    """The second column added to a table that already held rows, and the first
+    whose null means something a reader acts on.
+
+    `originals` predates `fetch_status`, so every row a real deployment already
+    holds — the whole seeded 2024 corpus among them — arrives with no value. That
+    has to read back as `None` rather than as a default, because acquisition treats
+    unrecorded as *complete* and so declines to overwrite it with a gappy re-fetch.
+    A widening that quietly filled the column with `partial_tiles`, or a reader that
+    substituted a default on the way up, would surrender exactly those images.
+    """
+    path = tmp_path / "catalogue.sqlite"
+    connection = sqlite3.connect(path)
+    try:
+        # The `originals` table as it stood before the column, written out rather
+        # than derived from the current DDL: a fixture that built itself from the
+        # shipped schema would gain the column and assert nothing.
+        connection.executescript("""
+            CREATE TABLE artworks (id TEXT PRIMARY KEY, title TEXT NOT NULL, artist_id TEXT,
+                date_created TEXT, medium TEXT, dimensions TEXT, description TEXT, rights TEXT,
+                status TEXT NOT NULL, accepted_at TEXT, created_at TEXT NOT NULL);
+            CREATE TABLE sources (id TEXT PRIMARY KEY, artwork_id TEXT NOT NULL, url TEXT NOT NULL,
+                provider TEXT NOT NULL, source_class TEXT NOT NULL, acquisition_method TEXT NOT NULL,
+                rights_status TEXT NOT NULL, is_primary INTEGER NOT NULL DEFAULT 0, confidence REAL,
+                selection_rationale TEXT, last_fetch_status TEXT, last_fetched_at TEXT);
+            CREATE TABLE originals (id TEXT PRIMARY KEY, artwork_id TEXT NOT NULL UNIQUE,
+                source_id TEXT NOT NULL, relative_path TEXT NOT NULL, width INTEGER NOT NULL,
+                height INTEGER NOT NULL, byte_size INTEGER NOT NULL CHECK (byte_size > 0),
+                content_hash TEXT NOT NULL);
+            """)
+        moment = datetime(2026, 7, 27, 9, 30, tzinfo=UTC).astimezone(UTC).isoformat()
+        connection.execute(
+            "INSERT INTO artworks (id, title, status, created_at) VALUES (?, ?, ?, ?)",
+            ("w1", "Nighthawks", "accepted", moment),
+        )
+        connection.execute(
+            "INSERT INTO sources (id, artwork_id, url, provider, source_class, acquisition_method, rights_status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("s1", "w1", "https://museum.example/1", "artic", "institutional", "dezoomify", "public_domain"),
+        )
+        connection.execute(
+            "INSERT INTO originals (id, artwork_id, source_id, relative_path, width, height, byte_size, content_hash) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            ("o1", "w1", "s1", "raw/w1.tif", 6000, 4000, 90_000_000, "sha256:aaa"),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    catalogue = SqliteCatalogue(open_catalogue_file(path))
+    try:
+        held = catalogue.get_original("w1")
+        assert held.fetch_status is None, "a pre-column row must not acquire a value nobody recorded"
+        assert (held.width, held.content_hash) == (6000, "sha256:aaa")
+
+        # And the widened file accepts a write that names the column.
+        catalogue.update_original(replace(held, fetch_status=FetchStatus.PARTIAL_TILES))
+        assert catalogue.get_original("w1").fetch_status is FetchStatus.PARTIAL_TILES
     finally:
         catalogue.close()
 

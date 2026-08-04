@@ -13,6 +13,7 @@ answer out.
 
 from curation.persistence.records import (
     AcquisitionMethod,
+    FetchStatus,
     MatMethod,
     RenditionKind,
     RightsStatus,
@@ -40,6 +41,7 @@ def _make_showable(service, work):
         height=4000,
         byte_size=90_000_000,
         content_hash="hash-1",
+        fetch_status=FetchStatus.OK,
     )
     service.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)
     service.record_rendition(
@@ -214,6 +216,7 @@ def test_q8_which_renditions_exist_for_which_geometry_and_are_they_current(servi
         height=5000,
         byte_size=421_337_216,
         content_hash="sha256:first",
+        fetch_status=FetchStatus.OK,
     )
     service.record_rendition(
         artwork_id=work.id, kind=RenditionKind.TV_DISPLAY, target_width=3840, target_height=2160, path="renders/nighthawks.jpg"
@@ -239,6 +242,7 @@ def test_q8_which_renditions_exist_for_which_geometry_and_are_they_current(servi
         height=5400,
         byte_size=500_000_000,
         content_hash="sha256:second",
+        fetch_status=FetchStatus.OK,
     )
     assert all(view.stale is True for view in service.list_renditions(work.id))
 
@@ -263,6 +267,7 @@ def test_q8_whether_a_held_original_is_large_enough_is_answered_without_storing_
         height=600,
         byte_size=98_304,
         content_hash="sha256:press",
+        fetch_status=FetchStatus.OK,
     )
 
     assessment = service.display_fit(work.id, box=_BOX)

@@ -14,6 +14,7 @@ from mcp.client.streamable_http import streamable_http_client
 from curation.manifest.builder import ExclusionReason, assess
 from curation.mcp.registry import DESCRIPTION_BUDGET_BYTES
 from curation.mcp.tools import ART_DISPLAY, TOOLS
+from curation.persistence.records import FetchStatus
 from curation.services.errors import ServiceError
 
 #: A regression here silently renames the entire MCP tool surface for every
@@ -83,10 +84,31 @@ async def test_every_tool_declares_its_annotations(tools):
         assert tool.annotations.openWorldHint is not None, name
 
 
-async def test_only_the_money_tool_reaches_the_open_world(tools):
+async def test_exactly_the_tools_that_leave_the_machine_declare_an_open_world(tools):
+    """`openWorldHint` is how a client decides a call warrants confirmation, so it
+    has to describe reach rather than intent.
+
+    **This test read `== {"art_discovery"}` and was named for the money tool until
+    2026-08-03.** Those were the same set when it was written and are not now:
+    `art_catalogue` gained `retry_acquisition`, which fetches an arbitrary museum
+    URL, and then `set_mat_color`, which asks a vision model. The tool went on
+    declaring a closed world through both, understating its reach to every client
+    that reads the hint — and *this test passing* was part of why, because it
+    asserted the old set rather than the property.
+
+    Both sides are named below, so it still discriminates: the honest failure mode
+    is a tool that grows an outward-reaching action and keeps a stale flag, and a
+    one-sided assertion would not catch the reverse — a purely local tool marked
+    open-world, which costs a confirmation prompt on every call forever.
+    """
     open_world = {name for name, tool in tools.items() if tool.annotations.openWorldHint}
 
-    assert open_world == {"art_discovery"}
+    # Reaches outside: discovery searches the web and queries museums; the
+    # catalogue re-fetches images and asks a vision model for mat colours.
+    assert open_world == {"art_discovery", "art_catalogue"}
+    # Purely local: reviewing candidates, arranging themes and writing the
+    # manifest all touch this machine's catalogue and its own filesystem.
+    assert {"art_review", "art_theme", "art_display"} & open_world == set()
 
 
 async def test_every_tool_requires_an_action_and_nothing_else(tools):
@@ -222,6 +244,7 @@ def test_a_stale_render_is_refused_in_the_words_the_tip_uses(service, display, r
         height=4000,
         byte_size=90_000_000,
         content_hash="a-later-acquisition",
+        fetch_status=FetchStatus.OK,
     )
 
     # On the reason, not on "render": NO_RENDITION's message says "rendered" too,

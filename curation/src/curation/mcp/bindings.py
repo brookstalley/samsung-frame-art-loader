@@ -18,20 +18,26 @@ to read, HTTP responses for a UI to render, and forcing one shape on both is
 what the shared service layer exists to avoid.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Final
 
+from curation.acquisition.dezoomify import DezoomifyUnavailable
+from curation.acquisition.preparation import PreparationResult
+from curation.acquisition.service import AcquisitionOutcome, AcquisitionResult
+from curation.acquisition.space import NotEnoughSpace
 from curation.manifest.builder import ManifestBuild
 from curation.mcp.envelope import ImageBlock, ok, with_images
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
 from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, RunKind, RunStatus
-from curation.persistence.records import Artist, Artwork, Directive, Theme
+from curation.persistence.records import Artist, Artwork, Directive, Source, Theme
 from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing
 from curation.services.container import Services
 from curation.services.discovery import VerdictOutcome
 from curation.services.display import UNSET
+from curation.services.display_fit import DisplayFit
+from curation.services.errors import ServiceError
 from curation.services.previews import InlinePreview
 from curation.services.review import MAX_REVIEW_LIMIT, CandidatePage, CandidateView, InstanceListing, InstanceView
 from curation.services.runner import RunView
@@ -63,6 +69,208 @@ def _list_artworks(services: Services, arguments: Mapping[str, Any]) -> dict[str
 
 def _get_artwork(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
     return ok(artwork=_full(services.catalogue.get_artwork(arguments["artwork_id"])))
+
+
+def _list_sources(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    artwork_id = arguments["artwork_id"]
+    sources = services.catalogue.list_sources(artwork_id)
+    return ok(
+        artwork_id=artwork_id,
+        sources=[_source_fields(source) for source in sources],
+        count=len(sources),
+        notice=_sources_notice(sources),
+    )
+
+
+def _archive_artwork(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    artwork = services.catalogue.archive_artwork(arguments["artwork_id"])
+    return ok(
+        artwork=_artwork_fields(artwork),
+        notice="It is out of every theme's rotation until action='restore' brings it back. Nothing is deleted.",
+    )
+
+
+def _restore_artwork(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    artwork = services.catalogue.restore_artwork(arguments["artwork_id"])
+    return ok(
+        artwork=_artwork_fields(artwork),
+        notice="It is eligible for the wall again; a theme holding it will carry it at the next manifest build.",
+    )
+
+
+def _retry_acquisition(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    try:
+        result = services.acquisition.acquire(
+            arguments["artwork_id"],
+            source_id=arguments.get("source_id"),
+        )
+    except NotEnoughSpace as exc:
+        # Translated rather than allowed to reach the generic handler. These two
+        # are the conditions acquisition deliberately raises for instead of
+        # recording, because no source is at fault — and a caller told only that
+        # the call "failed unexpectedly" would go looking at the museum. Each
+        # carries the remedy that actually fixes it.
+        raise ServiceError(
+            f"Acquisition did not start: {exc} Free space on the art tree's disk, or lower MIN_FREE_BYTES "
+            "if this deployment means to run closer to full."
+        ) from exc
+    except DezoomifyUnavailable as exc:
+        raise ServiceError(
+            f"Acquisition did not start: {exc} This is a deployment problem rather than a bad source — "
+            "install dezoomify-rs, or set DEZOOMIFY_PATH to where it lives. Every source using "
+            "acquisition_method='dezoomify' is affected, and no source is at fault."
+        ) from exc
+    return ok(
+        artwork_id=result.artwork_id,
+        source_id=result.source_id,
+        outcome=result.outcome.value,
+        detail=result.detail,
+        relative_path=result.relative_path,
+        byte_size=result.byte_size,
+        width=result.width,
+        height=result.height,
+        notice=_acquisition_notice(result),
+    )
+
+
+def _set_mat_color(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """Set a mat colour, or ask the model for one when none is given.
+
+    **One action rather than two, because the parameter is the whole difference.**
+    "Use this colour" and "pick me a colour" are the same request about the same
+    field, differing in who decides — and a surface with `set_mat_color` beside a
+    `choose_mat_color` would make a caller pick between them before knowing that
+    only one of them costs anything. The tip says which does.
+    """
+    artwork_id = arguments["artwork_id"]
+    hex_rgb = arguments.get("hex_rgb")
+    if hex_rgb:
+        result = services.preparation.set_mat(artwork_id, str(hex_rgb))
+    else:
+        result = services.preparation.choose_mat(artwork_id)
+    return ok(
+        artwork_id=result.artwork_id,
+        hex_rgb=result.mat_hex,
+        method=result.mat_method,
+        outcome=result.outcome.value,
+        detail=result.detail,
+        relative_path=result.relative_path,
+        # A string rather than a float: the ledger keeps money exact, and a
+        # `Decimal` serialised through JSON would become the binary float this
+        # whole path exists to avoid.
+        cost_usd=str(result.cost_usd),
+        notice=_mat_notice(result),
+    )
+
+
+def _mat_notice(result: PreparationResult) -> str | None:
+    """What the recorded method means, when it means more than the word does.
+
+    `dominant_color_fallback` is the one that has to speak up: it is the state
+    the 2024 pipeline entered silently, leaving a mechanical colour and a
+    considered one indistinguishable forever after. The caller asked a model to
+    choose and did not get one, and only this line says so.
+    """
+    if result.mat_fallback_detail is None:
+        return None
+    return (
+        f"The vision model did not choose this colour — it was derived from the artwork's own dominant "
+        f"colour and darkened, because {result.mat_fallback_detail}. Setting hex_rgb yourself overrides it, "
+        "and asking again may succeed if the cause was temporary."
+    )
+
+
+def _regenerate(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    result = services.preparation.prepare(arguments["artwork_id"], force=bool(arguments.get("force")))
+    return ok(
+        artwork_id=result.artwork_id,
+        outcome=result.outcome.value,
+        detail=result.detail,
+        relative_path=result.relative_path,
+        hex_rgb=result.mat_hex,
+        method=result.mat_method,
+        # Present only when something was actually rendered. On `unchanged` there
+        # is no fresh assessment to report, and repeating a stored one would be
+        # answering a question this call did not ask.
+        fit=None if result.fit is None else result.fit.value,
+        rendered_long_edge_inches=result.rendered_long_edge_inches,
+        # **Reported even though this action is usually free.** A work that has
+        # never had a mat gets one chosen here, and that is a paid call — so a
+        # field present only on the paying path would be indistinguishable from
+        # one the caller forgot to look at. Always present, usually "0".
+        cost_usd=str(result.cost_usd),
+        notice=_regenerate_notice(result),
+    )
+
+
+def _regenerate_notice(result: PreparationResult) -> str | None:
+    """Said out loud when the work is on the wall smaller than the floor allows.
+
+    Not a refusal and not an error: the curator may have chosen this instance
+    knowing it was small, and `nonfunctional-requirements.md` is explicit that
+    such a work is rendered rather than hidden. But a canvas reported as composed
+    with no mention of it would let a work quietly appear as a postage stamp in
+    an enormous mat, which is the gap the floor exists to close.
+    """
+    notices = []
+    if result.mat_fallback_detail is not None:
+        # A first preparation chooses a mat, and that choice can fall back. Said
+        # here as well as on `set_mat_color` because this is the action that
+        # actually makes it happen for most works — `acquire` does not prepare,
+        # so the mat a work ends up wearing is usually the one chosen on the
+        # `regenerate` that follows.
+        notices.append(
+            f"This work had no mat, so one was chosen for it — but not by the vision model, because "
+            f"{result.mat_fallback_detail}. It was derived from the artwork's own dominant colour and darkened."
+        )
+    if result.fit is DisplayFit.BELOW_FLOOR and result.rendered_long_edge_inches is not None:
+        notices.append(
+            f"This work renders at about {result.rendered_long_edge_inches:.1f} inches on the wall, below the "
+            "configured floor, so it will appear small in a wide mat. It is on the wall regardless; "
+            "art_review's re-search finds a larger scan if one exists."
+        )
+    return " ".join(notices) or None
+
+
+def _acquisition_notice(result: AcquisitionResult) -> str | None:
+    """What the outcome means for the work, when the outcome alone understates it."""
+    if result.outcome is AcquisitionOutcome.PARTIAL:
+        # Said out loud because `partial` reads like a failure and is not one:
+        # the work is on the wall, with gaps, and asking again may close them.
+        return (
+            "The image is usable and the work holds it, but some tiles never arrived, so it has gaps. "
+            "Retrying re-uses the tiles already fetched, so a second attempt is cheap and may complete it."
+        )
+    if result.outcome is AcquisitionOutcome.FAILED:
+        return (
+            "The work holds whatever image it had before; a failed fetch replaces nothing. "
+            "art_catalogue(action='sources') shows the other sources this work has, if any."
+        )
+    if result.outcome is AcquisitionOutcome.KEPT_HELD:
+        # The one outcome where the source did nothing wrong and the work still
+        # changed nothing, so neither "acquired" nor "failed" describes it. Said in
+        # full because the obvious next move — retry again — has the same result
+        # until the tile server stops dropping tiles.
+        return (
+            "The fetch worked but came back with missing tiles, and the work already holds a better image, "
+            "so nothing was replaced. Retrying repeats this until the source returns every tile; "
+            "art_catalogue(action='sources') shows the work's other sources, if any."
+        )
+    return None
+
+
+def _sources_notice(sources: Sequence[Source]) -> str | None:
+    if not sources:
+        # A catalogued work with no source cannot be re-acquired at all, which is
+        # worth saying rather than leaving an empty list to be read as "none yet".
+        return "This work records no source, so there is nothing to re-acquire it from."
+    if not any(source.is_primary for source in sources):
+        return (
+            "No source is marked primary, so nothing records which one produced the held image. "
+            "With more than one source, action='retry_acquisition' needs source_id until one has succeeded; "
+            "with a single source it uses that one."
+        )
+    return None
 
 
 def _list_themes(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -447,6 +655,12 @@ BINDINGS: Final[Mapping[tuple[str, str], Binding]] = {
     ("art_review", "reject_image"): _reject_image,
     ("art_catalogue", "list"): _list_artworks,
     ("art_catalogue", "get"): _get_artwork,
+    ("art_catalogue", "sources"): _list_sources,
+    ("art_catalogue", "archive"): _archive_artwork,
+    ("art_catalogue", "restore"): _restore_artwork,
+    ("art_catalogue", "retry_acquisition"): _retry_acquisition,
+    ("art_catalogue", "set_mat_color"): _set_mat_color,
+    ("art_catalogue", "regenerate"): _regenerate,
     ("art_theme", "list"): _list_themes,
     ("art_theme", "get"): _get_theme,
     ("art_theme", "create"): _create_theme,
@@ -531,6 +745,27 @@ def _full(entry: ArtworkDetail) -> dict[str, Any]:
     return {
         **_artwork_fields(entry.artwork),
         "artist": None if entry.artist is None else _artist_fields(entry.artist),
+    }
+
+
+def _source_fields(source: Source) -> dict[str, Any]:
+    """A source as the surface reports it.
+
+    The same fields `GET /api/works/{id}` returns, off the same service read, so
+    the two surfaces cannot describe a work's provenance differently.
+    """
+    return {
+        "source_id": source.id,
+        "url": source.url,
+        "provider": source.provider,
+        "source_class": str(source.source_class),
+        "acquisition_method": str(source.acquisition_method),
+        "rights_status": str(source.rights_status),
+        "is_primary": source.is_primary,
+        "confidence": source.confidence,
+        "selection_rationale": source.selection_rationale,
+        "last_fetch_status": None if source.last_fetch_status is None else str(source.last_fetch_status),
+        "last_fetched_at": _moment(source.last_fetched_at),
     }
 
 

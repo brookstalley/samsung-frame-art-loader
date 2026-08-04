@@ -48,6 +48,361 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-04: A retry cannot cost a work its image — the other half of the promise
+
+<!-- prawduct: status=shipped | scope=v1-build -->
+
+<!-- No `chunks=` on purpose: this entry is issue #67 and the review round that
+     followed it, not a chunk's build. 18A and 18B carry their own entries and
+     their own checkboxes; naming a chunk here would flip a box a second time or,
+     worse, flip one for work nobody did. No `release=` either — this product
+     tracks no version in the change-log and ships no release-notes view, so the
+     only entry carrying one is the format example in this file's header. -->
+
+**Why:** the surface told a curator that retrying a fetch was safe, and for one of
+the two ways an attempt can end that was false. Issue #67, filed by this branch's
+own cumulative review, impact L.
+
+**Staging covered the fetch that fails; nothing covered the fetch that succeeds
+partially.** A tiled fetch returning most of its tiles is a *normal outcome* — it
+yields a usable image, `partial_tiles` is recorded, and the work goes on the wall —
+so it arrived at promotion by the same path a complete fetch does and overwrote
+whatever the work was displaying. `retry_acquisition`'s own tips made the trap:
+one recommended retrying *after a partial fetch*, the next reassured that "a
+failed attempt replaces nothing". Both true, and together they read as a promise
+the code did not keep. `Source.last_fetch_status` was written and displayed the
+whole time, and read by no decision.
+
+**`Original.fetch_status` is a new column, and the obvious derivation is why.**
+The temptation is to read the held image's quality off `Source.last_fetch_status`
+for the source that produced it. That is wrong in a way that only shows up on the
+third fetch: the column holds the source's *most recent* attempt, so one failed
+re-fetch overwrites it to `failed` while the held original — protected by staging
+— is still the complete image from before. A guard reading it would conclude "held
+quality: failed", treat anything as an improvement, and let a partial overwrite a
+complete master. The fact belongs to the bytes, not to the source.
+
+Stored rather than derived, in a table whose one other stored-verdict candidate
+was deliberately removed: `display_fit` came off `Original` because a verdict about
+panel geometry goes wrong when the TV changes. `fetch_status` is a fact about an
+event that already happened, which no later deployment can falsify — the same
+footing `width` and `height` stand on. The artifact now says so at the row, because
+a reader who has just absorbed the `display_fit` reasoning is owed the distinction.
+
+**Three judgement calls, each recorded where its rule lives** (constraint 16,
+`data-model.md`). The comparison reads **only** complete-versus-partial — pixel
+count is not consulted, because a complete fetch from a smaller scan is a
+legitimate re-acquisition and refusing it would second-guess a choice acceptance
+already made. **Two partials replace each other freely**, since neither is
+authoritative and no tile count survives into either row to compare; the
+alternative freezes a work at the first gappy image it ever got. And **a null
+`fetch_status` counts as complete** — every row a real deployment already holds is
+null, including all 41 seeded works, and the permissive reading would surrender
+exactly the corpus the mat engine is judged against.
+
+**A refusal is not a failure, and the difference is load-bearing.** The new
+`kept_held` outcome writes nothing at all: no `record_fetch`, so the source keeps
+the status of the fetch that produced the image being kept — the very fact the next
+comparison reads. Recording it as a failure would also stamp `failed` on a source
+that answered correctly and send whoever read it to a museum that is working. The
+tiles survive too, so asking again is still cheap.
+
+**The seed records `None`, which is the honest answer rather than a gap.** It
+adopts files the 2024 pipeline left on disk; it never fetched them and nothing
+observed whether their tiles arrived. Writing `ok` would invent the fact, and
+`partial_tiles` would mark the whole hand-tuned corpus replaceable. **A mutation
+sweep found this branch undefended** — the seed's value was asserted by nothing,
+and both wrong answers passed — which is the fifteenth mutation of fifteen and the
+only survivor of the first pass.
+
+**The api-contract gained a compatibility row it had been missing.** Adding a
+*value* to a result field that reads as an enum is not the same as adding a field:
+an unknown key is ignored, while an unknown value in a key the reader switches on
+falls through every branch, so the caller proceeds as if nothing happened. It is
+Additive here only because every outcome is paired with a `notice` in prose — a
+client that understands no outcome values still relays a sentence. The rule now
+states that condition rather than leaving the next person to guess.
+
+**The cumulative round: 0 blocking, and the one it found in this fix was real.**
+`rev-20260804T105746Z-fc44baaa` returned 19 findings over the whole 18A+18B+#67
+bundle. **The tally below is the rendered one and supersedes any count in this
+prose**: accepted 11, fixed 7, waived 1. An earlier draft of this paragraph read
+"17 accepted, 2 filed, nine fixed", which sums past 19 — it was counting
+dispositions and outcomes in one list. The renderer decomposes them, and eight
+findings carry BOTH a disposition and a resolution fact from the verify round, so
+the verify round's answer is the current one for those eight.
+
+**Two of them were defects in the #67 fix itself**, which is the pattern this
+branch keeps producing and is worth naming again. The guard refused on the
+strength of the catalogue row alone and never checked the file was there — so a
+row that outlived its bytes, which is the product's own documented restore state,
+deadlocked: `retry_acquisition` answered `kept_held` while nothing was on disk and
+`regenerate` said re-acquire it first, the two actions pointing at each other. And
+the comment justifying the refusal path named the wrong row: it claimed skipping
+`record_fetch` protected "the fact the next comparison reads", when the comparison
+reads `Original.fetch_status` and `record_fetch` touches only the `Source`. **The
+comment was wrong in a way that made the behaviour wrong too** — a refusal now
+*does* record the attempt, because `last_fetch_status` means the source's most
+recent attempt and skipping it left `sources` showing a date older than the retry
+the curator had just been told to make.
+
+**Three more were latent and cheap**, all against claims the code already made.
+`dezoomify._discard` alone among its three siblings let an `OSError` escape, so a
+failed unlink ended the whole acquisition pass — against that module's own
+docstring promising one bad source never does. `_record_success` took `status` and
+`outcome` as a pair that had to agree, making `status=ok, outcome=partial`
+representable; `outcome` is derived now. And `set_mat` sent a curator's colour to
+the strict parser while the model's went to the lenient one, so **the product
+accepted `#ABC` from a model and refused it from a person**, on a parameter
+documented only as "a hex triplet".
+
+**One finding was a comment that taught a false pattern.** Three `curation.config`
+imports in `services/container.py` were deferred to function scope to break an
+import cycle. Walking config's module-scope import graph shows no such cycle — it
+reaches `manifest.builder`, `manifest.heartbeat`, `services.display_fit` and
+`services.runner`, and none of those reaches `container`. Hoisted, with the
+correction recorded rather than the comment quietly deleted.
+
+**Dispositions, rendered rather than hand-counted:**
+
+**rev-20260804T105746Z-fc44baaa** — chunk 18B, 2026-08-04T11:20:12Z
+
+| Finding | Severity | State | Detail |
+|---|---|---|---|
+| R-1 | warning | fixed | Fixed. The guard now tests art_root/relative_path before refusing, so a row that outlived its file no longer blocks the re-acquisition preparation reports as needed. Test + 2 mutations. |
+| R-2 | warning | fixed | `brookstalley/samsung-frame-art-loader#69` — owner ruling: Renders as 'fixed' because the verify round verified this finding's OWN remedy (b) — it offered 'either record a SpendRecord, or record the deferral explicitly so the category has a stated owner instead of reading as implemented', and data-model.md § SpendRecord now carries that deferral. The finding is discharged; #69 is OPEN and this PR deliberately ships it open, tracking the code half, which was never what the finding required. Contrast R-15, the same filed-to-an-issue shape but WAIVED: there nothing in the tree changed at all, so the filing is the whole answer. |
+| R-3 | note | accepted | Accepted, not fixed. Its trigger is a panel-geometry change, and the display chunks (12/13) are bench-blocked, so nothing can exercise the fix. Rendition records target pixels only, so covering the TV_PANEL_DIAGONAL_INCHES variant needs mat geometry on the row — a data-model change that belongs with the panel work rather than ahead of it. |
+| R-4 | note | accepted | Accepted as covered, with the attribution corrected (2026-08-04, verify round): the three flagged lines are the pre-existing 'raw/' bullet under 'Data and cache contract', which this branch narrowed rather than authored — the narrative was there at the base. Either way the outcome stands: the file-wide problem is issue #26 (416 findings, stage:ready), which owns the move to learnings-detail.md, and fixing three lines here would leave 413. |
+| R-5 | note | accepted | Accepted, and the asymmetry is defensible as it stands: the colour a curator asked for is recorded, and it applies once the work is acquired. The finding calls it genuinely ambiguous. Reversing the order would discard a stated preference because of a fetch that has not happened yet, which is the worse default for an append-only history. |
+| R-6 | warning | fixed | Fixed. The diagram gains a PreparationService row with its MatEngine seam, and the DiscoveryEngine annotation no longer claims to be the seam every paid call sits behind. |
+| R-7 | warning | fixed | Fixed, and the finding was right about the reasoning rather than only the wording. A refusal now DOES call record_fetch: last_fetch_status means the source's most recent attempt, and the guard reads Original.fetch_status, so recording it cannot weaken the guard and keeps the column's documented meaning true. Comment restated, test inverted, mutation-checked. |
+| R-8 | warning | fixed | Fixed. Verified by walking config's module-scope import graph: curation.config does not reach services.container. The three imports are hoisted and the comment now records that the cycle never existed. |
+| R-9 | warning | fixed | Fixed. Closed with the model, the date, the measured price and the trail, in the same shape as the limit_remaining entry closed earlier today. |
+| R-10 | warning | fixed | Fixed. The four detail headings are now character-identical to their index rules; a script confirms zero detail headings without an index rule. |
+| R-11 | note | accepted | Fixed. outcome is derived from status inside _record_success and the parameter is gone, so the mismatched pair is unrepresentable. Mutation-checked. |
+| R-12 | note | accepted | The concrete half is fixed under R-1: _would_lower_quality now checks the file exists, so the dangling-row deadlock it describes is closed. The residual — making both services answer 'does the work really hold this' with one shape — is a refactor with no failing behaviour behind it now, and is better done when a third caller exists to say what the shape should be. |
+| R-13 | note | accepted | Fixed. dezoomify._discard now catches OSError and logs, matching its two siblings, so an unlink failure no longer escapes tile_fetch and ends the pass against the module's own docstring. Test + 2 mutations. |
+| R-14 | note | accepted | Fixed. set_mat normalises through format_hex(parse_hex(...)), so the product gives one answer to 'what is a hex colour' whoever asks. ColorError is translated to ServiceError so a malformed value stays a clean refusal. Two tests over the wire, 2 mutations. |
+| R-15 | warning | waived | `brookstalley/samsung-frame-art-loader#70` |
+| R-16 | note | accepted | Fixed. The cost row names the model, the date and the measured price, drops the dangling see-also, and retires the ai.py 5x-retry warning the new engine does not do. |
+| R-17 | note | accepted | Fixed. The foreign-API register now states the argv invocation as it is and points at dezoomify-cli-findings.md, with the correction noted so a security re-derivation does not restart from a shell surface that never existed here. |
+| R-18 | note | accepted | No action required — a clean cross-check result, recorded as evidence rather than as a defect. |
+| R-19 | note | accepted | Acted on. #67 is closed as shipped against this branch with a ship-note; #60 and #11 were already closed. |
+
+**19 findings** (8 warning, 11 note) — accepted: 11, fixed: 7, waived: 1.
+**8 answered twice** — recorded as both resolved and dispositioned; check which answer is current.
+
+**The verify round: 0 blocking, 0 warning.** `rev-20260804T122615Z-115f84e3`
+read the delta and settled all eight prior warnings — **seven verified fixed,
+one waived**: R-15 is confirmed *not* fixed (14 log sites under `acquisition/`,
+none carrying `extra=`) and stands on the filing to #70, which is the honest
+disposition rather than a claim the tree does not support. It checked the two
+things most worth checking about the fixes themselves: that `record_fetch` on the
+refusal path cannot weaken the guard — `last_fetch_status` is read by display
+paths only, by no decision logic — and that hoisting the config import adds no
+import-time side effect, `load_dotenv()` being called inside a function.
+
+**Its two notes were both mine, and both were fixed rather than accepted.** The
+`[[slug]]` cross-references I put in `learnings-detail.md` were a link syntax from
+a different tool's conventions — the repo's only two, and neither resolved to
+anything; they now quote the referenced rule by its heading, which is the file's
+own idiom. And the R-4 disposition credited this branch with narrative it had only
+narrowed: the three record-lint lines are the pre-existing `raw/` bullet. The
+disposition **fact** is corrected and the table above re-rendered from it, rather
+than the prose being edited to disagree with the record it was generated from.
+
+Suite: **1599 curation + 52 root green**, in random and fixed order, plus the live
+checks behind `-m live_api` and `-m live_binary`. Twenty-three mutations across the
+two rounds, all caught.
+
+## 2026-08-03: Preparation — a mat that says who chose it, and a bar the corpus states
+
+<!-- prawduct: chunks=18B | status=shipped | scope=v1-build -->
+
+**Why:** an acquired work was bytes on disk with no way to reach a wall. It now
+gets a mat colour with recorded provenance and a 4K canvas composed against the
+configured panel, and enters the manifest.
+
+**The fallback is the point, not the model.** The 2024 pipeline substituted a
+darkened dominant colour whenever the vision model failed and recorded nothing, so
+a considered colour and a mechanical one were indistinguishable in the data
+forever after. Every path through the new engine sets `MatColor.method`, and the
+tool's own notice says out loud when the model did not choose. That matters more
+than it sounds: an unenforced schema makes an unusable answer an ordinary Tuesday,
+and probing produced empty content, content truncated mid-string, and a hex
+triplet with no leading `#`.
+
+**The compositor draws the box the config already computes**, recovering the
+margins from it rather than recomputing them from inches and a weight. A second
+derivation is the only way the canvas and the readiness verdict could disagree
+about where the mat ends — by the pixel or two that rounding order moves, which no
+test would have caught and no surface would have reported.
+
+**Decisions settled at build:**
+
+- **The vision model is `qwen/qwen3.7-flash`**, on the operator's stated
+  criterion — cheapest that does the job, with evals deferred. Thirty-one probe
+  calls over real corpus images: it answered every one usably where no other
+  candidate did, and both cheaper models proposed a near-white mat over a Rothko
+  and a Mondrian, which is the one failure that glares on an emissive panel.
+- **`MAT_MAX_OUTPUT_TOKENS` is a correctness value.** A reservation that does not
+  clear a model's *reasoning* budget returns empty content billed in full. It
+  reads as a model failure and is a client misconfiguration, so the diagnostic
+  names the setting rather than blaming the provider. Raised to 8,000 when a
+  corpus run hit the ceiling intermittently at 2,000.
+- **The corpus is `all.json`.** Chunk 06 deferred extracting the 41 colours to
+  `tests/fixtures/mat_corpus.json`; this is the decision not to. A copy is a
+  second place they live, free to drift silently from the one the seed reads.
+  *(Propagated 2026-08-04, and worth recording as a miss: the decision reached
+  the code and this entry and stopped there. `nonfunctional-requirements.md`
+  § Output Quality still promised the file would be kept only "before the
+  regression fixture is extracted", Chunk 06's entry still carried the fixture as
+  a deliverable and as an acceptance criterion that could never come true, and
+  issue #11 still instructed the next builder to create it. All four now agree.
+  The shape to keep: a decision that DESCOPES something has to be walked back
+  through every artifact that promised it, and the promising artifacts are never
+  the one you are editing when you make the call.)*
+- **The colour arithmetic is first-party.** 2024 reached CIE LAB through OpenCV,
+  NumPy and scikit-image — three packages on a memory-capped Pi to do thirty
+  lines. CIEDE2000 rather than Euclidean CIE76, because mats cluster in the dark
+  low-chroma corner where the two disagree most, and the number is read by a
+  person deciding whether an engine regressed. Verified against the published
+  Sharma reference set.
+
+**Found and fixed, from 18A:** `art_catalogue` declared `openWorldHint=false`
+while `retry_acquisition` was already fetching arbitrary museum URLs — understated
+to every client that reads the hint. The contract test that should have caught it
+asserted the old *set of tools* rather than the property, so it passed. It now
+names both sides. The generalisable shape: **an annotation is per tool, so adding
+an action can falsify a flag the tool has carried correctly for months**, and
+nothing in the new action's own review would look at that flag.
+
+**Also found by its own guard:** `PreparationSettings` takes the panel and the
+artwork box as two fields, and a mismatched pair yields a negative mat that pastes
+the artwork off the canvas — written, recorded, carried into the manifest, first
+visible on the wall. The guard added for it caught the mismatch in this repo's own
+test on its first run.
+
+**Not settled, and enqueued rather than assumed:** the acceptance criterion's
+other half is "the operator's corpus look finds no regression", which is
+explicitly subjective. A full run is done — 33 of 41 works compared, median
+CIEDE2000 9.8, the engine's median lightness 20.8 against the corpus's 20.7, one
+work over the darkness bar — and `tools/mat_corpus.py` regenerates the sheet.
+
+**The review rounds are part of the record.** The cumulative pass returned 22
+findings, one blocking, and two reviewers independently found the same top one:
+`regenerate` was published as free in three places while the first call on every
+acquired work minted a mat with a paid model call. The fix for *that* then
+produced two more — a translation that swallowed `compose`'s write half, so a
+full disk reported an unreadable original; and new caller-facing fields asserted
+by nothing, on a surface that had just started claiming "every answer reports
+cost_usd". Four acquisition findings were filed as issues #65–#68 rather than
+widening this diff into Chunk 18A.
+
+1573 curation + 52 root green, plus five live checks against the real API behind
+`-m live_api`. Twenty mutations over the new branches, all caught; the single
+survivor was a floor a zero-factor test could not reach, because `0.0 × L*` is
+already zero.
+
+## 2026-08-03: Acquisition, and a probe that rewrote the fetch path before it was written
+
+<!-- prawduct: chunks=18A | status=shipped | scope=v1-build -->
+
+**Chunk 18 was split into 18A and 18B** at the operator's call, at the seam the
+data model already draws: everything in 18A produces an `Original`, everything in
+18B consumes one. The halves share no foreign interface, no entity and no failure
+mode, so neither Critic round reads the other's code — the same reason 08, 14 and
+16 were split, and this chunk was larger than any of them.
+
+**Three claims in the chunk entry were stale and were corrected rather than
+inherited.** The bottom-weight carried finding had been settled on 2026-08-01
+(`MAT_BOTTOM_WEIGHT`, pinned by `test_config.py`). "The legacy `shell=True`
+invocation is not ported forward" described code that does not exist —
+`image_utils.py` has been argv-based since `4fddf36`. And the acceptance criterion
+ended "and reaches the wall", which nothing here can meet: the display plane is
+Chunks 12 and 13, both bench-blocked. That half is descoped explicitly rather than
+left as four fifths of a criterion that reads met.
+
+**Step 0 changed the design rather than confirming it**, which is the thing worth
+carrying forward. `dezoomify-cli-findings.md` records the probe against 2.18.1.
+The load-bearing finding is that **exit codes classify nothing**: `0` also means
+"read no input and wrote nothing", and `1` covers total failure and partial tiles
+alike — the two outcomes the data model holds apart. So the fetch path classifies
+on the produced file, which is the zero-byte guard answering both questions at
+once. Two further behaviours would have been inherited as bugs: the saved-file
+name is announced on **stderr**, where the 2024 code parses stdout and would
+`IndexError` on every success, and the 2024 code **deletes a usable partial image**
+on any non-zero exit, which made `partial_tiles` unrecordable in practice.
+
+**The probe also fired a trigger this repo had written down in advance.**
+`security-model.md` said its assessment must be *re-derived* if a tool fetches an
+arbitrary URL. Acquisition does, with a binary whose input argument reads local
+paths as readily as URLs and which reaches loopback. Bound 2 is re-derived rather
+than extended: it no longer rests on the capability being absent, but on three
+weaker properties — a fetch is reachable only through a URL a curator already
+accepted, scheme and resolved host are checked before invocation, and the binary
+never receives a shell or an inherited stdin. The residual an accepted-but-poisoned
+candidate leaves is stated rather than implied.
+
+**Hosts are judged by what they are, never by which they are.** A registry of
+permitted hosts would make every new gallery a code change and quietly re-scope a
+product whose provider vocabulary `data-model.md` deliberately leaves open, so the
+check is "publicly routable" — loopback, link-local, RFC1918 and `.local` refused.
+
+**Issue #60 is settled where its rule lives.** `art_catalogue(action='sources')` is
+its own action rather than a field folded into `get`: folding was compatible and
+would have cost no round trip, but `get` is the payload every list-then-detail hop
+pulls and provenance is not what that hop is for. It reads through the same
+`CatalogueService.list_sources()` the browser detail view uses, so no second
+projection of "a work's sources" exists to drift.
+
+**The carried finding about the caches is closed with a rule, not a chore.**
+`tile-cache/` earns its disk only while a fetch might be resumed, so tiles are
+cached per source and reclaimed the moment that work holds a complete image — and
+kept when it does not, which is exactly when a retry wants them. `api-cache/`
+needed no rule: nothing creates it. That second half corrected four artifacts and
+`learnings.md`, all of which had been listing it as an upstream artifact to
+transport.
+
+**What the mutation sweep caught, and the one thing it got wrong.** Two of the new
+tests could not fail: one asserted stdin was closed using a fake that returns
+immediately under pytest either way, and one asserted a stale destination is
+cleared using a fake that overwrites happily where the real binary refuses. Both
+are now able to fail. The sweep then reported the IPv4-mapped-address unwrap as
+unreachable, so it was removed — and `ipaddress` turns out to classify
+`::ffff:8.8.8.8` as `is_reserved` on 3.12 and `is_global` on 3.14. The branch
+defends against an interpreter change rather than an input, so no mutation over
+inputs can kill it. Restored, with the reason written where the next reader finds
+it before deleting it again.
+
+**The Critic found five blockers, and the review round after the fix found a
+sixth that the fix itself introduced.** R-1 and R-9 were the same defect from two
+independent reviewers: a failed *retry* deleted the master the work was still
+displaying while its `Original` row went on naming the file, and the surface
+promised the opposite in two places. Both fetch paths now stage and the service
+promotes only after the bytes measure as an image — one rule in one place, because
+the guarantee had held on the direct path by accident of where staging happened to
+live. The staging fix then named the staged file `<name>.partial`, and
+**dezoomify-rs picks its output encoder from the extension**: probed at 2.18.1
+that exits 1 with "was not recognized as an image format" and leaves a zero-byte
+file, so every tiled fetch would have failed in the deployment against a green
+suite. Staging is `<stem>.partial<suffix>` now.
+
+**The gap that let it through is the durable lesson, and it is closed.** Every
+stand-in for the binary is a shell script that writes to its last argument
+whatever the argument is called, so no fake could ever witness a decision the
+binary makes *from the filename*. `tests/live/test_dezoomify_contract_still_holds.py`
+drives the real tool behind `-m live_binary`, beside the ARTIC and OpenRouter live
+suites and on its own marker for the same reason they are separate: it costs
+nothing but needs the network and the binary.
+
+**Constraint 10 needed no code.** `description_markup` already existed in
+`services/fields.py` and was already wired into `add_artwork` — a second one was
+started before a truncated grep was noticed to have hidden the first. What the
+constraint actually lacked was evidence, so the 41 real corpus descriptions are now
+asserted to normalise and to **parse as XML**, which is Pango's real bar and what
+no existing test checked.
+
 ## 2026-08-03: The verdict reaches the surface, and previews stop accumulating
 
 <!-- prawduct: chunks=17B | status=shipped | scope=v1-build -->

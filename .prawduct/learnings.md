@@ -824,9 +824,9 @@ material that advertises the seam.
 Established 2026-07-19. The `art/` tree is not one thing, and the two halves are
 transported differently:
 
-- **Upstream, expensive, device-independent** — `raw/`, `api-cache/`,
-  `tile-cache/`. Costs network fetches and real API spend to regenerate.
-- **Derived, cheap, device-specific** — `ready/`, `tv-thumbs/`, `label/`.
+- **Upstream, expensive, device-independent** — `raw/`. Costs network fetches and
+  real API spend to regenerate. See `learnings-detail.md`.
+- **Derived, cheap, device-specific** — `ready/`, `thumbs/`, `tv-thumbs/`, `label/`.
   Rendered for a particular target geometry (4K for the TV, 1448x1072 for the
   e-paper). *(Annotated 2026-07-20: `label/` described the 2024 single-plane
   layout and is retired from the prospective ART_ROOT contract — labels render on
@@ -862,6 +862,14 @@ starting with hoisting the art root into configuration as a single `ART_ROOT`
 (it was hardcoded to `/home/tvpi/art`, correctly outside the repo, but only
 implicitly).
 
+## At the moment of a fix, ask what the change now COVERS that it did not before — a wrapper added to translate a read will also catch the write beside it, and a claim added to one payload will be published by the branch that shares it
+
+## A claim repeated in three artifacts is ONE piece of evidence copied twice — when a property is asserted in prose, verify it against the code before adding the third statement of it, because every later text inherits it from the earlier prose rather than from the behaviour
+
+## When a module's docstring says it exists to stop two callers drifting, adding a caller is the moment to READ that docstring — the drift it warns about reappears in the new caller, and the escaping case will be the common path rather than the one being written
+
+## When a fixture seeds a file at a path the code DERIVES, learn that path from an observed run instead of spelling it out — a rename leaves the fixture pointing at nothing, and the test stays green while the branch it guards goes undefended
+
 ## Known problems in the existing index
 
 `all.json` conflates three separate concerns in one record, which the planned
@@ -882,3 +890,7 @@ Also unreconciled: **41 artworks in `all.json` but 46 files in `raw/`**, and
 filenames encode identity in at least three mutually inconsistent conventions
 (`Surname, Forename; Title; Year`, `Forename Surname - Title`, and at least one
 `Title - Forename Surname` with the fields reversed).
+
+## A comment that justifies code by naming a constraint is a CLAIM — check the constraint before inheriting the workaround, because a false reason usually sits on top of wrong behaviour
+
+## A decision that DESCOPES something has to be walked back through every artifact that promised it — the promising artifacts are never the one you are editing when you make the call

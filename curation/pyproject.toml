@@ -70,9 +70,15 @@ dependencies = [
 #     a second provider ever earns it. Reasoning in `openrouter-api-findings.md`.
 #
 # Deliberately not pinned yet:
-#   opencv-python-headless, scikit-image, numpy — acquisition and the mat engine,
-#     which arrive with that work rather than being carried unused. Pillow was in
-#     this group until the browser surface needed to downscale a 4K rendition.
+#   (opencv-python-headless, scikit-image and numpy were forecast here for
+#     "acquisition and the mat engine". Both landed 2026-08-03 and neither needed
+#     any of the three, so this is a rejection now rather than a deferral. The
+#     mat engine's CIE LAB conversion and CIEDE2000 distance are thirty lines of
+#     fully-specified arithmetic in `acquisition/color.py`, verified against the
+#     published Sharma reference set; the dominant-colour fallback uses Pillow's
+#     median-cut quantiser where 2024 used OpenCV k-means. Three packages on a
+#     memory-capped Pi, to do that, could not be argued for. Reinstate only with
+#     the component that needs them named.)
 #   (httpx was here until 2026-08-02 on the grounds that only the mcp *client*
 #     used it. The OpenRouter client imports it directly now, so it moved into
 #     the declared set above — see the note beside it there.)
@@ -153,6 +159,7 @@ markers = [
     "llm_eval: drives the tool surface with a real model over OpenRouter. Costs money, needs OPENROUTER_API_KEY, and is not deterministic — deselected by default, run with `-m llm_eval`.",
     "live_api: re-verifies OpenRouter's recorded response shapes and prices against the live API. Costs money, needs OPENROUTER_API_KEY — deselected by default, run with `-m live_api`.",
     "live_museum: re-verifies a museum API's recorded response shapes against the live API. Costs nothing and needs no key — the museum APIs are open — but needs the network, so it is deselected by default. Run with `-m live_museum`.",
+    "live_binary: drives the real dezoomify-rs against a live museum, checking the CLI behaviours the wrapper is written against. Costs nothing and needs no key, but needs the binary installed and the network. Deselected by default; run with `-m live_binary`.",
 ]
 # All three live suites are off unless asked for, but for two different reasons
 # and they are kept on separate markers because of it. `llm_eval` and `live_api`
@@ -166,4 +173,4 @@ markers = [
 # was in the environment — an invitation to spend money written in a file
 # arguing the suite was free. A command-line `-m` overrides this line, which is
 # how any of them is opted into.
-addopts = "-m 'not llm_eval and not live_api and not live_museum'"
+addopts = "-m 'not llm_eval and not live_api and not live_museum and not live_binary'"

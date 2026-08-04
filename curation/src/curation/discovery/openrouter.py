@@ -94,6 +94,28 @@ class Citation:
 
 
 @dataclass(frozen=True, slots=True)
+class ImageAttachment:
+    """An image to ask the model about, already encoded and sized.
+
+    Carries bytes rather than a path or a URL for two reasons. A path would put
+    file reading and downscaling behind a transport, where a caller could not see
+    what it was about to pay for — the encoded size *is* the input token count.
+    A URL would have the provider fetch it, which for a museum's server means an
+    unannounced third party pulling a gigapixel master.
+    """
+
+    #: Base64 of the encoded image, without any data-URI preamble.
+    base64_data: str
+    #: The media type of what `base64_data` decodes to, e.g. `image/jpeg`.
+    media_type: str
+
+    @property
+    def data_uri(self) -> str:
+        """The `data:` URI form the provider's `image_url` part expects."""
+        return f"data:{self.media_type};base64,{self.base64_data}"
+
+
+@dataclass(frozen=True, slots=True)
 class Completion:
     """What one call produced, and what it cost in the provider's own terms.
 
@@ -216,8 +238,9 @@ class OpenRouterClient:
         prompt: str,
         schema: Mapping[str, Any] | None = None,
         search_results: int = 0,
+        image: ImageAttachment | None = None,
     ) -> Completion:
-        """Ask the model once, optionally searching the web first.
+        """Ask the model once, optionally about an image, optionally searching first.
 
         `search_results` is how many pages a search may return, and zero means
         do not search at all. It is *not* a count of searches: one call carries
@@ -226,11 +249,25 @@ class OpenRouterClient:
         So breadth costs nothing and is worth asking for.
 
         A `schema` makes the provider enforce the response shape, which is what
-        lets the engine above parse without defending against prose.
+        lets the engine above parse without defending against prose. **Enforce is
+        the intent, not the guarantee** — a model may advertise `response_format`
+        without `structured_outputs`, honour the schema anyway, and remain free to
+        stop honouring it. Callers parse defensively regardless.
+
+        `image` turns the message into a list of content parts. Measured against
+        the live API: nothing else about the request or the response changes —
+        same choices, same `usage.cost`, same `finish_reason` — and the image
+        bills inside `prompt_tokens` rather than as a separate charge.
         """
+        content: str | list[dict[str, Any]] = prompt
+        if image is not None:
+            content = [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": image.data_uri}},
+            ]
         body: dict[str, Any] = {
             "model": self._model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [{"role": "user", "content": content}],
             # Deliberate, never omitted: this is the reservation the provider
             # prices, and leaving it out invites a 402 at full credit.
             "max_tokens": self._max_output_tokens,

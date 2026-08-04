@@ -146,11 +146,20 @@
 - **Exists:** partially — the 2024 layout exists on the Pi; the split is recorded in
   `learnings.md` § Data and cache contract.
 - **Producer:** acquisition and rendering. **Consumer:** both planes.
-- **Contract:** **upstream artifacts** (`raw/`, `api-cache/`, `tile-cache/`) are
+- **Contract:** **upstream artifacts** (`raw/`) are
   expensive and device-independent and *are* transported; **derived artifacts**
   (`ready/`, `thumbs/`, `tv-thumbs/`) are cheap and are **regenerated, never
   transported**. (`label/` removed from this row 2026-07-20 — see the retirement
   bullet below. `thumbs/` added 2026-08-01 — see the bullet below it.)
+- **`tile-cache/` is neither, and `api-cache/` does not exist** *(corrected
+  2026-08-03, when acquisition was built and the row's first list turned out to
+  name one directory that is working space and one that has no producer)*.
+  `tile-cache/` is transient working space for a fetch in progress: it holds the
+  tiles of a **partial** download so a retry can resume, and it is removed per
+  source as soon as that work holds a complete image. Transporting it would carry
+  the debris of an interrupted fetch to another machine. `api-cache/` appears only
+  in the 2024 `config.py`; the curation plane asks museums over HTTP and caches
+  nothing on disk, so nothing produces it.
 - All stored paths are relative to `ART_ROOT`. No absolute paths in any record.
 - Candidate `preview_path` files are a third class — neither upstream nor derived;
   cheap, disposable, pre-acceptance. Their lifecycle **is** recorded in

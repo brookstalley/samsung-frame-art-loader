@@ -93,8 +93,9 @@ recorded plan (curation on a desktop, NAS, or second Pi) — see Decision Log.
                     │  │                          │   │                          │ │
                     │  │  discovery · acquisition │   │   catalogue.sqlite  (C)  │ │
                     │  │  image prep · mat colour │   │   theme-manifest.json(C) │ │
-                    │  └───────────┬──────────────┘   │   raw/ ready/ tv-thumbs/ │ │
-                    │              │                  │   api-cache/ tile-cache/ │ │
+                    │  └───────────┬──────────────┘   │   raw/ ready/ thumbs/    │ │
+                    │              │                  │   tv-thumbs/ tile-cache/ │ │
+                    │              │                  │   previews/              │ │
                     │              │ HTTPS            │                          │ │
                     │              ▼                  │   display-state.sqlite(D)│ │
                     │   OpenRouter, museum APIs,      └────────────┬─────────────┘ │
@@ -179,7 +180,17 @@ is no network between planes.
   cleanly. It takes the catalogue service alone rather than the container: it
   writes no discovery state and no directive, so it needs neither the services
   that own them nor the startup reconciliation that repairs them.
-- **Internal layering, inside that plane** (established 2026-07-27):
+- **Internal layering, inside that plane** (established 2026-07-27; `acquisition/`
+  added 2026-08-03 — the fetch paths, the guards and the URL policy, sitting beside
+  `discovery/` as the other package that reaches outside the machine, and extended
+  the same day with preparation: the mat engine, the compositor and the colour
+  arithmetic they share. **`PreparationService` is a peer of `AcquisitionService`,
+  not its tail**, because a work is acquired once and prepared repeatedly — on a
+  panel change, a re-chosen mat, or a stale rendition — and folding the two
+  together would make every re-render read as a re-fetch in the journal. The mat
+  engine reaches OpenRouter through the same first-party client discovery uses,
+  with its own model: discovery wants a text model that searches, preparation
+  wants one that can see):
 
   ```
   MCP tools  ·  HTTP handlers  ·  browser client   bindings: unpack, call one method, format
@@ -189,8 +200,9 @@ is no network between planes.
   Discovery     │           Display      SurveyService   every rule, transition and derivation
   Runner ──┐    │           Service           │          (all hold CatalogueService;
         │  │    │              │        ThumbnailService   it holds none of them)
-        │  ├─ DiscoveryEngine (Protocol)      │          phase 1 — the seam every paid call sits
-        │  │    UnavailableEngine ships       │          behind; no other service can reach it
+        │  ├─ DiscoveryEngine (Protocol)      │          phase 1 — discovery's paid seam, reachable
+        │  │    UnavailableEngine ships       │          by no other service. NOT the only paid edge
+        │  │                                  │          any more: MatEngine is the second, below
         │  ├─ ImageSearch (Protocol)          │          phase 2 — the museum seam. Free, but
         │  │    ArticImageSearch ships        │          behind a seam for the same reason
         │  └─ PreviewCache                    │          writes the disposable local copy an
@@ -198,12 +210,30 @@ is no network between planes.
   Discovery ── ReviewService                  │          the pre-acceptance twin of SurveyService
   Service ──── PreviewSweep                   │          reclaims the previews of decided works;
         │       │              │              │          the plane's second background thread
+        │       │   AcquisitionService        │          fetches the master a work was accepted for.
+        │       │    ├─ StreamOpener (seam)   │          the only service that runs a subprocess; its
+        │       │    └─ Resolver   (seam)     │          transport and its resolver are both injected,
+        │       │              │              │          so the policy above them runs offline
+        │       │   PreparationService        │          turns a held original into a mat and a 4K
+        │       │    └─ MatEngine  (seam)     │          canvas. Its seam is the SECOND paid edge —
+        │       │              │              │          a vision model, keyless deployments fall
+        │       │              │              │          back to the mechanical producer and say so
         │       └── CatalogueService ─────────┘
         │              │
   SqliteDiscovery  SqliteCatalogue                domain adapters: schema, record↔row, ordering
         └──────────────┬──────────────┘           and paging — the product judgements
               SqliteDurableStore                  generic: tables, keys, rows. Knows no artwork
   ```
+
+  **`AcquisitionService` is the one service that leaves the machine to do its
+  job**, and its two foreign edges are injected rather than reached for: an HTTP
+  stream opener and a name resolver. That is the same arrangement `DiscoveryEngine`
+  and `ImageSearch` have one row up, for the same reason — the rules worth testing
+  exhaustively (which source is used, what a refusal is recorded as, whether a
+  host may be fetched at all) then run with no network. The subprocess is not
+  behind a Protocol: there is one binary, its contract is captured in
+  `dezoomify-cli-findings.md`, and a second implementation would be a second
+  fiction rather than a second provider.
 
   **`ReviewService` is `SurveyService`'s counterpart on the other side of
   acceptance, and they are deliberately two classes rather than one.** Both
@@ -246,8 +276,13 @@ is no network between planes.
 
   `DiscoveryRunner` holds `DiscoveryService`, not the other way round, and the
   engine hangs off the runner alone — no other service can reach it, which is
-  what "exactly one tool spends money" looks like as a dependency edge rather
-  than as a rule somebody remembers.
+  what "exactly one tool runs a *paid discovery engine*" looks like as a
+  dependency edge rather than as a rule somebody remembers. *(Narrowed 2026-08-03:
+  the edge is real and unchanged, but it never said "exactly one tool spends
+  money", which stopped being true when `PreparationService` gained a mat engine
+  reaching the same provider. The two paid paths share the transport and share
+  nothing else — no service can reach both — and that is the property the
+  structure actually enforces.)*
 
   **`DiscoveryRunner` and the engine seam were added 2026-08-02, and the split
   between the runner and `DiscoveryService` is the load-bearing part.**
@@ -596,7 +631,7 @@ catalogue does not apply. What remains:
 | E-paper write fails | label stale | Log and continue; never let a panel failure stop the TV rotation |
 | Budget exhausted mid-run (the provider refuses — a 403; see `openrouter-api-findings.md`) | discovery halts partially | `halted_by_budget`, a modelled outcome. Already-acquired works stay acquired |
 | Preview sweep stops running | **curation only, and silently** | The characteristic failure of the plane's one periodic job: no error, no refusal, and no symptom until the SD card fills. It is upstream of the row below, and the only signal is positive — `preview.swept` at INFO on **every** pass, including the ones that reclaim nothing, so absence over an interval is the fault. A pass that hangs instead of stopping is the neighbouring case and reads differently: `preview.sweep_started` with no `preview.swept`, and at shutdown a `preview.sweep_wedged` warning, because that pass holds the store lock the next generation of services will want |
-| SD card full | **both planes** | The one genuinely shared failure. Needs a free-space guard before acquisition, not a disk-full exception during it |
+| SD card full | **both planes** | The one genuinely shared failure. **Built 2026-08-03**: `acquisition/space.py` refuses before a fetch begins, sized by `MIN_FREE_BYTES` (2 GiB) and protecting `catalogue.sqlite` on the same device rather than the fetch. It raises rather than recording, unlike every other acquisition failure, because a full disk is a fact about the machine that every work behind this one would hit |
 | SD card corruption | catastrophic | The catalogue is the irreplaceable asset and it lives here. Mitigation is off-device backup — see `operational-spec.md` |
 
 **Restart order does not exist**, and that is a property worth naming: neither

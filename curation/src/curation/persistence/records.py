@@ -198,6 +198,22 @@ class Original:
     height: int
     byte_size: int
     content_hash: str
+    #: How the fetch that produced *these bytes* ended — `OK` or `PARTIAL_TILES`.
+    #: A fact about a past event, not a verdict about a deployment, which is why
+    #: it is stored where `display_fit` deliberately is not.
+    #:
+    #: It cannot be read off `Source.last_fetch_status` instead: that column holds
+    #: the source's *most recent* attempt, and one failed re-fetch overwrites it to
+    #: `FAILED` while the held original — protected by staging — is still the
+    #: complete image from before. A caller comparing against it would read "held
+    #: quality: failed", conclude anything is an improvement, and let a partial
+    #: overwrite a complete master.
+    #:
+    #: `None` means the row was written before this field existed. Callers
+    #: comparing quality must treat that as complete: the rows cannot be told
+    #: apart, and the permissive reading loses images for exactly the oldest ones.
+    #: `FAILED` is unreachable here — a failed fetch produces no bytes to record.
+    fetch_status: FetchStatus | None = None
 
 
 @dataclass(frozen=True, slots=True)
