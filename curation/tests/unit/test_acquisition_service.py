@@ -689,9 +689,16 @@ class TestARetryNeverLowersTheQualityOfWhatIsHeld:
         assert (reread.content_hash, reread.width) == (held.content_hash, 400)
         assert reread.fetch_status is FetchStatus.OK
 
-    def test_the_refused_attempt_leaves_no_trace_on_the_source(self, service, acq_settings, tmp_path):
-        """Stamping the source `partial_tiles` would erase the fact of the fetch
-        that produced the image being kept — which is what the next comparison reads."""
+    def test_the_refused_attempt_is_recorded_on_the_source_and_not_on_the_original(self, service, acq_settings, tmp_path):
+        """The two columns say different things, which is why splitting them fixed this.
+
+        `Source.last_fetch_status` is the source's *most recent* attempt, so a
+        refused partial belongs on it — otherwise `sources` shows a fetch date
+        older than the retry a curator was just told to make, and this outcome's
+        notice sends them to exactly that read. `Original.fetch_status` is a fact
+        about the held bytes, which this attempt did not change, so it must not
+        move. Before the split these were one field and the guard read the wrong one.
+        """
         work, source = self._tiled_work(service)
         complete = self._settings(acq_settings, tmp_path, "whole.jpg", width=400, height=300, complete=True)
         _acquisition(service, complete, _serves(b"")).acquire(work.id)
@@ -700,7 +707,11 @@ class TestARetryNeverLowersTheQualityOfWhatIsHeld:
         _acquisition(service, gappy, _serves(b"")).acquire(work.id, source_id=source.id)
 
         refreshed = next(s for s in service.list_sources(work.id) if s.id == source.id)
-        assert refreshed.last_fetch_status is FetchStatus.OK
+        assert refreshed.last_fetch_status is FetchStatus.PARTIAL_TILES
+        assert refreshed.last_fetched_at is not None
+        # And the held image's own provenance is untouched, which is what the
+        # guard reads on the next attempt.
+        assert service.get_original(work.id).fetch_status is FetchStatus.OK
 
     def test_the_refused_bytes_are_discarded_rather_than_left_beside_the_original(self, service, acq_settings, tmp_path):
         work, source = self._tiled_work(service)
@@ -790,6 +801,29 @@ class TestARetryNeverLowersTheQualityOfWhatIsHeld:
         assert result.outcome is AcquisitionOutcome.KEPT_HELD
         assert "unrecorded completeness" in result.detail
         assert service.get_original(work.id).width == 400
+
+    def test_a_partial_is_promoted_when_the_held_row_names_a_file_that_is_gone(self, service, acq_settings, tmp_path):
+        """A row outliving its file is the one case where refusing protects nothing.
+
+        The guard's premise is that the work already holds a better image. When the
+        bytes are gone — a botched sync, a restore that missed one — the premise is
+        false, and refusing would leave the work with a dangling row instead of a
+        gappy picture. Preparation already treats a missing master as a failure
+        wanting exactly this re-acquisition.
+        """
+        work, source = self._tiled_work(service)
+        complete = self._settings(acq_settings, tmp_path, "whole.jpg", width=400, height=300, complete=True)
+        _acquisition(service, complete, _serves(b"")).acquire(work.id)
+        held = service.get_original(work.id)
+        (acq_settings.art_root / held.relative_path).unlink()
+
+        gappy = self._settings(acq_settings, tmp_path, "gappy.jpg", width=120, height=90, complete=False)
+        result = _acquisition(service, gappy, _serves(b"")).acquire(work.id, source_id=source.id)
+
+        assert result.outcome is AcquisitionOutcome.PARTIAL
+        reread = service.get_original(work.id)
+        assert (reread.width, reread.fetch_status) == (120, FetchStatus.PARTIAL_TILES)
+        assert (acq_settings.art_root / reread.relative_path).is_file()
 
     def test_a_complete_refetch_from_a_smaller_scan_is_allowed(self, service, acq_settings, tmp_path):
         """Pixel count is deliberately not compared. Moving a work to another

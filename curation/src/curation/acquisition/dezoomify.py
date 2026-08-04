@@ -265,6 +265,18 @@ def _failure_detail(messages: str, returncode: int) -> str:
 
 
 def _discard(path: Path) -> None:
-    """Remove an unusable output so no later step mistakes it for an image."""
-    if path.exists():
-        path.unlink()
+    """Remove an unusable output so no later step mistakes it for an image.
+
+    **A removal that fails is logged, not raised**, and the difference is the
+    module docstring's promise that one bad source never ends the pass over the
+    works behind it. This ran without the guard: a read-only mount or a
+    permissions problem turned an unlink into an `OSError` that escaped
+    `tile_fetch`, through `_acquire_tiled`, which catches nothing, and ended the
+    whole acquisition — over a leftover file, on the path that exists to clean up
+    after a failure. The two sibling helpers in `direct.py` and `service.py`
+    already caught it; this one is now the same contract rather than the odd one.
+    """
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as exc:
+        log.warning("could not remove the unusable tile output at %s: %s", path, exc)

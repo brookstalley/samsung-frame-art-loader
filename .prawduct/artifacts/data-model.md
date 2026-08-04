@@ -914,7 +914,7 @@ path consults it before spending.
 | `id` | UUID | PK | |
 | `discovery_run_id` | UUID | FK → DiscoveryRun, nullable | Null for non-discovery spend, e.g. mat colour. |
 | `artwork_id` | UUID | FK → Artwork, nullable | Set for per-artwork spend. |
-| `category` | enum | required | `discovery_tokens` \| `web_search` \| `image_research` \| `mat_color_vision`. |
+| `category` | enum | required | `discovery_tokens` \| `web_search` \| `image_research` \| `mat_color_vision` — **the last of these has a producer but writes no row today; see the deferral below.** |
 | `model_id` | string | nullable | |
 | `input_tokens`, `output_tokens` | integer | nullable | Null where the unit is not tokens. |
 | `units` | integer | nullable | e.g. number of web searches. |
@@ -932,6 +932,26 @@ path consults it before spending.
 > What this table *is* for: per-run and per-surface cost attribution, the
 > after-the-fact "what did this run cost", and monthly reporting. Those are real
 > needs and none of them is enforcement.
+>
+> **`mat_color_vision` is declared and unwritten, recorded here so the row does not
+> read as implemented (2026-08-04).** The category and its two nullable-key columns
+> predate any producer. Chunk 18B shipped the producer — a vision call per accepted
+> work through `MatEngine` — and it writes no SpendRecord: the cost is returned to
+> the caller on `cost_usd`, reported in the tool result, and then discarded. So the
+> monthly total from `art_discovery(action='spend')` omits every mat call. The
+> figures are small (about $0.000063 a call, one per accepted work) and the ceiling
+> is unaffected either way, because the ceiling is the provider's and this table
+> never enforced it — but a month total that silently excludes a whole paid path is
+> the wrong kind of small.
+>
+> **It is deferred rather than merely missing, and the reason is where the writer
+> would have to live.** `record_spend` belongs to `DiscoveryService`, so recording
+> mat spend today means `PreparationService` taking a dependency on the discovery
+> service to reach an accounting concern that has nothing to do with discovery —
+> deepening precisely the coupling that is already filed for removal. Spend
+> accounting is separable on its own records and its own aggregation, and the mat
+> path is the second caller that proves it. The writer lands with that split, and
+> both are tracked in the backlog.
 >
 > **Q4.** `category` separates `web_search` because it is billed per search rather
 > than per token, so a token-only breakdown would misattribute cost. The earlier

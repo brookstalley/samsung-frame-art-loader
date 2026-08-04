@@ -202,7 +202,6 @@ class AcquisitionService:
             return self._record_failure(source, result.detail)
 
         status = FetchStatus.OK if result.outcome is TileOutcome.COMPLETE else FetchStatus.PARTIAL_TILES
-        outcome = AcquisitionOutcome.ACQUIRED if status is FetchStatus.OK else AcquisitionOutcome.PARTIAL
         recorded = self._record_success(
             source,
             staged=result.path,
@@ -210,7 +209,6 @@ class AcquisitionService:
             byte_size=result.byte_size,
             content_hash=_hash_file(result.path),
             status=status,
-            outcome=outcome,
             detail=result.detail,
         )
         if recorded.acquired and result.outcome is TileOutcome.COMPLETE:
@@ -237,7 +235,6 @@ class AcquisitionService:
             byte_size=result.byte_size,
             content_hash=result.content_hash,
             status=FetchStatus.OK,
-            outcome=AcquisitionOutcome.ACQUIRED,
             detail=result.detail,
         )
 
@@ -250,7 +247,6 @@ class AcquisitionService:
         byte_size: int,
         content_hash: str | None,
         status: FetchStatus,
-        outcome: AcquisitionOutcome,
         detail: str,
     ) -> AcquisitionResult:
         """Promote a staged fetch to the held original, or discard it and say why.
@@ -275,13 +271,27 @@ class AcquisitionService:
         image untouched.
         """
         assert staged is not None and content_hash is not None  # noqa: S101 - guarded by `usable` above
+        # Derived rather than passed alongside `status`. Both call sites computed
+        # it from `status` by the same rule, and taking the pair made the
+        # disagreement representable — `status=OK` with `outcome=PARTIAL` would
+        # have recorded a complete Original while telling the caller it had gaps,
+        # and nothing rejected it. Made unrepresentable here while there are two
+        # fetch paths rather than after a third arrives.
+        outcome = AcquisitionOutcome.ACQUIRED if status is FetchStatus.OK else AcquisitionOutcome.PARTIAL
         if refusal := self._would_lower_quality(source.artwork_id, incoming=status):
             _discard(staged)
-            # Deliberately no `record_fetch`: the source answered, and stamping it
-            # `partial_tiles` would overwrite the status of the fetch that produced
-            # the image the work is keeping — the very fact the next comparison
-            # reads. Nothing about this attempt changes what the work holds, so
-            # nothing about the work is written.
+            # The attempt is recorded even though its bytes are thrown away. It
+            # happened, and `last_fetch_status` means the source's *most recent*
+            # attempt — so skipping it would leave `sources` showing a fetch date
+            # that predates the retry a curator was just told to make, and this
+            # outcome's own notice sends them to that read.
+            #
+            # Recording it cannot weaken the guard, and the reason is the whole
+            # point of the new column: the comparison reads `Original.fetch_status`
+            # — a fact about the held bytes — while this writes only the `Source`
+            # row. The two were one field before, which is exactly how a partial
+            # came to overwrite a complete master.
+            self._catalogue.record_fetch(source.id, status=status)
             log.info(
                 "kept the held original for %s: %s",
                 source.artwork_id,
@@ -381,6 +391,15 @@ class AcquisitionService:
             # Nothing to lower. A work's first image is an improvement on no image
             # even with gaps in it, which is why `partial_tiles` is a recorded
             # outcome rather than a refusal.
+            return None
+        if not (self._settings.art_root / held.relative_path).is_file():
+            # The row survives its file: a botched sync, a hand-deleted tree, a
+            # restore that missed one. Refusing here would protect an image that
+            # is not there and leave the work with nothing on the strength of a
+            # row — and preparation already treats a missing master as a failure
+            # needing a re-acquisition, which is exactly the call being refused.
+            # A gappy image beats a dangling row, so this is the same case as
+            # holding nothing at all.
             return None
         if held.fetch_status is FetchStatus.PARTIAL_TILES:
             return None

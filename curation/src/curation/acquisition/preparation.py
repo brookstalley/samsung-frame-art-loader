@@ -34,6 +34,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Final
 
+from curation.acquisition.color import ColorError, format_hex, parse_hex
 from curation.acquisition.compose import compose
 from curation.acquisition.mat import MatChoice, MatEngine
 from curation.persistence.records import MatColor, MatMethod, RenditionKind
@@ -282,8 +283,28 @@ class PreparationService:
         Recorded as `manual`, which is the same provenance the 41 legacy colours
         carry: a person decided this one. It supersedes whatever the model chose
         without discarding it.
+
+        **The curator's spelling is normalised through the same reader the model's
+        answer goes through**, so the product gives one answer to "what is a hex
+        colour". Without this the two disagreed in the direction nobody would
+        defend: `parse_hex` is deliberately lenient about shorthand, a missing `#`
+        and upper case — measured leniency, a probed model really did return
+        `3F6F7A` — while the catalogue's own check takes only lower-case
+        `#rrggbb`. So `#ABC` was accepted from a model and refused from a person,
+        on a tool whose parameter says only "a hex triplet".
+
+        A malformed value is still refused, and the translation is not incidental:
+        `parse_hex` raises `ColorError`, which is a `ValueError` and not a
+        `ServiceError`, so letting it out would turn what had been a clean refusal
+        with a message fit to return into an unhandled error at the surface. Only
+        the parse is wrapped — a `ServiceError` from the write below must reach the
+        caller as itself.
         """
-        self._catalogue.record_mat_color(artwork_id=artwork_id, hex_rgb=hex_rgb, method=MatMethod.MANUAL)
+        try:
+            normalised = format_hex(parse_hex(hex_rgb))
+        except ColorError as exc:
+            raise ServiceError(str(exc)) from exc
+        self._catalogue.record_mat_color(artwork_id=artwork_id, hex_rgb=normalised, method=MatMethod.MANUAL)
         return self.prepare(artwork_id, force=True)
 
     def _current_or_chosen_mat(self, artwork_id: str, *, source: Path) -> tuple[MatColor, MatChoice | None]:

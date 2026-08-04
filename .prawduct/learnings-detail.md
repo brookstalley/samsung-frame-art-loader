@@ -591,7 +591,7 @@ evidence that anything creates it, and "upstream vs derived" has a third case �
 working space, which is neither transported nor regenerated because it is only
 ever meaningful mid-operation.
 
-## A test that SPELLS a path the code DERIVES is disarmed by the next rename
+## When a fixture seeds a file at a path the code DERIVES, learn that path from an observed run instead of spelling it out — a rename leaves the fixture pointing at nothing, and the test stays green while the branch it guards goes undefended
 
 The failure has two halves and the second is what makes it dangerous. A fixture
 that writes its seed to a path the code *computes* — a staged name, a cache key,
@@ -641,7 +641,7 @@ being true without anyone noticing.
 
 
 
-## A claim repeated in three artifacts is ONE piece of evidence copied twice
+## A claim repeated in three artifacts is ONE piece of evidence copied twice — when a property is asserted in prose, verify it against the code before adding the third statement of it, because every later text inherits it from the earlier prose rather than from the behaviour
 
 Chunk 18B published "regenerate spends nothing" in a tool tip, a parameter
 description and an `api-contract.md` correction block, while
@@ -660,7 +660,7 @@ property into a *second* artifact, read the code path that makes it true. Not th
 first statement of it, which is usually written while the code is in mind; the
 second, which is written from the first.
 
-## When a module's docstring says it exists to stop two callers drifting, adding a caller is the moment to read it
+## When a module's docstring says it exists to stop two callers drifting, adding a caller is the moment to READ that docstring — the drift it warns about reappears in the new caller, and the escaping case will be the common path rather than the one being written
 
 `services/imaging.py` opens with "The one downscale this product does, so its two
 callers cannot drift apart… the copies had already diverged on which exceptions
@@ -679,7 +679,7 @@ item at review time but a reading habit at write time: a docstring that names a
 past divergence is a warning addressed to whoever adds the next caller.
 
 
-## At the moment of a fix, ask what the change now covers that it did not before
+## At the moment of a fix, ask what the change now COVERS that it did not before — a wrapper added to translate a read will also catch the write beside it, and a claim added to one payload will be published by the branch that shares it
 
 Chunk 18B's review ran to four rounds, and two of the middle ones found defects
 in the previous round's *fix* rather than in the original work. The chain:

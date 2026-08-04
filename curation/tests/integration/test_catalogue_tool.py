@@ -513,13 +513,42 @@ async def test_a_curators_colour_carries_no_fallback_notice(server_url, services
 
 
 async def test_an_unreadable_colour_is_an_error_result_rather_than_a_crash(server_url, services, settings):
+    """The refusal has to survive the trip as a *result*, not an exception.
+
+    The assertions moved from the message's wording to what a caller can act on,
+    because the wording changed for a reason worth keeping: a curator's spelling
+    is now read by the same lenient parser the model's answer goes through, so
+    `#abc` is accepted from both rather than from the model alone, and the refusal
+    that reaches here is that parser's. Its message is the better one — it quotes
+    the value back and shows a well-formed example — and pinning the old substring
+    would pin the surface to the parser that no longer runs.
+    """
     work = _a_work_with_an_original(services, settings)
 
     payload, errored = await call(server_url, "art_catalogue", action="set_mat_color", artwork_id=work.id, hex_rgb="octarine")
 
     assert errored is True
     assert payload["success"] is False
-    assert "hex triplet" in payload["error"]
+    # Names the value that was wrong, and shows what a right one looks like.
+    assert "octarine" in payload["error"]
+    assert "#27285b" in payload["error"]
+
+
+async def test_a_colour_a_person_spells_loosely_is_accepted_like_the_models_own(server_url, services, settings):
+    """The other half of joining the two readers, asserted over the wire.
+
+    Before this the product took `#ABC` from a vision model and refused it from a
+    curator, on a parameter documented only as "a hex triplet".
+    """
+    work = _a_work_with_an_original(services, settings)
+
+    payload, errored = await call(server_url, "art_catalogue", action="set_mat_color", artwork_id=work.id, hex_rgb="#ABC")
+
+    assert errored is False
+    assert payload["success"] is True
+    # Normalised to the one spelling the catalogue compares by, so re-choosing the
+    # colour already in force still reads as no change rather than as history.
+    assert payload["hex_rgb"] == "#aabbcc"
 
 
 async def test_regenerate_composes_the_canvas_and_reports_where_it_went(server_url, services, settings):

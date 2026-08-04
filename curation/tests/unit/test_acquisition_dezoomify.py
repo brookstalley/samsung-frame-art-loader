@@ -158,6 +158,39 @@ class TestClassification:
         assert result.path is None
         assert not (tmp_path / "out" / "work.jpg").exists()
 
+    def test_a_removal_that_cannot_happen_is_logged_rather_than_raised(self, tmp_path, caplog, monkeypatch):
+        """This module promises one bad source never ends the pass over the works
+        behind it, and its own cleanup was the one path that could break that.
+
+        Discarding an unusable output used to unlink without a guard, so a
+        read-only mount or a permissions problem raised `OSError` out of
+        `tile_fetch`, through `_acquire_tiled` — which catches nothing — and ended
+        the whole acquisition, over a leftover file, on the path that exists to
+        clean up after a failure. The sibling helpers in `direct.py` and
+        `service.py` already logged and carried on; this one did not.
+        """
+        import curation.acquisition.dezoomify as module
+
+        script = _fake_binary(tmp_path, ZERO_BYTE_THEN_FAIL)
+        real_unlink = Path.unlink
+
+        def refuses(self, *args, **kwargs):
+            # The staged name, not the destination: the binary writes to
+            # `<stem>.partial<suffix>` and it is the staged file that is discarded.
+            if self.name == "work.partial.jpg":
+                raise PermissionError("read-only file system")
+            return real_unlink(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "unlink", refuses)
+
+        with caplog.at_level("WARNING", logger=module.__name__):
+            result = _run(tmp_path, script)
+
+        # Still a reported failure rather than an exception, which is the contract.
+        assert result.outcome is TileOutcome.FAILED
+        assert not result.usable
+        assert "could not remove" in caplog.text
+
     def test_exit_zero_with_no_file_is_failed(self, tmp_path):
         # The trap the probe found: reading no input and writing nothing exits 0.
         script = _fake_binary(tmp_path, WRITES_NOTHING)

@@ -322,6 +322,27 @@ class TestACuratorsOwnColour:
             pixel = canvas.convert("RGB").load()[0, 0]
         assert all(abs(channel - expected) <= 12 for channel, expected in zip(pixel, (39, 40, 91), strict=True))
 
+    @pytest.mark.parametrize("spelling", ["#27285B", "27285b", "#abc"])
+    def test_a_person_may_spell_a_colour_the_way_the_model_is_allowed_to(self, prep, service, settings, spelling):
+        """One answer to "what is a hex colour", whoever is asking.
+
+        The mat engine's reader is deliberately lenient about shorthand, a missing
+        `#` and upper case — measured leniency, a probed model really did answer
+        `3F6F7A`. The catalogue's own check takes only lower-case `#rrggbb`. Until
+        these were joined the product accepted `#abc` from a model and refused it
+        from a person, on a tool whose parameter says only "a hex triplet".
+        """
+        work, _ = _work_with_original(service, settings)
+        prep.prepare(work.id)
+
+        result = prep.set_mat(work.id, spelling)
+
+        # Stored in the one spelling the catalogue compares by, so re-choosing the
+        # colour already in force still reads as no change rather than as history.
+        assert result.mat_hex == result.mat_hex.lower()
+        assert service.current_mat_color(work.id).hex_rgb == result.mat_hex
+        assert result.mat_hex.startswith("#") and len(result.mat_hex) == 7
+
     def test_an_unreadable_colour_is_refused_before_anything_is_written(self, prep, service, settings):
         work, _ = _work_with_original(service, settings)
         prep.prepare(work.id)

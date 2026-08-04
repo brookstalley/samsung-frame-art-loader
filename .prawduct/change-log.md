@@ -116,8 +116,72 @@ Additive here only because every outcome is paired with a `notice` in prose — 
 client that understands no outcome values still relays a sentence. The rule now
 states that condition rather than leaving the next person to guess.
 
-Suite: **1593 curation + 52 root green** (1645 combined), plus the live checks
-behind `-m live_api` and `-m live_binary`. Fifteen mutations, all caught.
+**The cumulative round: 0 blocking, and the one it found in this fix was real.**
+`rev-20260804T105746Z-fc44baaa` returned 19 findings over the whole 18A+18B+#67
+bundle — 17 accepted, 2 filed (#69, #70). Nine were fixed in the follow-up commit.
+
+**Two of them were defects in the #67 fix itself**, which is the pattern this
+branch keeps producing and is worth naming again. The guard refused on the
+strength of the catalogue row alone and never checked the file was there — so a
+row that outlived its bytes, which is the product's own documented restore state,
+deadlocked: `retry_acquisition` answered `kept_held` while nothing was on disk and
+`regenerate` said re-acquire it first, the two actions pointing at each other. And
+the comment justifying the refusal path named the wrong row: it claimed skipping
+`record_fetch` protected "the fact the next comparison reads", when the comparison
+reads `Original.fetch_status` and `record_fetch` touches only the `Source`. **The
+comment was wrong in a way that made the behaviour wrong too** — a refusal now
+*does* record the attempt, because `last_fetch_status` means the source's most
+recent attempt and skipping it left `sources` showing a date older than the retry
+the curator had just been told to make.
+
+**Three more were latent and cheap**, all against claims the code already made.
+`dezoomify._discard` alone among its three siblings let an `OSError` escape, so a
+failed unlink ended the whole acquisition pass — against that module's own
+docstring promising one bad source never does. `_record_success` took `status` and
+`outcome` as a pair that had to agree, making `status=ok, outcome=partial`
+representable; `outcome` is derived now. And `set_mat` sent a curator's colour to
+the strict parser while the model's went to the lenient one, so **the product
+accepted `#ABC` from a model and refused it from a person**, on a parameter
+documented only as "a hex triplet".
+
+**One finding was a comment that taught a false pattern.** Three `curation.config`
+imports in `services/container.py` were deferred to function scope to break an
+import cycle. Walking config's module-scope import graph shows no such cycle — it
+reaches `manifest.builder`, `manifest.heartbeat`, `services.display_fit` and
+`services.runner`, and none of those reaches `container`. Hoisted, with the
+correction recorded rather than the comment quietly deleted.
+
+**Dispositions, rendered rather than hand-counted:**
+
+**rev-20260804T105746Z-fc44baaa** — chunk 18B, 2026-08-04T11:20:12Z
+
+| Finding | Severity | State | Detail |
+|---|---|---|---|
+| R-1 | warning | accepted | Fixed. The guard now tests art_root/relative_path before refusing, so a row that outlived its file no longer blocks the re-acquisition preparation reports as needed. Test + 2 mutations. |
+| R-2 | warning | filed | `brookstalley/samsung-frame-art-loader#69` |
+| R-3 | note | accepted | Accepted, not fixed. Its trigger is a panel-geometry change, and the display chunks (12/13) are bench-blocked, so nothing can exercise the fix. Rendition records target pixels only, so covering the TV_PANEL_DIAGONAL_INCHES variant needs mat geometry on the row — a data-model change that belongs with the panel work rather than ahead of it. |
+| R-4 | note | accepted | Accepted as covered. The three lines are the branch narrowing existing bullets, not new narrative; the file-wide problem is issue #26 (416 findings, stage:ready), which owns the move to learnings-detail.md. Fixing three lines here would leave 413. |
+| R-5 | note | accepted | Accepted, and the asymmetry is defensible as it stands: the colour a curator asked for is recorded, and it applies once the work is acquired. The finding calls it genuinely ambiguous. Reversing the order would discard a stated preference because of a fetch that has not happened yet, which is the worse default for an append-only history. |
+| R-6 | warning | accepted | Fixed. The diagram gains a PreparationService row with its MatEngine seam, and the DiscoveryEngine annotation no longer claims to be the seam every paid call sits behind. |
+| R-7 | warning | accepted | Fixed, and the finding was right about the reasoning rather than only the wording. A refusal now DOES call record_fetch: last_fetch_status means the source's most recent attempt, and the guard reads Original.fetch_status, so recording it cannot weaken the guard and keeps the column's documented meaning true. Comment restated, test inverted, mutation-checked. |
+| R-8 | warning | accepted | Fixed. Verified by walking config's module-scope import graph: curation.config does not reach services.container. The three imports are hoisted and the comment now records that the cycle never existed. |
+| R-9 | warning | accepted | Fixed. Closed with the model, the date, the measured price and the trail, in the same shape as the limit_remaining entry closed earlier today. |
+| R-10 | warning | accepted | Fixed. The four detail headings are now character-identical to their index rules; a script confirms zero detail headings without an index rule. |
+| R-11 | note | accepted | Fixed. outcome is derived from status inside _record_success and the parameter is gone, so the mismatched pair is unrepresentable. Mutation-checked. |
+| R-12 | note | accepted | The concrete half is fixed under R-1: _would_lower_quality now checks the file exists, so the dangling-row deadlock it describes is closed. The residual — making both services answer 'does the work really hold this' with one shape — is a refactor with no failing behaviour behind it now, and is better done when a third caller exists to say what the shape should be. |
+| R-13 | note | accepted | Fixed. dezoomify._discard now catches OSError and logs, matching its two siblings, so an unlink failure no longer escapes tile_fetch and ends the pass against the module's own docstring. Test + 2 mutations. |
+| R-14 | note | accepted | Fixed. set_mat normalises through format_hex(parse_hex(...)), so the product gives one answer to 'what is a hex colour' whoever asks. ColorError is translated to ServiceError so a malformed value stays a clean refusal. Two tests over the wire, 2 mutations. |
+| R-15 | warning | filed | `brookstalley/samsung-frame-art-loader#70` |
+| R-16 | note | accepted | Fixed. The cost row names the model, the date and the measured price, drops the dangling see-also, and retires the ai.py 5x-retry warning the new engine does not do. |
+| R-17 | note | accepted | Fixed. The foreign-API register now states the argv invocation as it is and points at dezoomify-cli-findings.md, with the correction noted so a security re-derivation does not restart from a shell surface that never existed here. |
+| R-18 | note | accepted | No action required — a clean cross-check result, recorded as evidence rather than as a defect. |
+| R-19 | note | accepted | Acted on. #67 is closed as shipped against this branch with a ship-note; #60 and #11 were already closed. |
+
+**19 findings** (8 warning, 11 note) — accepted: 17, filed: 2.
+
+Suite: **1599 curation + 52 root green**, in random and fixed order, plus the live
+checks behind `-m live_api` and `-m live_binary`. Twenty-three mutations across the
+two rounds, all caught.
 
 ## 2026-08-03: Preparation — a mat that says who chose it, and a bar the corpus states
 

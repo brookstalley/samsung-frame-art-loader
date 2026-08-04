@@ -200,8 +200,9 @@ is no network between planes.
   Discovery     │           Display      SurveyService   every rule, transition and derivation
   Runner ──┐    │           Service           │          (all hold CatalogueService;
         │  │    │              │        ThumbnailService   it holds none of them)
-        │  ├─ DiscoveryEngine (Protocol)      │          phase 1 — the seam every paid call sits
-        │  │    UnavailableEngine ships       │          behind; no other service can reach it
+        │  ├─ DiscoveryEngine (Protocol)      │          phase 1 — discovery's paid seam, reachable
+        │  │    UnavailableEngine ships       │          by no other service. NOT the only paid edge
+        │  │                                  │          any more: MatEngine is the second, below
         │  ├─ ImageSearch (Protocol)          │          phase 2 — the museum seam. Free, but
         │  │    ArticImageSearch ships        │          behind a seam for the same reason
         │  └─ PreviewCache                    │          writes the disposable local copy an
@@ -213,6 +214,10 @@ is no network between planes.
         │       │    ├─ StreamOpener (seam)   │          the only service that runs a subprocess; its
         │       │    └─ Resolver   (seam)     │          transport and its resolver are both injected,
         │       │              │              │          so the policy above them runs offline
+        │       │   PreparationService        │          turns a held original into a mat and a 4K
+        │       │    └─ MatEngine  (seam)     │          canvas. Its seam is the SECOND paid edge —
+        │       │              │              │          a vision model, keyless deployments fall
+        │       │              │              │          back to the mechanical producer and say so
         │       └── CatalogueService ─────────┘
         │              │
   SqliteDiscovery  SqliteCatalogue                domain adapters: schema, record↔row, ordering

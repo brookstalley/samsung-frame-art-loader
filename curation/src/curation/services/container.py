@@ -24,6 +24,29 @@ from curation.acquisition.mat import MatEngine
 from curation.acquisition.preparation import PreparationService, PreparationSettings
 from curation.acquisition.service import AcquisitionService, AcquisitionSettings
 from curation.acquisition.transport import no_transport
+
+# Module scope, and the three `_default_*` helpers below used to import this at
+# function scope instead, explained as breaking a cycle: "config reads this
+# package to compose its settings objects". It does not. `curation.config`
+# imports `manifest.builder`, `manifest.heartbeat`, `services.display_fit` and
+# `services.runner`, and none of those reaches this module — `services/__init__`
+# is a docstring. The deferral hid container→config from anything reading the
+# import graph while teaching a pattern on a premise that was never true. If a
+# real cycle ever appears, the fix is to move the constants, not to hide the edge.
+from curation.config import (
+    DEFAULT_ACQUISITION_USER_AGENT,
+    DEFAULT_MAT_IMAGE_MAX_EDGE,
+    DEFAULT_MAX_IMAGE_BYTES,
+    DEFAULT_MIN_FREE_BYTES,
+    DEFAULT_TILE_BINARY,
+    DEFAULT_TILE_MAX_PIXELS,
+    DEFAULT_TILE_TIMEOUT_SECONDS,
+    DEFAULT_TV_PANEL_HEIGHT_PX,
+    DEFAULT_TV_PANEL_WIDTH_PX,
+    ORIGINALS_DIRNAME,
+    READY_DIRNAME,
+    TILE_CACHE_DIRNAME,
+)
 from curation.discovery.engine import DiscoveryEngine
 from curation.discovery.images import ImageSearch
 from curation.discovery.phase_two import PhaseTwoEngine
@@ -199,19 +222,6 @@ def _default_acquisition(art_root: Path) -> AcquisitionSettings:
     is right for a test and wrong for the Pi — so the entry point passes its own,
     resolved from the environment like everything else it configures.
     """
-    # Imported here rather than at module scope: `config` reads this package to
-    # compose its settings objects, so a top-level import would close the loop.
-    from curation.config import (
-        DEFAULT_ACQUISITION_USER_AGENT,
-        DEFAULT_MAX_IMAGE_BYTES,
-        DEFAULT_MIN_FREE_BYTES,
-        DEFAULT_TILE_BINARY,
-        DEFAULT_TILE_MAX_PIXELS,
-        DEFAULT_TILE_TIMEOUT_SECONDS,
-        ORIGINALS_DIRNAME,
-        TILE_CACHE_DIRNAME,
-    )
-
     return AcquisitionSettings(
         art_root=art_root,
         originals_path=art_root / ORIGINALS_DIRNAME,
@@ -233,8 +243,6 @@ def _default_mat_engine() -> MatEngine:
     acquired there get dominant-colour mats recorded as such. So the default is
     that deployment rather than something that would fail if used.
     """
-    from curation.config import DEFAULT_MAT_IMAGE_MAX_EDGE
-
     return MatEngine(None, image_max_edge=DEFAULT_MAT_IMAGE_MAX_EDGE)
 
 
@@ -247,8 +255,6 @@ def _default_preparation(art_root: Path, artwork_box: ArtworkBox) -> Preparation
     passes both from one resolved `Settings` — the box is *derived from* the
     panel there, so the two cannot disagree.
     """
-    from curation.config import DEFAULT_TV_PANEL_HEIGHT_PX, DEFAULT_TV_PANEL_WIDTH_PX, READY_DIRNAME
-
     return PreparationSettings(
         art_root=art_root,
         ready_path=art_root / READY_DIRNAME,
