@@ -70,9 +70,15 @@ dependencies = [
 #     a second provider ever earns it. Reasoning in `openrouter-api-findings.md`.
 #
 # Deliberately not pinned yet:
-#   opencv-python-headless, scikit-image, numpy — acquisition and the mat engine,
-#     which arrive with that work rather than being carried unused. Pillow was in
-#     this group until the browser surface needed to downscale a 4K rendition.
+#   (opencv-python-headless, scikit-image and numpy were forecast here for
+#     "acquisition and the mat engine". Both landed 2026-08-03 and neither needed
+#     any of the three, so this is a rejection now rather than a deferral. The
+#     mat engine's CIE LAB conversion and CIEDE2000 distance are thirty lines of
+#     fully-specified arithmetic in `acquisition/color.py`, verified against the
+#     published Sharma reference set; the dominant-colour fallback uses Pillow's
+#     median-cut quantiser where 2024 used OpenCV k-means. Three packages on a
+#     memory-capped Pi, to do that, could not be argued for. Reinstate only with
+#     the component that needs them named.)
 #   (httpx was here until 2026-08-02 on the grounds that only the mcp *client*
 #     used it. The OpenRouter client imports it directly now, so it moved into
 #     the declared set above — see the note beside it there.)

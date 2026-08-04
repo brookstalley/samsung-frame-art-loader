@@ -93,8 +93,9 @@ recorded plan (curation on a desktop, NAS, or second Pi) — see Decision Log.
                     │  │                          │   │                          │ │
                     │  │  discovery · acquisition │   │   catalogue.sqlite  (C)  │ │
                     │  │  image prep · mat colour │   │   theme-manifest.json(C) │ │
-                    │  └───────────┬──────────────┘   │   raw/ ready/ tv-thumbs/ │ │
-                    │              │                  │   tile-cache/ previews/  │ │
+                    │  └───────────┬──────────────┘   │   raw/ ready/ thumbs/    │ │
+                    │              │                  │   tv-thumbs/ tile-cache/ │ │
+                    │              │                  │   previews/              │ │
                     │              │ HTTPS            │                          │ │
                     │              ▼                  │   display-state.sqlite(D)│ │
                     │   OpenRouter, museum APIs,      └────────────┬─────────────┘ │

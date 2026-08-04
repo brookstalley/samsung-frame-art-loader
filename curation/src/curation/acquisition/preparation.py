@@ -7,11 +7,17 @@ here — when a mat is worth paying for, when a rendition is stale, what a failu
 costs — while `mat.py` knows how to choose a colour and `compose.py` knows how to
 draw one.
 
-**Preparation is idempotent and cheap to re-run.** The expensive half is the
-model call, so a work that already has a mat keeps it: re-preparing a hundred
-works after a panel change costs a hundred renders and nothing at all in model
-spend. `regenerate` is the operation a curator reaches for, and it must not be
-one they have to think about the price of.
+**Preparation is idempotent, and free to re-run once a work has a mat.** The
+expensive half is the model call, so a work that already has a mat keeps it:
+re-preparing a hundred works after a panel change costs a hundred renders and
+nothing at all in model spend.
+
+**The first preparation of a work is not free, and every result says so.** A work
+that has never had a mat cannot be rendered without choosing one, and `acquire()`
+does not prepare — so the first call on a freshly acquired work is a paid vision
+call, which is the normal case rather than an edge. `PreparationResult.cost_usd`
+carries it and the tool surface reports it. The tempting sentence was "regenerate
+never spends"; it is false on exactly the call a curator makes first.
 
 **Staleness is a comparison, not a flag.** A rendition records the
 `content_hash` of the original it was drawn from, so "is this current" is
@@ -29,11 +35,12 @@ from pathlib import Path
 from typing import Final
 
 from curation.acquisition.compose import compose
-from curation.acquisition.mat import MatEngine
+from curation.acquisition.mat import MatChoice, MatEngine
 from curation.persistence.records import MatColor, MatMethod, RenditionKind
 from curation.services.catalogue import CatalogueService
 from curation.services.display_fit import ArtworkBox, DisplayFit
 from curation.services.errors import ServiceError
+from curation.services.imaging import reading
 
 log = logging.getLogger(__name__)
 
@@ -143,6 +150,15 @@ class PreparationService:
         because someone asked for a re-render would spend money to overwrite a
         decision they did not mention. Choosing again is `choose_mat` — a separate
         request, because it is a separate intent.
+
+        **This is free for a work that already has a mat, and only for one.** A
+        work that has never had a mat cannot be rendered without choosing one, so
+        the first preparation of a freshly acquired work asks the vision model —
+        and `acquire()` does not prepare, so that first call is the normal case
+        rather than an edge. The cost comes back on `cost_usd` and the caller
+        reports it. Saying "this never spends" would have been the easier
+        sentence and it would have been false at exactly the moment a curator
+        relied on it.
         """
         original = self._catalogue.get_original(artwork_id)
         if original is None:
@@ -159,7 +175,7 @@ class PreparationService:
                 "Re-acquire it before preparing."
             )
 
-        mat = self._current_or_chosen_mat(artwork_id, source=source)
+        mat, chosen = self._current_or_chosen_mat(artwork_id, source=source)
         current = self._current_tv_rendition(artwork_id)
         if current is not None and not force:
             return PreparationResult(
@@ -169,17 +185,32 @@ class PreparationService:
                 mat_hex=mat.hex_rgb,
                 mat_method=mat.method.value,
                 relative_path=current,
-                cost_usd=Decimal(0),
+                # Not unconditionally zero. A work with no mat gets one chosen
+                # above, and that can be a paid call even on the branch that then
+                # finds the canvas current — which is a real sequence, not a
+                # hypothetical: a rendition can outlive the mat row that a
+                # restored catalogue lost.
+                cost_usd=Decimal(0) if chosen is None else chosen.cost_usd,
+                mat_fallback_detail=None if chosen is None else chosen.fallback_detail,
             )
 
         destination = self._settings.ready_path / _FILENAME.format(artwork_id=artwork_id)
-        composition = compose(
+        # **Translated, because this is the path where an undecodable original
+        # would otherwise escape as a bare Pillow error.** The mat engine
+        # translates its own reads, so a work with no mat is refused by name — but
+        # a work that *has* one skips the engine entirely and reaches the
+        # compositor first, and every `set_mat` does the same. One seam, both
+        # callers, which is the arrangement `services/imaging.py` exists to hold.
+        composition = reading(
             source,
-            destination=destination,
-            mat_hex=mat.hex_rgb,
-            panel_width=self._settings.panel_width,
-            panel_height=self._settings.panel_height,
-            box=self._settings.box,
+            lambda: compose(
+                source,
+                destination=destination,
+                mat_hex=mat.hex_rgb,
+                panel_width=self._settings.panel_width,
+                panel_height=self._settings.panel_height,
+                box=self._settings.box,
+            ),
         )
         relative = str(destination.relative_to(self._settings.art_root))
         # Recorded after the file exists, never before: a row naming a canvas that
@@ -200,6 +231,8 @@ class PreparationService:
             relative_path=relative,
             fit=composition.fit,
             rendered_long_edge_inches=composition.rendered_long_edge_inches,
+            cost_usd=Decimal(0) if chosen is None else chosen.cost_usd,
+            mat_fallback_detail=None if chosen is None else chosen.fallback_detail,
         )
 
     def choose_mat(self, artwork_id: str) -> PreparationResult:
@@ -259,19 +292,26 @@ class PreparationService:
         self._catalogue.record_mat_color(artwork_id=artwork_id, hex_rgb=hex_rgb, method=MatMethod.MANUAL)
         return self.prepare(artwork_id, force=True)
 
-    def _current_or_chosen_mat(self, artwork_id: str, *, source: Path) -> MatColor:
+    def _current_or_chosen_mat(self, artwork_id: str, *, source: Path) -> tuple[MatColor, MatChoice | None]:
         """The mat in force, choosing one only if the work has never had one.
 
-        **The reason a re-render is free.** A mat is a judgement, and re-asking a
-        model for one the work already has would both spend money and quietly
-        replace a decision — including a curator's own manual choice, which is the
-        worst version of it.
+        **The reason a re-render is free for a work that already has a mat.** A
+        mat is a judgement, and re-asking a model for one the work already has
+        would both spend money and quietly replace a decision — including a
+        curator's own manual choice, which is the worst version of it.
+
+        Returns the choice alongside the record, and the second element is the
+        whole point: `None` means nothing was asked and nothing was spent, while a
+        `MatChoice` carries what the call cost and whether the model actually
+        answered. Without it the caller cannot tell a free call from a paid one,
+        and would have to either report every preparation as free — which is
+        false on a work's first — or report a cost it never incurred.
         """
         current = self._catalogue.current_mat_color(artwork_id)
         if current is not None:
-            return current
+            return current, None
         choice = self._mat.choose(source)
-        return self._catalogue.record_mat_color(
+        recorded = self._catalogue.record_mat_color(
             artwork_id=artwork_id,
             hex_rgb=choice.hex_rgb,
             method=choice.method,
@@ -281,6 +321,7 @@ class PreparationService:
             reason=choice.reason or None,
             model_id=choice.model_id,
         )
+        return recorded, choice
 
     def _current_tv_rendition(self, artwork_id: str) -> str | None:
         """The path of a television canvas that is current and actually on disk.

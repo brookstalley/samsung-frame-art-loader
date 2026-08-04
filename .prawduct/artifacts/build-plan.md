@@ -1971,9 +1971,13 @@ stalls on the binary or the network.
   regression
   <!-- The criterion read "and reaches the wall" until 2026-08-03. Nothing can
        meet that here: the display plane is Chunks 12 and 13, both bench-blocked,
-       and no `display/` package exists. The wall half is verified when 13 lands
+       and no display package exists yet. The wall half is verified when 13 lands
        and its hardware pass runs — it is descoped from this chunk explicitly
-       rather than left as four fifths of a criterion that reads met. -->
+       rather than left as four fifths of a criterion that reads met.
+       (The display package is named in prose rather than backticked, because the
+       deliverable check reads a backticked path in a chunk entry as a file the
+       chunk was meant to add — and this comment says the opposite. Chunk 18A's
+       carried-finding comment does the same thing for the cache directories.) -->
 - **Done when:**
   0. verify-api — the chosen vision model through OpenRouter with a real image,
      capturing the response shape, before its client is written

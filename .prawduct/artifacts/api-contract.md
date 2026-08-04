@@ -370,7 +370,13 @@ real constraint on how far consolidation can go.
 > **Corrected 2026-08-03, when the mat engine landed: `art_discovery` is no
 > longer the only tool with a cost.** `art_catalogue(action='set_mat_color')`
 > asks a vision model whenever it is given no `hex_rgb`, at about $0.000063 a
-> call. The paragraph above is left standing because its *reasoning* survives
+> call — **and so does `action='regenerate'`, for a work that has never had a
+> mat**. That second path was missed when this block was first written and two
+> Critic reviewers found it independently: a work cannot be rendered without a
+> mat, `acquire` does not prepare, so the first `regenerate` on every acquired
+> work is the paying one. It is the *normal* case, not an edge, which is what
+> made the omission worth correcting rather than footnoting. Both actions now
+> report `cost_usd` on every answer, including the zeroes. The paragraph above is left standing because its *reasoning* survives
 > intact and only its premise moved, and because the reasoning is what a reader
 > needs: a boundary is worth drawing where an operation needs its own
 > confirmation.

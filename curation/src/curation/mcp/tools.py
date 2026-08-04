@@ -72,8 +72,9 @@ _HEX_RGB = Param(
     name="hex_rgb",
     type="string",
     description=(
-        "The mat colour as a hex triplet, e.g. '#27285b'. Omit it to have the vision model choose one, "
-        "which is the only thing on this tool that spends money."
+        "The mat colour as a hex triplet, e.g. '#27285b'. Omit it to have the vision model choose one, which "
+        "spends a fraction of a cent. (action='regenerate' also chooses one, and pays, for a work that has "
+        "never had a mat; both actions report cost_usd.)"
     ),
 )
 
@@ -180,7 +181,9 @@ ART_CATALOGUE: Final = ToolRecord(
             example="art_catalogue(action='regenerate', artwork_id='<an artwork_id from action=list>')",
             params=(_ARTWORK_ID, _FORCE),
             tips=(
-                "It spends nothing: the mat colour is the one already recorded, so no model is asked.",
+                "Free for a work that already has a mat colour: the recorded one is reused and no model is asked. "
+                "A work that has never had one gets a mat chosen here, which costs a fraction of a cent — every "
+                "answer reports cost_usd, so a call that spent nothing says so.",
                 "Ordinarily it does only what is needed — a work whose canvas is already current is reported "
                 "unchanged rather than re-rendered.",
                 "Use force=true after changing the panel geometry or clearing the rendered tree.",

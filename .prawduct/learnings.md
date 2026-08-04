@@ -826,7 +826,7 @@ transported differently:
 
 - **Upstream, expensive, device-independent** — `raw/`. Costs network fetches and
   real API spend to regenerate. See `learnings-detail.md`.
-- **Derived, cheap, device-specific** — `ready/`, `tv-thumbs/`, `label/`.
+- **Derived, cheap, device-specific** — `ready/`, `thumbs/`, `tv-thumbs/`, `label/`.
   Rendered for a particular target geometry (4K for the TV, 1448x1072 for the
   e-paper). *(Annotated 2026-07-20: `label/` described the 2024 single-plane
   layout and is retired from the prospective ART_ROOT contract — labels render on
@@ -862,13 +862,7 @@ starting with hoisting the art root into configuration as a single `ART_ROOT`
 (it was hardcoded to `/home/tvpi/art`, correctly outside the repo, but only
 implicitly).
 
-## A test that SPELLS a path the code DERIVES is disarmed by the next rename
-
-When a fixture seeds a file at a path the code computes — a staged name, a cache
-key, a derived filename — **learn the path from an observed run instead of writing
-it out**, because a rename leaves the fixture pointing at a path nothing touches
-and the test stays green while the branch it guards goes undefended. Full account
-in `learnings-detail.md`.
+## When a fixture seeds a file at a path the code DERIVES, learn that path from an observed run instead of spelling it out — a rename leaves the fixture pointing at nothing, and the test stays green while the branch it guards goes undefended
 
 ## Known problems in the existing index
 

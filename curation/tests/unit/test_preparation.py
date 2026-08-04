@@ -10,13 +10,14 @@ stale looks exactly like one that is correct, on every surface, until someone
 walks past the television.
 """
 
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
-from curation.acquisition.mat import MatEngine
+from curation.acquisition.mat import MatChoice, MatEngine
 from curation.acquisition.preparation import (
     PreparationOutcome,
     PreparationService,
@@ -47,6 +48,27 @@ def prep_settings(settings) -> PreparationSettings:
         panel_height=settings.tv_panel_height_px,
         box=settings.tv_artwork_box,
     )
+
+
+def _spending_engine(hex_rgb: str, cost: Decimal) -> MatEngine:
+    """A mat engine that answers as a paid model would, without a network.
+
+    Substituting the *choice* rather than the transport, because what is under
+    test here is what the service does with a cost — not how a cost is parsed,
+    which `test_mat_engine.py` drives through the real client.
+    """
+
+    class _Paid(MatEngine):
+        def choose(self, image_path):  # noqa: ARG002 - the path is irrelevant to a canned answer
+            return MatChoice(
+                hex_rgb=hex_rgb,
+                method=MatMethod.VISION_MODEL,
+                reason="A canned answer.",
+                model_id="qwen/qwen3.7-flash",
+                cost_usd=cost,
+            )
+
+    return _Paid(None, image_max_edge=256)
 
 
 def _work_with_original(service, settings, *, width=2400, height=1800, colour=(30, 60, 120), content_hash="hash-one"):
@@ -387,3 +409,99 @@ class TestWhatItRefuses:
         )
 
         assert accepted.ready_path.name == "ready"
+
+
+class TestWhatItCosts:
+    """**Two Critic reviewers found this independently, and it was documented
+    backwards.** `regenerate` was published as spending nothing, while the first
+    preparation of every acquired work chooses a mat — because a work cannot be
+    rendered without one and `acquire()` does not prepare. The claim was false on
+    exactly the call a curator makes first.
+    """
+
+    def test_the_first_preparation_of_a_work_reports_what_choosing_its_mat_cost(self, service, settings, prep_settings):
+        work, _ = _work_with_original(service, settings)
+        engine = _spending_engine("#27285b", Decimal("0.00006626"))
+
+        result = PreparationService(service, engine, prep_settings).prepare(work.id)
+
+        assert result.cost_usd == Decimal("0.00006626")
+
+    def test_a_second_preparation_costs_nothing_and_says_so(self, service, settings, prep_settings):
+        """The other half. A field only ever populated on the paying path would be
+        indistinguishable from one the caller forgot to read."""
+        work, _ = _work_with_original(service, settings)
+        engine = _spending_engine("#27285b", Decimal("0.00006626"))
+        prep = PreparationService(service, engine, prep_settings)
+        prep.prepare(work.id)
+
+        again = prep.prepare(work.id, force=True)
+
+        assert again.cost_usd == Decimal(0)
+        assert again.outcome is PreparationOutcome.PREPARED
+
+    def test_an_unchanged_result_still_carries_a_first_choice_it_paid_for(self, service, settings, prep_settings):
+        """The branch that made the old code wrong in two places rather than one:
+        a mat is chosen *before* the already-current check, so a work whose canvas
+        survived a lost mat row pays on a call that then reports `unchanged`."""
+        work, _ = _work_with_original(service, settings)
+        engine = _spending_engine("#27285b", Decimal("0.00006626"))
+        prep = PreparationService(service, engine, prep_settings)
+        prep.prepare(work.id)
+        # The canvas stays; the mat row goes, as a restored catalogue can leave it.
+        for colour in service.mat_color_history(work.id):
+            service._store.update_mat_color(replace(colour, is_current=False))
+
+        result = prep.prepare(work.id)
+
+        assert result.outcome is PreparationOutcome.UNCHANGED
+        assert result.cost_usd == Decimal("0.00006626")
+
+    def test_a_fallback_on_the_first_preparation_reaches_the_caller(self, prep, service, settings):
+        """The suite's engine has no client, so every first preparation falls
+        back — and the reason has to travel, because `regenerate` is where most
+        works actually get their mat."""
+        work, _ = _work_with_original(service, settings)
+
+        result = prep.prepare(work.id)
+
+        assert result.mat_fallback_detail is not None
+
+
+class TestAnUndecodableOriginal:
+    """**The divergence `services/imaging.py` was written to prevent, reproduced.**
+    The mat engine translated Pillow's failures and the compositor did not, so an
+    undecodable original raised a bare `UnidentifiedImageError` from whichever
+    path reached it first — and the path that reaches it first is the common one,
+    because a work with a mat skips the engine entirely.
+    """
+
+    def _corrupt(self, service, settings):
+        work, path = _work_with_original(service, settings)
+        path.write_bytes(b"certainly not a JPEG")
+        return work
+
+    def test_a_work_with_a_mat_already_recorded_is_refused_by_name(self, prep, service, settings):
+        """This is the case that escaped: `prepare` finds a mat, skips the engine,
+        and hands the file straight to the compositor."""
+        work = self._corrupt(service, settings)
+        service.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.MANUAL)
+
+        with pytest.raises(ServiceError, match="could not be read"):
+            prep.prepare(work.id)
+
+    def test_setting_a_colour_on_one_is_refused_by_name(self, prep, service, settings):
+        """`set_mat` records the colour then renders, so it never touches the mat
+        engine either."""
+        work = self._corrupt(service, settings)
+
+        with pytest.raises(ServiceError, match="could not be read"):
+            prep.set_mat(work.id, "#27285b")
+
+    def test_a_work_with_no_mat_yet_is_refused_the_same_way(self, prep, service, settings):
+        """The path that already worked, kept honest: both routes now give the
+        same named refusal rather than two different exceptions."""
+        work = self._corrupt(service, settings)
+
+        with pytest.raises(ServiceError, match="could not be read"):
+            prep.prepare(work.id)

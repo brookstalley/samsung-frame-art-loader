@@ -75,15 +75,15 @@ DEFAULT_ACQUISITION_USER_AGENT: Final[str] = (
     "samsung-frame-art-loader (+https://github.com/brookstalley/samsung-frame-art-loader)"
 )
 
-#: The largest tiled image to assemble, per side. Carried forward from the 2024
-#: pipeline, which ran the wall at this ceiling for two years — a 4K canvas needs
-#: far less, and the headroom is what lets a future panel or a crop use the same
-#: master rather than re-acquiring it.
 #: The binary that walks a tile grid. A name rather than a path: it is resolved
 #: off `PATH` at call time, which is why `deploy/` has to give the units a `PATH`
 #: that contains it.
 DEFAULT_TILE_BINARY: Final[str] = "dezoomify-rs"
 
+#: The largest tiled image to assemble, per side. Carried forward from the 2024
+#: pipeline, which ran the wall at this ceiling for two years — a 4K canvas needs
+#: far less, and the headroom is what lets a future panel or a crop use the same
+#: master rather than re-acquiring it.
 DEFAULT_TILE_MAX_PIXELS: Final[int] = 8192
 
 #: How long one tiled fetch may run before it is abandoned. Generous because it

@@ -194,6 +194,11 @@ def _regenerate(services: Services, arguments: Mapping[str, Any]) -> dict[str, A
         # answering a question this call did not ask.
         fit=None if result.fit is None else result.fit.value,
         rendered_long_edge_inches=result.rendered_long_edge_inches,
+        # **Reported even though this action is usually free.** A work that has
+        # never had a mat gets one chosen here, and that is a paid call — so a
+        # field present only on the paying path would be indistinguishable from
+        # one the caller forgot to look at. Always present, usually "0".
+        cost_usd=str(result.cost_usd),
         notice=_regenerate_notice(result),
     )
 
@@ -207,13 +212,24 @@ def _regenerate_notice(result: PreparationResult) -> str | None:
     with no mention of it would let a work quietly appear as a postage stamp in
     an enormous mat, which is the gap the floor exists to close.
     """
+    notices = []
+    if result.mat_fallback_detail is not None:
+        # A first preparation chooses a mat, and that choice can fall back. Said
+        # here as well as on `set_mat_color` because this is the action that
+        # actually makes it happen for most works — `acquire` does not prepare,
+        # so the mat a work ends up wearing is usually the one chosen on the
+        # `regenerate` that follows.
+        notices.append(
+            f"This work had no mat, so one was chosen for it — but not by the vision model, because "
+            f"{result.mat_fallback_detail}. It was derived from the artwork's own dominant colour and darkened."
+        )
     if result.fit is DisplayFit.BELOW_FLOOR and result.rendered_long_edge_inches is not None:
-        return (
+        notices.append(
             f"This work renders at about {result.rendered_long_edge_inches:.1f} inches on the wall, below the "
             "configured floor, so it will appear small in a wide mat. It is on the wall regardless; "
             "art_review's re-search finds a larger scan if one exists."
         )
-    return None
+    return " ".join(notices) or None
 
 
 def _acquisition_notice(result: AcquisitionResult) -> str | None:

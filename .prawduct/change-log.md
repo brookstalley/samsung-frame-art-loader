@@ -48,9 +48,79 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-03: Preparation — a mat that says who chose it, and a bar the corpus states
+
+<!-- prawduct: chunks=18B | status=shipped | scope=v1-build -->
+
+**Why:** an acquired work was bytes on disk with no way to reach a wall. It now
+gets a mat colour with recorded provenance and a 4K canvas composed against the
+configured panel, and enters the manifest.
+
+**The fallback is the point, not the model.** The 2024 pipeline substituted a
+darkened dominant colour whenever the vision model failed and recorded nothing, so
+a considered colour and a mechanical one were indistinguishable in the data
+forever after. Every path through the new engine sets `MatColor.method`, and the
+tool's own notice says out loud when the model did not choose. That matters more
+than it sounds: an unenforced schema makes an unusable answer an ordinary Tuesday,
+and probing produced empty content, content truncated mid-string, and a hex
+triplet with no leading `#`.
+
+**The compositor draws the box the config already computes**, recovering the
+margins from it rather than recomputing them from inches and a weight. A second
+derivation is the only way the canvas and the readiness verdict could disagree
+about where the mat ends — by the pixel or two that rounding order moves, which no
+test would have caught and no surface would have reported.
+
+**Decisions settled at build:**
+
+- **The vision model is `qwen/qwen3.7-flash`**, on the operator's stated
+  criterion — cheapest that does the job, with evals deferred. Thirty-one probe
+  calls over real corpus images: it answered every one usably where no other
+  candidate did, and both cheaper models proposed a near-white mat over a Rothko
+  and a Mondrian, which is the one failure that glares on an emissive panel.
+- **`MAT_MAX_OUTPUT_TOKENS` is a correctness value.** A reservation that does not
+  clear a model's *reasoning* budget returns empty content billed in full. It
+  reads as a model failure and is a client misconfiguration, so the diagnostic
+  names the setting rather than blaming the provider. Raised to 8,000 when a
+  corpus run hit the ceiling intermittently at 2,000.
+- **The corpus is `all.json`.** Chunk 06 deferred extracting the 41 colours to
+  `tests/fixtures/mat_corpus.json`; this is the decision not to. A copy is a
+  second place they live, free to drift silently from the one the seed reads.
+- **The colour arithmetic is first-party.** 2024 reached CIE LAB through OpenCV,
+  NumPy and scikit-image — three packages on a memory-capped Pi to do thirty
+  lines. CIEDE2000 rather than Euclidean CIE76, because mats cluster in the dark
+  low-chroma corner where the two disagree most, and the number is read by a
+  person deciding whether an engine regressed. Verified against the published
+  Sharma reference set.
+
+**Found and fixed, from 18A:** `art_catalogue` declared `openWorldHint=false`
+while `retry_acquisition` was already fetching arbitrary museum URLs — understated
+to every client that reads the hint. The contract test that should have caught it
+asserted the old *set of tools* rather than the property, so it passed. It now
+names both sides. The generalisable shape: **an annotation is per tool, so adding
+an action can falsify a flag the tool has carried correctly for months**, and
+nothing in the new action's own review would look at that flag.
+
+**Also found by its own guard:** `PreparationSettings` takes the panel and the
+artwork box as two fields, and a mismatched pair yields a negative mat that pastes
+the artwork off the canvas — written, recorded, carried into the manifest, first
+visible on the wall. The guard added for it caught the mismatch in this repo's own
+test on its first run.
+
+**Not settled, and enqueued rather than assumed:** the acceptance criterion's
+other half is "the operator's corpus look finds no regression", which is
+explicitly subjective. A full run is done — 33 of 41 works compared, median
+CIEDE2000 9.8, the engine's median lightness 20.8 against the corpus's 20.7, one
+work over the darkness bar — and `tools/mat_corpus.py` regenerates the sheet.
+
+1552 curation + 52 root green, plus five live checks against the real API behind
+`-m live_api`. Twenty mutations over the new branches, all caught; the single
+survivor was a floor a zero-factor test could not reach, because `0.0 × L*` is
+already zero.
+
 ## 2026-08-03: Acquisition, and a probe that rewrote the fetch path before it was written
 
-<!-- prawduct: chunks=18A | scope=v1-build -->
+<!-- prawduct: chunks=18A | status=shipped | scope=v1-build -->
 
 **Chunk 18 was split into 18A and 18B** at the operator's call, at the seam the
 data model already draws: everything in 18A produces an `Original`, everything in

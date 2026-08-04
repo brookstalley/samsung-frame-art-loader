@@ -23,7 +23,6 @@ exercisable without a database or a network.
 import base64
 import json
 import logging
-from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
 from io import BytesIO
@@ -35,7 +34,7 @@ from PIL import Image, ImageOps
 from curation.acquisition.color import ColorError, format_hex, parse_hex, rgb_to_lab, scale_lightness
 from curation.discovery.openrouter import Completion, ImageAttachment, OpenRouterClient, OpenRouterError
 from curation.persistence.records import MatMethod
-from curation.services.errors import ServiceError
+from curation.services.imaging import reading
 
 log = logging.getLogger(__name__)
 
@@ -156,7 +155,7 @@ class MatEngine:
         """
         if self._client is None:
             return self._fallback(image_path, detail="no OpenRouter key is configured, so no vision model was asked")
-        attachment = _reading(image_path, lambda: self._encode(image_path))
+        attachment = reading(image_path, lambda: self._encode(image_path))
 
         try:
             completion = self._client.complete(prompt=MAT_PROMPT, schema=MAT_SCHEMA, image=attachment)
@@ -199,7 +198,7 @@ class MatEngine:
         return ImageAttachment(base64_data=base64.b64encode(buffer.getvalue()).decode("ascii"), media_type="image/jpeg")
 
     def _fallback(self, image_path: Path, *, detail: str, cost_usd: Decimal = Decimal(0)) -> MatChoice:
-        rgb = _reading(image_path, lambda: dominant_color(image_path))
+        rgb = reading(image_path, lambda: dominant_color(image_path))
         darkened = scale_lightness(rgb, _FALLBACK_LIGHTNESS)
         lab = rgb_to_lab(darkened)
         log.info("mat for %s fell back to the dominant colour: %s", image_path.name, detail)
@@ -217,38 +216,6 @@ class MatEngine:
             cost_usd=cost_usd,
             fallback_detail=detail,
         )
-
-
-def _reading[T](image_path: Path, read: Callable[[], T]) -> T:
-    """Run a read of `image_path`, turning any decode failure into one refusal.
-
-    **The one image failure the fallback cannot absorb, in the one place that
-    says so.** Both producers read the same file: bytes that will not decode for
-    the model will not quantise for a dominant colour either, and will not compose
-    onto a canvas afterwards. So this raises where the rest of the module falls
-    back — a fallback here would raise the identical exception a few lines later,
-    from a site whose message names the dominant colour and sends whoever reads it
-    somewhere unrelated.
-
-    Broad on purpose, for the reason the acquisition service's `measure()` is: the
-    imaging seam raises what Pillow raises, and that is deliberately not one
-    family — `UnidentifiedImageError` and a truncated file give `OSError`, a
-    `La`-mode image gives `ValueError`, and an image engineered to exhaust memory
-    gives `DecompressionBombError`, straight from `Exception`. These bytes came
-    from a URL discovery found, which the security model treats as
-    attacker-influenceable, so the one an attacker *chooses* is the one a narrower
-    catch would let escape untranslated.
-    """
-    try:
-        return read()
-    except Exception as exc:  # prawduct:allow prawduct/broad-except -- attacker-influenced bytes, translated not swallowed
-        # Logged with its type and traceback before it becomes a ServiceError, so
-        # a `TypeError` from a future edit above does not read in the journal as a
-        # museum having served bad bytes.
-        log.warning("reading %s to choose a mat raised %s", image_path.name, type(exc).__name__, exc_info=True)
-        raise ServiceError(
-            f"The image at {image_path.name} could not be read, so no mat can be chosen for it and it cannot be rendered: {exc}"
-        ) from exc
 
 
 def dominant_color(image_path: Path) -> tuple[int, int, int]:

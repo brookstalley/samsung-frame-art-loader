@@ -565,6 +565,14 @@ not by the sweep that followed the decision.
 
 ## Data and cache contract
 
+**`tile-cache/` is on neither side of this contract** *(classified 2026-08-03,
+when acquisition was built)*. It is transient working space holding the tiles of
+a **partial** download so a retry can resume, and it is removed per source as
+soon as that work holds a complete image. Transporting it would carry the debris
+of an interrupted fetch to another machine. `api-cache/`, which the 2024
+`config.py` names, has no producer at all: the curation plane asks museums over
+HTTP and caches nothing on disk.
+
 **Narrowed 2026-08-03, when acquisition was actually built.** The upstream list
 had named `raw/`, `tile-cache/` and `api-cache/`, and only the first belongs.
 
@@ -584,6 +592,17 @@ working space, which is neither transported nor regenerated because it is only
 ever meaningful mid-operation.
 
 ## A test that SPELLS a path the code DERIVES is disarmed by the next rename
+
+The failure has two halves and the second is what makes it dangerous. A fixture
+that writes its seed to a path the code *computes* — a staged name, a cache key,
+a derived filename — stops reaching the code the moment that computation changes.
+The rename itself looks correct in review, and the suite stays green, because a
+test whose setup no longer lands anywhere the code reads simply exercises the
+empty case and passes.
+
+So after a rename the question is not "do the tests still pass" but "does
+anything still *reach* what they claim to guard". A green suite answers the first
+and is silent on the second.
 
 **Found 2026-08-03, by a Critic round reviewing the fix from the round before it.**
 
