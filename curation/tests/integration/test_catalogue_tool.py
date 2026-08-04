@@ -100,7 +100,15 @@ async def test_help_works_without_arguments_and_without_the_catalogue(server_url
     payload, errored = await call(server_url, "art_catalogue", action="help")
 
     assert errored is False
-    assert {action["action"] for action in payload["actions"]} == {"list", "get", "help"}
+    assert {action["action"] for action in payload["actions"]} == {
+        "list",
+        "get",
+        "sources",
+        "archive",
+        "restore",
+        "retry_acquisition",
+        "help",
+    }
 
 
 async def test_help_reports_exactly_the_actions_a_tool_actually_serves(server_url):
@@ -138,7 +146,15 @@ async def test_an_unknown_action_is_an_error_result_that_enumerates_the_valid_se
     assert errored is True
     assert payload["success"] is False
     assert payload["error"] == "Unknown action: 'lst'"
-    assert payload["valid_actions"] == ["list", "get", "help"]
+    assert payload["valid_actions"] == [
+        "list",
+        "get",
+        "sources",
+        "archive",
+        "restore",
+        "retry_acquisition",
+        "help",
+    ]
     assert payload["example"] == "art_catalogue(action='help')"
     assert payload["hint"].startswith("Use art_catalogue(action='help')")
 

@@ -66,3 +66,29 @@ def encode_downscaled(source: Path, *, max_edge: int, quality: int) -> EncodedFr
         frame.save(buffer, format=_FORMAT, quality=quality, optimize=True)
         width, height = frame.size
     return EncodedFrame(data=buffer.getvalue(), width=width, height=height)
+
+
+def measure(source: Path) -> tuple[int, int]:
+    """The size an image would display at, without decoding it.
+
+    Reads the header rather than the pixels, so asking a gigapixel master how
+    large it is costs no memory — which matters because acquisition asks this of
+    every image it writes, on the smallest machine in the deployment.
+
+    **EXIF orientation is applied**, so a portrait photograph stored as a rotated
+    landscape reports portrait dimensions. The catalogue's width and height feed
+    the display-fit verdict and the mat geometry, both of which are judgements
+    about the picture as a viewer sees it; reporting the stored orientation would
+    make a work that renders tall get judged as though it were wide.
+
+    Raises whatever Pillow raises for a file that is not a readable image, on the
+    same terms as `encode_downscaled` above.
+    """
+    with Image.open(source) as image:
+        width, height = image.size
+        # `exif_transpose` would decode; the orientation tag alone answers the
+        # question, and values 5 through 8 are the four that transpose the axes.
+        orientation = image.getexif().get(0x0112)
+        if orientation in (5, 6, 7, 8):
+            width, height = height, width
+    return width, height

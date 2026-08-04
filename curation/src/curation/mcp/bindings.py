@@ -18,16 +18,17 @@ to read, HTTP responses for a UI to render, and forcing one shape on both is
 what the shared service layer exists to avoid.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Final
 
+from curation.acquisition.service import AcquisitionOutcome, AcquisitionResult
 from curation.manifest.builder import ManifestBuild
 from curation.mcp.envelope import ImageBlock, ok, with_images
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
 from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, RunKind, RunStatus
-from curation.persistence.records import Artist, Artwork, Directive, Theme
+from curation.persistence.records import Artist, Artwork, Directive, Source, Theme
 from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing
 from curation.services.container import Services
 from curation.services.discovery import VerdictOutcome
@@ -63,6 +64,81 @@ def _list_artworks(services: Services, arguments: Mapping[str, Any]) -> dict[str
 
 def _get_artwork(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
     return ok(artwork=_full(services.catalogue.get_artwork(arguments["artwork_id"])))
+
+
+def _list_sources(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    artwork_id = arguments["artwork_id"]
+    sources = services.catalogue.list_sources(artwork_id)
+    return ok(
+        artwork_id=artwork_id,
+        sources=[_source_fields(source) for source in sources],
+        count=len(sources),
+        notice=_sources_notice(sources),
+    )
+
+
+def _archive_artwork(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    artwork = services.catalogue.archive_artwork(arguments["artwork_id"])
+    return ok(
+        artwork=_artwork_fields(artwork),
+        notice="It is out of every theme's rotation until action='restore' brings it back. Nothing is deleted.",
+    )
+
+
+def _restore_artwork(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    artwork = services.catalogue.restore_artwork(arguments["artwork_id"])
+    return ok(
+        artwork=_artwork_fields(artwork),
+        notice="It is eligible for the wall again; a theme holding it will carry it at the next manifest build.",
+    )
+
+
+def _retry_acquisition(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    result = services.acquisition.acquire(
+        arguments["artwork_id"],
+        source_id=arguments.get("source_id"),
+    )
+    return ok(
+        artwork_id=result.artwork_id,
+        source_id=result.source_id,
+        outcome=result.outcome.value,
+        detail=result.detail,
+        relative_path=result.relative_path,
+        byte_size=result.byte_size,
+        width=result.width,
+        height=result.height,
+        notice=_acquisition_notice(result),
+    )
+
+
+def _acquisition_notice(result: AcquisitionResult) -> str | None:
+    """What the outcome means for the work, when the outcome alone understates it."""
+    if result.outcome is AcquisitionOutcome.PARTIAL:
+        # Said out loud because `partial` reads like a failure and is not one:
+        # the work is on the wall, with gaps, and asking again may close them.
+        return (
+            "The image is usable and the work holds it, but some tiles never arrived, so it has gaps. "
+            "Retrying re-uses the tiles already fetched, so a second attempt is cheap and may complete it."
+        )
+    if result.outcome is AcquisitionOutcome.FAILED:
+        return (
+            "The work holds whatever image it had before; a failed fetch replaces nothing. "
+            "art_catalogue(action='sources') shows the other sources this work has, if any."
+        )
+    return None
+
+
+def _sources_notice(sources: Sequence[Source]) -> str | None:
+    if not sources:
+        # A catalogued work with no source cannot be re-acquired at all, which is
+        # worth saying rather than leaving an empty list to be read as "none yet".
+        return "This work records no source, so there is nothing to re-acquire it from."
+    if not any(source.is_primary for source in sources):
+        return (
+            "No source is marked primary, so nothing records which one produced the held image. "
+            "action='retry_acquisition' needs source_id until one has succeeded."
+        )
+    return None
 
 
 def _list_themes(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -447,6 +523,10 @@ BINDINGS: Final[Mapping[tuple[str, str], Binding]] = {
     ("art_review", "reject_image"): _reject_image,
     ("art_catalogue", "list"): _list_artworks,
     ("art_catalogue", "get"): _get_artwork,
+    ("art_catalogue", "sources"): _list_sources,
+    ("art_catalogue", "archive"): _archive_artwork,
+    ("art_catalogue", "restore"): _restore_artwork,
+    ("art_catalogue", "retry_acquisition"): _retry_acquisition,
     ("art_theme", "list"): _list_themes,
     ("art_theme", "get"): _get_theme,
     ("art_theme", "create"): _create_theme,
@@ -531,6 +611,27 @@ def _full(entry: ArtworkDetail) -> dict[str, Any]:
     return {
         **_artwork_fields(entry.artwork),
         "artist": None if entry.artist is None else _artist_fields(entry.artist),
+    }
+
+
+def _source_fields(source: Source) -> dict[str, Any]:
+    """A source as the surface reports it.
+
+    The same fields `GET /api/works/{id}` returns, off the same service read, so
+    the two surfaces cannot describe a work's provenance differently.
+    """
+    return {
+        "source_id": source.id,
+        "url": source.url,
+        "provider": source.provider,
+        "source_class": str(source.source_class),
+        "acquisition_method": str(source.acquisition_method),
+        "rights_status": str(source.rights_status),
+        "is_primary": source.is_primary,
+        "confidence": source.confidence,
+        "selection_rationale": source.selection_rationale,
+        "last_fetch_status": None if source.last_fetch_status is None else str(source.last_fetch_status),
+        "last_fetched_at": _moment(source.last_fetched_at),
     }
 
 

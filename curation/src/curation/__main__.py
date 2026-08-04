@@ -5,6 +5,8 @@ import logging
 import uvicorn
 
 from curation import logs
+from curation.acquisition.service import AcquisitionSettings
+from curation.acquisition.transport import http_stream
 from curation.app import create_app
 from curation.config import Settings
 from curation.discovery.artic import build_image_search
@@ -167,6 +169,21 @@ def main() -> None:
             previews=(
                 None if image_search is None else PreviewSettings(art_root=settings.art_root, directory=settings.previews_path)
             ),
+            acquisition=AcquisitionSettings(
+                art_root=settings.art_root,
+                originals_path=settings.originals_path,
+                tile_cache_path=settings.tile_cache_path,
+                user_agent=settings.acquisition_user_agent,
+                tile_binary=settings.tile_binary,
+                tile_max_pixels=settings.tile_max_pixels,
+                tile_timeout_seconds=settings.tile_timeout_seconds,
+                max_image_bytes=settings.max_image_bytes,
+                min_free_bytes=settings.min_free_bytes,
+            ),
+            # The one place a live transport is wired. Everything below the seam
+            # takes it as an argument, so this line is what separates a process
+            # that can fetch from a suite that cannot.
+            open_stream=http_stream(settings.acquisition_user_agent),
         )
         # The catalogue file outlives any single version of this code, so rules
         # added since it was written are brought to it here rather than assumed

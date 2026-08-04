@@ -8,6 +8,11 @@ renderer that reads the text back out, which is what the 2024 code did and is wh
 each renderer had to remember to.
 """
 
+import json
+import re
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
 import pytest
 
 from curation.services.errors import ServiceError
@@ -113,3 +118,44 @@ def test_a_path_that_climbs_out_of_the_art_root_is_refused(value):
 def test_an_empty_path_is_refused_by_the_name_of_the_field():
     with pytest.raises(ServiceError, match="preview_path cannot be empty"):
         relative_path("  ", field="preview_path")
+
+
+# -- constraint 10 against the population that actually reaches it --------------
+
+
+def _parses_as_xml(markup: str) -> None:
+    """Pango parses description text as XML, so this is its bar, applied locally.
+
+    The assertions above check individual rewrites; this checks the property that
+    makes them worth having. A description that survives every rule and still
+    fails to parse is a rendering failure on a panel nobody is watching, which is
+    the outcome the constraint exists to prevent.
+    """
+    ET.fromstring(f"<root>{markup}</root>")
+
+
+def _corpus_descriptions() -> list[str]:
+    """Every description the seeded catalogue was built from.
+
+    The 41 works in `all.json` are the real input to this function in this
+    deployment — museum prose with paragraph markup, entities and the occasional
+    stray tag — so they are a population worth asserting against rather than only
+    the cases someone thought to write down.
+    """
+    payload = json.loads(Path(__file__).resolve().parents[3].joinpath("all.json").read_text())
+    return [entry["metadata"]["description"] for entry in payload["art"] if entry.get("metadata", {}).get("description")]
+
+
+def test_the_corpus_carries_markup_this_function_has_to_remove():
+    """Guards the test below from passing because it found nothing to check."""
+    raw = _corpus_descriptions()
+    assert raw, "the corpus carries no descriptions"
+    assert any("<p>" in text for text in raw)
+
+
+def test_every_corpus_description_normalises_to_the_constraint():
+    for text in _corpus_descriptions():
+        normalised = description_markup(text)
+        assert normalised is not None
+        assert set(re.findall(r"</?([a-zA-Z][a-zA-Z0-9]*)", normalised)) <= {"i", "b"}
+        _parses_as_xml(normalised)

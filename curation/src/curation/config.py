@@ -41,6 +41,66 @@ THUMBNAILS_DIRNAME: Final[str] = "thumbs"
 #: held work's thumbnails.
 PREVIEWS_DIRNAME: Final[str] = "previews"
 
+#: Where acquired master images are written under `ART_ROOT`. Upstream and
+#: expensive: this is the half of the tree rsync carries and nothing regenerates,
+#: so it is never confused with the derived directories beside it.
+ORIGINALS_DIRNAME: Final[str] = "raw"
+
+#: Where a tiled fetch stores tiles as it walks the grid. **Working space, not
+#: storage**: it exists so a fetch that came back partial can be retried without
+#: re-downloading what already arrived, and it is reclaimed per work as soon as
+#: that work holds a complete image. Retained after a partial fetch, which is the
+#: one case the tiles are worth what they cost.
+TILE_CACHE_DIRNAME: Final[str] = "tile-cache"
+
+#: How the loader names itself to the sites it fetches from.
+#:
+#: **Truthful by default, which is a change from the 2024 pipeline.** That code
+#: sent a hardcoded Chrome-on-Windows string — a claim to be software it is not,
+#: made to servers whose operators use it to decide how to treat traffic. The
+#: same reasoning already governs `ARTIC_USER_AGENT`, whose absence switches
+#: phase 2 off rather than let this product misrepresent whoever runs it: a
+#: default is acceptable here only because this one misrepresents nobody.
+#: Deployments that want a contact address in it should set their own.
+DEFAULT_ACQUISITION_USER_AGENT: Final[str] = (
+    "samsung-frame-art-loader (+https://github.com/brookstalley/samsung-frame-art-loader)"
+)
+
+#: The largest tiled image to assemble, per side. Carried forward from the 2024
+#: pipeline, which ran the wall at this ceiling for two years — a 4K canvas needs
+#: far less, and the headroom is what lets a future panel or a crop use the same
+#: master rather than re-acquiring it.
+#: The binary that walks a tile grid. A name rather than a path: it is resolved
+#: off `PATH` at call time, which is why `deploy/` has to give the units a `PATH`
+#: that contains it.
+DEFAULT_TILE_BINARY: Final[str] = "dezoomify-rs"
+
+DEFAULT_TILE_MAX_PIXELS: Final[int] = 8192
+
+#: How long one tiled fetch may run before it is abandoned. Generous because it
+#: bounds a walk over hundreds of tiles against a throttled museum server, and the
+#: throttle is deliberate — the alternative to waiting is hammering an institution
+#: that asked us not to. It exists at all because the binary prompts interactively
+#: in more than one situation, and a service with no ceiling would wait forever.
+DEFAULT_TILE_TIMEOUT_SECONDS: Final[int] = 1800
+
+#: The largest single image a `direct_http` source may serve. Enforced while
+#: streaming rather than trusted from a header, because the ceiling exists to
+#: protect the disk and a header is the source's claim about itself.
+DEFAULT_MAX_IMAGE_BYTES: Final[int] = 512 * 1024 * 1024
+
+#: Free space that must remain after an acquisition, below which one is refused.
+#:
+#: **This guards the catalogue, not the fetch.** `catalogue.sqlite` sits on the
+#: same device as the image tree, and a full disk during a write is the classic
+#: SQLite corruption story on the consumer flash `operational-spec.md` § Risks
+#: names as the top operational risk — so the floor is sized to leave the
+#: irreplaceable asset room to work, not to predict how large any one work is.
+#: Two gigabytes is comfortably more than the largest single work in flight
+#: (tiles plus assembled master) and small enough not to refuse work on a card
+#: with ordinary headroom.
+DEFAULT_MIN_FREE_BYTES: Final[int] = 2 * 1024 * 1024 * 1024
+
 DEFAULT_HOST: Final[str] = "127.0.0.1"
 DEFAULT_PORT: Final[int] = 8770
 
@@ -220,6 +280,14 @@ class Settings:
     mat_width_inches: float
     mat_bottom_weight: float
     resolution_floor_inches: float
+    #: What acquisition may fetch, how, and what it refuses to risk. The free
+    #: space floor is the one that is not about images at all — see its default.
+    acquisition_user_agent: str
+    tile_binary: str
+    tile_max_pixels: int
+    tile_timeout_seconds: int
+    max_image_bytes: int
+    min_free_bytes: int
     #: What discovery is allowed to do, and what a provider charges for doing it.
     #: Prices move — one recorded model price drifted 28% in twelve days — and the
     #: allowances are policy a household sets, so none of these may be a literal
@@ -287,6 +355,22 @@ class Settings:
         television state, the class this catalogue exists to keep out.
         """
         return self.art_root / THUMBNAILS_DIRNAME
+
+    @property
+    def originals_path(self) -> Path:
+        """Where acquired master images live.
+
+        Upstream rather than derived: nothing regenerates these, so this is the
+        directory a backup would have to carry if the image tree were backed up
+        at all — and the recorded decision is that it is not, because
+        re-acquisition refills it from the catalogue.
+        """
+        return self.art_root / ORIGINALS_DIRNAME
+
+    @property
+    def tile_cache_path(self) -> Path:
+        """Working space for tiled fetches, reclaimed per work as each completes."""
+        return self.art_root / TILE_CACHE_DIRNAME
 
     @property
     def previews_path(self) -> Path:
@@ -370,6 +454,19 @@ class Settings:
             mat_width_inches=_positive_float("MAT_WIDTH_INCHES", DEFAULT_MAT_WIDTH_INCHES),
             mat_bottom_weight=_positive_float("MAT_BOTTOM_WEIGHT", DEFAULT_MAT_BOTTOM_WEIGHT),
             resolution_floor_inches=_positive_float("RESOLUTION_FLOOR_INCHES", DEFAULT_RESOLUTION_FLOOR_INCHES),
+            acquisition_user_agent=os.environ.get("ACQUISITION_USER_AGENT") or DEFAULT_ACQUISITION_USER_AGENT,
+            # Resolved off `PATH` by name, and configurable because it is the one
+            # dependency this plane does not install: a deployment that built it
+            # from source or keeps it outside `PATH` sets the path here rather
+            # than editing a module.
+            tile_binary=os.environ.get("DEZOOMIFY_PATH") or DEFAULT_TILE_BINARY,
+            tile_max_pixels=_positive_int("TILE_MAX_PIXELS", DEFAULT_TILE_MAX_PIXELS),
+            tile_timeout_seconds=_positive_int("TILE_TIMEOUT_SECONDS", DEFAULT_TILE_TIMEOUT_SECONDS),
+            max_image_bytes=_positive_int("MAX_IMAGE_BYTES", DEFAULT_MAX_IMAGE_BYTES),
+            # Positive rather than counted: a floor of zero is not a cautious
+            # deployment's choice, it is the guard switched off — and the thing it
+            # guards is the one file in this product that cannot be re-derived.
+            min_free_bytes=_positive_int("MIN_FREE_BYTES", DEFAULT_MIN_FREE_BYTES),
             # Zero is allowed throughout rather than refused: a threshold of zero
             # gates every run, and an allowance of zero forbids searching. Both
             # are coherent settings for a cautious deployment, and refusing them

@@ -49,6 +49,21 @@ _OFFSET = Param(
     minimum=0,
 )
 
+#: One description for `artwork_id`, because every action's parameters flatten
+#: onto a single wire schema and only the first description survives.
+_ARTWORK_ID = Param(
+    name="artwork_id",
+    type="string",
+    description="The work's catalogue id, as returned by action='list'.",
+    required=True,
+)
+
+_SOURCE_ID = Param(
+    name="source_id",
+    type="string",
+    description="Which source to fetch from, as returned by action='sources'. Omit to use the work's primary source.",
+)
+
 ART_CATALOGUE: Final = ToolRecord(
     name="art_catalogue",
     title="Art catalogue",
@@ -71,15 +86,47 @@ ART_CATALOGUE: Final = ToolRecord(
             name="get",
             description="Return one work in full, with its artist resolved.",
             example="art_catalogue(action='get', artwork_id='<an artwork_id from action=list>')",
-            params=(
-                Param(
-                    name="artwork_id",
-                    type="string",
-                    description="The work's catalogue id, as returned by action='list'.",
-                    required=True,
-                ),
-            ),
+            params=(_ARTWORK_ID,),
             tips=("Ids are stable internal identities, never source URLs, so they survive a museum reorganising its site.",),
+        ),
+        Action(
+            name="sources",
+            description="List where a work can be obtained from, with rights, primacy and the last fetch's outcome.",
+            example="art_catalogue(action='sources', artwork_id='<an artwork_id from action=list>')",
+            params=(_ARTWORK_ID,),
+            tips=(
+                "The primary source is the one that produced the image the work holds.",
+                "rights_status is provenance, not permission: it gates nothing and is recorded as the source stated it.",
+                "last_fetch_status='partial_tiles' is a normal outcome, not an error — the image exists and has gaps.",
+            ),
+        ),
+        Action(
+            name="archive",
+            description="Take a work out of circulation, keeping its record, its sources and its mat history.",
+            example="art_catalogue(action='archive', artwork_id='<an artwork_id from action=list>')",
+            params=(_ARTWORK_ID,),
+            tips=(
+                "Nothing is deleted and action='restore' reverses it exactly.",
+                "A standing pin naming the work is withdrawn, because the wall could never carry it out.",
+            ),
+        ),
+        Action(
+            name="restore",
+            description="Return an archived work to circulation.",
+            example="art_catalogue(action='restore', artwork_id='<an artwork_id from action=list, status=archived>')",
+            params=(_ARTWORK_ID,),
+            tips=("Renditions made before it was archived are checked against the held image and regenerated if stale.",),
+        ),
+        Action(
+            name="retry_acquisition",
+            description="Fetch the work's master image again from one of its sources.",
+            example="art_catalogue(action='retry_acquisition', artwork_id='<an artwork_id from action=list>')",
+            params=(_ARTWORK_ID, _SOURCE_ID),
+            tips=(
+                "Use it after a failed or partial fetch; action='sources' shows which, and what went wrong last time.",
+                "Omitting source_id uses the work's primary source.",
+                "A failed attempt replaces nothing — the work keeps whatever image it already held.",
+            ),
         ),
     ),
 )
