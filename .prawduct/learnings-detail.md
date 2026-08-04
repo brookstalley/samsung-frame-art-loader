@@ -582,3 +582,41 @@ The general shape is worth keeping: a directory named in a contract is not
 evidence that anything creates it, and "upstream vs derived" has a third case —
 working space, which is neither transported nor regenerated because it is only
 ever meaningful mid-operation.
+
+## A test that SPELLS a path the code DERIVES is disarmed by the next rename
+
+**Found 2026-08-03, by a Critic round reviewing the fix from the round before it.**
+
+A wrapper staged its fetches at `<name>.partial`. That turned out to be
+deployment-fatal — the binary picks its output encoder from the file extension —
+so the staging expression changed to `<stem>.partial<suffix>`. One test seeded
+debris at the staged path to prove a stale file gets cleared before a retry, and
+it spelled that path by hand: `work.jpg.partial`.
+
+After the rename the code staged at `work.partial.jpg`. The seeded debris now sat
+somewhere nothing looked. The test's fake refused to overwrite only if its output
+already existed; it no longer did, so the fake never refused, the run succeeded,
+and **the test passed identically with the clearing branch deleted outright** —
+which its own comment said had to be impossible.
+
+Nothing flagged it. The rename touched no test file, so no diff review had reason
+to look; the suite was green; and a mutation sweep run *before* the rename had
+found the branch defended, because it was.
+
+**The fix that generalises is not "update the string".** The test now performs one
+ordinary run and takes the staged path off the result, then seeds debris there. It
+cannot be disarmed by a rename, because it never claims to know the name. The name
+itself is pinned by a separate, single-purpose assertion — which is the right split:
+one test owns the naming rule, and the other owns the clearing branch and merely
+needs *a* staged path.
+
+**Where to apply it.** Any fixture that seeds, deletes or asserts on a path the
+production code computes. Derived filenames, cache keys, staging suffixes, temp
+names. If the test and the code both spell the same rule, they are two copies of
+it, and the copy in the test is the one nothing enforces.
+
+**The tell at review time**: a test comment that says "this would pass if X were
+removed" beside a fixture built from a literal the code also builds. That comment
+is a claim about coverage, and a hand-written path is exactly what makes it stop
+being true without anyone noticing.
+

@@ -862,6 +862,14 @@ starting with hoisting the art root into configuration as a single `ART_ROOT`
 (it was hardcoded to `/home/tvpi/art`, correctly outside the repo, but only
 implicitly).
 
+## A test that SPELLS a path the code DERIVES is disarmed by the next rename
+
+When a fixture seeds a file at a path the code computes — a staged name, a cache
+key, a derived filename — **learn the path from an observed run instead of writing
+it out**, because a rename leaves the fixture pointing at a path nothing touches
+and the test stays green while the branch it guards goes undefended. Full account
+in `learnings-detail.md`.
+
 ## Known problems in the existing index
 
 `all.json` conflates three separate concerns in one record, which the planned
