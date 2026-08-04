@@ -162,3 +162,48 @@ def test_a_held_work_still_resolves_confidently_end_to_end(engine):
     assert judged[0].confidence == CONFIDENT
     assert judged[0].below_floor is False
     assert HELD[0] in judged[0].rationale
+
+
+#: The object endpoint the fetch path resolves through, and a work whose page URL
+#: shape matches what the 2024 index recorded on 32 seeded sources.
+GOLDEN_BIRD_PAGE = "https://www.artic.edu/artworks/91194/golden-bird"
+GOLDEN_BIRD_API = "https://api.artic.edu/api/v1/artworks/91194"
+
+
+def test_the_object_endpoint_still_answers_with_an_image_id(museum):
+    """Acquisition cannot fetch an artic work without this call succeeding.
+
+    It is a *different* endpoint from the search every other test here uses —
+    `/artworks/{id}` rather than `/artworks/search` — and the fetch path depends
+    on it entirely. Nothing else in the suite would notice it moving.
+    """
+    target = museum.tile_url(GOLDEN_BIRD_API)
+
+    assert target.startswith("https://www.artic.edu/iiif/2/")
+    # An image_id after the base, not a bare base with nothing on the end.
+    assert len(target.rsplit("/", 1)[1]) > 8
+
+
+def test_both_recorded_url_shapes_still_resolve_to_the_same_image_service(museum):
+    """The seeded corpus carries page URLs; discovery records api_links.
+
+    Both are real shapes held in this product's catalogue right now, and a change
+    to the museum's URL scheme that broke either would strand a third of the
+    works with no signal until someone tried to fetch one.
+    """
+    assert museum.tile_url(GOLDEN_BIRD_PAGE) == museum.tile_url(GOLDEN_BIRD_API)
+
+
+def test_the_resolved_image_service_is_really_a_iiif_endpoint(museum):
+    """Proves the resolution lands somewhere dezoomify can read, not merely
+    somewhere well-formed. `info.json` under the base is the contract the tile
+    fetcher relies on, and it is checked against the live service rather than
+    assumed from the URL's shape."""
+    import httpx
+
+    target = museum.tile_url(GOLDEN_BIRD_API)
+
+    response = httpx.get(f"{target}/info.json", timeout=20.0, follow_redirects=True)
+    response.raise_for_status()
+    payload = response.json()
+    assert int(payload["width"]) > 0 and int(payload["height"]) > 0

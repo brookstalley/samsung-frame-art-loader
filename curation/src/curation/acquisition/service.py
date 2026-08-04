@@ -191,6 +191,22 @@ class AcquisitionService:
             # reads it to the museum to look for a problem that is in the wiring.
             try:
                 url = check_fetchable(resolve_tile_target(source, resolvers=self._tile_targets), resolve=self._resolve)
+                if url != source.url:
+                    # Logged because the fetch that follows is against an address
+                    # no record holds: without this line a failed tile fetch
+                    # cannot be attributed to a bad resolution versus a museum
+                    # that went away, and the recorded failure names only the URL
+                    # the source carries — which was never the one fetched.
+                    log.info(
+                        "resolved a source's image service before fetching",
+                        extra={
+                            "event": "acquisition.tile_target_resolved",
+                            "provider": source.provider,
+                            "source_id": source.id,
+                            "recorded_url": source.url,
+                            "tile_url": url,
+                        },
+                    )
             except ImageSearchFailure as exc:
                 # The provider *was* asked and could not answer — unreachable, or
                 # holding no image of this object. That is about this source and

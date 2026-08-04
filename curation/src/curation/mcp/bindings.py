@@ -26,6 +26,7 @@ from curation.acquisition.dezoomify import DezoomifyUnavailable
 from curation.acquisition.preparation import PreparationResult
 from curation.acquisition.service import AcquisitionOutcome, AcquisitionResult
 from curation.acquisition.space import NotEnoughSpace
+from curation.acquisition.tiles import TileTargetUnavailable
 from curation.manifest.builder import ManifestBuild
 from curation.mcp.envelope import ImageBlock, ok, with_images
 from curation.mcp.registry import HELP_ACTION, RegistryError
@@ -105,11 +106,16 @@ def _retry_acquisition(services: Services, arguments: Mapping[str, Any]) -> dict
             source_id=arguments.get("source_id"),
         )
     except NotEnoughSpace as exc:
-        # Translated rather than allowed to reach the generic handler. These two
-        # are the conditions acquisition deliberately raises for instead of
+        # Translated rather than allowed to reach the generic handler. These are
+        # the conditions acquisition deliberately raises for instead of
         # recording, because no source is at fault — and a caller told only that
         # the call "failed unexpectedly" would go looking at the museum. Each
         # carries the remedy that actually fixes it.
+        #
+        # **Every raise-rather-record condition needs a clause here.** Adding one
+        # to the service without one here is silent: the generic handler drops
+        # the exception text, so the deliberate refusal arrives as the very
+        # "failed unexpectedly" these clauses exist to prevent.
         raise ServiceError(
             f"Acquisition did not start: {exc} Free space on the art tree's disk, or lower MIN_FREE_BYTES "
             "if this deployment means to run closer to full."
@@ -119,6 +125,13 @@ def _retry_acquisition(services: Services, arguments: Mapping[str, Any]) -> dict
             f"Acquisition did not start: {exc} This is a deployment problem rather than a bad source — "
             "install dezoomify-rs, or set DEZOOMIFY_PATH to where it lives. Every source using "
             "acquisition_method='dezoomify' is affected, and no source is at fault."
+        ) from exc
+    except TileTargetUnavailable as exc:
+        raise ServiceError(
+            f"Acquisition did not start: {exc} Set ARTIC_USER_AGENT in .env to a string naming this "
+            "deployment and a contact address — the museum's API is open, but it asks callers to identify "
+            "themselves, and an object's image service can only be reached by asking. Every source from "
+            "that provider is affected, and no source is at fault."
         ) from exc
     return ok(
         artwork_id=result.artwork_id,

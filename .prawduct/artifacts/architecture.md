@@ -226,8 +226,15 @@ is no network between planes.
   ```
 
   **`AcquisitionService` is the one service that leaves the machine to do its
-  job**, and its two foreign edges are injected rather than reached for: an HTTP
-  stream opener and a name resolver. That is the same arrangement `DiscoveryEngine`
+  job**, and its three foreign edges are injected rather than reached for: an HTTP
+  stream opener, a name resolver, and — added 2026-08-04 — a per-provider tile-target
+  resolver, which is the one that reaches a *museum* rather than a network
+  primitive. It exists because the URL a `Source` records identifies the object
+  and is not always where the pixels are served; only the provider can close that
+  gap, and storing its answer would put a derived URL in a durable row. It is a
+  required constructor argument with no default, because an empty map is
+  indistinguishable from correct wiring until a museum source fails. That is the same
+  arrangement `DiscoveryEngine`
   and `ImageSearch` have one row up, for the same reason — the rules worth testing
   exhaustively (which source is used, what a refusal is recorded as, whether a
   host may be fetched at all) then run with no network. The subprocess is not

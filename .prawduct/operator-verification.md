@@ -106,6 +106,15 @@ with the below-floor work pictured and marked `is_on_offer: false`.
 
 ### The loader unit starts clean with its declared `EnvironmentFile=` — added 2026-08-02
 
+> **Blocked as written, 2026-08-04.** The Pi was rebuilt onto a fresh card: there
+> is no `tvpi` user and no `/home/tvpi/...` tree, so every path below names
+> something that does not exist, and the checkout is three merges behind `main`.
+> **This item cannot be performed until the Chunk 13 cutover creates the account
+> and installs the new units**, at which point the unit under test is a different
+> file and this item should be rewritten rather than run. Left here rather than
+> deleted because the *question* — does the un-prefixed `EnvironmentFile=` start
+> clean on the real machine — is still owed.
+
 **Not visual — this needs the Pi, and it is quick.** The unit now declares
 `EnvironmentFile=/home/tvpi/source/samsung-frame-art-loader/.env` un-prefixed and
 sets `StartLimitIntervalSec=0` / `RestartSec=10`. Everything about that was
@@ -155,6 +164,12 @@ On the Pi, with the set awake:
 pip install -r requirements.txt          # the new pins
 python tv_api_check.py --image "$ART_ROOT/ready/<a 4K composite>.jpg"
 ```
+
+> **`ready/` is empty on the rebuilt card and the 2024 composites are gone with
+> the old one** (2026-08-04), so there is no 4K composite to point this at. Any
+> real JPEG the set will accept proves the same thing — this checks what the
+> *television* does with an upload, not what the renderer produced. Use a
+> bench file, or run it after the first work is prepared.
 
 It uploads one image, watches which callback the set emits, removes that image
 and confirms the removal — touching nothing else on the wall — and exits non-zero
