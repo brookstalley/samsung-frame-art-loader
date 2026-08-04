@@ -702,3 +702,62 @@ One question at fix time closes most of it — not at review time, where it is t
 reviewer's job anyway: **what does this change now cover that it did not before,
 and which of those did I mean?** A wrapper covers everything inside it. A claim
 in a tool tip covers every branch that returns that payload.
+
+## A comment that justifies code by naming a constraint is a CLAIM — check the constraint before inheriting the workaround, because a false reason usually sits on top of wrong behaviour
+
+**Two instances in one review round, and the second is why this is a rule rather
+than an anecdote.**
+
+Three `curation.config` imports sat at function scope in `services/container.py`,
+explained as "config reads this package to compose its settings objects, so a
+top-level import would close the loop". Walking config's module-scope import graph
+takes about ten lines and shows no loop: it reaches `manifest.builder`,
+`manifest.heartbeat`, `services.display_fit` and `services.runner`, and none of
+those reaches `container`. The workaround was inherited by everyone who read it,
+and it hid a container→config edge from anything reading the import graph.
+
+The costlier one had the same shape. A comment on the refused-promotion branch of
+`AcquisitionService._record_success` said omitting `record_fetch` avoided
+overwriting "the fact the next comparison reads". The next comparison reads
+`Original.fetch_status`; `record_fetch` writes only the `Source` row and cannot
+affect the guard at all. **The wrong reason was not a documentation slip — it was
+load-bearing.** The behaviour it justified was also wrong: skipping the write left
+`sources` reporting a fetch date older than the retry the curator had just been
+told to make, on the very outcome whose notice sends them to that read. Correcting
+the comment meant correcting the code.
+
+That is the asymmetry worth carrying. A comment that merely describes can be
+stale harmlessly. A comment that *justifies* is the record of a decision, so when
+its premise is false the decision was made on that false premise — and the code is
+suspect, not just the sentence. Distinct from [[a-guards-comment-names-what-it-excludes-not-what-it-silently-breaks]],
+which is about what a true comment leaves out; this is about the comment that is
+not true.
+
+## A decision that DESCOPES something has to be walked back through every artifact that promised it — the promising artifacts are never the one you are editing when you make the call
+
+**Chunk 18B was explicitly delegated the call on whether to extract the 41
+hand-tuned mat colours into `tests/fixtures/mat_corpus.json`, and decided not to.**
+The decision reached the code — a test docstring — and the chunk's own change-log
+entry, and stopped there. Three artifacts kept promising the opposite for a day:
+`nonfunctional-requirements.md` said `all.json` must survive only "before the
+regression fixture is extracted", Chunk 06 still carried the fixture as a
+deliverable and as an acceptance criterion that could never come true, and the
+backlog item asking for the extraction was still open and still `stage:ready`.
+
+**The mechanism is positional, which is what makes it recur.** You make a descope
+decision while editing the thing you decided *not* to build — a test, a module, the
+chunk you are in. Every artifact that promised the thing is somewhere else by
+construction: an earlier chunk's entry, a requirements section written months
+before, a backlog item filed by someone else. Nothing you are looking at while
+deciding contains the promise, so nothing prompts the sweep.
+
+The residue is worse than an ordinary stale doc. A landed chunk asserting an
+acceptance criterion that can never come true reads to an auditor as a missed
+deliverable, and an open backlog item instructs the next person to build the thing
+the product decided against — with the reasoning nowhere they will look.
+
+The check is one grep on the *thing's name* at the moment of deciding, not later:
+every artifact naming it, plus the backlog. Sibling of
+[[when-a-behaviour-is-retired-grep-the-sentences-that-justified-it-not-just-the-code]],
+which covers retiring a behaviour that exists; this covers retiring one that never
+will.

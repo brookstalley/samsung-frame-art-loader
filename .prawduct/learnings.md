@@ -890,3 +890,7 @@ Also unreconciled: **41 artworks in `all.json` but 46 files in `raw/`**, and
 filenames encode identity in at least three mutually inconsistent conventions
 (`Surname, Forename; Title; Year`, `Forename Surname - Title`, and at least one
 `Title - Forename Surname` with the fields reversed).
+
+## A comment that justifies code by naming a constraint is a CLAIM — check the constraint before inheriting the workaround, because a false reason usually sits on top of wrong behaviour
+
+## A decision that DESCOPES something has to be walked back through every artifact that promised it — the promising artifacts are never the one you are editing when you make the call
