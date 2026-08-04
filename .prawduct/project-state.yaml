@@ -1622,6 +1622,30 @@ technical_decisions:
         - "Strictly LAN with no remote access — simpler still, but no access while away."
       date: 2026-07-19
   operational:
+    - decision: "The service account for both systemd units is `tvpi`; ART_ROOT's path is deliberately left open until the cutover."
+      rationale: >
+        Decided 2026-08-04 by the operator. The name was the only part in
+        question and it is kept: it is what the committed unit, deploy/README.md
+        and this product's history already say, so renaming would have bought
+        nothing but a diff across all of them.
+
+        The account does not exist on the machine. The Pi was rebuilt onto a
+        fresh card and `tvpi` did not survive it — only `brooks` (uid 1000, sudo,
+        already in spi and gpio). It is created as part of the systemd-unit
+        cutover rather than before it, because the account, its group
+        memberships, moving ART_ROOT under it and both unit files are one change:
+        any landing alone leaves a machine that is neither the old arrangement
+        nor the new one.
+
+        ART_ROOT's path is NOT settled by this decision and that is deliberate.
+        The committed unit puts the art tree at /home/tvpi/art, inside a home
+        directory a no-login account has no other use for; a neutral path is the
+        shape to prefer at cutover. Deciding it costs nothing today because every
+        reader of that path is already configuration.
+
+        Full shape — no login, no sudo, groups spi and gpio, owning ART_ROOT and
+        the checkout — in operational-spec.md § The Service Account.
+
     - decision: "uv is the dependency manager for both planes, structured as two SIBLING uv projects (AMENDED 2026-07-20: not a uv workspace)."
       rationale: >
         Decided 2026-07-20 by the operator. Recorded here after Critic review found
@@ -1942,6 +1966,24 @@ design_decisions:
     length. The 2024 implementation hardcodes "Sans 18" for a panel geometry that
     is no longer the target, so this needs re-deriving for the 1448x1072 panel
     rather than carrying forward.
+
+    MEASURED ON THE PANEL 2026-08-04, and the headline is that the 16 levels are
+    not the default. omni-epd brings this driver up in 1-bit `bw`, and the obvious
+    sanity check cannot detect it because `max_colors` reports 16 in BOTH modes —
+    only reading `mode` is honest. Every legibility claim above assumes 16 levels,
+    so the driver has to set the mode explicitly and assert on `mode`. The 2024
+    code shows what the trap catches: display.py:41 passes greyscale_bits=1 to an
+    ArtLabel that never uses it, so the wall has been rendering 1-bit type into a
+    1-bit panel with nothing reporting it. Also measured: full-frame draw 1.5-1.9s
+    against the 15s budget (~10x headroom), display() returns None in both modes
+    so exceptions are the only failure signal, and no partial refresh exists on
+    this driver's surface at all — every label change is a full frame.
+
+    Type sizing is still NOT settled. The operator's look narrowed it to roughly
+    mid-20s through low-40s px and killed "Sans 18", but that ladder was rendered
+    with PIL/DejaVu and the product renders with Pango — different rasterizer,
+    different metrics, so the numbers do not transfer. Full measurements in
+    platform-and-dependency-findings.md § The e-paper panel.
 
     The TV surface has no accessibility affordances by deliberate design — it is
     artwork on a wall, and adding overlays would violate the product's core
