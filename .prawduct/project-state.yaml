@@ -2185,6 +2185,24 @@ design_decisions:
 #   priority: high | medium | low
 
 open_questions:
+  - question: "Where does ART_ROOT live on the Pi once the `tvpi` service account exists?"
+    context: >
+      Raised 2026-08-04, deliberately left open when the service-account NAME was
+      decided (see technical_decisions.operational). The committed unit puts the
+      art tree at /home/tvpi/art, inside a home directory that a no-login,
+      no-sudo account has no other use for. A neutral path — /srv/art or
+      /var/lib/samsung-art — matches what the account actually is.
+
+      Deciding it costs nothing today because every reader of that path is
+      already configuration: ART_ROOT in the root .env, which is where the norm
+      against deployment values in source put it. Deciding it LATE costs nothing
+      either, as long as it is decided at the cutover rather than defaulted into
+      by whoever writes the unit file.
+    decide_by: >
+      Chunk 13, with the systemd units. The account, its group memberships, the
+      ART_ROOT move and both unit files are one coherent change; this question is
+      the part of it that is still a choice.
+
   # RESOLVED 2026-08-04 by the operator: option (a) — the health panel does NOT
   # surface `limit_remaining`, in any form. Chunk 19's health-panel half is
   # unblocked and builds without it.

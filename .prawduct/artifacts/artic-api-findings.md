@@ -139,6 +139,39 @@ Two consequences, and they are the ones the data model already has fields for:
   larger comes back downscaled and anything smaller comes back upscaled, so the
   tile width is not a tuning knob — it is 843.
 
+## The object endpoint, which the fetch path depends on entirely
+
+**Measured 2026-08-04.** Everything above concerns `/artworks/search`. Acquisition
+uses a *different* endpoint, and no finding here covered it until a defect showed
+that nothing did.
+
+`GET https://api.artic.edu/api/v1/artworks/{id}?fields=id,image_id` returns
+`data` as a **single object, not a list**, and carries the same `config.iiif_url`
+the search envelope does. Joining `config.iiif_url` to `data.image_id` gives a
+IIIF base that `dezoomify-rs` reads; `info.json` under it answers with real
+`width`/`height`.
+
+**Why this endpoint is reached at all:** a `Source` records the object's page or
+API link, and neither is something the tile fetcher can read — all eleven of its
+dezoomers decline both (`dezoomify-cli-findings.md`). The `image_id` needed to
+build a usable URL is not persisted anywhere in the catalogue, so it is asked for
+at fetch time. Both recorded URL shapes carry the object id in the same path
+segment, so both resolve identically:
+
+| Recorded on a Source | Where it comes from |
+|---|---|
+| `www.artic.edu/artworks/91194/golden-bird` | the 2024 index, seeded onto 32 sources |
+| `api.artic.edu/api/v1/artworks/91194` | `api_link`, what discovery records today |
+
+**`data.image_id` can be absent or null on a real record** — the museum holds the
+object and publishes no picture of it. That is distinct from a failed lookup, and
+the fetch path reports it as such rather than composing a base with nothing after
+it.
+
+Guarded by `live_museum` tests in
+`curation/tests/live/test_artic_shapes_are_still_real.py`, including one that
+fetches `info.json` under the resolved base rather than trusting the URL's shape.
+
 ## Failure and edge shapes
 
 **A missing artwork** returns HTTP 404 with:

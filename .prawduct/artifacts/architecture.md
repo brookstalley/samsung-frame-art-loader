@@ -211,9 +211,12 @@ is no network between planes.
   Service ──── PreviewSweep                   │          reclaims the previews of decided works;
         │       │              │              │          the plane's second background thread
         │       │   AcquisitionService        │          fetches the master a work was accepted for.
-        │       │    ├─ StreamOpener (seam)   │          the only service that runs a subprocess; its
-        │       │    └─ Resolver   (seam)     │          transport and its resolver are both injected,
-        │       │              │              │          so the policy above them runs offline
+        │       │    ├─ StreamOpener (seam)   │          the only service that runs a subprocess; all
+        │       │    ├─ Resolver   (seam)     │          three edges are injected, so the policy above
+        │       │    └─ TileTarget  (seam)    │          them runs offline. TileTarget is the odd one:
+        │       │              │              │          it reaches a MUSEUM, not a network primitive,
+        │       │              │              │          because only the provider knows where an
+        │       │              │              │          object's tiles are actually served
         │       │   PreparationService        │          turns a held original into a mat and a 4K
         │       │    └─ MatEngine  (seam)     │          canvas. Its seam is the SECOND paid edge —
         │       │              │              │          a vision model, keyless deployments fall
@@ -325,6 +328,16 @@ is no network between planes.
   protocol rather than a change to anything that consumes it. The same parsing
   test that guards the paid seam covers this one, as an allowlist over the whole
   package rather than a list of named files.
+
+  **It grew a fetch-path member on 2026-08-04, and that is a real widening worth
+  naming.** `tile_url` answers "where are this object's tiles actually served",
+  which acquisition asks and phase 2 never does — so the protocol now spans two
+  callers with different concerns. It went here anyway because the alternative is
+  worse: a second protocol over the same museum client, implemented by the same
+  class, wired from the same configuration, would be two names for one seam. The
+  cost is that `AcquisitionService` now depends on a discovery-package protocol,
+  which is the direction `acquisition/mat.py` already established. If a third
+  concern arrives, split it then — with two callers the seam is still honest.
 
   **What is deliberately *not* behind it: the judgement.** A provider reports
   what its collection holds; whether any of it is the work that was asked for is

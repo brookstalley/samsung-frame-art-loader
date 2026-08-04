@@ -910,6 +910,47 @@ class TestResolvingTheTileTargetBeforeFetching:
         assert "https://www.artic.edu/iiif/2/c8024369" in given
         assert "https://api.artic.edu/api/v1/artworks/91194" not in given
 
+    def test_the_resolution_is_journalled_with_both_urls(self, service, acq_settings, tmp_path, caplog):
+        """A failed tile fetch is otherwise unattributable.
+
+        The recorded failure names the URL the source carries, which is never the
+        one fetched — so without this record there is no way to tell a bad
+        resolution from a museum that went away.
+        """
+        import logging
+        from dataclasses import replace
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, _ = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, _ = self._artic_work(service)
+
+        with caplog.at_level(logging.INFO):
+            _acquisition(
+                service,
+                replace(acq_settings, tile_binary=binary),
+                _serves(b""),
+                tile_targets={"artic": lambda _: "https://www.artic.edu/iiif/2/c8024369"},
+            ).acquire(work.id)
+
+        resolved = [r for r in caplog.records if r.__dict__.get("event") == "acquisition.tile_target_resolved"]
+        assert len(resolved) == 1
+        assert resolved[0].__dict__["recorded_url"] == "https://api.artic.edu/api/v1/artworks/91194"
+        assert resolved[0].__dict__["tile_url"] == "https://www.artic.edu/iiif/2/c8024369"
+
+    def test_a_provider_that_needed_no_resolution_is_not_journalled_as_resolved(self, service, acq_settings, tmp_path, caplog):
+        """Pass-through is not a resolution, and a record saying so would be noise."""
+        import logging
+        from dataclasses import replace
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, _ = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, _ = _work_with_source(service, method=AcquisitionMethod.DEZOOMIFY, url="https://www.artic.edu/iiif/2/abc/info.json")
+
+        with caplog.at_level(logging.INFO):
+            _acquisition(service, replace(acq_settings, tile_binary=binary), _serves(b""), tile_targets={}).acquire(work.id)
+
+        assert not [r for r in caplog.records if r.__dict__.get("event") == "acquisition.tile_target_resolved"]
+
     def test_the_recorded_url_is_left_alone_for_provenance(self, service, acq_settings, tmp_path):
         """Resolution is for this fetch; it must not rewrite what the source says."""
         from dataclasses import replace

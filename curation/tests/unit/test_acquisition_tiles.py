@@ -89,3 +89,73 @@ class TestResolvingATileTarget:
     def test_google_arts_culture_is_deliberately_not_declared(self):
         """Its pages are fetchable, so requiring a resolver would break what works."""
         assert "google_arts_culture" not in RESOLUTION_REQUIRED
+
+
+class TestTheContainerWiresResolutionFromTheConfiguredProvider:
+    """The wiring itself, which is where a provider-keyed map can silently miss.
+
+    `resolve_tile_target` looks the resolver up by `source.provider`; the container
+    keys the map by `image_search.provider`. Both halves can be individually
+    correct while the join is broken, and nothing below this level would notice —
+    every museum fetch would simply refuse. So this drives a real container rather
+    than re-deriving the expression it evaluates.
+    """
+
+    def _container(self, store, discovery_store, wall, thumbnail_settings, settings, engine, image_search):
+        from curation.services.container import Services
+        from curation.services.previews import PreviewSettings
+
+        return Services.bind(
+            catalogue=store,
+            discovery=discovery_store,
+            wall=wall,
+            thumbnails=thumbnail_settings,
+            artwork_box=settings.tv_artwork_box,
+            engine=engine,
+            discovery_settings=settings.discovery_settings,
+            image_search=image_search,
+            # Phase 2's two halves are wired together or not at all.
+            previews=(
+                None if image_search is None else PreviewSettings(art_root=settings.art_root, directory=settings.previews_path)
+            ),
+            # Deliberately NOT passing tile_targets: the default derivation is
+            # what is under test, and passing one would test the override.
+        )
+
+    def _artic_work(self, services):
+        work = services.catalogue.add_artwork(title="Golden Bird")
+        services.catalogue.add_source(
+            artwork_id=work.id,
+            url="https://api.artic.edu/api/v1/artworks/91194",
+            provider="artic",
+            source_class=SourceClass.INSTITUTIONAL,
+            acquisition_method=AcquisitionMethod.DEZOOMIFY,
+            rights_status=RightsStatus.PUBLIC_DOMAIN,
+            is_primary=True,
+        )
+        return work
+
+    def test_a_configured_provider_is_consulted_on_a_real_acquisition(
+        self, store, discovery_store, wall, thumbnail_settings, settings, engine
+    ):
+        from fakes import FakeImageSearch
+
+        museum = FakeImageSearch()
+        services = self._container(store, discovery_store, wall, thumbnail_settings, settings, engine, museum)
+        work = self._artic_work(services)
+
+        # The fetch itself fails — there is no real binary or museum here — but
+        # what matters is that resolution was reached and asked the provider.
+        services.acquisition.acquire(work.id)
+
+        assert museum.resolved == ["https://api.artic.edu/api/v1/artworks/91194"]
+
+    def test_with_no_provider_configured_an_artic_fetch_refuses_rather_than_passing_it_on(
+        self, store, discovery_store, wall, thumbnail_settings, settings, engine
+    ):
+        """The keyless deployment, which is what every seeded install starts as."""
+        services = self._container(store, discovery_store, wall, thumbnail_settings, settings, engine, None)
+        work = self._artic_work(services)
+
+        with pytest.raises(TileTargetUnavailable):
+            services.acquisition.acquire(work.id)
