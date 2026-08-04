@@ -61,13 +61,17 @@ attached. The spine is deliberately evidence-first for exactly this reason.
 - `work_dedup_key` derivation and the discovery search-engine default are **unknowns
   with scheduled spikes** (Chunk 15), not assumptions — nothing downstream of them is
   designed until they resolve.
-- **One operator decision is pending and gates deployment paths:** issue #13
-  (SD-card mitigation — USB/SSD storage vs SSD boot). Five minutes, needed before
-  Chunk 03 bakes paths into deployment config.
+- ~~**One operator decision is pending and gates deployment paths:** issue #13
+  (SD-card mitigation — USB/SSD storage vs SSD boot).~~ **Taken 2026-08-04 and issue
+  #13 is closed:** the card stays, so no deployment path moved and nothing
+  downstream was waiting on it. The residual risk transferred to the backup path
+  rather than closing.
 
-**What would raise confidence:** Chunks 04, 05, and 15 — the two hardware/build
-verifications and the two spikes. Each is cheap, early, and converts an assumption
-into a recorded fact.
+**What would raise confidence:** ~~Chunks 04, 05, and~~ Chunk 15 — the spikes.
+*(04 and 05 ran on 2026-08-04 and are `[x]`; both assumptions are now recorded
+facts, and the hardware pass turned up two the plan had not anticipated — see
+their entries.)* Each is cheap, early, and converts an assumption into a recorded
+fact.
 
 ## Status
 
@@ -763,7 +767,11 @@ architecture-proving slice is Chunk 07.
   4K upload timed by path and a confirmed delete were all measured; the numbers and
   the protocol trace live in `platform-and-dependency-findings.md` § The
   television, which is where a builder will look for them, and are not restated
-  here. Two results the chunk did not anticipate: **`upload()` reports failure on
+  here. Two results the chunk did not anticipate — and the first of them is **live on the
+  loader running the wall today**, not a future-plane concern: `tvart.py:140` calls
+  `upload()` with no `timeout`, and `tvart.py:253` re-selects every file lacking a
+  content id, so a mis-reported success becomes a duplicate on the next run. Issue
+  #73 carries both halves. **`upload()` reports failure on
   uploads that succeeded** (filed as issue #73 — the fix belongs with the binding
   that does not exist yet, not with the loader being retired), and **only
   `image_selected` of the three registered callbacks fires**, because the other two

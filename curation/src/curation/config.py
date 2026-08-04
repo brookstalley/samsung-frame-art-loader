@@ -134,7 +134,9 @@ DEFAULT_ROTATION_SHUFFLE: Final[bool] = True
 #: this directory is the only one under `ART_ROOT` that nothing else reclaims.
 DEFAULT_PREVIEW_SWEEP_INTERVAL_SECONDS: Final[int] = 3600
 
-#: The reference deployment is a 42" Frame at 4K, but nothing may hardcode a
+#: These defaults describe a 42" Frame at 4K. That is a REFERENCE, not this
+#: deployment — the operator's set is 50", and a stale diagonal produces a running
+#: system that quietly mis-sizes every judgement rather than failing. Nothing may hardcode a
 #: panel: the mat is specified in physical units and the resolution floor is a
 #: minimum size on the wall, so both are wrong on a different television. These
 #: are defaults for the reference panel, overridable per deployment.

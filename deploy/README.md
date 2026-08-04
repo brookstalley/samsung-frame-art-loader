@@ -153,10 +153,11 @@ The commit the wall actually ran is recorded in `pi-freeze-2024.txt`:
 that line explicitly. *(Checked 2026-08-04: a fresh resolve does land on `9f13613`
 — but only because that commit still **is** the repository's master, unchanged
 since 2023. Nothing pins it, so the day upstream moves, a rebuild silently takes
-whatever master became. The build itself is verified on 3.13/aarch64.)* It is documented rather than pinned here because pinning a
-transitive git URL alongside the parent's own unpinned declaration is exactly the
-kind of resolver behaviour that should be verified on the hardware before it is
-committed, and the panel is not on the bench. Pinning or vendoring it is a
+whatever master became. The build itself is verified on 3.13/aarch64.)* It was documented rather than pinned
+because pinning a transitive git URL alongside the parent's own unpinned
+declaration is resolver behaviour that wanted verifying on hardware first. **That
+verification has now happened**, so the reason for waiting is spent and the choice
+is open. Pinning or vendoring it is a
 recorded decision still owed — see `project-state.yaml` →
 `technical_decisions.operational`.
 

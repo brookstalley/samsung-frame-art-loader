@@ -242,7 +242,9 @@ the operator maintains — rather than to unblock this product.
 
 This collides directly with
 [platform-and-dependency-findings.md](platform-and-dependency-findings.md), which
-chose **Python 3.13 with a 3.12 fallback** for the Pi and explicitly rejected 3.14:
+chose **Python 3.13** for the Pi and explicitly rejected 3.14 *(the 3.12 fallback
+that used to be named here was discharged 2026-08-04 — the build succeeded on 3.13,
+so 3.12 is a floor rather than a landing site)*:
 IT8951 compiles Cython from `.pyx` sources at install time and was last touched
 2023-11, and aarch64 wheels for opencv/scikit-image may lag.
 

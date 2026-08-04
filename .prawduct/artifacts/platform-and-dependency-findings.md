@@ -29,8 +29,10 @@ upstream repositories on 2026-07-19 — it is not recalled from the original wor
 > on 2026-07-20, and the source-built Cython concern applies to the e-paper driver,
 > which lives on the display plane and is exactly why that plane stays on 3.13.
 >
-> Everything else here — the driver-stack bounds, the Cython reasoning, the
-> unverified-build warning — still stands and still governs the display plane.
+> Everything else here — the driver-stack bounds and the Cython reasoning — still
+> stands and still governs the display plane. **The unverified-build warning does
+> not: it was discharged on 2026-08-04** and is struck below, where the build is
+> recorded as done on 3.13/aarch64.
 
 **Decision (display plane): target Python 3.13.** ~~Fall back to 3.12 if the
 IT8951 build fails.~~ **The fallback contingency is discharged, 2026-08-04:** the
@@ -73,8 +75,8 @@ was ever real:**
   fail on it. No remediation was needed: no build-requires override, no vendoring,
   no re-pin.
 - **The interpreter risk was real and is now answered.** A current Cython does
-  emit 3.13-compatible C for those `.pyx` sources on aarch64. The fallback to 3.12
-  is not needed and can be retired.
+  emit 3.13-compatible C for those `.pyx` sources on aarch64. **The fallback to
+  3.12 is discharged** — struck at the decision line above; 3.12 stays a floor.
 
 **What actually blocks a rebuilt Pi is a system package nobody declared.**
 Without `python3-dev`, the install fails — but *not* in IT8951. It fails building
@@ -170,22 +172,45 @@ configuration and feeds every physical-size judgement the product makes.
 ### `upload()` reports failure on uploads that succeeded
 
 **This is the defect to design around, and it is worse than a plain failure
-because it lies in the safe-looking direction.** The library's `upload()` takes a
-`timeout` defaulting to **10 seconds**, and that budget covers the acknowledgement
-after the image data has already been transferred. A 2.0 MB 4K composite takes
-**8.39 s** — 84% of the default — so a larger file or a busier set exceeds it
-routinely.
+because it lies in the safe-looking direction: the image is on the television and
+the caller is told it is not.** A caller that retries on a falsy return duplicates
+images on the wall.
 
-When it does, **the image is on the television and the caller is told it is not.**
-The two argument forms fail differently and neither says anything legible:
+**What was measured, on the set, 2026-08-04:**
 
-| Argument | Failure mode |
+| Run | Result |
 |---|---|
-| `bytes` | returns `None` |
-| path (`str`) | raises a bare `AssertionError` from an `assert data` on the acknowledgement |
+| Default `timeout=10`, bytes argument | returned `None` — **and the image landed**: the work the set listed carried the exact `image_date` this request sent |
+| Default `timeout=10`, path argument | raised `AssertionError` out of `upload()` |
+| Explicit `timeout=60`, path argument | returned its content id, **8.39 s** wall-clock |
 
-Passing `timeout=60` explicitly, the identical upload returns its content id in
-8.39 s. **A caller that retries on a falsy return duplicates images on the wall.**
+> **Corrected 2026-08-04, and the correction matters to anyone fixing this.** An
+> earlier version of this section made three claims it could not support, all
+> since checked against the pinned source.
+>
+> **It attributed the two failures to the argument form.** `upload()` returns
+> `None` on a timed-out acknowledgement regardless of form — `wait_for_response`
+> then `return data["content_id"] if data else None`. The two runs above differ in
+> more than their argument and the form is not established as the cause.
+>
+> **It cited the raise as an `assert data` "on the acknowledgement" at line 434.**
+> That line is inside `get_thumbnail`. `upload()`'s only assertion guards the
+> `send_image` handshake, *before* any bytes move, and its acknowledgement path
+> does not assert at all. **The raise site is therefore not established** — the
+> plausible mechanism is a late reply desynchronising response correlation, so a
+> subsequent request asserts on a reply that is not its own, which is the failure
+> mode the deletion wrapper was already written against. One instrumented run
+> would settle it; until then this is a hypothesis, not a finding.
+>
+> **It reported the 8.39 s as "84% of the default" acknowledgement budget.** That
+> figure is wall-clock for the whole call — transfer *and* acknowledgement — which
+> `tv_api_check.check_upload` notes cannot be separated from outside the library.
+> The timeout governs only the acknowledgement, so the ratio was never computable
+> from what was measured.
+>
+> **None of this weakens the defect.** A default-window upload failed twice and a
+> wide-window upload succeeded, and a reported failure was observed to have landed.
+> What is retracted is the mechanism, not the behaviour.
 
 **The rule this establishes, which generalises beyond upload:** *this library's
 return values are not trustworthy in either direction — confirm against the

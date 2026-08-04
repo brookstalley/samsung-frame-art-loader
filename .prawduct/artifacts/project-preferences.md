@@ -63,7 +63,10 @@ Developer preferences for how code is written in this project. Captured during d
   provide. This is **adjacent to but distinct from** the existing "IT8951 build is
   unverified" risk in `platform-and-dependency-findings.md`, which is about the
   interpreter version rather than the build frontend; an earlier draft claimed it folded
-  into that risk, which overstated the coverage. **Tracked as issue #9.** A single
+  into that risk, which overstated the coverage. ~~**Tracked as issue #9.**~~ **Both
+  closed 2026-08-04, issue #9 with them** — the pinned commit does declare Cython in
+  build-requires so isolation was never at risk, and a current Cython emits
+  3.13-compatible C on aarch64. The real blocker was undeclared `python3-dev`. A single
   `target-version` still cannot describe both planes; that is settled by the workspace
   split, not by picking a number.
 
