@@ -772,8 +772,8 @@ architecture-proving slice is Chunk 07.
   `upload()` with no `timeout`, and `tvart.py:253` re-selects every file lacking a
   content id, so a mis-reported success becomes a duplicate on the next run. Issue
   #73 carries both halves. **`upload()` reports failure on
-  uploads that succeeded** (filed as issue #73 — the fix belongs with the binding
-  that does not exist yet, not with the loader being retired), and **only
+  uploads that succeeded** — measured at the default timeout, mechanism partly
+  retracted and separated in #73 from what was actually observed — and **only
   `image_selected` of the three registered callbacks fires**, because the other two
   are slideshow-advance events and rotation here is host-driven. Acceptance box
   "LS03A/B/C/D support confirmed" is met **only for LS03D** — the operator holds

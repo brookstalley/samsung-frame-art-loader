@@ -129,9 +129,10 @@ fails.
 
 **The television verification found a defect worse than the one it was looking
 for.** `upload()` returns falsy or raises a bare `AssertionError` on uploads that
-*succeeded* — its default `timeout=10` covers an acknowledgement that a 2.0 MB 4K
-composite takes 8.39 s to earn, so a larger file exceeds it routinely and the
-image is on the set while the caller is told it is not. A retry loop turns that
+*succeeded* — at the default `timeout=10`, observed twice, with the image on the
+set while the caller is told it is not. *(The mechanism this paragraph originally
+gave — a named raise site, an argument-form rule, and "8.39 s, 84% of the default"
+— is retracted; see the entry above. The behaviour is unchanged.)* A retry loop turns that
 into duplicates on the wall. Filed as issue #73. **This is live on the loader
 running the wall today** — `tvart.py:140` passes no `timeout` and `tvart.py:253`
 re-selects anything lacking a content id — so it is not deferred to a future plane,

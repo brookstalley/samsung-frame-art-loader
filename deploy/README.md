@@ -99,11 +99,15 @@ against the television.~~ **It was run against the television on 2026-08-04 and 
 checks pass** — construction, art-mode support, API version, a real 4K upload by
 path, a confirmed delete, and callback registration, against a 2024
 `QN50LS03DAFXZA` on firmware 1310. **One defect was found and is not fixed**
-(issue #73): `upload()`'s default `timeout=10` covers an acknowledgement that a
-2.0 MB composite takes 8.39 s to earn, so on a larger file it reports failure for
-an upload that *succeeded* — the bytes form returning `None`, the path form raising
-a bare `AssertionError`. Anything calling it must pass an explicit timeout and
-confirm against the set's own content list rather than trusting the return.
+(issue #73): at the default `timeout=10`, `upload()` **reports failure on uploads
+that succeeded** — observed twice, once returning `None` and once raising
+`AssertionError`, with the `None` run's image demonstrably on the set. At an
+explicit `timeout=60` the same upload returned its content id. Anything calling it
+must pass an explicit timeout **and** confirm against the set's own content list
+rather than trusting the return. *(The mechanism is deliberately not stated here:
+an earlier revision named a raise site and an argument-form rule that the library's
+source does not support, and both are retracted. Issue #73 separates what was
+measured from what was inferred.)*
 Findings in `.prawduct/artifacts/platform-and-dependency-findings.md` § The
 television. Run it yourself after any change to the pins or the set's firmware:
 
