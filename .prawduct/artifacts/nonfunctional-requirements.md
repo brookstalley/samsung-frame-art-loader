@@ -576,6 +576,38 @@ that the price gap it was chosen for has not closed. Both can decay — an index
 can rot, a per-request price can move — and a decision nobody re-runs quietly
 stops describing the world.
 
+### The Supply Horizon
+
+**Measured 2026-08-04. This is a fact about supply, not a policy about rights.**
+Intents whose works predate the public-domain boundary resolve; intents past it do
+not, and wiring more providers does not move it. The eight works from two real runs
+were put to four open-access providers — the Art Institute, the Met, Cleveland, and
+Wikidata/Commons — and each returned nothing for all eight. A per-intent sweep over
+the recorded phase-1 corpus put pre-boundary intents around two thirds and
+post-boundary intents at or near zero, with one mid-century American intent
+measuring 0 of 10. The partition is not *which collection is wired*; it is
+copyright. The measured break sat around 1929, and the boundary itself moves
+forward a year at a time, so it is the boundary that is the constant here and not
+the date.
+
+**This sits against a recorded decision, and the collision is recorded rather than
+quietly resolved.** `project-state.yaml` § integrations commits discovery to museum
+collections *and* the contemporary web — gallery sites, prize announcements, artist
+portfolios — with "museum/public-domain only" listed as its **explicitly rejected**
+alternative, on the reasoning that "recent award-winning art" cannot be satisfied
+from institutions alone. Only the museum half is wired. So the product today ships
+the alternative that decision rejected, and a curator asking for contemporary work
+gets a run that spends money and returns nothing.
+
+**No rights gate follows from this, and that is a decision rather than an
+oversight** (operator, 2026-08-04: *record rights, do not gate, do not filter*).
+Constraint 13 already holds rights to a quality weight and never an exclusion, and
+nothing measured here amends it — none of this is about whether a work may be
+shown. What is open, and is deliberately left open, is whether the contemporary-web
+half of that integrations decision gets built or gets retracted. Until one of those
+happens this section exists so the horizon is read rather than rediscovered, which
+so far has cost two runs.
+
 ## Output Quality
 
 <!-- Not a template section. Added because for this product visual output quality

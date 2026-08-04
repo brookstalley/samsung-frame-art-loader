@@ -129,7 +129,7 @@ to serve, elicited from the Product Brief's core flows:
 | Q9 | Who is the artist — name, nationality, dates — for the physical label? | 4 |
 | Q10 | Which image instances were found for this work, which one was selected, and on what basis? | 2, 3 |
 | Q11 | Has this **image** been rejected for a work the curator still wants, so the re-search does not return it? | 3 |
-| Q12 | Which proposed works could not be resolved to any credible image, and are therefore suspect? | 2 |
+| Q12 | Which proposed works could not be resolved to any credible image, and which kind of nothing was it? | 2 |
 
 **Q3 is the one most easily missed.** Without persisted rejections, every
 discovery run re-proposes the same works the curator has already declined, and
@@ -147,6 +147,13 @@ famous works will occasionally invent a plausible title. A work for which no
 credible instance can be found is evidence of exactly that, so the run must be able
 to say "these N could not be resolved" rather than quietly returning a shorter
 list — or, worse, attaching a confident near-match.
+
+**Q12 was widened on 2026-08-04, not amended.** It always asked *which* works could
+not be resolved, and it still does; what it now also answers is *which kind of
+nothing* each one was. The original phrasing called an unresolved work "therefore
+suspect", and that turns out to hold for only one of the four routes to
+`unresolved` — see `CandidateWork.unresolved_reason`. The question is unchanged;
+its answer got a second column, and a claim it carried was too broad.
 
 ## Entities
 
@@ -539,6 +546,7 @@ artworks.
 | `rationale` | text | required | Why the model matched this work to the intent. **Q5.** |
 | `work_dedup_key` | string | required, indexed | Normalised work identity for cross-run suppression. **Q3.** |
 | `resolution_status` | enum | required | `pending` \| `resolved` \| `unresolved`. Reflects the **latest** resolution attempt, whether that was the original phase 2 or a later re-search. `unresolved` ⇒ that attempt found no credible instance the curator has not already rejected. **Q12.** |
+| `unresolved_reason` | enum | nullable | Which kind of nothing: `not_held` \| `identity_refused` \| `size_unknown` \| `below_floor`. Set whenever `resolution_status = unresolved`, null otherwise. **Q12.** |
 | `verdict` | enum | required | `pending` \| `accepted` \| `rejected` \| `awaiting_better_image`. See State Machines. |
 | `rejected_reason` | text | nullable | Optional curator note. |
 | `decided_at` | datetime | nullable | |
@@ -551,9 +559,48 @@ artworks.
 > keep (**Q11**).
 >
 > **`resolution_status = unresolved` is a first-class outcome, not an absent row.**
-> Phase 2 failing to find any credible instance is the signal that phase 1 may have
-> invented the work. Dropping it from the batch discards that signal; attaching a
-> low-confidence near-match actively launders it.
+> Phase 2 failing to find any credible instance is one of the signals that phase 1
+> may have invented the work. Dropping it from the batch discards that signal;
+> attaching a low-confidence near-match actively launders it.
+>
+> **`unresolved` must say which kind of nothing, and the sentence above is why.**
+> A work reaches `unresolved` by four routes that are not interchangeable: nothing
+> came back whose title matched (`not_held`); a record matched the title and
+> disagreed on the artist (`identity_refused`); a matching record reported no
+> dimensions, so it could not be judged against the floor (`size_unknown`); every
+> matching record renders below the floor (`below_floor`). The first is a fact
+> about the collection, the second about two spellings of a name, the last two
+> about the record. **Only the first carries the invented-work signal** — the other
+> three are the collection saying "I have this, but not like that", which is nearly
+> the opposite. So the claim that `unresolved` means phase 1 may have invented the
+> work is narrowed here to `not_held`, and the docstrings asserting the broader
+> reading are amended with it.
+>
+> A curator reading a bare `unresolved` cannot tell those apart, and neither can
+> anyone diagnosing a run afterwards — which is how two runs that resolved nothing
+> on 2026-08-04 sat unexplained while both suites were green. The reason is
+> therefore **derived on the same write as the status, from the same instances**,
+> and reported on the wire beside it. It records decisions phase 2 already makes
+> and currently throws away; it is not a new judgement, and it is not asserted by
+> the caller.
+>
+> **Precedence is by how far the work got: the deepest gate any of its records
+> reached is what it reports.** A work is `not_held` only when *no* record matched
+> its title; a single title match takes that reading off the table however many
+> other records missed. Past that, deeper beats shallower — `below_floor` over
+> `size_unknown` over `identity_refused` — because the deepest gate is the most
+> informative thing that is true: "the collection holds this, too small for your
+> wall" is actionable, and "some record somewhere did not match" is not. Stated
+> here rather than left to the write site, because choosing one label where several
+> apply is a judgement, and an underived rule is how it silently becomes
+> whichever result the provider happened to return first.
+>
+> **Two values were considered and deliberately left out.** A `no_rights_clear_image`
+> is unreachable — rights are a quality weight and never a filter (constraint 13),
+> so nothing is refused for them. A `curator_rejected_all` is unreachable at this
+> write site for a different reason: rejecting every instance sets the *verdict* to
+> `awaiting_better_image`, not the resolution status. Adding either would be a
+> value nothing can produce, which reads to the next person as a route that exists.
 >
 > **Redefined 2026-07-20, deliberately and with the hazard named.** It previously
 > meant "phase 2 found no credible instance" — an outcome of the original run only.

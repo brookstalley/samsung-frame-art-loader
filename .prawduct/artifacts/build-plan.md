@@ -122,6 +122,8 @@ re-created the same silence one line further down.
 - [x] Chunk 17B: The verdict, the artist, and the preview's death
 - [x] Chunk 18A: Acquisition — the fetch paths, the guards, and a work's sources
 - [x] Chunk 18B: Preparation — the mat engine, the 4K render, and the corpus look
+- [ ] Chunk 21: Say which kind of nothing — `unresolved_reason`, and the artist fold (issue #78)
+- [ ] Chunk 22: Grounded alternatives — the collection's own answer when the gate refuses
 - [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
 - [x] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [x] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
@@ -2089,6 +2091,153 @@ binds already exists and is contract-tested.
 > alerting surface, but its scoped fields omit the TV, panel, and last-error
 > state that `observability-strategy.md`'s failure table maps failures onto.
 > Either the panel surfaces them or that table has no reader.
+
+### Chunk 21: Say which kind of nothing — `unresolved_reason`, and the artist fold
+
+- **Description:** Two runs on 2026-08-04 proposed works and resolved none of
+  them, and nothing in the product could say why — a green suite over a pipeline
+  returning nothing, because no rule anywhere says a run must resolve anything.
+  This chunk does not meaningfully raise the resolution rate (measured 4/51 →
+  5/51 on the real distribution); it makes the failure **diagnosable**, which is
+  what makes the chunk after it falsifiable. Three parts. **First, and before
+  anything else, own the RED live test** (issue #78): a nonsense query no longer
+  scores 0.0 at the Art Institute, so the zero-score pre-filter is dead code and
+  the identity gate is the only thing between a garbage query and *Nighthawks* —
+  which must be settled *before* the query change below, since that change widens
+  what reaches a gate that just lost its outer layer. **Second, `unresolved_reason`
+  on `CandidateWork`** — four values, derived on the same write as the status from
+  decisions phase 2 already makes and throws away, with the precedence rule
+  `data-model.md` now states. **Third, the artist fold**: the artist is folded into
+  the free-text query, where its tokens dominate scoring, and the measured cost is
+  that three different Frank Stella titles return a byte-identical top ten and
+  Ellsworth Kelly resolves 0 of 12 held works against 10 of 12 title-only. Issue
+  the title-only query; keep the artist for the gate, not the retrieval.
+- **The test that pins the fold is a decision, not a formality.**
+  `tests/unit/test_artic_client.py` asserts the current behaviour under a name
+  claiming the artist "narrows the query text" — which the live API refutes. Tests
+  are contracts here and the code gets fixed, never the test; this is the case that
+  rule exists to make hard. The reading to be ruled on is that a test pinning a
+  measured-false claim is a recorded measurement rather than a contract, so the
+  claim and the test move together. **Take that to `/prawduct:critic` rather than
+  deciding it inside the chunk.**
+- **Depends on:** Chunk 16A/16B (the phase-2 engine and its gates)
+- **Artifacts consumed:** `data-model.md` § CandidateWork (`unresolved_reason` and
+  its precedence rule), `product-brief.md` § Success Criteria (the resolution
+  floor), `api-contract.md` (the work row and its token budget),
+  `observability-strategy.md` (the two-way split that does not name a record which
+  was never retrieved), issue #78
+- **Visual change:** no — the reason reaches the wire and the review surfaces
+  render it, but no new page
+- **Deliverables:** the `unresolved_reason` column (additive and nullable, so the
+  durable store's widening step applies it on open with no written migration) and
+  its derivation threaded from the phase-2 engine through the runner to the write
+  site; the title-only artic query; the resolution-floor test that R2 records as
+  owed, naming its own figure; a re-measured `list_works` page, since the row gains
+  a field and the ceiling already ran 2% over; `observability-strategy.md`'s split
+  widened to name a record that was never retrieved — today it names two failure
+  modes behind `phase_two.not_the_work`, and the Stella case is a third it cannot
+  express, a record the query never retrieved at all
+- **The narrowed claim is swept by grep, not by memory.** `data-model.md` now
+  confines "unresolved means phase 1 may have invented the work" to `not_held`, and
+  the broad form is asserted at more sites than the two an initial read found —
+  service and persistence docstrings, the phase-2 engine, and three test docstrings
+  and comments that state it as the thing being tested. The sweep is
+  `grep -rn --include='*.md' --include='*.py' -e 'invented the work' -e 'may have
+  invented' -e 'therefore suspect' .`, run before the chunk is called done, with
+  `change-log.md`, `reflections.md` and `learnings*.md` excluded as the historical
+  record they are. Written as a command rather than a count because a count is
+  wrong the moment anyone adds a seventh
+- **Tests:** unit over the four reason routes and the precedence rule; **the
+  museum fake is reshaped first** — while its holdings are an exact dict lookup on
+  the query title that never reads the artist, it cannot express the defect and
+  every mutation below survives for the wrong reason; a model-vs-museum identity
+  corpus beside `phase_one_proposals.json`, which is phase-1-vs-phase-1 only
+- **Mutation sweep, and it is the acceptance evidence rather than a formality** —
+  a green suite is not evidence here, having been green throughout the two runs
+  that resolved nothing. At least: swap `identity_refused` for `not_held` in the
+  derivation (a survivor means nothing distinguishes "the museum does not have it"
+  from "it has it under another artist", which is the whole point of the column);
+  neuter the `size_unknown` guard; neuter the `below_floor` route; flip the
+  precedence comparison; revert the artic query to the artist fold (a survivor
+  means nothing in the suite measures retrieval at all, which is true today)
+- **Acceptance criteria:** every `unresolved` work carries a reason and the wire
+  reports it beside the status; the live museum suite is green with the zero-score
+  measurement either removed or re-justified against what the API now does; the
+  floor test exists, names its figure, and that figure is stated against the 4/51
+  baseline whether or not it moved; every mutation above dies
+- **Done when:**
+  1. Acceptance criteria met and tests pass
+  2. `/prawduct:critic` run — including the ruling on the fold test — and blocking
+     findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+### Chunk 22: Grounded alternatives — the collection's own answer when the gate refuses
+
+- **Description:** The requirement ratified 2026-08-04 (`product-brief.md` flow 2):
+  a run may **additionally** offer works drawn from a wired collection when phase 2
+  cannot confirm what phase 1 named. Phase 1 and the gate run exactly as today —
+  the rate is unchanged, Q12 intact, `unresolved` fully reachable — and the browse
+  is a supplement *after* the gate refuses, never before phase 1 and never the
+  route by which a named work gets its image. That placement is what defangs the
+  failure that killed the inverted design: a query that compiles to nothing is a
+  supplement returning nothing, not an authoritative "the collection holds nothing
+  for this intent". **Scoped to artist adjacency (operator, 2026-08-04)**, which is
+  the one facet reproduced live; style, classification and period miss on ordinary
+  spellings and are explicitly out until measured. The seam is shaped so a facet
+  compiled by a model can be added later without changing it.
+- **Step 0, before design — the packet's own headline claim is unverified.** The
+  mechanism rests on the model's artist field being grounded, and both observed
+  runs *named their artists in the intent text*; the only artists the model
+  originated were two, of which one yielded nothing. Re-run the recorded fixture
+  intents through live phase 1 and record which artists the model **originates**
+  versus which the intent supplied. If they are mostly artists the collection does
+  not hold, the artist facet is weak and a compile step becomes necessary rather
+  than optional — which changes this chunk's shape, so it runs first.
+- **Depends on:** Chunk 21 (`unresolved_reason` is what makes this falsifiable —
+  without it nobody can tell whether this chunk worked), Chunk 16A/16B
+- **Artifacts consumed:** `product-brief.md` flow 2 (the ratified requirement and
+  its four conditions on every offered work), `nonfunctional-requirements.md`
+  § The Supply Horizon, `data-model.md` § CandidateWork, `architecture.md` (adding
+  a provider is a pre-authorised bounded extension)
+- **Visual change:** yes — a run's work list stops being a flat list of what phase
+  1 said, so the review grid, the API work list and the approval count each gain a
+  second kind of row to render, count and explain. That is why this is a chunk and
+  not a patch.
+- **Deliverables:** a `CollectionBrowse` Protocol beside the image-search seam,
+  with an Art Institute implementation issuing **one POST per run** (not per work)
+  — a `bool.filter` on image presence, a width range at the display floor and a
+  wall-appropriate type set, with a token-AND on the artist field. **Filters, not
+  relevance**: the score is boost-dominated and a constant score does not
+  neutralise it, so a text-relevance query for a Dutch still life returns
+  *American Gothic*. Facets derive from the run's own works — the artists it named,
+  the type set, the floor — so there is no new model call and no new prompt. A
+  nullable provenance field on `CandidateWork` distinguishing offered from
+  proposed; the per-run bound and its separate reporting; the approval-count
+  arithmetic; the review surfaces' labelling
+- **Rights: recorded, shown, never gating** (operator, 2026-08-04). No filter, no
+  public-domain preference, no exclusion — constraint 13 unchanged. The review card
+  shows an offered work's rights, and the honest cost is stated rather than
+  discovered: this raises how often in-copyright masters are acquired, and nothing
+  downstream refuses on rights.
+- **Tests:** unit over the query construction and the offered/proposed split;
+  integration over a run that ends with the gate refusing everything and offers
+  works anyway; the review surfaces asserting an offered work is never merged with
+  or presented as a work phase 1 named
+- **Acceptance criteria:** a run whose every proposed work is unresolved returns
+  offered works with the collection's own titles and attributions, each labelled,
+  bounded and counted separately; the resolution-floor figure from Chunk 21 is
+  restated against the 4/51 baseline; **no offered image is ever attached to a
+  model-named work**, asserted rather than asserted-about
+- **Honest expectation, recorded now so the chunk is judged against it rather than
+  against hope:** the run naming Kelly, Noland, Louis and Stella goes from nothing
+  to at least four works. The run naming the Delaunays and Banksy goes from nothing
+  to roughly one, and that one is a dress-fabric swatch — or to nothing, if
+  textiles fall outside the type set. This is not a general fix for the supply
+  horizon and must not be sold as one.
+- **Done when:**
+  1. Step 0 run and its result recorded, then acceptance criteria met and tests pass
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
 
 ### Chunk 19: Curation web UI and HTTP API — the discovery half
 

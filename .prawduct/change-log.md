@@ -48,6 +48,74 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-04: A run may offer works the curator did not name — three requirements and two chunks
+
+**Why:** two real discovery runs proposed eight works and resolved none of them,
+and no rule written anywhere said that was wrong. An eleven-agent investigation
+measured the cause and the options; the operator ratified the requirement it
+turned on. **No code changed — this is planning work.**
+
+**The finding that reframed it.** Zero resolution is an *unspecified requirement*,
+not a defect: `data-model.md` calls 34-of-40 "succeeded partially",
+`observability-strategy.md` rules "a work the collection genuinely does not hold"
+as the product working, and all eight works are in that class. But a real defect
+sits underneath — the artist is folded into the free-text museum query, where its
+tokens dominate scoring. Measured: three different Frank Stella titles return a
+byte-identical top ten, and Ellsworth Kelly resolves **0 of 12** held works against
+**10 of 12** title-only.
+
+**What the evidence killed, and it killed the cheap options first.** Naming the
+collection in the phase-1 prompt cannot work — a run whose intent already read
+"held by the Art Institute of Chicago" resolved 0 of 5, and the search plugin
+carries no domain restriction. Alias plumbing measured **zero lift** (4/51 → 4/51)
+against the real fixture. Adding providers is not the fix either: the eight works
+went to artic, the Met, Cleveland and Commons and every one returned nothing for
+all eight. The partition is not which collection is wired — it is **copyright**,
+and both runs asked for post-boundary work.
+
+**Ratified by the operator, and both answers are recorded where their rules live.**
+*A run may offer works the curator did not name* — adjacent, similar and derivative
+works are welcome, bounded and labelled, offered only after the gate refuses. That
+is `product-brief.md`'s own Vision ("works the curator has not seen and could not
+have named") finally reaching phase 2. Scoped to **artist adjacency** for the first
+build, because it is the only facet reproduced live; style, classification and
+period miss on ordinary spellings, and relevance-ranking returns *American Gothic*
+for a Dutch still-life query. And *rights: record, show, never gate or filter* —
+constraint 13 extended to works the system chooses, with its honest cost stated.
+
+**Three requirements written:**
+
+- **`unresolved` must say which kind of nothing** (`data-model.md` § CandidateWork).
+  Four routes that are not interchangeable, with a precedence rule stated rather
+  than left to the write site: the *deepest* gate any record reached wins, because
+  "the collection holds this, too small for your wall" is actionable and "something
+  somewhere did not match" is not. **This narrows a claim the repo asserts in six
+  places** — that `unresolved` means phase 1 may have invented the work — to
+  `not_held` alone. Two enum values were considered and left out as unreachable.
+- **The resolution rate is a measured number with a floor** (`product-brief.md`
+  § Success Criteria), over a fixed corpus, with the *test* as the authority for
+  the figure and this repo's habit of naming tests that do not exist called out:
+  the mechanism is recorded as **owed**, not described as live.
+- **A run may offer the collection's own answer** (`product-brief.md` flow 2), with
+  four conditions on every offered work and the seam that keeps "derivative" from
+  becoming a loophole: a study offered *as itself* is welcome, the same object
+  offered *as* the named work is the near-match the flow forbids.
+
+**Also recorded:** `nonfunctional-requirements.md` § The Supply Horizon — the
+measured post-boundary cliff, and the fact that the product today ships the
+"museum/public-domain only" alternative that `project-state.yaml`'s integrations
+decision **explicitly rejected**. Recorded rather than resolved, at the operator's
+call. `api-contract.md` gains the row's new field *and the arithmetic owed with
+it*: the 10,200-token page was measured without it and the ceiling already runs 2%
+over.
+
+**Two chunks planned, sequenced before the browser surface.** Chunk 21 makes the
+failure diagnosable (and explicitly does *not* raise the rate — 4/51 → 5/51);
+Chunk 22 is the substantive change. 21 first because without it nobody can tell
+whether 22 worked. Chunk 22 carries a **step 0** that may reshape it: the claim
+that the model's artist field is grounded rests on n=2 with 1 hit, since both
+observed intents named their artists themselves.
+
 ## 2026-08-04: Two Critic rounds, and a finding that had to be partly retracted
 
 <!-- prawduct: chunks=03,04,05 | status=shipped | scope=v1-build -->

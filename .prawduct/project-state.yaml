@@ -1581,6 +1581,63 @@ technical_decisions:
         - "No gate, but phase 1 exposed as its own operation — pushes the discipline onto the caller rather than the system."
       date: 2026-07-19
   integrations:
+    - decision: "A run MAY offer works the curator did not name — adjacent, similar and derivative works are welcome — bounded, labelled, and only after phase 2's gate has refused."
+      rationale: >
+        Ratified by the operator 2026-08-04, answering the question two runs that
+        resolved nothing forced. It is what product-brief.md's own Vision already
+        asks for — "works the curator has not seen and could not have named" — and
+        the artifact text is in product-brief.md § Core Flows, flow 2.
+
+        Scoped at the same time to ARTIST ADJACENCY for the first build, because
+        that is the only facet reproduced against the live collection. Style,
+        classification and period miss on ordinary spellings (their keyword fields
+        hold museum-internal strings), and asking by relevance instead returns
+        American Gothic for a Dutch still-life query. Widening past artist is a
+        measurement before it is a feature.
+      alternatives_considered:
+        - "No — the run reports what it could not find and stops. Coherent and cheap, but it makes the browser surface's acceptance criterion (intent to wall, with images) unmeetable for a natural intent, which would have to be renegotiated in the same breath."
+        - "Yes, but only when the curator explicitly asks for alternatives — sounds safe and is worse: it puts a second decision in front of a curator already looking at an empty screen."
+      consequences: >
+        A run's work list stops being a flat list of what phase 1 said. The review
+        grid, the API work list, the unresolved count and the approval gate each
+        gain a second kind of row to render, count and explain.
+
+        The offered half is honest about its supply: it comes from one collection
+        with a measured skew, and for 20th-century intents that collection is
+        overwhelmingly in copyright. A curator asking for Banksy still gets nothing
+        offered, correctly.
+
+        Two invariants are load-bearing and are stated in the artifact rather than
+        left to the build: an offered work carries the collection's own title and
+        artist verbatim and is never presented as the work the curator named; and
+        no image found by the browse may ever be attached to a work phase 1 named.
+        A derivative offered AS ITSELF is welcome; the same object offered as the
+        named work is the confident near-match flow 2 forbids.
+      date: 2026-08-04
+    - decision: "Rights on works the SYSTEM chooses: record them, show them, never gate or filter on them."
+      rationale: >
+        Operator, 2026-08-04, in those words: "This is the wrong app to get into
+        whether a photograph of a Banksy piece is acceptable to show in my own
+        living room." Constraint 13 already holds rights to a quality weight and
+        never an exclusion; this extends the same answer to works the system offers
+        rather than works a curator's intent named, which is the case constraint 13
+        was not decided for.
+      alternatives_considered:
+        - "Prefer public domain in ranking — largely inert for the runs that motivated the feature: Ellsworth Kelly is 61 imaged / 0 public domain, Frank Stella 14 / 0."
+        - "Public-domain only for offered works — cleanest rights position, and returns ZERO for both observed intents, which kills the feature for exactly its use case."
+      consequences: >
+        This materially raises how often in-copyright masters are acquired through
+        the tiled-fetch path, and nothing downstream refuses on rights — selection
+        never reads them and acceptance promotes them onto the Source without
+        objecting. That composition is the cost of the decision and is recorded
+        here rather than discovered later.
+
+        Deliberately NOT decided at the same time: whether the contemporary-web
+        half of the integrations decision below gets built or retracted. The
+        operator deferred it ("let's address rights later; for now, content"). The
+        measurement that forces it eventually is in
+        nonfunctional-requirements.md § The Supply Horizon.
+      date: 2026-08-04
     - decision: "Discovery searches museum/public-domain collections AND the contemporary web (gallery sites, prize announcements, artist portfolios)."
       rationale: >
         Confirmed 2026-07-19. The curator's motivating example — "find recent

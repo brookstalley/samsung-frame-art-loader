@@ -157,6 +157,58 @@ Three consequences follow from the split, and each is load-bearing:
   that must surface as its own outcome — never be silently dropped from the batch,
   and never be filled with a confident near-match.
 
+**A run may offer the collection's own answer when it cannot confirm the model's.**
+Phase 2 verifies phase 1, and a work it cannot confirm stays unresolved — that does
+not change, and no image found by any other route may ever be attached to a work
+phase 1 named. But a run that ends with nothing to review has told the curator
+nothing about a collection that may hold a great deal for their intent, and on
+2026-08-04 two real runs ended exactly there: every proposed work unresolved, not
+one image to look at, and no way to tell an invented title from a collection that
+simply does not hold the work. A run may therefore **additionally** offer works
+drawn directly from a wired collection, chosen by filtering that collection rather
+than by asking a model to recall it. Every such work is a separate candidate that:
+
+- carries the collection's own title and artist **verbatim**, including an
+  attribution that differs from anything that was asked for;
+- is marked on every review surface as offered by the collection rather than
+  proposed by the model, and is never merged with, or presented as, the work the
+  curator asked about;
+- says in its rationale which query produced it and how many works that query
+  matched, so being offered one work out of four hundred reads differently from
+  being offered one out of one;
+- counts against a per-run bound reported separately from the proposed count,
+  because the curator approved a work list of a stated size and this adds to it.
+
+**Adjacent, similar and derivative works are welcome — and the third of those is
+not a loophole in the rule above.** A print after a painting, a study, a variant:
+offered *as itself*, under the collection's own title and attribution, it is a work
+a curator may well want, and refusing it would throw away much of what a print room
+holds. The same object offered *as* the work the curator named is the confident
+near-match this flow forbids, and the canonical-selection rule below names studies
+and "after Dalí" specifically. The difference is not the object; it is whose name
+it carries.
+
+**What a collection can be asked is narrower than what may be offered, and the gap
+is measured rather than assumed.** Adjacency is the requirement; the mechanism is
+whatever a collection can actually be made to answer. At the Art Institute, artist
+adjacency answers: a token-AND on the artist field, filtered to records carrying an
+image above the display floor, returns that artist's wall-usable holdings. Style,
+classification and period do not — their keyword fields hold museum-internal
+strings that miss on the ordinary spelling ("Color Field" matches nothing, and
+"Painting" matches nothing because it is indexed lowercase), and asking by
+relevance instead returns *American Gothic* for a Dutch still-life query. So the
+first form of this is artist adjacency, and each widening past it is a measurement
+before it is a feature.
+
+**This does not make the product a collection filter**, which the Vision above
+distinguishes it from. Phase 1's universe is unchanged: it proposes from all of art
+history, and every model-named work still goes through the gate. What is filtered
+is the *supplement* — offered after the gate has refused, never before phase 1, and
+never as the route by which a named work gets its image. The honest cost is that
+the supplement comes from one collection with a measured skew, and that skew is
+stated where a collection is wired rather than left for a curator to infer from
+results that quietly favour whatever the collection happens to hold.
+
 **Approving the work list is gated by scope, not by policy.** When the resolved
 work count is small the run proceeds straight through; when it crosses a
 configured threshold it stops and waits. A leisure activity in short sessions
@@ -296,6 +348,26 @@ API consumers. Three consequences that are easy to miss:
   weaker — the thumbnail is present in the transcript at the moment of acceptance;
   whether a human looked is a property of how the operator works, not something
   the surface can guarantee (`security-model.md` § Content Appropriateness).
+- **The pipeline's resolution rate is a measured number with a floor, not an
+  impression.** Partial success stays normal — a run that resolves 34 of 40
+  succeeded partially and did not fail. But under every other rule written here, a
+  run that resolves *none* of what it proposed is indistinguishable from one
+  working correctly, and that is not hypothetical: it is what two runs did on
+  2026-08-04 while both suites were green. The floor is therefore a measurement
+  over a fixed corpus — the recorded phase-1 proposals in
+  `curation/tests/fixtures/phase_one_proposals.json` — and the authority for the
+  current figure is the test that asserts it, never this sentence. It stood at 4 of
+  51 when the corpus was first measured against the live provider on 2026-08-04,
+  before any of the work aimed at raising it. Any change claiming to improve
+  resolution states its own figure against that baseline; a change that does not
+  move it says so. Lowering the floor takes the ratification that raising it does.
+
+  > **The asserting test does not exist yet**, and this is recorded as owed rather
+  > than written as though it were live. A criterion whose mechanism is imaginary
+  > is worse than one with no mechanism at all, because it reads as covered — this
+  > repo has twice found a norm naming a test file that had never been created.
+  > The first chunk that touches resolution owes it.
+
 - Themes are switchable from the web UI and materialise on the TV without a
   redeploy.
 - LLM spend stays under the declared monthly ceiling, and hitting the ceiling

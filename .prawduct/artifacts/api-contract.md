@@ -498,6 +498,16 @@ warning. The remaining 2% overshoot at the ceiling is deliberate: closing it mea
 dropping `resolution_status` or `instances_held` from the row, and both carry the
 distinction between "nothing was found" and "we could not look".
 
+**The row gains `unresolved_reason` beside `resolution_status`** — which kind of
+nothing, null unless the work is unresolved (`data-model.md` § CandidateWork). It
+is a short enum and it is the answer to the question `resolution_status` raises, so
+a caller that has one and not the other has to fetch each work to act. **What is
+owed with it is the arithmetic**, not an assurance: the 10,200-token page above was
+measured with this field absent, and the ceiling already runs 2% over. The chunk
+that adds the field re-measures a full page and either records the new figure or
+lowers the ceiling — the one thing it must not do is add a field to a row whose
+budget was measured without it and leave the old number standing.
+
 **Image content blocks correlate by position and by nothing else.** The protocol
 gives a block no identity, and a result's blocks are only the instances that had a
 local copy — so block *n* is not row *n* the moment one preview is missing. Every
