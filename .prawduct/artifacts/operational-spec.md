@@ -80,10 +80,26 @@ it the distro C bindings the e-paper driver needs.
 
 **A standalone interpreter cannot see distro site-packages.** That is fine here, and
 only because label rendering already moved to the display plane: curation's stack
-(FastAPI, opencv, scikit-image, numpy, pydantic) is all wheels, verified against the
-PyPI JSON API. `pycairo` — the one source-only aarch64 dependency — is on the
-display side, where the GTK stack already lives. **If anything needing distro C
-bindings is ever added to curation, this decision is what it breaks.**
+(FastAPI, starlette, uvicorn, mcp, python-dotenv, pydantic, pillow, httpx) is all
+wheels, verified against the PyPI JSON API. `pycairo` — the one source-only aarch64
+dependency — is on the display side, where the GTK stack already lives. **If
+anything needing distro C bindings is ever added to curation, this decision is what
+it breaks.**
+
+> **Corrected 2026-08-04, and the correction makes the argument stronger rather
+> than weaker.** This sentence named *opencv, scikit-image and numpy* as part of
+> curation's stack. They were forecast for "acquisition and the mat engine" and
+> never declared: both landed 2026-08-03 needing none of the three, and
+> `curation/pyproject.toml` now records that as **a rejection rather than a
+> deferral** — the LAB conversion and CIEDE2000 distance are thirty lines of
+> fully-specified arithmetic in `acquisition/color.py`, and the dominant-colour
+> fallback uses Pillow's median-cut quantiser where 2024 used OpenCV k-means.
+>
+> Worth noting how this survived: the same bundle that made the rejection wrote
+> the rule that a descope must be walked back through every artifact that promised
+> it, walked back the *fixture* descope, and left this one. The forecast lived in
+> a sentence about interpreters, which is not where anyone looks when deciding a
+> dependency.
 
 ## Process Management
 

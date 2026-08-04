@@ -125,7 +125,12 @@ states that condition rather than leaving the next person to guess.
 
 **The cumulative round: 0 blocking, and the one it found in this fix was real.**
 `rev-20260804T105746Z-fc44baaa` returned 19 findings over the whole 18A+18B+#67
-bundle — 17 accepted, 2 filed (#69, #70). Nine were fixed in the follow-up commit.
+bundle. **The tally below is the rendered one and supersedes any count in this
+prose**: accepted 11, fixed 7, waived 1. An earlier draft of this paragraph read
+"17 accepted, 2 filed, nine fixed", which sums past 19 — it was counting
+dispositions and outcomes in one list. The renderer decomposes them, and eight
+findings carry BOTH a disposition and a resolution fact from the verify round, so
+the verify round's answer is the current one for those eight.
 
 **Two of them were defects in the #67 fix itself**, which is the pattern this
 branch keeps producing and is worth naming again. The guard refused on the
@@ -165,7 +170,7 @@ correction recorded rather than the comment quietly deleted.
 | Finding | Severity | State | Detail |
 |---|---|---|---|
 | R-1 | warning | fixed | Fixed. The guard now tests art_root/relative_path before refusing, so a row that outlived its file no longer blocks the re-acquisition preparation reports as needed. Test + 2 mutations. |
-| R-2 | warning | fixed | `brookstalley/samsung-frame-art-loader#69` |
+| R-2 | warning | fixed | `brookstalley/samsung-frame-art-loader#69` — owner ruling: Renders as 'fixed' because the verify round verified this finding's OWN remedy (b) — it offered 'either record a SpendRecord, or record the deferral explicitly so the category has a stated owner instead of reading as implemented', and data-model.md § SpendRecord now carries that deferral. The finding is discharged; #69 is OPEN and this PR deliberately ships it open, tracking the code half, which was never what the finding required. Contrast R-15, the same filed-to-an-issue shape but WAIVED: there nothing in the tree changed at all, so the filing is the whole answer. |
 | R-3 | note | accepted | Accepted, not fixed. Its trigger is a panel-geometry change, and the display chunks (12/13) are bench-blocked, so nothing can exercise the fix. Rendition records target pixels only, so covering the TV_PANEL_DIAGONAL_INCHES variant needs mat geometry on the row — a data-model change that belongs with the panel work rather than ahead of it. |
 | R-4 | note | accepted | Accepted as covered, with the attribution corrected (2026-08-04, verify round): the three flagged lines are the pre-existing 'raw/' bullet under 'Data and cache contract', which this branch narrowed rather than authored — the narrative was there at the base. Either way the outcome stands: the file-wide problem is issue #26 (416 findings, stage:ready), which owns the move to learnings-detail.md, and fixing three lines here would leave 413. |
 | R-5 | note | accepted | Accepted, and the asymmetry is defensible as it stands: the colour a curator asked for is recorded, and it applies once the work is acquired. The finding calls it genuinely ambiguous. Reversing the order would discard a stated preference because of a fetch that has not happened yet, which is the worse default for an append-only history. |
