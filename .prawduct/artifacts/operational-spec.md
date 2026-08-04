@@ -25,6 +25,37 @@ works — are decided rather than discovered.
 | Processes | `curation` (Python 3.14, uv-managed standalone) and `display` (Python 3.13, system interpreter), both under systemd |
 | Shared state | `ART_ROOT` on local disk |
 
+## The Service Account — decided
+
+**Both units run as `tvpi`** (settled 2026-08-04). The name was the only part in
+question and it is kept: it is what the committed unit, `deploy/README.md` and
+this product's own history already say, and renaming would have bought nothing
+but a diff across every one of them.
+
+The account itself does not exist on the machine. The Pi was rebuilt onto a fresh
+card and `tvpi` did not survive it — see `platform-and-dependency-findings.md`
+§ That card is gone. What has to be created:
+
+| | |
+|---|---|
+| Login | None. `--system`, no password, shell `/usr/sbin/nologin` |
+| Privilege | No sudo. Nothing either plane does needs root |
+| Groups | `spi` and `gpio` — the e-paper HAT is reached through both |
+| Owns | `ART_ROOT`, and the checkout the units execute from |
+
+**Create it as part of the systemd-unit cutover, not before.** The account, its
+group memberships, moving `ART_ROOT` under it, and both unit files are one
+change: any of them landing alone leaves a machine that is neither the old
+arrangement nor the new one. The build plan puts that cutover in Chunk 13.
+
+**`ART_ROOT` is not settled by this section.** The committed unit puts the art
+tree at `/home/tvpi/art`, inside a home directory that a service account with no
+login has no other use for. A neutral path — `/srv/art` or `/var/lib/samsung-art`
+— matches what the account actually is, and is the shape to prefer at cutover.
+Deciding it costs nothing today because every reader of that path is already
+configuration: `ART_ROOT` in the root `.env`, which is where the existing norm
+against deployment values in source put it.
+
 ## The Curation Interpreter — decided
 
 **Raspberry Pi OS Trixie ships Python 3.13. The curation plane gets its 3.14 from

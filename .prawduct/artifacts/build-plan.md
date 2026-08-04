@@ -1168,7 +1168,17 @@ surface was reviewed on its own.
   renders, in the deployed image tree under ART_ROOT — the raw and ready
   directories on the Pi, which are not part of this checkout — with
   `source_content_hash` computed at ingest so Chunk 18B's staleness rule governs
-  them from birth. Known defects in the legacy shape are corrected on the way
+  them from birth.
+
+  *(Corrected 2026-08-04: **there is no `ready/` left to point at.** The Pi was
+  rebuilt onto a fresh card and the 2024 renditions were on the old one; the
+  masters survive on the operator's Mac at `~/art/raw` but `ready/` was never
+  copied off. Nothing about the seeding path changes — it already treats a
+  missing rendition as a reported absence rather than an error, which is exactly
+  the case this turned out to be — but every work now seeds `no_rendition`, and
+  re-rendering the corpus for the wall is real work that was assumed already
+  done. The television still holds its uploaded copies; recovering identity from
+  them is Chunk 12's adoption path, not a file the tree can be pointed at.)* Known defects in the legacy shape are corrected on the way
   in, not carried: identity becomes a UUID (never the source URL),
   `artist_details` is parsed into Artist rows, and `tv_content_id` is **not**
   written to the catalogue — it is per-device state and belongs to the display
@@ -1467,27 +1477,35 @@ two missing deliverables.)*
   `operational-spec.md` § Process Management, `nonfunctional-requirements.md`
   § Output Quality (label legibility) and Performance (15 s label budget),
   `design_decisions.accessibility_approach`
-- **Foreign API:** IT8951 / omni-epd (build verified in Chunk 04)
-  <!-- Chunk 04 verified that the stack COMPILES, not how it displays. This
-       chunk writes a driver against omni-epd's runtime surface, so it owes its
-       own verify-api (step 0 below). -->
+- **Foreign API:** IT8951 / omni-epd — **runtime surface probed on the real panel
+  2026-08-04; step 0 below is discharged.** Findings in
+  `platform-and-dependency-findings.md` § The e-paper panel. Read them before
+  writing the driver: the default mode is 1-bit, `display()` returns nothing on
+  success or failure, and there is no partial refresh.
 - **Visual change:** yes — label legibility at standing distance on the real
-  panel needs the operator's eyes, not a test
+  panel needs the operator's eyes, not a test. The probe's type ladder narrowed
+  the range (mid-20s to low-40s px) but was rendered with PIL/DejaVu, so its
+  numbers do not transfer to Pango and the look has to be repeated.
 - **Deliverables:** new `display/src/display/panel/` (driver behind an
   interface + Pango label rendering), heartbeat writer, new
-  `deploy/curation.service` and new `deploy/display.service`, cutover performed
-  and recorded
+  `deploy/curation.service` and new `deploy/display.service`, the `tvpi` service
+  account created with its groups and `ART_ROOT` ownership
+  (`operational-spec.md` § The Service Account), cutover performed and recorded
 - **Tests:** unit — label layout against fixed metadata (golden-image or
-  measured-extent checks), heartbeat shape and atomicity; hardware — label
-  matches the artwork within the 15 s budget across several rotations; killing
-  the panel mid-run leaves rotation running
+  measured-extent checks), heartbeat shape and atomicity, **the panel is put in
+  `gray16` and the driver asserts on `mode` rather than `max_colors`** (which
+  reports 16 in both modes, so the obvious check passes against a 1-bit panel);
+  hardware — label matches the artwork within the 15 s budget across several
+  rotations; killing the panel mid-run leaves rotation running
 - **Acceptance criteria:** wall + label run unattended from the two new units
   through a TV power-cycle and a display restart with no human action; heartbeat
   advances and carries honest state
 - **Done when:**
-  0. verify-api — probe omni-epd/IT8951's runtime display surface on the real
+  0. ~~verify-api — probe omni-epd/IT8951's runtime display surface on the real
      panel (init, draw, partial vs full refresh, and what a failure returns)
-     before writing the driver; Chunk 04 verified the build, not this
+     before writing the driver; Chunk 04 verified the build, not this~~
+     **Done 2026-08-04** — findings recorded in
+     `platform-and-dependency-findings.md` § The e-paper panel
   1. Acceptance criteria met on the Pi, including the operator's legibility look
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
@@ -2136,7 +2154,12 @@ binds already exists and is contract-tested.
 - **Carried findings (hygiene, close-out):** `deploy/README.md` and the committed
   unit still describe the single-process 2024 loader with no pointer to the
   two-unit deployment; three artifact `depends_on` headers disagree with the
-  derivation their own prose shows. Both corrected here.
+  derivation their own prose shows. Both corrected here. **Amended 2026-08-04 —
+  that pair is staler than this row says:** the Pi was rebuilt onto a fresh card
+  and every `/home/tvpi/` path in both files now points at a directory that does
+  not exist, on behalf of a user that does not exist. Chunk 13 creates the
+  account and writes the new units, so what reaches this chunk is whatever
+  `deploy/` still carries afterwards.
 - **Deliverables:** backup job + schedule in `deploy/`; backup age on the
   health panel; the restore exercise performed and its outcome recorded; legacy
   modules removed; README brought current

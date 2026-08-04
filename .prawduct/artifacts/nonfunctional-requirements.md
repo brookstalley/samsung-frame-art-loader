@@ -717,6 +717,13 @@ sizing must be re-derived for the 1448×1072 panel rather than carried forward.
 This is the product's most important accessibility surface and it is a physical
 one — see `design_decisions.accessibility_approach`.
 
+> **The 16 grey levels are not the default and must be claimed.** Measured on the
+> panel 2026-08-04: the driver comes up in 1-bit `bw`, and the obvious sanity
+> check cannot detect it because `max_colors` reports 16 either way. The display
+> plane therefore has to set the mode explicitly and assert on `mode` itself —
+> otherwise this requirement is unmet by a build that passes every test. Full
+> measurements in `platform-and-dependency-findings.md` § The e-paper panel.
+
 ## What This Artifact Hands Off
 
 | To | What |

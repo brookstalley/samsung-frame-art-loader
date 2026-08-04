@@ -911,3 +911,5 @@ filenames encode identity in at least three mutually inconsistent conventions
 ## A decision that DESCOPES something has to be walked back through every artifact that promised it — the promising artifacts are never the one you are editing when you make the call
 
 ## When a chunk is parked behind access it does not have, check which of its DEPENDENCIES actually need that access — a dependency inherits the parking by adjacency rather than by need, and one that gates the parked work is the cheapest thing to take early
+
+## A claim about a live machine's current state decays silently — read the machine, never a comment that describes it. Config comments, deploy docs and prior findings record what a box looked like when someone last looked; the box gets reimaged, users get renamed and trees get emptied without touching a single line of the text that describes them. When shell access is available, the check costs one command and the assertion costs a wrong plan
