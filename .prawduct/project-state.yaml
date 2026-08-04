@@ -407,7 +407,10 @@ classification:
             apart.
           * The library's async client signals a timed-out art request by
             returning None from wait_for_response and then asserting on it, so
-            AssertionError is its timeout type.
+            AssertionError is its timeout type. ONE EXCEPTION, established from
+            source 2026-08-04 and stated above: upload()'s acknowledgement path
+            returns that None rather than asserting on it, which is why a
+            timed-out upload can surface as a falsy return instead.
     - name: "Art Institute of Chicago API"
       notes: "api.artic.edu. Already throttled in source_utils.py; responses cached to api-cache/."
     - name: "Google Arts & Culture"

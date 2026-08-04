@@ -1438,6 +1438,14 @@ two missing deliverables.)*
 
 ### Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
 
+- **Carries a decision trigger.** The IT8951 pin-or-vendor decision
+  (`project-state.yaml` → `technical_decisions.operational`) was unblocked on
+  2026-08-04 and deliberately left un-taken, with this chunk named as when to take
+  it — wiring the panel is the first point at which a rebuild resolving the driver
+  to whatever upstream master became would have a consequence anyone sees. Note
+  when taking it that `Cython` is also unpinned in the driver's own build-requires,
+  so pinning the driver alone does not make the build reproducible over time.
+
 - **Description:** The label renders on the display plane from manifest label
   text — the e-paper panel's geometry stays with the plane that owns that panel. Type sizing is
   re-derived for the 1448×1072 panel rather than carrying the 2024 "Sans 18"

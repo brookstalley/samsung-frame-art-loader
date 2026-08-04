@@ -402,14 +402,18 @@ uses — so the file is correct whichever storage mode is in force.
 > left in the arithmetic. 256M was chosen against a measurement: 9.2 MB after first
 > boot and a full provisioning run, so it is weeks of history at that rate.
 
-**What volatile storage actually costs is diagnosis, and that is an open
-decision.** The journal does not survive a reboot, so "the wall froze and the Pi
-restarted" is precisely the case `journalctl` cannot answer — and it is the case
-the operator is most likely to be investigating. `Storage=persistent` would fix it
-and would move logging onto the card, making the journal a wear path for the first
-time. That trade has not been taken either way; it is recorded here rather than
-settled, because it is a judgement about how much diagnosis is worth on a machine
-whose top risk is its boot medium.
+**What volatile storage costs is diagnosis, and the operator decided 2026-08-04 to
+accept that cost: the journal stays volatile.** It does not survive a reboot, so
+"the wall froze and the Pi restarted" is precisely the case `journalctl` cannot
+answer — and it is the case an operator is most likely to be investigating.
+`Storage=persistent` would fix that and would move logging onto the card, making
+the journal a wear path for the first time; it was declined. **Two consequences to
+carry rather than rediscover.** Post-reboot diagnosis has to come from somewhere
+other than the journal — the health surface's heartbeat age, or the catalogue —
+which is a constraint on how failures are made visible, not merely a missing
+convenience. And the top operational risk keeps its narrowest form: nothing this
+product does writes continuously to the card except the display heartbeat, whose
+writer is not built.
 
 The pre-acquisition free-space guard is unrelated to any of this: it is
 curation-side and checks before a fetch.

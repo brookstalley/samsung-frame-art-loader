@@ -13,34 +13,17 @@ inline, which the record linter flags; moving them is tracked as issue #26.
 **Record what the system did and what you inferred about why as two things, and
 label which is which.** A measurement earns confidence; the mechanism written
 beside it inherits that confidence without earning any, and a reader has nothing to
-separate them by.
-
-Verified against a foreign API 2026-08-04: an upload defect was correctly measured
-and then given a mechanism — a named source line, a rule about which argument form
-fails how, and a percentage — none of which the library's source supported. Two
-Critic rounds passed it, one explicitly listing the wrong figure as evidence the
-finding was *properly filed*. What caught it was a subagent reading the pinned
-source to do an unrelated task and noticing a line number did not say what the
-prose said it did.
-
-**The tell is a mechanism written in the same voice as the measurement.** If the
-behaviour was observed and the cause was reasoned, they cannot honestly share a
-sentence. Foreign APIs make this worse: their source is right there, so an
-explanation feels checkable even when nobody checked it.
+separate them by. The tell is a mechanism written in the same voice as the
+measurement — if the behaviour was observed and the cause was reasoned, they cannot
+honestly share a sentence.
 
 ## Do not trust a foreign client's return value in either direction — confirm against the system itself
 
 **When a boundary library reports success or failure, verify the claim against the
-remote system's own state before acting on it.** This product's television client
-gets it wrong in both directions: deletion could not confirm removal (its only
-removal verb discards the response), and upload reports failure on uploads that
-succeeded. The consequences are opposite and both are bad — a retry loop on the
-second duplicates content on a device with finite storage.
-
-The wrapper written for deletion already encodes the answer: ask, then read the
-remote list back, and keep *unconfirmable* apart from *failed*. That shape
-generalises to every verb on a boundary whose library is unowned and unmaintained,
-and it is cheap — one extra read against a system you are already connected to.
+remote system's own state before acting on it.** Ask, then read the remote list
+back, and keep *unconfirmable* apart from *failed*. It is one extra read against a
+system you are already connected to, and it is the only thing that survives a
+library that is wrong in both directions.
 
 ## Retiring a claim is a repo-wide grep, not a local edit
 
