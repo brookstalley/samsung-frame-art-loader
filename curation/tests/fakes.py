@@ -181,7 +181,25 @@ class FakeImageSearch:
     fails_for: set[str] = field(default_factory=set)
     asked: list[str] = field(default_factory=list)
     fetched: list[str] = field(default_factory=list)
+    resolved: list[str] = field(default_factory=list)
     preview_bytes: bytes | None = b"\xff\xd8\xff\xe0 jpeg"
+
+    @property
+    def provider(self) -> str:
+        return "artic"
+
+    def tile_url(self, url: str) -> str:
+        """The image service for an object, as the real client derives one.
+
+        Mirrors the real shape rather than echoing the argument: the whole point
+        of this seam is that the URL a source records and the URL the tiles come
+        from are *different strings*, and a stand-in that returned its input
+        would make a caller that skipped the resolution step pass.
+        """
+        self.resolved.append(url)
+        if self.unreachable:
+            raise ImageSearchFailure(f"could not reach the collection to resolve {url!r}")
+        return f"https://www.artic.edu/iiif/2/{abs(hash(url)) % 100000}"
 
     def find_images(self, query: ImageQuery) -> Sequence[FoundImage]:
         self.asked.append(query.title)

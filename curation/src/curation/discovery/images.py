@@ -103,6 +103,16 @@ class ImageSearch(Protocol):
     the same absence, and the two would eventually disagree.
     """
 
+    @property
+    def provider(self) -> str:
+        """The name instances from this search are recorded under.
+
+        Here so that wiring which needs to key something by provider can ask the
+        provider rather than repeat its name — a second copy of that string is a
+        second thing to update when a provider is added, and the wiring is the
+        copy nobody would think to check.
+        """
+
     def find_images(self, query: ImageQuery) -> Sequence[FoundImage]:
         """Every instance this provider holds for the work, unjudged and unranked.
 
@@ -117,4 +127,17 @@ class ImageSearch(Protocol):
         instance is still real, still selectable, and still carries a source-side
         URL. Losing the whole work over a missing thumbnail would be the tail
         wagging the dog.
+        """
+
+    def tile_url(self, url: str) -> str:
+        """Where the tiles of the object `url` names are actually served.
+
+        On this seam because the provider is the only thing that can answer it:
+        the URL a source records identifies the object, and for a provider serving
+        tiles the image service lives somewhere the object's own address does not
+        say. A provider whose recorded URLs the tile fetcher can already read
+        returns its argument.
+
+        Raises `ImageSearchFailure` when the provider could not be asked, or
+        answered without an image.
         """

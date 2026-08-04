@@ -77,8 +77,11 @@ def _resolves_publicly(_host: str):
     return ["93.184.216.34"]
 
 
-def _acquisition(service, acq_settings, open_stream, *, resolve=_resolves_publicly) -> AcquisitionService:
-    return AcquisitionService(service, acq_settings, open_stream=open_stream, resolve=resolve)
+def _acquisition(service, acq_settings, open_stream, *, resolve=_resolves_publicly, tile_targets=None) -> AcquisitionService:
+    # Empty by default: every provider these tests use records a URL the fetcher
+    # can read as it stands, so no resolution is wanted. The seam itself is
+    # covered in `TestResolvingTheTileTargetBeforeFetching`.
+    return AcquisitionService(service, acq_settings, open_stream=open_stream, resolve=resolve, tile_targets=tile_targets or {})
 
 
 #: The stand-in binary's output path is its last argument, which is awkward to
@@ -850,3 +853,141 @@ class TestARetryNeverLowersTheQualityOfWhatIsHeld:
 
         assert result.outcome is AcquisitionOutcome.ACQUIRED
         assert service.get_original(work.id).fetch_status is FetchStatus.OK
+
+
+class TestResolvingTheTileTargetBeforeFetching:
+    """The seam that shipped broken: what a source records vs. what gets fetched.
+
+    A source from a museum records the object's page — that is what a curator
+    follows to check provenance — and the tile fetcher cannot read it. Nothing
+    crossed this boundary in a test, so each side stayed self-consistent against a
+    URL shape the other never produced, and no artic work could be acquired.
+    """
+
+    @staticmethod
+    def _binary_recording_argv(tmp_path: Path, seed: Path) -> tuple[str, Path]:
+        """A stand-in fetcher that writes a real image and logs what it was given."""
+        argv_log = tmp_path / "argv.txt"
+        script = tmp_path / "recording-dezoomify"
+        script.write_text(
+            '#!/bin/sh\nprintf "%s\\n" "$@" >> "' + str(argv_log) + '"\n'
+            'cp "' + str(seed) + '" "$(eval echo \\${$#})"\nexit 0\n'
+        )
+        script.chmod(script.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        return str(script), argv_log
+
+    def _artic_work(self, service):
+        """A source exactly as acceptance records one from the museum client."""
+        work = service.add_artwork(title="Golden Bird")
+        source = service.add_source(
+            artwork_id=work.id,
+            url="https://api.artic.edu/api/v1/artworks/91194",
+            provider="artic",
+            source_class=SourceClass.INSTITUTIONAL,
+            acquisition_method=AcquisitionMethod.DEZOOMIFY,
+            rights_status=RightsStatus.PUBLIC_DOMAIN,
+            is_primary=True,
+        )
+        return work, source
+
+    def test_the_fetcher_is_given_the_resolved_url_not_the_recorded_one(self, service, acq_settings, tmp_path):
+        """The regression test for the defect itself."""
+        from dataclasses import replace
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, argv_log = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, _ = self._artic_work(service)
+
+        result = _acquisition(
+            service,
+            replace(acq_settings, tile_binary=binary),
+            _serves(b""),
+            tile_targets={"artic": lambda _: "https://www.artic.edu/iiif/2/c8024369"},
+        ).acquire(work.id)
+
+        assert result.outcome is AcquisitionOutcome.ACQUIRED
+        given = argv_log.read_text().splitlines()
+        assert "https://www.artic.edu/iiif/2/c8024369" in given
+        assert "https://api.artic.edu/api/v1/artworks/91194" not in given
+
+    def test_the_recorded_url_is_left_alone_for_provenance(self, service, acq_settings, tmp_path):
+        """Resolution is for this fetch; it must not rewrite what the source says."""
+        from dataclasses import replace
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, _ = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, source = self._artic_work(service)
+
+        _acquisition(
+            service,
+            replace(acq_settings, tile_binary=binary),
+            _serves(b""),
+            tile_targets={"artic": lambda _: "https://www.artic.edu/iiif/2/c8024369"},
+        ).acquire(work.id)
+
+        refreshed = next(s for s in service.list_sources(work.id) if s.id == source.id)
+        assert refreshed.url == "https://api.artic.edu/api/v1/artworks/91194"
+
+    def test_a_provider_needing_resolution_with_none_wired_never_reaches_the_fetcher(self, service, acq_settings, tmp_path):
+        """The old behaviour, now refused: an identity URL must not be fetched.
+
+        Raised rather than recorded, like a missing tile binary: no source is at
+        fault, so a `failed` row against this URL would send its reader to the
+        museum instead of to the wiring.
+        """
+        from dataclasses import replace
+
+        from curation.acquisition.tiles import TileTargetUnavailable
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, argv_log = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, source = self._artic_work(service)
+
+        with pytest.raises(TileTargetUnavailable):
+            _acquisition(service, replace(acq_settings, tile_binary=binary), _serves(b""), tile_targets={}).acquire(work.id)
+
+        assert not argv_log.exists(), "the fetcher was run against an unresolved identity URL"
+        refreshed = next(s for s in service.list_sources(work.id) if s.id == source.id)
+        assert refreshed.last_fetch_status is None, "a wiring fault must not be recorded against the source"
+
+    def test_a_provider_that_cannot_be_asked_records_a_failure_against_the_source(self, service, acq_settings, tmp_path):
+        from dataclasses import replace
+
+        from curation.discovery.images import ImageSearchFailure
+
+        def unreachable(_: str) -> str:
+            raise ImageSearchFailure("could not reach the collection")
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, _ = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, source = self._artic_work(service)
+
+        result = _acquisition(
+            service,
+            replace(acq_settings, tile_binary=binary),
+            _serves(b""),
+            tile_targets={"artic": unreachable},
+        ).acquire(work.id)
+
+        assert result.outcome is AcquisitionOutcome.FAILED
+        assert "could not reach the collection" in result.detail
+        refreshed = next(s for s in service.list_sources(work.id) if s.id == source.id)
+        assert refreshed.last_fetch_status is FetchStatus.FAILED
+
+    def test_a_resolved_url_is_checked_before_it_is_fetched(self, service, acq_settings, tmp_path):
+        """A URL this deployment did not record is exactly the kind to check."""
+        from dataclasses import replace
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, argv_log = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, _ = self._artic_work(service)
+
+        result = _acquisition(
+            service,
+            replace(acq_settings, tile_binary=binary),
+            _serves(b""),
+            tile_targets={"artic": lambda _: "file:///etc/passwd"},
+        ).acquire(work.id)
+
+        assert result.outcome is AcquisitionOutcome.FAILED
+        assert not argv_log.exists()

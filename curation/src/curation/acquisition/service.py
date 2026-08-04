@@ -14,12 +14,16 @@ re-fetch later on evidence rather than on suspicion.
 **A refusal is data about a source, not a fault in the process.** A URL the fetch
 policy rejects, a body over the ceiling, a museum that has gone away: each records
 a failed fetch against the source and returns, so one bad source in a batch never
-ends the pass over the works behind it. The two things that *do* raise are the
-ones no source is responsible for — the binary being absent, and the disk being
-too full to start — because retrying the work cannot fix either.
+ends the pass over the works behind it. The things that *do* raise are the ones no
+source is responsible for — the binary being absent, the disk being too full to
+start, and a provider whose URLs need resolving having no resolver wired — because
+retrying the work cannot fix any of them. The dividing line is not severity but
+blame: a `failed` row against a URL that is perfectly good sends whoever reads it
+to a museum to look for a problem that is in this deployment.
 """
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -32,7 +36,9 @@ from curation.acquisition.dezoomify import (
 )
 from curation.acquisition.direct import StreamOpener, direct_fetch
 from curation.acquisition.space import NotEnoughSpace, require_free_space
+from curation.acquisition.tiles import TileTargetResolver, resolve_tile_target
 from curation.acquisition.urls import Resolver, UrlRefused, check_fetchable, system_resolver
+from curation.discovery.images import ImageSearchFailure
 from curation.persistence.records import AcquisitionMethod, FetchStatus, Source
 from curation.services.catalogue import CatalogueService
 from curation.services.errors import ServiceError
@@ -127,10 +133,17 @@ class AcquisitionService:
         settings: AcquisitionSettings,
         *,
         open_stream: StreamOpener,
+        tile_targets: Mapping[str, TileTargetResolver],
         resolve: Resolver = system_resolver,
     ) -> None:
         self._catalogue = catalogue
         self._settings = settings
+        #: Per provider, how to get from a source's identity URL to something the
+        #: tile fetcher can read. **Required rather than defaulted to empty:** an
+        #: empty map is indistinguishable from a correctly wired one right up to
+        #: the moment a museum source fails, and a default that looks like working
+        #: wiring is precisely the trap this product has now been bitten by twice.
+        self._tile_targets = tile_targets
         #: Injected for the same reason `PreviewCache` injects its fetch: the
         #: transport belongs behind the image seam, and a service that also made
         #: HTTP requests could not be exercised without a network.
@@ -164,6 +177,27 @@ class AcquisitionService:
 
         destination = self._settings.originals_path / _FILENAME.format(artwork_id=artwork_id)
         if source.acquisition_method is AcquisitionMethod.DEZOOMIFY:
+            # The recorded URL identifies the object; the tile fetcher needs the
+            # image service. For most providers those are the same string, and for
+            # a museum serving IIIF they are not — so this is asked rather than
+            # assumed. `check_fetchable` runs again on the answer, because a URL
+            # this deployment did not record is exactly the kind that has to be
+            # checked before it is fetched.
+            #
+            # `TileTargetUnavailable` is deliberately *not* caught, for the same
+            # reason `DezoomifyUnavailable` is not: a provider with no resolver
+            # wired is a deployment fault, no source is at fault, and retrying the
+            # work cannot fix it. Recorded as a failed fetch it would send whoever
+            # reads it to the museum to look for a problem that is in the wiring.
+            try:
+                url = check_fetchable(resolve_tile_target(source, resolvers=self._tile_targets), resolve=self._resolve)
+            except ImageSearchFailure as exc:
+                # The provider *was* asked and could not answer — unreachable, or
+                # holding no image of this object. That is about this source and
+                # this attempt, so it is recorded like any other failed fetch.
+                return self._record_failure(source, f"no image service could be reached for this source: {exc}")
+            except UrlRefused as exc:
+                return self._record_failure(source, f"the resolved image service URL was refused: {exc}")
             return self._acquire_tiled(source, url=url, destination=destination)
         if source.acquisition_method is AcquisitionMethod.DIRECT_HTTP:
             return self._acquire_direct(source, url=url, destination=destination)

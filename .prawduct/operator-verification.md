@@ -188,18 +188,34 @@ it is subjective by nature.
 
 **How to bring it up over the real works, without touching the deployed tree:**
 
+> **Corrected 2026-08-04 — the recipe below replaces one that could not work.**
+> It set `ART_ROOT` in the environment, and **`ART_ROOT` cannot be overridden that
+> way**: `config.py` calls `load_dotenv(override=True)`, and `find_dotenv()` walks
+> up from *that module's own file*, so the checkout's `.env` wins over the
+> environment no matter where the command is run from or what is exported. The old
+> recipe therefore seeded the real `ART_ROOT` while printing that it had, which
+> reads as success — it says which root it used in its first line, and that line
+> was the only tell. Verified by running it.
+
 ```sh
-# A scratch art root with the real masters read-only behind a symlink.
-SCRATCH=$(mktemp -d)/art && mkdir -p "$SCRATCH" && ln -s ~/art/raw "$SCRATCH/raw"
+# The masters, read-only behind a symlink, inside the ART_ROOT `.env` names.
+# One `rm ~/samsung-art/raw` undoes it; nothing is copied.
+ln -sfn ~/art/raw "$(grep '^ART_ROOT=' .env | cut -d= -f2-)/raw"
 cd curation
-ART_ROOT=$SCRATCH uv run python -m curation.seed ../all.json
-ART_ROOT=$SCRATCH CURATION_PORT=8791 uv run python -m curation
-# then open http://127.0.0.1:8791/
+uv run python -m curation.seed ../all.json   # re-runnable; fills in what was absent
+uv run python -m curation
+# then open the CURATION_PORT from .env — http://127.0.0.1:8770/ as shipped
 ```
+
+To serve a *second* copy on another port without disturbing the first, change
+`CURATION_PORT` in `.env` — for the same reason, it is not settable per command.
 
 `~/art` on the dev Mac holds `raw/` and no `ready/`, so every work will show its
 master image and the wall view will report every work as `no_rendition`. **That is
-correct, not a fault** — the television renders live on the Pi. To see a mixed
+correct, not a fault** — and as of 2026-08-04 it is also permanent for these
+works: the Pi was rebuilt and the 2024 renditions were on the old card, so
+`ready/` exists nowhere. Re-rendering the corpus is real work, not a missing
+symlink. To see a mixed
 manifest, give a few works a rendition first; the wall view is the section most
 worth seeing with both states in it.
 

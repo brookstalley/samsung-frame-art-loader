@@ -213,6 +213,13 @@ def services(
             panel_height=settings.tv_panel_height_px,
             box=settings.tv_artwork_box,
         ),
+        # A museum source records the object's page; the tile fetcher needs the
+        # image service, and only the provider can say where that is. Wired here
+        # even though these tests configure no image *search*, because a catalogue
+        # holding artic works and a deployment able to fetch them is a real
+        # arrangement — and without it every such fetch refuses before reaching
+        # the code the test is about.
+        tile_targets={"artic": lambda url: f"https://www.artic.edu/iiif/2/{abs(hash(url)) % 100000}"},
     )
 
 

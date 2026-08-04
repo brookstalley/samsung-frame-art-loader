@@ -309,3 +309,115 @@ def test_the_response_the_findings_recorded_parses_field_for_field():
         "Ann-In Memory",
         "In Memory of My Father",
     ]
+
+
+#: The single-object response, as `GET /artworks/91194?fields=id,image_id` really
+#: returns it — `data` is one object rather than a list, and `config` carries the
+#: IIIF base the same way the search envelope does. Measured 2026-08-04 against
+#: the live API for Brancusi's *Golden Bird*.
+GOLDEN_BIRD_OBJECT = {
+    "data": {"id": 91194, "title": "Golden Bird", "image_id": "c8024369-fa0a-6438-0072-f9b9929a800b"},
+    "info": {"license_text": "…", "license_links": ["…"], "version": "1.14"},
+    "config": {"iiif_url": "https://www.artic.edu/iiif/2", "website_url": "http://www.artic.edu"},
+}
+
+
+class TestResolvingAnObjectsImageService:
+    """The step whose absence meant no artic work could ever be fetched.
+
+    A source records where a curator goes to check provenance; the tile fetcher
+    needs where the pixels are served. These are the tests that the client can
+    get from the first to the second.
+    """
+
+    def test_an_api_link_resolves_to_the_iiif_base_for_its_image(self):
+        """The shape discovery records on every instance it accepts."""
+        client = _client(lambda request: httpx.Response(200, json=GOLDEN_BIRD_OBJECT))
+
+        target = client.tile_url("https://api.artic.edu/api/v1/artworks/91194")
+
+        assert target == "https://www.artic.edu/iiif/2/c8024369-fa0a-6438-0072-f9b9929a800b"
+
+    def test_a_museum_page_url_resolves_to_the_same_place(self):
+        """The shape the 2024 index carries, which seeding wrote onto 32 sources."""
+        client = _client(lambda request: httpx.Response(200, json=GOLDEN_BIRD_OBJECT))
+
+        target = client.tile_url("https://www.artic.edu/artworks/91194/golden-bird")
+
+        assert target == "https://www.artic.edu/iiif/2/c8024369-fa0a-6438-0072-f9b9929a800b"
+
+    def test_the_object_is_asked_for_by_id_and_only_for_what_is_needed(self):
+        captured: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            return httpx.Response(200, json=GOLDEN_BIRD_OBJECT)
+
+        _client(handler).tile_url("https://www.artic.edu/artworks/91194/golden-bird")
+
+        assert captured[0].url.path == "/api/v1/artworks/91194"
+        assert captured[0].url.params["fields"] == "id,image_id"
+
+    def test_the_museum_identifies_the_caller_on_this_call_too(self):
+        """The API asks callers to say who they are; a new call must not forget."""
+        captured: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            return httpx.Response(200, json=GOLDEN_BIRD_OBJECT)
+
+        _client(handler).tile_url("https://api.artic.edu/api/v1/artworks/91194")
+
+        assert captured[0].headers["AIC-User-Agent"] == USER_AGENT
+
+    def test_an_advertised_iiif_base_is_used_when_the_museum_moves_its_path(self):
+        """Reading the base from the response is why a service move needs no release."""
+        moved = {**GOLDEN_BIRD_OBJECT, "config": {"iiif_url": "https://www.artic.edu/iiif/3"}}
+
+        target = _client(lambda request: httpx.Response(200, json=moved)).tile_url("https://api.artic.edu/api/v1/artworks/91194")
+
+        assert target == "https://www.artic.edu/iiif/3/c8024369-fa0a-6438-0072-f9b9929a800b"
+
+    def test_an_advertised_base_on_another_host_is_refused(self):
+        """The response builds a URL this process fetches and writes to disk."""
+        hijacked = {**GOLDEN_BIRD_OBJECT, "config": {"iiif_url": "https://evil.example.com/iiif/2"}}
+
+        target = _client(lambda request: httpx.Response(200, json=hijacked)).tile_url(
+            "https://api.artic.edu/api/v1/artworks/91194"
+        )
+
+        assert target.startswith("https://www.artic.edu/iiif/2/")
+
+    def test_a_url_that_names_no_object_is_refused_without_asking_the_museum(self):
+        asked: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            asked.append(request)
+            return httpx.Response(200, json=GOLDEN_BIRD_OBJECT)
+
+        with pytest.raises(ImageSearchFailure, match="does not name an Art Institute object"):
+            _client(handler).tile_url("https://artsandculture.google.com/asset/golden-bird/abc")
+
+        assert asked == []
+
+    def test_a_number_outside_the_object_path_is_not_read_as_an_id(self):
+        """`/artworks/<id>` is a path segment, not any digits in the URL."""
+        with pytest.raises(ImageSearchFailure):
+            _client(lambda request: httpx.Response(200, json=GOLDEN_BIRD_OBJECT)).tile_url(
+                "https://www.artic.edu/collection?page=91194"
+            )
+
+    def test_an_object_the_museum_publishes_no_image_of_is_named_as_that(self):
+        """Distinct from a failed lookup: the record is real and carries no picture."""
+        imageless = {**GOLDEN_BIRD_OBJECT, "data": {"id": 91194, "title": "Golden Bird", "image_id": None}}
+
+        with pytest.raises(ImageSearchFailure, match="publishes no image"):
+            _client(lambda request: httpx.Response(200, json=imageless)).tile_url("https://api.artic.edu/api/v1/artworks/91194")
+
+    def test_a_museum_that_cannot_be_reached_is_a_failure_not_a_guess(self):
+        with pytest.raises(ImageSearchFailure):
+            _client(lambda request: httpx.Response(503)).tile_url("https://api.artic.edu/api/v1/artworks/91194")
+
+    def test_the_client_reports_the_provider_its_instances_are_recorded_under(self):
+        """Wiring keys resolvers by this rather than repeating the name."""
+        assert _client(lambda request: httpx.Response(200, json=GOLDEN_BIRD_OBJECT)).provider == PROVIDER

@@ -32,6 +32,7 @@ identity comparison above the seam.
 """
 
 import logging
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any, Final
 from urllib.parse import quote
@@ -48,6 +49,18 @@ log = logging.getLogger(__name__)
 PROVIDER: Final[str] = "artic"
 
 _SEARCH_URL: Final[str] = "https://api.artic.edu/api/v1/artworks/search"
+
+#: Where one object is read by id. The same collection the search endpoint is
+#: part of, named separately because a URL built by trimming another's last
+#: segment reads as a coincidence rather than as an address.
+_OBJECT_URL: Final[str] = "https://api.artic.edu/api/v1/artworks"
+
+#: The object id inside either URL an Art Institute source carries: the museum's
+#: own page (`www.artic.edu/artworks/91194/golden-bird`) and its API link
+#: (`api.artic.edu/api/v1/artworks/91194`) put the same number in the same place.
+#: Anchored to a path segment so a number anywhere else in the URL — a query
+#: parameter, a fragment — cannot be read as one.
+_OBJECT_ID: Final[re.Pattern[str]] = re.compile(r"/artworks/(\d+)(?:/|$|\?|#)")
 
 #: The fields asked for. Explicit rather than taking the default projection: the
 #: default omits `image_id` and the dimensions, which are the two things an
@@ -135,6 +148,11 @@ class ArticImageSearch:
         )
         self._headers = {"AIC-User-Agent": user_agent}
 
+    @property
+    def provider(self) -> str:
+        """The name this client's instances are recorded under."""
+        return PROVIDER
+
     def find_images(self, query: ImageQuery) -> Sequence[FoundImage]:
         """Every instance the collection holds for this work, unjudged.
 
@@ -164,6 +182,44 @@ class ArticImageSearch:
             },
         )
         return found
+
+    def tile_url(self, url: str) -> str:
+        """The IIIF image service for the object `url` names.
+
+        The recorded URL is the object's identity — either the museum's own page
+        or its API link — and neither is something a tile fetcher can read. What
+        it needs is `{iiif_base}/{image_id}`, and `image_id` is a fact only the
+        collection holds, so this asks for it rather than deriving it.
+
+        The base comes from the same response, checked the same way previews'
+        does: a service move needs no release here, but the response cannot
+        redirect the fetcher off the museum's own host.
+
+        Failure is `ImageSearchFailure` — the same kind every other question this
+        client asks reports — so that reaching the museum stays this module's
+        vocabulary and the fetch path translates it into its own.
+        """
+        object_id = _object_id(url)
+        if object_id is None:
+            raise ImageSearchFailure(
+                f"{url!r} does not name an Art Institute object, so there is no collection record to ask "
+                "for its image service."
+            )
+        payload = self._get(
+            f"{_OBJECT_URL}/{object_id}?fields=id,image_id",
+            what=f"look up the image service for object {object_id}",
+        )
+        data = payload.get("data")
+        image_id = _text(data.get("image_id")) if isinstance(data, dict) else ""
+        if not image_id:
+            # A real answer that carries no image: the museum holds the object and
+            # publishes no picture of it. Distinct from a failed lookup, and the
+            # difference matters to whoever reads the recorded failure.
+            raise ImageSearchFailure(
+                f"The Art Institute's record for object {object_id} carries no image_id, so the collection "
+                "publishes no image of it."
+            )
+        return f"{_iiif_base(payload.get('config')).rstrip('/')}/{image_id}"
 
     def fetch_preview(self, url: str) -> bytes | None:
         """The preview bytes, or `None` when they could not be got.
@@ -279,6 +335,12 @@ def _iiif_base(config: object) -> str:
                 extra={"event": "phase_two.iiif_base_rejected", "provider": PROVIDER, "advertised": advertised},
             )
     return _IIIF_FALLBACK
+
+
+def _object_id(url: str) -> str | None:
+    """The collection's id for the object a source URL names, or `None`."""
+    match = _OBJECT_ID.search(url)
+    return None if match is None else match.group(1)
 
 
 def _text(raw: object) -> str:

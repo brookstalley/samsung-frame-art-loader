@@ -16,6 +16,7 @@ facts about the product rather than conveniences of one call site, which is why
 they are settled in one place instead of per constructor.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from curation.acquisition.direct import StreamOpener
 from curation.acquisition.mat import MatEngine
 from curation.acquisition.preparation import PreparationService, PreparationSettings
 from curation.acquisition.service import AcquisitionService, AcquisitionSettings
+from curation.acquisition.tiles import TileTargetResolver
 from curation.acquisition.transport import no_transport
 
 # Module scope, and the three `_default_*` helpers below used to import this at
@@ -124,6 +126,7 @@ class Services:
         previews: PreviewSettings | None = None,
         acquisition: AcquisitionSettings | None = None,
         open_stream: StreamOpener | None = None,
+        tile_targets: Mapping[str, TileTargetResolver] | None = None,
         preparation: PreparationSettings | None = None,
         mat_engine: MatEngine | None = None,
     ) -> Services:
@@ -189,6 +192,22 @@ class Services:
                 # a real client here would let that mistake reach a museum from a
                 # test suite instead of failing where it was made.
                 open_stream=open_stream or no_transport,
+                # Only a provider whose recorded URL is an identity needs one, and
+                # the museum client is the thing that can answer — so by default
+                # this is exactly the configured image provider. A deployment with
+                # none configured therefore has no resolver either, and an artic
+                # fetch refuses by name rather than handing the tile fetcher a URL
+                # it cannot read: without credentials to ask the collection for an
+                # object's image service, there is genuinely no way to reach it.
+                #
+                # Overridable because resolving one object and searching a whole
+                # collection are separate capabilities that today's one provider
+                # happens to serve both of.
+                tile_targets=(
+                    tile_targets
+                    if tile_targets is not None
+                    else ({} if image_search is None else {image_search.provider: image_search.tile_url})
+                ),
             ),
             preparation=PreparationService(
                 catalogue_service,
