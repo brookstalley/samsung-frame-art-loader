@@ -184,6 +184,18 @@ Panel geometry was briefly listed as a second shared value; it is not, because
   deployment's figure, and the resolved box is logged at startup beside the panel
   it came from, because a wrong mat is otherwise visible only as works being
   labelled oddly in the review grid.)*
+
+  *(**Three more joined them on 2026-08-03**, when the mat engine landed, and are
+  curation-only for a different reason — display never asks a model anything:
+  `MAT_MODEL`, `MAT_MAX_OUTPUT_TOKENS` and `MAT_IMAGE_MAX_EDGE`. The middle one
+  is a correctness value rather than a limit: a reservation that does not clear
+  the model's *reasoning* budget returns empty content billed in full, and the
+  work is then matted by the mechanical fallback with only `MatColor.method`
+  recording that anything went wrong. The model is logged at startup alongside
+  the discovery model, and a deployment with no `OPENROUTER_API_KEY` logs that
+  every mat will come from the dominant colour — which is a supported deployment,
+  not a failure, but one worth reading in the journal rather than inferring from
+  forty rows.)*
 - **E-paper panel geometry** (1448×1072) — **display only**, for label typesetting.
 
 Because neither is shared, neither can drift between planes. A wrong TV size is
