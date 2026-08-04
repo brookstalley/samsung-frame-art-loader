@@ -50,7 +50,14 @@
 
 ## 2026-08-04: A retry cannot cost a work its image — the other half of the promise
 
-<!-- prawduct: scope=v1-build -->
+<!-- prawduct: status=shipped | scope=v1-build -->
+
+<!-- No `chunks=` on purpose: this entry is issue #67 and the review round that
+     followed it, not a chunk's build. 18A and 18B carry their own entries and
+     their own checkboxes; naming a chunk here would flip a box a second time or,
+     worse, flip one for work nobody did. No `release=` either — this product
+     tracks no version in the change-log and ships no release-notes view, so the
+     only entry carrying one is the format example in this file's header. -->
 
 **Why:** the surface told a curator that retrying a fetch was safe, and for one of
 the two ways an attempt can end that was false. Issue #67, filed by this branch's
