@@ -760,3 +760,34 @@ The check is one grep on the *thing's name* at the moment of deciding, not later
 every artifact naming it, plus the backlog. Sibling of the rule "When a behaviour
 is retired, grep the sentences that justified it, not just the code", which covers
 retiring a behaviour that exists; this covers retiring one that never will.
+
+## When a chunk is parked behind access it does not have, check which of its DEPENDENCIES actually need that access — a dependency inherits the parking by adjacency rather than by need, and one that gates the parked work is the cheapest thing to take early
+
+**2026-08-04.** Issue #13 — the SD-card storage decision — was Chunk 03's sole
+declared dependency, marked "blocking for this chunk only" when the plan was
+authored on 2026-07-20. Chunk 03 is bench-gated, so it moved with the hardware
+block every time the bench lapsed: parked on 2026-07-20, unparked 2026-07-31,
+re-parked 2026-08-02 with 05, 04, 12 and 13.
+
+**The decision itself never needed the bench.** It is a choice between storage
+media, answerable from the write profile and the existing artifacts, and the
+operator settled it in one exchange with no hardware present. It sat parked for
+two weeks because the *chunk* it blocked was parked, not because anything about
+the decision required waiting.
+
+The failure is that the plan's own re-sequencing rule operates on chunks, and a
+dependency has no position of its own — it moves wherever the chunk sits. Nothing
+was written down that was wrong; the parking was simply never questioned, because
+the thing that needed questioning was one level below what the rule ranges over.
+
+**The tell was in the chunk entry the whole time.** Chunk 03's `Depends on:` line
+named an *operator decision*, not a hardware step — and its own description said
+the decision "determines the paths later chunks bake into deployment", which is an
+argument for taking it as early as possible rather than as late. A dependency whose
+description explains why it must come first, sitting in a chunk parked to the back,
+is the shape to look for.
+
+**Generalises past bench access.** The same reasoning covers any access
+constraint — a credential, a staging environment, a third party's availability. Ask
+of each dependency whether it needs the thing being waited for, or is merely
+adjacent to work that does.

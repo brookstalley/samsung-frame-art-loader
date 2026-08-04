@@ -324,9 +324,38 @@ asset.** Write-heavy tile caching plus ~10 GB of artwork on consumer flash, with
 unexpected power loss. SQLite plus power loss on consumer flash is the classic Pi
 corruption story.
 
-This is what makes the backup *and restore* path load-bearing rather than
-diligent. Two cheap mitigations, neither yet decided: move `ART_ROOT` and the
-catalogue to USB storage, or move to SSD boot entirely. Either closes it.
+**Decided 2026-08-04: the card stays.** `ART_ROOT` and the catalogue remain on the
+128 GB SD card — no USB SSD, no SSD boot, no network storage. The reasoning is the
+write *profile* rather than the medium's reputation. The image tree is additive and
+written once: works are added, and rarely deleted or rebuilt, so the total bytes
+written is bounded by the size of the collection rather than by churn. A collection
+that eventually fills most of the card is on the order of a hundred gigabytes
+written across years, which is a small fraction of any modern card's rated
+endurance. What wears a card out is small writes that never stop, and this product
+has exactly two — the journal and the display heartbeat. Both are bounded
+explicitly, below and in `observability-strategy.md` § The Health Surface, rather
+than being left for the storage choice to absorb.
+
+*The alternatives, and why they lost.* **USB SSD for `ART_ROOT`, or SSD boot** —
+issue #13's two original options. Both work, and the Pi 4's USB 3.0 ports make
+either comfortably fast, but they buy endurance this write profile does not need,
+and USB boot adds a second failure class in enclosure and UASP behaviour for a
+speed benefit nothing here requires. **`ART_ROOT` on network storage**, raised and
+rejected the same day: `catalogue_path` resolves to `art_root / catalogue.sqlite`,
+so this puts SQLite on a network filesystem — where advisory locking is unreliable,
+and WAL, the mode that would otherwise reduce the exposure, cannot be used at all
+because it requires shared memory between processes on a single host. It would also
+put the wall's uptime behind a second machine, since the display plane polls the
+manifest and reads the image tree continuously, and it would rest the manifest and
+heartbeat channels' atomic write-and-rename on semantics a network filesystem
+decides rather than the kernel.
+
+*The trade-off, stated plainly.* Card death costs a rebuild plus whatever curation
+happened since the last backup, at an accepted frequency of once every few years.
+**That makes the backup and restore path the entire mitigation for this risk rather
+than a complement to it** — and it is not built. Until issue #14 lands, this risk is
+*decided* rather than *closed*: nothing on the Pi today would survive the card. The
+storage medium is no longer the open question; the backup is.
 
 **Journal growth is an unguarded path to that same failure.** Structured logging is
 the product's primary observability signal and both planes log continuously to the

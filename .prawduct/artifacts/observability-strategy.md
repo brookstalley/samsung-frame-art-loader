@@ -233,6 +233,31 @@ manufactured by the mechanism built to detect it, which is why the key is named
 here rather than left to the writer. Everything else in the document is the
 writer's to shape: the reader hands the whole object through untouched.
 
+**The interval is 60 seconds, and it is a wear budget as much as a freshness one.**
+This file is rewritten forever, on the same medium as the catalogue, and the
+storage decision in `operational-spec.md` § Risks rests on this product having no
+unbounded small-write source: a writer that borrowed the manifest poll's ~1 s
+cadence by symmetry would commit roughly 86,400 write-and-rename cycles a day to
+that medium in perpetuity. The ceiling on the other side is the rotation interval —
+the document names the work *currently* displayed, so a heartbeat slower than the
+wall's rotation would report works the wall had already left, and would skip others
+entirely. Sixty seconds sits comfortably under the 180 s rotation default with
+margin for a faster theme. A theme rotating faster than the heartbeat will have
+works the panel never names; that is a reporting limitation of a coarse cadence,
+not a fault, and it costs nothing because no display behaviour reads this file.
+
+Freshness costs nothing here either, because the panel states staleness in absolute
+terms rather than judging it: "last heartbeat: 4 days ago" reads the same whether
+the interval is one second or sixty, and nothing downstream compares the age to a
+threshold.
+
+> `[DECISION: the display heartbeat is written every 60 seconds | the cadence was
+> unspecified while being the product's only unbounded small-write source on the
+> medium named as the top operational risk, and the reader judges heartbeat age
+> absolutely rather than against a threshold, so a coarse interval costs no
+> fidelity; bounded above by the rotation interval, since the document names the
+> work currently displayed | user can veto/override]`
+
 > `[DECISION: display writes a heartbeat file rather than curation reading
 > display-state.sqlite directly | a file keeps the planes' schemas decoupled and
 > reuses a discipline already proven for the manifest, where a cross-process read
