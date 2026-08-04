@@ -626,3 +626,193 @@ class TestAFailedRetryCostsTheWorkNothing:
 
         assert result.outcome is AcquisitionOutcome.FAILED
         assert (acq_settings.tile_cache_path / source.id).is_dir(), "the retry lost its head start"
+
+
+class TestARetryNeverLowersTheQualityOfWhatIsHeld:
+    """Constraint 16, and the half of the retry promise staging does not keep.
+
+    Staging covers the fetch that *fails*. A fetch that succeeds *partially* is
+    not a failure — it arrives with usable bytes and a real image — so it reached
+    promotion on the same path a complete one does and overwrote whatever the work
+    was displaying. That is the data-loss shape: the curator is told retrying is
+    safe, retries a work holding a complete master, and is handed back a gappy one
+    with nothing recording that it used to be whole.
+
+    The seeds below differ in *dimensions* rather than only in bytes, so an
+    assertion can tell which image survived rather than only that some image did.
+    """
+
+    @staticmethod
+    def _binary(tmp_path: Path, body: str) -> str:
+        script = tmp_path / "fake-dezoomify-quality"
+        script.write_text("#!/bin/sh\n" + body)
+        script.chmod(script.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        return str(script)
+
+    def _tiled_work(self, service):
+        return _work_with_source(
+            service,
+            method=AcquisitionMethod.DEZOOMIFY,
+            url="https://www.artic.edu/iiif/2/abc/info.json",
+        )
+
+    def _settings(self, acq_settings, tmp_path, seed_name: str, *, width: int, height: int, complete: bool):
+        from dataclasses import replace
+
+        seed = tmp_path / seed_name
+        seed.write_bytes(_jpeg_bytes(width, height))
+        body = _copies_to_last_arg(seed)
+        if not complete:
+            body = body.replace(
+                "exit 0\n",
+                'echo "[WARN ] Only 120 tiles out of 238 could be downloaded." >&2\nexit 1\n',
+            )
+        return replace(acq_settings, tile_binary=self._binary(tmp_path, body))
+
+    def test_a_partial_refetch_does_not_replace_a_complete_master(self, service, acq_settings, tmp_path):
+        work, source = self._tiled_work(service)
+        complete = self._settings(acq_settings, tmp_path, "whole.jpg", width=400, height=300, complete=True)
+        _acquisition(service, complete, _serves(b"")).acquire(work.id)
+        held = service.get_original(work.id)
+        held_file = acq_settings.art_root / held.relative_path
+
+        gappy = self._settings(acq_settings, tmp_path, "gappy.jpg", width=120, height=90, complete=False)
+        result = _acquisition(service, gappy, _serves(b"")).acquire(work.id, source_id=source.id)
+
+        assert result.outcome is AcquisitionOutcome.KEPT_HELD
+        assert not result.acquired
+        # The image itself, not merely a row pointing at one: dimensions identify
+        # which of the two seeds is on disk.
+        with Image.open(held_file) as image:
+            assert image.size == (400, 300), "the gappy re-fetch overwrote the complete master"
+        reread = service.get_original(work.id)
+        assert (reread.content_hash, reread.width) == (held.content_hash, 400)
+        assert reread.fetch_status is FetchStatus.OK
+
+    def test_the_refused_attempt_leaves_no_trace_on_the_source(self, service, acq_settings, tmp_path):
+        """Stamping the source `partial_tiles` would erase the fact of the fetch
+        that produced the image being kept — which is what the next comparison reads."""
+        work, source = self._tiled_work(service)
+        complete = self._settings(acq_settings, tmp_path, "whole.jpg", width=400, height=300, complete=True)
+        _acquisition(service, complete, _serves(b"")).acquire(work.id)
+
+        gappy = self._settings(acq_settings, tmp_path, "gappy.jpg", width=120, height=90, complete=False)
+        _acquisition(service, gappy, _serves(b"")).acquire(work.id, source_id=source.id)
+
+        refreshed = next(s for s in service.list_sources(work.id) if s.id == source.id)
+        assert refreshed.last_fetch_status is FetchStatus.OK
+
+    def test_the_refused_bytes_are_discarded_rather_than_left_beside_the_original(self, service, acq_settings, tmp_path):
+        work, source = self._tiled_work(service)
+        complete = self._settings(acq_settings, tmp_path, "whole.jpg", width=400, height=300, complete=True)
+        _acquisition(service, complete, _serves(b"")).acquire(work.id)
+        held = service.get_original(work.id)
+
+        gappy = self._settings(acq_settings, tmp_path, "gappy.jpg", width=120, height=90, complete=False)
+        _acquisition(service, gappy, _serves(b"")).acquire(work.id, source_id=source.id)
+
+        remaining = sorted(p.name for p in acq_settings.originals_path.glob("*"))
+        assert remaining == [Path(held.relative_path).name], "the refused fetch was orphaned on disk"
+
+    def test_the_refused_attempt_keeps_the_tiles_so_asking_again_is_still_cheap(self, service, acq_settings, tmp_path):
+        work, source = self._tiled_work(service)
+        complete = self._settings(acq_settings, tmp_path, "whole.jpg", width=400, height=300, complete=True)
+        _acquisition(service, complete, _serves(b"")).acquire(work.id)
+
+        gappy = self._settings(acq_settings, tmp_path, "gappy.jpg", width=120, height=90, complete=False)
+        _acquisition(service, gappy, _serves(b"")).acquire(work.id, source_id=source.id)
+
+        assert (acq_settings.tile_cache_path / source.id).is_dir()
+
+    def test_a_complete_refetch_does_replace_a_held_partial(self, service, acq_settings, tmp_path):
+        """The guard must not freeze a work at the first gappy image it got."""
+        work, source = self._tiled_work(service)
+        gappy = self._settings(acq_settings, tmp_path, "gappy.jpg", width=120, height=90, complete=False)
+        first = _acquisition(service, gappy, _serves(b"")).acquire(work.id)
+        assert first.outcome is AcquisitionOutcome.PARTIAL
+        assert service.get_original(work.id).fetch_status is FetchStatus.PARTIAL_TILES
+
+        complete = self._settings(acq_settings, tmp_path, "whole.jpg", width=400, height=300, complete=True)
+        result = _acquisition(service, complete, _serves(b"")).acquire(work.id, source_id=source.id)
+
+        assert result.outcome is AcquisitionOutcome.ACQUIRED
+        reread = service.get_original(work.id)
+        assert (reread.width, reread.fetch_status) == (400, FetchStatus.OK)
+
+    def test_a_partial_replaces_a_held_partial(self, service, acq_settings, tmp_path):
+        """Neither is authoritative and the second may hold more tiles; refusing
+        would freeze the work at its first partial with no way forward."""
+        work, source = self._tiled_work(service)
+        first = self._settings(acq_settings, tmp_path, "gappy-one.jpg", width=120, height=90, complete=False)
+        _acquisition(service, first, _serves(b"")).acquire(work.id)
+
+        second = self._settings(acq_settings, tmp_path, "gappy-two.jpg", width=360, height=240, complete=False)
+        result = _acquisition(service, second, _serves(b"")).acquire(work.id, source_id=source.id)
+
+        assert result.outcome is AcquisitionOutcome.PARTIAL
+        reread = service.get_original(work.id)
+        assert (reread.width, reread.fetch_status) == (360, FetchStatus.PARTIAL_TILES)
+
+    def test_a_first_partial_acquisition_is_still_held(self, service, acq_settings, tmp_path):
+        """There is nothing to lower. A gappy image beats no image, which is why
+        `partial_tiles` is a recorded outcome rather than a refusal."""
+        work, _ = self._tiled_work(service)
+        gappy = self._settings(acq_settings, tmp_path, "gappy.jpg", width=120, height=90, complete=False)
+
+        result = _acquisition(service, gappy, _serves(b"")).acquire(work.id)
+
+        assert result.outcome is AcquisitionOutcome.PARTIAL
+        assert service.get_original(work.id) is not None
+
+    def test_a_partial_does_not_replace_an_original_of_unrecorded_completeness(self, service, acq_settings, tmp_path):
+        """Rows written before `fetch_status` existed — the seeded 2024 corpus —
+        cannot be told from complete ones, so they get the protective reading."""
+        work, source = self._tiled_work(service)
+        complete = self._settings(acq_settings, tmp_path, "whole.jpg", width=400, height=300, complete=True)
+        _acquisition(service, complete, _serves(b"")).acquire(work.id)
+        held = service.get_original(work.id)
+        # Exactly what the seed writes, and what a pre-column row reads back as.
+        service.record_original(
+            artwork_id=work.id,
+            source_id=source.id,
+            path=held.relative_path,
+            width=held.width,
+            height=held.height,
+            byte_size=held.byte_size,
+            content_hash=held.content_hash,
+            fetch_status=None,
+        )
+        assert service.get_original(work.id).fetch_status is None
+
+        gappy = self._settings(acq_settings, tmp_path, "gappy.jpg", width=120, height=90, complete=False)
+        result = _acquisition(service, gappy, _serves(b"")).acquire(work.id, source_id=source.id)
+
+        assert result.outcome is AcquisitionOutcome.KEPT_HELD
+        assert "unrecorded completeness" in result.detail
+        assert service.get_original(work.id).width == 400
+
+    def test_a_complete_refetch_from_a_smaller_scan_is_allowed(self, service, acq_settings, tmp_path):
+        """Pixel count is deliberately not compared. Moving a work to another
+        institution's complete file is a choice acceptance already made, and a
+        guard that second-guessed it would refuse a legitimate re-acquisition."""
+        work, source = self._tiled_work(service)
+        large = self._settings(acq_settings, tmp_path, "large.jpg", width=400, height=300, complete=True)
+        _acquisition(service, large, _serves(b"")).acquire(work.id)
+
+        smaller = self._settings(acq_settings, tmp_path, "smaller.jpg", width=160, height=120, complete=True)
+        result = _acquisition(service, smaller, _serves(b"")).acquire(work.id, source_id=source.id)
+
+        assert result.outcome is AcquisitionOutcome.ACQUIRED
+        assert service.get_original(work.id).width == 160
+
+    def test_a_direct_refetch_is_unaffected_because_it_cannot_come_back_partial(self, service, acq_settings):
+        """The direct path records `ok` or nothing at all, so the guard never
+        fires on it — asserted so a later change that makes direct fetches partial
+        cannot quietly skip the comparison."""
+        work, _ = _work_with_source(service)
+        _acquisition(service, acq_settings, _serves(_jpeg_bytes(400, 300))).acquire(work.id)
+
+        result = _acquisition(service, acq_settings, _serves(_jpeg_bytes(160, 120))).acquire(work.id)
+
+        assert result.outcome is AcquisitionOutcome.ACQUIRED
+        assert service.get_original(work.id).fetch_status is FetchStatus.OK

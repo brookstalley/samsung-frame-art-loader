@@ -414,6 +414,7 @@ class CatalogueService:
         height: int,
         byte_size: int,
         content_hash: str,
+        fetch_status: FetchStatus | None,
     ) -> Original:
         """Record the master image acquired for this work, replacing any held before.
 
@@ -422,6 +423,21 @@ class CatalogueService:
         this replaces rather than refusing. Renditions made from the previous
         image read as stale immediately afterwards, because they carry the hash
         they were made from.
+
+        **Whether the replacement is an improvement is not decided here.** This
+        records what the caller proved; refusing a partial result that would
+        overwrite a complete master is the acquisition service's judgement, made
+        before any bytes are promoted, because the file on disk and the row have
+        to be refused together or the two disagree.
+
+        `fetch_status` has no default, and `None` is a real value rather than an
+        omission. It says how the bytes being recorded came back; a default would
+        claim `ok` on behalf of every caller that forgot, which is the reading that
+        loses images. `None` is what the seed passes, honestly — it ingests files
+        the 2024 pipeline left on disk, which this product never fetched and whose
+        completeness nothing recorded. Readers treat unrecorded as complete, so the
+        seeded corpus is protected without anything having to assert a fact about
+        it that nobody checked.
         """
         self._require_artwork(artwork_id)
         source = self._store.get_source(source_id)
@@ -435,6 +451,13 @@ class CatalogueService:
             raise ServiceError(f"An original cannot be {byte_size} bytes; a zero-length file is a failed download.")
         if width <= 0 or height <= 0:
             raise ServiceError(f"An original must have a positive width and height, got {width}x{height}.")
+        if fetch_status is FetchStatus.FAILED:
+            # There are no bytes to record for a failed fetch, so a row claiming
+            # one is a contradiction rather than an unusual case. Refused here
+            # because the value would otherwise be read later as "held quality:
+            # failed", against which every subsequent result looks like an
+            # improvement — the reading constraint 16 exists to prevent.
+            raise ServiceError("An original cannot record a failed fetch; a failed fetch produces no image to hold.")
 
         with self._store.transaction():
             held = self._store.get_original(artwork_id)
@@ -447,6 +470,9 @@ class CatalogueService:
                 height=height,
                 byte_size=byte_size,
                 content_hash=require_text(content_hash, field="content_hash"),
+                fetch_status=(
+                    None if fetch_status is None else require_member(fetch_status, enum=FetchStatus, field="fetch_status")
+                ),
             )
             if held is None:
                 store_write(self._store.add_original, original)

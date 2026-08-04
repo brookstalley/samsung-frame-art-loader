@@ -124,7 +124,12 @@ CREATE TABLE IF NOT EXISTS originals (
     -- A zero-byte file is the 2024 pipeline's known download failure. The
     -- catalogue must not be able to record one as a held original.
     byte_size      INTEGER NOT NULL CHECK (byte_size > 0),
-    content_hash   TEXT NOT NULL
+    content_hash   TEXT NOT NULL,
+    -- How the fetch that produced these bytes ended. Nullable, because the column
+    -- was added to a table that already had rows on disk and the widening step
+    -- can only add columns that allow NULL — a null here means "written before
+    -- this was recorded", which readers treat as complete rather than as partial.
+    fetch_status   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS renditions (
@@ -427,6 +432,7 @@ def _original_row(original: Original) -> dict[str, Any]:
         "height": original.height,
         "byte_size": original.byte_size,
         "content_hash": original.content_hash,
+        "fetch_status": None if original.fetch_status is None else original.fetch_status.value,
     }
 
 
@@ -541,6 +547,10 @@ def _original(row: Mapping[str, Any]) -> Original:
         height=row["height"],
         byte_size=row["byte_size"],
         content_hash=row["content_hash"],
+        # `.get`, not `[...]`: a catalogue file written before this column existed
+        # is widened on open, but a row read through a mapping built from an older
+        # file's columns would raise KeyError where the contract is "unrecorded".
+        fetch_status=None if row.get("fetch_status") is None else FetchStatus(row["fetch_status"]),
     )
 
 

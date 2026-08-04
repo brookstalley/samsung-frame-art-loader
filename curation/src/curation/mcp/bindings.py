@@ -246,6 +246,16 @@ def _acquisition_notice(result: AcquisitionResult) -> str | None:
             "The work holds whatever image it had before; a failed fetch replaces nothing. "
             "art_catalogue(action='sources') shows the other sources this work has, if any."
         )
+    if result.outcome is AcquisitionOutcome.KEPT_HELD:
+        # The one outcome where the source did nothing wrong and the work still
+        # changed nothing, so neither "acquired" nor "failed" describes it. Said in
+        # full because the obvious next move — retry again — has the same result
+        # until the tile server stops dropping tiles.
+        return (
+            "The fetch worked but came back with missing tiles, and the work already holds a better image, "
+            "so nothing was replaced. Retrying repeats this until the source returns every tile; "
+            "art_catalogue(action='sources') shows the work's other sources, if any."
+        )
     return None
 
 

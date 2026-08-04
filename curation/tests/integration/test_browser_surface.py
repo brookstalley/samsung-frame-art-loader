@@ -18,6 +18,7 @@ import pytest
 
 from curation.persistence.records import (
     AcquisitionMethod,
+    FetchStatus,
     MatMethod,
     RenditionKind,
     RightsStatus,
@@ -72,6 +73,7 @@ def hold(service, settings, decodable_jpeg):
             height=height,
             byte_size=(settings.art_root / relative).stat().st_size,
             content_hash=content_hash or f"hash-{artwork.id}",
+            fetch_status=FetchStatus.OK,
         )
         if mat:
             service.record_mat_color(artwork_id=artwork.id, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)
@@ -209,6 +211,7 @@ class TestWorkDetail:
             height=1200,
             byte_size=10,
             content_hash="a-new-acquisition",
+            fetch_status=FetchStatus.OK,
         )
         detail = http.get(f"/api/works/{artwork.id}").json()
         assert [rendition["stale"] for rendition in detail["renditions"]] == [True]
@@ -408,6 +411,7 @@ class TestThumbnailRevalidation:
             height=1500,
             byte_size=(settings.art_root / replacement).stat().st_size,
             content_hash="a-new-acquisition",
+            fetch_status=FetchStatus.OK,
         )
 
         response = http.get(f"/api/works/{artwork.id}/thumbnail", headers={"If-None-Match": stale_etag})

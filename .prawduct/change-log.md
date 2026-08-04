@@ -48,6 +48,77 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-04: A retry cannot cost a work its image — the other half of the promise
+
+<!-- prawduct: scope=v1-build -->
+
+**Why:** the surface told a curator that retrying a fetch was safe, and for one of
+the two ways an attempt can end that was false. Issue #67, filed by this branch's
+own cumulative review, impact L.
+
+**Staging covered the fetch that fails; nothing covered the fetch that succeeds
+partially.** A tiled fetch returning most of its tiles is a *normal outcome* — it
+yields a usable image, `partial_tiles` is recorded, and the work goes on the wall —
+so it arrived at promotion by the same path a complete fetch does and overwrote
+whatever the work was displaying. `retry_acquisition`'s own tips made the trap:
+one recommended retrying *after a partial fetch*, the next reassured that "a
+failed attempt replaces nothing". Both true, and together they read as a promise
+the code did not keep. `Source.last_fetch_status` was written and displayed the
+whole time, and read by no decision.
+
+**`Original.fetch_status` is a new column, and the obvious derivation is why.**
+The temptation is to read the held image's quality off `Source.last_fetch_status`
+for the source that produced it. That is wrong in a way that only shows up on the
+third fetch: the column holds the source's *most recent* attempt, so one failed
+re-fetch overwrites it to `failed` while the held original — protected by staging
+— is still the complete image from before. A guard reading it would conclude "held
+quality: failed", treat anything as an improvement, and let a partial overwrite a
+complete master. The fact belongs to the bytes, not to the source.
+
+Stored rather than derived, in a table whose one other stored-verdict candidate
+was deliberately removed: `display_fit` came off `Original` because a verdict about
+panel geometry goes wrong when the TV changes. `fetch_status` is a fact about an
+event that already happened, which no later deployment can falsify — the same
+footing `width` and `height` stand on. The artifact now says so at the row, because
+a reader who has just absorbed the `display_fit` reasoning is owed the distinction.
+
+**Three judgement calls, each recorded where its rule lives** (constraint 16,
+`data-model.md`). The comparison reads **only** complete-versus-partial — pixel
+count is not consulted, because a complete fetch from a smaller scan is a
+legitimate re-acquisition and refusing it would second-guess a choice acceptance
+already made. **Two partials replace each other freely**, since neither is
+authoritative and no tile count survives into either row to compare; the
+alternative freezes a work at the first gappy image it ever got. And **a null
+`fetch_status` counts as complete** — every row a real deployment already holds is
+null, including all 41 seeded works, and the permissive reading would surrender
+exactly the corpus the mat engine is judged against.
+
+**A refusal is not a failure, and the difference is load-bearing.** The new
+`kept_held` outcome writes nothing at all: no `record_fetch`, so the source keeps
+the status of the fetch that produced the image being kept — the very fact the next
+comparison reads. Recording it as a failure would also stamp `failed` on a source
+that answered correctly and send whoever read it to a museum that is working. The
+tiles survive too, so asking again is still cheap.
+
+**The seed records `None`, which is the honest answer rather than a gap.** It
+adopts files the 2024 pipeline left on disk; it never fetched them and nothing
+observed whether their tiles arrived. Writing `ok` would invent the fact, and
+`partial_tiles` would mark the whole hand-tuned corpus replaceable. **A mutation
+sweep found this branch undefended** — the seed's value was asserted by nothing,
+and both wrong answers passed — which is the fifteenth mutation of fifteen and the
+only survivor of the first pass.
+
+**The api-contract gained a compatibility row it had been missing.** Adding a
+*value* to a result field that reads as an enum is not the same as adding a field:
+an unknown key is ignored, while an unknown value in a key the reader switches on
+falls through every branch, so the caller proceeds as if nothing happened. It is
+Additive here only because every outcome is paired with a `notice` in prose — a
+client that understands no outcome values still relays a sentence. The rule now
+states that condition rather than leaving the next person to guess.
+
+Suite: **1593 curation + 52 root green** (1645 combined), plus the live checks
+behind `-m live_api` and `-m live_binary`. Fifteen mutations, all caught.
+
 ## 2026-08-03: Preparation — a mat that says who chose it, and a bar the corpus states
 
 <!-- prawduct: chunks=18B | status=shipped | scope=v1-build -->

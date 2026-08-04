@@ -15,6 +15,8 @@ import json
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+from curation.persistence.records import FetchStatus
+
 
 async def call(server_url: str, tool: str, **arguments) -> tuple[dict, bool]:
     """Call a tool over real HTTP; return its payload and the protocol's error flag."""
@@ -471,6 +473,7 @@ def _a_work_with_an_original(services, settings, *, width=2400, height=1800):
         height=height,
         byte_size=path.stat().st_size,
         content_hash="hash-one",
+        fetch_status=FetchStatus.OK,
     )
     return work
 

@@ -61,6 +61,7 @@ from curation.persistence.durable import SqliteDurableStore
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import (
     AcquisitionMethod,
+    FetchStatus,
     MatMethod,
     RenditionKind,
     RightsStatus,
@@ -278,6 +279,7 @@ def ready_work(service: CatalogueService):
                 height=4000,
                 byte_size=90_000_000,
                 content_hash=content_hash,
+                fetch_status=FetchStatus.OK,
             )
         if mat:
             service.record_mat_color(artwork_id=work.id, hex_rgb="#27285b", method=MatMethod.VISION_MODEL)

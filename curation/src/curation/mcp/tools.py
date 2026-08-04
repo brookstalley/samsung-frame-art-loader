@@ -157,7 +157,8 @@ ART_CATALOGUE: Final = ToolRecord(
             tips=(
                 "Use it after a failed or partial fetch; action='sources' shows which, and what went wrong last time.",
                 "Omitting source_id uses the work's primary source.",
-                "A failed attempt replaces nothing — the work keeps whatever image it already held.",
+                "Retrying cannot cost the work its image: an attempt that fails replaces nothing, and one that "
+                "comes back with missing tiles is refused outright when the work already holds a complete image.",
             ),
         ),
         Action(

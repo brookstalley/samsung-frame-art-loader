@@ -25,6 +25,7 @@ from curation.acquisition.preparation import (
 )
 from curation.persistence.records import (
     AcquisitionMethod,
+    FetchStatus,
     MatMethod,
     RenditionKind,
     RightsStatus,
@@ -99,6 +100,7 @@ def _work_with_original(service, settings, *, width=2400, height=1800, colour=(3
         height=height,
         byte_size=path.stat().st_size,
         content_hash=content_hash,
+        fetch_status=FetchStatus.OK,
     )
     return work, path
 
@@ -217,6 +219,7 @@ class TestStaleness:
             height=1800,
             byte_size=path.stat().st_size,
             content_hash="hash-two",
+            fetch_status=FetchStatus.OK,
         )
         assert service.list_renditions(work.id)[0].stale is True
 

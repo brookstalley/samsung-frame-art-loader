@@ -14,6 +14,7 @@ from mcp.client.streamable_http import streamable_http_client
 from curation.manifest.builder import ExclusionReason, assess
 from curation.mcp.registry import DESCRIPTION_BUDGET_BYTES
 from curation.mcp.tools import ART_DISPLAY, TOOLS
+from curation.persistence.records import FetchStatus
 from curation.services.errors import ServiceError
 
 #: A regression here silently renames the entire MCP tool surface for every
@@ -243,6 +244,7 @@ def test_a_stale_render_is_refused_in_the_words_the_tip_uses(service, display, r
         height=4000,
         byte_size=90_000_000,
         content_hash="a-later-acquisition",
+        fetch_status=FetchStatus.OK,
     )
 
     # On the reason, not on "render": NO_RENDITION's message says "rendered" too,

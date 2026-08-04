@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from curation.persistence.records import AcquisitionMethod, MatMethod, RenditionKind, RightsStatus, SourceClass
+from curation.persistence.records import AcquisitionMethod, FetchStatus, MatMethod, RenditionKind, RightsStatus, SourceClass
 from curation.services.errors import ServiceError
 from curation.services.thumbnails import THUMBNAIL_MAX_EDGE_PX, ThumbnailSettings, ThumbnailUnavailable
 
@@ -42,6 +42,7 @@ def work(service, settings, decodable_jpeg):
                 height=height,
                 byte_size=(settings.art_root / relative).stat().st_size,
                 content_hash=content_hash,
+                fetch_status=FetchStatus.OK,
             )
         return artwork
 
@@ -93,6 +94,7 @@ class TestWhichImageIsUsed:
             height=1200,
             byte_size=100,
             content_hash="hash-2",
+            fetch_status=FetchStatus.OK,
         )
         assert thumbnails.source_for(artwork.id).kind == "original"
 
@@ -177,6 +179,7 @@ class TestGenerating:
             height=1500,
             byte_size=(settings.art_root / replacement).stat().st_size,
             content_hash="hash-2",
+            fetch_status=FetchStatus.OK,
         )
 
         with Image.open(thumbnails.thumbnail(artwork.id)) as regenerated:

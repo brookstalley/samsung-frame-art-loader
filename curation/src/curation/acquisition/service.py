@@ -52,6 +52,12 @@ class AcquisitionOutcome(Enum):
     ACQUIRED = "acquired"
     PARTIAL = "partial"
     FAILED = "failed"
+    #: The fetch worked and was refused anyway, because promoting it would have
+    #: lowered the quality of the image the work already holds. Distinct from
+    #: `FAILED` on purpose: the source answered correctly, and recording this as a
+    #: failure would put a `failed` status on a working source and send whoever
+    #: reads it to a museum that is fine.
+    KEPT_HELD = "kept_held"
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +75,14 @@ class AcquisitionResult:
 
     @property
     def acquired(self) -> bool:
-        """Whether the work now holds an image, gaps included."""
+        """Whether *this attempt* is the one the work's held image came from.
+
+        `KEPT_HELD` is deliberately false here even though the work does hold an
+        image afterwards: the one caller is the tile-cache reclaim, and reclaiming
+        on a refused promotion would throw away the tiles of the very fetch that
+        was told to try again. "The work has an image" and "this attempt produced
+        it" are different questions, and only the second one has callers.
+        """
         return self.outcome in (AcquisitionOutcome.ACQUIRED, AcquisitionOutcome.PARTIAL)
 
 
@@ -251,8 +264,35 @@ class AcquisitionService:
         make room for bytes that never arrived, and the tool tip promising "a
         failed fetch replaces nothing" is false at exactly the moment a curator
         relies on it.
+
+        **The same promise has a second half, and staging alone does not keep
+        it.** A fetch that succeeds *partially* is not a failure and reaches this
+        method with usable bytes — so before staging was ever involved, a gappy
+        re-fetch would promote straight over a complete master a work was already
+        displaying. A retry is the operation most likely to produce one, because
+        the surface recommends retrying after a partial result. So quality is
+        compared here, and a result that would lower it is discarded with the held
+        image untouched.
         """
         assert staged is not None and content_hash is not None  # noqa: S101 - guarded by `usable` above
+        if refusal := self._would_lower_quality(source.artwork_id, incoming=status):
+            _discard(staged)
+            # Deliberately no `record_fetch`: the source answered, and stamping it
+            # `partial_tiles` would overwrite the status of the fetch that produced
+            # the image the work is keeping — the very fact the next comparison
+            # reads. Nothing about this attempt changes what the work holds, so
+            # nothing about the work is written.
+            log.info(
+                "kept the held original for %s: %s",
+                source.artwork_id,
+                refusal,
+            )
+            return AcquisitionResult(
+                artwork_id=source.artwork_id,
+                source_id=source.id,
+                outcome=AcquisitionOutcome.KEPT_HELD,
+                detail=refusal,
+            )
         try:
             width, height = measure(staged)
         except Exception as exc:  # prawduct:allow prawduct/broad-except -- attacker-influenced bytes, reported not raised
@@ -293,6 +333,7 @@ class AcquisitionService:
             height=height,
             byte_size=byte_size,
             content_hash=content_hash,
+            fetch_status=status,
         )
         self._catalogue.record_fetch(source.id, status=status)
         if not source.is_primary:
@@ -318,6 +359,39 @@ class AcquisitionService:
             byte_size=byte_size,
             width=width,
             height=height,
+        )
+
+    def _would_lower_quality(self, artwork_id: str, *, incoming: FetchStatus) -> str | None:
+        """Say why this result must not replace the held original, or nothing.
+
+        Only the complete/partial distinction is read. Pixel count deliberately is
+        not: a complete fetch from a smaller scan is a legitimate re-acquisition —
+        a curator moving a work to a different institution's file — and refusing it
+        would have this guard second-guess a choice acceptance already made.
+
+        Two partial results replace each other freely. Neither is authoritative,
+        the second may hold more tiles than the first, and no tile count survives
+        into either row to compare — so the only honest options are to allow it or
+        to freeze the work at its first partial forever.
+        """
+        if incoming is not FetchStatus.PARTIAL_TILES:
+            return None
+        held = self._catalogue.get_original(artwork_id)
+        if held is None:
+            # Nothing to lower. A work's first image is an improvement on no image
+            # even with gaps in it, which is why `partial_tiles` is a recorded
+            # outcome rather than a refusal.
+            return None
+        if held.fetch_status is FetchStatus.PARTIAL_TILES:
+            return None
+        # `None` lands here with `OK`, and that is the protective reading rather
+        # than an oversight: a row written before the column existed cannot be told
+        # apart from a complete one, and treating it as partial would let exactly
+        # the oldest originals be overwritten by a gappy fetch.
+        held_quality = "complete" if held.fetch_status is FetchStatus.OK else "of unrecorded completeness"
+        return (
+            f"the fetch came back with missing tiles, and this work already holds an image {held_quality}; "
+            "the held image is kept and nothing was replaced"
         )
 
     def _record_failure(self, source: Source, detail: str) -> AcquisitionResult:

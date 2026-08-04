@@ -799,9 +799,33 @@ breaking change is recoverable in a way a public API's would not be.
 | Add an optional parameter | Additive. Safe. |
 | Add a **required** parameter | Breaking. Add it optional with a default instead. |
 | Add a field to a result | Additive — readers tolerate unknown keys, the discipline `3tears` already uses for its `--json` envelopes. |
+| Add a **value** to a result field that reads as an enum | Additive, **on the condition that the new value's own meaning is carried in prose beside it** — see below. |
 | Remove or rename a **tool** | **Not permitted.** |
 | Remove or rename an **action** | Breaking. Announce, then retire with the retirement noted inline at the old name's site. |
 | Change a tool or action **description** | **Treat as breaking.** |
+
+**On the enum row, added 2026-08-04 when `acquire` first grew a value.** The table
+had no verdict for this and the answer is not the same as adding a *field*. An
+unknown key is ignored by a reader that does not know it; an unknown **value** in a
+key the reader already switches on falls through every branch it has, so the caller
+carries on as though nothing happened — which is the failure mode
+`retry_acquisition`'s new `kept_held` would produce exactly when it matters, a
+curator told nothing while their re-fetch was refused. It is Additive only because
+this surface pairs every outcome with a `notice` in prose, so a client that
+understands no outcome values at all still relays a sentence saying what happened.
+**A result field that reads as an enum and has no prose companion cannot grow a
+value additively** — give it the companion first.
+
+> **A related correction, same date.** `retry_acquisition`'s tip said *"A failed
+> attempt replaces nothing — the work keeps whatever image it already held."* That
+> was true and was read as more than it said: paired with the tip above it
+> recommending retry *after a partial fetch*, it implied retrying was safe, while a
+> partial re-fetch overwrote a complete master. The tip now states what the code
+> enforces. By the last row of the table this is a breaking description change, and
+> it is made anyway: the alternative is keeping wording whose plain reading is false,
+> and the compatibility rule exists to protect callers rather than to preserve
+> sentences that mislead them. (The behaviour it now describes is constraint 16 in
+> `data-model.md`.)
 
 **Tool names never change.** hallucinote states the rule as *"stable surface — never
 rename, only alias"* and enforces it at import time; cordyceps pins its seven tool
