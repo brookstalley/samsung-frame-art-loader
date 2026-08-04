@@ -729,9 +729,9 @@ the comment meant correcting the code.
 That is the asymmetry worth carrying. A comment that merely describes can be
 stale harmlessly. A comment that *justifies* is the record of a decision, so when
 its premise is false the decision was made on that false premise — and the code is
-suspect, not just the sentence. Distinct from [[a-guards-comment-names-what-it-excludes-not-what-it-silently-breaks]],
-which is about what a true comment leaves out; this is about the comment that is
-not true.
+suspect, not just the sentence. Distinct from the rule "A guard's comment names
+what it excludes, not what it silently breaks", which is about what a *true*
+comment leaves out; this is about the comment that is not true.
 
 ## A decision that DESCOPES something has to be walked back through every artifact that promised it — the promising artifacts are never the one you are editing when you make the call
 
@@ -757,7 +757,6 @@ deliverable, and an open backlog item instructs the next person to build the thi
 the product decided against — with the reasoning nowhere they will look.
 
 The check is one grep on the *thing's name* at the moment of deciding, not later:
-every artifact naming it, plus the backlog. Sibling of
-[[when-a-behaviour-is-retired-grep-the-sentences-that-justified-it-not-just-the-code]],
-which covers retiring a behaviour that exists; this covers retiring one that never
-will.
+every artifact naming it, plus the backlog. Sibling of the rule "When a behaviour
+is retired, grep the sentences that justified it, not just the code", which covers
+retiring a behaviour that exists; this covers retiring one that never will.
