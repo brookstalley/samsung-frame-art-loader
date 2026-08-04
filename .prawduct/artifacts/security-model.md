@@ -161,7 +161,7 @@ ones labelled as weak**:
 | # | Bound | Strength |
 |---|---|---|
 | 1 | **The spend cap fails closed**, enforced by OpenRouter server-side rather than by our code | **Strong.** A poisoned page cannot run up an unbounded bill, and it cannot be bypassed by a bug in our metering |
-| 2 | **Tool authority is narrow** — no filesystem access, no shell, no arbitrary fetch. Blast radius stays inside the catalogue | **Strong.** Structural |
+| 2 | **Tool authority is narrow** — no filesystem access, no shell, and **no fetch a curator did not first accept**. Blast radius stays inside the catalogue | **Strong, and narrower than it was.** Structural, but see the re-derivation below: acquisition fetches, and what bounds it is the URL policy rather than the absence of the capability |
 | 3 | **A per-run search cap** bounds a single runaway run, not just the month | **Moderate.** Bounds cost and loop length, not content |
 | 4 | **Acceptance is visible and fully reversible** — it changes the wall, the most conspicuous surface the product has, and archive restores | **Weak as prevention.** It is detection and recovery, not prevention |
 | 5 | **`set_verdict` requires explicit ids**, so the accepted set is enumerated in the transcript | **Weak.** An agent can enumerate first. It buys visibility, not refusal |
@@ -183,6 +183,51 @@ must be re-derived rather than extended:
   bounds 4 and 6 simultaneously, which are the two that depend on a human being
   around.
 - Any credential becoming reachable from a tool.
+
+### The fetch trigger fired — re-derived 2026-08-03
+
+The first of those triggers has landed. Acquisition fetches the URL a `Source`
+names, and it does so with a third-party binary whose input argument accepts a
+local path as readily as a URL: probed at 2.18.1, `dezoomify-rs /etc/hosts` reads
+the file and runs every parser over its contents, loopback addresses are attempted,
+and `--bulk` will take its list of URLs *out of a file it reads*
+(`dezoomify-cli-findings.md`). Those URLs originate in web discovery, which the
+mechanism paragraph above establishes as attacker-influenceable.
+
+**Bound 2 is re-derived rather than extended, per the rule above.** It no longer
+rests on the capability being absent, because it is not. It rests on three
+properties, and each is weaker than "the tool cannot do this":
+
+1. **A fetch is reachable only through a URL a curator already accepted.** Nothing
+   on the surface takes a URL as an argument; `retry_acquisition` re-fetches what a
+   `Source` already holds, and a `Source` exists only because a verdict promoted a
+   reviewed candidate. This is real but **not** a human URL audit — a curator
+   approves a picture, not a hostname.
+2. **Scheme and host are checked before invocation, not after.** `https`/`http`
+   only, and the resolved address must be publicly routable — loopback,
+   link-local, RFC1918 and `.local` are refused. This is what keeps a poisoned
+   candidate from turning the loader into a probe of the operator's own LAN, which
+   is the one asset on this network that a purely external attacker cannot
+   otherwise reach.
+3. **The binary never receives an unvalidated argument, and never a shell.** argv
+   list, no shell, `stdin` at `/dev/null`, an explicit `--image-index` so no input
+   path can reach an interactive prompt.
+
+**What this deliberately does not do is allowlist hosts.** `data-model.md` scopes
+`source_class = contemporary_web` with an open provider vocabulary — galleries,
+prize sites, artist portfolios — so a registry of permitted hosts would make every
+new gallery a code change and would quietly re-scope the product. The check is
+therefore on what a host *is* (publicly routable) rather than on which host it is.
+
+**The honest residual.** An attacker who gets a poisoned candidate past a curator
+can cause one authenticated-as-nobody GET to a public host of their choosing, from
+the operator's network, and can have the response written to `ART_ROOT` as an
+image. That is a worse position than before this chunk and it is not reduced to
+nothing by any of the three properties above. It stays acceptable for the same
+reason the rest of this section does — one principal, a private overlay network,
+no PII, no tenancy, no payment surface — and it is recorded here rather than
+implied so that a future reader weighing a fourth trigger starts from the real
+baseline.
 
 ## Content Appropriateness
 

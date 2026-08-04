@@ -118,7 +118,7 @@ tool per action stops paying and consolidation starts.
 |---|---|---|
 | `art_discovery` | `estimate`, `start`, `status`, `approve`, `decline`, `cancel`, `resolve_images`, `list_runs`, `spend`, `help` | **The only tool that spends money.** |
 | `art_review` | `list_works`, `get_work`, `list_images`, `set_canonical`, `set_verdict`, `reject_image`, `help` | Returns thumbnails; see Inputs & Outputs. Never spends. |
-| `art_catalogue` | `list`, `get`, `archive`, `restore`, `retry_acquisition`, `set_mat_color`, `regenerate`, `help` | |
+| `art_catalogue` | `list`, `get`, `sources`, `archive`, `restore`, `retry_acquisition`, `set_mat_color`, `regenerate`, `help` | `sources` is the provenance read; see below. |
 | `art_theme` | `list`, `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`, `help` | `activate` changes the wall immediately. |
 | `art_display` | `status`, `sync`, `show_now`, `next`, `help` | Every action goes through the theme manifest — see below. |
 
@@ -317,6 +317,35 @@ is persisted on the instance and carried onto the `Source` at promotion, so why
 this scan was chosen survives into the catalogue. `reject_image` takes no reason,
 and that asymmetry is deliberate — "this one" is a judgement worth keeping, while
 "not this one" is followed by a re-search whose result is the record.
+
+### `sources` is its own action, not a field on `get` (settled at build, 2026-08-03)
+
+`art_catalogue` had no way to read where a catalogued work came from. The gap was
+not an unbuilt action but a missing one: the table above listed none, so `get`
+returned artwork fields and the resolved artist, and `url`, `provider`,
+`rights_status`, `is_primary`, `confidence`, `selection_rationale` and
+`last_fetch_status` were unreachable over MCP while `GET /api/works/{id}` had been
+returning them to the browser all along.
+
+The blind spot opened exactly at acceptance. Before it, scans are inspectable via
+`art_review(list_images)` under a run's `work_id`; the promotion that mints an
+`Artwork` re-keys them by `artwork_id`, and at that moment they left the surface.
+So an agent could not say which source is primary or whether the last fetch failed
+— and `retry_acquisition` would have acted on a source its caller could not read.
+
+**Two shapes were available and the round trip is not what decided it.** Folding
+`sources` into `get`'s result is *Additive* under the compatibility table below, so
+it was compatible and would have cost no extra call. It was rejected because `get`
+is the payload every list-then-detail hop pulls, and provenance is not what that
+hop is for: rights, fetch status and primacy are acquisition-time concerns, read
+when a caller is about to act on a source, not when it is reading a title and a
+date. Fattening the common read to spare a call on the rare one is the wrong trade
+in a surface whose § Token budget is a standing constraint.
+
+**It reads through `CatalogueService.list_sources()` — the same service method the
+browser detail view already uses.** No second projection of "a work's sources"
+exists, which is the service-layer norm doing its job: the two surfaces cannot
+drift because there is nothing to drift.
 
 ### Why not split reads from writes
 

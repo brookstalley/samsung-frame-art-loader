@@ -29,7 +29,7 @@ governed_by:
       - "identity is never a source URL → conforms: Artwork identity is a UUID from Chunk 07 on; source URLs live on Source/CandidateImage rows only"
       - "a work is distinct from an image of it, at every stage → conforms: CandidateWork/CandidateImage land as separate entities in Chunk 08, before any discovery code exists; acceptance is promotion, not transformation (Chunk 17)"
       - "per-device runtime state never lives in the catalogue → conforms: TvBinding and the last-acted-on sequence live in `display-state.sqlite` (Chunk 12); labels render display-side (Chunk 13); each plane's own panel geometry is configuration, stored in neither catalogue nor device state (Chunks 02, 09, 12) — the TV panel's physical size is curation's, the e-paper panel's is display's; corrected 2026-07-20, they are not one shared value"
-      - "derived artifacts are regenerated, never transported → conforms: renditions carry `source_content_hash` and regenerate on staleness (Chunk 18); backup excludes the image tree (Chunk 20); candidate previews get their recorded disposable lifecycle in Chunk 17"
+      - "derived artifacts are regenerated, never transported → conforms: renditions carry `source_content_hash` and regenerate on staleness (Chunk 18B); backup excludes the image tree (Chunk 20); candidate previews get their recorded disposable lifecycle in Chunk 17"
   - artifact: project-preferences
     dispositions:
       - "norm-index rows (formatting, naming, imports, logging-not-print, type-annotate-on-touch, specific exceptions, no hardcoded deployment values, async-at-the-boundary, hardware behind an interface) → conforms: ruff lands in Chunk 06 and the mechanical rows migrate to lint rules as each row's Why already directs; until then the Critic carries them per the index"
@@ -112,7 +112,8 @@ re-created the same silence one line further down.
 - [x] Chunk 16B: `resolve_images` — the re-search, its coverage and its rollup
 - [x] Chunk 17A: The review surface — works, instances, and the image in the transcript
 - [x] Chunk 17B: The verdict, the artist, and the preview's death
-- [ ] Chunk 18: Acquisition and preparation — fetch, metadata, mat engine, 4K render
+- [ ] Chunk 18A: Acquisition — the fetch paths, the guards, and a work's sources
+- [ ] Chunk 18B: Preparation — the mat engine, the 4K render, and the corpus look
 - [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
@@ -431,7 +432,7 @@ Beyond tests, each chunk is verified the way its consumers experience it:
   (`design_decisions.infrastructure_dependencies`). Every display chunk ends with
   a hardware pass: art on the wall, label matching, journal clean.
 - **Mat quality** is judged by the operator side-by-side against the 2024 corpus
-  (Chunk 18's visual-change entry) — the bar is subjective and the 41 hand-tuned
+  (Chunk 18B's visual-change entry) — the bar is subjective and the 41 hand-tuned
   mats are the regression corpus.
 - **The restore path is exercised, not described** (Chunk 20), restoring the
   catalogue onto a scratch directory and watching the system self-heal visibly.
@@ -1006,7 +1007,7 @@ surface was reviewed on its own.
   curation, seeded with the existing 41 artworks as worked examples"
   (`product-brief.md` § Scope, `data-model.md` — "the 41 legacy records are
   re-ingested through curation as new works"). This chunk owns it. Without it
-  the new catalogue has no ready work by any built path until Chunk 18, and the
+  the new catalogue has no ready work by any built path until Chunk 18B, and the
   display chunks below have nothing to put on the wall — which is why it sits
   here rather than late: **it is what makes Chunks 12–13's cutover acceptance
   executable.** Re-ingest, do not migrate: read `all.json` as an input file and
@@ -1055,7 +1056,7 @@ surface was reviewed on its own.
   Originals point at the existing masters, and renditions at the existing
   renders, in the deployed image tree under ART_ROOT — the raw and ready
   directories on the Pi, which are not part of this checkout — with
-  `source_content_hash` computed at ingest so Chunk 18's staleness rule governs
+  `source_content_hash` computed at ingest so Chunk 18B's staleness rule governs
   them from birth. Known defects in the legacy shape are corrected on the way
   in, not carried: identity becomes a UUID (never the source URL),
   `artist_details` is parsed into Artist rows, and `tv_content_id` is **not**
@@ -1138,7 +1139,7 @@ deployment surface here, defaulting to the reference panel's 2.5" and 12" — th
 figures that artifact's own worked example uses. This is the chunk that first
 needs the verdict, which is why it is the chunk that wires it.
 
-*Pillow moves from Chunk 18 to here.* Thumbnail serving is a named deliverable
+*Pillow moves from the render chunk (now 18B) to here.* Thumbnail serving is a named deliverable
 and the seeded renditions are 4K files; nothing in the standard library decodes
 a JPEG, and `curation/src/curation/seed/images.py` reads only the SOF header for
 dimensions precisely because it needed no decoder. Pillow was already the declared
@@ -1811,74 +1812,116 @@ runtime, and a tool part-way through its action set is exactly what 14A/14B and
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-### Chunk 18: Acquisition and preparation — fetch, metadata, mat engine, 4K render
+**Chunk 18 was split into 18A and 18B on 2026-08-03**, at the operator's call, at
+the seam the data model already draws: **the `Original`**. Everything in 18A
+produces one — bytes on disk with a row naming them; everything in 18B consumes
+one and produces nothing else's input. The split's value is that the two halves
+share no foreign interface (a local binary plus museum image endpoints, against
+OpenRouter vision), no entity (`Source`/`Original` against `MatColor`/`Rendition`),
+and no failure mode, so neither Critic round has to read the other's code — the
+same reason 08, 14 and 16 were split, and this chunk was larger than any of them.
 
-- **Description:** Accepted works become wall-ready. Fetch by
+The ordering is the data flow rather than a dependency: 18B could have gone first,
+because the seeded corpus already holds 41 originals on disk and the mat engine can
+be judged against them with no fetch path in existence. That remains true if 18A
+stalls on the binary or the network.
+
+### Chunk 18A: Acquisition — the fetch paths, the guards, and a work's sources
+
+- **Description:** An accepted work acquires its master image. Fetch by
   `acquisition_method` (dezoomify tiles / direct / API) with the zero-byte guard
   (constraint 5), `partial_tiles` as a normal recorded outcome, and the
   **free-space guard before acquisition starts** — disk-full is the one shared
-  failure and it must be prevented, not caught. **The legacy `shell=True`
-  invocation of dezoomify is not ported forward**: source URLs come from web
-  discovery, which `security-model.md` establishes as attacker-influenceable, so
-  interpolating one into a shell command is a command-injection vector. This
-  chunk invokes the binary with an argv list and no shell, allowlists URL
-  schemes before fetching, and treats every museum/source URL as untrusted
-  input. Metadata normalisation at
-  ingest: description markup reduced to `<i>`/`<b>` (constraint 10) so renderers
-  stop re-fixing it. The mat engine: vision-model selection reasoning in LAB
-  space via OpenRouter — the cheap vision model is selected here with prices
-  re-verified at build (a slug picked months early is guaranteed stale; volume
-  is one call per accepted work, so the choice barely moves cost), the
-  dominant-colour fallback **recorded** on `MatColor.method` (never invisible),
-  history retained. Composition: the mat in physical inches, bottom-weighted,
-  against the configured TV panel geometry; the floor in rendered inches; **no
-  upscaling, ever**; renditions carry `source_content_hash` and regenerate on
-  staleness. `retry_acquisition`, `set_mat_color`, `regenerate` actions land.
-  Mat quality is judged against the 41-work fixture from Chunk 06.
+  failure and it must be prevented, not caught. **Source URLs are untrusted
+  input**: they come from web discovery, which `security-model.md` establishes as
+  attacker-influenceable, so the binary is invoked with an argv list and no shell
+  and URL schemes are allowlisted before anything is fetched.
+  <!-- The 2024 call site was already argv-based when this chunk was written
+       (image_utils.py, corrected in 4fddf36); the requirement below governs the
+       new code on its own merits, not as a port of a defect. -->
+  Metadata normalisation at ingest: description markup reduced to `<i>`/`<b>`
+  (constraint 10) so renderers stop re-fixing it. **`art_catalogue` gains
+  `sources`** — the read that `retry_acquisition` needs and that issue #60 shows
+  no MCP caller has, off the same `CatalogueService.list_sources()` the browser
+  detail view already uses. Then `archive`, `restore` and `retry_acquisition`.
 - **Depends on:** Chunk 17 (acceptance produces the work to acquire)
-- **Artifacts consumed:** `nonfunctional-requirements.md` § Output Quality (mat
-  geometry, the floor), `data-model.md` (Original, Rendition, MatColor,
-  constraints 4/5/10/12), `design_decisions.error_handling_approach`,
-  issue #6 (defects 2/3 die here with the module replacement)
+- **Artifacts consumed:** `data-model.md` (Source, Original, constraints 4/5/10),
+  `security-model.md` (source URLs as attacker-influenceable),
+  `design_decisions.error_handling_approach`, `api-contract.md` (the action
+  table), issue #60, issue #6 (defects 2/3 die here with the module replacement)
 - **Foreign API:** dezoomify (external binary) and museum image endpoints
   <!-- Its CLI contract is unowned and unversioned: capture it at step 0 below
        rather than inferring it from the 2024 call site. -->
-
 - **Carried finding:** `tile-cache/` and `api-cache/` are created here and have
   no lifecycle owner. "Transient working space" holds only if something reclaims
   them — on the device already named the top operational risk. Give them a
   reclaim rule, or record that the operator prunes them and surface it on the
   health panel.
+- **Visual change:** no
+- **Deliverables:** new `curation/src/curation/acquisition/` (fetch paths, the
+  guards, metadata normalisation); `art_catalogue` actions `sources`, `archive`,
+  `restore`, `retry_acquisition`; the free-space guard; the cache lifecycle rule
+- **Tests:** unit — the zero-byte guard, `partial_tiles` recording, free-space
+  refusal, metadata normalisation against constraint 10; security — the fetch
+  path refuses a non-allowlisted URL scheme, and a source URL carrying shell
+  metacharacters reaches dezoomify as one inert argv element (the test must be
+  able to fail: assert on the argv actually passed, not on the absence of a
+  crash); contract — an MCP caller reads a catalogued work's sources, including
+  `is_primary` and `last_fetch_status`; integration — an accepted work acquires
+  on the dev machine and holds an `Original`
+- **Acceptance criteria:** an accepted work acquires by each of the three
+  methods, its `Original` names bytes that exist and are non-empty, a failed or
+  partial fetch is recorded on the `Source` rather than raised, and an MCP caller
+  can read where the work came from and ask for the fetch again
+- **Done when:**
+  0. verify-api — dezoomify's CLI contract (arguments, exit codes, output layout,
+     partial-tile behaviour) captured from the installed binary rather than
+     inferred from the 2024 call site
+  1. Acceptance criteria met and tests pass
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+### Chunk 18B: Preparation — the mat engine, the 4K render, and the corpus look
+
+- **Description:** An acquired work becomes wall-ready. The mat engine:
+  vision-model selection reasoning in LAB space via OpenRouter — the cheap vision
+  model is selected here with prices re-verified at build (a slug picked months
+  early is guaranteed stale; volume is one call per accepted work, so the choice
+  barely moves cost), the dominant-colour fallback **recorded** on
+  `MatColor.method` (never invisible), history retained. Composition: the mat in
+  physical inches, bottom-weighted at `MAT_BOTTOM_WEIGHT`, against the configured
+  TV panel geometry; the floor in rendered inches; **no upscaling, ever**;
+  renditions carry `source_content_hash` and regenerate on staleness.
+  `set_mat_color` and `regenerate` actions land. Mat quality is judged against
+  the 41 hand-tuned colours — **which are already in the catalogue**, loaded from
+  the tracked `all.json` by the seed as `MatColor(method='manual')`; Chunk 06
+  deferred extracting them to a standalone fixture and this chunk decides whether
+  that file is still worth having or the seeded rows are the corpus.
+- **Depends on:** Chunk 18A (an `Original` to prepare)
+- **Artifacts consumed:** `nonfunctional-requirements.md` § Output Quality (mat
+  geometry, the floor, `MAT_BOTTOM_WEIGHT`), `data-model.md` (Rendition,
+  MatColor, constraints 4/12), `api-contract.md` (the action table)
+- **Foreign API:** the chosen vision model through OpenRouter
 - **Visual change:** yes — mats over the regression corpus need the operator's
   eyes; "at least as good as 2024" is the subjective bar
-- **Deliverables:** new `curation/src/curation/acquisition/` (fetch, prepare,
-  mat engine); remaining `art_catalogue` actions (`archive`, `restore`,
-  `retry_acquisition`, `set_mat_color`, `regenerate`); the free-space guard;
-  vision-model choice recorded with verified pricing
-- **Carried finding — settle before writing the mat engine:** the two recorded
-  worked examples do not share a bottom-weight rule. The widths reproduce
-  exactly, but the 42" box implies bottom = 1.15x top and the 75" box implies
-  1.98x, and the factor itself is stated in no artifact. Those figures are named
-  below as the unit-test oracle, so an oracle that cannot be satisfied has to be
-  fixed first: derive the rule, correct whichever example is wrong, and record it
-  in `nonfunctional-requirements.md`.
+- **Deliverables:** the mat engine and compositor under
+  `curation/src/curation/acquisition/`; `art_catalogue` actions `set_mat_color`
+  and `regenerate`; vision-model choice recorded with verified pricing
 - **Tests:** unit — mat arithmetic against the recorded worked examples (42"/75"
   panels), floor classification, staleness detection, fallback recording;
-  security — the fetch path refuses a non-allowlisted URL scheme, and a source
-  URL carrying shell metacharacters reaches dezoomify as one inert argv element
-  (the test must be able to fail: assert on the argv actually passed, not on the
-  absence of a crash); regression — mat outputs across the 41-work fixture
-  compared to the hand-tuned corpus; integration — a small accepted work goes
-  intent-to-ready on the dev machine
-- **Acceptance criteria:** an accepted work acquires, gets a mat with recorded
-  provenance, renders to 4K, enters the manifest, and reaches the wall; the
-  operator's corpus look finds no regression
+  regression — mat outputs across the 41 works compared to the hand-tuned colours;
+  integration — an acquired work renders to 4K and enters the manifest
+- **Acceptance criteria:** an acquired work gets a mat with recorded provenance,
+  renders to 4K, and enters the manifest; the operator's corpus look finds no
+  regression
+  <!-- The criterion read "and reaches the wall" until 2026-08-03. Nothing can
+       meet that here: the display plane is Chunks 12 and 13, both bench-blocked,
+       and no `display/` package exists. The wall half is verified when 13 lands
+       and its hardware pass runs — it is descoped from this chunk explicitly
+       rather than left as four fifths of a criterion that reads met. -->
 - **Done when:**
-  0. verify-api — two unowned interfaces, both probed before their client is
-     written: (a) the chosen vision model through OpenRouter with a real image,
-     capturing the response shape; (b) dezoomify's CLI contract — arguments,
-     exit codes, output layout, and partial-tile behaviour — captured from the
-     installed binary rather than inferred from the 2024 call site
+  0. verify-api — the chosen vision model through OpenRouter with a real image,
+     capturing the response shape, before its client is written
   1. Acceptance criteria met and tests pass, including the corpus look
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
