@@ -40,7 +40,6 @@ from curation.persistence.records import MatColor, MatMethod, RenditionKind
 from curation.services.catalogue import CatalogueService
 from curation.services.display_fit import ArtworkBox, DisplayFit
 from curation.services.errors import ServiceError
-from curation.services.imaging import reading
 
 log = logging.getLogger(__name__)
 
@@ -195,22 +194,17 @@ class PreparationService:
             )
 
         destination = self._settings.ready_path / _FILENAME.format(artwork_id=artwork_id)
-        # **Translated, because this is the path where an undecodable original
-        # would otherwise escape as a bare Pillow error.** The mat engine
-        # translates its own reads, so a work with no mat is refused by name — but
-        # a work that *has* one skips the engine entirely and reaches the
-        # compositor first, and every `set_mat` does the same. One seam, both
-        # callers, which is the arrangement `services/imaging.py` exists to hold.
-        composition = reading(
+        # `compose` translates its own decode failures, so an undecodable original
+        # is refused by name here as it is in the mat engine — and a disk that
+        # will not take the canvas still raises `OSError`, which is a fault on
+        # this host rather than in the museum's bytes.
+        composition = compose(
             source,
-            lambda: compose(
-                source,
-                destination=destination,
-                mat_hex=mat.hex_rgb,
-                panel_width=self._settings.panel_width,
-                panel_height=self._settings.panel_height,
-                box=self._settings.box,
-            ),
+            destination=destination,
+            mat_hex=mat.hex_rgb,
+            panel_width=self._settings.panel_width,
+            panel_height=self._settings.panel_height,
+            box=self._settings.box,
         )
         relative = str(destination.relative_to(self._settings.art_root))
         # Recorded after the file exists, never before: a row naming a canvas that

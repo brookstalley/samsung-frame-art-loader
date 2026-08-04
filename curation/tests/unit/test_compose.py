@@ -15,6 +15,7 @@ from PIL import Image
 from curation.acquisition.color import ColorError
 from curation.acquisition.compose import compose
 from curation.services.display_fit import ArtworkBox, DisplayFit
+from curation.services.errors import ServiceError
 
 #: The reference 42" 4K Frame, as `nonfunctional-requirements.md` works it out.
 PANEL_WIDTH = 3840
@@ -234,6 +235,48 @@ class TestWritingTheFile:
 
         assert result.path.is_file()
         assert result.path.parent.name == "ready"
+
+    def test_a_write_failure_is_reported_as_a_write_failure_not_an_unreadable_source(self, tmp_path):
+        """**The two failures send a reader to opposite places.** A source that
+        will not decode is the museum's bytes; a canvas that will not write is
+        this host's disk or the owner of `ready/`. The decode is translated into a
+        named `ServiceError` and the write deliberately is not, because a
+        translation covering both would report a full disk as an unreadable
+        original and point at the museum for a fault on the machine."""
+        destination = tmp_path / "ready" / "work.jpg"
+        destination.parent.mkdir(parents=True)
+        # A directory where the staged file must go, so `save` fails on the write
+        # half while the source decodes perfectly.
+        (destination.parent / f"{destination.name}.composing").mkdir()
+        source = _source(tmp_path, 400, 300)
+
+        with pytest.raises(OSError) as raised:
+            compose(
+                source,
+                destination=destination,
+                mat_hex=MAT_HEX,
+                panel_width=PANEL_WIDTH,
+                panel_height=PANEL_HEIGHT,
+                box=REFERENCE_BOX,
+            )
+
+        assert not isinstance(raised.value, ServiceError)
+        assert "could not be read" not in str(raised.value)
+
+    def test_an_undecodable_source_is_translated_into_a_named_refusal(self, tmp_path):
+        """The other side of the same boundary."""
+        source = tmp_path / "not-an-image.jpg"
+        source.write_bytes(b"certainly not a JPEG")
+
+        with pytest.raises(ServiceError, match="could not be read"):
+            compose(
+                source,
+                destination=tmp_path / "ready" / "work.jpg",
+                mat_hex=MAT_HEX,
+                panel_width=PANEL_WIDTH,
+                panel_height=PANEL_HEIGHT,
+                box=REFERENCE_BOX,
+            )
 
     def test_a_failed_composition_leaves_the_previous_canvas_untouched(self, tmp_path):
         """The same rule acquisition follows and for the same reason: a

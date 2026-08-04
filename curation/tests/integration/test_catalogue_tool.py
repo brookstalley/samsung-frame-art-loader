@@ -601,3 +601,64 @@ async def test_a_prepared_work_enters_the_manifest(server_url, services, setting
     assert work.id in {entry.work_id for entry in build.entries}
     assert work.id not in {excluded.work_id for excluded in build.exclusions}
     assert payload["relative_path"] in {entry.render_path for entry in build.entries}
+
+
+async def test_regenerate_reports_what_it_spent_even_when_that_is_nothing(server_url, services, settings):
+    """**The claim the surface now publishes**: "every answer reports cost_usd".
+    A field present only on the paying path is indistinguishable from one nobody
+    emitted, so the zero has to be there too — and this deployment wires no model
+    client, which is exactly the path that spends nothing."""
+    work = _a_work_with_an_original(services, settings)
+
+    payload, errored = await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    assert errored is False
+    assert payload["cost_usd"] == "0"
+
+
+async def test_regenerate_says_when_it_chose_the_mat_mechanically(server_url, services, settings):
+    """A work's mat is usually chosen on the `regenerate` that follows acquisition,
+    not on `set_mat_color` — `acquire` does not prepare. So the notice that says
+    the vision model did not choose has to appear on this action too, or the
+    silent-fallback failure `MatColor.method` exists to end comes back on the
+    action most works actually go through."""
+    work = _a_work_with_an_original(services, settings)
+
+    payload, _ = await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    assert payload["method"] == "dominant_color_fallback"
+    assert "not by the vision model" in payload["notice"]
+
+
+async def test_a_second_regenerate_carries_no_fallback_notice(server_url, services, settings):
+    """The discriminating half. Without it the assertion above would pass on a
+    notice that was always present, and the below-floor test's substring match
+    would accept the fallback sentence silently prepended or silently gone."""
+    work = _a_work_with_an_original(services, settings)
+    await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    payload, _ = await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    assert payload["outcome"] == "unchanged"
+    assert payload["notice"] is None
+
+
+async def test_the_below_floor_notice_stands_alone_once_a_mat_is_already_chosen(server_url, services, settings):
+    """Pins which sentences a below-floor answer carries, rather than asserting a
+    substring that a second sentence could appear beside unnoticed."""
+    work = _a_work_with_an_original(services, settings, width=400, height=300)
+    await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    payload, _ = await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id, force=True)
+
+    assert payload["fit"] == "below_floor"
+    assert "not by the vision model" not in payload["notice"]
+    assert payload["notice"].startswith("This work renders at about")
+
+
+async def test_set_mat_color_reports_its_cost_too(server_url, services, settings):
+    work = _a_work_with_an_original(services, settings)
+
+    payload, _ = await call(server_url, "art_catalogue", action="set_mat_color", artwork_id=work.id, hex_rgb="#27285b")
+
+    assert payload["cost_usd"] == "0"
