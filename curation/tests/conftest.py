@@ -20,6 +20,7 @@ import uvicorn
 from fakes import FakeEngine
 from PIL import Image
 
+from curation.acquisition.preparation import PreparationSettings
 from curation.app import create_app
 from curation.config import (
     CATALOGUE_FILENAME,
@@ -199,6 +200,18 @@ def services(
         artwork_box=settings.tv_artwork_box,
         engine=engine,
         discovery_settings=settings.discovery_settings,
+        # Panel and box from the same resolved settings, as the entry point does
+        # it. Letting the panel default while passing a box derived from these
+        # settings is the one way the canvas and the mat can disagree about where
+        # the mat ends, and a test wired that way would assert against geometry no
+        # deployment produces.
+        preparation=PreparationSettings(
+            art_root=settings.art_root,
+            ready_path=settings.ready_path,
+            panel_width=settings.tv_panel_width_px,
+            panel_height=settings.tv_panel_height_px,
+            box=settings.tv_artwork_box,
+        ),
     )
 
 

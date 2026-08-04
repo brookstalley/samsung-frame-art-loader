@@ -64,13 +64,44 @@ _SOURCE_ID = Param(
     description="Which source to fetch from, as returned by action='sources'. Omit to use the work's primary source.",
 )
 
+#: Optional, and its absence is what asks the model. Stated in the description
+#: because the parameter's presence changes what the action *costs*, and a caller
+#: reading only the schema would have no way to know that omitting it spends
+#: money — the one thing on this tool that does.
+_HEX_RGB = Param(
+    name="hex_rgb",
+    type="string",
+    description=(
+        "The mat colour as a hex triplet, e.g. '#27285b'. Omit it to have the vision model choose one, "
+        "which is the only thing on this tool that spends money."
+    ),
+)
+
+_FORCE = Param(
+    name="force",
+    type="boolean",
+    description="Re-render even if the work's canvas is already current. Defaults to false.",
+)
+
 ART_CATALOGUE: Final = ToolRecord(
     name="art_catalogue",
     title="Art catalogue",
-    summary="Read and manage the works already accepted into the collection.",
+    summary=(
+        "Read and manage the works already accepted into the collection. Two actions reach outside the machine: "
+        "retry_acquisition fetches from a museum, and set_mat_color asks a vision model when given no colour."
+    ),
     read_only=False,
     destructive=False,
-    open_world=False,
+    #: **True, and it was wrong before.** This is published to clients as
+    #: `openWorldHint`, which is how a client decides whether a call warrants
+    #: confirmation. Two actions here reach the internet — `retry_acquisition`
+    #: fetches a museum URL, and `set_mat_color` without a colour calls a vision
+    #: model — so declaring a closed world understated both to every client that
+    #: reads the hint. The flag is per *tool*, not per action, so a tool holding
+    #: one open-world action is an open-world tool; the alternative is splitting
+    #: them out, which `api-contract.md` weighs and rejects for the surface size
+    #: this product has.
+    open_world=True,
     actions=(
         Action(
             name="list",
@@ -128,6 +159,35 @@ ART_CATALOGUE: Final = ToolRecord(
                 "A failed attempt replaces nothing — the work keeps whatever image it already held.",
             ),
         ),
+        Action(
+            name="set_mat_color",
+            description="Set the mat colour a work is shown against, or ask the vision model to choose one again.",
+            example="art_catalogue(action='set_mat_color', artwork_id='<an artwork_id from action=list>', hex_rgb='#27285b')",
+            params=(_ARTWORK_ID, _HEX_RGB),
+            tips=(
+                "Give hex_rgb to set a colour yourself; omit it to have the vision model choose, which spends "
+                "a fraction of a cent.",
+                "Nothing is overwritten: the previous colour is kept, so a worse choice can be read back and reversed "
+                "by setting the old one again.",
+                "The work is re-rendered in the new colour immediately — there is no separate regenerate to remember.",
+                "A colour recorded as method='dominant_color_fallback' was derived mechanically because the model "
+                "could not be asked or could not be read, not chosen for this work.",
+            ),
+        ),
+        Action(
+            name="regenerate",
+            description="Re-render a work's television canvas from the image it holds, in the mat colour already in force.",
+            example="art_catalogue(action='regenerate', artwork_id='<an artwork_id from action=list>')",
+            params=(_ARTWORK_ID, _FORCE),
+            tips=(
+                "It spends nothing: the mat colour is the one already recorded, so no model is asked.",
+                "Ordinarily it does only what is needed — a work whose canvas is already current is reported "
+                "unchanged rather than re-rendered.",
+                "Use force=true after changing the panel geometry or clearing the rendered tree.",
+                "A work whose master image is missing from disk is refused rather than rendered blank; "
+                "action='retry_acquisition' fetches it again.",
+            ),
+        ),
     ),
 )
 
@@ -148,7 +208,12 @@ _OPTIONAL_RUN_ID = Param(name="run_id", type="string", description=_RUN_ID_DESCR
 ART_DISCOVERY: Final = ToolRecord(
     name="art_discovery",
     title="Art discovery",
-    summary="Propose and resolve new works. The only tool that spends money.",
+    #: No longer "the only tool that spends money" — `art_catalogue`'s
+    #: `set_mat_color` asks a vision model when given no colour. The distinction
+    #: that survives is scale, and it is the one a curator needs: a discovery run
+    #: is the operation with a budget, an approval gate and a ceiling behind it,
+    #: while a mat call is a fraction of a cent against one work.
+    summary="Propose and resolve new works. The only tool that spends money in amounts worth authorising.",
     read_only=False,
     destructive=True,
     open_world=True,

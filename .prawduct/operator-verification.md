@@ -10,6 +10,63 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The mat corpus look — is the new engine at least as good as 2024? — added 2026-08-03
+
+**This is the product's stated quality bar and no test can settle it.**
+`nonfunctional-requirements.md` § Output Quality says mat colour must be at least
+as good as the 2024 implementation, that the bar is explicitly subjective, and
+that an engine scoring well on any metric while producing visibly worse mats on
+the 41-work corpus has failed. So the suite holds the one property the corpus
+states unambiguously — every one of the 41 is darker than mid-grey — and this
+entry holds the rest.
+
+A full run is already done and its numbers are worth having before you look:
+
+- **33 of the 41 compared.** The other eight are held outside the Art Institute
+  and the tool only resolves `artic.edu` URLs; it names them at the end rather
+  than quietly reporting 33 as the corpus.
+- **Median CIEDE2000 distance to the 2024 colour: 9.8** (min 1.0, max 34.9).
+- **The central tendency is the same.** New mats have a median LAB lightness of
+  20.8 against the corpus's 20.7 — the engine lands in the region 2024 landed in.
+- **One of 33 crossed the darkness bar** — a Rothko given `#8a7a6a` (L\* 52.2)
+  where 2024 chose `#1c1818`. Two more sit just under it.
+- **Zero mechanical fallbacks**, after the output reservation was raised.
+- **It cost $0.0024.**
+
+Regenerate the sheet and compare each pair by eye:
+
+```
+cd curation
+uv run python tools/mat_corpus.py ../all.json --out /tmp/mat-corpus
+open /tmp/mat-corpus/corpus.jpg          # 2024 on the left, the engine on the right
+```
+
+**Three specific pairs are worth your attention first**, because they are where
+the engine and 2024 most disagree and where I think 2024 may be the better
+choice:
+
+1. **Untitled (Purple, White, and Red)** — the one over the bar. `#8a7a6a`
+   against 2024's near-black `#1c1818`.
+2. **Sky above Clouds IV** — `#4a7c9d` against `#2a3a5e`. The work is pale and
+   the lighter mat competes with it; this is the failure mode the bar exists for,
+   arriving just *under* the bar at L\* 49.9.
+3. **...And the Home of the Brave** — `#4a5d75` against the deep indigo
+   `#27285b`. Debatable rather than wrong.
+
+**One thing to know before reading the numbers as a baseline:** the model is not
+deterministic. The same work asked twice gives different colours — this work drew
+`#27285b`, exactly the 2024 colour, on an earlier run and `#4a5d75` on the full
+one. So a corpus run is a sample of the engine's behaviour, not a fixed output,
+and a single bad pair is weaker evidence than a pattern across several.
+
+If the verdict is "worse than 2024", the cheapest levers in order: the prompt in
+`acquisition/mat.py` (`MAT_PROMPT` — its guidance is deliberately carried over
+from 2024's, so it is the least likely culprit), then `MAT_MODEL` in `.env`,
+which was chosen on cost among models that cleared the bar rather than on taste.
+`art_catalogue(action='set_mat_color', ...)` overrides any individual work
+permanently, and the previous colour is never discarded.
+
+
 ### A curator can see the candidate images in their own client — added 2026-08-03
 
 **Visual, and it is the one thing this chunk's tests cannot prove.** Chunk 17A

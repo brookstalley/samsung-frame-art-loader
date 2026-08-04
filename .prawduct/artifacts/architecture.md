@@ -181,7 +181,15 @@ is no network between planes.
   that own them nor the startup reconciliation that repairs them.
 - **Internal layering, inside that plane** (established 2026-07-27; `acquisition/`
   added 2026-08-03 — the fetch paths, the guards and the URL policy, sitting beside
-  `discovery/` as the other package that reaches outside the machine):
+  `discovery/` as the other package that reaches outside the machine, and extended
+  the same day with preparation: the mat engine, the compositor and the colour
+  arithmetic they share. **`PreparationService` is a peer of `AcquisitionService`,
+  not its tail**, because a work is acquired once and prepared repeatedly — on a
+  panel change, a re-chosen mat, or a stale rendition — and folding the two
+  together would make every re-render read as a re-fetch in the journal. The mat
+  engine reaches OpenRouter through the same first-party client discovery uses,
+  with its own model: discovery wants a text model that searches, preparation
+  wants one that can see):
 
   ```
   MCP tools  ·  HTTP handlers  ·  browser client   bindings: unpack, call one method, format
@@ -262,8 +270,13 @@ is no network between planes.
 
   `DiscoveryRunner` holds `DiscoveryService`, not the other way round, and the
   engine hangs off the runner alone — no other service can reach it, which is
-  what "exactly one tool spends money" looks like as a dependency edge rather
-  than as a rule somebody remembers.
+  what "exactly one tool runs a *paid discovery engine*" looks like as a
+  dependency edge rather than as a rule somebody remembers. *(Narrowed 2026-08-03:
+  the edge is real and unchanged, but it never said "exactly one tool spends
+  money", which stopped being true when `PreparationService` gained a mat engine
+  reaching the same provider. The two paid paths share the transport and share
+  nothing else — no service can reach both — and that is the property the
+  structure actually enforces.)*
 
   **`DiscoveryRunner` and the engine seam were added 2026-08-02, and the split
   between the runner and `DiscoveryService` is the load-bearing part.**

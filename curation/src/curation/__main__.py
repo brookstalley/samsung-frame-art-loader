@@ -6,6 +6,8 @@ import shutil
 import uvicorn
 
 from curation import logs
+from curation.acquisition.mat import MatEngine
+from curation.acquisition.preparation import PreparationSettings
 from curation.acquisition.service import AcquisitionSettings
 from curation.acquisition.transport import http_stream
 from curation.app import create_app
@@ -13,6 +15,7 @@ from curation.config import Settings
 from curation.discovery.artic import build_image_search
 from curation.discovery.engine import DiscoveryEngine, unavailable_engine
 from curation.discovery.images import ImageSearch
+from curation.discovery.openrouter import OpenRouterClient
 from curation.discovery.phase_one import build_engine
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.sqlite import SqliteCatalogue
@@ -50,6 +53,26 @@ def _engine(settings: Settings) -> DiscoveryEngine:
         search_results=settings.discovery_search_results,
         search_engine=settings.discovery_search_engine,
     )
+
+
+def _mat_engine(settings: Settings) -> MatEngine:
+    """The mat engine, asking a vision model when there is a key to ask with.
+
+    **Unlike `_engine` above, no key is not a refusal here.** Discovery with no
+    key must refuse, because a stand-in would write invented works into a real
+    catalogue. A mat has an honest mechanical producer — the work's own dominant
+    colour, darkened — and `MatColor.method` records which one chose it, so the
+    keyless deployment gets real mats that say what they are rather than works
+    that cannot be rendered.
+    """
+    client = None
+    if settings.openrouter_api_key:
+        client = OpenRouterClient(
+            settings.openrouter_api_key,
+            model=settings.mat_model,
+            max_output_tokens=settings.mat_max_output_tokens,
+        )
+    return MatEngine(client, image_max_edge=settings.mat_image_max_edge)
 
 
 def _image_search(settings: Settings) -> ImageSearch | None:
@@ -161,6 +184,19 @@ def main() -> None:
         settings.min_free_bytes / (1024**3),
     )
 
+    # Which model chooses mat colours, and where the composed canvases go. Worth
+    # its own line for the reason the discovery model's is: a deployment with no
+    # key still renders, using the mechanical fallback, and "every mat on this
+    # machine says dominant_color_fallback" is a question best answered at
+    # startup rather than by reading forty rows.
+    log.info(
+        "mat model=%s max_output_tokens=%d image_max_edge=%d ready=%s",
+        settings.mat_model if settings.openrouter_api_key else "none (no key; every mat comes from the dominant colour)",
+        settings.mat_max_output_tokens,
+        settings.mat_image_max_edge,
+        settings.ready_path,
+    )
+
     settings.art_root.mkdir(parents=True, exist_ok=True)
     # One connection behind both halves of the model: acceptance promotes a
     # candidate's image instances into a work's sources, and that has to commit
@@ -199,6 +235,19 @@ def main() -> None:
             # takes it as an argument, so this line is what separates a process
             # that can fetch from a suite that cannot.
             open_stream=http_stream(settings.acquisition_user_agent),
+            preparation=PreparationSettings(
+                art_root=settings.art_root,
+                ready_path=settings.ready_path,
+                panel_width=settings.tv_panel_width_px,
+                panel_height=settings.tv_panel_height_px,
+                # The same object passed as `artwork_box` above, and passed twice
+                # on purpose rather than derived twice: it is *computed from* the
+                # panel dimensions on the line above it, so a second derivation
+                # here is the only way the canvas and the box could disagree
+                # about where the mat ends.
+                box=box,
+            ),
+            mat_engine=_mat_engine(settings),
         )
         # The catalogue file outlives any single version of this code, so rules
         # added since it was written are brought to it here rather than assumed

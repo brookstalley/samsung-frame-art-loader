@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from curation.acquisition.direct import StreamOpener
+from curation.acquisition.mat import MatEngine
+from curation.acquisition.preparation import PreparationService, PreparationSettings
 from curation.acquisition.service import AcquisitionService, AcquisitionSettings
 from curation.acquisition.transport import no_transport
 from curation.discovery.engine import DiscoveryEngine
@@ -77,6 +79,12 @@ class Services:
     #: outside the machine to do its job — a subprocess and an HTTP transport —
     #: and the record layer is deliberately free of both.
     acquisition: AcquisitionService
+    #: Turning a held original into a mat and a television canvas. Its own service
+    #: rather than the tail of acquisition: a work is prepared repeatedly over its
+    #: life — whenever the panel changes, the mat is re-chosen, or a rendition
+    #: goes stale — while it is acquired once. Folding the two together would make
+    #: every re-render look like a re-fetch to whatever reads the journal.
+    preparation: PreparationService
 
     @classmethod
     def bind(
@@ -93,6 +101,8 @@ class Services:
         previews: PreviewSettings | None = None,
         acquisition: AcquisitionSettings | None = None,
         open_stream: StreamOpener | None = None,
+        preparation: PreparationSettings | None = None,
+        mat_engine: MatEngine | None = None,
     ) -> Services:
         """Assemble the services over an already-open file.
 
@@ -157,6 +167,16 @@ class Services:
                 # test suite instead of failing where it was made.
                 open_stream=open_stream or no_transport,
             ),
+            preparation=PreparationService(
+                catalogue_service,
+                # Defaults to an engine with no client, which is not a stub: it is
+                # exactly the keyless deployment, and it produces recorded
+                # dominant-colour mats. A real client here would let a wiring
+                # mistake spend money from a test suite rather than failing where
+                # it was made — the same reason `open_stream` defaults to refusing.
+                mat_engine or _default_mat_engine(),
+                preparation or _default_preparation(thumbnails.art_root, artwork_box),
+            ),
         )
 
     def reconcile(self) -> None:
@@ -202,4 +222,37 @@ def _default_acquisition(art_root: Path) -> AcquisitionSettings:
         tile_timeout_seconds=DEFAULT_TILE_TIMEOUT_SECONDS,
         max_image_bytes=DEFAULT_MAX_IMAGE_BYTES,
         min_free_bytes=DEFAULT_MIN_FREE_BYTES,
+    )
+
+
+def _default_mat_engine() -> MatEngine:
+    """A mat engine for a caller that wired no model client.
+
+    **No client is a real deployment, not a stub.** A plane with no
+    `OPENROUTER_API_KEY` serves its whole catalogue and pays for nothing; works
+    acquired there get dominant-colour mats recorded as such. So the default is
+    that deployment rather than something that would fail if used.
+    """
+    from curation.config import DEFAULT_MAT_IMAGE_MAX_EDGE
+
+    return MatEngine(None, image_max_edge=DEFAULT_MAT_IMAGE_MAX_EDGE)
+
+
+def _default_preparation(art_root: Path, artwork_box: ArtworkBox) -> PreparationSettings:
+    """Preparation settings for a caller that expressed no preference.
+
+    The panel comes from the reference defaults, as every other value in this
+    file's defaults does. **A caller passing its own `artwork_box` and letting
+    the panel default would get a mismatched pair**, which is why the entry point
+    passes both from one resolved `Settings` — the box is *derived from* the
+    panel there, so the two cannot disagree.
+    """
+    from curation.config import DEFAULT_TV_PANEL_HEIGHT_PX, DEFAULT_TV_PANEL_WIDTH_PX, READY_DIRNAME
+
+    return PreparationSettings(
+        art_root=art_root,
+        ready_path=art_root / READY_DIRNAME,
+        panel_width=DEFAULT_TV_PANEL_WIDTH_PX,
+        panel_height=DEFAULT_TV_PANEL_HEIGHT_PX,
+        box=artwork_box,
     )

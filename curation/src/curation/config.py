@@ -46,6 +46,15 @@ PREVIEWS_DIRNAME: Final[str] = "previews"
 #: so it is never confused with the derived directories beside it.
 ORIGINALS_DIRNAME: Final[str] = "raw"
 
+#: Where composed television canvases are written under `ART_ROOT`. Derived and
+#: **specific to the television**: a canvas here is one panel's pixel dimensions
+#: with a mat drawn to that panel's physical size, so it is regenerated on the
+#: machine that will show it rather than carried to another. The geometry is not
+#: encoded in the filename — the 2024 tree's `_w648_h480` suffix is why a
+#: recovered catalogue pointed at a panel that no longer existed; a `Rendition`
+#: row carries the target size, and that row is what makes staleness detectable.
+READY_DIRNAME: Final[str] = "ready"
+
 #: Where a tiled fetch stores tiles as it walks the grid. **Working space, not
 #: storage**: it exists so a fetch that came back partial can be retried without
 #: re-downloading what already arrived, and it is reclaimed per work as soon as
@@ -241,6 +250,48 @@ DEFAULT_DISCOVERY_SEARCH_RESULTS: Final[int] = 10
 #: searches.
 DEFAULT_DISCOVERY_SEARCH_ENGINE: Final[str] = "parallel"
 
+#: Which model chooses mat colours. A **floating** alias for the same reason
+#: `DEFAULT_DISCOVERY_MODEL` is one: a dated snapshot can be retired out from
+#: under a household product.
+#:
+#: **Chosen 2026-08-03 on cost, having first cleared the bar.** Across ten real
+#: corpus images it was the only candidate to return a usable answer every time,
+#: it is the cheapest of those that did at ~$0.000063 a call, and it never
+#: proposed a mat lighter than the artwork — the one failure that glares on an
+#: emissive panel, and the one both cheaper candidates committed.
+#: `openrouter-api-findings.md` carries the measurements.
+DEFAULT_MAT_MODEL: Final[str] = "qwen/qwen3.7-flash"
+
+#: The mat call's output reservation, in tokens. **A correctness value, not a
+#: tuning knob**, and far larger than a typical answer on purpose.
+#:
+#: The provider prices the maximum output a request could produce, and a
+#: reservation that does not clear the model's *reasoning* budget produces a
+#: billed call that returns empty content with `finish_reason='length'` — money
+#: spent for nothing, and a work quietly matted by the mechanical fallback.
+#: Measured: a reasoning model given 700 tokens answered nothing five times out of
+#: five, and answered correctly five times out of five at 3,000.
+#:
+#: **Raised from 2,000 after a corpus run, and the reason is that the overrun is
+#: intermittent.** The chosen model reasons in about 160 tokens on most works, and
+#: on one Miró it exceeded 2,000 — then came in under it when the identical call
+#: was repeated. So the failure is not a property of a work that could be
+#: predicted from it, and sizing the reservation to typical consumption buys a
+#: tail of silently-mechanical mats.
+#:
+#: **Headroom is close to free**, which is what makes this the easy call: the
+#: provider bills the tokens actually emitted, not the reservation. The same work
+#: cost $0.000064 at 2,000 and $0.000077 at 8,000. The reservation is priced only
+#: when it is *refused* — a 402 against remaining credit — which is a different
+#: failure with a different remedy.
+DEFAULT_MAT_MAX_OUTPUT_TOKENS: Final[int] = 8_000
+
+#: The longest edge, in pixels, of the copy of the artwork the mat model sees.
+#: Images bill inside `prompt_tokens`, so this is the one dial on what a mat call
+#: costs. 768 is enough for a model to read a palette and a composition, and a
+#: master at gallery resolution would otherwise be sent whole.
+DEFAULT_MAT_IMAGE_MAX_EDGE: Final[int] = 768
+
 #: Settings fields that must never reach a log line, declared once here rather
 #: than remembered at each site that logs. `Settings.redacted()` walks this set
 #: and so does the guard over it, so declaring a secret is what gets it both
@@ -313,6 +364,13 @@ class Settings:
     #: model provider's native search where one exists and to Exa where none does.
     #: `DEFAULT_DISCOVERY_SEARCH_ENGINE` carries which one and why.
     discovery_search_engine: str = DEFAULT_DISCOVERY_SEARCH_ENGINE
+    #: How the mat engine reaches its provider. Its own model rather than
+    #: `discovery_model`, because the two ask for different things: discovery
+    #: wants a text model that searches, and this one has to see a picture. A
+    #: single setting would make either choice a constraint on the other.
+    mat_model: str = DEFAULT_MAT_MODEL
+    mat_max_output_tokens: int = DEFAULT_MAT_MAX_OUTPUT_TOKENS
+    mat_image_max_edge: int = DEFAULT_MAT_IMAGE_MAX_EDGE
     #: The key everything paid runs through. Optional: a deployment without one
     #: serves the whole catalogue and refuses only to *start* a discovery run,
     #: which is a far better failure than refusing to boot.
@@ -366,6 +424,17 @@ class Settings:
         re-acquisition refills it from the catalogue.
         """
         return self.art_root / ORIGINALS_DIRNAME
+
+    @property
+    def ready_path(self) -> Path:
+        """Where composed television canvases live.
+
+        Derived and regenerable, so a lost `ready/` costs a re-render rather than
+        a re-acquisition — which is why the backup carries neither this nor the
+        originals beside it. Specific to the television in a way `thumbs/` is
+        not: the mat is drawn to this panel's physical size.
+        """
+        return self.art_root / READY_DIRNAME
 
     @property
     def tile_cache_path(self) -> Path:
@@ -486,6 +555,11 @@ class Settings:
             discovery_max_output_tokens=_positive_int("DISCOVERY_MAX_OUTPUT_TOKENS", DEFAULT_DISCOVERY_MAX_OUTPUT_TOKENS),
             discovery_search_results=_counted("DISCOVERY_SEARCH_RESULTS", DEFAULT_DISCOVERY_SEARCH_RESULTS),
             discovery_search_engine=os.environ.get("DISCOVERY_SEARCH_ENGINE") or DEFAULT_DISCOVERY_SEARCH_ENGINE,
+            mat_model=os.environ.get("MAT_MODEL") or DEFAULT_MAT_MODEL,
+            # Positive for the same reason the discovery reservation is: a
+            # request reserving nothing is refused by the provider, not run free.
+            mat_max_output_tokens=_positive_int("MAT_MAX_OUTPUT_TOKENS", DEFAULT_MAT_MAX_OUTPUT_TOKENS),
+            mat_image_max_edge=_positive_int("MAT_IMAGE_MAX_EDGE", DEFAULT_MAT_IMAGE_MAX_EDGE),
             openrouter_api_key=os.environ.get("OPENROUTER_API_KEY") or None,
             artic_user_agent=os.environ.get("ARTIC_USER_AGENT") or None,
         )

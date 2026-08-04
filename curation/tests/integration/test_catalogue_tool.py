@@ -107,6 +107,8 @@ async def test_help_works_without_arguments_and_without_the_catalogue(server_url
         "archive",
         "restore",
         "retry_acquisition",
+        "set_mat_color",
+        "regenerate",
         "help",
     }
 
@@ -153,6 +155,8 @@ async def test_an_unknown_action_is_an_error_result_that_enumerates_the_valid_se
         "archive",
         "restore",
         "retry_acquisition",
+        "set_mat_color",
+        "regenerate",
         "help",
     ]
     assert payload["example"] == "art_catalogue(action='help')"
@@ -431,3 +435,169 @@ async def test_a_full_disk_reaches_the_caller_with_its_remedy(server_url, servic
     assert errored is True
     assert "did not start" in payload["error"]
     assert "MIN_FREE_BYTES" in payload["error"]
+
+
+def _a_work_with_an_original(services, settings, *, width=2400, height=1800):
+    """A catalogued work holding real bytes, ready to be prepared.
+
+    Real bytes because the mat engine and the compositor both decode them; a
+    stand-in would make every assertion below depend on Pillow never being asked
+    to open the file.
+    """
+    from PIL import Image
+
+    from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
+
+    catalogue = services.catalogue
+    work = catalogue.add_artwork(title="Sky above Clouds")
+    source = catalogue.add_source(
+        artwork_id=work.id,
+        url="https://gallery.example.com/sky.jpg",
+        provider="gallery_site",
+        source_class=SourceClass.CONTEMPORARY_WEB,
+        acquisition_method=AcquisitionMethod.DIRECT_HTTP,
+        rights_status=RightsStatus.UNKNOWN,
+        is_primary=True,
+    )
+    originals = settings.art_root / "raw"
+    originals.mkdir(parents=True, exist_ok=True)
+    path = originals / f"{work.id}.jpg"
+    Image.new("RGB", (width, height), (30, 60, 120)).save(path, format="JPEG", quality=90)
+    catalogue.record_original(
+        artwork_id=work.id,
+        source_id=source.id,
+        path=str(path.relative_to(settings.art_root)),
+        width=width,
+        height=height,
+        byte_size=path.stat().st_size,
+        content_hash="hash-one",
+    )
+    return work
+
+
+async def test_set_mat_color_records_a_curators_colour_and_re_renders(server_url, services, settings):
+    work = _a_work_with_an_original(services, settings)
+
+    payload, errored = await call(server_url, "art_catalogue", action="set_mat_color", artwork_id=work.id, hex_rgb="#27285b")
+
+    assert errored is False
+    assert payload["success"] is True
+    assert payload["hex_rgb"] == "#27285b"
+    assert payload["method"] == "manual"
+    assert (settings.art_root / payload["relative_path"]).is_file()
+
+
+async def test_omitting_the_colour_asks_the_producer_and_says_which_one_answered(server_url, services, settings):
+    # This deployment wires no model client, which is the keyless deployment
+    # exactly — so the mechanical producer answers, and the notice is the only
+    # thing that says the model did not. That silence is what the 2024 pipeline
+    # shipped and what `method` exists to end.
+    work = _a_work_with_an_original(services, settings)
+
+    payload, errored = await call(server_url, "art_catalogue", action="set_mat_color", artwork_id=work.id)
+
+    assert errored is False
+    assert payload["method"] == "dominant_color_fallback"
+    assert "did not choose this colour" in payload["notice"]
+
+
+async def test_a_curators_colour_carries_no_fallback_notice(server_url, services, settings):
+    work = _a_work_with_an_original(services, settings)
+
+    payload, _ = await call(server_url, "art_catalogue", action="set_mat_color", artwork_id=work.id, hex_rgb="#6b6b6b")
+
+    assert payload["notice"] is None
+
+
+async def test_an_unreadable_colour_is_an_error_result_rather_than_a_crash(server_url, services, settings):
+    work = _a_work_with_an_original(services, settings)
+
+    payload, errored = await call(server_url, "art_catalogue", action="set_mat_color", artwork_id=work.id, hex_rgb="octarine")
+
+    assert errored is True
+    assert payload["success"] is False
+    assert "hex triplet" in payload["error"]
+
+
+async def test_regenerate_composes_the_canvas_and_reports_where_it_went(server_url, services, settings):
+    work = _a_work_with_an_original(services, settings)
+
+    payload, errored = await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    assert errored is False
+    assert payload["outcome"] == "prepared"
+    assert payload["fit"] == "native"
+    assert (settings.art_root / payload["relative_path"]).is_file()
+
+
+async def test_regenerating_a_current_canvas_reports_unchanged_rather_than_redoing_it(server_url, services, settings):
+    # The multi-hop half: the second call's answer depends on what the first one
+    # left behind, which is the whole of what "already current" means.
+    work = _a_work_with_an_original(services, settings)
+    await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    payload, errored = await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    assert errored is False
+    assert payload["outcome"] == "unchanged"
+    # No fresh assessment to report, and repeating a stored one would answer a
+    # question this call did not ask.
+    assert payload["fit"] is None
+
+
+async def test_force_re_renders_a_canvas_that_is_already_current(server_url, services, settings):
+    work = _a_work_with_an_original(services, settings)
+    await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    payload, _ = await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id, force=True)
+
+    assert payload["outcome"] == "prepared"
+
+
+async def test_a_work_rendered_below_the_floor_says_so_without_refusing(server_url, services, settings):
+    # Not a refusal: the curator may have chosen this instance knowing it was
+    # small, and the requirement is explicit that such a work is rendered rather
+    # than hidden. But a canvas reported as composed with no mention of it would
+    # let a work quietly appear as a postage stamp in an enormous mat.
+    work = _a_work_with_an_original(services, settings, width=400, height=300)
+
+    payload, errored = await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    assert errored is False
+    assert payload["outcome"] == "prepared"
+    assert payload["fit"] == "below_floor"
+    assert "below the configured floor" in payload["notice"]
+    assert (settings.art_root / payload["relative_path"]).is_file()
+
+
+async def test_regenerating_a_work_with_no_original_is_an_error_result_naming_the_remedy(server_url, services):
+    work = services.catalogue.add_artwork(title="Unacquired")
+
+    payload, errored = await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    assert errored is True
+    assert "acquire it first" in payload["error"]
+
+
+async def test_a_prepared_work_enters_the_manifest(server_url, services, settings):
+    # The acceptance criterion, end to end: an acquired work renders to 4K and
+    # enters the manifest. The manifest excludes a work with no rendition, so
+    # this is the one check that the two halves actually meet.
+    work = _a_work_with_an_original(services, settings)
+    theme = services.display.add_theme(name="Everything")
+    services.display.add_to_theme(theme_id=theme.id, artwork_id=work.id)
+    services.display.activate_theme(theme.id)
+
+    # Excluded before it is rendered, which is what makes the assertion after it
+    # mean something: the work is in the theme throughout, so the only thing that
+    # changes between these two builds is the canvas.
+    before = services.display.build_manifest()
+    assert work.id in {excluded.work_id for excluded in before.exclusions}
+
+    payload, errored = await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+    build = services.display.build_manifest()
+
+    assert errored is False
+    assert work.id in {entry.work_id for entry in build.entries}
+    assert work.id not in {excluded.work_id for excluded in build.exclusions}
+    assert payload["relative_path"] in {entry.render_path for entry in build.entries}

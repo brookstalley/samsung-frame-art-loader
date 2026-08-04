@@ -1,0 +1,348 @@
+"""Choosing the colour of the mat a work is shown against.
+
+Two producers, and **which one produced a colour is recorded, never inferred.**
+A vision model looks at the work and reasons about it; when it cannot be reached,
+cannot be parsed, or answers with something unusable, the work still gets a mat —
+derived mechanically from its own dominant colour, darkened. The 2024 pipeline
+did exactly this and said nothing, so a considered choice and a mechanical one
+were indistinguishable in the data forever afterwards. `MatColor.method` is the
+fix, and every path through this module sets it.
+
+**A failed model call is an ordinary outcome, not an incident.** The chosen model
+advertises `response_format` but not `structured_outputs`, so a schema is a
+request rather than a contract; probing it produced empty content, content
+truncated mid-string, and a hex triplet with no leading `#`. Each of those is a
+Tuesday. What this module refuses to do is retry until the model complies, or
+quietly paint a colour nobody chose.
+
+**Nothing here writes to the catalogue.** It answers "what colour, and how did we
+arrive at it"; the service above records it, which is what keeps the whole engine
+exercisable without a database or a network.
+"""
+
+import base64
+import json
+import logging
+from collections.abc import Callable
+from dataclasses import dataclass
+from decimal import Decimal
+from io import BytesIO
+from pathlib import Path
+from typing import Any, Final
+
+from PIL import Image, ImageOps
+
+from curation.acquisition.color import ColorError, format_hex, parse_hex, rgb_to_lab, scale_lightness
+from curation.discovery.openrouter import Completion, ImageAttachment, OpenRouterClient, OpenRouterError
+from curation.persistence.records import MatMethod
+from curation.services.errors import ServiceError
+
+log = logging.getLogger(__name__)
+
+#: What the model is asked. The 2024 prompt is the ancestor of this one and its
+#: guidance is carried over deliberately — those instructions produced the 41
+#: colours that are this product's regression corpus, so departing from them
+#: would be changing the thing being measured at the same time as the thing doing
+#: the measuring.
+#:
+#: One instruction is *new* and corrects a mismatch the old prompt had with the
+#: product: 2024 told the model the mat was bars on two sides of a 16:9 canvas,
+#: because that is what its compositor produced. This one composes a mat of even
+#: width on all four sides, so describing it the old way would have the model
+#: reasoning about a picture nobody will see.
+MAT_PROMPT: Final[str] = """You are choosing a mat colour for a framed artwork that will hang on a wall-mounted display.
+
+The artwork is centred on the display inside a mat that surrounds it on all four sides, so it reads as the mount of a
+framed picture rather than as bars beside a video.
+
+Choose the mat colour. Guidelines:
+- Reason in CIE LAB space, which aligns with human perception.
+- Consider the artwork's palette, mood, and overall aesthetic; if you recognise the work or artist, consider their style.
+- Avoid a colour or lightness that blends into the artwork's edges.
+- The display is emissive, so a mat brighter than the artwork glares. When in doubt, go darker.
+- Prefer a low-chroma colour drawn from the artwork over a neutral grey, but a grey is right when the work is achromatic.
+
+Answer with the chosen colour and a short reason."""
+
+#: The shape asked for. `lab_*` are requested even though the hex already fixes
+#: the colour, because `data-model.md` keeps them "when the model returns them" —
+#: they record what the model believed it was choosing, which is the evidence for
+#: whether an odd choice was odd reasoning or a slipped conversion.
+MAT_SCHEMA: Final[dict[str, Any]] = {
+    "type": "object",
+    "properties": {
+        "hex_rgb": {"type": "string", "description": "The mat colour as a hex triplet, e.g. '#27285b'."},
+        "lab_l": {"type": "number", "description": "CIE LAB lightness of the chosen colour, 0-100."},
+        "lab_a": {"type": "number", "description": "CIE LAB a* of the chosen colour."},
+        "lab_b": {"type": "number", "description": "CIE LAB b* of the chosen colour."},
+        "reason": {"type": "string", "description": "One or two sentences on why this colour suits this artwork."},
+    },
+    "required": ["hex_rgb", "lab_l", "lab_a", "lab_b", "reason"],
+    "additionalProperties": False,
+}
+
+#: How much of the dominant colour's lightness the fallback keeps. Carried from
+#: the 2024 pipeline, which multiplied the dominant colour's luminance by this
+#: and produced the corpus — so it is the one figure here with evidence behind
+#: it. Applied to L* rather than to a luminance, which is the same intent
+#: expressed in the space the mat is reasoned in.
+_FALLBACK_LIGHTNESS: Final[float] = 0.66
+
+#: How many colours the fallback clusters the work into before taking the largest.
+#: Five, as in 2024. Enough that a painting's background does not swallow its
+#: subject, few enough that the largest cluster is a colour rather than a shade.
+_FALLBACK_CLUSTERS: Final[int] = 5
+
+#: The longest edge the fallback examines. Dominance is a property of the picture,
+#: not of its resolution, and quantising a gigapixel master would spend minutes
+#: to reach the same answer.
+_FALLBACK_MAX_EDGE: Final[int] = 256
+
+#: What the fallback records as its reason, so a reader of the history sees why a
+#: colour was arrived at mechanically rather than an empty field.
+_FALLBACK_REASON: Final[str] = "Derived from the artwork's dominant colour, darkened; no vision model choice was available."
+
+
+@dataclass(frozen=True, slots=True)
+class MatChoice:
+    """A mat colour and the account of how it was arrived at.
+
+    Shaped to be handed straight to `CatalogueService.record_mat_color`, because
+    a caller that had to re-map fields is a caller that can map one wrong.
+    """
+
+    hex_rgb: str
+    method: MatMethod
+    reason: str
+    lab_l: float | None = None
+    lab_a: float | None = None
+    lab_b: float | None = None
+    model_id: str | None = None
+    #: What the model call cost, or zero when no call was made. Reported rather
+    #: than accumulated here: this module chooses a colour, and a running total
+    #: belongs to whatever authorised the spending.
+    cost_usd: Decimal = Decimal(0)
+    #: Why the model did not decide, when it did not. `None` on the model path.
+    #: Kept out of `reason`, which is the *colour's* rationale and is shown to a
+    #: curator — a parse failure is a fact about the call, not about the colour.
+    fallback_detail: str | None = None
+
+
+class MatEngine:
+    """Choose mat colours, preferring a vision model and always producing one."""
+
+    def __init__(self, client: OpenRouterClient | None, *, image_max_edge: int) -> None:
+        #: `None` is a deployment with no API key, and it is a supported one: the
+        #: plane serves its whole catalogue without paying for anything. Works
+        #: acquired there get mechanically-derived mats, recorded as such, rather
+        #: than no mat at all — which would leave them unrenderable.
+        self._client = client
+        if image_max_edge <= 0:
+            raise ValueError(f"The mat image edge must be positive, got {image_max_edge}.")
+        self._image_max_edge = image_max_edge
+
+    @property
+    def model_id(self) -> str | None:
+        """Which model this engine asks, or `None` when it cannot ask one."""
+        return None if self._client is None else self._client.model
+
+    def choose(self, image_path: Path) -> MatChoice:
+        """Pick the mat colour for the image at `image_path`.
+
+        Always returns a choice. Every way the model path can fail lands on the
+        dominant-colour fallback with the failure recorded on the result, so the
+        caller never has to decide what to do about a mat that could not be
+        chosen — there is no such state.
+        """
+        if self._client is None:
+            return self._fallback(image_path, detail="no OpenRouter key is configured, so no vision model was asked")
+        attachment = _reading(image_path, lambda: self._encode(image_path))
+
+        try:
+            completion = self._client.complete(prompt=MAT_PROMPT, schema=MAT_SCHEMA, image=attachment)
+        except OpenRouterError as exc:
+            # Includes the two money refusals. Neither is retried here: 403 means
+            # the key is spent and will refuse identically, and 402 means the
+            # reservation is too large for the credit left, which asking again
+            # does not change. Both leave the work with a recorded mechanical mat
+            # rather than with none.
+            log.info("the mat model could not be reached for %s: %s", image_path.name, exc)
+            return self._fallback(image_path, detail=f"the vision model could not be reached: {exc}")
+
+        choice = _read_choice(completion)
+        if choice is not None:
+            return choice
+        return self._fallback(
+            image_path,
+            detail=_unusable_detail(completion),
+            cost_usd=completion.cost_usd,
+        )
+
+    def _encode(self, image_path: Path) -> ImageAttachment:
+        """The work as a JPEG small enough to send, upright and in RGB.
+
+        The size is the only dial on what a mat call costs, since the image bills
+        inside the prompt tokens. EXIF rotation is applied for the same reason
+        `measure()` applies it: a model shown a portrait work lying on its side
+        reasons about a different picture than the one the wall will show.
+        """
+        with Image.open(image_path) as image:
+            # Decodes at a reduced DCT scale where the format allows, so a
+            # 47-megapixel master never becomes a 47-megapixel bitmap on the way
+            # to a 768-pixel thumbnail on the smallest machine in the deployment.
+            image.draft("RGB", (self._image_max_edge, self._image_max_edge))
+            upright = ImageOps.exif_transpose(image) or image
+            frame = upright.convert("RGB")
+            frame.thumbnail((self._image_max_edge, self._image_max_edge), Image.Resampling.LANCZOS)
+            buffer = BytesIO()
+            frame.save(buffer, format="JPEG", quality=85, optimize=True)
+        return ImageAttachment(base64_data=base64.b64encode(buffer.getvalue()).decode("ascii"), media_type="image/jpeg")
+
+    def _fallback(self, image_path: Path, *, detail: str, cost_usd: Decimal = Decimal(0)) -> MatChoice:
+        rgb = _reading(image_path, lambda: dominant_color(image_path))
+        darkened = scale_lightness(rgb, _FALLBACK_LIGHTNESS)
+        lab = rgb_to_lab(darkened)
+        log.info("mat for %s fell back to the dominant colour: %s", image_path.name, detail)
+        return MatChoice(
+            hex_rgb=format_hex(darkened),
+            method=MatMethod.DOMINANT_COLOR_FALLBACK,
+            reason=_FALLBACK_REASON,
+            lab_l=lab.l,
+            lab_a=lab.a,
+            lab_b=lab.b,
+            # No `model_id`: no model chose this. Recording the configured one
+            # would attribute a mechanical colour to a model that never saw the
+            # work, which is precisely the confusion `method` exists to end.
+            model_id=None,
+            cost_usd=cost_usd,
+            fallback_detail=detail,
+        )
+
+
+def _reading[T](image_path: Path, read: Callable[[], T]) -> T:
+    """Run a read of `image_path`, turning any decode failure into one refusal.
+
+    **The one image failure the fallback cannot absorb, in the one place that
+    says so.** Both producers read the same file: bytes that will not decode for
+    the model will not quantise for a dominant colour either, and will not compose
+    onto a canvas afterwards. So this raises where the rest of the module falls
+    back — a fallback here would raise the identical exception a few lines later,
+    from a site whose message names the dominant colour and sends whoever reads it
+    somewhere unrelated.
+
+    Broad on purpose, for the reason the acquisition service's `measure()` is: the
+    imaging seam raises what Pillow raises, and that is deliberately not one
+    family — `UnidentifiedImageError` and a truncated file give `OSError`, a
+    `La`-mode image gives `ValueError`, and an image engineered to exhaust memory
+    gives `DecompressionBombError`, straight from `Exception`. These bytes came
+    from a URL discovery found, which the security model treats as
+    attacker-influenceable, so the one an attacker *chooses* is the one a narrower
+    catch would let escape untranslated.
+    """
+    try:
+        return read()
+    except Exception as exc:  # prawduct:allow prawduct/broad-except -- attacker-influenced bytes, translated not swallowed
+        # Logged with its type and traceback before it becomes a ServiceError, so
+        # a `TypeError` from a future edit above does not read in the journal as a
+        # museum having served bad bytes.
+        log.warning("reading %s to choose a mat raised %s", image_path.name, type(exc).__name__, exc_info=True)
+        raise ServiceError(
+            f"The image at {image_path.name} could not be read, so no mat can be chosen for it and it cannot be rendered: {exc}"
+        ) from exc
+
+
+def dominant_color(image_path: Path) -> tuple[int, int, int]:
+    """The colour that covers most of the image.
+
+    Median-cut quantisation through Pillow rather than k-means through OpenCV,
+    NumPy and scikit-image — which is what 2024 used, and what this plane will not
+    install on a memory-capped Pi to answer a question about five colours.
+
+    The two agree on what they are asked for. Both partition the image and return
+    the most-populated partition's colour; median cut splits along the widest
+    channel where k-means iterates towards cluster centres, so an individual
+    answer can differ by a shade. What neither does is matter much: this feeds a
+    fallback that then darkens the result by a third.
+    """
+    with Image.open(image_path) as image:
+        image.draft("RGB", (_FALLBACK_MAX_EDGE, _FALLBACK_MAX_EDGE))
+        upright = ImageOps.exif_transpose(image) or image
+        frame = upright.convert("RGB")
+        frame.thumbnail((_FALLBACK_MAX_EDGE, _FALLBACK_MAX_EDGE), Image.Resampling.LANCZOS)
+        quantised = frame.quantize(colors=_FALLBACK_CLUSTERS, method=Image.Quantize.MEDIANCUT)
+        palette = quantised.getpalette() or []
+        # `getcolors` on a palette image returns (count, palette index) pairs.
+        # None would mean more distinct values than the limit, which quantising to
+        # five cannot produce — but a fallback that raised here would defeat its
+        # own purpose, so the guard is a value rather than an exception.
+        counts = quantised.getcolors(maxcolors=_FALLBACK_CLUSTERS) or [(1, 0)]
+    _, index = max(counts)
+    return (palette[index * 3], palette[index * 3 + 1], palette[index * 3 + 2])
+
+
+def _read_choice(completion: Completion) -> MatChoice | None:
+    """The model's answer as a choice, or `None` if it did not give a usable one.
+
+    Every failure returns `None` rather than raising, because none of them is
+    exceptional: an unenforced schema produces malformed answers as a matter of
+    course, and the caller's response to all of them is identical.
+    """
+    try:
+        payload = json.loads(completion.content)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    try:
+        hex_rgb = format_hex(parse_hex(str(payload.get("hex_rgb", ""))))
+    except ColorError:
+        return None
+    return MatChoice(
+        hex_rgb=hex_rgb,
+        method=MatMethod.VISION_MODEL,
+        reason=str(payload.get("reason") or "").strip(),
+        # The model's own LAB, kept as it sent it rather than recomputed from the
+        # hex. They can disagree, and when they do that disagreement is the
+        # evidence: a hex that does not match the LAB beside it is a model that
+        # converted badly, not a model with unusual taste.
+        lab_l=_number(payload.get("lab_l")),
+        lab_a=_number(payload.get("lab_a")),
+        lab_b=_number(payload.get("lab_b")),
+        model_id=completion.model_id,
+        cost_usd=completion.cost_usd,
+    )
+
+
+def _unusable_detail(completion: Completion) -> str:
+    """Why an answer that arrived could not be used, in terms that name the fix.
+
+    `length` is called out by name because it is the one failure whose cause is
+    on this side of the wire: the output reservation did not clear the model's
+    reasoning budget, and the call was billed in full for nothing. Reported as
+    "the model failed" it would send whoever reads it to change models, which
+    fixes nothing.
+    """
+    if completion.finish_reason == "length":
+        return (
+            f"the model's answer was cut off at the output reservation "
+            f"({completion.output_tokens} tokens); raise MAT_MAX_OUTPUT_TOKENS"
+        )
+    if not completion.content.strip():
+        return f"the model returned an empty answer (finish_reason={completion.finish_reason!r})"
+    return f"the model's answer was not a usable colour: {completion.content[:200]!r}"
+
+
+def _number(value: object) -> float | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, (int, float, Decimal)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+__all__ = ["MAT_PROMPT", "MAT_SCHEMA", "MatChoice", "MatEngine", "dominant_color"]

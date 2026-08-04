@@ -116,7 +116,7 @@ tool per action stops paying and consolidation starts.
 
 | Tool | Actions | Notes |
 |---|---|---|
-| `art_discovery` | `estimate`, `start`, `status`, `approve`, `decline`, `cancel`, `resolve_images`, `list_runs`, `spend`, `help` | **The only tool that spends money.** |
+| `art_discovery` | `estimate`, `start`, `status`, `approve`, `decline`, `cancel`, `resolve_images`, `list_runs`, `spend`, `help` | **The only tool that spends money in amounts worth authorising** — see the correction below. |
 | `art_review` | `list_works`, `get_work`, `list_images`, `set_canonical`, `set_verdict`, `reject_image`, `help` | Returns thumbnails; see Inputs & Outputs. Never spends. |
 | `art_catalogue` | `list`, `get`, `sources`, `archive`, `restore`, `retry_acquisition`, `set_mat_color`, `regenerate`, `help` | `sources` is the provenance read; see below. |
 | `art_theme` | `list`, `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`, `help` | `activate` changes the wall immediately. |
@@ -366,6 +366,31 @@ only tool with a cost, so it can be gated independently without splitting anythi
 else. Note the consequence — because MCP annotations are per *tool*, not per
 action, an operation needing its own confirmation must be its own tool. That is the
 real constraint on how far consolidation can go.
+
+> **Corrected 2026-08-03, when the mat engine landed: `art_discovery` is no
+> longer the only tool with a cost.** `art_catalogue(action='set_mat_color')`
+> asks a vision model whenever it is given no `hex_rgb`, at about $0.000063 a
+> call. The paragraph above is left standing because its *reasoning* survives
+> intact and only its premise moved, and because the reasoning is what a reader
+> needs: a boundary is worth drawing where an operation needs its own
+> confirmation.
+>
+> **A mat call does not need one, and the difference is four orders of
+> magnitude.** A discovery run is the operation with an approval gate, a run
+> handle, a stored estimate and a monthly ceiling behind it; a mat call is a
+> fraction of a cent spent on one work at the curator's explicit request, and
+> re-preparing an entire collection spends nothing at all because a work that
+> already has a mat keeps it. Splitting `set_mat_color` onto its own tool to
+> carry an annotation would buy a confirmation prompt nobody wants and a seventh
+> tool on a surface this artifact argues should be small.
+>
+> **What did have to change is `openWorldHint`.** `art_catalogue` declared a
+> closed world while `retry_acquisition` was already fetching arbitrary museum
+> URLs — understating it to every client that reads the hint, since Chunk 18A.
+> It is now `true`. The lesson generalises past this instance: an annotation is
+> per tool, so **adding an action can falsify a flag the tool has carried
+> correctly for months**, and nothing about the new action's own code review
+> would look at that flag.
 
 ### Argument shape
 

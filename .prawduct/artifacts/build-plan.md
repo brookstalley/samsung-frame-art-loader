@@ -113,7 +113,7 @@ re-created the same silence one line further down.
 - [x] Chunk 17A: The review surface — works, instances, and the image in the transcript
 - [x] Chunk 17B: The verdict, the artist, and the preview's death
 - [x] Chunk 18A: Acquisition — the fetch paths, the guards, and a work's sources
-- [ ] Chunk 18B: Preparation — the mat engine, the 4K render, and the corpus look
+- [x] Chunk 18B: Preparation — the mat engine, the 4K render, and the corpus look
 - [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
 - [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
@@ -363,6 +363,46 @@ can act on. And a re-search now carries an `estimated_cost_usd` of its own,
 priced from the works it covers — without it, `estimate` on a resolve run
 answered with a sentence about phase 1 finishing, which will never happen on a
 run that never had one.
+
+**Chunk 18A landed 2026-08-03** — the two fetch paths, the URL policy, the disk
+guard and four `art_catalogue` actions. Its step-0 probe of `dezoomify-rs`
+invalidated three things the 2024 call site implied, and its four review rounds
+turned up a failed *retry* deleting the image the work was still displaying: both
+fetch paths now stage and promote, so a failed re-fetch costs the work nothing.
+
+**Chunk 18B landed 2026-08-03 and the preparation half is built.** The mat engine
+asks a vision model in LAB and records `MatColor.method` on every path, so the
+mechanical fallback the 2024 pipeline applied silently is now visible in the data
+and in the tool's own notice. The compositor draws the artwork box
+`Settings.tv_artwork_box` already computes — recovering the margins from the box
+rather than recomputing them from inches and a weight, so the canvas and the
+readiness verdict cannot disagree by the pixel or two that rounding order moves.
+`set_mat_color` and `regenerate` are live, and a prepared work enters the
+manifest end to end.
+
+*Four things were settled at build.* **The vision model is `qwen/qwen3.7-flash`**,
+chosen on the operator's stated criterion — cheapest that does the job — after
+thirty-one probe calls over real corpus images: it was the only candidate to
+answer every call usably, and the two cheaper ones proposed a near-white mat over
+a Rothko and a Mondrian. **`MAT_MAX_OUTPUT_TOKENS` is a correctness value**, not a
+tuning knob: a reservation that does not clear a model's *reasoning* budget
+returns empty content billed in full, which reads as a model failure and is a
+client misconfiguration — it was raised to 8,000 when a corpus run hit the ceiling
+intermittently at 2,000. **The corpus is `all.json` itself** and Chunk 06's
+deferred `tests/fixtures/mat_corpus.json` is deliberately not created: a copy
+would be a second place the 41 colours live, free to drift silently from the one
+the seed loads. **`art_catalogue` now declares `openWorldHint=true`**, which it
+should have since 18A — `retry_acquisition` was already fetching arbitrary museum
+URLs behind a closed-world declaration, and the contract test that should have
+caught it asserted the old set of tools rather than the property.
+
+**What 18B could not settle is the acceptance criterion's other half**, and it is
+enqueued rather than assumed: "the operator's corpus look finds no regression" is
+explicitly subjective. A full run is done — 33 of the 41 works compared, median
+CIEDE2000 distance 9.8, the engine's median lightness 20.8 against the corpus's
+20.7, one work over the darkness bar — and `tools/mat_corpus.py` regenerates the
+side-by-side sheet. It is in `operator-verification.md` with the three pairs worth
+looking at first.
 
 ## Scaffolding
 

@@ -23,6 +23,7 @@ from datetime import datetime
 from typing import Any, Final
 
 from curation.acquisition.dezoomify import DezoomifyUnavailable
+from curation.acquisition.preparation import PreparationResult
 from curation.acquisition.service import AcquisitionOutcome, AcquisitionResult
 from curation.acquisition.space import NotEnoughSpace
 from curation.manifest.builder import ManifestBuild
@@ -35,6 +36,7 @@ from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkLi
 from curation.services.container import Services
 from curation.services.discovery import VerdictOutcome
 from curation.services.display import UNSET
+from curation.services.display_fit import DisplayFit
 from curation.services.errors import ServiceError
 from curation.services.previews import InlinePreview
 from curation.services.review import MAX_REVIEW_LIMIT, CandidatePage, CandidateView, InstanceListing, InstanceView
@@ -129,6 +131,89 @@ def _retry_acquisition(services: Services, arguments: Mapping[str, Any]) -> dict
         height=result.height,
         notice=_acquisition_notice(result),
     )
+
+
+def _set_mat_color(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """Set a mat colour, or ask the model for one when none is given.
+
+    **One action rather than two, because the parameter is the whole difference.**
+    "Use this colour" and "pick me a colour" are the same request about the same
+    field, differing in who decides — and a surface with `set_mat_color` beside a
+    `choose_mat_color` would make a caller pick between them before knowing that
+    only one of them costs anything. The tip says which does.
+    """
+    artwork_id = arguments["artwork_id"]
+    hex_rgb = arguments.get("hex_rgb")
+    if hex_rgb:
+        result = services.preparation.set_mat(artwork_id, str(hex_rgb))
+    else:
+        result = services.preparation.choose_mat(artwork_id)
+    return ok(
+        artwork_id=result.artwork_id,
+        hex_rgb=result.mat_hex,
+        method=result.mat_method,
+        outcome=result.outcome.value,
+        detail=result.detail,
+        relative_path=result.relative_path,
+        # A string rather than a float: the ledger keeps money exact, and a
+        # `Decimal` serialised through JSON would become the binary float this
+        # whole path exists to avoid.
+        cost_usd=str(result.cost_usd),
+        notice=_mat_notice(result),
+    )
+
+
+def _mat_notice(result: PreparationResult) -> str | None:
+    """What the recorded method means, when it means more than the word does.
+
+    `dominant_color_fallback` is the one that has to speak up: it is the state
+    the 2024 pipeline entered silently, leaving a mechanical colour and a
+    considered one indistinguishable forever after. The caller asked a model to
+    choose and did not get one, and only this line says so.
+    """
+    if result.mat_fallback_detail is None:
+        return None
+    return (
+        f"The vision model did not choose this colour — it was derived from the artwork's own dominant "
+        f"colour and darkened, because {result.mat_fallback_detail}. Setting hex_rgb yourself overrides it, "
+        "and asking again may succeed if the cause was temporary."
+    )
+
+
+def _regenerate(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    result = services.preparation.prepare(arguments["artwork_id"], force=bool(arguments.get("force")))
+    return ok(
+        artwork_id=result.artwork_id,
+        outcome=result.outcome.value,
+        detail=result.detail,
+        relative_path=result.relative_path,
+        hex_rgb=result.mat_hex,
+        method=result.mat_method,
+        # Present only when something was actually rendered. On `unchanged` there
+        # is no fresh assessment to report, and repeating a stored one would be
+        # answering a question this call did not ask.
+        fit=None if result.fit is None else result.fit.value,
+        rendered_long_edge_inches=result.rendered_long_edge_inches,
+        notice=_regenerate_notice(result),
+    )
+
+
+def _regenerate_notice(result: PreparationResult) -> str | None:
+    """Said out loud when the work is on the wall smaller than the floor allows.
+
+    Not a refusal and not an error: the curator may have chosen this instance
+    knowing it was small, and `nonfunctional-requirements.md` is explicit that
+    such a work is rendered rather than hidden. But a canvas reported as composed
+    with no mention of it would let a work quietly appear as a postage stamp in
+    an enormous mat, which is the gap the floor exists to close.
+    """
+    if result.fit is DisplayFit.BELOW_FLOOR and result.rendered_long_edge_inches is not None:
+        return (
+            f"This work renders at about {result.rendered_long_edge_inches:.1f} inches on the wall, below the "
+            "configured floor, so it will appear small in a wide mat. It is on the wall regardless; "
+            "art_review's re-search finds a larger scan if one exists."
+        )
+    return None
 
 
 def _acquisition_notice(result: AcquisitionResult) -> str | None:
@@ -548,6 +633,8 @@ BINDINGS: Final[Mapping[tuple[str, str], Binding]] = {
     ("art_catalogue", "archive"): _archive_artwork,
     ("art_catalogue", "restore"): _restore_artwork,
     ("art_catalogue", "retry_acquisition"): _retry_acquisition,
+    ("art_catalogue", "set_mat_color"): _set_mat_color,
+    ("art_catalogue", "regenerate"): _regenerate,
     ("art_theme", "list"): _list_themes,
     ("art_theme", "get"): _get_theme,
     ("art_theme", "create"): _create_theme,

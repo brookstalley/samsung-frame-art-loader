@@ -260,7 +260,7 @@ each.
 | Web search — **Parallel** *(the default, chosen 2026-08-02)* | $0.001/request (10 results incl.) | $0.03–0.05 | **$0.010** |
 | Web search — Exa via OpenRouter | $0.005/request (10 results incl.) | $0.15–0.25 | $0.050 |
 | Web search — Perplexity | $0.005/request | $0.15–0.25 | $0.050 |
-| Mat-colour vision | one call per *accepted* work | negligible | negligible |
+| Mat-colour vision — **Qwen3.7 Flash** *(the default, chosen 2026-08-03)* | $0.000063/call, one call per *accepted* work | negligible | **$0.0013 per 20 works** |
 | Museum APIs, image acquisition | $0 | bandwidth only | bandwidth only |
 
 The search rows fall in the fourth column for a different reason from the token
