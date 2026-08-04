@@ -590,10 +590,22 @@ is not polish; it is the requirement.
 explicitly a subjective bar, and the 41 existing artworks with their hand-tuned
 mats are the regression corpus. A new mat engine that scores well on any metric
 while producing visibly worse mats on those 41 has failed. The corpus's canonical
-record is `all.json` — replaced as a schema, but **retained as a test fixture**:
-it is the only place the hand-tuned mat colours exist, so repo-hygiene work
-(issue #4 untracks its *backups*) must not delete the file itself before the
-regression fixture is extracted.
+record is `all.json` — replaced as a schema, but **retained, tracked, and read
+directly**: it is the only place the hand-tuned mat colours exist, so repo-hygiene
+work (issue #4 untracks its *backups*) must not delete the file itself.
+
+> **Settled 2026-08-03: there is no extracted fixture, and this record is
+> permanent rather than interim.** This paragraph read "retained as a *test
+> fixture* … must not delete the file itself **before the regression fixture is
+> extracted**", which promised that `all.json` would hand its role to a copy under
+> `tests/fixtures/`. That copy is deliberately not created. A second file holding
+> the same 41 colours is a second place they live, free to drift from the one the
+> seed actually loads — and the drift is silent, because both files keep parsing
+> and neither fails. The regression test reads `all.json` through the product's
+> own `read_index` instead of a second parser, so the corpus and the seed cannot
+> disagree without a test failing. The consequence to accept knowingly: deleting
+> or untracking `all.json` destroys the corpus outright, with no successor to fall
+> back to, which is why `.gitignore` excludes only its backups and says so inline.
 
 **Rendered size must be adequate, and the current pipeline has no floor.**
 `resize_file_with_matte` uses PIL's `image.thumbnail()`, which **never upscales** —

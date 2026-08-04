@@ -86,6 +86,15 @@ test would have caught and no surface would have reported.
 - **The corpus is `all.json`.** Chunk 06 deferred extracting the 41 colours to
   `tests/fixtures/mat_corpus.json`; this is the decision not to. A copy is a
   second place they live, free to drift silently from the one the seed reads.
+  *(Propagated 2026-08-04, and worth recording as a miss: the decision reached
+  the code and this entry and stopped there. `nonfunctional-requirements.md`
+  § Output Quality still promised the file would be kept only "before the
+  regression fixture is extracted", Chunk 06's entry still carried the fixture as
+  a deliverable and as an acceptance criterion that could never come true, and
+  issue #11 still instructed the next builder to create it. All four now agree.
+  The shape to keep: a decision that DESCOPES something has to be walked back
+  through every artifact that promised it, and the promising artifacts are never
+  the one you are editing when you make the call.)*
 - **The colour arithmetic is first-party.** 2024 reached CIE LAB through OpenCV,
   NumPy and scikit-image — three packages on a memory-capped Pi to do thirty
   lines. CIEDE2000 rather than Euclidean CIE76, because mats cluster in the dark

@@ -96,7 +96,7 @@ re-created the same silence one line further down.
 
 - [x] Chunk 01: Untrack the TV pairing token; drop the catalogue backups (issue #4)
 - [x] Chunk 02: Deployment values out of source (issue #5) + `art.py` defect dispositions (issue #6)
-- [x] Chunk 06: uv restructure (curation only), lint/test tooling — *display plane deferred, mat fixture deferred*
+- [x] Chunk 06: uv restructure (curation only), lint/test tooling — *display plane deferred; mat fixture **descoped** by Chunk 18B, not pending*
 - [x] Chunk 07: Walking skeleton — catalogue core → service layer → MCP tool, end to end
 - [x] Chunk 07B: The durable seam — persistence reshaped to the `DurableStore` contract
 - [x] Chunk 08A: The accepted-catalogue entities, their constraints, and `display_fit`
@@ -746,7 +746,7 @@ architecture-proving slice is Chunk 07.
 proves the architecture, then the catalogue and the manifest land in full and
 the existing 41 works are seeded into them.
 
-### Chunk 06: uv two-plane restructure, lint/test tooling, mat regression fixture (issue #11)
+### Chunk 06: uv two-plane restructure, lint/test tooling
 
 - **Description:** Restructure onto the decided shape: `curation/` (3.14,
   uv-managed standalone) and `display/` (3.13, system interpreter), each with its
@@ -755,10 +755,10 @@ the existing 41 works are seeded into them.
   chunk builds the decided shape rather than rediscovering it. Wire pytest per plane, adopt ruff (the
   mechanical norm-index rows migrate to lint rules), carry black's line-length
   130, give each plane its own `target-version` (retiring the single `py312`
-  departure). Extract the mat regression fixture from `all.json` — all 41 works
+  departure). ~~Extract the mat regression fixture from `all.json` — all 41 works
   with their hand-tuned mat colours and what a re-render needs — and point
   `nonfunctional-requirements.md` § Output Quality at the fixture as the corpus's
-  canonical record. Delete `art_label.py` (issue #6 defect 4) after confirming no
+  canonical record.~~ **Descoped 2026-08-03 — see the correction below.** Delete `art_label.py` (issue #6 defect 4) after confirming no
   out-of-tree importer on the Pi. Rename the recovered `r` freeze to say what it
   is (evidence, not scratch) — landed 2026-07-27 as `deploy/pi-freeze-2024.txt`,
   after Chunk 06 shipped without it. Legacy modules stay at the root, running
@@ -769,16 +769,35 @@ the existing 41 works are seeded into them.
 - **Artifacts consumed:** `project-preferences.md` (Language & Runtime, Tooling,
   Enforcement), `operational-spec.md` § The Curation Interpreter, issue #11
 - **Deliverables:** new `curation/pyproject.toml`, new `display/pyproject.toml`,
-  per-plane lockfiles and venvs; ruff config with the migrated rules; new
-  `tests/fixtures/mat_corpus.json` (name per what the comparison needs);
-  `nonfunctional-requirements.md` § Output Quality repointed at the fixture and
-  the `all.json` untrack-or-keep call recorded; `art_label.py` deleted; `r`
+  per-plane lockfiles and venvs; ruff config with the migrated rules;
+  the `all.json` keep-and-track call recorded; `art_label.py` deleted; `r`
   renamed; `test_commands` declared in `project-state.yaml` for both planes
-- **Tests:** fixture round-trip (41 works, every mat colour present); both plane
-  suites runnable and green; ruff clean
+- **Tests:** both plane suites runnable and green; ruff clean
 - **Acceptance criteria:** both venvs resolve from their locks (display's on the
-  Pi); `uv run pytest` green in both projects; the fixture is the corpus's
-  canonical record per the amended artifact
+  Pi); `uv run pytest` green in both projects; `all.json` is the corpus's
+  canonical record and stays tracked, per the amended artifact
+  <!-- The fixture half was deferred at build and DESCOPED on 2026-08-03 by Chunk
+       18B, which this entry had explicitly delegated the call to ("this chunk
+       decides whether that file is still worth having or the seeded rows are the
+       corpus"). Three things were struck rather than left standing: the fixture
+       deliverable under tests/fixtures, the test "fixture round-trip (41 works,
+       every mat colour present)", and the criterion naming that fixture as the
+       canonical record. A landed chunk asserting an acceptance criterion that can
+       never come true reads to an auditor as a missed deliverable, and the next
+       person to pick it up would build the copy the product decided against.
+       The reason lives in `nonfunctional-requirements.md` § Output Quality and in
+       `curation/tests/unit/test_mat_corpus.py`'s docstring: a second file holding
+       the same 41 colours drifts silently from the one the seed loads, because
+       both keep parsing and neither fails. Issue #11 asked for the extraction and
+       is closed against this decision.
+       The struck fixture is named in prose rather than backticked, because the
+       deliverable check reads a backticked path in a chunk entry as a file the
+       chunk was meant to add — the same reason Chunks 18A and 18B give for the
+       cache directories and the display package.
+       "Artifacts consumed" still lists issue #11, deliberately: it records what
+       this chunk was written against, and editing that list after the fact would
+       erase the trail from the requirement to the decision that retired it. -->
+- **Superseded in part by:** Chunk 18B (the fixture half, 2026-08-03)
 - **Done when:**
   1. Acceptance criteria met and tests pass
   2. `/prawduct:critic` run and blocking findings resolved
