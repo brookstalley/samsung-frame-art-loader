@@ -862,6 +862,10 @@ starting with hoisting the art root into configuration as a single `ART_ROOT`
 (it was hardcoded to `/home/tvpi/art`, correctly outside the repo, but only
 implicitly).
 
+## A claim repeated in three artifacts is ONE piece of evidence copied twice — when a property is asserted in prose, verify it against the code before adding the third statement of it, because every later text inherits it from the earlier prose rather than from the behaviour
+
+## When a module's docstring says it exists to stop two callers drifting, adding a caller is the moment to READ that docstring — the drift it warns about reappears in the new caller, and the escaping case will be the common path rather than the one being written
+
 ## When a fixture seeds a file at a path the code DERIVES, learn that path from an observed run instead of spelling it out — a rename leaves the fixture pointing at nothing, and the test stays green while the branch it guards goes undefended
 
 ## Known problems in the existing index

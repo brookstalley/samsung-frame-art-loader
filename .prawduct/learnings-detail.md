@@ -639,3 +639,41 @@ removed" beside a fixture built from a literal the code also builds. That commen
 is a claim about coverage, and a hand-written path is exactly what makes it stop
 being true without anyone noticing.
 
+
+
+## A claim repeated in three artifacts is ONE piece of evidence copied twice
+
+Chunk 18B published "regenerate spends nothing" in a tool tip, a parameter
+description and an `api-contract.md` correction block, while
+`PreparationService.prepare()` called the mat chooser *before* its
+already-current branch — so the first call on every acquired work made a paid
+vision call. Two Critic reviewers found it independently through different goals.
+
+The confident sentence was the reason nobody re-checked. The free-re-render
+property went into the module docstring early, and each later text was written
+from that prose rather than from the code, so three statements agreed with each
+other and none of them with the behaviour. Repetition reads as corroboration and
+is not: the second and third statements carry no independent evidence at all.
+
+The check that would have caught it is cheap and specific — before writing a
+property into a *second* artifact, read the code path that makes it true. Not the
+first statement of it, which is usually written while the code is in mind; the
+second, which is written from the first.
+
+## When a module's docstring says it exists to stop two callers drifting, adding a caller is the moment to read it
+
+`services/imaging.py` opens with "The one downscale this product does, so its two
+callers cannot drift apart… the copies had already diverged on which exceptions
+they name." Chunk 18B then added a third and fourth caller of the same decode —
+the mat engine and the compositor — one translating Pillow's failures into a
+named refusal and one letting them escape.
+
+The escaping case was the *common* one, which is the part worth carrying. A work
+that already has a mat skips the mat engine entirely and reaches the compositor
+first, and every `set_mat()` does the same, so the path with no translation was
+the path most calls took. The path that was correctly guarded was the rarer one.
+
+This is the third consecutive chunk whose review turned up "the second caller of
+the same idea" — 17B, 18A and 18B. The habit that closes it is not a checklist
+item at review time but a reading habit at write time: a docstring that names a
+past divergence is a warning addressed to whoever adds the next caller.
