@@ -48,6 +48,71 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-04: The card stays, and the risk moves to the backup that does not exist
+
+<!-- prawduct: status=shipped | scope=v1-build -->
+
+<!-- No `chunks=`: this is issue #13's decision, recorded off-bench. Chunk 03 owns
+     it as one of three deliverables and the other two need the bench, so the
+     chunk is not shipped and no checkbox flips. -->
+
+**Why:** issue #13 had blocked Chunk 03 since the plan was authored, and the
+decision gates deployment paths rather than following them. It needed no hardware,
+so it had no business waiting for bench access.
+
+**Decided: the SD card stays** — no USB SSD, no SSD boot, no network storage.
+`ART_ROOT` and `catalogue.sqlite` remain on the 128 GB card, and the NAS is the
+backup destination only, which is the role `operational-spec.md` already gave it
+on 2026-07-20.
+
+**The reasoning is the write profile, not the medium's reputation**, and that
+distinction is what the recorded rationale had to get right. The image tree is
+additive and written once — works are added and rarely deleted or rebuilt — so
+total bytes written is bounded by the size of the collection rather than by churn,
+which puts a full card on the order of a hundred gigabytes across years. That is a
+small fraction of any modern card's endurance. **What wears a card is small writes
+that never stop, and this product has exactly two:** journald, capped by the
+`SystemMaxUse=` deliverable Chunk 03 still owes, and the display heartbeat, which
+had no stated cadence at all until this entry's other half.
+
+*An earlier draft of this rationale leaned on free space — a 128 GB card holding
+10 GB has enormous room to wear-level. The operator corrected the projection to
+roughly 70% full, which weakens that argument considerably and leaves the
+conclusion untouched, because the bound that matters is total writes and not
+headroom. The artifact records the argument that survives.*
+
+**`ART_ROOT` on network storage was raised and rejected**, and it is worth keeping
+why, because "the NAS has RAID" is a good instinct that this layout defeats.
+`catalogue_path` resolves to `art_root / catalogue.sqlite`, so moving `ART_ROOT`
+moves the database — onto a filesystem where advisory locking is unreliable and
+where WAL, the mode that would otherwise reduce the exposure, cannot run at all
+because it requires shared memory between processes on one host. It would also put
+the wall's uptime behind a second machine, since the display plane polls the
+manifest and reads the image tree continuously, and it would rest the manifest and
+heartbeat channels' atomic write-and-rename on semantics a network filesystem
+decides rather than the kernel.
+
+**The risk is now decided rather than closed, and the artifact says so.** The
+decision accepts card death every few years, which makes the backup and restore
+path this risk's entire mitigation instead of a complement to it — and issue #14 /
+Chunk 20 is unbuilt and sits last in the build order. Writing "mitigated" would
+have been the green dot this product's own observability strategy refuses. Nothing
+on the Pi today survives the card.
+
+**The heartbeat interval was undefined, and the storage decision is what made that
+matter.** `observability-strategy.md` said the display plane writes its status
+document "on a regular interval" and named no number; Chunk 13 owns the writer and
+its entry named none either. On a Pi with no SSD that number *is* the wear budget,
+and a writer borrowing the manifest poll's ~1 s cadence by symmetry would commit
+~86,400 write-and-rename cycles a day to the card in perpetuity. Set to **60
+seconds**, recorded as a vetoable decision at the point the contract is stated.
+Bounded on the other side by the rotation interval — the document names the work
+*currently* displayed, so a heartbeat slower than the wall would report works it
+had already left. 60 s sits under the 180 s rotation default with margin. It costs
+no fidelity because the panel reports heartbeat age absolutely rather than judging
+it against a threshold, which is a property the health surface already committed
+to for its own reasons.
+
 ## 2026-08-04: A retry cannot cost a work its image — the other half of the promise
 
 <!-- prawduct: status=shipped | scope=v1-build -->

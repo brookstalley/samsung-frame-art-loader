@@ -629,18 +629,32 @@ architecture-proving slice is Chunk 07.
   box. Establish on the actual TV whether firmware auto-update can be disabled —
   the vendor has removed art mode by firmware before — and record the finding in
   its three homes (`security-model.md` § Open, `operational-spec.md` § Risks,
-  `project-state.yaml` risk factor). Capture the operator's issue #13 decision
-  (USB/SSD storage vs SSD boot) and update `operational-spec.md` § Risks so the
-  top risk reads mitigated-by-decision; the chosen medium determines the paths
-  later chunks bake into deployment.
-- **Depends on:** operator decision on issue #13 (blocking for this chunk only)
+  `project-state.yaml` risk factor). The issue #13 storage decision is captured —
+  see below.
+- **The #13 decision landed 2026-08-04, off-bench, and it needed no hardware.**
+  The operator kept the SD card: no USB SSD, no SSD boot, and no network storage.
+  Recorded with its alternatives and its trade-off in `operational-spec.md`
+  § Risks. Two consequences for the rest of this plan:
+  - **No deployment paths move.** The chunk's premise was that the chosen medium
+    determines the paths later chunks bake in; the medium did not change, so
+    nothing downstream is waiting on it.
+  - **The residual risk transferred to the backup path rather than closing.** The
+    decision accepts card death at a frequency of once every few years, which
+    makes issue #14 / Chunk 20 the entire mitigation instead of a complement to
+    it. Chunk 20 sits last in the build order and needs no bench — worth pulling
+    forward on that basis, which is an operator call and not a re-plan.
+- **Depends on:** nothing outstanding. *(Was: the operator decision on issue #13,
+  discharged 2026-08-04.)* The two remaining deliverables need the bench.
 - **Artifacts consumed:** `operational-spec.md` § Risks, issues #13/#15/#16
 - **Deliverables:** new `deploy/journald.conf.d/` drop-in (applied on the Pi);
   auto-update finding recorded in all three named homes and the disable/keep
-  decision recorded with its trade-off; #13 decision recorded with alternatives
+  decision recorded with its trade-off; ~~#13 decision recorded with
+  alternatives~~ — **done 2026-08-04**
 - **Tests:** none (config + recorded findings)
-- **Acceptance criteria:** `journalctl` reflects the explicit cap on the Pi;
-  neither risk in `operational-spec.md` § Risks still reads "undecided"
+- **Acceptance criteria:** `journalctl` reflects the explicit cap on the Pi; the
+  vendor auto-update risk in `operational-spec.md` § Risks no longer reads
+  "undecided" *(the storage risk half is met — it reads decided as of
+  2026-08-04, with the caveat that its mitigation is unbuilt)*
 - **Type:** doc-only
 - **Done when:**
   1. Acceptance criteria met on the Pi
