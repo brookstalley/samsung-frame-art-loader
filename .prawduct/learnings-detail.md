@@ -830,3 +830,12 @@ confirm-deletion wrapper built for the first defect — ask, read the category b
 raise only when neither outcome can be established — is exactly the shape the
 second one needs. It generalises to every verb on a boundary whose library is
 unowned and unmaintained.
+
+**The tell** is a mechanism written in the same voice as the measurement: if the
+behaviour was observed and the cause was reasoned, they cannot honestly share a
+sentence.
+
+**Why the read-back generalises.** It is one extra read against a system you are
+already connected to, and it is the only thing that survives a library that is
+wrong in both directions — which this one is.
+

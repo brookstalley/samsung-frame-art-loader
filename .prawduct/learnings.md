@@ -11,19 +11,14 @@ inline, which the record linter flags; moving them is tracked as issue #26.
 ## A measured behaviour and an explanation of it are separate claims
 
 **Record what the system did and what you inferred about why as two things, and
-label which is which.** A measurement earns confidence; the mechanism written
-beside it inherits that confidence without earning any, and a reader has nothing to
-separate them by. The tell is a mechanism written in the same voice as the
-measurement — if the behaviour was observed and the cause was reasoned, they cannot
-honestly share a sentence.
+label which is which** — a measurement earns confidence, and the mechanism written
+beside it inherits that confidence without earning any.
 
 ## Do not trust a foreign client's return value in either direction — confirm against the system itself
 
 **When a boundary library reports success or failure, verify the claim against the
-remote system's own state before acting on it.** Ask, then read the remote list
-back, and keep *unconfirmable* apart from *failed*. It is one extra read against a
-system you are already connected to, and it is the only thing that survives a
-library that is wrong in both directions.
+remote system's own state before acting on it** — ask, then read the remote list
+back, and keep *unconfirmable* apart from *failed*.
 
 ## Retiring a claim is a repo-wide grep, not a local edit
 

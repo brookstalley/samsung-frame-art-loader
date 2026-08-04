@@ -118,9 +118,11 @@ live set, touching only the image it uploads itself, and exits non-zero if any
 check fails. If it does fail, `pi-freeze-2024.txt` below is the rollback — it
 records the exact versions the wall ran on before the move.
 
-Behaviour changes to expect. These were established by reading the library's
-source; the run above has since confirmed the first two on the set, and the third
-is the defect issue #73 carries:
+Behaviour changes to expect. Both were established by reading the library's source
+and have since been confirmed on the set by the run above. (The upload defect is a
+third change, but it belongs to neither category — it was *measured* on hardware,
+and the source-derived mechanism first written around it has been retracted. Issue
+#73 carries it.):
 
 - **Building the art client now performs blocking network I/O** and raises when
   the set is unreachable, where it used to defer that to first use.

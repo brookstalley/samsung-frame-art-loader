@@ -80,7 +80,8 @@ now sets `RuntimeMaxUse=` too, evidenced by journald's own startup line moving
 from `max 156.1M` to `max 256M`. **Two standing facts fall out**: the journal does
 not survive a reboot, which is exactly when it would be read; and logging never
 wore the card, so `operational-spec.md`'s "exactly two" continuous-write paths were
-one. Whether to take `Storage=persistent` is recorded as an open trade, not taken.
+one. `Storage=persistent` was **declined** — the operator accepted losing the
+journal across a reboot rather than moving logging onto the card.
 
 **A deferral rationale was withdrawn rather than defended.** The bench entry said
 the upload defect could wait because the display binding does not exist and the
