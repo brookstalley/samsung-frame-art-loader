@@ -228,7 +228,17 @@ class TestStaleness:
         engine = MatEngine(None, image_max_edge=256)
         PreparationService(service, engine, prep_settings).prepare(work.id)
 
-        smaller_panel = replace(prep_settings, panel_width=1920, panel_height=1080)
+        # A coherent second deployment, not just a smaller number: the box is
+        # derived from *this* panel, because the two are wired together and the
+        # guard in `PreparationSettings` refuses a pair that came from different
+        # ones. Deriving it here is what makes this a panel change rather than a
+        # misconfiguration.
+        smaller_panel = replace(
+            prep_settings,
+            panel_width=1920,
+            panel_height=1080,
+            box=replace(prep_settings.box, width=1658, height=798, pixels_per_inch=52.4),
+        )
         result = PreparationService(service, engine, smaller_panel).prepare(work.id)
 
         assert result.outcome is PreparationOutcome.PREPARED
@@ -331,6 +341,39 @@ class TestWhatItRefuses:
                 panel_height=2160,
                 box=settings.tv_artwork_box,
             )
+
+    @pytest.mark.parametrize(
+        ("panel_width", "panel_height"),
+        [(3000, 2160), (3840, 1200), (0, 2160), (3840, -1)],
+    )
+    def test_a_box_that_does_not_fit_its_panel_is_refused_at_wiring_time(self, settings, tmp_path, panel_width, panel_height):
+        """**The failure this prevents has no downstream reporter.** A box wider
+        than its panel yields a negative mat, which pastes the artwork off the
+        canvas: the file is written, the rendition row is written, the manifest
+        carries it, and the first sign of the crop is the wall. The two fields are
+        derived from one another in a resolved configuration, so a mismatch means
+        they came from different deployments."""
+        with pytest.raises(ServiceError):
+            PreparationSettings(
+                art_root=tmp_path / "art",
+                ready_path=tmp_path / "art" / "ready",
+                panel_width=panel_width,
+                panel_height=panel_height,
+                box=settings.tv_artwork_box,
+            )
+
+    def test_the_shipped_panel_and_its_derived_box_agree(self, settings, tmp_path):
+        """The other half: the guard must accept the pair a real deployment
+        produces, or it would refuse every deployment rather than the wrong one."""
+        accepted = PreparationSettings(
+            art_root=tmp_path / "art",
+            ready_path=tmp_path / "art" / "ready",
+            panel_width=settings.tv_panel_width_px,
+            panel_height=settings.tv_panel_height_px,
+            box=settings.tv_artwork_box,
+        )
+
+        assert accepted.box.width <= accepted.panel_width
 
     def test_a_rendition_directory_inside_the_art_root_is_accepted(self, settings, tmp_path):
         """The other half, so the guard above is known to discriminate rather

@@ -98,15 +98,33 @@ class PreparationSettings:
     box: ArtworkBox
 
     def __post_init__(self) -> None:
-        """Refuse a tree outside `ART_ROOT` at wiring time rather than mid-render.
+        """Refuse a wiring that could only ever render wrongly, at wiring time.
 
         Every catalogue path is relative to `ART_ROOT`, so a canvas written
         anywhere else has no representable path. Caught here it names both
         directories at startup; caught where the row is written it is a
         `ValueError` from `relative_to` thrown after the render is already done.
+
+        **The panel and the box are two fields that must agree, so the agreement
+        is checked rather than trusted.** The box is *derived from* the panel
+        wherever both come from one resolved `Settings` — but this object can be
+        built with either from anywhere, and a box wider than its panel yields a
+        negative mat, which pastes the artwork off the canvas and produces a
+        plausible-looking file with the picture cropped. Nothing downstream could
+        report that: the rendition row would be written, the manifest would carry
+        it, and the first sign would be the wall.
         """
         if not self.ready_path.is_relative_to(self.art_root):
             raise ServiceError(f"The rendition directory at {self.ready_path} must sit inside ART_ROOT at {self.art_root}.")
+        if self.panel_width <= 0 or self.panel_height <= 0:
+            raise ServiceError(f"The panel must have a positive size, got {self.panel_width}x{self.panel_height}.")
+        if self.box.width > self.panel_width or self.box.height > self.panel_height:
+            raise ServiceError(
+                f"The artwork box of {self.box.width}x{self.box.height} does not fit the "
+                f"{self.panel_width}x{self.panel_height} panel it is composed against. These two are derived from "
+                "one another in a resolved configuration, so a mismatch here means the panel and the box came from "
+                "different deployments."
+            )
 
 
 class PreparationService:
