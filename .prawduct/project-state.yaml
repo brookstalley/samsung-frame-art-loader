@@ -154,15 +154,24 @@ classification:
           on some units (1710, Sept 2025), or the model was unaffected. Downgraded
           from high to medium because the risk is now prospective rather than
           present, but NOT to low: the capability the whole product rests on is
-          controlled by a vendor who has already removed it from some units, and a
-          future auto-update could do the same here. Worth knowing whether TV
-          auto-update can be disabled.
+          controlled by a vendor who has already removed it from some units.
+          MITIGATED 2026-08-04, and it stays medium rather than dropping to low.
+          Auto-update CAN be disabled on this set and now is; the set is held at
+          firmware 1310 with 1400 offered and declined. What that changes is that a
+          removal can no longer arrive overnight — it would take a deliberate
+          update, and updating is one-way with no rollback. What it does not change
+          is that the vendor still owns the capability, and the set is now
+          accumulating un-taken firmware, so the decision returns every time there
+          is a reason to update. The set is a 2024 QN50LS03DAFXZA on art API
+          4.3.4.0; every measured fact about it is firmware-scoped, and
+          `tv_api_check.py` is the scripted pass that says what moved after any
+          future update. Full reasoning: `operational-spec.md` section Risks.
       - factor: "3tears is alpha with a shifting public API"
         level: medium
         rationale: "0.x line; README states the API can shift between minor versions. A 3tears breaking change becomes art-loader work. Mitigated by pinning."
       - factor: "E-paper driver stack is dormant upstream"
         level: medium
-        rationale: "omni-epd last touched 2024-11, IT8951 2023-11 with no releases and an unpinned dependency. Mitigated by the display-plane interface boundary. **The 9f13613 pin is NOT taken** (corrected 2026-08-03): `requirements.txt` pins omni_epd to a commit, and omni_epd declares `IT8951[rpi]` as a git dependency with no commit, so a rebuild resolves the driver to that repo's master on the day. 9f13613 is the commit the wall actually ran, recorded in `deploy/pi-freeze-2024.txt` and documented in `deploy/README.md` as the first thing to suspect after a rebuild — documented rather than pinned, because pinning a transitive git URL beside the parent's own unpinned declaration is resolver behaviour to verify on hardware, and the panel is off the bench. This row previously read as though the pin had been applied; it names the decision still owed, in `technical_decisions.operational`, and Chunk 04 is where it is verified."
+        rationale: "omni-epd last touched 2024-11, IT8951 2023-11 with no releases and an unpinned dependency. Mitigated by the display-plane interface boundary. **The 9f13613 pin is NOT taken** (corrected 2026-08-03): `requirements.txt` pins omni_epd to a commit, and omni_epd declares `IT8951[rpi]` as a git dependency with no commit, so a rebuild resolves the driver to that repo's master on the day. 9f13613 is the commit the wall actually ran, recorded in `deploy/pi-freeze-2024.txt` and documented in `deploy/README.md` as the first thing to suspect after a rebuild — documented rather than pinned, because pinning a transitive git URL beside the parent's own unpinned declaration is resolver behaviour to verify on hardware. This row previously read as though the pin had been applied; it names the decision still owed, in `technical_decisions.operational`. **Resolver behaviour verified on the Pi 2026-08-04, and the risk is real but currently benign:** a fresh resolve of `requirements.txt` on Trixie/3.13 lands on `it8951==1.0.0` at `9f13613` — not because anything pins it, but because that commit *is* the repository's master and has been since 2023. Installing pinned omni_epd over an explicitly-pinned IT8951 leaves the pinned one in place rather than re-resolving. So the exposure is exactly as described and unchanged: the day that repository moves, a rebuild silently takes whatever master became. The driver itself now builds and imports on 3.13/aarch64, which was the other half of this risk and is closed."
       - factor: "Two-plane topology introduces a contract to maintain"
         level: low
         rationale: >
@@ -328,8 +337,52 @@ classification:
             auto_rotation_*, new uses slideshow_*. Neither is deprecated; the
             failure modes are asymmetric (old fails silently on new TVs, throws
             AssertionError on older ones), so probing must be defensive. The
-            dual-callback registration in tvart.py is correct and the dispatch
-            mechanism behind it is unchanged on the target.
+            dispatch mechanism behind the registration is unchanged on the target.
+            MEASURED ON HARDWARE 2026-08-04 (API 4.3.4.0, so the new side of the
+            split): provoking a real select_image fires ONLY image_selected, at
+            +2.15s. Neither slideshow_image_changed nor auto_rotation_image_changed
+            fires at all — they are slideshow-ADVANCE events, and host-driven
+            rotation never advances the set's own slideshow. So the dual
+            registration in tvart.py is not wrong, it is inert: two of its three
+            callbacks can never fire under this product's design, and a binding
+            needs exactly one. This corrects a previous "the dual-callback
+            registration is correct" reading that was never provoked, only read.
+          * upload() REPORTS FAILURE ON UPLOADS THAT SUCCEEDED, and this is the
+            single most consequential fact here for anything building a binding.
+            MEASURED: at the default timeout=10 an upload failed twice, once
+            returning None and once raising AssertionError; the None run's image
+            WAS on the television, carrying the exact image_date that request
+            sent. At an explicit timeout=60 the same upload returned its content
+            id in 8.39s of whole-call wall-clock. ESTABLISHED FROM SOURCE: the
+            timeout governs the acknowledgement, which arrives after the bytes
+            have gone over a separate TLS d2d socket, and the ack path returns
+            None rather than asserting. NOT ESTABLISHED, and a previous revision
+            of this entry asserted all three as fact: which line raises (upload's
+            only assert guards the send_image handshake BEFORE any transfer, so
+            the plausible mechanism is a late reply desynchronising response
+            correlation — one instrumented run would settle it); that the two
+            failure shapes follow from the argument form (the source selects only
+            a chunker on that branch); and any ratio of 8.39s to the timeout,
+            since that figure covers transfer AND acknowledgement together and
+            they cannot be separated from outside the library. A caller that
+            retries on falsy duplicates the image. Pass an explicit timeout AND
+            confirm against the set's own content list; never read the return as
+            authoritative — that half of the fix is correct whichever way the
+            raise site resolves. Issue #73.
+          * The upload data path is not the websocket. send_image is answered with
+            ready_to_use carrying ip/port/key and secured:true — a fresh ephemeral
+            port each time, TLS-wrapped — and the bytes stream there.
+          * Art mode is NOT detectable by PowerState (reports 'on' for both art
+            mode and normal TV) nor by get_artmode() (needs start_listening() to
+            have succeeded, which is exactly what fails when art mode is off, and
+            it HANGS rather than raising). What works both ways, cheaply, without
+            start_listening(): the presence of an isHost:true client in the art
+            channel's ms.channel.connect frame — that is the set's own art app.
+          * The remote-control channel is reachable in standby while the art
+            channel is not, and KEY_POWER over it does wake the set. Two presses
+            from standby were needed (first to normal TV, second to art mode).
+            The full power state machine is NOT mapped — only one starting state
+            was exercised and press-and-hold was never tested.
           * async delete_list still has NO return statement on master — byte
             for byte the same as the two-year-old pin — so it always yields None
             and cannot confirm deletion. Bumping does not fix it. The SYNC path
@@ -354,7 +407,10 @@ classification:
             apart.
           * The library's async client signals a timed-out art request by
             returning None from wait_for_response and then asserting on it, so
-            AssertionError is its timeout type.
+            AssertionError is its timeout type. ONE EXCEPTION, established from
+            source 2026-08-04 and stated above: upload()'s acknowledgement path
+            returns that None rather than asserting on it, which is why a
+            timed-out upload can surface as a falsy return instead.
     - name: "Art Institute of Chicago API"
       notes: "api.artic.edu. Already throttled in source_utils.py; responses cached to api-cache/."
     - name: "Google Arts & Culture"
@@ -1192,8 +1248,9 @@ technical_decisions:
         deliberate frame". The premise was aspirational and nothing implemented it.
 
         PANEL GEOMETRY IS A DEPLOYMENT VALUE, not a constant. The operator's panel
-        is 42" and explicitly instructed that nothing may depend on that, because
-        other people will run this on other sizes. This falls under the existing
+        is 50" (recorded here as 42" until 2026-08-04, when the set's own modelName
+        settled it) and they explicitly instructed that nothing may depend on that,
+        because other people will run this on other sizes. This falls under the existing
         ratified "no hardcoded deployment values in source" norm, and it makes panel
         dimensions the SECOND value both planes must agree on after ART_ROOT — a
         quieter mismatch than ART_ROOT's and therefore worse, because nothing fails:
@@ -1605,7 +1662,12 @@ technical_decisions:
         "IT8951 build is unverified" risk in platform-and-dependency-findings.md
         (that one is about the interpreter version); an earlier draft claimed it
         "folds into" that risk, which the Critic correctly called an overstatement.
-        Tracked as issue #9.
+        CLOSED 2026-08-04, issue #9 closed with it. Both halves are answered and
+        only one was ever real: the pinned commit DOES declare Cython in
+        build-requires, so isolation was never going to fail on it, and a current
+        Cython emits 3.13-compatible C for those sources on aarch64. What actually
+        blocked a rebuilt Pi was undeclared python3-dev, failing in rpi-gpio rather
+        than in IT8951.
       alternatives_considered:
         - "uv for curation, pip for display — lowest risk to the fragile Cython build, but two toolchains and two lockfile formats, and every deployment doc must say which is which."
         - "pip for both, uv only provisioning the interpreter — most conservative and matches the recovered 2024 venv, but no real lockfile, keeps a hand-maintained requirements.txt, and installs uv without taking most of its value."
@@ -1807,7 +1869,7 @@ technical_decisions:
         - "Backup only, restore documented but never exercised — the default outcome, and the reason untested backups are a recurring class of incident."
       date: 2026-07-20
     - decision: "Pin the IT8951 driver to 9f13613 or vendor it."
-      rationale: "omni-epd declares it as an unpinned git dependency resolving to whatever master currently is. Builds are only reproducible today because the repo has not moved since 2023. Roughly 1,500 lines of frozen code the project depends on completely."
+      rationale: "omni-epd declares it as an unpinned git dependency resolving to whatever master currently is. Builds are only reproducible today because the repo has not moved since 2023. Roughly 1,500 lines of frozen code the project depends on completely. UNBLOCKED 2026-08-04 and still owed: the reason for waiting was that pinning a transitive git URL beside the parent's own unpinned declaration is resolver behaviour wanting hardware verification first, and that verification has happened — a fresh resolve lands on 9f13613, but only because that commit still IS master. TRIGGER: take this decision when Chunk 13 wires the panel, which is the first time a rebuild's driver resolution has a consequence anyone would see. Whoever takes it should note Cython is also unpinned in the driver's own build-requires, so pinning the driver alone does not make the build reproducible over time."
       alternatives_considered: ["Leave unpinned — a silent reproducibility failure waiting on an upstream commit."]
       date: 2026-07-19
 
@@ -2562,7 +2624,7 @@ views_enabled: true
 # Do not hand-edit — overwritten on next regen.
 scope_rollups:
   v1-build:
-    chunks: ["01", "02", "06", "07", "07B", "08A", "08B", "09", "10", "10B", "11", "14A", "14B", "15", "16A", "16B", "17A", "17B", "18A", "18B"]
+    chunks: ["01", "02", "03", "04", "05", "06", "07", "07B", "08A", "08B", "09", "10", "10B", "11", "14A", "14B", "15", "16A", "16B", "17A", "17B", "18A", "18B"]
     releases: []
 
 # =============================================================================

@@ -8,6 +8,18 @@ here with no body under it is not an entry that lost its evidence; it is one who
 evidence is in that file. Entries written before 2026-07-31 still carry theirs
 inline, which the record linter flags; moving them is tracked as issue #26.
 
+## A measured behaviour and an explanation of it are separate claims
+
+**Record what the system did and what you inferred about why as two things, and
+label which is which** — a measurement earns confidence, and the mechanism written
+beside it inherits that confidence without earning any.
+
+## Do not trust a foreign client's return value in either direction — confirm against the system itself
+
+**When a boundary library reports success or failure, verify the claim against the
+remote system's own state before acting on it** — ask, then read the remote list
+back, and keep *unconfirmable* apart from *failed*.
+
 ## Retiring a claim is a repo-wide grep, not a local edit
 
 **When you void, amend, or supersede a factual claim, grep the whole repo for it
@@ -710,8 +722,11 @@ for the full record established 2026-07-19. Summary:
 
 - Python version is **per plane, not one number** (corrected 2026-07-20 — the
   product-wide "target 3.13" predates the two-plane split and kept resurfacing).
-  **Display plane: 3.13** (matches Raspberry Pi OS Trixie), falling back to 3.12;
-  verified working on 3.12, and 3.13 is an open assumption until a build proves it.
+  **Display plane: 3.13** (matches Raspberry Pi OS Trixie), floor 3.12. _(Updated
+  2026-08-04: this said "falling back to 3.12; verified working on 3.12, and 3.13 is
+  an open assumption until a build proves it". A build proved it — the IT8951 stack
+  builds and imports on 3.13/aarch64 — so the fallback contingency is discharged and
+  3.12 is a floor rather than a landing site.)_
   **Curation plane: 3.14** on a uv-managed standalone build. _(Re-based
   2026-07-27 and again 2026-08-02: this said "with `3tears` unmodified", then that
   "the floor rests on `3tears-models`". Neither holds — that package moved to the

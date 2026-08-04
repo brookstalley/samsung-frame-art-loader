@@ -639,8 +639,6 @@ removed" beside a fixture built from a literal the code also builds. That commen
 is a claim about coverage, and a hand-written path is exactly what makes it stop
 being true without anyone noticing.
 
-
-
 ## A claim repeated in three artifacts is ONE piece of evidence copied twice — when a property is asserted in prose, verify it against the code before adding the third statement of it, because every later text inherits it from the earlier prose rather than from the behaviour
 
 Chunk 18B published "regenerate spends nothing" in a tool tip, a parameter
@@ -677,7 +675,6 @@ This is the third consecutive chunk whose review turned up "the second caller of
 the same idea" — 17B, 18A and 18B. The habit that closes it is not a checklist
 item at review time but a reading habit at write time: a docstring that names a
 past divergence is a warning addressed to whoever adds the next caller.
-
 
 ## At the moment of a fix, ask what the change now COVERS that it did not before — a wrapper added to translate a read will also catch the write beside it, and a claim added to one payload will be published by the branch that shares it
 
@@ -791,3 +788,50 @@ is the shape to look for.
 constraint — a credential, a staging environment, a third party's availability. Ask
 of each dependency whether it needs the thing being waited for, or is merely
 adjacent to work that does.
+
+## A measured behaviour and an explanation of it are separate claims
+
+Verified against a foreign API 2026-08-04. An upload defect was correctly measured
+— two failures at the client's default timeout, one of them returning `None` with
+the image demonstrably on the television, and a success at an explicit wide timeout
+— and then given a mechanism: a named source line for the raise, a rule about which
+argument form fails how, and a percentage of the timeout budget. **None of the
+three was supported by the library's source.** The line cited was inside a
+different method; the acknowledgement path returns rather than asserting; the
+argument branch selects only a chunker; and the percentage divided a whole-call
+wall-clock by a budget governing part of it.
+
+**Two Critic rounds passed it.** The second explicitly listed the wrong percentage
+as evidence the finding had been *properly filed*. What caught it was a backlog
+subagent reading the pinned source to do an unrelated task and noticing that a line
+number did not say what the prose said it did.
+
+The failure was not carelessness about the measurement, which was sound and still
+stands. It is that an inference and an observation went into the same paragraph in
+the same voice, after which nothing downstream could separate them. Foreign APIs
+make this worse: their source is right there, so an explanation feels checkable
+even when nobody checked it.
+
+**The tell** is a mechanism written in the same voice as the measurement: if the
+behaviour was observed and the cause was reasoned, they cannot honestly share a
+sentence.
+
+## Do not trust a foreign client's return value in either direction — confirm against the system itself
+
+This product's television client is wrong in both directions, which is what makes
+the rule general rather than a note about one bug. Deletion could not confirm
+removal — the library's only removal verb discards the response and always yields
+`None`. Upload reports failure on uploads that succeeded, at its default
+acknowledgement window. The consequences are opposite and both are bad: the first
+cannot tell *failed* from *unconfirmable*, and the second turns a retry loop into
+duplicate content on a device with finite storage.
+
+The answer was already in this repository before the rule was written. The
+confirm-deletion wrapper built for the first defect — ask, read the category back,
+raise only when neither outcome can be established — is exactly the shape the
+second one needs. It generalises to every verb on a boundary whose library is
+unowned and unmaintained.
+
+**Why the read-back generalises.** It is one extra read against a system you are
+already connected to, and it is the only thing that survives a library that is
+wrong in both directions — which this one is.

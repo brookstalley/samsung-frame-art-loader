@@ -53,21 +53,25 @@ attached. The spine is deliberately evidence-first for exactly this reason.
 
 **Open assumptions / unknowns:**
 
-- [ASSUMPTION: the IT8951 stack builds under uv's PEP 517 isolation on 3.13/aarch64 | HIGH impact | Chunk 04 proves or disproves it before any plane scaffolding exists; user can reorder]
-- [RESOLVED 2026-08-01, half each way: a target exists (fork master `fe95ef1`) and carries Frame-generation support as a model-year branch, but `delete_list` is **not** fixable by bumping — it is unchanged on master, so the fallback fired and confirmed deletion is `tv_delete.delete_list_confirmed` in this repo. Two things the assumption did not anticipate: the target needs `websockets>=13.0` (the pinned 12.0 cannot import it), and its constructor performs blocking network I/O. **Live on hardware is still unverified** — Chunk 05 stays open for the bench pass]
+- [RESOLVED 2026-08-04: the IT8951 stack builds AND imports under uv's PEP 517 isolation on 3.13/aarch64, from the pinned `9f13613`. The feared cause never existed — that commit declares Cython in `build-requires` — so no remediation was needed and the 3.12 fallback is discharged. The real blocker was undeclared `python3-dev`, which fails in `rpi-gpio` rather than in IT8951 and so points at the wrong package. `Cython` is unpinned in that `build-requires`, so the build is reproducible today but not over time]
+- [RESOLVED 2026-08-01, half each way: a target exists (fork master `fe95ef1`) and carries Frame-generation support as a model-year branch, but `delete_list` is **not** fixable by bumping — it is unchanged on master, so the fallback fired and confirmed deletion is `tv_delete.delete_list_confirmed` in this repo. Two things the assumption did not anticipate: the target needs `websockets>=13.0` (the pinned 12.0 cannot import it), and its constructor performs blocking network I/O. ~~Live on hardware is still unverified~~ — **verified 2026-08-04** against a 2024 `QN50LS03DAFXZA` on firmware 1310, art API 4.3.4.0. `delete_list_confirmed` returned `requested=1, deleted=1, surviving=()`. The pass also found what reading could not: **`upload()` reports failure on uploads that succeeded** (issue #73), and **only `image_selected` of the three registered callbacks fires**, the other two being slideshow-advance events host-driven rotation never triggers]
 - [ASSUMPTION: the 2024 code keeps running the wall throughout the build; cutover to the new display plane happens at Chunk 13, and the legacy modules are deleted only at Chunk 20 | MED impact | user can override with an earlier or later cutover]
 - [ASSUMPTION: the existing sun-position brightness behaviour (`local.py`) ports into the display daemon in v1 — it runs on the wall today, so dropping it would be a regression, but the v1 scope list does not name it | LOW impact | user can defer to Later]
 - [ASSUMPTION: rotation timing is per-theme with a global fallback | LOW impact | carried from `data-model.md`; user can collapse to global]
 - `work_dedup_key` derivation and the discovery search-engine default are **unknowns
   with scheduled spikes** (Chunk 15), not assumptions — nothing downstream of them is
   designed until they resolve.
-- **One operator decision is pending and gates deployment paths:** issue #13
-  (SD-card mitigation — USB/SSD storage vs SSD boot). Five minutes, needed before
-  Chunk 03 bakes paths into deployment config.
+- ~~**One operator decision is pending and gates deployment paths:** issue #13
+  (SD-card mitigation — USB/SSD storage vs SSD boot).~~ **Taken 2026-08-04 and issue
+  #13 is closed:** the card stays, so no deployment path moved and nothing
+  downstream was waiting on it. The residual risk transferred to the backup path
+  rather than closing.
 
-**What would raise confidence:** Chunks 04, 05, and 15 — the two hardware/build
-verifications and the two spikes. Each is cheap, early, and converts an assumption
-into a recorded fact.
+**What would raise confidence:** ~~Chunks 04, 05, and~~ Chunk 15 — the spikes.
+*(04 and 05 ran on 2026-08-04 and are `[x]`; both assumptions are now recorded
+facts, and the hardware pass turned up two the plan had not anticipated — see
+their entries.)* Each is cheap, early, and converts an assumption into a recorded
+fact.
 
 ## Status
 
@@ -77,7 +81,11 @@ re-ordered on 2026-07-31; the two changes and why are recorded in the Context
 block under "Re-sequenced 2026-07-31".
 
 **Every chunk that needs the bench sits behind every chunk that does not**, because
-bench access lapsed on 2026-08-02 and has not returned. This is the same rule that
+bench access lapsed on 2026-08-02. *(Updated 2026-08-04: it returned. 05, 04 and 03
+ran and are shipped. The rule still governs 12 and 13, whose remaining bench need is
+sustained access rather than a visit — and Chunk 12's stated dependency, a verified
+library, is now satisfied, so what parks it is its own acceptance criteria and not a
+blocked predecessor.)* This is the same rule that
 parked 05, 04 and 03 originally, applied a third time: the tooling takes the first
 unchecked box as the current chunk, and a blocked chunk ahead of active work
 silently hands its `Critic mode:` and `Type:` to every chunk after it. Chunks keep
@@ -115,9 +123,9 @@ re-created the same silence one line further down.
 - [x] Chunk 18A: Acquisition — the fetch paths, the guards, and a work's sources
 - [x] Chunk 18B: Preparation — the mat engine, the 4K render, and the corpus look
 - [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
-- [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
-- [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
-- [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
+- [x] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
+- [x] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
+- [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [ ] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
@@ -624,9 +632,12 @@ architecture-proving slice is Chunk 07.
 ### Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 
 - **Description:** Three small deployment items done in one hardware sitting.
-  Set `SystemMaxUse=` explicitly (journald's default scales with the disk it is
-  supposed to protect) and carry it in the repo's deploy config, not only on the
-  box. Establish on the actual TV whether firmware auto-update can be disabled —
+  Set the journal bound explicitly and carry it in the repo's deploy config, not
+  only on the box. *(This read "journald's default scales with the disk it is
+  supposed to protect" — retracted 2026-08-04. The persistent default is capped at
+  4G, and this machine's journal is volatile anyway, so `SystemMaxUse=` alone binds
+  nothing on a stock Pi. The bound is worth setting because a ceiling should be
+  chosen and visible, not because the journal could run away.)* Establish on the actual TV whether firmware auto-update can be disabled —
   the vendor has removed art mode by firmware before — and record the finding in
   its three homes (`security-model.md` § Open, `operational-spec.md` § Risks,
   `project-state.yaml` risk factor). The issue #13 storage decision is captured —
@@ -644,7 +655,13 @@ architecture-proving slice is Chunk 07.
     it. Chunk 20 sits last in the build order and needs no bench — worth pulling
     forward on that basis, which is an operator call and not a re-plan.
 - **Depends on:** nothing outstanding. *(Was: the operator decision on issue #13,
-  discharged 2026-08-04.)* The two remaining deliverables need the bench.
+  discharged 2026-08-04.)* ~~The two remaining deliverables need the bench.~~
+  **Both landed 2026-08-04.** `deploy/journald.conf.d/10-bound-the-journal.conf`
+  caps the journal at 256M and is applied on the Pi; firmware auto-update was
+  established as disable-able and disabled, recorded in all three named homes. The
+  requirement's own rationale was corrected in the process — systemd caps its
+  default at 4G rather than growing with the disk, so an explicit bound buys a
+  visible ceiling rather than averting runaway growth.
 - **Artifacts consumed:** `operational-spec.md` § Risks, issues #13/#15/#16
 - **Deliverables:** new `deploy/journald.conf.d/` drop-in (applied on the Pi);
   auto-update finding recorded in all three named homes and the disable/keep
@@ -685,6 +702,14 @@ architecture-proving slice is Chunk 07.
 - **Acceptance criteria:** a definitive recorded answer: the display plane's
   dependency set installs under uv on the Pi (3.13, falling back 3.12), or a
   chosen remediation makes it install
+- **Answered 2026-08-04: it installs on 3.13, and no remediation was needed.** The
+  chunk's central premise did not hold — the pinned commit declares Cython in
+  `build-requires`, so PEP 517 isolation was never going to fail on it. The
+  interpreter half is closed too: a current Cython emits 3.13-compatible C for
+  those `.pyx` sources on aarch64, so the 3.12 fallback is retired. The real
+  blocker was `python3-dev`, undeclared anywhere and failing in `rpi-gpio` rather
+  than in IT8951; it is now in `requirements.txt`'s apt line. Detail lives in
+  `platform-and-dependency-findings.md` rather than here.
 - **Done when:**
   0. verify-api — read `setup.py`/`pyproject.toml` at the pinned commit; capture
      what `[build-system] requires` declares (or that no `pyproject.toml` exists)
@@ -739,11 +764,24 @@ architecture-proving slice is Chunk 07.
   suite with the rest of the TV boundary, where the library is present. The
   deletion wrapper it calls is separately and fully tested, because that module
   takes the client as a parameter and imports nothing.
-- **What the bench pass still owes:** `tv_api_check.py` is the scripted pass —
-  construction cost, model and API generation, which callback spelling this set
-  emits, a real 4K upload timed by path, and a confirmed delete of only the image
-  it uploaded. Until it runs green against the live set, the new pins are
-  unverified and `deploy/pi-freeze-2024.txt` is the rollback.
+- ~~**What the bench pass still owes**~~ — **discharged 2026-08-04.**
+  `tv_api_check.py` was executed against the live set for the first time and the
+  pins are verified. Construction cost, API generation, callback spelling, a real
+  4K upload timed by path and a confirmed delete were all measured; the numbers and
+  the protocol trace live in `platform-and-dependency-findings.md` § The
+  television, which is where a builder will look for them, and are not restated
+  here. Two results the chunk did not anticipate — and the first of them is **live on the
+  loader running the wall today**, not a future-plane concern: `tvart.py:140` calls
+  `upload()` with no `timeout`, and `tvart.py:253` re-selects every file lacking a
+  content id, so a mis-reported success becomes a duplicate on the next run. Issue
+  #73 carries both halves. **`upload()` reports failure on
+  uploads that succeeded** — measured at the default timeout, mechanism partly
+  retracted and separated in #73 from what was actually observed — and **only
+  `image_selected` of the three registered callbacks fires**, because the other two
+  are slideshow-advance events and rotation here is host-driven. Acceptance box
+  "LS03A/B/C/D support confirmed" is met **only for LS03D** — the operator holds
+  one television and untestable compatibility branching is explicitly not being
+  written.
 - **Tests:** a scripted hardware pass against the live TV — upload, select,
   confirmed delete, callback registration — captured as notes now, promoted into
   the display plane's test suite in Chunk 12
@@ -1402,6 +1440,14 @@ two missing deliverables.)*
   3. Committed and chunk marked `[x]` in Status
 
 ### Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
+
+- **Carries a decision trigger.** The IT8951 pin-or-vendor decision
+  (`project-state.yaml` → `technical_decisions.operational`) was unblocked on
+  2026-08-04 and deliberately left un-taken, with this chunk named as when to take
+  it — wiring the panel is the first point at which a rebuild resolving the driver
+  to whatever upstream master became would have a consequence anyone sees. Note
+  when taking it that `Cython` is also unpinned in the driver's own build-requires,
+  so pinning the driver alone does not make the build reproducible over time.
 
 - **Description:** The label renders on the display plane from manifest label
   text — the e-paper panel's geometry stays with the plane that owns that panel. Type sizing is

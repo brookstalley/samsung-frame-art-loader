@@ -48,6 +48,153 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-04: Two Critic rounds, and a finding that had to be partly retracted
+
+<!-- prawduct: chunks=03,04,05 | status=shipped | scope=v1-build -->
+
+**Why:** the bench round closed three chunks and then failed to sweep after
+itself. Two Critic rounds and a backlog subagent found the same shape repeatedly —
+a closure asserted in the artifact that owned it and nowhere else — plus one
+finding that was over-claimed and is now partly withdrawn.
+
+**The retraction first, because it is the one that would have cost someone time.**
+`upload()` reporting failure on uploads that succeeded is real and stays: a
+default-window upload failed twice, a wide-window upload succeeded, and an upload
+that reported `None` was observed to have landed. **Three things recorded around
+it were wrong.** The raise was attributed to an `assert data` "on the
+acknowledgement" at `async_art.py:434` — that line is inside `get_thumbnail`, and
+`upload()`'s acknowledgement path does not assert at all. The two failure shapes
+were attributed to the argument form, which the source does not support. And
+"8.39 s, 84% of the default" divided a whole-call wall-clock by a budget that
+governs only part of it — a ratio never computable from what was measured. **The
+raise site is now marked as needing one instrumented run rather than asserted.**
+The lesson generalises: a measured behaviour and an explanation of it are separate
+claims, and only the first was earned.
+
+**The journal bound was aimed at a journal that does not exist.** Chasing the first
+round's complaint about *evidence* — `systemd-analyze cat-config` proves a file
+parses, not that a directive binds — turned up the reason it could not have bound:
+Raspberry Pi OS ships `Storage=volatile`, so the journal is a tmpfs in RAM and
+`SystemMaxUse=` governs a persistent journal this machine has none of. The drop-in
+now sets `RuntimeMaxUse=` too, evidenced by journald's own startup line moving
+from `max 156.1M` to `max 256M`. **Two standing facts fall out**: the journal does
+not survive a reboot, which is exactly when it would be read; and logging never
+wore the card, so `operational-spec.md`'s "exactly two" continuous-write paths were
+one. `Storage=persistent` was **declined** — the operator accepted losing the
+journal across a reboot rather than moving logging onto the card.
+
+**A deferral rationale was withdrawn rather than defended.** The bench entry said
+the upload defect could wait because the display binding does not exist and the
+2024 loader is being retired. The loader is what runs the wall, `tvart.py:140`
+passes no `timeout`, and `tvart.py:253` re-selects anything lacking a content id —
+so the cost of leaving it is live duplicate uploads. It is still unfixed; the
+honest reason is scope, not harmlessness.
+
+**Swept, having been asserted in one place and not carried:** the 3.12 fallback
+(decision line, norms row, learnings, an integration-findings file); the 42-inch
+panel (three artifacts, two source files, two tests — worked examples deliberately
+left at 42" because re-cutting them would lose the check that the arithmetic
+reproduces); issues #9 and #13 recorded as open gates after closing; the build
+plan's bench prose and confidence register; `deploy/README.md`, which both recorded
+the resolver check and said it still needed doing.
+
+**Filed rather than fixed:** issue #74 — correcting the panel diagonal does not
+invalidate canvases already composed at the old one, because rendition staleness
+compares pixels and both panels are 3840x2160. The blind spot is wider than the
+diagonal: `MAT_WIDTH_INCHES` and `MAT_BOTTOM_WEIGHT` are equally unrecorded, so it
+is a missing column in the staleness key rather than a one-off.
+
+## 2026-08-04: The bench answered three chunks, and the television answered back
+
+<!-- prawduct: chunks=03,04,05 | status=shipped | scope=v1-build -->
+
+**Why:** three chunks had been parked behind bench access since the plan was
+authored, each holding an assumption a later chunk depends on. A rebuilt Pi and a
+live television closed all three in one sitting. No product code changed — the
+deliverables are recorded findings, one deployment drop-in, and one packaging fix.
+
+**The IT8951 assumption resolved positively, and the feared problem never
+existed.** The driver builds from its pinned commit and imports on Python
+3.13/aarch64 under uv's PEP 517 isolation. The premise — a 2023 `setup.py`
+importing Cython without declaring it — does not hold at that commit, which
+declares it properly. So the whole remediation branch the chunk budgeted for
+(build-requires override, vendoring ~1,500 lines, re-pinning) is dead, and the
+3.12 fallback can be retired.
+
+**What actually blocks a rebuilt Pi is `python3-dev`, which nothing declared.**
+The install fails building `rpi-gpio` — not IT8951 — with
+`fatal error: Python.h: No such file or directory`, pointing a reader at the wrong
+package entirely. Added to the apt line in `requirements.txt`, in a file whose own
+comment says a dependency nothing declares is one nobody installs until an import
+fails.
+
+**The television verification found a defect worse than the one it was looking
+for.** `upload()` returns falsy or raises a bare `AssertionError` on uploads that
+*succeeded* — at the default `timeout=10`, observed twice, with the image on the
+set while the caller is told it is not. *(The mechanism this paragraph originally
+gave — a named raise site, an argument-form rule, and "8.39 s, 84% of the default"
+— is retracted; see the entry above. The behaviour is unchanged.)* A retry loop turns that
+into duplicates on the wall. Filed as issue #73. **This is live on the loader
+running the wall today** — `tvart.py:140` passes no `timeout` and `tvart.py:253`
+re-selects anything lacking a content id — so it is not deferred to a future plane,
+only unfixed in this commit.
+
+The generalisable rule, now stated where a builder will find it: **this library's
+return values are not trustworthy in either direction — confirm against the
+television's own content list.** Deletion already worked that way because
+collapsing *failed* into *unconfirmable* was the original defect; upload has the
+mirror-image bug and is owed the same treatment.
+
+**Two of the three registered image-changed callbacks are dead wire**, established
+by provoking a real selection rather than by reading source: only `image_selected`
+fires. The other two are slideshow-advance events, and host-driven rotation never
+advances the set's own slideshow — so the old/new API split this product worried
+about costs it nothing.
+
+**Detecting art mode turned out to need the answer nobody would guess.**
+`PowerState` reports `'on'` for both art mode and normal TV, and `get_artmode()`
+can only ever confirm the positive case because reaching it requires a call that
+hangs when art mode is off. What works in both directions is the presence of an
+`isHost: true` client in the art channel's connect frame — the set's own art
+application. Recorded with the transitions explicitly marked as a sketch rather
+than a map, because only one starting state was exercised.
+
+**Firmware auto-update can be disabled, and is.** The set is held at 1310 with
+1400 offered and declined; the standing recommendation is to stay, because the
+update is one-way and every measured figure above is firmware-scoped. That closes
+the last open question in `security-model.md` and turns the vendor risk from an
+exposure into a decision. It does not lower the risk level: the vendor still owns
+the capability, and un-taken firmware now accumulates.
+
+**The journal is bounded on the machine**, at 256M, in a committed drop-in rather
+than only on the box — which is how the last unit file came to exist nowhere but a
+card. The reasoning behind the requirement was also corrected — though **not far
+enough, and the follow-up commit reversed this paragraph's premise as well.** It
+read that systemd caps its own default at 4G rather than growing with the disk. It
+does, but that is beside the point: Raspberry Pi OS ships `Storage=volatile`, so
+this journal is not on the filesystem at all, the `SystemMaxUse=` shipped here
+bound nothing, and logging never wore the card. See the entry above.
+
+**Corrected while here:** `TV_PANEL_DIAGONAL_INCHES` read 42 against a 50 inch
+set — not a typo but an unchanged template default, which is the worse failure
+because it produces a running system that quietly mis-sizes every judgement about
+whether a work is big enough for the wall. The set names its own size in
+`modelName`, so this is checkable rather than merely documentable — **though no
+check was built or filed, so that sentence advertises a capability this commit did
+not deliver.** Correcting the value also does not invalidate canvases already
+composed at 42", which is issue #74.
+
+**Not done:** the upload defect is filed rather than fixed. The original wording
+here said the fix could wait because "the display plane's binding does not exist
+yet" and the 2024 loader is scheduled for retirement — **that rationale is
+withdrawn.** The loader is what runs the wall today and takes the defective path,
+so the cost of leaving it is live duplicate uploads, not a deferred cleanup. It
+remains unfixed in this commit; the reason is scope, not harmlessness. Two
+requirements
+also surfaced and were left unwritten rather than designed in passing: when a
+display process should begin and suspend rotation, and whether the set can offer
+any interaction of its own.
+
 ## 2026-08-04: The card stays, and the risk moves to the backup that does not exist
 
 <!-- prawduct: status=shipped | scope=v1-build -->

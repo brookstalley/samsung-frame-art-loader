@@ -643,8 +643,12 @@ weighting, and a more pronounced one is a matter of taste rather than of
 correctness.)*
 
 **Panel geometry is a deployment value, never a constant.** The operator's own
-panel is 42", but nothing may depend on that — other people will run this on other
-sizes, and the product must support any of them. Panel dimensions therefore join
+panel is **50"** — a `QN50LS03DAFXZA`, established from the set's own `modelName`
+on 2026-08-04, having been recorded here as 42" until then — but nothing may depend
+on that — other people will run this on other sizes, and the product must support
+any of them. The worked examples elsewhere in this document stay at 42" on purpose:
+they are arithmetic demonstrations, and re-cutting them would lose the check that
+the numbers reproduce. Panel dimensions therefore join
 `ART_ROOT` as configuration both planes must agree on (`operational-spec.md`).
 
 Everything else follows arithmetically:

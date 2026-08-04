@@ -55,7 +55,10 @@ def museum():
 
 @pytest.fixture
 def engine(museum):
-    # The operator's own 42" geometry, so the fit verdicts mean something.
+    # A fixed 42" geometry, so the fit verdicts mean something against a known
+    # panel. NOT the operator's set, which is 50" — this is a reference the
+    # numbers are checkable against, and pinning it keeps the test stable when a
+    # deployment value changes.
     return PhaseTwoEngine(museum, box=ArtworkBox(width=3316, height=1597, pixels_per_inch=104.9, floor_inches=12.0))
 
 

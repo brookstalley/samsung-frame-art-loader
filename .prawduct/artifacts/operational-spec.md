@@ -185,7 +185,7 @@ manifests nobody reads and display waits forever on a file that will never appea
 Panel geometry was briefly listed as a second shared value; it is not, because
 "panel geometry" named two different physical panels:
 
-- **TV panel physical geometry** (reference: 42") — **curation only**. The mat is
+- **TV panel physical geometry** (this deployment: 50") — **curation only**. The mat is
   specified in physical units and the resolution floor is a minimum size on the
   wall, so curation needs it to judge whether a source is adequate, to show the
   curator what a work would look like, and to compose the mat. Display receives the
@@ -218,7 +218,7 @@ Because neither is shared, neither can drift between planes. A wrong TV size is
 still a real defect — the mat comes out the wrong width and the review grid's
 warnings are computed against a TV that isn't there — but it is a single-plane
 misconfiguration, not a cross-plane mismatch. **Nothing may hardcode either panel's
-size**; the reference deployment is a 42" Frame but the product must run on any.
+size**; this deployment is a 50" Frame but the product must run on any.
 
 **Each plane logs its resolved `ART_ROOT` and its own panel geometry at startup**,
 so a misconfiguration is one journal line away rather than a mystery.
@@ -296,7 +296,9 @@ that will actually get run rather than skipped.
 | Restart one plane | Safe at any time, in either order. The other is unaffected by design |
 | Add disk headroom | **`tile-cache/` reclaims itself since 2026-08-03** and is no longer an operator chore: tiles are cached under the id of the source being fetched, and that directory is removed the moment the work holds a complete image. What survives a pass is exactly the tiles of a **partial** fetch, which is the one case they are worth their disk — they are what lets `art_catalogue(action='retry_acquisition')` finish the image without re-downloading what already arrived. So a `tile-cache/` that is large is a report that works are sitting partially fetched, and the remedy is to retry them rather than to delete the directory; deleting it is safe and costs those retries their head start. `temp/` belongs to the 2024 modules and is still pruned by hand until they are retired. **`api-cache/` needs no rule: the curation plane never creates one** — phase 2 asks museums over HTTP with no on-disk cache, and the directory exists only in the 2024 `config.py`. **`previews/` reclaims itself since 2026-08-03**: the plane sweeps it hourly (`PREVIEW_SWEEP_INTERVAL_SECONDS`, 0 to disable), deleting the cached thumbnails of candidate works the curator has accepted or rejected, and logging `preview.swept` every pass whether or not it took anything — a plane that has stopped sweeping is therefore visible in the journal rather than only in the free-space figure. **Two things it does not reclaim, and the second is why deleting the directory by hand is still a listed remedy.** The previews of works nobody has judged yet — those are the ones review still needs, so a backlog of undecided candidates is a state in which this directory legitimately grows, and deciding them is the remedy. And **files no row names**: the sweep derives every path it considers from `CandidateImage.preview_path`, so bytes written by a phase-2 run that died between writing the file and recording the row are invisible to it permanently. That is not hypothetical — it is the case an on-verdict hook could never have covered, which is part of why the sweep exists — and it is unbuilt, filed rather than glossed. Until it is built, **`rm -rf` on `previews/` is the only thing that reclaims an orphan**, and it costs more than the word "disposable" suggests: **nothing re-fetches a preview.** `PreviewCache.store` is called once, by phase 2 when an instance is first recorded, and a re-search does not restore the file either — `record_image` returns the instance a work already holds for that URL without rewriting `preview_path`. So deleting the directory permanently costs the inline picture of every candidate **still under review**, whose cards fall back to reporting a source URL a curator would have to open by hand; works already decided lose nothing, since their previews were the sweep's to take anyway. Safe on a full card, and not free — prefer deciding the outstanding candidates first, which lets the sweep reclaim them properly. It matters here because § Risks opens with the SD card as the top operational risk |
 | **Verify the spend ceiling** | In the OpenRouter console, confirm the key in `OPENROUTER_API_KEY` still carries a **USD 20 credit limit with a monthly reset**. **This setting is the entire cap** — nothing in this repository enforces one, by ratified decision, because an application-side meter that fails open is indistinguishable from one that works. A key whose limit was cleared, or a key swapped for an uncapped one, looks identical on every surface the product exposes right up to the bill. `cd curation && uv run pytest -m live_api` asserts it mechanically (`test_the_key_reports_a_monthly_ceiling`) and costs a few cents to run |
-| Bound the journal | `SystemMaxUse=` in `journald.conf`. **Set this explicitly** — see below |
+| Bound the journal | Install `deploy/journald.conf.d/10-bound-the-journal.conf` and restart `systemd-journald`. **`SystemMaxUse=` alone is not enough** — Raspberry Pi OS ships `Storage=volatile`, so the journal is in RAM and `RuntimeMaxUse=` is the directive that binds; the drop-in sets both. Verify with journald's own `Journal ... max` startup line, not `systemd-analyze cat-config`, which only proves the file parses — see § Risks |
+| **Decide on a TV firmware update** | Auto-update is **off** (2026-08-04) and the set is held at 1310 with 1400 offered. Nothing arrives on its own, so this recurs whenever there is a reason to update. Default answer is stay: the update is one-way and every measured fact about this set is firmware-scoped. If one is ever taken, re-run `python tv_api_check.py --image <a 4K composite>` — it is what says which behaviours moved |
+| **Diagnosis after a reboot** | There is none from the journal: `Storage=volatile` means it does not survive one. If the wall froze and the Pi restarted, `journalctl` holds nothing about the run that failed. **Do not reach for `Storage=persistent` here** — it was declined on 2026-08-04 and switching it reverses a recorded decision and puts logging on the card, which is the top operational risk. Diagnose from the health surface's heartbeat age or the catalogue instead; see § Risks |
 | Patch curation's CPython | `uv python upgrade 3.14`, then rebuild the venv and restart. **`apt upgrade` does not do this** — it patches the display plane's 3.13 only |
 | Re-pair the TV | Rotates the pairing token. Nothing to untrack first — `token_file` was untracked 2026-07-27 and the token now resolves under `ART_ROOT`, outside the checkout, so a `git pull` no longer deletes it and re-pairing needs no repo work at all. Just re-pair at the hardware. *(Updated 2026-08-01: this row still ordered an untracking step that is done, and carried a `git pull` hazard `security-model.md` withdrew on 2026-07-27.)* See `security-model.md` |
 
@@ -332,13 +334,28 @@ written is bounded by the size of the collection rather than by churn. A collect
 that eventually fills most of the card is on the order of a hundred gigabytes
 written across years, which is a small fraction of any modern card's rated
 endurance. What wears a card out is small writes that never stop, and this product
-has exactly two — the journal and the display heartbeat. Both carry an explicit
-bound rather than being left for the storage choice to absorb: the heartbeat's is
-60 s in `observability-strategy.md` § The Health Surface, and the journal's is the
-`SystemMaxUse=` requirement below. **Neither bound is in force on the Pi yet** —
-the journal drop-in is an unshipped deliverable and the heartbeat's writer is not
-built — so this reasoning describes the deployment being built toward, not the one
-running today.
+was thought to have exactly two — the journal and the display heartbeat.
+
+> **Corrected 2026-08-04, on the machine: the journal is not one of them.**
+> Raspberry Pi OS ships `Storage=volatile` in
+> `/usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf`, so the journal
+> lives in `/run/log/journal` — a tmpfs — and **logging writes to RAM, not to the
+> card.** Every sentence that treats journal growth as flash wear was describing a
+> persistent journal this deployment does not have. **The display heartbeat is
+> therefore the only continuous-write path to the card**, and its writer is not
+> built, so no part of this wear reasoning is exercised by anything running today.
+>
+> The journal still gets an explicit bound, for the different reason given below,
+> and **that bound is in force as of 2026-08-04** — evidenced by journald's own
+> startup line moving from `max 156.1M` to `max 256M` across the restart, which is
+> the check Chunk 03's criterion asked for. An earlier version of this paragraph
+> cited `systemd-analyze cat-config` instead; that proves only that the drop-in
+> parses, and it would have reported success just as happily while the directive
+> bound nothing — which is exactly what was happening, because the file set only
+> `SystemMaxUse=` and volatile storage is governed by `RuntimeMaxUse=`.
+
+The heartbeat's bound is 60 s in `observability-strategy.md` § The Health Surface;
+the journal's is the requirement below.
 
 *The alternatives, and why they lost.* **USB SSD for `ART_ROOT`, or SSD boot** —
 issue #13's two original options. Both work, and the Pi 4's USB 3.0 ports make
@@ -361,21 +378,68 @@ than a complement to it** — and it is not built. Until issue #14 lands, this r
 *decided* rather than *closed*: nothing on the Pi today would survive the card. The
 storage medium is no longer the open question; the backup is.
 
-**Journal growth is an unguarded path to that same failure.** Structured logging is
-the product's primary observability signal and both planes log continuously to the
-journal, on a machine whose top risk is disk. **`SystemMaxUse=` must be set
-explicitly in `journald.conf`** rather than left to the default, which sizes itself
-as a fraction of the filesystem — so it grows with the disk you were trying to
-protect. The pre-acquisition free-space guard cannot see this: it is curation-side
-and checks before a fetch, while the journal fills between fetches and from the
-display plane, which never fetches anything.
+**The journal is bounded explicitly, for a narrower reason than this section once
+gave.** Structured logging is the product's primary observability signal and both
+planes log continuously to it. `deploy/journald.conf.d/10-bound-the-journal.conf`
+sets **256M** with 32M segments, on **both** ceilings — `SystemMaxUse=` for a
+persistent journal and `RuntimeMaxUse=` for the volatile one this machine actually
+uses — so the file is correct whichever storage mode is in force.
 
-**Second risk: vendor removal of the TV art-mode API.** Samsung has already
-removed art mode from some units via firmware (1710, Sept 2025). The operator
-confirmed it works today, so the risk is prospective rather than present — but the
-capability the entire product rests on is controlled by a vendor who has withdrawn
-it before, and auto-update could do it here. Worth establishing whether TV
-auto-update can be disabled.
+> **Corrected twice on 2026-08-04, and the second correction reverses the first's
+> premise.** This paragraph originally said the default "sizes itself as a fraction
+> of the filesystem — so it grows with the disk you were trying to protect."
+> Neither half survived contact with the machine: systemd caps its persistent
+> default at 4G, and this journal is not on the filesystem at all. Two things
+> follow.
+>
+> **The bound protects nothing about the card**, per the correction above. What it
+> buys is a ceiling that is *chosen and visible* rather than inherited from
+> defaulting rules a reviewer would have to know.
+>
+> **On this machine it is a raise, not a cap.** The runtime default was 156.1M of
+> RAM; 256M is more. That is affordable on 8 GB and is the intent — but it is the
+> opposite of what "bound the journal" suggests, so it is said plainly rather than
+> left in the arithmetic. 256M was chosen against a measurement: 9.2 MB after first
+> boot and a full provisioning run, so it is weeks of history at that rate.
+
+**What volatile storage costs is diagnosis, and the operator decided 2026-08-04 to
+accept that cost: the journal stays volatile.** It does not survive a reboot, so
+"the wall froze and the Pi restarted" is precisely the case `journalctl` cannot
+answer — and it is the case an operator is most likely to be investigating.
+`Storage=persistent` would fix that and would move logging onto the card, making
+the journal a wear path for the first time; it was declined. **Two consequences to
+carry rather than rediscover.** Post-reboot diagnosis has to come from somewhere
+other than the journal — the health surface's heartbeat age, or the catalogue —
+which is a constraint on how failures are made visible, not merely a missing
+convenience. And the top operational risk keeps its narrowest form: nothing this
+product does writes continuously to the card except the display heartbeat, whose
+writer is not built.
+
+The pre-acquisition free-space guard is unrelated to any of this: it is
+curation-side and checks before a fetch.
+
+**Second risk: vendor removal of the TV art-mode API — the auto-update question is
+answered.** Samsung has already removed art mode from some units via firmware
+(1710, Sept 2025). The capability the entire product rests on is controlled by a
+vendor who has withdrawn it before.
+
+**Firmware auto-update can be disabled on this television, and was disabled
+2026-08-04.** The set is held at firmware **1310**; **1400** is offered and has not
+been taken. Two consequences worth stating:
+
+- **The risk is now a decision rather than an exposure.** Nothing arrives
+  overnight; taking 1400 is a deliberate act.
+- **Updating is effectively one-way** — there is no rollback — so the standing
+  recommendation is to stay on 1310 unless a release note shows 1400 fixes
+  something wanted. Staying costs nothing known and keeps the set on behaviour that
+  has been *measured*; every figure in
+  `platform-and-dependency-findings.md` § The television was taken against 1310.
+  The counter-argument, security patching, is weak for a LAN device behind NAT on a
+  network `security-model.md` already treats as the trust boundary.
+- **What makes this recoverable in knowledge, if not in firmware**, is
+  `tv_api_check.py`: re-run it after any future update and it reports what moved.
+  That is the defence against vendor change — not compatibility branching, which
+  could not be tested here against a second set anyway.
 
 **Third risk: the norms with no mechanical enforcement.** *(Re-scoped 2026-07-27.
 This read "no test suite exists — zero tests across 2,216 lines"; that departure was

@@ -13,8 +13,25 @@ repository root, which is also the unit's `WorkingDirectory`.
 
     cp .env.example .env      # then fill it in
     sudo cp deploy/samsung-frame-art-loader.service /etc/systemd/system/
+    sudo mkdir -p /etc/systemd/journald.conf.d
+    sudo cp deploy/journald.conf.d/10-bound-the-journal.conf /etc/systemd/journald.conf.d/
+    sudo systemctl restart systemd-journald
     sudo systemctl daemon-reload
     sudo systemctl enable --now samsung-frame-art-loader
+
+**The journald line is not optional decoration.** Committing that drop-in without
+installing it is how the last unit file came to exist nowhere but a card. It bounds
+the journal at 256M on *both* ceilings — `SystemMaxUse=` and `RuntimeMaxUse=` —
+because Raspberry Pi OS ships `Storage=volatile`, so the journal lives in RAM and a
+`SystemMaxUse=`-only file would bind nothing while reading as though it does. Two
+things follow from volatile storage that are worth knowing before you debug
+anything: **the journal does not survive a reboot**, and **logging does not wear the
+card**. The file's own header carries the detail.
+
+Verify it took — `systemd-analyze cat-config` proves only that the file parses:
+
+    sudo journalctl -b -u systemd-journald | grep -i 'Journal.*max'
+    # expect: "Runtime Journal (...) is 9.2M, max 256M, ..."
 
 **Skipping the first line now fails loudly, and the two ways it can fail are
 worth telling apart.** If `.env` is *absent*, systemd refuses to start the unit at
@@ -77,8 +94,22 @@ it is deployed again:
 
 `samsungtvws` and `websockets` moved together on 2026-08-01 — a two-year-old fork
 SHA to fork master, and websockets 12.0 to 16.1.1, which the new library requires.
-**That pair has been verified to resolve and import, and has not yet been run
-against the television.** Until it has, treat installing it as the change it is:
+~~That pair has been verified to resolve and import, and has not yet been run
+against the television.~~ **It was run against the television on 2026-08-04 and the
+checks pass** — construction, art-mode support, API version, a real 4K upload by
+path, a confirmed delete, and callback registration, against a 2024
+`QN50LS03DAFXZA` on firmware 1310. **One defect was found and is not fixed**
+(issue #73): at the default `timeout=10`, `upload()` **reports failure on uploads
+that succeeded** — observed twice, once returning `None` and once raising
+`AssertionError`, with the `None` run's image demonstrably on the set. At an
+explicit `timeout=60` the same upload returned its content id. Anything calling it
+must pass an explicit timeout **and** confirm against the set's own content list
+rather than trusting the return. *(The mechanism is deliberately not stated here:
+an earlier revision named a raise site and an argument-form rule that the library's
+source does not support, and both are retracted. Issue #73 separates what was
+measured from what was inferred.)*
+Findings in `.prawduct/artifacts/platform-and-dependency-findings.md` § The
+television. Run it yourself after any change to the pins or the set's firmware:
 
     python tv_api_check.py --image "$ART_ROOT/ready/<a 4K composite>.jpg"
 
@@ -87,8 +118,11 @@ live set, touching only the image it uploads itself, and exits non-zero if any
 check fails. If it does fail, `pi-freeze-2024.txt` below is the rollback — it
 records the exact versions the wall ran on before the move.
 
-Behaviour changes to expect, established by reading the library's source rather
-than by running it:
+Behaviour changes to expect. Both were established by reading the library's source
+and have since been confirmed on the set by the run above. (The upload defect is a
+third change, but it belongs to neither category — it was *measured* on hardware,
+and the source-derived mechanism first written around it has been retracted. Issue
+#73 carries it.)
 
 - **Building the art client now performs blocking network I/O** and raises when
   the set is unreachable, where it used to defer that to first use.
@@ -123,10 +157,14 @@ The commit the wall actually ran is recorded in `pi-freeze-2024.txt`:
     IT8951 @ git+https://github.com/GregDMeyer/IT8951.git@9f136139378f74e17d9972d7165dc6ae53a2568e
 
 **If the label panel misbehaves after a rebuild, suspect this first** and install
-that line explicitly. It is documented rather than pinned here because pinning a
-transitive git URL alongside the parent's own unpinned declaration is exactly the
-kind of resolver behaviour that should be verified on the hardware before it is
-committed, and the panel is not on the bench. Pinning or vendoring it is a
+that line explicitly. *(Checked 2026-08-04: a fresh resolve does land on `9f13613`
+— but only because that commit still **is** the repository's master, unchanged
+since 2023. Nothing pins it, so the day upstream moves, a rebuild silently takes
+whatever master became. The build itself is verified on 3.13/aarch64.)* It was documented rather than pinned
+because pinning a transitive git URL alongside the parent's own unpinned
+declaration is resolver behaviour that wanted verifying on hardware first. **That
+verification has now happened**, so the reason for waiting is spent and the choice
+is open. Pinning or vendoring it is a
 recorded decision still owed — see `project-state.yaml` →
 `technical_decisions.operational`.
 

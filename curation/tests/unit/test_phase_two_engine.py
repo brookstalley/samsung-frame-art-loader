@@ -18,7 +18,8 @@ from curation.discovery.phase_two import CONFIDENT, TITLE_ONLY, UNATTRIBUTED_REC
 from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
 from curation.services.display_fit import ArtworkBox, DisplayFit
 
-#: The operator's own 42" panel, as `Settings.tv_artwork_box` composes it. A
+#: A 42" panel, as `Settings.tv_artwork_box` composes it — a fixed geometry chosen
+#: so the numbers below are checkable, NOT the operator's set, which is 50". A
 #: 12-inch floor sits at about 1,260 pixels on the long edge here.
 BOX = ArtworkBox(width=3316, height=1597, pixels_per_inch=104.9, floor_inches=12.0)
 
