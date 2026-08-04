@@ -335,10 +335,11 @@ endurance. What wears a card out is small writes that never stop, and this produ
 has exactly two — the journal and the display heartbeat. Both carry an explicit
 bound rather than being left for the storage choice to absorb: the heartbeat's is
 60 s in `observability-strategy.md` § The Health Surface, and the journal's is the
-`SystemMaxUse=` requirement below. **Neither bound is in force on the Pi yet** —
-the journal drop-in is an unshipped deliverable and the heartbeat's writer is not
-built — so this reasoning describes the deployment being built toward, not the one
-running today.
+`SystemMaxUse=` requirement below. **The journal's bound is in force as of
+2026-08-04** — `deploy/journald.conf.d/10-bound-the-journal.conf` is applied on the
+Pi and `systemd-analyze cat-config` reports it. **The heartbeat's is not**, because
+its writer is not built, so that half of this reasoning still describes the
+deployment being built toward rather than the one running.
 
 *The alternatives, and why they lost.* **USB SSD for `ART_ROOT`, or SSD boot** —
 issue #13's two original options. Both work, and the Pi 4's USB 3.0 ports make
@@ -361,21 +362,51 @@ than a complement to it** — and it is not built. Until issue #14 lands, this r
 *decided* rather than *closed*: nothing on the Pi today would survive the card. The
 storage medium is no longer the open question; the backup is.
 
-**Journal growth is an unguarded path to that same failure.** Structured logging is
-the product's primary observability signal and both planes log continuously to the
-journal, on a machine whose top risk is disk. **`SystemMaxUse=` must be set
-explicitly in `journald.conf`** rather than left to the default, which sizes itself
-as a fraction of the filesystem — so it grows with the disk you were trying to
-protect. The pre-acquisition free-space guard cannot see this: it is curation-side
-and checks before a fetch, while the journal fills between fetches and from the
-display plane, which never fetches anything.
+**Journal growth is a path to that same failure, and a narrower one than this
+section used to claim.** Structured logging is the product's primary observability
+signal and both planes log continuously to the journal, on a machine whose top risk
+is disk. **`SystemMaxUse=` is set explicitly** in
+`deploy/journald.conf.d/10-bound-the-journal.conf`, at **256M**, with
+`SystemMaxFileSize=32M`.
 
-**Second risk: vendor removal of the TV art-mode API.** Samsung has already
-removed art mode from some units via firmware (1710, Sept 2025). The operator
-confirmed it works today, so the risk is prospective rather than present — but the
-capability the entire product rests on is controlled by a vendor who has withdrawn
-it before, and auto-update could do it here. Worth establishing whether TV
-auto-update can be disabled.
+> **Corrected 2026-08-04, against the machine.** This paragraph said the default
+> "sizes itself as a fraction of the filesystem — so it grows with the disk you
+> were trying to protect." That overstates it: systemd's default is 10% of the
+> filesystem **capped at 4G**, so on the Pi's 117 GB card it resolves to 4G and does
+> not grow further. The reason to set the bound explicitly is therefore that the
+> ceiling should be *chosen and visible* rather than inherited from defaulting
+> rules a reviewer would have to know — not that the journal could otherwise run
+> away. 256M was picked against a measurement rather than a guess: a freshly
+> provisioned card holds 9.2 MB after first boot and a full provisioning run, so
+> 256M is weeks of history at that rate while never being the reason the catalogue
+> has nowhere to write.
+
+The pre-acquisition free-space guard cannot see this: it is curation-side and
+checks before a fetch, while the journal fills between fetches and from the display
+plane, which never fetches anything.
+
+**Second risk: vendor removal of the TV art-mode API — the auto-update question is
+answered.** Samsung has already removed art mode from some units via firmware
+(1710, Sept 2025). The capability the entire product rests on is controlled by a
+vendor who has withdrawn it before.
+
+**Firmware auto-update can be disabled on this television, and was disabled
+2026-08-04.** The set is held at firmware **1310**; **1400** is offered and has not
+been taken. Two consequences worth stating:
+
+- **The risk is now a decision rather than an exposure.** Nothing arrives
+  overnight; taking 1400 is a deliberate act.
+- **Updating is effectively one-way** — there is no rollback — so the standing
+  recommendation is to stay on 1310 unless a release note shows 1400 fixes
+  something wanted. Staying costs nothing known and keeps the set on behaviour that
+  has been *measured*; every figure in
+  `platform-and-dependency-findings.md` § The television was taken against 1310.
+  The counter-argument, security patching, is weak for a LAN device behind NAT on a
+  network `security-model.md` already treats as the trust boundary.
+- **What makes this recoverable in knowledge, if not in firmware**, is
+  `tv_api_check.py`: re-run it after any future update and it reports what moved.
+  That is the defence against vendor change — not compatibility branching, which
+  could not be tested here against a second set anyway.
 
 **Third risk: the norms with no mechanical enforcement.** *(Re-scoped 2026-07-27.
 This read "no test suite exists — zero tests across 2,216 lines"; that departure was

@@ -154,15 +154,24 @@ classification:
           on some units (1710, Sept 2025), or the model was unaffected. Downgraded
           from high to medium because the risk is now prospective rather than
           present, but NOT to low: the capability the whole product rests on is
-          controlled by a vendor who has already removed it from some units, and a
-          future auto-update could do the same here. Worth knowing whether TV
-          auto-update can be disabled.
+          controlled by a vendor who has already removed it from some units.
+          MITIGATED 2026-08-04, and it stays medium rather than dropping to low.
+          Auto-update CAN be disabled on this set and now is; the set is held at
+          firmware 1310 with 1400 offered and declined. What that changes is that a
+          removal can no longer arrive overnight — it would take a deliberate
+          update, and updating is one-way with no rollback. What it does not change
+          is that the vendor still owns the capability, and the set is now
+          accumulating un-taken firmware, so the decision returns every time there
+          is a reason to update. The set is a 2024 QN50LS03DAFXZA on art API
+          4.3.4.0; every measured fact about it is firmware-scoped, and
+          `tv_api_check.py` is the scripted pass that says what moved after any
+          future update. Full reasoning: `operational-spec.md` section Risks.
       - factor: "3tears is alpha with a shifting public API"
         level: medium
         rationale: "0.x line; README states the API can shift between minor versions. A 3tears breaking change becomes art-loader work. Mitigated by pinning."
       - factor: "E-paper driver stack is dormant upstream"
         level: medium
-        rationale: "omni-epd last touched 2024-11, IT8951 2023-11 with no releases and an unpinned dependency. Mitigated by the display-plane interface boundary. **The 9f13613 pin is NOT taken** (corrected 2026-08-03): `requirements.txt` pins omni_epd to a commit, and omni_epd declares `IT8951[rpi]` as a git dependency with no commit, so a rebuild resolves the driver to that repo's master on the day. 9f13613 is the commit the wall actually ran, recorded in `deploy/pi-freeze-2024.txt` and documented in `deploy/README.md` as the first thing to suspect after a rebuild — documented rather than pinned, because pinning a transitive git URL beside the parent's own unpinned declaration is resolver behaviour to verify on hardware, and the panel is off the bench. This row previously read as though the pin had been applied; it names the decision still owed, in `technical_decisions.operational`, and Chunk 04 is where it is verified."
+        rationale: "omni-epd last touched 2024-11, IT8951 2023-11 with no releases and an unpinned dependency. Mitigated by the display-plane interface boundary. **The 9f13613 pin is NOT taken** (corrected 2026-08-03): `requirements.txt` pins omni_epd to a commit, and omni_epd declares `IT8951[rpi]` as a git dependency with no commit, so a rebuild resolves the driver to that repo's master on the day. 9f13613 is the commit the wall actually ran, recorded in `deploy/pi-freeze-2024.txt` and documented in `deploy/README.md` as the first thing to suspect after a rebuild — documented rather than pinned, because pinning a transitive git URL beside the parent's own unpinned declaration is resolver behaviour to verify on hardware. This row previously read as though the pin had been applied; it names the decision still owed, in `technical_decisions.operational`. **Resolver behaviour verified on the Pi 2026-08-04, and the risk is real but currently benign:** a fresh resolve of `requirements.txt` on Trixie/3.13 lands on `it8951==1.0.0` at `9f13613` — not because anything pins it, but because that commit *is* the repository's master and has been since 2023. Installing pinned omni_epd over an explicitly-pinned IT8951 leaves the pinned one in place rather than re-resolving. So the exposure is exactly as described and unchanged: the day that repository moves, a rebuild silently takes whatever master became. The driver itself now builds and imports on 3.13/aarch64, which was the other half of this risk and is closed."
       - factor: "Two-plane topology introduces a contract to maintain"
         level: low
         rationale: >
@@ -2562,7 +2571,7 @@ views_enabled: true
 # Do not hand-edit — overwritten on next regen.
 scope_rollups:
   v1-build:
-    chunks: ["01", "02", "06", "07", "07B", "08A", "08B", "09", "10", "10B", "11", "14A", "14B", "15", "16A", "16B", "17A", "17B", "18A", "18B"]
+    chunks: ["01", "02", "03", "04", "05", "06", "07", "07B", "08A", "08B", "09", "10", "10B", "11", "14A", "14B", "15", "16A", "16B", "17A", "17B", "18A", "18B"]
     releases: []
 
 # =============================================================================

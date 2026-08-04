@@ -48,6 +48,85 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-04: The bench answered three chunks, and the television answered back
+
+<!-- prawduct: chunks=03,04,05 | status=shipped | scope=v1-build -->
+
+**Why:** three chunks had been parked behind bench access since the plan was
+authored, each holding an assumption a later chunk depends on. A rebuilt Pi and a
+live television closed all three in one sitting. No product code changed — the
+deliverables are recorded findings, one deployment drop-in, and one packaging fix.
+
+**The IT8951 assumption resolved positively, and the feared problem never
+existed.** The driver builds from its pinned commit and imports on Python
+3.13/aarch64 under uv's PEP 517 isolation. The premise — a 2023 `setup.py`
+importing Cython without declaring it — does not hold at that commit, which
+declares it properly. So the whole remediation branch the chunk budgeted for
+(build-requires override, vendoring ~1,500 lines, re-pinning) is dead, and the
+3.12 fallback can be retired.
+
+**What actually blocks a rebuilt Pi is `python3-dev`, which nothing declared.**
+The install fails building `rpi-gpio` — not IT8951 — with
+`fatal error: Python.h: No such file or directory`, pointing a reader at the wrong
+package entirely. Added to the apt line in `requirements.txt`, in a file whose own
+comment says a dependency nothing declares is one nobody installs until an import
+fails.
+
+**The television verification found a defect worse than the one it was looking
+for.** `upload()` returns falsy or raises a bare `AssertionError` on uploads that
+*succeeded* — its default `timeout=10` covers an acknowledgement that a 2.0 MB 4K
+composite takes 8.39 s to earn, so a larger file exceeds it routinely and the
+image is on the set while the caller is told it is not. A retry loop turns that
+into duplicates on the wall. Filed as issue #73; the fix belongs with the process
+that will own the boundary, not here.
+
+The generalisable rule, now stated where a builder will find it: **this library's
+return values are not trustworthy in either direction — confirm against the
+television's own content list.** Deletion already worked that way because
+collapsing *failed* into *unconfirmable* was the original defect; upload has the
+mirror-image bug and is owed the same treatment.
+
+**Two of the three registered image-changed callbacks are dead wire**, established
+by provoking a real selection rather than by reading source: only `image_selected`
+fires. The other two are slideshow-advance events, and host-driven rotation never
+advances the set's own slideshow — so the old/new API split this product worried
+about costs it nothing.
+
+**Detecting art mode turned out to need the answer nobody would guess.**
+`PowerState` reports `'on'` for both art mode and normal TV, and `get_artmode()`
+can only ever confirm the positive case because reaching it requires a call that
+hangs when art mode is off. What works in both directions is the presence of an
+`isHost: true` client in the art channel's connect frame — the set's own art
+application. Recorded with the transitions explicitly marked as a sketch rather
+than a map, because only one starting state was exercised.
+
+**Firmware auto-update can be disabled, and is.** The set is held at 1310 with
+1400 offered and declined; the standing recommendation is to stay, because the
+update is one-way and every measured figure above is firmware-scoped. That closes
+the last open question in `security-model.md` and turns the vendor risk from an
+exposure into a decision. It does not lower the risk level: the vendor still owns
+the capability, and un-taken firmware now accumulates.
+
+**The journal is bounded on the machine**, at 256M, in a committed drop-in rather
+than only on the box — which is how the last unit file came to exist nowhere but a
+card. The reasoning behind the requirement was also corrected: systemd caps its
+own default at 4G rather than growing with the disk, so the value of setting it
+explicitly is that the ceiling is chosen and visible, not that the journal could
+otherwise run away.
+
+**Corrected while here:** `TV_PANEL_DIAGONAL_INCHES` read 42 against a 50 inch
+set — not a typo but an unchanged template default, which is the worse failure
+because it produces a running system that quietly mis-sizes every judgement about
+whether a work is big enough for the wall. The set names its own size in
+`modelName`, so this is checkable rather than merely documentable.
+
+**Not done, and deliberately:** the upload defect is filed rather than fixed —
+the display plane's binding does not exist yet, and fixing it in the 2024 loader
+that is scheduled for retirement would be work thrown away twice. Two requirements
+also surfaced and were left unwritten rather than designed in passing: when a
+display process should begin and suspend rotation, and whether the set can offer
+any interaction of its own.
+
 ## 2026-08-04: The card stays, and the risk moves to the backup that does not exist
 
 <!-- prawduct: status=shipped | scope=v1-build -->

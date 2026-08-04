@@ -115,9 +115,9 @@ re-created the same silence one line further down.
 - [x] Chunk 18A: Acquisition — the fetch paths, the guards, and a work's sources
 - [x] Chunk 18B: Preparation — the mat engine, the 4K render, and the corpus look
 - [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
-- [ ] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
-- [ ] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
-- [ ] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
+- [x] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
+- [x] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
+- [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [ ] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
@@ -644,7 +644,13 @@ architecture-proving slice is Chunk 07.
     it. Chunk 20 sits last in the build order and needs no bench — worth pulling
     forward on that basis, which is an operator call and not a re-plan.
 - **Depends on:** nothing outstanding. *(Was: the operator decision on issue #13,
-  discharged 2026-08-04.)* The two remaining deliverables need the bench.
+  discharged 2026-08-04.)* ~~The two remaining deliverables need the bench.~~
+  **Both landed 2026-08-04.** `deploy/journald.conf.d/10-bound-the-journal.conf`
+  caps the journal at 256M and is applied on the Pi; firmware auto-update was
+  established as disable-able and disabled, recorded in all three named homes. The
+  requirement's own rationale was corrected in the process — systemd caps its
+  default at 4G rather than growing with the disk, so an explicit bound buys a
+  visible ceiling rather than averting runaway growth.
 - **Artifacts consumed:** `operational-spec.md` § Risks, issues #13/#15/#16
 - **Deliverables:** new `deploy/journald.conf.d/` drop-in (applied on the Pi);
   auto-update finding recorded in all three named homes and the disable/keep
@@ -685,6 +691,14 @@ architecture-proving slice is Chunk 07.
 - **Acceptance criteria:** a definitive recorded answer: the display plane's
   dependency set installs under uv on the Pi (3.13, falling back 3.12), or a
   chosen remediation makes it install
+- **Answered 2026-08-04: it installs on 3.13, and no remediation was needed.** The
+  chunk's central premise did not hold — the pinned commit declares Cython in
+  `build-requires`, so PEP 517 isolation was never going to fail on it. The
+  interpreter half is closed too: a current Cython emits 3.13-compatible C for
+  those `.pyx` sources on aarch64, so the 3.12 fallback is retired. The real
+  blocker was `python3-dev`, undeclared anywhere and failing in `rpi-gpio` rather
+  than in IT8951; it is now in `requirements.txt`'s apt line. Detail lives in
+  `platform-and-dependency-findings.md` rather than here.
 - **Done when:**
   0. verify-api — read `setup.py`/`pyproject.toml` at the pinned commit; capture
      what `[build-system] requires` declares (or that no `pyproject.toml` exists)
@@ -739,11 +753,20 @@ architecture-proving slice is Chunk 07.
   suite with the rest of the TV boundary, where the library is present. The
   deletion wrapper it calls is separately and fully tested, because that module
   takes the client as a parameter and imports nothing.
-- **What the bench pass still owes:** `tv_api_check.py` is the scripted pass —
-  construction cost, model and API generation, which callback spelling this set
-  emits, a real 4K upload timed by path, and a confirmed delete of only the image
-  it uploaded. Until it runs green against the live set, the new pins are
-  unverified and `deploy/pi-freeze-2024.txt` is the rollback.
+- ~~**What the bench pass still owes**~~ — **discharged 2026-08-04.**
+  `tv_api_check.py` was executed against the live set for the first time and the
+  pins are verified. Construction cost, API generation, callback spelling, a real
+  4K upload timed by path and a confirmed delete were all measured; the numbers and
+  the protocol trace live in `platform-and-dependency-findings.md` § The
+  television, which is where a builder will look for them, and are not restated
+  here. Two results the chunk did not anticipate: **`upload()` reports failure on
+  uploads that succeeded** (filed as issue #73 — the fix belongs with the binding
+  that does not exist yet, not with the loader being retired), and **only
+  `image_selected` of the three registered callbacks fires**, because the other two
+  are slideshow-advance events and rotation here is host-driven. Acceptance box
+  "LS03A/B/C/D support confirmed" is met **only for LS03D** — the operator holds
+  one television and untestable compatibility branching is explicitly not being
+  written.
 - **Tests:** a scripted hardware pass against the live TV — upload, select,
   confirmed delete, callback registration — captured as notes now, promoted into
   the display plane's test suite in Chunk 12

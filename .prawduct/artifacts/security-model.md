@@ -333,6 +333,11 @@ not an oversight.
   export, or the catalogue becoming public). Decision and rationale live in
   `data-model.md` constraint 13; this entry is corrected rather than deleted
   because a reader of this document alone would have re-opened a settled question.
-- **Whether TV auto-update can be disabled.** Not strictly security, but it is the
-  vendor-controlled capability the whole product rests on, and Samsung has already
-  removed art mode from some units.
+- ~~**Whether TV auto-update can be disabled.**~~ **Closed 2026-08-04: it can be,
+  and it is.** Not strictly security, but it is the vendor-controlled capability the
+  whole product rests on, and Samsung has already removed art mode from some units.
+  The set is held at firmware 1310 with 1400 offered and declined; the standing
+  recommendation is to stay there, because the update is one-way and every measured
+  fact about this television is firmware-scoped. Reasoning, consequences and the
+  re-verification path live in `operational-spec.md` § Risks — not restated here,
+  because the version numbers will move and one home for them is enough.
