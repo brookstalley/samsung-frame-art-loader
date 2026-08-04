@@ -825,7 +825,7 @@ Established 2026-07-19. The `art/` tree is not one thing, and the two halves are
 transported differently:
 
 - **Upstream, expensive, device-independent** — `raw/`. Costs network fetches and
-  real API spend to regenerate. *(Narrowed 2026-08-03 — see `learnings-detail.md`.)*
+  real API spend to regenerate. See `learnings-detail.md`.
 - **Derived, cheap, device-specific** — `ready/`, `tv-thumbs/`, `label/`.
   Rendered for a particular target geometry (4K for the TV, 1448x1072 for the
   e-paper). *(Annotated 2026-07-20: `label/` described the 2024 single-plane

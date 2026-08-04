@@ -222,6 +222,18 @@ class TestTheTileCache:
 
 
 class TestDestination:
+    def test_the_staged_name_keeps_the_real_suffix_last(self, tmp_path):
+        # The binary picks its output encoder from the extension, so a staged path
+        # ending `.partial` is refused outright and every tiled fetch fails. That
+        # is the binary's behaviour and the live suite witnesses it — but the
+        # *name* is this module's choice, pure Python, and belongs where the
+        # command CLAUDE.md names as the authority will actually run it.
+        destination = tmp_path / "out" / "work.jpg"
+        result = _run(tmp_path, _fake_binary(tmp_path, SAVES_IMAGE), destination=destination)
+
+        assert result.path.name == "work.partial.jpg"
+        assert result.path.suffix == destination.suffix
+
     def test_the_destination_is_never_touched(self, tmp_path):
         # A held image stands at the destination. Nothing here may remove it or
         # write over it: a retry that fails must cost the work nothing, and
@@ -250,8 +262,13 @@ class TestDestination:
         # The stand-in refuses to overwrite, which is what the real binary does.
         # A fake that overwrote happily would pass with the clearing removed.
         destination = tmp_path / "out" / "work.jpg"
-        destination.parent.mkdir(parents=True)
-        (destination.parent / "work.jpg.partial").write_bytes(b"debris from an interrupted attempt")
+        # The debris goes wherever the wrapper *actually* stages, learned from a
+        # run rather than spelled here. Spelling it is how this test came to seed
+        # a path the code no longer touched after a rename: the fake had nothing
+        # to refuse, and the branch below sat undefended behind a green test.
+        observed = _run(tmp_path, _fake_binary(tmp_path, SAVES_IMAGE), destination=destination)
+        staged = observed.path
+        staged.write_bytes(b"debris from an interrupted attempt")
         refuses_to_overwrite = _fake_binary(
             tmp_path,
             'if [ -e "$(eval echo \\${$#})" ]; then\n'
@@ -264,6 +281,7 @@ class TestDestination:
 
         assert result.outcome is TileOutcome.COMPLETE
         assert result.byte_size == 100
+        assert result.path.read_bytes() != b"debris from an interrupted attempt"
 
 
 class TestDeploymentFailures:
