@@ -710,8 +710,11 @@ for the full record established 2026-07-19. Summary:
 
 - Python version is **per plane, not one number** (corrected 2026-07-20 — the
   product-wide "target 3.13" predates the two-plane split and kept resurfacing).
-  **Display plane: 3.13** (matches Raspberry Pi OS Trixie), falling back to 3.12;
-  verified working on 3.12, and 3.13 is an open assumption until a build proves it.
+  **Display plane: 3.13** (matches Raspberry Pi OS Trixie), floor 3.12. _(Updated
+  2026-08-04: this said "falling back to 3.12; verified working on 3.12, and 3.13 is
+  an open assumption until a build proves it". A build proved it — the IT8951 stack
+  builds and imports on 3.13/aarch64 — so the fallback contingency is discharged and
+  3.12 is a floor rather than a landing site.)_
   **Curation plane: 3.14** on a uv-managed standalone build. _(Re-based
   2026-07-27 and again 2026-08-02: this said "with `3tears` unmodified", then that
   "the floor rests on `3tears-models`". Neither holds — that package moved to the

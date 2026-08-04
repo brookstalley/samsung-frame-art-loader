@@ -53,8 +53,8 @@ attached. The spine is deliberately evidence-first for exactly this reason.
 
 **Open assumptions / unknowns:**
 
-- [ASSUMPTION: the IT8951 stack builds under uv's PEP 517 isolation on 3.13/aarch64 | HIGH impact | Chunk 04 proves or disproves it before any plane scaffolding exists; user can reorder]
-- [RESOLVED 2026-08-01, half each way: a target exists (fork master `fe95ef1`) and carries Frame-generation support as a model-year branch, but `delete_list` is **not** fixable by bumping — it is unchanged on master, so the fallback fired and confirmed deletion is `tv_delete.delete_list_confirmed` in this repo. Two things the assumption did not anticipate: the target needs `websockets>=13.0` (the pinned 12.0 cannot import it), and its constructor performs blocking network I/O. **Live on hardware is still unverified** — Chunk 05 stays open for the bench pass]
+- [RESOLVED 2026-08-04: the IT8951 stack builds AND imports under uv's PEP 517 isolation on 3.13/aarch64, from the pinned `9f13613`. The feared cause never existed — that commit declares Cython in `build-requires` — so no remediation was needed and the 3.12 fallback is discharged. The real blocker was undeclared `python3-dev`, which fails in `rpi-gpio` rather than in IT8951 and so points at the wrong package. `Cython` is unpinned in that `build-requires`, so the build is reproducible today but not over time]
+- [RESOLVED 2026-08-01, half each way: a target exists (fork master `fe95ef1`) and carries Frame-generation support as a model-year branch, but `delete_list` is **not** fixable by bumping — it is unchanged on master, so the fallback fired and confirmed deletion is `tv_delete.delete_list_confirmed` in this repo. Two things the assumption did not anticipate: the target needs `websockets>=13.0` (the pinned 12.0 cannot import it), and its constructor performs blocking network I/O. ~~Live on hardware is still unverified~~ — **verified 2026-08-04** against a 2024 `QN50LS03DAFXZA` on firmware 1310, art API 4.3.4.0. `delete_list_confirmed` returned `requested=1, deleted=1, surviving=()`. The pass also found what reading could not: **`upload()` reports failure on uploads that succeeded** (issue #73), and **only `image_selected` of the three registered callbacks fires**, the other two being slideshow-advance events host-driven rotation never triggers]
 - [ASSUMPTION: the 2024 code keeps running the wall throughout the build; cutover to the new display plane happens at Chunk 13, and the legacy modules are deleted only at Chunk 20 | MED impact | user can override with an earlier or later cutover]
 - [ASSUMPTION: the existing sun-position brightness behaviour (`local.py`) ports into the display daemon in v1 — it runs on the wall today, so dropping it would be a regression, but the v1 scope list does not name it | LOW impact | user can defer to Later]
 - [ASSUMPTION: rotation timing is per-theme with a global fallback | LOW impact | carried from `data-model.md`; user can collapse to global]
@@ -77,7 +77,11 @@ re-ordered on 2026-07-31; the two changes and why are recorded in the Context
 block under "Re-sequenced 2026-07-31".
 
 **Every chunk that needs the bench sits behind every chunk that does not**, because
-bench access lapsed on 2026-08-02 and has not returned. This is the same rule that
+bench access lapsed on 2026-08-02. *(Updated 2026-08-04: it returned. 05, 04 and 03
+ran and are shipped. The rule still governs 12 and 13, whose remaining bench need is
+sustained access rather than a visit — and Chunk 12's stated dependency, a verified
+library, is now satisfied, so what parks it is its own acceptance criteria and not a
+blocked predecessor.)* This is the same rule that
 parked 05, 04 and 03 originally, applied a third time: the tooling takes the first
 unchecked box as the current chunk, and a blocked chunk ahead of active work
 silently hands its `Critic mode:` and `Type:` to every chunk after it. Chunks keep

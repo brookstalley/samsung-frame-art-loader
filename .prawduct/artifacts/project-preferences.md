@@ -17,7 +17,12 @@ Developer preferences for how code is written in this project. Captured during d
   outlived its amendment).
   - **Display plane: 3.13**, floor 3.12. Raspberry Pi OS Trixie ships 3.13, and the
     IT8951 e-paper driver compiles Cython from 2023 sources targeting 3.13/3.12.
-    This is the plane whose version is pinned by hardware.
+    This is the plane whose version is pinned by hardware. _(2026-08-04: 3.13 is no
+    longer an assumption — the driver builds and imports on 3.13/aarch64 under uv's
+    PEP 517 isolation. 3.12 stays as a floor, not as a fallback anyone expects to
+    take. Noted here because this row's own history records it as the fourth site
+    where a superseded version claim outlived its amendment, and a discharged
+    contingency left standing is how the fifth one starts.)_
   - **Curation plane: 3.14**, **settled 2026-07-20; rationale re-based 2026-07-27,
     re-based again 2026-08-02.** This read "required by nothing except `3tears`",
     then "`3tears-models`, the operator's own model adapters that the discovery

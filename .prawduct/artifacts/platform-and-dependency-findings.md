@@ -32,8 +32,10 @@ upstream repositories on 2026-07-19 — it is not recalled from the original wor
 > Everything else here — the driver-stack bounds, the Cython reasoning, the
 > unverified-build warning — still stands and still governs the display plane.
 
-**Decision (display plane): target Python 3.13. Fall back to 3.12 if the IT8951
-build fails.**
+**Decision (display plane): target Python 3.13.** ~~Fall back to 3.12 if the
+IT8951 build fails.~~ **The fallback contingency is discharged, 2026-08-04:** the
+build did not fail. 3.12 remains a floor — nothing requires dropping it — but it is
+no longer a landing site this decision is prepared to use.
 
 Rationale:
 

@@ -185,7 +185,7 @@ manifests nobody reads and display waits forever on a file that will never appea
 Panel geometry was briefly listed as a second shared value; it is not, because
 "panel geometry" named two different physical panels:
 
-- **TV panel physical geometry** (reference: 42") — **curation only**. The mat is
+- **TV panel physical geometry** (this deployment: 50") — **curation only**. The mat is
   specified in physical units and the resolution floor is a minimum size on the
   wall, so curation needs it to judge whether a source is adequate, to show the
   curator what a work would look like, and to compose the mat. Display receives the
@@ -218,7 +218,7 @@ Because neither is shared, neither can drift between planes. A wrong TV size is
 still a real defect — the mat comes out the wrong width and the review grid's
 warnings are computed against a TV that isn't there — but it is a single-plane
 misconfiguration, not a cross-plane mismatch. **Nothing may hardcode either panel's
-size**; the reference deployment is a 42" Frame but the product must run on any.
+size**; this deployment is a 50" Frame but the product must run on any.
 
 **Each plane logs its resolved `ART_ROOT` and its own panel geometry at startup**,
 so a misconfiguration is one journal line away rather than a mystery.
@@ -332,14 +332,28 @@ written is bounded by the size of the collection rather than by churn. A collect
 that eventually fills most of the card is on the order of a hundred gigabytes
 written across years, which is a small fraction of any modern card's rated
 endurance. What wears a card out is small writes that never stop, and this product
-has exactly two — the journal and the display heartbeat. Both carry an explicit
-bound rather than being left for the storage choice to absorb: the heartbeat's is
-60 s in `observability-strategy.md` § The Health Surface, and the journal's is the
-`SystemMaxUse=` requirement below. **The journal's bound is in force as of
-2026-08-04** — `deploy/journald.conf.d/10-bound-the-journal.conf` is applied on the
-Pi and `systemd-analyze cat-config` reports it. **The heartbeat's is not**, because
-its writer is not built, so that half of this reasoning still describes the
-deployment being built toward rather than the one running.
+was thought to have exactly two — the journal and the display heartbeat.
+
+> **Corrected 2026-08-04, on the machine: the journal is not one of them.**
+> Raspberry Pi OS ships `Storage=volatile` in
+> `/usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf`, so the journal
+> lives in `/run/log/journal` — a tmpfs — and **logging writes to RAM, not to the
+> card.** Every sentence that treats journal growth as flash wear was describing a
+> persistent journal this deployment does not have. **The display heartbeat is
+> therefore the only continuous-write path to the card**, and its writer is not
+> built, so no part of this wear reasoning is exercised by anything running today.
+>
+> The journal still gets an explicit bound, for the different reason given below,
+> and **that bound is in force as of 2026-08-04** — evidenced by journald's own
+> startup line moving from `max 156.1M` to `max 256M` across the restart, which is
+> the check Chunk 03's criterion asked for. An earlier version of this paragraph
+> cited `systemd-analyze cat-config` instead; that proves only that the drop-in
+> parses, and it would have reported success just as happily while the directive
+> bound nothing — which is exactly what was happening, because the file set only
+> `SystemMaxUse=` and volatile storage is governed by `RuntimeMaxUse=`.
+
+The heartbeat's bound is 60 s in `observability-strategy.md` § The Health Surface;
+the journal's is the requirement below.
 
 *The alternatives, and why they lost.* **USB SSD for `ART_ROOT`, or SSD boot** —
 issue #13's two original options. Both work, and the Pi 4's USB 3.0 ports make
@@ -362,28 +376,41 @@ than a complement to it** — and it is not built. Until issue #14 lands, this r
 *decided* rather than *closed*: nothing on the Pi today would survive the card. The
 storage medium is no longer the open question; the backup is.
 
-**Journal growth is a path to that same failure, and a narrower one than this
-section used to claim.** Structured logging is the product's primary observability
-signal and both planes log continuously to the journal, on a machine whose top risk
-is disk. **`SystemMaxUse=` is set explicitly** in
-`deploy/journald.conf.d/10-bound-the-journal.conf`, at **256M**, with
-`SystemMaxFileSize=32M`.
+**The journal is bounded explicitly, for a narrower reason than this section once
+gave.** Structured logging is the product's primary observability signal and both
+planes log continuously to it. `deploy/journald.conf.d/10-bound-the-journal.conf`
+sets **256M** with 32M segments, on **both** ceilings — `SystemMaxUse=` for a
+persistent journal and `RuntimeMaxUse=` for the volatile one this machine actually
+uses — so the file is correct whichever storage mode is in force.
 
-> **Corrected 2026-08-04, against the machine.** This paragraph said the default
-> "sizes itself as a fraction of the filesystem — so it grows with the disk you
-> were trying to protect." That overstates it: systemd's default is 10% of the
-> filesystem **capped at 4G**, so on the Pi's 117 GB card it resolves to 4G and does
-> not grow further. The reason to set the bound explicitly is therefore that the
-> ceiling should be *chosen and visible* rather than inherited from defaulting
-> rules a reviewer would have to know — not that the journal could otherwise run
-> away. 256M was picked against a measurement rather than a guess: a freshly
-> provisioned card holds 9.2 MB after first boot and a full provisioning run, so
-> 256M is weeks of history at that rate while never being the reason the catalogue
-> has nowhere to write.
+> **Corrected twice on 2026-08-04, and the second correction reverses the first's
+> premise.** This paragraph originally said the default "sizes itself as a fraction
+> of the filesystem — so it grows with the disk you were trying to protect."
+> Neither half survived contact with the machine: systemd caps its persistent
+> default at 4G, and this journal is not on the filesystem at all. Two things
+> follow.
+>
+> **The bound protects nothing about the card**, per the correction above. What it
+> buys is a ceiling that is *chosen and visible* rather than inherited from
+> defaulting rules a reviewer would have to know.
+>
+> **On this machine it is a raise, not a cap.** The runtime default was 156.1M of
+> RAM; 256M is more. That is affordable on 8 GB and is the intent — but it is the
+> opposite of what "bound the journal" suggests, so it is said plainly rather than
+> left in the arithmetic. 256M was chosen against a measurement: 9.2 MB after first
+> boot and a full provisioning run, so it is weeks of history at that rate.
 
-The pre-acquisition free-space guard cannot see this: it is curation-side and
-checks before a fetch, while the journal fills between fetches and from the display
-plane, which never fetches anything.
+**What volatile storage actually costs is diagnosis, and that is an open
+decision.** The journal does not survive a reboot, so "the wall froze and the Pi
+restarted" is precisely the case `journalctl` cannot answer — and it is the case
+the operator is most likely to be investigating. `Storage=persistent` would fix it
+and would move logging onto the card, making the journal a wear path for the first
+time. That trade has not been taken either way; it is recorded here rather than
+settled, because it is a judgement about how much diagnosis is worth on a machine
+whose top risk is its boot medium.
+
+The pre-acquisition free-space guard is unrelated to any of this: it is
+curation-side and checks before a fetch.
 
 **Second risk: vendor removal of the TV art-mode API — the auto-update question is
 answered.** Samsung has already removed art mode from some units via firmware

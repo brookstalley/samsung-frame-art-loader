@@ -337,8 +337,40 @@ classification:
             auto_rotation_*, new uses slideshow_*. Neither is deprecated; the
             failure modes are asymmetric (old fails silently on new TVs, throws
             AssertionError on older ones), so probing must be defensive. The
-            dual-callback registration in tvart.py is correct and the dispatch
-            mechanism behind it is unchanged on the target.
+            dispatch mechanism behind the registration is unchanged on the target.
+            MEASURED ON HARDWARE 2026-08-04 (API 4.3.4.0, so the new side of the
+            split): provoking a real select_image fires ONLY image_selected, at
+            +2.15s. Neither slideshow_image_changed nor auto_rotation_image_changed
+            fires at all — they are slideshow-ADVANCE events, and host-driven
+            rotation never advances the set's own slideshow. So the dual
+            registration in tvart.py is not wrong, it is inert: two of its three
+            callbacks can never fire under this product's design, and a binding
+            needs exactly one. This corrects a previous "the dual-callback
+            registration is correct" reading that was never provoked, only read.
+          * upload() REPORTS FAILURE ON UPLOADS THAT SUCCEEDED, and this is the
+            single most consequential fact here for anything building a binding.
+            Its timeout= defaults to 10s and covers the acknowledgement AFTER the
+            bytes have already gone over a separate TLS d2d socket. A 2.0 MB 4K
+            composite takes 8.39s of that budget, so a larger file or a busier set
+            exceeds it routinely — and then the bytes form returns None while the
+            path form raises a bare AssertionError, with the image sitting on the
+            television either way. A caller that retries on falsy duplicates the
+            image. Pass an explicit timeout AND confirm against the set's own
+            content list; never read the return as authoritative. Issue #73.
+          * The upload data path is not the websocket. send_image is answered with
+            ready_to_use carrying ip/port/key and secured:true — a fresh ephemeral
+            port each time, TLS-wrapped — and the bytes stream there.
+          * Art mode is NOT detectable by PowerState (reports 'on' for both art
+            mode and normal TV) nor by get_artmode() (needs start_listening() to
+            have succeeded, which is exactly what fails when art mode is off, and
+            it HANGS rather than raising). What works both ways, cheaply, without
+            start_listening(): the presence of an isHost:true client in the art
+            channel's ms.channel.connect frame — that is the set's own art app.
+          * The remote-control channel is reachable in standby while the art
+            channel is not, and KEY_POWER over it does wake the set. Two presses
+            from standby were needed (first to normal TV, second to art mode).
+            The full power state machine is NOT mapped — only one starting state
+            was exercised and press-and-hold was never tested.
           * async delete_list still has NO return statement on master — byte
             for byte the same as the two-year-old pin — so it always yields None
             and cannot confirm deletion. Bumping does not fix it. The SYNC path
