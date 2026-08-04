@@ -12,9 +12,13 @@ grid, and a guess that ran low would refuse good work while a guess that ran hig
 would pass right before the failure. It asserts a floor of free space that must
 still be there afterwards, and refuses to begin when the floor is already breached.
 
-A refusal is a recorded outcome for that work rather than a crash: the run
-continues, the source records a failed fetch, and the operator sees a symptom the
-runbook already maps to free disk space.
+**A refusal here raises, and that is the opposite of how a bad source is handled.**
+Everything else in acquisition records a failure against the `Source` and lets the
+pass continue, because one bad URL says nothing about the next work. A full disk
+says the opposite: it is a fact about the machine, every work behind this one will
+hit it, and continuing means writing rows about failures that have one cause. So
+this stops, and the surface translates it into a refusal naming the remedy rather
+than letting it read as "the fetch failed unexpectedly".
 """
 
 import shutil

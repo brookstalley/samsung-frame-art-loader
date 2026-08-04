@@ -208,7 +208,7 @@ may exist at several institutions, and a broken source does not break the work.
 | `url` | string | required | The source URL. An attribute here, never an identity. |
 | `provider` | string | required | e.g. `artic`, `google_arts`, `gallery_site`, `prize_site`, `artist_portfolio`, `http`. Open vocabulary — the contemporary web has no fixed provider list. |
 | `source_class` | enum | required | `institutional` \| `contemporary_web`. The load-bearing distinction; see below. |
-| `acquisition_method` | enum | required | `dezoomify` \| `direct_http` \| `api`. Determines the fetch path. |
+| `acquisition_method` | enum | required | `dezoomify` \| `direct_http` \| `api`. Determines the fetch path. **`api` has no producer and no fetch path as of 2026-08-03**: the one museum client in the product resolves to tiled URLs, so nothing records it, and acquisition refuses it by name rather than guessing at a shape no response has ever exercised. The value is kept because a provider serving images through an API rather than a tile grid is a real thing this model should be able to say — building the path belongs with the provider that first needs it. |
 | `rights_status` | enum | required | `public_domain` \| `in_copyright` \| `unknown`. |
 | `is_primary` | boolean | default false | Which source was actually used for the held original. |
 | `confidence` | float | nullable | Carried from `CandidateImage.confidence` at acceptance. |

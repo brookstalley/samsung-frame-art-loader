@@ -115,8 +115,13 @@ def tile_fetch(
         raise DezoomifyUnavailable(f"{binary!r} is not on PATH; tiled acquisition cannot run in this deployment.")
 
     destination.parent.mkdir(parents=True, exist_ok=True)
-    # Beside the destination, never the destination itself.
-    staged = destination.with_name(f"{destination.name}.partial")
+    # Beside the destination, never the destination itself — and **the suffix stays
+    # last**. The binary picks its output encoder from the file extension, so a
+    # path ending `.partial` is refused outright: probed at 2.18.1, it exits 1 with
+    # `The file extension ."partial" was not recognized as an image format` and
+    # leaves a zero-byte file. Naming it `<stem>.partial<suffix>` keeps `.jpg`
+    # where the binary looks for it.
+    staged = destination.with_name(f"{destination.stem}.partial{destination.suffix}")
     # Observed: given a cache directory that does not exist, the binary warns once
     # per tile and completes with an empty cache — losing exactly the
     # retry-without-refetching this directory exists for, and saying so only in

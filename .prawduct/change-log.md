@@ -119,6 +119,27 @@ defends against an interpreter change rather than an input, so no mutation over
 inputs can kill it. Restored, with the reason written where the next reader finds
 it before deleting it again.
 
+**The Critic found five blockers, and the review round after the fix found a
+sixth that the fix itself introduced.** R-1 and R-9 were the same defect from two
+independent reviewers: a failed *retry* deleted the master the work was still
+displaying while its `Original` row went on naming the file, and the surface
+promised the opposite in two places. Both fetch paths now stage and the service
+promotes only after the bytes measure as an image — one rule in one place, because
+the guarantee had held on the direct path by accident of where staging happened to
+live. The staging fix then named the staged file `<name>.partial`, and
+**dezoomify-rs picks its output encoder from the extension**: probed at 2.18.1
+that exits 1 with "was not recognized as an image format" and leaves a zero-byte
+file, so every tiled fetch would have failed in the deployment against a green
+suite. Staging is `<stem>.partial<suffix>` now.
+
+**The gap that let it through is the durable lesson, and it is closed.** Every
+stand-in for the binary is a shell script that writes to its last argument
+whatever the argument is called, so no fake could ever witness a decision the
+binary makes *from the filename*. `tests/live/test_dezoomify_contract_still_holds.py`
+drives the real tool behind `-m live_binary`, beside the ARTIC and OpenRouter live
+suites and on its own marker for the same reason they are separate: it costs
+nothing but needs the network and the binary.
+
 **Constraint 10 needed no code.** `description_markup` already existed in
 `services/fields.py` and was already wired into `add_artwork` — a second one was
 started before a truncated grep was noticed to have hidden the first. What the

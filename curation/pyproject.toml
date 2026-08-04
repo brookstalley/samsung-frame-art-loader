@@ -153,6 +153,7 @@ markers = [
     "llm_eval: drives the tool surface with a real model over OpenRouter. Costs money, needs OPENROUTER_API_KEY, and is not deterministic — deselected by default, run with `-m llm_eval`.",
     "live_api: re-verifies OpenRouter's recorded response shapes and prices against the live API. Costs money, needs OPENROUTER_API_KEY — deselected by default, run with `-m live_api`.",
     "live_museum: re-verifies a museum API's recorded response shapes against the live API. Costs nothing and needs no key — the museum APIs are open — but needs the network, so it is deselected by default. Run with `-m live_museum`.",
+    "live_binary: drives the real dezoomify-rs against a live museum, checking the CLI behaviours the wrapper is written against. Costs nothing and needs no key, but needs the binary installed and the network. Deselected by default; run with `-m live_binary`.",
 ]
 # All three live suites are off unless asked for, but for two different reasons
 # and they are kept on separate markers because of it. `llm_eval` and `live_api`
@@ -166,4 +167,4 @@ markers = [
 # was in the environment — an invitation to spend money written in a file
 # arguing the suite was free. A command-line `-m` overrides this line, which is
 # how any of them is opted into.
-addopts = "-m 'not llm_eval and not live_api and not live_museum'"
+addopts = "-m 'not llm_eval and not live_api and not live_museum and not live_binary'"

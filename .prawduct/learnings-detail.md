@@ -562,3 +562,23 @@ Superseding a decision means marking the evidence that supported it, not only
 recording the new decision somewhere else — the evidence is what the next reader
 reasons from. Found by Critic cross-check (`rev-20260803T032431Z-f8474689` R-13),
 not by the sweep that followed the decision.
+
+## Data and cache contract
+
+**Narrowed 2026-08-03, when acquisition was actually built.** The upstream list
+had named `raw/`, `tile-cache/` and `api-cache/`, and only the first belongs.
+
+`tile-cache/` is **transient working space**, not an upstream artifact. It holds a
+*partial* fetch's tiles so a retry can resume without re-downloading what already
+arrived, and it is reclaimed per source the moment that work holds a complete
+image. Transporting it would carry the debris of an interrupted download to
+another machine, which is the opposite of what the upstream class means.
+
+`api-cache/` has **no producer at all**. It exists only in the 2024 root-plane
+`config.py`; the curation plane asks museums over HTTP and caches no response on
+disk. It had been listed in five places as something to transport.
+
+The general shape is worth keeping: a directory named in a contract is not
+evidence that anything creates it, and "upstream vs derived" has a third case —
+working space, which is neither transported nor regenerated because it is only
+ever meaningful mid-operation.

@@ -269,6 +269,17 @@ class AcquisitionService:
             # treats as attacker-influenceable, so the one that is *chosen* by an
             # attacker is the one a narrower catch would let escape — orphaning the
             # staged file and failing the call instead of the work.
+            # Logged with its type and traceback before it becomes a recorded
+            # fetch failure. Without this a `TypeError` from a future edit to
+            # `measure()` reads in the journal as a museum serving bad bytes, and
+            # the one thing that would identify it as ours is nowhere. `direct.py`
+            # waives the same rule and logs the same way, for the same reason.
+            log.warning(
+                "measuring the fetched image for %s raised %s",
+                source.artwork_id,
+                type(exc).__name__,
+                exc_info=True,
+            )
             _discard(staged)
             return self._record_failure(source, f"the fetched bytes are not a readable image: {exc}")
 

@@ -179,7 +179,9 @@ is no network between planes.
   cleanly. It takes the catalogue service alone rather than the container: it
   writes no discovery state and no directive, so it needs neither the services
   that own them nor the startup reconciliation that repairs them.
-- **Internal layering, inside that plane** (established 2026-07-27):
+- **Internal layering, inside that plane** (established 2026-07-27; `acquisition/`
+  added 2026-08-03 — the fetch paths, the guards and the URL policy, sitting beside
+  `discovery/` as the other package that reaches outside the machine):
 
   ```
   MCP tools  ·  HTTP handlers  ·  browser client   bindings: unpack, call one method, format
@@ -610,7 +612,7 @@ catalogue does not apply. What remains:
 | E-paper write fails | label stale | Log and continue; never let a panel failure stop the TV rotation |
 | Budget exhausted mid-run (the provider refuses — a 403; see `openrouter-api-findings.md`) | discovery halts partially | `halted_by_budget`, a modelled outcome. Already-acquired works stay acquired |
 | Preview sweep stops running | **curation only, and silently** | The characteristic failure of the plane's one periodic job: no error, no refusal, and no symptom until the SD card fills. It is upstream of the row below, and the only signal is positive — `preview.swept` at INFO on **every** pass, including the ones that reclaim nothing, so absence over an interval is the fault. A pass that hangs instead of stopping is the neighbouring case and reads differently: `preview.sweep_started` with no `preview.swept`, and at shutdown a `preview.sweep_wedged` warning, because that pass holds the store lock the next generation of services will want |
-| SD card full | **both planes** | The one genuinely shared failure. Needs a free-space guard before acquisition, not a disk-full exception during it |
+| SD card full | **both planes** | The one genuinely shared failure. **Built 2026-08-03**: `acquisition/space.py` refuses before a fetch begins, sized by `MIN_FREE_BYTES` (2 GiB) and protecting `catalogue.sqlite` on the same device rather than the fetch. It raises rather than recording, unlike every other acquisition failure, because a full disk is a fact about the machine that every work behind this one would hit |
 | SD card corruption | catastrophic | The catalogue is the irreplaceable asset and it lives here. Mitigation is off-device backup — see `operational-spec.md` |
 
 **Restart order does not exist**, and that is a property worth naming: neither

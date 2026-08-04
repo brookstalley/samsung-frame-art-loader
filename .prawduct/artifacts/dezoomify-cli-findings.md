@@ -152,6 +152,29 @@ surfaced and did not decide; it is raised against `security-model.md` rather tha
 settled here, because inventing it in the acquisition module is how an unwritten
 rule gets one implementation and no owner.
 
+## The output *extension* chooses the encoder, and an unknown one is fatal
+
+Given an output path ending `.partial`, the binary refuses:
+
+```
+[WARN ] Error when finalizing image: The file extension `."partial"` was not recognized as an image format
+[ERROR] Input/Output error: The file extension `."partial"` was not recognized as an image format
+```
+
+Exit `1`, and a zero-byte file left behind. Given `out.partial.jpg` the same fetch
+exits `0` and writes a real JPEG.
+
+**This is the property that was missing from the first version of this file, and
+its absence cost a working build.** Everything above was probed; this was not, and
+a later change staged fetches as `<name>.partial` — which passed every unit test,
+because the stand-ins are shell scripts that write to their last argument whatever
+it is called, and would have failed every tiled fetch in the deployment. So a
+staged path must keep the real suffix last: `<stem>.partial<suffix>`.
+
+`tests/live/test_dezoomify_contract_still_holds.py` is the durable form of this
+page. Where a behaviour is the *binary's* rather than the wrapper's, only the
+binary can witness it — a fake that writes wherever it is told cannot.
+
 ## Flags this product relies on, confirmed present in 2.18.1
 
 `--max-width` · `--max-height` · `--compression` · `--parallelism` ·
