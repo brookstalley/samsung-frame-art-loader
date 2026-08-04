@@ -9,6 +9,7 @@ join, not about either side.
 
 import pytest
 
+from curation.acquisition.service import AcquisitionOutcome
 from curation.acquisition.tiles import (
     RESOLUTION_REQUIRED,
     TileTargetUnavailable,
@@ -101,11 +102,12 @@ class TestTheContainerWiresResolutionFromTheConfiguredProvider:
     than re-deriving the expression it evaluates.
     """
 
-    def _container(self, store, discovery_store, wall, thumbnail_settings, settings, engine, image_search):
+    def _container(self, store, discovery_store, wall, thumbnail_settings, settings, engine, image_search, tmp_path):
+        from curation.acquisition.service import AcquisitionSettings
         from curation.services.container import Services
         from curation.services.previews import PreviewSettings
 
-        return Services.bind(
+        services = Services.bind(
             catalogue=store,
             discovery=discovery_store,
             wall=wall,
@@ -118,9 +120,28 @@ class TestTheContainerWiresResolutionFromTheConfiguredProvider:
             previews=(
                 None if image_search is None else PreviewSettings(art_root=settings.art_root, directory=settings.previews_path)
             ),
+            # A stub binary and an art root of its own, so nothing here can run
+            # the real dezoomify-rs. `pyproject.toml` marks tests that drive it
+            # `live_binary` and deselects them; these must stay in the default
+            # suite, because the wiring they assert is the whole point.
+            acquisition=AcquisitionSettings(
+                art_root=tmp_path,
+                originals_path=tmp_path / "raw",
+                tile_cache_path=tmp_path / "tile-cache",
+                user_agent="samsung-frame-art-loader (test)",
+                tile_binary="/nonexistent/dezoomify-rs",
+                tile_max_pixels=8192,
+                tile_timeout_seconds=30,
+                max_image_bytes=10_000_000,
+                min_free_bytes=1,
+            ),
             # Deliberately NOT passing tile_targets: the default derivation is
             # what is under test, and passing one would test the override.
         )
+        # Stated rather than looked up, so a rule about wiring is not a rule
+        # about this machine's DNS.
+        services.acquisition._resolve = lambda _host: ["93.184.216.34"]
+        return services
 
     def _artic_work(self, services):
         work = services.catalogue.add_artwork(title="Golden Bird")
@@ -136,25 +157,30 @@ class TestTheContainerWiresResolutionFromTheConfiguredProvider:
         return work
 
     def test_a_configured_provider_is_consulted_on_a_real_acquisition(
-        self, store, discovery_store, wall, thumbnail_settings, settings, engine
+        self, store, discovery_store, wall, thumbnail_settings, settings, engine, tmp_path
     ):
         from fakes import FakeImageSearch
 
-        museum = FakeImageSearch()
-        services = self._container(store, discovery_store, wall, thumbnail_settings, settings, engine, museum)
+        # `unreachable` so the provider raises the moment it is asked. That is the
+        # whole point: this test is about the container handing acquisition a
+        # resolver keyed correctly, and it must stop there. Letting the call
+        # proceed would build a real museum URL and hand it to the real
+        # dezoomify-rs — a default-suite test fetching from the Art Institute.
+        museum = FakeImageSearch(unreachable=True)
+        services = self._container(store, discovery_store, wall, thumbnail_settings, settings, engine, museum, tmp_path)
         work = self._artic_work(services)
 
-        # The fetch itself fails — there is no real binary or museum here — but
-        # what matters is that resolution was reached and asked the provider.
-        services.acquisition.acquire(work.id)
+        result = services.acquisition.acquire(work.id)
 
         assert museum.resolved == ["https://api.artic.edu/api/v1/artworks/91194"]
+        # Recorded rather than raised: the provider was reached and could not answer.
+        assert result.outcome is AcquisitionOutcome.FAILED
 
     def test_with_no_provider_configured_an_artic_fetch_refuses_rather_than_passing_it_on(
-        self, store, discovery_store, wall, thumbnail_settings, settings, engine
+        self, store, discovery_store, wall, thumbnail_settings, settings, engine, tmp_path
     ):
         """The keyless deployment, which is what every seeded install starts as."""
-        services = self._container(store, discovery_store, wall, thumbnail_settings, settings, engine, None)
+        services = self._container(store, discovery_store, wall, thumbnail_settings, settings, engine, None, tmp_path)
         work = self._artic_work(services)
 
         with pytest.raises(TileTargetUnavailable):
