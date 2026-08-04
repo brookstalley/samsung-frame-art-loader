@@ -632,9 +632,12 @@ architecture-proving slice is Chunk 07.
 ### Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 
 - **Description:** Three small deployment items done in one hardware sitting.
-  Set `SystemMaxUse=` explicitly (journald's default scales with the disk it is
-  supposed to protect) and carry it in the repo's deploy config, not only on the
-  box. Establish on the actual TV whether firmware auto-update can be disabled —
+  Set the journal bound explicitly and carry it in the repo's deploy config, not
+  only on the box. *(This read "journald's default scales with the disk it is
+  supposed to protect" — retracted 2026-08-04. The persistent default is capped at
+  4G, and this machine's journal is volatile anyway, so `SystemMaxUse=` alone binds
+  nothing on a stock Pi. The bound is worth setting because a ceiling should be
+  chosen and visible, not because the journal could run away.)* Establish on the actual TV whether firmware auto-update can be disabled —
   the vendor has removed art mode by firmware before — and record the finding in
   its three homes (`security-model.md` § Open, `operational-spec.md` § Risks,
   `project-state.yaml` risk factor). The issue #13 storage decision is captured —

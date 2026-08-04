@@ -1248,8 +1248,9 @@ technical_decisions:
         deliberate frame". The premise was aspirational and nothing implemented it.
 
         PANEL GEOMETRY IS A DEPLOYMENT VALUE, not a constant. The operator's panel
-        is 42" and explicitly instructed that nothing may depend on that, because
-        other people will run this on other sizes. This falls under the existing
+        is 50" (recorded here as 42" until 2026-08-04, when the set's own modelName
+        settled it) and they explicitly instructed that nothing may depend on that,
+        because other people will run this on other sizes. This falls under the existing
         ratified "no hardcoded deployment values in source" norm, and it makes panel
         dimensions the SECOND value both planes must agree on after ART_ROOT — a
         quieter mismatch than ART_ROOT's and therefore worse, because nothing fails:

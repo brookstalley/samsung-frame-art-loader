@@ -727,7 +727,8 @@ silent failure, with curation writing manifests nobody reads.
 **"Panel geometry" was one name for two different physical panels, and separating
 them is what dissolves the shared-value problem** (2026-07-20):
 
-- **The TV panel's physical geometry** (reference deployment: 42", 16:9) is
+- **The TV panel's physical geometry** (this deployment: 50", 16:9 — the worked
+  examples elsewhere stay at 42" deliberately, as arithmetic demonstrations) is
   **curation's alone**. The mat is specified in physical inches and the resolution
   floor is a minimum size on the wall, so curation needs it to judge a source, to
   show the curator what a work would look like, and to compose the mat into the

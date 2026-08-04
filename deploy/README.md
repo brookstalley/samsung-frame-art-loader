@@ -31,7 +31,7 @@ card**. The file's own header carries the detail.
 Verify it took — `systemd-analyze cat-config` proves only that the file parses:
 
     sudo journalctl -b -u systemd-journald | grep -i 'Journal.*max'
-    # expect: "Runtime Journal (...) is 9.2M, max 256M, ..." 
+    # expect: "Runtime Journal (...) is 9.2M, max 256M, ..."
 
 **Skipping the first line now fails loudly, and the two ways it can fail are
 worth telling apart.** If `.env` is *absent*, systemd refuses to start the unit at

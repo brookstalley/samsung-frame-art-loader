@@ -639,8 +639,6 @@ removed" beside a fixture built from a literal the code also builds. That commen
 is a claim about coverage, and a hand-written path is exactly what makes it stop
 being true without anyone noticing.
 
-
-
 ## A claim repeated in three artifacts is ONE piece of evidence copied twice — when a property is asserted in prose, verify it against the code before adding the third statement of it, because every later text inherits it from the earlier prose rather than from the behaviour
 
 Chunk 18B published "regenerate spends nothing" in a tool tip, a parameter
@@ -677,7 +675,6 @@ This is the third consecutive chunk whose review turned up "the second caller of
 the same idea" — 17B, 18A and 18B. The habit that closes it is not a checklist
 item at review time but a reading habit at write time: a docstring that names a
 past divergence is a warning addressed to whoever adds the next caller.
-
 
 ## At the moment of a fix, ask what the change now COVERS that it did not before — a wrapper added to translate a read will also catch the write beside it, and a claim added to one payload will be published by the branch that shares it
 
@@ -814,10 +811,10 @@ stands. It is that an inference and an observation went into the same paragraph 
 the same voice, after which nothing downstream could separate them. Foreign APIs
 make this worse: their source is right there, so an explanation feels checkable
 even when nobody checked it.
+
 **The tell** is a mechanism written in the same voice as the measurement: if the
 behaviour was observed and the cause was reasoned, they cannot honestly share a
 sentence.
-
 
 ## Do not trust a foreign client's return value in either direction — confirm against the system itself
 
@@ -838,4 +835,3 @@ unowned and unmaintained.
 **Why the read-back generalises.** It is one extra read against a system you are
 already connected to, and it is the only thing that survives a library that is
 wrong in both directions — which this one is.
-
