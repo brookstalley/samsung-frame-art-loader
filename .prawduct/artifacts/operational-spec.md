@@ -332,9 +332,13 @@ written is bounded by the size of the collection rather than by churn. A collect
 that eventually fills most of the card is on the order of a hundred gigabytes
 written across years, which is a small fraction of any modern card's rated
 endurance. What wears a card out is small writes that never stop, and this product
-has exactly two — the journal and the display heartbeat. Both are bounded
-explicitly, below and in `observability-strategy.md` § The Health Surface, rather
-than being left for the storage choice to absorb.
+has exactly two — the journal and the display heartbeat. Both carry an explicit
+bound rather than being left for the storage choice to absorb: the heartbeat's is
+60 s in `observability-strategy.md` § The Health Surface, and the journal's is the
+`SystemMaxUse=` requirement below. **Neither bound is in force on the Pi yet** —
+the journal drop-in is an unshipped deliverable and the heartbeat's writer is not
+built — so this reasoning describes the deployment being built toward, not the one
+running today.
 
 *The alternatives, and why they lost.* **USB SSD for `ART_ROOT`, or SSD boot** —
 issue #13's two original options. Both work, and the Pi 4's USB 3.0 ports make
