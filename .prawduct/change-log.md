@@ -123,7 +123,7 @@ by nothing, on a surface that had just started claiming "every answer reports
 cost_usd". Four acquisition findings were filed as issues #65–#68 rather than
 widening this diff into Chunk 18A.
 
-1571 curation + 52 root green, plus five live checks against the real API behind
+1573 curation + 52 root green, plus five live checks against the real API behind
 `-m live_api`. Twenty mutations over the new branches, all caught; the single
 survivor was a floor a zero-factor test could not reach, because `0.0 × L*` is
 already zero.

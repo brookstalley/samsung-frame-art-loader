@@ -862,6 +862,8 @@ starting with hoisting the art root into configuration as a single `ART_ROOT`
 (it was hardcoded to `/home/tvpi/art`, correctly outside the repo, but only
 implicitly).
 
+## At the moment of a fix, ask what the change now COVERS that it did not before — a wrapper added to translate a read will also catch the write beside it, and a claim added to one payload will be published by the branch that shares it
+
 ## A claim repeated in three artifacts is ONE piece of evidence copied twice — when a property is asserted in prose, verify it against the code before adding the third statement of it, because every later text inherits it from the earlier prose rather than from the behaviour
 
 ## When a module's docstring says it exists to stop two callers drifting, adding a caller is the moment to READ that docstring — the drift it warns about reappears in the new caller, and the escaping case will be the common path rather than the one being written

@@ -677,3 +677,28 @@ This is the third consecutive chunk whose review turned up "the second caller of
 the same idea" — 17B, 18A and 18B. The habit that closes it is not a checklist
 item at review time but a reading habit at write time: a docstring that names a
 past divergence is a warning addressed to whoever adds the next caller.
+
+
+## At the moment of a fix, ask what the change now covers that it did not before
+
+Chunk 18B's review ran to four rounds, and two of the middle ones found defects
+in the previous round's *fix* rather than in the original work. The chain:
+`regenerate` was documented as free while it paid for a first mat; the fix
+threaded the cost through and wrapped `compose` in the decode translation; the
+wrapper also caught `compose`'s **write**, so a full disk came back as "the image
+could not be read", pointing at the museum for a fault on the host; fixing that
+added caller-facing fields; the fields were asserted by nothing; asserting them
+left the one notice state the join exists for unpinned; pinning that left the
+separator unpinned, which a mutation then proved.
+
+Every link was a small, correct-looking edit, and none was careless in isolation.
+What they share is scope blindness at the moment of the fix: the thing named in
+the finding got changed, and nothing asked what *else* the change now reached.
+`reading()` was written to translate a decode and was applied to a function that
+also writes. `cost_usd` was added to a payload and the service that produces it
+was tested rather than the surface that publishes it.
+
+One question at fix time closes most of it — not at review time, where it is the
+reviewer's job anyway: **what does this change now cover that it did not before,
+and which of those did I mean?** A wrapper covers everything inside it. A claim
+in a tool tip covers every branch that returns that payload.
