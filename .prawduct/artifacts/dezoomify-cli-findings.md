@@ -41,8 +41,9 @@ still works — verified the same day against the same object.
 one.** `discovery/artic.py` sets `FoundImage.url` to the museum's object link and
 says so in a comment: it is the instance's *identity*, "the bytes are reached
 through `acquisition_method`". So a fetch path that hands `source.url` straight to
-this binary is reading that field as something it was never meant to be — see the
-backlog item on the acquisition seam.
+this binary is reading that field as something it was never meant to be. The
+defect is issue #77, which carries the root cause: the IIIF `image_id` needed to
+build a working URL is fetched, used once for `preview_url`, and never persisted.
 
 ## The headline: exit codes classify nothing
 
