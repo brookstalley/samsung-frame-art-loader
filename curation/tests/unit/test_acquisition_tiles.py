@@ -9,7 +9,7 @@ join, not about either side.
 
 import pytest
 
-from curation.acquisition.service import AcquisitionOutcome
+from curation.acquisition.service import AcquisitionOutcome, AcquisitionSettings
 from curation.acquisition.tiles import (
     RESOLUTION_REQUIRED,
     TileTargetUnavailable,
@@ -103,7 +103,6 @@ class TestTheContainerWiresResolutionFromTheConfiguredProvider:
     """
 
     def _container(self, store, discovery_store, wall, thumbnail_settings, settings, engine, image_search, tmp_path):
-        from curation.acquisition.service import AcquisitionSettings
         from curation.services.container import Services
         from curation.services.previews import PreviewSettings
 

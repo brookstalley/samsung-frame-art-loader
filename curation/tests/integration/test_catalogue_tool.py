@@ -432,8 +432,6 @@ async def test_an_unresolvable_provider_reaches_the_caller_with_its_remedy(serve
     work, primary = _a_work_with_sources(services)
     # Exactly what the container builds when no image provider is configured.
     monkeypatch.setattr(services.acquisition, "_tile_targets", {})
-    # Stated rather than looked up: a rule about wiring is not a rule about DNS.
-    monkeypatch.setattr(services.acquisition, "_resolve", lambda _host: ["93.184.216.34"])
 
     payload, errored = await call(
         server_url, "art_catalogue", action="retry_acquisition", artwork_id=work.id, source_id=primary.id
@@ -449,7 +447,6 @@ async def test_an_unresolvable_provider_records_nothing_against_the_source(serve
     """A wiring fault must leave no `failed` row on a source that is perfectly good."""
     work, primary = _a_work_with_sources(services)
     monkeypatch.setattr(services.acquisition, "_tile_targets", {})
-    monkeypatch.setattr(services.acquisition, "_resolve", lambda _host: ["93.184.216.34"])
 
     await call(server_url, "art_catalogue", action="retry_acquisition", artwork_id=work.id, source_id=primary.id)
 
