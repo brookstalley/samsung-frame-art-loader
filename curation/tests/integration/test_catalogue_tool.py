@@ -662,3 +662,38 @@ async def test_set_mat_color_reports_its_cost_too(server_url, services, settings
     payload, _ = await call(server_url, "art_catalogue", action="set_mat_color", artwork_id=work.id, hex_rgb="#27285b")
 
     assert payload["cost_usd"] == "0"
+
+
+async def test_a_first_regenerate_of_a_below_floor_work_carries_both_sentences(server_url, services, settings):
+    """**The state the join exists for, and the only one that needed it.** A work
+    that is both below the floor and having its mat chosen for the first time
+    produces two notices, and `_regenerate_notice` joins them. Asserted together
+    because either sentence alone passes the two tests beside this one — which is
+    how a join can be written, shipped, and never exercised."""
+    work = _a_work_with_an_original(services, settings, width=400, height=300)
+
+    payload, errored = await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    assert errored is False
+    assert payload["fit"] == "below_floor"
+    assert "not by the vision model" in payload["notice"]
+    assert "below the configured floor" in payload["notice"]
+    # In that order: what happened to the mat, then what it means for the wall.
+    assert payload["notice"].index("not by the vision model") < payload["notice"].index("below the configured floor")
+    # And separated, which asserting each sentence and their order does not
+    # cover: without the join's space the two run together mid-word, and every
+    # other assertion here passes on the result.
+    assert " This work renders at about" in payload["notice"]
+
+
+async def test_an_unchanged_regenerate_reports_a_cost_too(server_url, services, settings):
+    """The `unchanged` branch returns its own payload, so "every answer reports
+    cost_usd" is two claims rather than one — and only the `prepared` half was
+    asserted."""
+    work = _a_work_with_an_original(services, settings)
+    await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    payload, _ = await call(server_url, "art_catalogue", action="regenerate", artwork_id=work.id)
+
+    assert payload["outcome"] == "unchanged"
+    assert payload["cost_usd"] == "0"

@@ -113,7 +113,17 @@ explicitly subjective. A full run is done — 33 of 41 works compared, median
 CIEDE2000 9.8, the engine's median lightness 20.8 against the corpus's 20.7, one
 work over the darkness bar — and `tools/mat_corpus.py` regenerates the sheet.
 
-1552 curation + 52 root green, plus five live checks against the real API behind
+**The review rounds are part of the record.** The cumulative pass returned 22
+findings, one blocking, and two reviewers independently found the same top one:
+`regenerate` was published as free in three places while the first call on every
+acquired work minted a mat with a paid model call. The fix for *that* then
+produced two more — a translation that swallowed `compose`'s write half, so a
+full disk reported an unreadable original; and new caller-facing fields asserted
+by nothing, on a surface that had just started claiming "every answer reports
+cost_usd". Four acquisition findings were filed as issues #65–#68 rather than
+widening this diff into Chunk 18A.
+
+1571 curation + 52 root green, plus five live checks against the real API behind
 `-m live_api`. Twenty mutations over the new branches, all caught; the single
 survivor was a floor a zero-factor test could not reach, because `0.0 × L*` is
 already zero.
