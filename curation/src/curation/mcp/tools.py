@@ -447,7 +447,8 @@ ART_REVIEW: Final = ToolRecord(
             tips=(
                 _BLOCK_ORDER_TIP,
                 "Works with an image found for them come first, then ones nothing was found for. A work "
-                "reported unresolved is not a defect: it is the signal that a proposed work may not exist.",
+                "reported unresolved is not a defect; read `unresolved_reason` for which kind of nothing. "
+                "Only `not_held` suggests the work may not exist.",
                 f"The page is capped at {MAX_REVIEW_LIMIT} works because each one carries a picture, and pictures "
                 "dominate the result's size. A truncated page says so and how many remain; page with offset.",
                 "Every image is shown at 400px on its long edge, which is enough to judge whether this is the "

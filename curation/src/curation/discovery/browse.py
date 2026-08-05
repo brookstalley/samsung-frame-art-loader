@@ -109,6 +109,12 @@ class CollectionBrowse(Protocol):
         with no works rather than being dropped, so a caller can tell "asked and
         the collection holds none" from "never asked".
 
+        **A `per_query` of zero or less means "do not ask"**, and the groups come
+        back empty without the collection being consulted. Stated because the
+        empty group is otherwise the same shape as "asked and it holds none", and
+        an implementation left to choose would make a caller unable to tell a
+        switched-off supplement from an exhausted one.
+
         Ordered by nothing the caller should read. The Art Institute's relevance
         score survives a filter-only query — one Ellsworth Kelly painting comes
         back at 13,535 against its siblings' 6 to 8 — so an implementation that

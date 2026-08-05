@@ -175,29 +175,42 @@ _CONNECT_TIMEOUT_SECONDS: Final[float] = 5.0
 _READ_TIMEOUT_SECONDS: Final[float] = 20.0
 
 
+def _museum_client(user_agent: str, client: httpx.Client | None) -> tuple[httpx.Client, dict[str, str]]:
+    """One transport policy for every question this module asks the museum.
+
+    Shared rather than repeated because the policy is a *measurement*, not a
+    preference: `_CONNECT_TIMEOUT_SECONDS` is short because a partial-IPv6
+    network multiplies the connect phase across two dozen addresses, and that
+    reasoning has to apply to whichever client is issuing the request. Two copies
+    means whoever acts on it next — a retry, an async transport, a redirect
+    policy — fixes one and leaves the other.
+    """
+    if not user_agent:
+        raise ValueError(
+            "The Art Institute's API asks callers to identify themselves. Set ARTIC_USER_AGENT to a "
+            "string naming this deployment and a contact address."
+        )
+    http = client or httpx.Client(
+        timeout=httpx.Timeout(
+            connect=_CONNECT_TIMEOUT_SECONDS,
+            read=_READ_TIMEOUT_SECONDS,
+            write=_READ_TIMEOUT_SECONDS,
+            pool=_READ_TIMEOUT_SECONDS,
+        )
+    )
+    return http, {"AIC-User-Agent": user_agent}
+
+
 class ArticImageSearch:
     """Search the Art Institute's collection and fetch previews from it."""
 
     def __init__(self, *, user_agent: str, client: httpx.Client | None = None) -> None:
-        if not user_agent:
-            raise ValueError(
-                "The Art Institute's API asks callers to identify themselves. Set ARTIC_USER_AGENT to a "
-                "string naming this deployment and a contact address."
-            )
         # Injectable so the suite can drive a recorded transport instead of the
         # network. The default is a real session; nothing else in the package
         # constructs one. No `base_url`: every request builds its full URL, and a
         # base half the code ignored would be a second answer to where the API
         # lives.
-        self._http = client or httpx.Client(
-            timeout=httpx.Timeout(
-                connect=_CONNECT_TIMEOUT_SECONDS,
-                read=_READ_TIMEOUT_SECONDS,
-                write=_READ_TIMEOUT_SECONDS,
-                pool=_READ_TIMEOUT_SECONDS,
-            )
-        )
-        self._headers = {"AIC-User-Agent": user_agent}
+        self._http, self._headers = _museum_client(user_agent, client)
 
     @property
     def provider(self) -> str:
@@ -338,7 +351,15 @@ def _request(
 class ArticCollectionBrowse:
     """Ask the Art Institute what it holds by an artist, rather than for a work.
 
-    **One POST for the whole run.** A named `filters` aggregation gives each
+    **One POST covering every facet, plus at most two more on the miss path.**
+    The retry needs its own ambiguity aggregation, and that one may not carry this
+    browse's filters (see `_names_one_artist`), so it cannot ride along; a run
+    where every artist is held costs exactly one request, and the worst case is
+    three. All three are per *run* — none of them scales with the work list, which
+    is the property that matters, and the one an earlier "one POST" reading of
+    this docstring overstated.
+
+    A named `filters` aggregation gives each
     facet its own bucket, so the collection does the matching and labels the
     result with the caller's own spelling — the alternative, partitioning one
     merged list by re-deriving which query matched which record, would be a
@@ -349,20 +370,7 @@ class ArticCollectionBrowse:
     """
 
     def __init__(self, *, user_agent: str, client: httpx.Client | None = None) -> None:
-        if not user_agent:
-            raise ValueError(
-                "The Art Institute's API asks callers to identify themselves. Set ARTIC_USER_AGENT to a "
-                "string naming this deployment and a contact address."
-            )
-        self._http = client or httpx.Client(
-            timeout=httpx.Timeout(
-                connect=_CONNECT_TIMEOUT_SECONDS,
-                read=_READ_TIMEOUT_SECONDS,
-                write=_READ_TIMEOUT_SECONDS,
-                pool=_READ_TIMEOUT_SECONDS,
-            )
-        )
-        self._headers = {"AIC-User-Agent": user_agent}
+        self._http, self._headers = _museum_client(user_agent, client)
 
     @property
     def provider(self) -> str:
@@ -446,7 +454,18 @@ class ArticCollectionBrowse:
         for artist in surnames:
             names = _bucket_keys(buckets.get(artist), _WHO_AGG)
             verdicts[artist] = len(names) == 1
-            if len(names) != 1:
+            if verdicts[artist]:
+                log.info(
+                    "retrying an artist on its surname: the collection files that surname under one artist",
+                    extra={
+                        "event": "browse.surname_retried",
+                        "provider": PROVIDER,
+                        "artist": artist,
+                        "surname": surnames[artist],
+                        "names_found": sorted(names),
+                    },
+                )
+            else:
                 log.info(
                     "not retrying an artist on its surname: the collection files that surname under several artists",
                     extra={
@@ -500,7 +519,7 @@ class ArticCollectionBrowse:
         holdings = {}
         for name in facets:
             bucket = buckets.get(name) or {}
-            hits = bucket.get(_TOP_AGG, {}).get("hits", {}).get("hits", [])
+            hits = _hits(bucket)
             works = tuple(
                 image
                 for hit in hits
@@ -568,6 +587,21 @@ def _buckets(payload: Mapping[str, Any], name: str) -> Mapping[str, Any]:
     return buckets if isinstance(buckets, dict) else {}
 
 
+def _hits(bucket: Mapping[str, Any]) -> list[Any]:
+    """The `top_hits` rows inside one facet bucket, or none.
+
+    Every step is checked rather than chained, for the reason the rest of this
+    module is: a `null` where an object was expected raises `AttributeError` on a
+    chained `.get`, and this one would escape a caller that catches only a browse
+    failure — ending an otherwise successful run as an unexplained fault, which is
+    the opposite of a supplement that must not take a run down with it.
+    """
+    top = bucket.get(_TOP_AGG)
+    inner = top.get("hits") if isinstance(top, dict) else None
+    rows = inner.get("hits") if isinstance(inner, dict) else None
+    return rows if isinstance(rows, list) else []
+
+
 def _bucket_keys(bucket: object, name: str) -> set[str]:
     """The distinct keys a `terms` sub-aggregation reported."""
     if not isinstance(bucket, dict):
@@ -620,7 +654,7 @@ def _instance(entry: object, *, iiif: str, scored: bool = True) -> FoundImage | 
         # instance's identity and what a curator follows to check provenance.
         # The bytes are reached through `acquisition_method`, which is what that
         # field is for.
-        url=_text(entry.get("api_link")) or f"{_SEARCH_URL.rsplit('/', 1)[0]}/{entry.get('id')}",
+        url=_text(entry.get("api_link")) or f"{_OBJECT_URL}/{entry.get('id')}",
         provider=PROVIDER,
         source_class=SourceClass.INSTITUTIONAL,
         # Tiles, because every simple size request is capped at 843px wide. The

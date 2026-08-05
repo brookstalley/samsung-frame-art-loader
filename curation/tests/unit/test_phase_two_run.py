@@ -347,6 +347,10 @@ def test_the_completed_notice_does_not_call_an_unreachable_work_unresolved(servi
     exist" — which is false about exactly the works it was describing, and false
     in the direction that tells a curator their painting does not exist because a
     museum was briefly down.
+
+    The rate is stated over *proposed* works, because a run may also carry works
+    the collection offered, and those arrive with their images already attached:
+    counting them would report a retrieval rate nothing achieved.
     """
     from curation.mcp.bindings import _run_notice
 
@@ -357,7 +361,7 @@ def test_the_completed_notice_does_not_call_an_unreachable_work_unresolved(servi
 
     notice = _run_notice(runner.run_status(run_id, wait=False))
 
-    assert "1 of 3 works have an image" in notice
+    assert "1 of 3 proposed works have an image" in notice
     assert "1 could not be matched to any image" in notice
     assert "1 could not be looked up at all" in notice
     assert "the image provider was unreachable" in notice
@@ -373,7 +377,7 @@ def test_the_completed_notice_stays_a_single_sentence_when_everything_resolved(s
 
     notice = _run_notice(runner.run_status(run_id, wait=False))
 
-    assert notice == "This run finished: 1 of 1 works have an image."
+    assert notice == "This run finished: 1 of 1 proposed works have an image."
 
 
 def test_a_run_that_could_not_reach_the_provider_for_anything_fails(services, engine, runner, museum):

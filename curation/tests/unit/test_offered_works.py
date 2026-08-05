@@ -490,3 +490,55 @@ def test_a_re_search_offers_nothing_and_does_not_fail_trying(services, engine, r
     assert services.discovery.get_run(resolve.id).status is RunStatus.COMPLETED, "the re-search failed instead of finishing"
     assert offered(services, resolve.id) == []
     assert collection.asked == [], "a re-search should not browse the collection at all"
+
+
+def test_the_run_notice_rates_resolution_over_proposed_works_only(services, engine, runner, collection):
+    """The sentence a curator reads must not claim a rate the run did not achieve.
+
+    Offered works arrive carrying their images, so folding them into the
+    numerator turns "one of one proposed work found nothing" into "twelve of
+    thirteen have an image" — the resolution figure this product made
+    load-bearing, reported as its own opposite.
+    """
+    from curation.mcp.bindings import _run_notice
+
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Kelly 1", "Kelly 2", "Kelly 3"]}).holdings
+
+    run_id = start(runner).id
+    notice = _run_notice(runner.run_status(run_id, wait=False))
+
+    assert "0 of 1 proposed works have an image" in notice
+    assert "offered 3 more works" in notice
+    assert "12 of 13" not in notice and "3 of 4" not in notice
+
+
+def test_the_run_payload_reports_the_two_kinds_apart(services, engine, runner, collection):
+    """The counts have to reach the wire, not just exist on the view."""
+    from curation.mcp.bindings import _run_view
+
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Kelly 1", "Kelly 2"]}).holdings
+
+    run_id = start(runner).id
+    payload = _run_view(runner.run_status(run_id, wait=False))
+
+    assert payload["works"]["proposed"] == 1
+    assert payload["works"]["offered"] == 2
+    assert payload["works"]["total"] == 3
+
+
+def test_the_search_allowance_is_sized_on_the_works_phase_two_searched(services, engine, runner, collection, settings):
+    """An offered work reached the run through the collection, not through a search.
+
+    Counting it in the allowance reports a bound larger than anything the run
+    could have spent, on the figure that exists to make the estimate meaningful.
+    """
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Kelly 1", "Kelly 2", "Kelly 3"]}).holdings
+
+    run_id = start(runner).id
+    view = runner.run_status(run_id, wait=False)
+
+    expected = settings.discovery_settings.phase1_search_allowance + 1 * settings.discovery_settings.phase2_searches_per_work
+    assert view.search_allowance == expected

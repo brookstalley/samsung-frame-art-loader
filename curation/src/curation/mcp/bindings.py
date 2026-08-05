@@ -985,7 +985,9 @@ def _no_instances_notice(instances: list[dict[str, Any]]) -> str | None:
         return None
     return (
         "No image instances have been found for this work. It is reported unresolved rather than "
-        "dropped, because that is the signal a proposed work may not exist; art_discovery("
+        "dropped; `unresolved_reason` says which kind of nothing, and only `not_held` suggests the "
+        "work may not exist — the others mean the collection has it and cannot offer it usably, or "
+        "that you have already turned down everything it offered. art_discovery("
         "action='resolve_images') looks again."
     )
 
@@ -1239,6 +1241,14 @@ def _run_view(view: RunView) -> dict[str, Any]:
         **_run_fields(view.run),
         works={
             "total": view.work_count,
+            # The curator approved a work list of a stated size, and a supplement
+            # adds to it. Reported apart because a single total describes a run
+            # as having found more of what was asked for than it did — with
+            # twelve offered works behind one unresolved proposal, a merged
+            # "12 of 13 have an image" is a resolution rate the run never
+            # achieved (`product-brief.md` flow 2).
+            "proposed": view.proposed_count,
+            "offered": view.offered_count,
             "resolved": view.resolved,
             "unresolved": view.unresolved,
             "pending": view.pending,
@@ -1325,11 +1335,21 @@ def _run_notice(view: RunView) -> str:
             "Call status again to keep watching."
         )
     if status is RunStatus.COMPLETED:
-        settled = f"This run finished: {view.resolved} of {view.work_count} works have an image."
+        # Rated against what the model proposed, never against the total: the
+        # works the collection offered arrived carrying their images, so counting
+        # them in the numerator reports a retrieval rate nothing achieved.
+        resolved_proposals = view.resolved - view.offered_count
+        settled = f"This run finished: {resolved_proposals} of {view.proposed_count} proposed works have an image."
+        if view.offered_count:
+            settled += (
+                f" Separately, the collection offered {view.offered_count} more works by artists this run named "
+                "but could not confirm. They are labelled `offered` and are not what was asked for."
+            )
         if view.unresolved:
             settled += (
                 f" {view.unresolved} could not be matched to any image and are reported as unresolved "
-                "rather than dropped, because that is the signal a proposed work may not exist."
+                "rather than dropped. Read `unresolved_reason` for which kind of nothing: only `not_held` "
+                "suggests the work may not exist."
             )
         if view.pending:
             # Held apart from unresolved on purpose. "We looked and it is not

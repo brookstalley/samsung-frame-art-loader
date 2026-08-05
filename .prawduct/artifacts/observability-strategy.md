@@ -170,6 +170,22 @@ between planes.
 > | `preview.cached` / `preview.absent` | whether a review card will have local bytes to show |
 > | `run.completed` | the run's works split into resolved, unresolved and unreachable |
 >
+> **The supplement's events, which are a separate subsystem.** A run may offer
+> works from a wired collection when phase 2 cannot confirm what phase 1 named,
+> and that path fails differently from a search: it is a *supplement*, so its
+> failures are swallowed rather than surfaced to the run — which means the
+> journal is the only place they appear at all.
+>
+> | Event | Says |
+> |---|---|
+> | `browse.searched` | how many artists the collection was asked about in one request, how many it holds anything for, and how many works came back |
+> | `browse.offered` | how many works the run actually offered, against how many the collection holds for those artists — the ratio a bound is judged by |
+> | `browse.unreachable` | the collection could not be browsed. **A supplement failing must not fail the run**, so this is the only signal that one was attempted and lost |
+> | `browse.surname_retried` | an artist was recovered under a different spelling, naming the surname and the artist the collection filed it under. **The one line to read when a wrong-hand offer reaches a curator**: this is the only path that returns work under a name nobody asked for, and it is licensed by a measurement the museum could change under us |
+> | `browse.surname_ambiguous` | a retry was refused because the surname reaches several artists — the guard working, and the counterpart to the line above |
+> | `browse.below_floor` | a work was not offered because it would render too small. **Systemic rather than per-work**: one wrong artwork-box setting makes every browse result fall below the floor, and without this line the supplement offers nothing for ever while reporting only `works_offered: 0` |
+> | `work.suppressed` / `work.already_present` | an offer was declined because the curator rejected that work earlier, or because the run already carries it |
+>
 > **Acquisition's events, which start here.** `acquisition.tile_target_resolved`
 > is the product's first, and it exists because the fetch that follows it is
 > against an address no record holds — without the line, a failed tile fetch

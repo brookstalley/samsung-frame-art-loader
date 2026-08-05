@@ -50,7 +50,7 @@
 
 ## 2026-08-04: Chunk 22 — the collection's own answer when the gate refuses
 
-<!-- prawduct: chunks=22 -->
+<!-- prawduct: chunks=22 | scope=v1-build -->
 
 **Why:** two real runs proposed eight works, resolved none, and told the curator
 nothing about a collection that holds a great deal for their intent. A run may now
@@ -65,7 +65,7 @@ name. There is nothing to judge, and a browse is never told which work failed �
 so "no offered image is ever attached to a model-named work" holds structurally
 rather than by rule.
 
-**One POST per run, and the shape is what makes fairness possible.** A named
+**One POST covering every facet, and the shape is what makes fairness possible.** A named
 `filters` aggregation gives each artist its own bucket with its own `top_hits`, so
 the collection does the matching and labels it with the caller's own spelling.
 That matters because the supply is wildly uneven — one real run's artists held 51,
@@ -101,7 +101,7 @@ widening, and `_iiif_base` had three callers and a docstring about one.
 
 ## 2026-08-04: Chunk 22 Step 0 — the artist facet, measured before it is built
 
-<!-- prawduct: chunks=22 -->
+<!-- prawduct: chunks=22 | scope=v1-build -->
 
 **Why:** Chunk 22's whole mechanism rests on the model's artist field naming
 artists the collection actually holds, and the evidence for that was n=2 with one

@@ -2262,9 +2262,13 @@ binds already exists and is contract-tested.
   nothing at all — 3,158 works either way — so the widening buys only artists the
   collection holds *exclusively* as textile, and offering a flat-photographed
   fabric sample as wall art would make "offered work" mean two different things.
-  **The ambiguity-bounded surname retry** the brief requires is a second POST on
-  the miss path only, which keeps the per-run bound at two requests rather than
-  per-work. **The display floor is applied from `thumbnail.width`/`height` on the
+  **The ambiguity-bounded surname retry** the brief requires costs two further
+  POSTs on the miss path — the ambiguity check cannot ride along with either
+  browse, because it must NOT carry the wall-type filter (a filter that hides one
+  of two colliding artists manufactures the confidence the check exists to
+  withhold). So a run where every artist is held costs one request and the worst
+  case is three. All three are per *run*: none scales with the work list, which is
+  the property that matters. **The display floor is applied from `thumbnail.width`/`height` on the
   browse response** — the same property the per-work search has, so no per-result
   round trip — and it is the pipeline's own `assess_display_fit`, not a width
   threshold restated in a query, because two thresholds that can disagree will. **Filters, not

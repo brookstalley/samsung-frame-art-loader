@@ -338,10 +338,19 @@ under the first one's name:
 ```
 
 **A `terms` aggregation on `artist_title.keyword` prices that ambiguity before
-committing to it**, in the same request: it reports how many distinct artists a
-surname reaches, so "one" and "several" are told apart by measurement rather than
-by guessing. `Kandinsky` and `Monet` return exactly one; the three above return
-two, six and four.
+committing to it**: it reports how many distinct artists a surname reaches, so
+"one" and "several" are told apart by measurement rather than by guessing.
+`Kandinsky` and `Monet` return exactly one; the three above return two, six and
+four.
+
+**It must be its own request, and this is the trap.** The check cannot ride along
+with the browse, because inside the browse's filters it manufactures the
+confidence it exists to withhold. Measured: the collection holds one Antonio
+Martorell, a `Graphic Design` the wall-type filter removes — so a filtered check
+sees only `bernat martorell`, reports one artist, and licenses offering Bernat's
+painting to a run that named Antonio. Unfiltered, the same surname reports both.
+A `global` aggregation to escape the query context was tried and the API did not
+answer it with JSON, so the check is a separate POST.
 
 **The artwork-type filter is load-bearing, not cosmetic.** `artwork_type_title`
 is a closed vocabulary (`Print` 45,961, `Photograph` 23,373, `Drawing and

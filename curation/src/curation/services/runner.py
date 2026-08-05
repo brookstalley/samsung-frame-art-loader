@@ -425,12 +425,17 @@ class DiscoveryRunner:
         proposed nothing and that approving it spends no more — one false, the
         other describing a decision they will never be offered.
         """
-        works = len(self._discovery.run_results(run.id).works)
+        held = self._discovery.run_results(run.id).works
         free = "Phase 2 asks museum APIs, which are free, and identifies works locally"
         if run.kind is RunKind.RESOLVE:
-            return f"Re-searching the {works} works this run covers. {free}, so this re-search costs nothing."
+            return f"Re-searching the {len(held)} works this run covers. {free}, so this re-search costs nothing."
+        # Proposed only: this sentence says what phase 2 will resolve, and a work
+        # the collection offered was never phase 1's to propose nor phase 2's to
+        # resolve. Counting it here described twelve works as proposed that the
+        # model never named.
+        proposed = sum(1 for work in held if work.provenance is WorkProvenance.PROPOSED)
         return (
-            f"Resolving the {works} works this run proposed. {free} — so approving this run spends nothing "
+            f"Resolving the {proposed} works this run proposed. {free} — so approving this run spends nothing "
             "further. The gate is on the work count, not the price."
         )
 
@@ -951,6 +956,22 @@ class DiscoveryRunner:
     def _offer_one(self, run_id: str, found: FoundImage, group: OfferedGroup, previews: PreviewCache) -> bool:
         """Record one offered work and the instance that is it. `False` if it was declined."""
         if not self._discovery.clears_display_floor(width=found.estimated_width, height=found.estimated_height):
+            # Journalled like the other two declines, and for a stronger reason
+            # than symmetry: this is the systemic one. A single wrong artwork-box
+            # setting makes every browse result fall below the floor, and the
+            # supplement then offers nothing for ever while reporting only
+            # `works_offered: 0` — a silence indistinguishable from a collection
+            # that holds nothing.
+            log.info(
+                "not offering a work that would render below the display floor",
+                extra={
+                    "event": "browse.below_floor",
+                    "work_title": found.title,
+                    "artist": group.query.artist,
+                    "estimated_width": found.estimated_width,
+                    "estimated_height": found.estimated_height,
+                },
+            )
             return False
         work = self._discovery.offer_work(
             run_id=run_id,
@@ -1119,7 +1140,14 @@ class DiscoveryRunner:
             run=results.run,
             works=results.works,
             searches_used=self._discovery.searches_in_run(run_id),
-            search_allowance=self._allowance_for(results.run, len(results.works)),
+            # Sized on the works phase 2 actually searched, which is the works
+            # the model proposed. An offered work reached the run *through* the
+            # collection rather than through a search, so counting it here would
+            # report an allowance larger than anything this run could have spent.
+            search_allowance=self._allowance_for(
+                results.run,
+                sum(1 for work in results.works if work.provenance is WorkProvenance.PROPOSED),
+            ),
             image_resolution_available=self._images is not None,
         )
 

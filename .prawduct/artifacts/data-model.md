@@ -547,10 +547,21 @@ artworks.
 | `work_dedup_key` | string | required, indexed | Normalised work identity for cross-run suppression. **Q3.** |
 | `provenance` | enum | required, defaults `proposed` | `proposed` \| `offered`. Who put this work in front of the curator: the model named it, or a wired collection volunteered it. Nullable *on disk* only so the column can be added to files written before collections were browsable — a null reads as `proposed`, that being the only thing which could have written a row then. |
 | `resolution_status` | enum | required | `pending` \| `resolved` \| `unresolved`. Reflects the **latest** resolution attempt, whether that was the original phase 2 or a later re-search. `unresolved` ⇒ that attempt found no credible instance the curator has not already rejected. **Q12.** |
-| `unresolved_reason` | enum | nullable | Which kind of nothing: `not_held` \| `identity_refused` \| `size_unknown` \| `below_floor` \| `all_rejected`. Set whenever `resolution_status = unresolved`, null otherwise. **Q12.** |
+| `unresolved_reason` | enum | nullable | Which kind of nothing: `not_held` \| `identity_refused` \| `size_unknown` \| `below_floor` \| `all_rejected`. Set whenever `resolution_status = unresolved`, null otherwise — **with one honest exception: a row whose attempt predates the column reads null beside `unresolved`.** The column was added nullable and existing files are widened without backfill, so the two runs that motivated it are themselves in that state. A null beside `unresolved` therefore means "this attempt happened before the reason was recorded", never "no reason applies". **Q12.** |
 | `verdict` | enum | required | `pending` \| `accepted` \| `rejected` \| `awaiting_better_image`. See State Machines. |
 | `rejected_reason` | text | nullable | Optional curator note. |
 | `decided_at` | datetime | nullable | |
+
+> **`confidence` has a fourth derivation, and it is not a comparison result.**
+> The three tiers below this table grade *how much of an identity was
+> confirmable* when a provider's record was checked against a work someone else
+> named. An `offered` instance was never checked against anything: the collection
+> produced the work and the picture of it from one row of its own catalogue, so
+> there is no near-match question to answer. It is recorded at the same value as a
+> confirmed title-and-artist match and means something different — **anything
+> ranking, thresholding or auto-accepting on `confidence` is reading two kinds of
+> number**, and must consult `provenance` to tell them apart. Not raised to 1.0
+> for the same reason the confirmed tier is not: nothing has inspected the image.
 
 > **An `offered` work is a candidate in every respect but its origin.** It takes a
 > verdict, it can be accepted into the catalogue, and its instance is recorded and
