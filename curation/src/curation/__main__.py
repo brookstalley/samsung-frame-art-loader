@@ -149,11 +149,15 @@ def main() -> None:
     # because the test that reads as the guard here deliberately cannot see a
     # deployment's own `.env` — see `test_the_search_price_matches_the_engine_that_is_pinned`.
     log.info(
-        "discovery gate=%d works phase1_searches=%d phase2_searches_per_work=%d search_engine=%s "
-        "search_price=$%s phase1_estimate=$%s",
+        "discovery gate=%d works phase1_searches=%d phase2_searches_per_work=%d offered_works_per_run=%s "
+        "search_engine=%s search_price=$%s phase1_estimate=$%s",
         discovery.approval_threshold,
         discovery.phase1_search_allowance,
         discovery.phase2_searches_per_work,
+        # Named rather than left at 0, because this is the setting whose "off" is
+        # otherwise invisible: a run that offers nothing because the supplement is
+        # disabled looks exactly like one whose collection held nothing.
+        "disabled" if discovery.offered_works_per_run <= 0 else discovery.offered_works_per_run,
         settings.discovery_search_engine,
         discovery.search_cost_usd,
         discovery.phase1_estimate_usd,

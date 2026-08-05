@@ -71,9 +71,19 @@ dev = [
     "black>=24",
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+[tool.uv]
+# **This plane is an application, not a distributable, and saying so is what makes
+# `uv run` work here at all.** Without it uv builds the project before running
+# anything, and the build fails twice over: hatchling refuses the git-sourced
+# `samsungtvws` above as a direct reference, and there is no package directory for
+# it to put in a wheel. Both failures land before ruff or black sees a file — so
+# the lint and format commands documented for this plane did not run against an
+# empty tree, they did not run at all.
+#
+# Nothing here is ever installed by another project: the display plane is started
+# by a systemd unit against this directory. Neither sibling needs this line —
+# both really are packages.
+package = false
 
 [tool.black]
 # The floor rather than the target: formatting that only parses on 3.13 would

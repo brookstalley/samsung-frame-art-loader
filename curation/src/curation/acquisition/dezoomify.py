@@ -148,10 +148,20 @@ def tile_fetch(
     ]
     if referer is not None:
         argv += ["--header", f"Referer: {referer}"]
-    # The URL is the last option-free argument and is passed as one element. That
-    # is what makes a URL carrying `;`, `$(...)` or a quote inert: it reaches the
-    # binary as data, never as anything a shell reads.
-    argv += [url, str(staged)]
+    # Two separate guards, because these are two separate bug classes and only one
+    # of them is about a shell. Passing each value as its own element is what makes
+    # a URL carrying `;`, `$(...)` or a quote inert — it reaches the binary as data,
+    # never as anything a shell reads. `--` ends the options, which is what stops the
+    # *binary's own parser* reading a URL beginning with `-` as a flag and silently
+    # overriding one of the settings above.
+    #
+    # Nothing reaching here can begin with `-` today: `check_fetchable` refuses any
+    # scheme but http/https before this is called, and a `-` string parses to no
+    # scheme at all. The fence is here anyway because that is a guarantee held in
+    # another module, one caller away — and this URL is remote-derived, composed from
+    # the museum's own `config.iiif_url`. Do not drop it as redundant: it is what
+    # holds if `ALLOWED_SCHEMES` widens or a second caller arrives unguarded.
+    argv += ["--", url, str(staged)]
 
     try:
         completed = subprocess.run(  # noqa: S603 - argv list, no shell, resolved binary

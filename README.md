@@ -8,7 +8,7 @@ exactly one file between them:
 - **curation** (`curation/`, Python 3.14) — the catalogue, discovery, image
   preparation, an HTTP API and an MCP server. It writes the theme manifest.
   **Built**, and the only plane with code in it today.
-- **display** (`display/`, Python 3.12 on the Pi) — polls that manifest, drives
+- **display** (`display/`, Python 3.13 on the Pi; 3.12 declared floor) — polls that manifest, drives
   the TV and the e-paper panel, and keeps showing art whether or not curation is
   running. **Not built yet:** `display/` holds a project manifest and no module,
   so the package exists as a place for the first one to land and nothing more.

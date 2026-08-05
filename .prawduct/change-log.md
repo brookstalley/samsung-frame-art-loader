@@ -48,6 +48,69 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-05: A fix-or-file pass, and the fence that shipped in the plane being deleted
+
+<!-- prawduct: chunks=19B | scope=v1-build -->
+
+**Why:** the strong-bias-towards-fixing preference was ratified with a retroactive
+clause and nothing had exercised it. Seventeen open `effort:S stage:ready` items
+were read and re-verified against the tree; twelve met neither filing test, three
+carried a genuine undecided policy question, and two were prawduct's bugs sitting
+here only because no bug inbox is configured.
+
+**The pass found more by re-verifying than by fixing.** Two items (#37, #43) had
+been fixed three days earlier by `53ec2d9` and never closed, so a triage that read
+the bodies and stopped would have rebuilt shipped work. One (#39) was half-done,
+and its code half had been solved *better* than the issue proposed — a `finally`
+rather than the `except BaseException:` asked for. One (#32) named functions that
+no longer exist while its defect stayed exactly where it was. **An issue body is
+evidence about the day it was written, and this repo's own habit of writing
+thorough ones is what made re-verification cheap rather than what made it
+unnecessary.**
+
+**The argument-injection fix and what the Critic then found wrong with it.** A URL
+beginning with `-` reaches `dezoomify-rs` as a flag, and the argv list guarding
+this call defeats shell metacharacters only — a different bug class with a
+different guard. The ARTIC path composes its URL out of the museum's own
+`config.iiif_url`, so the vector is real. Two guards landed in `image_utils.py`: a
+scheme refusal, which closes the reachable case, and `--`, which does not depend on
+the scheme check staying strict.
+
+Both were proved by mutation, and `--` was checked against dezoomify-rs 2.18.1
+rather than assumed from clap's documented behaviour. **The Critic's finding was
+that all of it shipped in the plane Chunk 20 deletes** while
+`curation/acquisition/dezoomify.py` — the one that survives — had no fence and a
+comment calling its URL "the last option-free argument", which it is not: nothing
+makes it option-free, and `staged` follows it. The curation plane was never
+vulnerable (`check_fetchable` refuses a scheme-less string a caller earlier), and
+that is precisely why the comment was worth fixing: **it credited the wrong
+mechanism, so a reader learning the pattern here would have carried the wrong
+lesson to the next call site.** Both planes now carry the fence and a comment
+naming which guarantee is holding and where it lives.
+
+**A blocking finding on commands nobody ran.** The new display-plane column in
+`CLAUDE.md` taught `cd display && uv run ruff check .` and asserted it "runs
+against an empty tree". It did not run at all: the manifest declared a hatchling
+build backend, so `uv run` built the project first and hatchling refused the
+git-pinned `samsungtvws` as a direct reference. `[tool.uv] package = false` makes
+the plane what it actually is — an application a systemd unit starts, never a
+wheel anything installs — and all three documented commands were then run rather
+than predicted. **The prose had described the behaviour by reading the config**,
+which is the same move the mutation-sweep section two headings below exists to
+warn against.
+
+`display/uv.lock` arrives with it, earlier than planned: Chunk 12 owed it, and
+making the documented commands runnable produces one. Three unbounded dependencies
+and a git-pinned fork are now actually pinned, which is what the lock was for.
+
+**Also:** the rendition-currency norm row said "both `pyproject.toml`s" with three
+in the tree, and `README.md` and the norm index both said the display plane runs
+3.12 on the Pi against a ratified 3.13 — in the two documents a newcomer
+provisioning the Pi and a Norm Health sweep read first. One JPEG-fixture helper had
+three byte-identical definitions and is now one. A supplement switched off in
+configuration logged nothing, so "nothing was offered" read identically whether the
+collection was empty, every candidate was declined, or the feature was off.
+
 ## 2026-08-05: A test that defended a copy of the branch it named
 
 <!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->

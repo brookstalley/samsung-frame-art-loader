@@ -21,7 +21,7 @@ import json
 from io import BytesIO
 
 import pytest
-from fakes import FakeImageSearch, a_work, an_image
+from fakes import FakeImageSearch, a_decodable_jpeg, a_work, an_image
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from PIL import Image
@@ -52,19 +52,6 @@ def image_tokens(width: int, height: int) -> float:
 #: used only to show the text is not what would blow the budget, and the margin
 #: below is wide enough that a factor-of-two error in it changes nothing.
 CHARS_PER_TOKEN = 4
-
-
-def a_jpeg(width: int = 1200, height: int = 900) -> bytes:
-    """Preview bytes a museum could really have served, and that Pillow can open.
-
-    The shipped fake returns a stub that is not decodable, which is right for
-    tests about *caching* bytes and wrong for every test here: a preview that
-    cannot be decoded produces no image block, so the whole surface would look
-    broken for a reason that is the fixture's.
-    """
-    buffer = BytesIO()
-    Image.new("RGB", (width, height), (84, 66, 132)).save(buffer, format="JPEG", quality=90)
-    return buffer.getvalue()
 
 
 async def call(server_url: str, tool: str, **arguments):
@@ -105,7 +92,7 @@ def preview_file(settings):
         relative = f"previews/{name}"
         target = settings.art_root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(a_jpeg(width, height))
+        target.write_bytes(a_decodable_jpeg(width, height))
         return relative
 
     return _write
@@ -120,7 +107,7 @@ def museum() -> FakeImageSearch:
         ),
     }
     found = FakeImageSearch(holdings=holdings)
-    found.preview_bytes = a_jpeg()
+    found.preview_bytes = a_decodable_jpeg()
     return found
 
 
@@ -239,7 +226,7 @@ async def test_each_row_points_at_its_own_picture_and_not_another_works(server_u
         relative = f"previews/{title.replace(' ', '-')}.jpg"
         target = settings.art_root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(a_jpeg(width, height))
+        target.write_bytes(a_decodable_jpeg(width, height))
         work = propose(title, run_id=run.id, dedup_key=title)
         add_image(work, preview_path=relative, estimated_width=4000, estimated_height=3000)
 
@@ -337,7 +324,7 @@ def a_run_of(services, propose, add_image, settings):
         run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
         source = settings.art_root / "previews/seed.jpg"
         source.parent.mkdir(parents=True, exist_ok=True)
-        source.write_bytes(a_jpeg())
+        source.write_bytes(a_decodable_jpeg())
         for index in range(count):
             work = propose(f"Work {index:02d}", run_id=run.id, dedup_key=f"seed-{index}")
             add_image(work, preview_path="previews/seed.jpg", estimated_width=4000, estimated_height=3000)

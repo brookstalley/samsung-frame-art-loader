@@ -942,6 +942,18 @@ class DiscoveryRunner:
         unable to reach the provider is the whole answer for that work.
         """
         if self._collection is None or self._settings.offered_works_per_run <= 0:
+            # Said out loud, because silence here is indistinguishable from the two
+            # outcomes that mean something entirely different: a collection that held
+            # nothing, and one whose every candidate was declined. All three read as
+            # `works_offered: 0`, and the operator asking "why did nothing get
+            # offered" is the one person the answer is cheap for.
+            log.info(
+                "the offered-works supplement is off for this run; nothing will be offered",
+                extra={
+                    "event": "browse.supplement_off",
+                    "reason": "no_collection" if self._collection is None else "offered_works_per_run_zero",
+                },
+            )
             return
         if self._discovery.get_run(run_id).kind is not RunKind.DISCOVERY:
             # A re-search asks for better images for works a curator already

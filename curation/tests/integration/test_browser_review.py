@@ -24,26 +24,13 @@ from io import BytesIO
 
 import httpx
 import pytest
-from fakes import FakeImageSearch, a_work, an_image
+from fakes import FakeImageSearch, a_decodable_jpeg, a_work, an_image
 from PIL import Image
 
 from curation.discovery.engine import WorkList
 from curation.persistence.discovery_records import RunStatus, Verdict
 from curation.services.container import Services
 from curation.services.previews import PreviewSettings
-
-
-def a_jpeg(width: int = 1200, height: int = 900) -> bytes:
-    """Preview bytes a museum could really have served, and that Pillow can open.
-
-    The shipped fake returns a stub that is not decodable, which is right for
-    tests about *caching* bytes and wrong for every test here: this surface's
-    whole job is putting a picture in front of a curator, so an undecodable
-    fixture would exercise the failure path in every test about the happy one.
-    """
-    buffer = BytesIO()
-    Image.new("RGB", (width, height), (84, 66, 132)).save(buffer, format="JPEG", quality=90)
-    return buffer.getvalue()
 
 
 @pytest.fixture
@@ -73,7 +60,7 @@ def museum() -> FakeImageSearch:
         ),
     }
     found = FakeImageSearch(holdings=holdings)
-    found.preview_bytes = a_jpeg()
+    found.preview_bytes = a_decodable_jpeg()
     return found
 
 
