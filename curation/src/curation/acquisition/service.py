@@ -175,9 +175,12 @@ class AcquisitionService:
             # The recorded URL identifies the object; the tile fetcher needs the
             # image service. For most providers those are the same string, and for
             # a museum serving IIIF they are not — so this is asked rather than
-            # assumed. `check_fetchable` runs again on the answer, because a URL
-            # this deployment did not record is exactly the kind that has to be
-            # checked before it is fetched.
+            # assumed. `check_fetchable` runs on the answer and on nothing else
+            # here, because the answer is the only address this path fetches — and
+            # a URL this deployment did not record is exactly the kind that has to
+            # be checked before it is. The recorded URL is deliberately not
+            # checked: gating a tiled fetch on a provenance link nobody fetches
+            # recorded failures against sources that were never at fault.
             #
             # `TileTargetUnavailable` is deliberately *not* caught, for the same
             # reason `DezoomifyUnavailable` is not: a provider with no resolver
