@@ -483,6 +483,19 @@ than a silent truncation of results.
 > revisiting. The corollary is that **breadth is free**, which is why
 > `DISCOVERY_SEARCH_RESULTS` ships at 10.
 >
+> **A third bound joined these on 2026-08-04, and it is not a cost bound at all**
+> (`DISCOVERY_OFFERED_WORKS_PER_RUN`, shipped at 12). It limits how many works a
+> run may *offer* from a wired collection on top of the list it proposed. Browsing
+> a museum costs nothing, so what it protects is the curator's attention and the
+> proportion between a supplement and the list they approved. **It is also the
+> selection mechanism, which is why it cannot simply be set high**: the collection
+> holds far more than any run will show — one real run's four artists had 69
+> offerable works between them — and the museum's relevance score is unusable for
+> ordering them (`artic-api-findings.md`). So the works kept are taken one per
+> artist per pass, and this number is how many passes. Twelve is about half the
+> approval threshold, which keeps the supplement visibly secondary while still
+> giving a four-artist run three works each. Zero turns it off.
+>
 > **Overrunning the allowance fails the run rather than trimming its results.**
 > An engine that searched past its bound spent money the estimate did not cover,
 > so its work list was bought outside what anyone authorised; accepting it with a
