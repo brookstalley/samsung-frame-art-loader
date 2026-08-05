@@ -187,6 +187,33 @@ def test_a_work_that_resolves_cleanly_refuses_nothing():
     assert refusals(held, title="American Gothic", artist="Grant Wood") == frozenset()
 
 
+def test_the_engine_never_reports_a_reason_that_is_read_from_stored_rows():
+    """The engine's vocabulary is the shallow gates only, and the depth ranking relies on it.
+
+    `BELOW_FLOOR` and `ALL_REJECTED` share a depth, which is safe precisely
+    because they are derived where the rows are and can never appear in a
+    refusal set to be ranked against each other. Nothing else states that, so an
+    engine that started emitting one would introduce a silent tie broken by set
+    iteration order — a wrong label on a work, chosen by nothing.
+
+    Written as a set difference rather than as a list of the three it may emit,
+    so a sixth member added to the enum is covered by the rule instead of missed
+    by an inventory taken today.
+    """
+    from_rows = {UnresolvedReason.BELOW_FLOOR, UnresolvedReason.ALL_REJECTED}
+    emitted = refusals(
+        an_instance("A Memory", artist="Gene Charlton"),
+        an_instance("American Gothic", artist="Elizabeth Layton"),
+        an_instance("American Gothic", artist="Grant Wood", width=None, height=None),
+        an_instance("Small Study", artist="Grant Wood", width=300, height=200),
+        title="American Gothic",
+        artist="Grant Wood",
+    )
+
+    assert emitted & from_rows == set(), "the engine emitted a reason only the store may derive"
+    assert emitted, "the fixture refused nothing, so this would pass with the check removed"
+
+
 def test_the_right_painter_is_kept_when_both_are_offered():
     judged = resolve(
         an_instance("American Gothic", artist="Elizabeth Layton"),

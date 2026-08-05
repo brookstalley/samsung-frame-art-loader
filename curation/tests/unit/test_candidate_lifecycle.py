@@ -392,7 +392,7 @@ def test_a_reason_derived_from_rows_outranks_anything_the_search_refused(discove
     assert outcome.work.unresolved_reason is UnresolvedReason.BELOW_FLOOR
 
 
-def test_every_unresolved_reason_is_ranked(discovery, propose):
+def test_every_unresolved_reason_is_ranked():
     """Derived from the enum, so a sixth member fails here rather than tying silently.
 
     A hardcoded list of today's members is correct and useless in the one
@@ -400,6 +400,26 @@ def test_every_unresolved_reason_is_ranked(discovery, propose):
     """
     for reason in UnresolvedReason:
         assert isinstance(reason.depth, int)
+
+
+def test_the_reasons_a_search_can_refuse_at_are_ranked_distinctly():
+    """The property the precedence actually relies on, which totality does not give it.
+
+    Picking the deepest gate is only well-defined if the rankable reasons have
+    *different* depths — two sharing one would be resolved by set iteration order,
+    which is to say by nothing. The pair read from stored rows is deliberately
+    excluded: they are consulted before any refusal is, and they are mutually
+    exclusive, so they share a depth on purpose and it is never compared.
+
+    Written as "every reason except the row-derived pair" rather than as a list of
+    the three, so a new refusal the engine can emit is covered on the day it is
+    added instead of on the day someone remembers this test.
+    """
+    from_rows = {UnresolvedReason.BELOW_FLOOR, UnresolvedReason.ALL_REJECTED}
+    rankable = [reason for reason in UnresolvedReason if reason not in from_rows]
+
+    depths = [reason.depth for reason in rankable]
+    assert len(set(depths)) == len(depths), f"two rankable reasons share a depth: {depths}"
 
 
 def test_the_reason_survives_the_round_trip_to_the_store(discovery, propose):

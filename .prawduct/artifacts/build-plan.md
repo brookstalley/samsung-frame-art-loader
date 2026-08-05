@@ -2150,11 +2150,21 @@ binds already exists and is contract-tested.
   `change-log.md`, `reflections.md` and `learnings*.md` excluded as the historical
   record they are. Written as a command rather than a count because a count is
   wrong the moment anyone adds a seventh
-- **Tests:** unit over the four reason routes and the precedence rule; **the
-  museum fake is reshaped first** — while its holdings are an exact dict lookup on
-  the query title that never reads the artist, it cannot express the defect and
-  every mutation below survives for the wrong reason; a model-vs-museum identity
-  corpus beside `phase_one_proposals.json`, which is phase-1-vs-phase-1 only
+- **Tests:** unit over every reason route and the precedence rule, plus the
+  round trip to the store and the wire, since a reason derived and not reported
+  is not a reason a curator has.
+- **The fake reshape and the identity corpus moved to Chunk 22, explicitly rather
+  than by omission — and the premise for doing them here turned out to be false.**
+  This entry said the museum fake's exact-title dict lookup meant "every mutation
+  below survives for the wrong reason". It did not: the sweep aimed the retrieval
+  mutation at the client's own tests, which drive a mock transport and assert on
+  the request URL, and it was caught along with the other nine. The fake's real
+  incapacity is narrower than stated — an artist differing from the query is
+  already expressible, and what is not is a work the museum holds under a
+  *different title*, which no test in this chunk needs. Chunk 22 is where that
+  bites, since a browse returns the collection's own titles by definition, and
+  building the capability a chunk ahead of its first user means shipping test
+  infrastructure nothing exercises.
 - **Mutation sweep, and it is the acceptance evidence rather than a formality** —
   a green suite is not evidence here, having been green throughout the two runs
   that resolved nothing. At least: swap `identity_refused` for `not_held` in the
@@ -2191,6 +2201,12 @@ binds already exists and is contract-tested.
   the one facet reproduced live; style, classification and period miss on ordinary
   spellings and are explicitly out until measured. The seam is shaped so a facet
   compiled by a model can be added later without changing it.
+- **Carried in from Chunk 21, which found it did not need them:** reshape the
+  museum fake so a holding can be keyed independently of the query title — today
+  it cannot express a work the collection holds under a *different* title, which
+  a browse returning the collection's own titles produces by definition — and add
+  a model-vs-museum identity corpus beside `phase_one_proposals.json`, which is
+  phase-1-vs-phase-1 only and so cannot measure the comparison this chunk leans on.
 - **Step 0, before design — the packet's own headline claim is unverified.** The
   mechanism rests on the model's artist field being grounded, and both observed
   runs *named their artists in the intent text*; the only artists the model

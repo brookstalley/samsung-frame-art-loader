@@ -166,10 +166,15 @@ class UnresolvedReason(StrEnum):
 
 
 #: Ordered shallowest to deepest, which is the precedence when several apply.
-#: `BELOW_FLOOR` and `ALL_REJECTED` are read from rows the work already holds and
-#: are mutually exclusive by construction — rejected instances are filtered out
-#: before the floor is applied — so they outrank everything derived from results
-#: that never became rows, and never need ranking against each other.
+#:
+#: **Only the first three are ever ranked**, and they are the three a search can
+#: refuse a result at. `BELOW_FLOOR` and `ALL_REJECTED` are read from rows the work
+#: already holds, which the derivation consults *before* it looks at any refusal at
+#: all — so their entries here are never compared against anything. They are listed
+#: for totality, so that `depth` is defined for every member and a sixth one cannot
+#: be added without deciding where it sits; their equal value records that ranking
+#: them against each other would be meaningless, since rejected instances are
+#: filtered out before the floor applies and a work can only ever be one of them.
 _REFUSAL_DEPTH: Final[dict[UnresolvedReason, int]] = {
     UnresolvedReason.NOT_HELD: 0,
     UnresolvedReason.IDENTITY_REFUSED: 1,
