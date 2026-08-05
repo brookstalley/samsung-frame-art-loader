@@ -929,6 +929,18 @@ technical_decisions:
         manifest inside `curation/`. Accepted against a product whose only human
         interface is this client.
 
+        AMENDED AT BUILD, 2026-08-05, operator's call: the third cost is not paid.
+        Playwright publishes first-party Python bindings, so the harness is
+        `pytest-playwright` in `curation/tests/browser/` behind a `browser` marker
+        — one language, one suite, one command, and no second package manifest.
+        This paragraph had assumed Node without the alternative having been put;
+        it was verified to install and import on this repo's 3.14 before the
+        choice was made rather than after. Two consequences beyond the manifest:
+        the harness reuses the suite's own server, catalogue and image fixtures
+        instead of rebuilding each state through the HTTP API, and its dependency
+        sits in an opt-in `browser` group for the same reason `eval` has one, so
+        the default `uv sync` is untouched. The other two costs stand as written.
+
     - decision: "Build the catalogue's durable tier as first-party SQLite shaped to 3tears' DurableStore contract; do not adopt 3tears collections, and take no 3tears core dependency."
       rationale: >
         Verified against the source rather than assumed (artifacts/3tears-integration-findings.md):

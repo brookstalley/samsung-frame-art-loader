@@ -247,7 +247,9 @@
 
 ## Test Levels
 
-Three of the four levels exist on the curation plane as of 2026-07-27. Two
+Every level below exists on the curation plane except end-to-end; the `Exists`
+column is the authority, and it is per-row so that adding a level does not strand
+a count in this sentence. Two
 suites run: `uv run pytest tests` at the repo root for the 2024 modules, and
 `cd curation && uv run pytest` for the plane. *(Corrected 2026-08-03: the root
 command was written without `uv run`. Both planes need the prefix — the dev tools
@@ -261,6 +263,7 @@ are in a uv-only dependency group — and `CLAUDE.md` is the authority.)*
 | Evaluation | **yes** (curation), opt-in | Any tool-surface change, before shipping it — **not** on every run | `curation/tests/eval/`, marker `llm_eval` |
 | Live API — paid | **yes** (curation), opt-in | Any change to the OpenRouter client, and when a recorded price or response shape is in doubt | `curation/tests/live/`, marker `live_api` |
 | Live API — free | **yes** (curation), opt-in | Any change to a museum client, and when a recorded response shape is in doubt | `curation/tests/live/`, marker **`live_museum`** |
+| Browser | **yes** (curation), opt-in | Any change to `app.js` | `curation/tests/browser/`, marker **`browser`** |
 | End-to-end | no | Before release | — |
 
 **The evaluation level is the only one that does not gate, and that is the
@@ -292,6 +295,35 @@ paragraph explaining it is not.** Anything added that talks to a free API goes o
 
 All three are off by default: `addopts = -m 'not llm_eval and not live_api and
 not live_museum'`.
+
+**The browser level, added 2026-08-05, is deselected for a fourth reason and
+none of the first three.** It spends nothing, reaches no foreign API, and is
+entirely deterministic. What it needs is a ~200MB browser on the machine, which
+is too much to put on the default `uv sync` — so its deselection is a packaging
+decision, not a statement about the tests, and `.github/workflows/browser.yml`
+runs it on every push and pull request so that being off the default run does not
+become never running. Its dependency is its own group for the same reason
+`eval`'s is, and both modules `importorskip` so a default install skips rather
+than fails.
+
+**What it covers is the client, with `/api` as its boundary.** The other suites
+assert what the API answers and take on trust that the page does something
+sensible with it; that trust had been wrong three times, and none of the three
+was visible to a test reading JSON. Where a real server can produce the state it
+does — paging runs against a real catalogue and the real `truncated` flag — and
+routes are stubbed only for states a server cannot be asked for deterministically,
+such as a poll that changes nothing or each unresolved reason in turn. Stubbed
+payloads are built from the API's own response models rather than hand-written
+dicts, so a response that changes shape cannot leave these tests green against a
+page that has started to break.
+
+**Its acceptance was a mutation sweep, not a count of tests.** `tools/mutation_sweep.py`
+drives `app.js` as readily as a Python file, and every behaviour this level claims
+was demonstrated by deleting it and watching a test go red. That is what caught
+the one test here whose fixture could not have failed: a run at the approval gate
+re-checks its paint generation after fetching the estimate, so the check under
+test was masked by the one after it, and only a run in a state with no second
+fetch could falsify the claim.
 
 Its dependency is an opt-in group (`uv sync --group eval`) rather than `dev`,
 because it is the heaviest install in the repo and no first-party module imports

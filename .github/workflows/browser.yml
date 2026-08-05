@@ -1,0 +1,66 @@
+# Run the browser suite, which is the only thing that executes the client.
+#
+# WHAT THIS IS FOR. `curation/src/curation/http/static/app.js` is the product's
+# only human interface, and neither Python suite runs a line of it. This suite
+# drives it in a real Chromium against a real booted server. Unlike the API-drift
+# probes, it is about whether our own code is right — so it belongs on push,
+# where a regression is caught by the change that caused it.
+#
+# WHY IT IS NOT IN THE DEFAULT SUITE. It needs a ~200MB browser, which is too
+# much to impose on `uv sync` for someone who only wants to run the tests. That
+# makes it a packaging decision rather than a statement about the tests: they are
+# deterministic, they reach no foreign API, they spend nothing, and they gate as
+# hard as anything else wherever the browser is installed. The `browser` marker
+# is what keeps them off the default run, and this file is what makes sure being
+# off the default run does not mean never running.
+#
+# -n0 is REQUIRED, not tidiness. `-n auto` is in the default `addopts`, and a
+# `-m` on the command line replaces the marker expression while leaving the
+# parallelism in place. Browser tests time real poll intervals, and workers
+# contending for cores turn those windows into flakes.
+
+name: Browser suite
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: browser-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: "The client, in a real browser"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install the browser group
+        working-directory: curation
+        run: uv sync --group browser
+      - name: Install Chromium
+        working-directory: curation
+        # Only the one browser. The suite pins behaviour of the client, not of
+        # any particular engine's rendering, so paying for three downloads would
+        # buy a longer job and no extra information.
+        run: uv run playwright install --with-deps chromium
+      - name: Run the browser suite
+        working-directory: curation
+        run: uv run pytest -m browser -n0 -v --junitxml=results.xml
+      - name: Fail if nothing actually ran
+        if: always()
+        # A suite that skipped itself reports green, and green-because-absent is
+        # indistinguishable from green-because-passing in the checks list. This
+        # is the guard that tells the two apart, and it is exactly why the
+        # modules skip rather than fail when the group is missing: that is the
+        # right behaviour locally and a trap here.
+        run: python3 .github/scripts/assert_tests_ran.py curation/results.xml

@@ -125,7 +125,7 @@ re-created the same silence one line further down.
 - [x] Chunk 21: Say which kind of nothing — `unresolved_reason`, and the artist fold (issue #78)
 - [x] Chunk 22: Grounded alternatives — the collection's own answer when the gate refuses
 - [x] Chunk 19A: The run half — intent entry, the estimate, the run view and its gate
-- [ ] Chunk 23: The browser client gets executed coverage — Playwright (issue #30)
+- [x] Chunk 23: The browser client gets executed coverage — Playwright (issue #30)
 - [ ] Chunk 19B: The review half — the grid, its alternates, the verdict, the panel
 - [x] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [x] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
@@ -2422,8 +2422,15 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   `boundary-patterns.md` § Test Levels, `project-preferences.md`
 - **Visual change:** no — this is coverage of a surface that already exists
 - **Deliverables:** a Playwright harness driving the booted server; its
-  dependency manifest, kept out of the two Python planes; the CI/dev invocation
-  written down where `CLAUDE.md`'s command table can point at it
+  dependency kept off the default install path; the CI/dev invocation
+  written down where `CLAUDE.md`'s command table can point at it.
+  **The binding is Python, settled at build (operator, 2026-08-05).** The entry
+  above said "its dependency manifest, kept out of the two Python planes",
+  which assumed Node — Playwright's own Python bindings mean the harness lives
+  in the curation suite behind a `browser` marker, and the "second language's
+  package manifest" the decision accepted as a cost is simply not paid. Kept off
+  the default install is the surviving intent, and it is met by an opt-in
+  `browser` dependency group of the same shape as `eval`'s.
 - **Tests:** the harness *is* the deliverable. **Issue #30's acceptance names
   three from 10B that must each fail when their behaviour is removed** —
   `fetchAllWorks` termination, the image-error fallback, and the post-navigation
@@ -2431,6 +2438,12 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   view leaving the DOM alone when a poll changes nothing (assert focus survives),
   two concurrent paints resolving to one, and an unresolved work reaching the
   page as a sentence rather than a raw enum token.
+  Each behaviour is paired with the assertion that fails if it *over*-fires —
+  a loop that stops must also have collected everything, a focus move that always
+  fires steals focus from a freshly loaded page, and suppression that never lifts
+  freezes the page while the run moves on. The reason test is parametrised over
+  `UnresolvedReason` rather than a list written in the test, so a sixth reason
+  arrives as a failure instead of as a raw token on a curator's card.
 - **Acceptance criteria:** every behaviour above is covered by a test that
   demonstrably fails when the behaviour is removed — demonstrated by the mutation
   sweep, not asserted; `boundary-patterns.md` § Test Levels and this plan's test
