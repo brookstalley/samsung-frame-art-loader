@@ -416,6 +416,36 @@ CIEDE2000 distance 9.8, the engine's median lightness 20.8 against the corpus's
 side-by-side sheet. It is in `operator-verification.md` with the three pairs worth
 looking at first.
 
+**Chunk 19B landed 2026-08-05 and the curator loop closes in a browser** — intent,
+estimate, review with images, accept, theme, wall, with no MCP client anywhere in
+it. The grid rides Chunk 17's review service; verdicts and image selection are
+thin bindings over methods that already enforce their rules; issue #2's last box
+is closed by the grid's components.
+
+*Three things settled at build.* **A binding for the re-search was added at the
+operator's call**, because turning a scan down is one of the grid's own actions
+and leaves the work `awaiting_better_image` where nothing looks again — shipping
+the rejection without it would have made this chunk's own screen a dead end
+escapable only from an MCP client. **The review listing stops inlining pictures
+the browser discards**: both surfaces call the same methods, the browser passes
+`pictures=False`, and a page costs a `stat` per instance instead of a re-encode.
+**The health panel gained a reader for the display plane's own report**, which
+closes the carried finding above Chunk 21 — the failure table mapped TV, panel and
+last-error state onto a document nothing displayed. Backup age is built against a
+receipt Chunk 20 will write (`backup-status.json`, key `completed_at`), and
+`get_health` left the known-departures table by conforming.
+
+**The mutation sweep was found reporting on runs that executed nothing**, and that
+is the finding worth carrying past this chunk. Every opt-in suite is deselected by
+`addopts`, naming such a test on the command line does not select it, pytest exits
+5, and the tool read any non-zero exit as a caught mutation. Twenty-one mutations
+of the review grid reported caught by runs that never executed a line of the file.
+Re-run with `-- -m browser`, two survived and both were real. The tool now runs the
+targets unmutated first and refuses to sweep unless they run and pass. **Chunk 23's
+recorded acceptance was reached the same way and was re-swept rather than assumed —
+all fourteen caught.** A vacuous proof and a false claim are different faults, and
+that one was the first.
+
 ## Scaffolding
 
 ### Project Initialization
