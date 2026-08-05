@@ -14,10 +14,26 @@ Usage:
 
     uv run python tools/mutation_sweep.py mutations.json tests/unit/test_thing.py
 
+    # An opt-in suite needs its marker, or pytest collects nothing:
+    uv run python tools/mutation_sweep.py m.json tests/browser/test_x.py -- -m browser
+
 `mutations.json` is a list of objects with `label`, `file` (relative to the
 curation project root), `find` and `replace`. `find` must appear in the file; a
 mutation whose pattern has drifted is reported rather than silently skipped,
 because a sweep that quietly tests nothing is worse than no sweep.
+
+Everything after a `--` is handed to pytest verbatim.
+
+**The chosen tests are run once, unmutated, before anything is swept, and the
+sweep refuses to start unless they run and pass.** That guard is the reason this
+paragraph exists: every opt-in suite here — browser, the three live markers, the
+evaluation one — is deselected by a marker expression in `pyproject.toml`'s
+`addopts`, and naming such a test on the command line does *not* select it.
+pytest then collects nothing and exits 5, which the old verdict (`returncode !=
+0`) read as the mutation having been caught. A twenty-one mutation sweep of the
+review grid reported every one caught by runs that executed no test at all —
+indistinguishable from a real pass, and strictly worse than never sweeping.
+Anything other than a pass or a failure now stops the sweep and says so.
 
 **Write mutations that change behaviour, and check that yours did.** A `replace`
 that only edits a comment, adds a `# noqa`, or renames an unused local cannot
@@ -77,6 +93,14 @@ class SweepError(RuntimeError):
     """The sweep itself is wrong — a missing file, a pattern that no longer matches."""
 
 
+#: pytest's own exit codes, for the two this tool can interpret and the one that
+#: silently ruined a whole sweep. 0 is a passing run — the mutation survived — and
+#: 1 is a failing one, which is a mutation caught. **5 is "no tests were
+#: collected", and it is not a caught mutation**: it is the sweep testing nothing
+#: at all and reporting success for every line of it.
+PASSED, FAILED, NO_TESTS = 0, 1, 5
+
+
 def load(path: pathlib.Path) -> list[Mutation]:
     try:
         described = json.loads(path.read_text())
@@ -86,6 +110,57 @@ def load(path: pathlib.Path) -> list[Mutation]:
         return [Mutation(**entry) for entry in described]
     except TypeError as exc:
         raise SweepError(f"a mutation in {path} is missing a field or has an extra one: {exc}") from exc
+
+
+def run_tests(targets: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run the chosen slice of the suite. One place, so the sweep and its baseline agree.
+
+    They must be the identical invocation: a baseline that ran a different command
+    from the mutated runs would vouch for a suite the sweep never executes.
+    """
+    return subprocess.run(
+        ["uv", "run", "pytest", *targets, "-q", "-x", "--no-header", "-p", "no:cacheprovider"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        # See the module docstring: without this a same-second rewrite of equal
+        # length runs against stale bytecode and reports a false survivor.
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        check=False,
+    )
+
+
+def check_baseline(targets: list[str]) -> None:
+    """Refuse to sweep unless the chosen tests actually run, and pass, unmutated.
+
+    **This is the guard that was missing, and its absence made a whole sweep read
+    green while executing nothing.** Every opt-in suite in this project — browser,
+    the three live markers, the evaluation one — is deselected by a marker
+    expression in `pyproject.toml`'s `addopts`. Naming such a test on the command
+    line does not select it: pytest collects nothing, exits 5, and the old
+    `returncode != 0` read that as the mutation having been caught. Twenty-one
+    mutations reported caught by a run that never executed a line of the file
+    they were applied to, which is indistinguishable from a real pass and is
+    strictly worse than no sweep at all.
+
+    An already-failing target set is refused for the same reason one step along:
+    every mutation would be "caught" by the failure that was there before it.
+    """
+    completed = run_tests(targets)
+    if completed.returncode == NO_TESTS:
+        raise SweepError(
+            f"pytest collected no tests from {' '.join(targets)}, so a sweep over them would report "
+            "every mutation as caught while executing nothing.\n"
+            "If these carry an opt-in marker — the browser and the three live suites all do — pass it "
+            "through after a `--`:\n"
+            "    uv run python tools/mutation_sweep.py mutations.json tests/browser/test_x.py -- -m browser"
+        )
+    if completed.returncode != PASSED:
+        raise SweepError(
+            f"the chosen tests do not pass before anything is mutated (pytest exit {completed.returncode}), "
+            "so every mutation would be reported as caught by a failure that was already there. Fix the "
+            f"suite first.\n{completed.stdout[-2000:]}"
+        )
 
 
 def apply_and_run(mutation: Mutation, targets: list[str]) -> bool:
@@ -123,20 +198,20 @@ def apply_and_run(mutation: Mutation, targets: list[str]) -> bool:
     shutil.copy(path, backup)
     try:
         path.write_text(original.replace(mutation.find, mutation.replace, 1))
-        completed = subprocess.run(
-            ["uv", "run", "pytest", *targets, "-q", "-x", "--no-header", "-p", "no:cacheprovider"],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-            # See the module docstring: without this a same-second rewrite of
-            # equal length runs against stale bytecode and reports a false
-            # survivor.
-            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
-            check=False,
-        )
+        completed = run_tests(targets)
     finally:
         shutil.move(backup, path)
-    return completed.returncode != 0
+    if completed.returncode not in (PASSED, FAILED):
+        # Every other exit code means the run did not answer the question. 5 is
+        # the one that made this necessary — everything deselected — but a usage
+        # error or an internal error would equally have read as a caught mutation
+        # under a bare `returncode != 0`, which is a verdict reached from a run
+        # that never tested anything.
+        raise SweepError(
+            f"{mutation.label}: pytest exited {completed.returncode}, which is neither a pass nor a "
+            f"failure, so whether this mutation was caught is unknown.\n{completed.stdout[-2000:]}"
+        )
+    return completed.returncode == FAILED
 
 
 def say(message: str = "", *, error: bool = False) -> None:
@@ -156,6 +231,7 @@ def say(message: str = "", *, error: bool = False) -> None:
 
 
 def sweep(mutations: list[Mutation], targets: list[str]) -> int:
+    check_baseline(targets)
     survivors = []
     for mutation in mutations:
         caught = apply_and_run(mutation, targets)
@@ -177,9 +253,17 @@ def main(argv: list[str]) -> int:
     if len(argv) < 2:
         say(__doc__ or "")
         return 2
+    # Everything after a `--` goes to pytest verbatim, which is how an opt-in
+    # suite is reached: `-m browser` and friends cannot be inferred from a path,
+    # and inferring them would be this tool deciding which tests the operator
+    # meant. Without a `--` the whole tail is target paths, as before.
+    targets, passthrough = argv[1:], []
+    if "--" in targets:
+        cut = targets.index("--")
+        targets, passthrough = targets[:cut], targets[cut + 1 :]
     try:
         mutations = load(pathlib.Path(argv[0]))
-        return sweep(mutations, argv[1:])
+        return sweep(mutations, [*targets, *passthrough])
     except SweepError as exc:
         # Distinct from a survivor, and it must not be mistaken for one: this
         # means the sweep did not measure what it claimed to. Hence the separate

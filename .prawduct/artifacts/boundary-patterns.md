@@ -56,8 +56,15 @@
   with typed responses in `http/models.py`.
 - **Consumer:** the curation UI, and nothing else — `http/static/app.js`, which
   binds concrete field names (`work.status`, `s.rights_status`,
-  `s.last_fetch_status`, the heartbeat fields). **It is a real consumer**: a
-  renamed field breaks the page with no test failing unless one is written for it.
+  `s.last_fetch_status`, the heartbeat and backup fields, and on the review grid
+  `shown_is_on_offer`, `preview_available`, `instances_held` and the verdict).
+  **It is a real consumer**: a renamed field breaks the page with no test failing
+  unless one is written for it.
+- **What now fails when it breaks:** the browser suite executes the client
+  against the real routes, so a rename that reaches a bound field is caught rather
+  than merely likely to be. That is coverage of *executed* behaviour, not of every
+  field — `tests/browser/`, marker `browser`, and `tools/mutation_sweep.py` is
+  what says which behaviours are actually defended.
 - **Contract:** response models. **No stability obligation** — shipped and deployed
   with its only consumer. That exemption is about *versioning*, not about
   changing fields blindly: producer and consumer ship together, so a rename is

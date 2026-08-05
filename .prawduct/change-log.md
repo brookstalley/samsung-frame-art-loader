@@ -48,6 +48,76 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-05: The review half — the grid, its alternates, the verdict, the panel
+
+<!-- prawduct: chunks=19B | scope=v1-build -->
+
+**Why:** a curator could commission a run in the browser and not judge what it
+brought back. The loop now closes onto the wall with no MCP client in it: intent,
+estimate, review with images, accept, theme, wall.
+
+**A binding for the re-search, added at the operator's call.** Turning a scan down
+is one of the grid's own actions and it leaves the work `awaiting_better_image`,
+where nothing looks again — `resolve_images` is what looks and had no HTTP
+binding. Shipping the rejection without it would have made this chunk's own screen
+a dead end escapable only from an MCP client. The grid says in words that nothing
+is searching, because that is the fact a curator cannot see.
+
+**The listing stops inlining pictures the browser discards.** Both surfaces call
+the same review methods; the browser passes `pictures=False` and fetches each
+picture by URL, so a page of the grid costs a `stat` per instance instead of a
+re-encode — roughly half of what it cost on the machine this runs on. The two
+readers have unrelated budgets: a model pays for a picture in context tokens, a
+curator in pixels. The picture route re-encodes rather than serving the cached
+file, because a preview's name on disk is derived from a URL and falls back to
+`.jpg` for anything unrecognised — the suffix is not evidence of what the bytes
+are.
+
+**The health panel now has a reader for the document the display plane writes**,
+which closes a finding carried against Chunk 19 since the plan was written: the
+failure table maps TV, panel and last-error state onto that document and nothing
+displayed it. Passed through untouched rather than unpacked into named fields —
+`reported_at` is the only key that is contract, and inventing more would be a
+second contract the writer never agreed to. Backup age ships against a receipt
+nothing writes yet (`backup-status.json`, key `completed_at`, written only on
+success): "no backup recorded" is a true observation, and it reports real ages the
+moment Chunk 20's job lands. There is deliberately no budget balance.
+
+**`get_health` left the known-departures table by conforming**, the first entry
+there closed that way rather than by deletion. Assembling the panel's three
+observations in the handler made *which signals the panel makes* a decision taken
+in a binding, where the next one would have to be added in two places. The
+heartbeat and the backup receipt now share one parser and one age-in-words, and
+the panel states "4 days ago" rather than "345600 seconds ago" — which is the
+wording `observability-strategy.md` specified and the code had never produced.
+
+## 2026-08-05: The mutation sweep was reporting on runs that executed nothing
+
+<!-- prawduct: chunks=19B | scope=v1-build -->
+
+**Why:** found while trying to prove this chunk's browser tests could fail. The
+sweep read any non-zero pytest exit as a caught mutation, and pytest exits **5**
+when it collects no tests. Every opt-in suite here is deselected by a marker
+expression in `addopts`, and naming such a test on the command line does not
+select it — so a sweep over `tests/browser/` mutated the file, ran nothing, and
+reported every mutation caught.
+
+**Twenty-one mutations reported caught by runs that never executed a line of the
+file they were applied to.** Re-run with the marker, two of the twenty-one
+survived, and both were real: a card that asks for a picture the listing said is
+absent, and the empty-page stopping condition in the paging loop. Neither test I
+had written reached the branch it named.
+
+The tool now runs the chosen tests once, unmutated, before sweeping, and refuses
+to start unless they actually run and pass — which also catches an
+already-red target set, where every mutation would be "caught" by the failure that
+was already there. Anything other than a pass or a failure stops the sweep and
+says which exit code it got. Extra pytest arguments pass through after a `--`.
+
+**This casts doubt on Chunk 23's recorded acceptance**, which was "twelve
+mutations, twelve caught" against the same tool over the same deselected suite.
+Re-swept here with the fix in place rather than assumed.
+
 ## 2026-08-05: The Critic's findings on the harness, closed in one pass
 
 <!-- prawduct: chunks=23 | scope=v1-build -->

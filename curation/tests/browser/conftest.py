@@ -28,10 +28,12 @@ Payload builders live in `payloads.py` beside this file, and the rule they follo
 stated there.
 """
 
+import io
 import json
 import pathlib
 
 import pytest
+from PIL import Image
 
 from curation.persistence.records import (
     AcquisitionMethod,
@@ -138,6 +140,22 @@ class Ui:
             )
 
         self.page.route(pattern, handler)
+
+    def serve_image(self, pattern: str, *, colour=(84, 66, 132)) -> None:
+        """Answer `pattern` with a real JPEG the browser can actually decode.
+
+        Real bytes rather than a stub, because the assertion this supports is
+        that a picture *renders* — a card whose `<img>` fails silently paints a
+        blank box, which is the exact failure the review grid must not have, and
+        an undecodable stub would make every such test look like that failure.
+        """
+        buffer = io.BytesIO()
+        Image.new("RGB", (240, 180), colour).save(buffer, format="JPEG")
+        body = buffer.getvalue()
+        self.page.route(
+            pattern,
+            lambda route: route.fulfill(status=200, content_type="image/jpeg", body=body),
+        )
 
     def text(self) -> str:
         return self.page.inner_text("#view")

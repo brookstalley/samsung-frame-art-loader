@@ -310,6 +310,46 @@ direction. The heartbeat runs display → curation, and it creates no availabili
 dependency for the display plane: display writes it and never checks whether
 anyone read it.
 
+**Everything else in the document reaches the panel unread**, as of 2026-08-05.
+`GET /api/health` carries the heartbeat's whole object through as `reported`, and
+the panel renders whatever keys it finds. That is what gives the TV, panel and
+last-error rows of the failure table below a reader — they had none until then,
+which made them a monitoring plan whose evidence existed only in a file no
+surface opened.
+
+Passed through rather than unpacked into named fields, and that is the same
+decision as naming `reported_at` here: exactly one key is contract, so inventing
+more on the reading side would be a second contract the writer never agreed to,
+and a writer that spelled one of them differently would drop off the panel in
+silence — the failure the one named key exists to prevent, reintroduced for every
+other field.
+
+### The backup records that it succeeded, and the panel reads its age
+
+`operational-spec.md` promises backup age on this panel in absolute terms — "last
+successful backup: 6 days ago" — because a backup that silently stopped
+succeeding a month ago is the failure that matters for the one asset nothing else
+protects. The reading side shipped 2026-08-05, ahead of the job.
+
+**The receipt is `backup-status.json` under `ART_ROOT`, and the key is
+`completed_at`.** It is written **only on success**, which is what makes its age
+mean what the panel says it means: a job stamping every attempt would report a
+fresh age for a backup that has been failing since Tuesday. Everything else in it
+is the job's to shape and reaches the panel the same way the heartbeat's does.
+
+> `[DECISION: the backup records its success in a file beside the catalogue,
+> never as a row inside it | the backup copies the catalogue, so a receipt
+> recorded as a row could only ever be written after the copy was taken — every
+> restored catalogue would then carry the *previous* backup's receipt and report
+> an age older than the file it came from. A file beside it is stamped by the run
+> that succeeded and restores as whatever the destination actually holds |
+> user can veto/override]`
+
+Both ends of this one are ours, unlike the heartbeat's, so the key cannot drift
+across planes. It can drift across chunks — the reader is built and the writer is
+Chunk 20's — which is why the name is written here rather than left in the code
+that reads it.
+
 ### The panel shows staleness in absolute terms
 
 **Never a green dot.** The health panel displays "last heartbeat: 4 days ago", not
@@ -319,6 +359,18 @@ panel at all because it manufactures false confidence.
 
 The same rule applies to every derived status the panel shows: state the
 observation and its age, not a verdict.
+
+**"4 days ago" is the wording, not shorthand for it.** Both readings state their
+age in the unit a person reads it in, because the conversion is the whole service
+this panel performs: a display plane down since Tuesday reported "345600 seconds
+ago" until 2026-08-05, which is arithmetic handed back to the reader on the one
+surface built so they would not have to do any. A negative age — the planes'
+clocks disagreeing — is reported as itself rather than folded into zero.
+
+**Nothing here compares an age to a threshold**, and the backup is where that
+restraint earns its keep: six days is alarming for a nightly job and unremarkable
+for a destination that is usually asleep, and this panel does not know which
+deployment it is on.
 
 ### Accepted detection latency, stated as a number
 
@@ -399,7 +451,9 @@ signal exists:
 |---|---|
 | The wired collection could not be browsed | `browse.unreachable` at WARNING, and nothing else — a supplement is swallowed so it cannot fail the run, which makes this line the only trace that one was attempted. **Distinguish it from a collection that answered and offered nothing**, which is `browse.offered` carrying `works_offered: 0` against a non-zero `collection_holds`: that is every candidate declined, and `browse.below_floor` / `work.suppressed` / `work.already_present` say which gate did it |
 | Display plane stalled or dead | Heartbeat stops advancing; panel shows its age |
-| TV unreachable | Heartbeat carries TV connectivity state; WARNING in the journal |
+| TV unreachable | Heartbeat carries TV connectivity state; WARNING in the journal. **The panel renders the heartbeat's whole reported document as of 2026-08-05**, so this row and the two below it have a reader rather than naming a field nothing displayed |
+| E-paper panel not updating | Heartbeat carries its state, and the panel shows it — same mechanism as the row above, and no second contract |
+| Backup silently stopped succeeding | **`backup-status.json` stops advancing; the panel shows its age.** The receipt is written only on success, so a failing job goes stale rather than reporting fresh. Nothing has ever written one is itself an observation the panel states plainly |
 | Manifest references a missing file | WARNING per work, and the work is skipped — the run continues |
 | Manifest major version unrecognised | ERROR, previous manifest retained |
 | Budget exhausted | `halted_by_budget` outcome on the run, and the refusal text names the cause. *(Corrected 2026-08-02: this also promised "`limit_remaining` at zero in the UI" — a figure no surface exposes, and one that lags badly enough to read non-zero while calls are already being refused. See the note under the signals table.)* |

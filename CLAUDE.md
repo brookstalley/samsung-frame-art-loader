@@ -55,8 +55,8 @@ so an in-process test would pass against an app that fails every real request.
 **That suite runs across cores** — `-n auto` is in the curation plane's
 `addopts`, so `uv run pytest` is already parallel (118s → 21s, measured
 2026-08-05). **Add `-n0` to debug a failure**: workers interleave output and a
-`pdb` breakpoint has no terminal to stop in. The root suite is 52 tests in a
-fifth of a second and is left serial.
+`pdb` breakpoint has no terminal to stop in. The root suite covers the 2024
+modules only, runs in a fraction of a second, and is left serial.
 
 ## The browser suite
 
@@ -73,7 +73,7 @@ cd curation && uv run pytest -m browser -n0
 **Deselected by default for the browser download, not for anything about the
 tests** — they are deterministic, free, and reach no foreign API. Run them when
 you touch `app.js`; `.github/workflows/browser.yml` runs them on pull requests
-and on pushes to `main`. Without the group the two modules skip with the command
+and on pushes to `main`. Without the group the modules skip with the command
 that fixes it, so a default `uv sync` is unaffected.
 
 **`-n0` matters here.** These tests time real two-second poll intervals, and
@@ -82,10 +82,21 @@ flakes when workers contend for cores.
 
 **A behaviour is not covered because a browser test exercises it.** Prove it with
 `tools/mutation_sweep.py`, which drives `app.js` as happily as a Python file:
-delete the branch and watch a test go red. That is what the acceptance for this
-suite was, and it found a test whose fixture could not fail — a run at the
-approval gate re-checks its paint generation twice, so the check under test was
-masked by the one after it.
+delete the branch and watch a test go red.
+
+**Sweeping this suite needs the marker passed through, and forgetting it used to
+pass silently:**
+
+```sh
+cd curation && uv run python tools/mutation_sweep.py m.json tests/browser/test_x.py -- -m browser -n0
+```
+
+Without `-- -m browser` pytest collects nothing and exits 5, which the sweep read
+as a caught mutation until 2026-08-05 — twenty-one mutations reported caught by
+runs that executed no test at all. The tool now runs the chosen tests unmutated
+first and refuses to sweep unless they run and pass, so the mistake fails loudly;
+the flag is still yours to pass. Re-run with it, two of those twenty-one survived
+and both were real coverage gaps.
 
 ## The live suites
 

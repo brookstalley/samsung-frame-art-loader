@@ -937,7 +937,7 @@ the client with them.
 | `POST`/`DELETE /api/themes/{id}/works[/{work_id}]`, `POST .../position` | Membership and order. Each returns the resulting order, so the surface repaints from the response. |
 | `POST /api/themes/{id}/activate` | Change the wall. Returns the manifest that was published, exclusions included. |
 | `GET /api/manifest` | What a theme *would* put on the wall, evaluated without writing. |
-| `GET /api/health` | The heartbeat reading, and this deployment's resolved artwork box. |
+| `GET /api/health` | Every observation the panel states: the heartbeat and the document the display plane reported, the backup's age, and this deployment's resolved artwork box. **Three observations and no fourth** — there is deliberately no budget balance, settled 2026-08-04. |
 
 Added 2026-08-05 with the run half of the browser surface, and exercised by
 `curation/tests/integration/test_browser_discovery.py`:
@@ -950,6 +950,27 @@ Added 2026-08-05 with the run half of the browser surface, and exercised by
 | `GET /api/runs/{id}` | The run, its works, its tallies and its search usage. |
 | `POST /api/runs/{id}/approve`, `/decline`, `/cancel` | The approval gate and the stop. Each returns the whole resulting view, as the MCP surface does, so the client repaints from the response. |
 | `GET /api/runs/{id}/spend` | What the run actually cost, including every re-search descended from it. Read by the run view's costs panel once the run is terminal — it is the only place the **family total** appears, since the run record carries only the run's own direct spend. |
+
+Added 2026-08-05 with the review half, and exercised by
+`curation/tests/integration/test_browser_review.py`:
+
+| Route | What it is |
+|---|---|
+| `GET /api/runs/{id}/candidates` | A page of the works a run is responsible for, each as a card: the instance whose picture stands for it, its size on this wall, and whether that instance is the one a verdict would accept on. **Paged where the run view's own work list is not**, and the difference is the payload rather than an inconsistency — that list is text, this one is a card per work. |
+| `GET /api/candidates/{work_id}` | One card, which is what the grid repaints a single tile from after a verdict. |
+| `GET /api/candidates/{work_id}/images` | Every scan found for the work, in the order the card offers them, capped — with `held` and `shows_every_choosable_instance` beside the rows so a truncated card cannot read as a complete one. |
+| `POST /api/candidates/{work_id}/verdict` | Accept or reject. Carries the minted artist and any held painter it may duplicate, which is the one part of a promotion a curator can neither see nor undo from the work. `awaiting_better_image` is refused here — rejecting an image is its only entry. |
+| `POST /api/candidate-images/{id}/select`, `/reject` | Choose a scan, or turn one down. Rejecting returns the *work*, because the interesting change is its move to `awaiting_better_image`. |
+| `GET /api/candidate-images/{id}/preview` | The picture, re-encoded to JPEG. **Not the cached file served directly:** a preview's name on disk is derived from a URL and falls back to `.jpg` for anything unrecognised, so the suffix is not evidence of what the bytes are. Held rather than revalidated — the bytes behind an image id are written once and only ever deleted. |
+| `POST /api/runs/resolve` | Look again for images of works whose scans were turned down. A re-search is a run, so `GET /api/runs/{id}` follows it with nothing special to know. Records `initiated_by: web_ui`. |
+
+**The review listing does not inline its pictures, and the MCP twin does.** Both
+call the same service method; the browser passes `pictures=False` and fetches each
+picture by URL. Inlining base64 for a caller that discards it costs a re-encode
+per instance — roughly half of what a page of the grid costs on a Pi — and the
+two readers have unrelated budgets: a model pays for a picture in context tokens
+and a curator pays in pixels on a screen. They share the decode and the media type
+and nothing else.
 
 **`GET /api/runs/{id}` answers immediately; the MCP `status` action holds for up
 to 45 seconds.** This is a deliberate divergence between the two surfaces rather

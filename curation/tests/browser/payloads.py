@@ -12,14 +12,21 @@ nothing the import does not.
 """
 
 from curation.http.models import (
+    ArtistOut,
+    CandidateCardOut,
+    CandidatePageOut,
     CandidateWorkOut,
     EstimateOut,
+    FitOut,
     ImageOut,
+    InstanceListingOut,
+    InstanceOut,
     RunOut,
     RunTallyOut,
     RunViewOut,
     SearchUsageOut,
     SpendOut,
+    VerdictOut,
     WorkOut,
     WorkPageOut,
 )
@@ -32,6 +39,7 @@ from curation.persistence.discovery_records import (
     WorkProvenance,
 )
 from curation.persistence.records import ArtworkStatus
+from curation.services.display_fit import DisplayFit
 
 
 def a_catalogue_work(**overrides) -> WorkOut:
@@ -130,6 +138,111 @@ def a_run_view(run: RunOut | None = None, works: list[CandidateWorkOut] | None =
         **overrides,
     )
     return view.model_dump(mode="json")
+
+
+def an_instance(**overrides) -> InstanceOut:
+    """One scan, defaulting to the one on offer with a picture that travels."""
+    fields = {
+        "image_id": "image-1",
+        "work_id": "work-1",
+        "url": "https://artic.edu/persistence",
+        "provider": "artic",
+        "confidence": 0.92,
+        "is_selected": True,
+        "rejected": False,
+        "rights_status": "public_domain",
+        "selection_rationale": None,
+        "fit": FitOut(
+            verdict=DisplayFit.NATIVE.value,
+            rendered_width=3316,
+            rendered_height=1597,
+            rendered_long_edge_inches=27.4,
+        ),
+        "fit_note": None,
+        "preview_available": True,
+        "preview_note": None,
+    }
+    return InstanceOut(**(fields | overrides))
+
+
+def a_card(work: CandidateWorkOut | None = None, shown: InstanceOut | None = ..., **overrides) -> CandidateCardOut:
+    """One review card, defaulting to a work standing on the scan it was offered.
+
+    `shown` defaults through a sentinel rather than through `None`, because
+    "no scan at all" is a state this surface has to be able to express and a
+    plain `None` default would make it unreachable.
+    """
+    work = work or a_candidate()
+    shown = an_instance(work_id=work.work_id) if shown is ... else shown
+    fields = {
+        "work": work,
+        "shown": shown,
+        "shown_is_on_offer": shown is not None and shown.is_selected,
+        "instances_held": 0 if shown is None else 1,
+        "instances_surviving": 0 if shown is None else 1,
+    }
+    return CandidateCardOut(**(fields | overrides))
+
+
+def a_candidate_page(cards, *, run: RunOut | None = None, total=None, truncated=False, offset=0) -> dict:
+    """One page of a run's works, as `/api/runs/{id}/candidates` answers it."""
+    cards = list(cards)
+    return CandidatePageOut(
+        run=run or a_run(status=RunStatus.COMPLETED.value, is_terminal=True),
+        works=cards,
+        total=len(cards) if total is None else total,
+        limit=30,
+        offset=offset,
+        truncated=truncated,
+    ).model_dump(mode="json")
+
+
+def an_instance_listing(instances=None, *, work: CandidateWorkOut | None = None, held=None, **overrides) -> dict:
+    """A work's alternates, as `/api/candidates/{id}/images` answers it.
+
+    `held` and the truncation flag are computed from the instances unless a test
+    names them, so a fixture cannot claim a complete card while showing a
+    truncated one — which is the exact confusion the two counts exist to prevent.
+    """
+    work = work or a_candidate()
+    instances = [an_instance(work_id=work.work_id)] if instances is None else list(instances)
+    held = len(instances) if held is None else held
+    fields = {
+        "work": work,
+        "instances": instances,
+        "held": held,
+        "surviving_held": len([i for i in instances if not i.rejected]),
+        "truncated": len(instances) < held,
+        "shows_every_choosable_instance": True,
+    }
+    return InstanceListingOut(**(fields | overrides)).model_dump(mode="json")
+
+
+def a_verdict(work: CandidateWorkOut | None = None, **overrides) -> dict:
+    """The answer to recording a verdict, defaulting to a plain acceptance."""
+    work = work or a_candidate(verdict=Verdict.ACCEPTED.value)
+    fields = {
+        "work": work,
+        "artwork_id": "artwork-minted",
+        "decided_at": "2026-08-05T10:06:00+00:00",
+        "minted_artist": None,
+        "possible_duplicate_artists": [],
+        "notice": None,
+    }
+    return VerdictOut(**(fields | overrides)).model_dump(mode="json")
+
+
+def an_artist(**overrides) -> ArtistOut:
+    fields = {
+        "artist_id": "artist-1",
+        "name": "Salvador Dalí",
+        "nationality": None,
+        "born": None,
+        "died": None,
+        "lifespan_text": None,
+        "biography": None,
+    }
+    return ArtistOut(**(fields | overrides))
 
 
 def an_estimate(**overrides) -> dict:

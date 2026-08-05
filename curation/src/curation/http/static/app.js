@@ -59,8 +59,11 @@ async function fetchAllWorks() {
     const body = await api(`/api/works?limit=${PAGE_SIZE}&offset=${works.length}`);
     total = body.total;
     works.push(...body.works);
-    // `truncated` alone would loop forever against an empty page, so the
-    // stopping condition is what actually arrived.
+    // The stopping condition is what actually arrived, not what the server says
+    // is left. A page that reports more while carrying nothing makes no
+    // progress — the offset is derived from what came back, so asking again
+    // sends the identical request. `PAGE_CEILING` would stop it either way, so
+    // what this saves is forty-nine pointless round trips rather than a hang.
     if (!body.truncated || body.works.length === 0) return { works, total, truncated };
     truncated = true;
   }
@@ -1343,8 +1346,10 @@ async function fetchAllCandidates(runId) {
     run = body.run;
     total = body.total;
     works.push(...body.works);
-    // `truncated` alone would loop forever against an empty page, so the
-    // stopping condition is what actually arrived.
+    // Same stopping condition as `fetchAllWorks`, and the same reason: a page
+    // reporting more while carrying nothing makes no progress, so asking again
+    // sends the identical request. The ceiling bounds it regardless; this is
+    // what keeps a misbehaving page from costing fifty round trips.
     if (!body.truncated || body.works.length === 0) break;
   }
   return { run, works, total };

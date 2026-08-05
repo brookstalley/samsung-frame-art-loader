@@ -10,6 +10,50 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The review half — the grid, its alternates, the panel — added 2026-08-05
+
+**What to look at.** The review grid reached from a finished run ("Review these
+works"), the alternates behind a card, and the Health tab. This is the screen a
+curator spends their session in, and the tests hold that every figure on it is
+right; what they cannot hold is whether judging thirty paintings on it is
+pleasant or a chore.
+
+**Free to look at if a run already exists**, which it will if you looked at the
+run half. Nothing on this screen spends — accepting, rejecting and choosing a
+scan are all local — with one exception named on the screen itself: "Look again
+for these" starts a re-search, which does spend.
+
+```sh
+cd curation
+uv run python -m curation
+# then open the CURATION_PORT from .env — http://127.0.0.1:8770/ as shipped
+# → Discovery → open a finished run → "Review these works"
+```
+
+**Specific things worth an opinion, because each was a judgement call:**
+
+1. **The alternates are a disclosure on the card, not a screen of their own.**
+   The choice is between the picture on the card and the ones behind it, and a
+   curator who had to navigate away would be choosing from memory. The cost is
+   that opening one pushes every card below it down the page. A side panel or a
+   modal would trade differently.
+2. **A "Why (optional)" field on every card.** It is what makes a rejection say
+   *why* — a studio copy rather than merely "no" — and it is also a text input on
+   thirty cards, which is a lot of furniture. It could be revealed only when
+   Reject is pressed, at the cost of a second click on the commonest path.
+3. **A work whose every scan is below the floor still shows a picture**, with a
+   note saying accepting will be refused until a scan is chosen. The alternative
+   — hiding it — is the one thing the contract forbids, but the note is doing
+   real work and it may not be doing enough of it.
+4. **The health panel prints the display plane's reported document as raw
+   key/value rows.** Nothing writes one yet, so today it is invisible; it will
+   read machine-ish when Chunk 13 lands. Deliberate — only `reported_at` is
+   contract, so naming the other fields here would invent a second one — but if
+   it reads badly in practice that is worth knowing before the writer exists.
+5. **Backup age says "No backup has recorded itself here"**, permanently, until
+   Chunk 20. It is a true observation and the panel's whole contract is stating
+   those. Say if it reads as a defect rather than as a fact.
+
 ### The run half of the browser surface — added 2026-08-05
 
 **What to look at.** The Discovery tab: entering an intent with the estimate
