@@ -1318,8 +1318,13 @@ def _run_notice(view: RunView) -> str:
         # from the wiring rather than from a sentence written here — a hardcoded
         # answer was true until phase 2 was built and false the moment it was.
         if not view.image_resolution_available:
+            # `proposed_count`, matching its sibling below rather than merely
+            # equalling it: a deployment with no image provider never reaches the
+            # supplement, so the two are the same number today — and two adjacent
+            # lines counting differently read as a disagreement whichever one a
+            # later change follows.
             return (
-                f"There are {view.work_count} works to find images for, but no image provider is configured "
+                f"There are {view.proposed_count} works to find images for, but no image provider is configured "
                 "in this deployment, so the run will stay here; cancel it when you are done reading it."
             )
         # A re-search never had a work list of its own to settle — the curator
@@ -1338,22 +1343,30 @@ def _run_notice(view: RunView) -> str:
             "Call status again to keep watching."
         )
     if status is RunStatus.COMPLETED:
-        # Rated against what the model proposed, never against the total: the
-        # works the collection offered arrived carrying their images, so counting
-        # them in the numerator reports a retrieval rate nothing achieved. Both
-        # figures are direct counts — a numerator derived by subtracting the
-        # offered works goes negative the moment one of them is re-searched to
-        # nothing, which is a flow this same file recommends.
-        settled = f"This run finished: {view.resolved_proposals} of {view.proposed_count} proposed works have an image."
-        # Only a discovery run can have offered anything: a re-search is refused
-        # at the record layer and returns early in the runner, so this sentence
-        # on one would describe an offer that never happened — over works whose
-        # provenance is the parent run's.
-        if view.offered_count and view.run.kind is RunKind.DISCOVERY:
-            settled += (
-                f" Separately, the collection offered {view.offered_count} more works by artists this run named "
-                "but could not confirm. They are labelled `offered` and are not what was asked for."
+        # Both kinds get their own sentence, for the same reason the
+        # `resolving_images` branch above splits: a re-search's works are the
+        # ones it *covers*, owned by the parent run and carrying the parent's
+        # provenance — so "proposed" describes a phase this run never performed,
+        # and counting a proposed rate over them answers about the wrong thing.
+        # The clauses below are provenance-neutral and are shared.
+        if view.run.kind is RunKind.RESOLVE:
+            settled = f"This re-search finished: {view.resolved} of the {view.work_count} works it covers have an image."
+        else:
+            # Rated against what the model proposed, never against the total: the
+            # works the collection offered arrived carrying their images, so
+            # counting them in the numerator reports a retrieval rate nothing
+            # achieved. Both figures are direct counts — a numerator derived by
+            # subtracting the offered works goes negative the moment one of them
+            # is re-searched to nothing, which is a flow this same file
+            # recommends.
+            settled = (
+                f"This run finished: {view.resolved_proposals} of {view.proposed_count} proposed works have an image."
             )
+            if view.offered_count:
+                settled += (
+                    f" Separately, the collection offered {view.offered_count} more works by artists this run named "
+                    "but could not confirm. They are labelled `offered` and are not what was asked for."
+                )
         if view.unresolved:
             settled += (
                 f" {view.unresolved} could not be matched to any image and are reported as unresolved "

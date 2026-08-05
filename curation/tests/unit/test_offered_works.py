@@ -593,12 +593,18 @@ def test_a_re_search_of_an_offered_work_is_allowed_its_searches(services, engine
     assert view.searches_exhausted is False
 
 
-def test_a_re_search_never_claims_the_collection_offered_anything(services, engine, runner, collection):
-    """The offered sentence belongs to the run that could have made an offer.
+def test_a_re_search_reports_what_it_covers_rather_than_a_proposed_rate(services, engine, runner, collection):
+    """A re-search's works belong to its parent and carry the parent's provenance.
 
-    A re-search is refused at the record layer and returns early in the runner,
-    so a sentence about works it offered describes something that never happened
-    — over works whose provenance belongs to the parent run.
+    So "N of M proposed works" answers about a phase this run never performed,
+    and on a re-search covering offered works the denominator is not even theirs:
+    one proposed and one offered, both unresolved, reads "0 of 1 proposed works
+    have an image. 2 could not be matched" — two failures against a denominator
+    of one, with nothing accounting for the second.
+
+    **Asserted on the sentence produced, not the one omitted.** An earlier version
+    of this test checked only that "collection offered" was absent, which passes
+    in every branch including the broken one and pins nothing at all.
     """
     from curation.mcp.bindings import _run_notice
 
@@ -607,9 +613,15 @@ def test_a_re_search_never_claims_the_collection_offered_anything(services, engi
 
     run_id = start(runner).id
     (gift,) = offered(services, run_id)
-    resolve = runner.resolve_images(candidate_work_ids=[gift.id], initiated_by=InitiatedBy.MCP_CLIENT)
+    named = next(work for work in proposed(services, run_id))
+    resolve = runner.resolve_images(candidate_work_ids=[gift.id, named.id], initiated_by=InitiatedBy.MCP_CLIENT)
 
-    assert "collection offered" not in _run_notice(runner.run_status(resolve.id, wait=False))
+    notice = _run_notice(runner.run_status(resolve.id, wait=False))
+
+    assert "This re-search finished:" in notice
+    assert "of the 2 works it covers" in notice, "a re-search must count what it covers, not a proposed list"
+    assert "proposed works have an image" not in notice
+    assert "collection offered" not in notice
 
 
 def test_a_run_still_in_flight_describes_the_work_list_it_is_resolving(services, engine, runner, collection):
