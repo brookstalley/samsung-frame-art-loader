@@ -48,6 +48,48 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-05: The Critic's findings on the review half, closed in one pass
+
+<!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
+
+**Why:** the cumulative round over five chunks returned 1 blocking, 7 warnings
+and 10 notes across three reviewers. Nine fixed, six accepted, five filed
+(#5, #26, #81, #86).
+
+**The blocking one was CI lying in the safe-looking direction.** All three
+api-drift jobs ran `pytest -m live_*` unscoped, so collection reached four modules
+whose opt-in groups are absent in CI, each landing an import skip — and the guard
+fails on any skip. Every scheduled run would have gone red while every probe
+passed, which is the alarm that cries wolf until nobody reads it. `browser.yml`
+found and fixed the identical defect in this same bundle. Reproduced before
+fixing, per this repo's own lesson about reasoning at a CI guard rather than
+running it.
+
+**A correction to something the previous session recorded as settled.** Its
+handoff said a change-log entry with no `status=` tag is "release-pending by
+design", and I repeated it in mine. Git says otherwise: all 23 prior chunks carry
+`status=shipped`, written pre-merge on the feature branch. Five built chunks were
+therefore showing as unstarted in the derived Status, and the tooling would have
+taken Chunk 21 — finished — as the current one. Tagged, regenerated, and the note
+that misled me corrected in place.
+
+**The navigation guard, and a fix that was wrong in an instructive way.** Four
+views paged through up to fifty round trips and painted unguarded, so clicking
+away mid-load repainted the old view over the new one with the tab highlight and
+the fragment both naming the new. My first attempt put the generation in a
+module-level variable — which the *later* navigation overwrites, so the abandoned
+paint reads the generation that superseded it and lands anyway. The guard passed
+and did nothing. The test caught it; the value has to travel with the paint, so
+`render` takes it as a required first argument and throws if a view omits it.
+
+**Two mutations survived the sweep of that fix and neither was a defect.** One
+reads `state.nav` a line later than the capture, which is the same value because
+the thunk is invoked synchronously. The other removes `go()`'s own bump, which
+`readHash` compensates on every path that changes the fragment — so the line is
+load-bearing only when navigating to the view already displayed. Recorded in the
+code rather than papered over with a white-box test, so the next reader does not
+take the survivor for proof the line does nothing.
+
 ## 2026-08-05: The review half — the grid, its alternates, the verdict, the panel
 
 <!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
