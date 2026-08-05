@@ -1028,3 +1028,35 @@ That covers the deselection, the typo, and the already-red target set — where 
 mutation would otherwise be "caught" by a failure that was already there. Then
 treat any later exit outside {0, 1} as "this run did not answer the question"
 rather than as an answer.
+
+## Running a generator tells you what it will DO, not whether its input is right — when derived output looks wrong, ask the generator AND then check the source tag against how every prior instance was tagged, because "no tag" reads identically as a deliberate state and as a missing one
+
+Chunk 19B, 2026-08-05. The second half of the rule above it, and it cost two
+sessions to find.
+
+Chunk 23 established the first half correctly: derived output that looks stale is
+a question about its generator, not a defect to tidy. It then drew a conclusion
+the generator could not support — that an entry carrying no `status=` tag is
+release-pending *by design* — wrote it into this file, and the next session (me)
+read it in the handoff and repeated it. Five built chunks stayed unticked, and
+`build-plan.md`'s own Status prose says the tooling takes the first unchecked box
+as the current chunk, so the next session would have inherited a finished chunk's
+`Critic mode:` and `Type:`.
+
+**`regen-views` was run, and it answered honestly.** It said `4 chunk(s) flipped —
+unshipped [19A, 21, 22, 23]`, which is true and is not evidence the input was
+right. The generator's job is to apply the tags; it has no opinion about whether
+a tag is missing. Reading its output as a ruling is the mistake, and it is
+seductive precisely because consulting the mechanism is the correct first move —
+the error hides in the step *after* the one the rule already covers.
+
+**The check that settles it is one command against history, not another run of
+the generator:** `git log -S 'status=shipped' --oneline` — or simply grep the tags
+and compare. All 23 prior chunks carried `status=shipped`, every one written on a
+feature branch before its merge, which makes the convention unambiguous and makes
+the five untagged entries an omission rather than a state.
+
+The general form: a generator answers "what does this input produce". Whether the
+input is *right* is answered by comparing it to how every previous instance of the
+same thing was written. An absent field is the case where those two questions look
+identical and are not.

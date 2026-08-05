@@ -942,3 +942,5 @@ something you can do from memory while looking at the wrong thing.
 ## Two verification passes that agree can both be vacuous — when a result is one you cannot derive, run the smallest thing that reproduces it by hand before believing either, because agreement between two runs of the same broken instrument is not corroboration
 
 ## A pytest exit code that is neither 0 nor 1 is not a verdict — any tool reading `returncode != 0` as "the test caught it" reports success for a run that collected nothing, and every opt-in marker in this repo makes that the DEFAULT outcome of naming such a test on the command line
+
+## Running a generator tells you what it will DO, not whether its input is right — when derived output looks wrong, ask the generator AND then check the source tag against how every prior instance was tagged, because "no tag" reads identically as a deliberate state and as a missing one
