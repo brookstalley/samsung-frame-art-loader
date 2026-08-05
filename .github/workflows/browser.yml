@@ -3,8 +3,10 @@
 # WHAT THIS IS FOR. `curation/src/curation/http/static/app.js` is the product's
 # only human interface, and neither Python suite runs a line of it. This suite
 # drives it in a real Chromium against a real booted server. Unlike the API-drift
-# probes, it is about whether our own code is right — so it belongs on push,
-# where a regression is caught by the change that caused it.
+# probes, it is about whether our own code is right — so it runs on every pull
+# request and on pushes to `main`, where a regression is caught by the change that
+# caused it. Not on every push to every branch: `pull_request` already fires on
+# each push to a PR head, so the wider trigger would only double the runs.
 #
 # WHY IT IS NOT IN THE DEFAULT SUITE. It needs a ~200MB browser, which is too
 # much to impose on `uv sync` for someone who only wants to run the tests. That

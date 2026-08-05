@@ -2,10 +2,12 @@
 
 `.github/scripts/assert_tests_ran.py` is the only thing standing between "this
 job verified the thing it exists to verify" and "this job was green because every
-test skipped". Five CI jobs depend on it — the four in `api-drift.yml` and the
-browser suite — and each of those suites is *designed* to skip when its
-dependency is absent, which is correct on a developer's machine and is precisely
-the trap in CI.
+test skipped". **Every CI job that runs a suite depends on it** — the API-drift
+probes and the browser suite — and each of those suites is *designed* to skip when
+its dependency is absent, which is correct on a developer's machine and is
+precisely the trap in CI. The invariant is stated rather than a count of today's
+jobs, because the count is the part that goes stale: the last test in this file is
+what actually holds it, by deriving the list from the workflow files.
 
 So the guard is load-bearing, and until this file it had no test: a guard that
 stopped working would itself be invisible, reporting the same silent green it
@@ -119,7 +121,7 @@ def test_a_report_with_no_testsuite_fails_the_job(tmp_path):
     assert guard.main(report) == 1
 
 
-def test_every_workflow_that_runs_a_suite_calls_the_guard(tmp_path):
+def test_every_workflow_that_runs_a_suite_calls_the_guard():
     """The guard is worth nothing where it is not wired, and wiring is easy to omit.
 
     Derived from the workflow files rather than from a list written here: a new

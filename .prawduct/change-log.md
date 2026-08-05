@@ -133,13 +133,22 @@ because it is non-deterministic. This one spends nothing, reaches nothing
 foreign, and is entirely deterministic; what it needs is a ~200MB browser, which
 is too much for a default `uv sync`. So its deselection is a packaging decision
 rather than a statement about the tests, its dependency is an opt-in group of the
-same shape as `eval`'s, and `.github/workflows/browser.yml` runs it on every push
-and pull request so that being off the default run does not become never running
-— with `assert_tests_ran.py` behind it, because a suite that skipped itself
-reports green and green-because-absent is indistinguishable from
+same shape as `eval`'s, and `.github/workflows/browser.yml` runs it on every pull
+request and on pushes to `main` so that being off the default run does not become
+never running — with `assert_tests_ran.py` behind it, because a suite that skipped
+itself reports green and green-because-absent is indistinguishable from
 green-because-passing in a checks list. Verified by installing without the group
 and watching both modules skip with the command that fixes them, the default
 suite untouched at 1,752 passing.
+
+**The CI leg was wrong when first written, and the guard is what said so.** `-m
+browser` still *collects* the whole tests tree, so the evaluation module's
+import-skip landed in the JUnit report, and `assert_tests_ran.py` reads any skip
+as a provisioning failure — the job would have failed on every run. Found by
+pointing the guard at a real report rather than by reasoning about it (it exited
+1, naming the eval module), and fixed by scoping the invocation to
+`tests/browser` as well as to the marker. Worth recording because the marker
+alone looks sufficient and is not.
 
 **What it covers is the client, with `/api` as its boundary.** Where a real
 server can produce the state it does — paging runs against a real catalogue of
