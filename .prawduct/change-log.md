@@ -70,8 +70,9 @@ sentence in the panel is the whole remedy. Two browser tests cover it, both prov
 by mutation, which is the harness earning its keep in the same session it landed.
 
 **The guard that had no guard.** `assert_tests_ran.py` is the only thing
-distinguishing green-because-passing from green-because-skipped across five CI
-jobs, and nothing tested it — the failure shape it exists to refuse, one level up.
+distinguishing green-because-passing from green-because-skipped in every CI job
+that runs a suite, and nothing tested it — the failure shape it exists to refuse,
+one level up.
 Nine tests now cover it, including both JUnit root shapes it handles by hand and a
 check, derived from the workflow files rather than a written list, that every
 workflow running pytest also calls it. Mutation found a weak one: asserting only

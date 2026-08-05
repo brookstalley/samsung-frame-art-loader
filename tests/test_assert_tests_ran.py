@@ -77,8 +77,8 @@ def test_the_failure_names_which_dependency_was_missing(tmp_path, capsys):
     """ "1 test(s) skipped" sends nobody anywhere; the reason is the whole value.
 
     Asserted on the emitted line rather than only on the exit code, because a
-    guard that fails the job without saying why leaves an operator reading five
-    workflow files to find which install broke.
+    guard that fails the job without saying why leaves an operator reading every
+    workflow in the repo to find which install broke.
     """
     guard = _load()
     report = _report(tmp_path, NESTED.format(tests=1, skipped=1, cases=SKIPPED_CASE))
@@ -127,8 +127,20 @@ def test_every_workflow_that_runs_a_suite_calls_the_guard():
     Derived from the workflow files rather than from a list written here: a new
     workflow that runs pytest and forgets the guard is exactly the regression
     this asserts, and a hardcoded list of today's workflows could not see it.
+
+    **Both spellings of the extension**, because GitHub accepts either and a
+    guard that walks only one has a hole exactly the width of someone typing
+    `.yaml`.
+
+    **What this does NOT catch, stated rather than left to be discovered:** it
+    matches per *file*, so a second pytest job added to a workflow that already
+    calls the guard elsewhere would pass unseen. Closing that needs a YAML parse,
+    and pyyaml is not a dependency of this plane — adding one for a single test
+    buys less than it costs. The Critic reviews new jobs; this holds the case
+    where a whole workflow forgets.
     """
-    workflows = sorted((GUARD.parents[2] / ".github" / "workflows").glob("*.yml"))
+    directory = GUARD.parents[2] / ".github" / "workflows"
+    workflows = sorted(set(directory.glob("*.yml")) | set(directory.glob("*.yaml")))
     assert workflows, "no workflows found — this test is asserting nothing"
 
     for workflow in workflows:

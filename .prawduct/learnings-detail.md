@@ -929,8 +929,9 @@ stating its own reasoning in one line.
 Neighbouring rule, quoted by its heading rather than linked: "A guard evaluated
 inside the filters it guards can manufacture the confidence it exists to withhold
 — range a safety check over the population the HAZARD lives in, never the narrowed
-one the feature reads". Both are cases where a result's meaning depends on
-machinery the reader did not look at.
+one the feature reads, because the filter that makes the feature correct is the
+one that can hide the colliding case". Both are cases where a result's meaning
+depends on machinery the reader did not look at.
 
 ## Closing a gap means sweeping the artifacts that assert the gap is open — grep for the absence you just removed, not only for the thing you just added, because a document saying "there is no X" reads as current guidance and sends the next builder to rebuild the debt you just paid
 
