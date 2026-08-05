@@ -49,6 +49,7 @@ from curation.persistence.discovery_records import (
     RunStatus,
     SpendCategory,
     SpendRecord,
+    UnresolvedReason,
     Verdict,
 )
 from curation.persistence.durable import OrderBy
@@ -87,6 +88,7 @@ CREATE TABLE IF NOT EXISTS candidate_works (
     rationale          TEXT NOT NULL,
     work_dedup_key     TEXT NOT NULL,
     resolution_status  TEXT NOT NULL,
+    unresolved_reason  TEXT,
     verdict            TEXT NOT NULL,
     rejected_reason    TEXT,
     decided_at         TEXT
@@ -308,6 +310,7 @@ def _candidate_work_row(work: CandidateWork) -> dict[str, Any]:
         "rationale": work.rationale,
         "work_dedup_key": work.work_dedup_key,
         "resolution_status": str(work.resolution_status),
+        "unresolved_reason": str(work.unresolved_reason) if work.unresolved_reason else None,
         "verdict": str(work.verdict),
         "rejected_reason": work.rejected_reason,
         "decided_at": to_iso(work.decided_at),
@@ -383,6 +386,7 @@ def _candidate_work(row: Mapping[str, Any]) -> CandidateWork:
         rationale=row["rationale"],
         work_dedup_key=row["work_dedup_key"],
         resolution_status=ResolutionStatus(row["resolution_status"]),
+        unresolved_reason=UnresolvedReason(row["unresolved_reason"]) if row["unresolved_reason"] else None,
         verdict=Verdict(row["verdict"]),
         artwork_id=row["artwork_id"],
         proposed_artist=row["proposed_artist"],

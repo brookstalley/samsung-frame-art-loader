@@ -249,7 +249,7 @@ def test_a_re_search_never_hands_back_the_instance_that_was_turned_down(discover
     assert outcome.selected.id == fresh.id
 
 
-# -- Q12: which works could not be resolved, and are therefore suspect? -------
+# -- Q12: which works could not be resolved, and which kind of nothing was it? --
 #
 # A model asked for an artist's famous works will occasionally invent a
 # plausible title. A work no credible instance can be found for is evidence of

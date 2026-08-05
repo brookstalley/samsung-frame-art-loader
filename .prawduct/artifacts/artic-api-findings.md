@@ -84,7 +84,32 @@ q="asdfghjkl qwerty"    pagination.total 132630   data[0] "Self-Portrait"  _scor
 `pagination.total` is the collection size regardless of the query, and results are
 always returned. **Neither the presence of results nor `total` is evidence that
 anything matched.** A client checking "did the search return anything" gets yes,
-always. The one thing that does discriminate garbage is `_score == 0.0` exactly.
+always.
+
+> **The zero score is gone — re-measured 2026-08-04, and this half of the finding
+> is retracted.** The same shape of query now comes back with ordinary relevance
+> scores and no zeros at all:
+>
+> ```
+> q="zzzqqx nonexistent painting nobody at all"   pagination.total 132634
+>   69.80  'Flowers of All Seasons'
+>   57.81  'A Sunday on La Grande Jatte — 1884'   Georges Seurat
+>   57.08  'Nighthawks'                           Edward Hopper
+>   54.26  'Untitled (Painting)'                  Mark Rothko
+> ```
+>
+> So **nothing in the response discriminates a garbage query**, and the sentence
+> this note replaces — that `_score == 0.0` is the one thing that does — described
+> an API that no longer exists. The consequence is not small: the pre-filter built
+> on it is now inert, and the identity comparison is the *only* thing standing
+> between a nonsense query and *Nighthawks*. The filter is kept because what it
+> asserts is still true whenever it fires, but it is a correctness detail and not
+> a guard.
+>
+> **This is what the live suite is for**, and it worked exactly as designed: the
+> test holding this measurement went red on its own, before anything depended on
+> the stale belief. Finding 3 below is unaffected and is the one that mattered all
+> along.
 
 **3. The near-match hazard is real and reproducible.** ARTIC does not hold *The
 Persistence of Memory* — it is MoMA's. Asking for it anyway:
@@ -105,8 +130,20 @@ and the build plan both forbid, arriving through the most obvious implementation
 
 **So confidence must come from comparing the returned `title` and `artist_title`
 against the work that was asked for, not from the engine's relevance number.**
-`_score == 0` is usable only as a cheap pre-filter for a query that matched
-nothing at all.
+That conclusion is now load-bearing in a way it was not when it was written: with
+the zero score gone (see the retraction above), the comparison is not the *main*
+defence but the only one.
+
+**And the artist is not sent to the search at all — measured 2026-08-04.** Folding
+it into the free-text `q=` looked like a harmless narrowing and is not: the ranker
+scores the whole term string, so the artist's tokens compete with the title's for
+the ten places a result has. Over eight Ellsworth Kelly paintings the museum
+holds, `q="<title>"` retrieved all eight and `q="<title> Ellsworth Kelly"`
+retrieved six, never doing better on any one. A field filter is not the
+alternative and never was — `artist_title.keyword` is an exact match against the
+museum's own spelling, and "Sonia Delaunay" returns nothing where
+"Sonia Delaunay-Terk" returns fifteen. The title retrieves; the identity
+comparison judges.
 
 ## Every IIIF response is 843 pixels wide, whatever you ask for
 
@@ -256,7 +293,8 @@ stops describing the API.
 
 | To | What |
 |---|---|
-| Phase-2 engine | Confidence is a title/artist comparison, never `_score`; `_score == 0` is a pre-filter only |
+| Phase-2 engine | Confidence is a title/artist comparison, never `_score` — and since the zero score went, that comparison is the only defence, not the main one |
+| Museum query | The title alone is sent; the artist would compete with it for the ten result places, and is applied by the comparison instead |
 | Phase-2 engine | One search request per work returns dimensions, rights and preview URL together |
 | `CandidateImage` | `estimated_width`/`estimated_height` from `thumbnail.width`/`height`; `rights_status` from `is_public_domain`; `acquisition_method = dezoomify`; `provider = artic` |
 | Preview caching | `{iiif_url}/{image_id}/full/843,/0/default.jpg`, one GET, no size negotiation |

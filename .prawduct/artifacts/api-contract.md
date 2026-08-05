@@ -501,12 +501,18 @@ distinction between "nothing was found" and "we could not look".
 **The row gains `unresolved_reason` beside `resolution_status`** — which kind of
 nothing, null unless the work is unresolved (`data-model.md` § CandidateWork). It
 is a short enum and it is the answer to the question `resolution_status` raises, so
-a caller that has one and not the other has to fetch each work to act. **What is
-owed with it is the arithmetic**, not an assurance: the 10,200-token page above was
-measured with this field absent, and the ceiling already runs 2% over. The chunk
-that adds the field re-measures a full page and either records the new figure or
-lowers the ceiling — the one thing it must not do is add a field to a row whose
-budget was measured without it and leave the old number standing.
+a caller that has one and not the other has to fetch each work to act.
+
+**Re-measured when it was added, 2026-08-04, because the figures above were taken
+without it.** A full 40-row page is now **10,522 tokens** — 6,400 of picture,
+unchanged, and **4,122 of text**, up from 3,800. The default 30-row page is
+**7,933**, against the 10,000 the client warns at. Both thresholds still hold and
+neither cap moved; the field cost about 8 tokens a row, which is roughly a third of
+the headroom the default page had. The two budget tests in
+`tests/integration/test_review_surface.py` assert each figure against its own
+threshold on a live server, so this is a measurement with a mechanism behind it
+rather than a number in prose — the next field added to this row fails there before
+it costs a curator their images.
 
 **Image content blocks correlate by position and by nothing else.** The protocol
 gives a block no identity, and a result's blocks are only the instances that had a

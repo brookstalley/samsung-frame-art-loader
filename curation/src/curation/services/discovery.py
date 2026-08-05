@@ -44,6 +44,7 @@ from curation.persistence.discovery_records import (
     RunStatus,
     SpendCategory,
     SpendRecord,
+    UnresolvedReason,
     Verdict,
 )
 from curation.persistence.records import AcquisitionMethod, Artist, RightsStatus, SourceClass
@@ -81,9 +82,12 @@ class VerdictOutcome:
 class RunResults:
     """A run's proposed works, split by whether an image was found for them.
 
-    `unresolved` is a bucket rather than an omission. A work phase 2 could not
-    resolve is evidence that phase 1 may have invented it, so a run that quietly
-    returned a shorter list would be discarding its own most useful signal.
+    `unresolved` is a bucket rather than an omission: a run that quietly returned
+    a shorter list would be discarding its own most useful signal. **What the
+    signal says depends on the work's `unresolved_reason`** — only `NOT_HELD` is
+    evidence phase 1 may have invented the work, and the rest report a collection
+    that has it and cannot offer it usably, or a curator who has already turned
+    down what it offered.
     """
 
     run: DiscoveryRun
@@ -755,7 +759,9 @@ class DiscoveryService:
             store_write(self._store.update_candidate_work, awaiting)
         return awaiting
 
-    def record_resolution(self, candidate_work_id: str) -> ResolutionOutcome:
+    def record_resolution(
+        self, candidate_work_id: str, *, refusals: frozenset[UnresolvedReason] = frozenset()
+    ) -> ResolutionOutcome:
         """Close a resolution attempt for one work, from the instances it now holds.
 
         The outcome is read from the work's instances rather than asserted by the
@@ -764,14 +770,23 @@ class DiscoveryService:
         review; a work whose instances are all rejected — or which never had any
         — is `unresolved`, which is a reportable outcome and not an absent row.
 
+        `refusals` is the one thing the store cannot see for itself: a result the
+        search discarded never became a row, so which gate refused it is
+        unrecoverable here and travels in from the attempt that made the
+        judgement. It is evidence, not an assertion of the outcome — the status
+        and the reason are both still derived below, and a caller cannot declare
+        a work resolved or name a reason the rows contradict.
+
         A terminal verdict is never overwritten. The curator may have accepted or
         rejected the work while the attempt was running, and only their verdict
         is authoritative; the result is then reported and not applied.
         """
         with self._store.transaction():
             work = self.get_candidate_work(candidate_work_id)
-            chosen = selection.best(self._store.list_candidate_images(work.id), box=self._artwork_box)
+            held = self._store.list_candidate_images(work.id)
+            chosen = selection.best(held, box=self._artwork_box)
             status = ResolutionStatus.RESOLVED if chosen is not None else ResolutionStatus.UNRESOLVED
+            reason = None if chosen is not None else self._unresolved_reason(held, refusals)
             if work.verdict.is_terminal:
                 return ResolutionOutcome(work=work, resolution_status=status, selected=chosen, applied=False)
             if chosen is not None and not chosen.is_selected:
@@ -779,6 +794,7 @@ class DiscoveryService:
             settled = replace(
                 work,
                 resolution_status=status,
+                unresolved_reason=reason,
                 # A work the curator asked a better image for returns to review
                 # once one is on offer. It stays where it is when nothing was
                 # found, which is what makes a dead end visible rather than a
@@ -787,6 +803,28 @@ class DiscoveryService:
             )
             store_write(self._store.update_candidate_work, settled)
         return ResolutionOutcome(work=settled, resolution_status=status, selected=chosen, applied=True)
+
+    def _unresolved_reason(self, held: Sequence[CandidateImage], refusals: frozenset[UnresolvedReason]) -> UnresolvedReason:
+        """Which kind of nothing this work came back with.
+
+        The rows the work already holds answer first, because a row on the card
+        is further than a result that never became one. Those two cases are
+        mutually exclusive rather than ordered: rejected instances are filtered
+        out before the floor applies, so surviving-but-unselectable means every
+        survivor is below the floor, and no survivors at all means the curator
+        turned down everything there was.
+
+        Only when the work holds no rows does what the search discarded decide
+        it, and then the deepest gate any result reached wins — "the collection
+        has it, too small for your wall" is something a curator can act on, and
+        "some result did not match" is not. An attempt that refused nothing
+        because the provider returned nothing lands on `NOT_HELD`, which is what
+        happened: no record came back whose title matched.
+        """
+        if held:
+            surviving = selection.surviving(held)
+            return UnresolvedReason.BELOW_FLOOR if surviving else UnresolvedReason.ALL_REJECTED
+        return max(refusals, key=lambda reason: reason.depth, default=UnresolvedReason.NOT_HELD)
 
     # -- spend ----------------------------------------------------------------
 

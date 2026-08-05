@@ -23,12 +23,20 @@ else returns the same bytes after an extra round trip. It is also why an instanc
 here is `dezoomify` — full resolution is reachable only by walking a region grid,
 notwithstanding an advertised `maxArea` that says otherwise.
 
-**A query that matches nothing still returns the whole collection**, at
-`_score` 0.0, with `pagination.total` reporting the collection size regardless.
-So neither the presence of results nor the total is evidence of a match, and a
-zero score is the one signal that separates a garbage query from a real one. It
-is used here as a cheap pre-filter and nothing more; the real check is the
-identity comparison above the seam.
+**A query that matches nothing still returns the whole collection**, with
+`pagination.total` reporting the collection size regardless. So neither the
+presence of results nor the total is evidence of a match.
+
+**Nothing in the response distinguishes a garbage query from a real one**, and
+this is a correction rather than an original finding. The first probe recorded
+non-matching results arriving at `_score` 0.0, which made a zero-score pre-filter
+a cheap first line. Re-measured 2026-08-04, a nonsense query returns ten real
+works scoring in the fifties and sixties — *Nighthawks* among them. **The
+pre-filter below is therefore no defence against a garbage query, and the
+identity comparison above the seam is the only one.** The filter is kept because
+what it says is still true — a record that matched no term cannot be the work —
+but it is a correctness detail now and not a guard, and reading it as a guard is
+what this paragraph exists to prevent.
 """
 
 import logging
@@ -156,20 +164,30 @@ class ArticImageSearch:
     def find_images(self, query: ImageQuery) -> Sequence[FoundImage]:
         """Every instance the collection holds for this work, unjudged.
 
-        The artist is folded into the query text rather than filtered on, because
-        the API's artist field is free text with its own spellings and a filter
-        would silently return nothing for a name the museum records differently.
-        Narrowing is the identity comparison's job, where a near miss is visible.
+        **The artist is not sent at all, and this was measured rather than
+        reasoned.** It is not a field filter either — a filter would silently
+        return nothing for a name the museum spells its own way, which is why one
+        was never used. But folding the artist into the free-text query is not the
+        harmless middle it looks like: the search ranks over the whole term
+        string, so the artist's tokens compete with the title's for the ten places
+        the result has, and works the collection demonstrably holds fall out of
+        the window. Measured 2026-08-04 over eight Ellsworth Kelly paintings the
+        museum holds: the title alone retrieved all eight, the title with
+        "Ellsworth Kelly" appended retrieved six, and it was never the better of
+        the two on any title.
+
+        The artist still decides the outcome — it is simply the identity
+        comparison above the seam that applies it, where a near miss is visible
+        and refusable, rather than the ranker, where it is silent.
         """
-        terms = query.title if not query.artist else f"{query.title} {query.artist}"
         payload = self._get(
-            f"{_SEARCH_URL}?q={quote(terms)}&limit={_RESULT_LIMIT}&fields={_FIELDS}",
-            what=f"search the collection for {terms!r}",
+            f"{_SEARCH_URL}?q={quote(query.title)}&limit={_RESULT_LIMIT}&fields={_FIELDS}",
+            what=f"search the collection for {query.title!r}",
         )
         iiif = _iiif_base(payload.get("config"))
         data = payload.get("data")
         if not isinstance(data, list):
-            raise ImageSearchFailure(f"The Art Institute's search returned no data array for {terms!r}.")
+            raise ImageSearchFailure(f"The Art Institute's search returned no data array for {query.title!r}.")
         found = [image for entry in data if (image := _instance(entry, iiif=iiif)) is not None]
         log.info(
             "searched a museum collection for a work",
@@ -258,11 +276,14 @@ def _instance(entry: object, *, iiif: str) -> FoundImage | None:
     """One search result as an instance, or `None` where it cannot be one.
 
     Three things disqualify a result and each is a fact about the record rather
-    than a judgement about the work. A **zero score** means the query matched
-    nothing and the collection came back anyway. **No `image_id`** means the
-    museum holds the object but publishes no image of it. **No dimensions** means
-    the rendered size on the wall cannot be computed, and an instance recorded
-    without them would be indistinguishable from one that clears the floor.
+    than a judgement about the work. A **zero score** means the record matched no
+    term in the query, so it cannot be the work — true whenever it happens, and
+    as of 2026-08-04 it no longer happens for a garbage query, which is why the
+    module docstring above insists this is not the defence against one. **No
+    `image_id`** means the museum holds the object but publishes no image of it.
+    **No dimensions** means the rendered size on the wall cannot be computed, and
+    an instance recorded without them would be indistinguishable from one that
+    clears the floor.
     """
     if not isinstance(entry, dict):
         return None

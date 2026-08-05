@@ -906,6 +906,7 @@ def _work_summary(work: CandidateWork) -> dict[str, Any]:
         "artist": work.proposed_artist,
         "verdict": str(work.verdict),
         "resolution_status": str(work.resolution_status),
+        "unresolved_reason": _reason(work),
     }
 
 
@@ -1066,6 +1067,18 @@ def _review_truncation_notice(page: CandidatePage) -> str | None:
     return f"Showing {first}-{last} of {page.total} works at limit {page.limit}{ceiling}; {remedy} to see the rest."
 
 
+def _reason(work: CandidateWork) -> str | None:
+    """Which kind of nothing, beside the status that raises the question.
+
+    Carried on every shape that carries `resolution_status`, because the two are
+    one answer: a caller holding "unresolved" and nothing else cannot tell a
+    title the collection does not have from a scan too small for the wall, and
+    would have to fetch each work in turn to find out — which costs more than the
+    field it was saving.
+    """
+    return str(work.unresolved_reason) if work.unresolved_reason else None
+
+
 def _candidate_summary(view: CandidateView, pictures: _Pictures) -> dict[str, Any]:
     """One proposed work as a *listing* shows it: enough to choose, and one picture.
 
@@ -1085,6 +1098,7 @@ def _candidate_summary(view: CandidateView, pictures: _Pictures) -> dict[str, An
         "artist": view.work.proposed_artist,
         "verdict": str(view.work.verdict),
         "resolution_status": str(view.work.resolution_status),
+        "unresolved_reason": _reason(view.work),
         "instances_held": view.instances_held,
         "shown_image": None if view.shown is None else _shown_fields(view.shown, pictures),
     }
@@ -1104,6 +1118,7 @@ def _candidate_detail(view: CandidateView, pictures: _Pictures) -> dict[str, Any
         "artist": view.work.proposed_artist,
         "verdict": str(view.work.verdict),
         "resolution_status": str(view.work.resolution_status),
+        "unresolved_reason": _reason(view.work),
         "instances_held": view.instances_held,
         "instances_surviving": view.instances_surviving,
         "shown_image": None if view.shown is None else _instance_fields(view.shown, pictures),

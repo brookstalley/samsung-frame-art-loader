@@ -48,6 +48,75 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-04: Chunk 21 — which kind of nothing, and the artist out of the query
+
+<!-- prawduct: chunks=21 | scope=v1-build -->
+
+**Why:** two runs proposed works and resolved none of them with both suites green,
+and nothing in the product could say why. This makes the failure diagnosable. It
+does **not** meaningfully raise the resolution rate, and the measurement below says
+so plainly rather than letting anyone hope otherwise.
+
+**The RED live test first, because everything else widened what reaches the gate
+it lost.** Issue #78: a nonsense query no longer scores 0.0 at the Art Institute.
+Re-measured live — it returns ten real works at 54–70, *Nighthawks* at 57, with
+`pagination.total` still the whole collection. So the zero-score pre-filter is
+inert and **the identity comparison is the only thing between a garbage query and
+a real painting**. The filter is kept (what it asserts is still true when it
+fires) and demoted in prose from guard to correctness detail; the retraction is in
+`artic-api-findings.md`, and the live test is re-aimed at the defence that
+actually holds. The suite worked as designed: it went red on its own before
+anything leaned on the stale belief.
+
+**`unresolved_reason`, derived across two layers because neither can produce it
+alone.** The engine returns its refusals beside its instances — a result it
+discarded never becomes a row, so which gate turned it away is unrecoverable
+downstream — and the store derives the rest from the rows the work holds. The
+precedence rule is on the enum as a `depth` property rather than at the write
+site, so a sixth member without one fails at definition instead of tying silently.
+
+**`all_rejected` was missed on the first pass, and the reason generalises.** It was
+ruled unreachable because rejecting an instance sets the *verdict*, not the
+resolution status — true at the rejection, irrelevant, because the re-search that
+finds nothing lands the same work at `unresolved` later. A test asserting that
+whole path already existed. **Reachability was argued from the write site that sets
+the value rather than from the paths that arrive at it.**
+
+**The artist is out of the museum query, and the test that pinned it is replaced
+rather than weakened.** The old contract said the artist "narrows" the query text.
+Measured against the live API over eight Ellsworth Kelly paintings the museum
+holds: the title alone retrieved **8 of 8**, the title with the artist appended
+**6 of 8**, never better on any title. The replacement contract is stricter — the
+request carries the title and *not* the artist — and a second test pins the half
+that could have been lost quietly, that the artist still refuses a near match
+above the seam. **This one is flagged for the Critic on purpose**: tests are
+contracts here, and the argument that a test pinning a measured-false claim is a
+recorded measurement rather than a contract should not be the builder's to accept.
+
+**What it was worth, measured rather than claimed.** The resolution floor is now a
+live test over the 51 distinct works in the real phase-1 corpus. It reads **5 of
+51**, against the 4 recorded before the change. One work. That is the honest
+result: the fold was a real defect and fixing it was never what moves this number.
+What the five say is that supply is — four Japanese prints and one O'Keeffe, all
+safely inside the public-domain boundary.
+
+**Also:** the reason reaches the wire on all three shapes that carry
+`resolution_status`, with the page re-measured because the row grew — a full
+40-row page is **10,522 tokens** against its 25,000 cap, the default 30-row page
+**7,933** against the 10,000 warning, both asserted by existing budget tests on a
+live server. `observability-strategy.md`'s two-way split gains the third failure
+mode it was structurally blind to: a record the query never retrieved emits no
+event at all, so a run whose journal is all `not_the_work` should prompt a
+question about the query, not about the results. And the claim that `unresolved`
+means phase 1 invented the work is narrowed to `not_held` at all six sites that
+asserted it, found by the grep rather than by memory.
+
+**Evidence:** both default suites green (52 + 1647). The **live museum suite is
+green at 10 passed**, having started this chunk at 1 failed. A ten-mutation sweep
+over the new branches — the two confusable labels swapped in each direction, both
+row-derived reasons swapped, precedence inverted, the reason dropped at the wire
+and at the store, the artist folded back in — **caught all ten**.
+
 ## 2026-08-04: A run may offer works the curator did not name — three requirements and two chunks
 
 **Why:** two real discovery runs proposed eight works and resolved none of them,
@@ -86,12 +155,22 @@ constraint 13 extended to works the system chooses, with its honest cost stated.
 **Three requirements written:**
 
 - **`unresolved` must say which kind of nothing** (`data-model.md` § CandidateWork).
-  Four routes that are not interchangeable, with a precedence rule stated rather
-  than left to the write site: the *deepest* gate any record reached wins, because
-  "the collection holds this, too small for your wall" is actionable and "something
-  somewhere did not match" is not. **This narrows a claim the repo asserts in six
-  places** — that `unresolved` means phase 1 may have invented the work — to
-  `not_held` alone. Two enum values were considered and left out as unreachable.
+  One value per route to `unresolved`, none of them interchangeable, with a
+  precedence rule stated rather than left to the write site: the *deepest* gate any
+  record reached wins, because "the collection holds this, too small for your wall"
+  is actionable and "something somewhere did not match" is not. **This narrows a
+  claim the repo asserts in six places** — that `unresolved` means phase 1 may have
+  invented the work — to `not_held` alone.
+
+  **One route was missed on the first pass and is recorded rather than smoothed
+  over.** `all_rejected` — the work holds instances, the curator turned down every
+  one, and the re-search found nothing to add — was ruled unreachable because
+  rejecting an instance sets the *verdict*, not the resolution status. True at the
+  rejection and irrelevant: the re-search that finds nothing lands that same work
+  at `unresolved` later, `data-model.md` said so already, and a test asserting the
+  whole path existed throughout. **Reachability was argued from the write site that
+  sets the value instead of from the paths that reach it**, which is the reusable
+  half.
 - **The resolution rate is a measured number with a floor** (`product-brief.md`
   § Success Criteria), over a fixed corpus, with the *test* as the authority for
   the figure and this repo's habit of naming tests that do not exist called out:

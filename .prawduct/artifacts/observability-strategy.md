@@ -172,10 +172,24 @@ between planes.
 >
 > **`phase_two.not_the_work` is the one to read first when a run comes back
 > emptier than expected.** It carries the museum's own title and artist beside the
-> requested ones, so the two failure modes it sits between are distinguishable
-> from the journal alone: a work the collection genuinely does not hold, and a
-> work it holds under a name the identity comparison did not match. The second is
-> a defect in the comparison; the first is the product working.
+> requested ones, so the failure modes it sits between are distinguishable from
+> the journal alone: a work the collection genuinely does not hold, and a work it
+> holds under a name the identity comparison did not match. The second is a defect
+> in the comparison; the first is the product working.
+>
+> **There is a third, and this split could not express it — which is how it went
+> unseen (2026-08-04).** A record the query *never retrieved* emits no event at
+> all, because nothing reached the comparison to be discarded. The measured case:
+> the artist was folded into the free-text museum query, its tokens competed with
+> the title's for the ten places a result has, and works the collection
+> demonstrably holds fell outside the window. Every one of them looked, from the
+> journal, exactly like a work the collection does not hold — the product
+> working. A two-way split over *what was discarded* is blind by construction to
+> what was never fetched, so the journal alone cannot close this, and the count
+> already on `phase_two.searched` is what distinguishes a thin result from an
+> absent one. **When a run comes back emptier than expected and
+> `not_the_work` explains all of it, the next question is what the query asked
+> for**, not what came back.
 
 > **The preview sweep's events, added 2026-08-03, and the failure they exist to
 > break the silence around.** The sweep is the plane's only periodic job, and its

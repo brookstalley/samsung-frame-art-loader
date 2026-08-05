@@ -2105,9 +2105,12 @@ binds already exists and is contract-tested.
   the identity gate is the only thing between a garbage query and *Nighthawks* —
   which must be settled *before* the query change below, since that change widens
   what reaches a gate that just lost its outer layer. **Second, `unresolved_reason`
-  on `CandidateWork`** — four values, derived on the same write as the status from
-  decisions phase 2 already makes and throws away, with the precedence rule
-  `data-model.md` now states. **Third, the artist fold**: the artist is folded into
+  on `CandidateWork`** — one value per route to `unresolved`, derived on the same
+  write as the status from decisions phase 2 already makes and throws away, with
+  the precedence rule `data-model.md` now states. Two of the values are read from
+  the rows the work already holds and the rest from what the search discarded, so
+  the derivation spans the engine and the store and neither half can produce it
+  alone. **Third, the artist fold**: the artist is folded into
   the free-text query, where its tokens dominate scoring, and the measured cost is
   that three different Frank Stella titles return a byte-identical top ten and
   Ellsworth Kelly resolves 0 of 12 held works against 10 of 12 title-only. Issue
@@ -2157,8 +2160,11 @@ binds already exists and is contract-tested.
   that resolved nothing. At least: swap `identity_refused` for `not_held` in the
   derivation (a survivor means nothing distinguishes "the museum does not have it"
   from "it has it under another artist", which is the whole point of the column);
-  neuter the `size_unknown` guard; neuter the `below_floor` route; flip the
-  precedence comparison; revert the artic query to the artist fold (a survivor
+  swap `all_rejected` for `below_floor` (a survivor means nothing tests the split
+  between the curator having turned everything down and the collection's scans
+  being too small — the pair the store derives, and the pair that was nearly
+  missed); neuter the `size_unknown` guard; neuter the `below_floor` route; flip
+  the precedence comparison; revert the artic query to the artist fold (a survivor
   means nothing in the suite measures retrieval at all, which is true today)
 - **Acceptance criteria:** every `unresolved` work carries a reason and the wire
   reports it beside the status; the live museum suite is green with the zero-score

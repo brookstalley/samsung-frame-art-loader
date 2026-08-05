@@ -359,6 +359,41 @@ def cost_of(result) -> tuple[float, float]:
     return pictures, text
 
 
+async def test_an_unresolved_work_reaches_a_curator_with_which_kind_of_nothing_it_was(server_url, services, propose, add_image):
+    """The acceptance criterion: derived is not enough, it has to arrive.
+
+    Two works that both read `unresolved` and mean opposite things — one the
+    collection does not hold, one whose only scan would render as a postage
+    stamp. A listing that carried the status alone would show a curator two
+    identical rows and offer no way to tell the invented title from the small
+    picture without opening each in turn.
+    """
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    missing = propose("A Work Nobody Holds", run_id=run.id, dedup_key="missing")
+    services.discovery.record_resolution(missing.id)
+    tiny = propose("A Work Held Too Small", run_id=run.id, dedup_key="tiny")
+    add_image(tiny, estimated_width=600, estimated_height=450)
+    services.discovery.record_resolution(tiny.id)
+
+    works = payload_of(await call(server_url, "art_review", action="list_works", run_id=run.id))["works"]
+
+    reasons = {work["title"]: work["unresolved_reason"] for work in works}
+    assert reasons == {"A Work Nobody Holds": "not_held", "A Work Held Too Small": "below_floor"}
+
+
+async def test_a_resolved_work_reaches_a_curator_with_no_reason_attached(server_url, services, propose, add_image):
+    """The other side, without which the assertion above passes on a constant."""
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    found = propose("A Work Held At Size", run_id=run.id, dedup_key="held")
+    add_image(found, estimated_width=6949, estimated_height=8400)
+    services.discovery.record_resolution(found.id)
+
+    works = payload_of(await call(server_url, "art_review", action="list_works", run_id=run.id))["works"]
+
+    assert [work["resolution_status"] for work in works] == ["resolved"]
+    assert [work["unresolved_reason"] for work in works] == [None]
+
+
 async def test_a_full_review_listing_stays_inside_the_token_budget(server_url, a_run_of):
     """The ceiling holds against the limit that would actually lose the images.
 

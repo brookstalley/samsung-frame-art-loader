@@ -546,7 +546,7 @@ artworks.
 | `rationale` | text | required | Why the model matched this work to the intent. **Q5.** |
 | `work_dedup_key` | string | required, indexed | Normalised work identity for cross-run suppression. **Q3.** |
 | `resolution_status` | enum | required | `pending` \| `resolved` \| `unresolved`. Reflects the **latest** resolution attempt, whether that was the original phase 2 or a later re-search. `unresolved` ⇒ that attempt found no credible instance the curator has not already rejected. **Q12.** |
-| `unresolved_reason` | enum | nullable | Which kind of nothing: `not_held` \| `identity_refused` \| `size_unknown` \| `below_floor`. Set whenever `resolution_status = unresolved`, null otherwise. **Q12.** |
+| `unresolved_reason` | enum | nullable | Which kind of nothing: `not_held` \| `identity_refused` \| `size_unknown` \| `below_floor` \| `all_rejected`. Set whenever `resolution_status = unresolved`, null otherwise. **Q12.** |
 | `verdict` | enum | required | `pending` \| `accepted` \| `rejected` \| `awaiting_better_image`. See State Machines. |
 | `rejected_reason` | text | nullable | Optional curator note. |
 | `decided_at` | datetime | nullable | |
@@ -564,17 +564,33 @@ artworks.
 > attaching a low-confidence near-match actively launders it.
 >
 > **`unresolved` must say which kind of nothing, and the sentence above is why.**
-> A work reaches `unresolved` by four routes that are not interchangeable: nothing
+> A work reaches `unresolved` by five routes that are not interchangeable: nothing
 > came back whose title matched (`not_held`); a record matched the title and
 > disagreed on the artist (`identity_refused`); a matching record reported no
 > dimensions, so it could not be judged against the floor (`size_unknown`); every
-> matching record renders below the floor (`below_floor`). The first is a fact
-> about the collection, the second about two spellings of a name, the last two
-> about the record. **Only the first carries the invented-work signal** — the other
-> three are the collection saying "I have this, but not like that", which is nearly
-> the opposite. So the claim that `unresolved` means phase 1 may have invented the
-> work is narrowed here to `not_held`, and the docstrings asserting the broader
-> reading are amended with it.
+> matching record renders below the floor (`below_floor`); or the work holds
+> instances and the curator has turned down every one of them, with this attempt
+> finding nothing to add (`all_rejected`). The first is a fact about the
+> collection, the second about two spellings of a name, the next two about the
+> record, and the last about the curator. **Only the first carries the
+> invented-work signal** — the rest are the collection saying "I have this, but not
+> like that", or the curator saying "not that scan", which are nearly the opposite.
+> So the claim that `unresolved` means phase 1 may have invented the work is
+> narrowed here to `not_held`, and the docstrings asserting the broader reading are
+> amended with it.
+>
+> > **`all_rejected` was added on 2026-08-04 after the list had been written at
+> > four, and the correction is kept rather than smoothed over** because the reason
+> > it was missed is reusable. It was ruled unreachable on the grounds that
+> > rejecting every instance sets the *verdict* to `awaiting_better_image` rather
+> > than the resolution status — true at the rejection, and irrelevant, because the
+> > write that matters happens later: the re-search that finds nothing then lands
+> > the same work at `unresolved`, which this document already said in as many
+> > words a few paragraphs above. **Reachability was argued from the write site
+> > that sets the value and not from the one that sets the status**, and a test
+> > asserting the whole path existed the entire time. An enum value is reachable if
+> > *any* path reaches it, so the search has to be over paths, not over the site
+> > that looks most relevant.
 >
 > A curator reading a bare `unresolved` cannot tell those apart, and neither can
 > anyone diagnosing a run afterwards — which is how two runs that resolved nothing
@@ -587,20 +603,29 @@ artworks.
 > **Precedence is by how far the work got: the deepest gate any of its records
 > reached is what it reports.** A work is `not_held` only when *no* record matched
 > its title; a single title match takes that reading off the table however many
-> other records missed. Past that, deeper beats shallower — `below_floor` over
-> `size_unknown` over `identity_refused` — because the deepest gate is the most
-> informative thing that is true: "the collection holds this, too small for your
-> wall" is actionable, and "some record somewhere did not match" is not. Stated
-> here rather than left to the write site, because choosing one label where several
-> apply is a judgement, and an underived rule is how it silently becomes
-> whichever result the provider happened to return first.
+> other records missed. Past that, deeper beats shallower — `size_unknown` over
+> `identity_refused` — because the deepest gate is the most informative thing that
+> is true: "the collection holds this, too small for your wall" is actionable, and
+> "some record somewhere did not match" is not. Stated here rather than left to the
+> write site, because choosing one label where several apply is a judgement, and an
+> underived rule is how it silently becomes whichever result the provider happened
+> to return first.
 >
-> **Two values were considered and deliberately left out.** A `no_rights_clear_image`
-> is unreachable — rights are a quality weight and never a filter (constraint 13),
-> so nothing is refused for them. A `curator_rejected_all` is unreachable at this
-> write site for a different reason: rejecting every instance sets the *verdict* to
-> `awaiting_better_image`, not the resolution status. Adding either would be a
-> value nothing can produce, which reads to the next person as a route that exists.
+> **The two deepest reasons need no precedence against anything, and that is a
+> property of the data rather than a convention.** `below_floor` and `all_rejected`
+> are read from the rows the work already holds, and they are mutually exclusive by
+> construction: rejected instances are filtered out before the floor is applied, so
+> a work whose surviving instances are all below the floor is `below_floor`, and a
+> work with no surviving instances at all is `all_rejected`. A work cannot be both,
+> and either one outranks every reason derived from what the search discarded —
+> because a row on the card is further than a result that never became one.
+>
+> **One value was considered and deliberately left out.** A `no_rights_clear_image`
+> is unreachable: rights are a quality weight and never a filter (constraint 13),
+> so nothing is ever refused for them. Adding it would be a value nothing can
+> produce, which reads to the next person as a route that exists — and the way to
+> be sure of that is to look for a path that reaches it, not for a site that would
+> set it.
 >
 > **Redefined 2026-07-20, deliberately and with the hazard named.** It previously
 > meant "phase 2 found no credible instance" — an outcome of the original run only.

@@ -819,7 +819,7 @@ class DiscoveryRunner:
             )
             return WorkOutcome.VERDICT_STOOD
         try:
-            judged = images.resolve(ImageQuery(title=work.proposed_title, artist=work.proposed_artist))
+            resolution = images.resolve(ImageQuery(title=work.proposed_title, artist=work.proposed_artist))
         except ImageSearchFailure as exc:
             log.warning(
                 "could not search for a work's images; it stays pending rather than being called unresolved: %s",
@@ -827,9 +827,12 @@ class DiscoveryRunner:
                 extra={"event": "phase_two.unreachable", "work_title": work.proposed_title},
             )
             return WorkOutcome.UNREACHABLE
-        for entry in judged:
+        for entry in resolution.instances:
             self._record_instance(work, entry, previews)
-        outcome = self._discovery.record_resolution(work.id)
+        # The refusals travel on because they cannot be recovered from the store:
+        # a result the search discarded never became a row, so which gate turned
+        # it away is knowable only here, at the attempt that made the judgement.
+        outcome = self._discovery.record_resolution(work.id, refusals=resolution.refusals)
         if not outcome.applied:
             log.info(
                 "a resolution finished against a work the curator had already decided; reporting, not applying",

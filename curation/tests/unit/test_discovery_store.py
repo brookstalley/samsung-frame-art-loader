@@ -56,6 +56,7 @@ _EXPECTED_SCHEMA = {
         "rationale",
         "work_dedup_key",
         "resolution_status",
+        "unresolved_reason",
         "verdict",
         "rejected_reason",
         "decided_at",

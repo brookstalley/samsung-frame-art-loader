@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
+from typing import Final
 
 from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
 
@@ -115,15 +116,67 @@ class ResolutionStatus(StrEnum):
     later re-search — which is what gives a failed re-search a terminal
     representation without adding a verdict value for it.
 
-    `UNRESOLVED` is a first-class outcome, not an absent row: phase 2 finding no
-    credible instance is the signal that phase 1 may have invented the work.
-    Dropping it from the batch discards that signal, and attaching a
-    low-confidence near-match actively launders it.
+    `UNRESOLVED` is a first-class outcome, not an absent row. Dropping such a work
+    from the batch discards a real signal, and attaching a low-confidence
+    near-match actively launders it. **What the signal says depends on which route
+    reached it** — see `UnresolvedReason`, which is set on the same write. Only
+    `NOT_HELD` is evidence that phase 1 may have invented the work; the others mean
+    the collection has it and cannot offer it in a usable form, or that the curator
+    has already turned down what it offered.
     """
 
     PENDING = "pending"
     RESOLVED = "resolved"
     UNRESOLVED = "unresolved"
+
+
+class UnresolvedReason(StrEnum):
+    """Which kind of nothing an unresolved work came back with.
+
+    A bare `UNRESOLVED` cannot distinguish a title nobody holds from a scan too
+    small for the wall, and neither a curator nor anyone diagnosing a run
+    afterwards can act without knowing which. The routes are not interchangeable:
+    `NOT_HELD` is a fact about the collection, `IDENTITY_REFUSED` about two
+    spellings of a name, `SIZE_UNKNOWN` and `BELOW_FLOOR` about the record, and
+    `ALL_REJECTED` about the curator.
+
+    **The value is derived, never asserted by a caller.** It records decisions the
+    judgement already makes and would otherwise throw away, so it cannot disagree
+    with what is actually stored — the same reason the status beside it is read
+    from a work's instances rather than passed in.
+
+    `depth` is how far a work got before it was refused, and it is what settles a
+    work whose results were refused at several different gates: the deepest gate
+    any of them reached is the most informative thing that is true. It is a
+    property here rather than an ordering written at the derivation site because a
+    sixth member added without a depth is then a failure at definition rather than
+    a silent tie broken by whichever result the provider happened to return first.
+    """
+
+    NOT_HELD = "not_held"
+    IDENTITY_REFUSED = "identity_refused"
+    SIZE_UNKNOWN = "size_unknown"
+    BELOW_FLOOR = "below_floor"
+    ALL_REJECTED = "all_rejected"
+
+    @property
+    def depth(self) -> int:
+        """How far the work got before this gate refused it. Higher is further."""
+        return _REFUSAL_DEPTH[self]
+
+
+#: Ordered shallowest to deepest, which is the precedence when several apply.
+#: `BELOW_FLOOR` and `ALL_REJECTED` are read from rows the work already holds and
+#: are mutually exclusive by construction — rejected instances are filtered out
+#: before the floor is applied — so they outrank everything derived from results
+#: that never became rows, and never need ranking against each other.
+_REFUSAL_DEPTH: Final[dict[UnresolvedReason, int]] = {
+    UnresolvedReason.NOT_HELD: 0,
+    UnresolvedReason.IDENTITY_REFUSED: 1,
+    UnresolvedReason.SIZE_UNKNOWN: 2,
+    UnresolvedReason.BELOW_FLOOR: 3,
+    UnresolvedReason.ALL_REJECTED: 3,
+}
 
 
 class Verdict(StrEnum):
@@ -231,6 +284,10 @@ class CandidateWork:
     verdict: Verdict = Verdict.PENDING
     artwork_id: str | None = None
     proposed_artist: str | None = None
+    #: Which kind of nothing, when `resolution_status` is `UNRESOLVED`; `None`
+    #: otherwise. The two travel together on every write, so a work can never
+    #: report that it found nothing without saying what kind of nothing it was.
+    unresolved_reason: UnresolvedReason | None = None
     rejected_reason: str | None = None
     decided_at: datetime | None = None
 

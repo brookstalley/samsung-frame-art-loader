@@ -17,7 +17,9 @@ import pytest
 
 from curation.discovery.artic import PROVIDER, ArticImageSearch
 from curation.discovery.images import ImageQuery, ImageSearchFailure
+from curation.discovery.phase_two import PhaseTwoEngine
 from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
+from curation.services.display_fit import ArtworkBox
 
 USER_AGENT = "samsung-frame-art-loader (test@example.org)"
 
@@ -196,8 +198,14 @@ def test_the_public_domain_flag_becomes_a_rights_status_that_distinguishes_false
     assert unchecked[0].rights_status is RightsStatus.UNKNOWN
 
 
-def test_a_zero_scored_result_is_dropped_because_a_garbage_query_returns_the_collection():
-    """`pagination.total` is the collection size whatever was asked, so presence proves nothing."""
+def test_a_zero_scored_result_is_dropped_because_it_matched_no_term():
+    """The behaviour is unchanged; the reason it was worth having is not.
+
+    Named for a garbage query until 2026-08-04, when the live API stopped
+    returning zero scores for one — so this no longer guards that case and the
+    identity comparison is what does. It is kept because the claim still holds
+    on its own terms: a record matching no term cannot be the work.
+    """
     found = _client(_serving(ZERO_SCORED, AMERICAN_GOTHIC)).find_images(ImageQuery(title="American Gothic"))
 
     assert [instance.title for instance in found] == ["American Gothic"]
@@ -224,17 +232,41 @@ def test_a_thumbnail_without_dimensions_is_dropped_rather_than_sized_at_zero():
     assert _client(_serving(sizeless)).find_images(ImageQuery(title="American Gothic")) == []
 
 
-def test_the_artist_narrows_the_query_text_rather_than_filtering_on_a_field():
-    """A field filter returns nothing for a name the museum spells its own way."""
+def test_the_artist_is_kept_out_of_the_query_and_left_to_the_identity_gate():
+    """The artist's tokens compete with the title's for the ten places a result has.
+
+    This replaces a contract that said the artist "narrows" the query text, which
+    the live API refuted: over eight Ellsworth Kelly paintings the museum holds,
+    the title alone retrieved all eight and the title with the artist appended
+    retrieved six, never doing better on any title (measured 2026-08-04). A field
+    filter is not the alternative and never was — it returns nothing for a name
+    the museum spells its own way. The artist still decides the outcome, above
+    this seam, where a near miss is visible instead of silently unranked.
+    """
     sent: list[httpx.Request] = []
     _client(_serving(AMERICAN_GOTHIC, capture=sent)).find_images(ImageQuery(title="American Gothic", artist="Grant Wood"))
 
     assert len(sent) == 1
-    assert "American%20Gothic%20Grant%20Wood" in str(sent[0].url)
+    assert "q=American%20Gothic&" in str(sent[0].url)
+    assert "Grant" not in str(sent[0].url)
     # Explicit rather than the default projection, which omits both of the fields
     # an instance cannot be recorded without.
     assert "image_id" in str(sent[0].url)
     assert "thumbnail" in str(sent[0].url)
+
+
+def test_the_artist_still_reaches_the_judgement_that_refuses_a_near_match():
+    """The half that must not be lost with the query change.
+
+    Removing the artist from retrieval would be a quiet loosening if nothing
+    downstream still applied it — the same painting under another painter would
+    then be found *and* kept.
+    """
+    layton = {**AMERICAN_GOTHIC, "artist_title": "Elizabeth Layton"}
+    box = ArtworkBox(width=3400, height=1687, pixels_per_inch=88.12, floor_inches=12.0)
+    engine = PhaseTwoEngine(_client(_serving(layton)), box=box)
+
+    assert engine.resolve(ImageQuery(title="American Gothic", artist="Grant Wood")).instances == []
 
 
 def test_the_museum_is_told_who_is_calling():

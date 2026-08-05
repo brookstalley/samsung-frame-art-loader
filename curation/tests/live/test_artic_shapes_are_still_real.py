@@ -3,9 +3,15 @@
 `artic-api-findings.md` is a snapshot of a live probe, and three of its
 measurements are load-bearing in the client: that the search response carries the
 *master's* dimensions, that every IIIF response is 843 pixels wide, and that a
-query matching nothing still returns the whole collection at score zero. A
-document nobody re-runs quietly stops describing the API, so the durable form of
-those measurements is a test that fails when one stops holding.
+query matching nothing still returns the whole collection rather than an empty
+page. A document nobody re-runs quietly stops describing the API, so the durable
+form of those measurements is a test that fails when one stops holding.
+
+**The third one has already earned its keep.** It was recorded as "the whole
+collection, *at score zero*", and that is no longer true: the scores are ordinary
+relevance scores now, so the client's zero-score pre-filter no longer empties a
+garbage query and the identity comparison is the sole defence. This suite is
+where that arrived, in the form of a red test rather than of a wrong belief.
 
 **Deselected by default**, like its OpenRouter sibling — but for a different
 reason, and the difference is why it carries a **different marker**. That suite
@@ -127,18 +133,28 @@ def test_every_iiif_response_is_still_843_pixels_wide(museum):
     assert width == 843
 
 
-def test_a_query_matching_nothing_still_returns_the_collection_rather_than_nothing(museum):
-    """The zero-score pre-filter exists because emptiness is not how this API says no.
+def test_a_nonsense_query_returns_real_paintings_and_the_identity_gate_refuses_them_all(museum, engine):
+    """Emptiness is not how this API says no, and the score no longer says it either.
 
-    If the API started returning an empty `data` array for a nonsense query, the
-    filter would become redundant rather than wrong — but the client would be
-    relying on a behaviour that had changed, and that is worth knowing.
+    **This test previously asserted the opposite half and the API moved under it**
+    (measured 2026-08-04). A nonsense query used to come back at `_score` 0.0, so
+    the client's zero-score pre-filter emptied the result and the recorded
+    behaviour was "garbage in, nothing out". It now comes back with ten real works
+    scoring in the fifties and sixties — *Nighthawks* among them — while
+    `pagination.total` still reports the whole collection. The pre-filter fires on
+    none of them.
+
+    So the recorded measurement was rewritten to what the API does, and this test
+    was re-aimed at the defence that actually holds: the identity comparison. Both
+    halves are asserted because they fail for different reasons and both are worth
+    hearing about — the client returning nothing again would mean the API changed
+    back, and the engine keeping something would mean the only remaining guard
+    between a garbage query and a real painting had stopped discriminating.
     """
-    found = museum.find_images(ImageQuery(title="zzzqqx nonexistent painting", artist="nobody at all"))
+    query = ImageQuery(title="zzzqqx nonexistent painting", artist="nobody at all")
 
-    # The client drops every zero-scored record, so what reaches us here is empty
-    # even though the API returned a full page. That is the filter working.
-    assert found == []
+    assert museum.find_images(query), "the collection came back empty; the API's way of saying no has changed again"
+    assert engine.resolve(query).instances == []
 
 
 def test_a_work_the_collection_does_not_hold_still_resolves_to_nothing(engine):
@@ -149,14 +165,14 @@ def test_a_work_the_collection_does_not_hold_still_resolves_to_nothing(engine):
     comparison has stopped discriminating — and the two need telling apart by
     hand, which is why this fails loudly rather than being asserted away.
     """
-    judged = engine.resolve(ImageQuery(title=NOT_HELD[0], artist=NOT_HELD[1]))
+    judged = engine.resolve(ImageQuery(title=NOT_HELD[0], artist=NOT_HELD[1])).instances
 
     assert judged == [], f"expected no credible instance, got {[entry.found.title for entry in judged]}"
 
 
 def test_a_held_work_still_resolves_confidently_end_to_end(engine):
     """The other half: the judgement must not be so strict that nothing survives it."""
-    judged = engine.resolve(ImageQuery(title=HELD[0], artist=HELD[1]))
+    judged = engine.resolve(ImageQuery(title=HELD[0], artist=HELD[1])).instances
 
     assert judged, "a work the collection holds resolved to nothing — the comparison is too strict"
     assert judged[0].confidence == CONFIDENT
