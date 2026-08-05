@@ -897,6 +897,14 @@ Tests over a value prove the value is right; they say nothing about whether
 anything asks for it. Four separate records asserted the reporting existed,
 including the comment directly above the two unused properties.
 
+**It recurred one chunk after the rule was written, which is why the rule now
+names a command rather than an intention.** Chunk 22 shipped `proposed_count` and
+`offered_count` computed, tested and wired to nothing, and the rule was written
+from it. Chunk 19A then shipped `GET /api/runs/{id}/spend`, whose one distinctive
+figure — the family total including descended re-searches — reached no screen, and
+the Critic quoted this rule back at it. Both were caught by review and neither by
+the author, and on the second occasion the author had written this very line.
+
 **"Name the surface that displays it" was the first form of this check, and it
 failed twice** — naming a surface is something you can do from memory while
 looking at the wrong thing. The form that holds is mechanical and takes seconds:

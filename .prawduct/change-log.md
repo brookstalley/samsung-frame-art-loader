@@ -48,6 +48,42 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-05: A test that defended a copy of the branch it named
+
+<!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
+
+**Why:** the guard fix above left two demoted observations, and both were the same
+shape as the defect they trailed — a claim stated more confidently than the code
+supports.
+
+The first was the scope check's docstring: "every line carrying the command
+counts, whatever precedes it" is true of what the scan *collects* and false of
+what it *checks*. The assertion reads the first token after the command on a
+single line, so `uv run pytest \` with its arguments on the next line collects and
+then passes on the backslash. No workflow here is written that way, and closing it
+would need a line-joining pass — so the limit is written down rather than rounded
+off, which is the whole lesson of the entry above.
+
+The second was that the comment-skip branch had nothing defending it. Deleting it
+turns no other test red, because the one comment in this repo carrying the command
+is itself path-scoped and satisfies the assertion anyway.
+
+**The fix for that second one was itself the defect it was closing.** The new test
+re-implemented the scan loop in its own body instead of calling it, so deleting
+the branch from the real scanner still turned nothing red while a fresh docstring
+claimed the branch was covered. The Critic caught it by simulating exactly that
+mutation, and rated it blocking. Both tests call `_ci_pytest_invocations` now —
+one over `.github/workflows`, one over a written fixture — so there is a single
+loop and mutating it is visible from both.
+
+**What that cost, recorded because the rule it produced is about when to stop.** A
+clean verify pass still carries demoted observations, and acting on them opens a
+new evidence edge needing another pass. The rule that held for two rounds was:
+take one only when the observation is a *false statement*, not a missing nicety.
+The third round broke it — a merely-missing test was batched in beside a docstring
+fix, got less care than a change taken on its own merits, and was the one that
+failed. Adjacency is not a reason.
+
 ## 2026-08-05: The guard against a thrice-recurring defect could not see the documented form
 
 <!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
@@ -290,7 +326,7 @@ never running — with `assert_tests_ran.py` behind it, because a suite that ski
 itself reports green and green-because-absent is indistinguishable from
 green-because-passing in a checks list. Verified by installing without the group
 and watching both modules skip with the command that fixes them, the default
-suite untouched at 1,752 passing.
+suite's own count untouched.
 
 **The CI leg was wrong when first written, and the guard is what said so.** `-m
 browser` still *collects* the whole tests tree, so the evaluation module's
@@ -395,7 +431,7 @@ wiring rather than waiting a week to discover a typo.
 
 ## 2026-08-05: The curation suite runs across cores
 
-**Why:** 1,752 tests at ~118s, with no hotspot to attack — roughly 67ms mean and
+**Why:** ~118s with no hotspot to attack — roughly 67ms mean across the suite and
 a slowest single test of 1.4s. The bulk is integration tests booting a real
 uvicorn per class and waiting on it, and that wait is one this repo deliberately
 will not remove: an in-process ASGI transport skips the mounted MCP lifespan and
