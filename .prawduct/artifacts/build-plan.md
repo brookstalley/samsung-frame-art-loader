@@ -122,8 +122,8 @@ re-created the same silence one line further down.
 - [x] Chunk 17B: The verdict, the artist, and the preview's death
 - [x] Chunk 18A: Acquisition — the fetch paths, the guards, and a work's sources
 - [x] Chunk 18B: Preparation — the mat engine, the 4K render, and the corpus look
-- [x] Chunk 21: Say which kind of nothing — `unresolved_reason`, and the artist fold (issue #78)
-- [x] Chunk 22: Grounded alternatives — the collection's own answer when the gate refuses
+- [ ] Chunk 21: Say which kind of nothing — `unresolved_reason`, and the artist fold (issue #78)
+- [ ] Chunk 22: Grounded alternatives — the collection's own answer when the gate refuses
 - [ ] Chunk 19A: The run half — intent entry, the estimate, the run view and its gate
 - [ ] Chunk 19B: The review half — the grid, its alternates, the verdict, the panel
 - [x] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)

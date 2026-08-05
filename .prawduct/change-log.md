@@ -48,6 +48,73 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-05: Chunk 19A — the run half of the browser surface
+
+<!-- prawduct: chunks=19A | scope=v1-build -->
+
+**Why:** discovery has been drivable only by an agent. Every operation a curator
+needs to commission a search and watch it existed in the service layer and on the
+MCP surface, and none of it was reachable from the browser — so the product's one
+human interface could show what had already been accepted and nothing about how
+it got there.
+
+**What landed.** Eight routes and two screens. Intent entry with the estimate
+above the button; the run view with its state in a sentence, its two tallies, its
+works, its search usage and its approval gate. `GET /api/estimate`, `POST/GET
+/api/runs`, `GET /api/runs/{id}`, approve/decline/cancel, and
+`GET /api/runs/{id}/spend`. The routes are thin bindings over
+`DiscoveryRunner` — every one is dispatch and formatting over a single service
+call, which is the norm this surface has held since 10B.
+
+**Two divergences from the MCP surface, both deliberate and both recorded in
+`api-contract.md`.** `GET /api/runs/{id}` answers immediately where MCP's
+`status` holds for up to 45 seconds: a model calls once and waits, a browser
+polls, and because these handlers are synchronous a held request would occupy one
+of Starlette's worker threads for the whole hold — starving the pool that serves
+thumbnails. And the two surfaces compose their own prose while sharing their
+arithmetic: the MCP notice names fields in backticks and says to call `status`
+again, neither of which suits a page with buttons, but every figure on both comes
+from a `RunView` property computed once. That split is aimed squarely at the
+defect the previous chunk's review found — a run-level figure computed as
+`len(works)` beside a view that counted provenance apart.
+
+**`is_terminal` is on the wire rather than derived in the client.** A list of
+finished status names written into the browser is the part that goes stale: a
+tenth status would leave the page either polling a finished run forever or
+abandoning a live one. **The mutation sweep found this branch undefended and it
+was the only survivor of ten** — the value could be replaced with a constant and
+nothing objected. Both directions are now asserted, because either constant
+passes half the test.
+
+**Two defects in this chunk's own client copy, found by reading the service back
+rather than by a test.** The costs panel labelled the run's stored figure
+"Estimated before starting"; it is written when phase 1 finishes and prices
+*resolving the work list*, so a phase-2 number sat under a phase-1 heading. And
+the approval gate — the actual point of decision for phase 2 — showed no estimate
+at all, which is half of "the estimate at the point of decision" simply missing.
+The gate now fetches it and shows the basis, which is the load-bearing half: the
+figure is $0 because phase 2 asks museum APIs, and a bare zero beside an approve
+button invites reading the gate as being about money when it is about the size of
+the work list.
+
+**Coverage:** 31 tests, and the acceptance criterion runs end to end against a
+booted uvicorn (`test_the_run_half_runs_over_http`). A `tests/unit/test_client_vocabulary.py`
+reads `app.js` and refuses a `UnresolvedReason` or `ResolutionStatus` member with
+no words for a curator, so a sixth reason arrives as a failure rather than as a
+raw diagnostic token on screen — the same bargain `test_design_tokens.py` strikes
+with the stylesheet, and the only kind of check available for a client with no
+build step. All ten mutations die.
+
+**Hygiene fixed rather than stepped over:** `mcp/bindings.py` and one live test
+carried black drift from before this chunk, and `api-contract.md` explained the
+absence of write routes with "those belong to acquisition, which is not built" —
+acquisition shipped 2026-08-03.
+
+**What this chunk does not do**, so the omission is not read as an oversight: the
+review grid, the verdict, image selection, and the health panel's completion are
+Chunk 19B. Issue #2's component box stays open, because it names the grid as well
+as intent entry and only 19B can close it.
+
 ## 2026-08-04: Chunk 22 — the collection's own answer when the gate refuses
 
 <!-- prawduct: chunks=22 | scope=v1-build -->

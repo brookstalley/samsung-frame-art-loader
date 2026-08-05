@@ -34,7 +34,9 @@ from curation.http.models import (
     AddWork,
     ArtistOut,
     ArtworkBoxOut,
+    CandidateWorkOut,
     CreateTheme,
+    EstimateOut,
     ExclusionOut,
     FitOut,
     HealthOut,
@@ -46,7 +48,14 @@ from curation.http.models import (
     MoveWork,
     OriginalOut,
     RenditionOut,
+    RunListOut,
+    RunOut,
+    RunTallyOut,
+    RunViewOut,
+    SearchUsageOut,
     SourceOut,
+    SpendOut,
+    StartRun,
     ThemeDetailOut,
     ThemeListOut,
     ThemeOut,
@@ -56,10 +65,12 @@ from curation.http.models import (
 )
 from curation.manifest.builder import ManifestBuild
 from curation.manifest.heartbeat import HeartbeatReading
+from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy
 from curation.persistence.records import Artist, MatColor, Original, Source, Theme
 from curation.services.catalogue import RenditionView
 from curation.services.container import Services
 from curation.services.display_fit import ArtworkBox
+from curation.services.runner import Estimate, RunView, SpendReport
 from curation.services.survey import WorkDossier, WorkSurvey
 
 log = logging.getLogger(__name__)
@@ -193,6 +204,90 @@ def get_health(request: Request) -> HealthOut:
         heartbeat=_heartbeat(services.display.wall_status()),
         artwork_box=_artwork_box(services.survey.artwork_box),
     )
+
+
+# -- discovery runs -----------------------------------------------------------
+
+
+@router.get("/estimate")
+def get_estimate(request: Request, run_id: Annotated[str | None, Query()] = None) -> EstimateOut:
+    """What a search would cost, before anyone commits to it.
+
+    Answered without a run id for "what does asking cost", and with one for "what
+    does resolving what this run found cost". Estimating spends nothing, which is
+    what lets the intent screen show the price beside the field rather than after
+    the decision.
+    """
+    return _estimate(_services(request).runner.estimate(run_id))
+
+
+@router.post("/runs")
+def start_run(request: Request, body: StartRun) -> RunOut:
+    """Begin a discovery run and return its handle at once.
+
+    Phase 1 proceeds on a worker behind this response. Waiting for it here would
+    hold the request open for the minutes the search takes, which no browser will
+    sit through — so the client is handed an id and follows it.
+    """
+    return _run(
+        _services(request).runner.start(
+            intent_text=body.intent,
+            # Provenance, never authorisation: every surface has identical
+            # authority, and this records which one asked so that "who wanted
+            # forty Dalí candidates" is answerable from the data afterwards.
+            initiated_by=InitiatedBy.WEB_UI,
+        )
+    )
+
+
+@router.get("/runs")
+def list_runs(
+    request: Request,
+    status: Annotated[str | None, Query()] = None,
+    kind: Annotated[str | None, Query()] = None,
+) -> RunListOut:
+    """Every run, newest first, optionally narrowed."""
+    runs = _services(request).runner.list_runs(status=status, kind=kind)
+    return RunListOut(runs=[_run(run) for run in runs], count=len(runs))
+
+
+@router.get("/runs/{run_id}")
+def get_run(request: Request, run_id: str) -> RunViewOut:
+    """Where a run is, answered immediately rather than held open.
+
+    **The MCP surface long-polls here and this one deliberately does not.** A
+    model calls `status` once and waits, so holding the call is what keeps it
+    from spinning. A browser is already an event loop: it polls on a timer, and a
+    held request would occupy one of the worker threads Starlette runs these
+    synchronous handlers in for the whole hold window — with a couple of tabs
+    open that starves the same pool that serves thumbnails. The client asks
+    again; nothing is lost but the hold.
+    """
+    return _run_view(_services(request).runner.run_status(run_id, wait=False))
+
+
+@router.post("/runs/{run_id}/approve")
+def approve_run(request: Request, run_id: str) -> RunViewOut:
+    """Accept the work list and its price; phase 2 begins behind the response."""
+    return _run_view(_services(request).runner.approve(run_id))
+
+
+@router.post("/runs/{run_id}/decline")
+def decline_run(request: Request, run_id: str) -> RunViewOut:
+    """Refuse the work list. The run ends without phase 2 ever spending."""
+    return _run_view(_services(request).runner.decline(run_id))
+
+
+@router.post("/runs/{run_id}/cancel")
+def cancel_run(request: Request, run_id: str) -> RunViewOut:
+    """Stop a run from wherever it is. Money already spent stays recorded."""
+    return _run_view(_services(request).runner.cancel(run_id))
+
+
+@router.get("/runs/{run_id}/spend")
+def get_run_spend(request: Request, run_id: str) -> SpendOut:
+    """What a run has actually cost, including every re-search descended from it."""
+    return _spend(_services(request).runner.spend_report(run_id=run_id))
 
 
 # -- images -------------------------------------------------------------------
@@ -411,6 +506,91 @@ def _manifest(build: ManifestBuild) -> ManifestOut:
         # The build's own sentence, not a second one written here: the tool
         # surface states the same fact, and two hand-written versions drift.
         summary=build.summarise(),
+    )
+
+
+def _run(run: DiscoveryRun) -> RunOut:
+    return RunOut(
+        run_id=run.id,
+        kind=str(run.kind),
+        status=str(run.status),
+        is_terminal=run.status.is_terminal,
+        initiated_by=str(run.initiated_by),
+        intent=run.intent_text,
+        strategy=run.strategy,
+        approval_required=run.approval_required,
+        estimated_cost_usd=None if run.estimated_cost_usd is None else str(run.estimated_cost_usd),
+        actual_cost_usd=None if run.actual_cost_usd is None else str(run.actual_cost_usd),
+        unresolved_work_count=run.unresolved_work_count,
+        parent_run_id=run.parent_run_id,
+        started_at=run.started_at.isoformat(),
+        completed_at=None if run.completed_at is None else run.completed_at.isoformat(),
+    )
+
+
+def _run_view(view: RunView) -> RunViewOut:
+    """A run with its works and both of its tallies.
+
+    Every figure is read off the view's own properties rather than recomputed
+    here. The counts and the list they describe would otherwise be two
+    derivations of one fact, and the second is the one that goes wrong — which is
+    not hypothetical: a run-level figure computed as `len(works)` beside a view
+    that counted provenance apart is exactly the defect that reached a review.
+    """
+    return RunViewOut(
+        run=_run(view.run),
+        tally=RunTallyOut(
+            total=view.work_count,
+            proposed=view.proposed_count,
+            offered=view.offered_count,
+            resolved=view.resolved,
+            resolved_proposals=view.resolved_proposals,
+            unresolved=view.unresolved,
+            pending=view.pending,
+        ),
+        works=[_candidate_work(work) for work in view.works],
+        searches=SearchUsageOut(
+            used=view.searches_used,
+            allowance=view.search_allowance,
+            exhausted=view.searches_exhausted,
+        ),
+        image_resolution_available=view.image_resolution_available,
+    )
+
+
+def _candidate_work(work: CandidateWork) -> CandidateWorkOut:
+    return CandidateWorkOut(
+        work_id=work.id,
+        title=work.proposed_title,
+        artist=work.proposed_artist,
+        rationale=work.rationale,
+        provenance=str(work.provenance),
+        verdict=str(work.verdict),
+        resolution_status=str(work.resolution_status),
+        unresolved_reason=None if work.unresolved_reason is None else str(work.unresolved_reason),
+    )
+
+
+def _estimate(estimate: Estimate) -> EstimateOut:
+    return EstimateOut(
+        phase=estimate.phase,
+        # A string rather than a float, for the same reason the MCP surface does
+        # it: a price through binary floating point comes back as
+        # 0.12699999999999999.
+        estimated_cost_usd=str(estimate.cost_usd),
+        basis=estimate.basis,
+        run_id=estimate.run_id,
+    )
+
+
+def _spend(report: SpendReport) -> SpendOut:
+    return SpendOut(
+        scope=report.scope,
+        cost_usd=str(report.cost_usd),
+        run_id=report.run_id,
+        run_direct_cost_usd=None if report.run_direct_usd is None else str(report.run_direct_usd),
+        year=report.year,
+        month=report.month,
     )
 
 

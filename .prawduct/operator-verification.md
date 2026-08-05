@@ -10,6 +10,71 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The run half of the browser surface — added 2026-08-05
+
+**What to look at.** The Discovery tab: entering an intent with the estimate
+beside the field, the approval gate, and the run view while a run is working and
+after it has finished. The tests hold that every figure is correct; what they
+cannot hold is whether the screen makes the decision it is asking for an easy one.
+
+**This look costs money, and here is exactly how much.** A real run spends about
+**$0.013** — the phase-1 model call plus its search allowance. Everything except
+starting a run is free to look at: the estimate, the run list, and any run
+already in the catalogue. If you would rather not spend, the first two are still
+worth an opinion and the third can be read against a run from an earlier session.
+
+```sh
+cd curation
+uv run python -m curation
+# then open the CURATION_PORT from .env — http://127.0.0.1:8770/ as shipped
+# → the Discovery tab
+```
+
+Without `OPENROUTER_API_KEY` set, starting a run is refused with a sentence
+saying why, which is itself worth seeing once — it is the first thing a fresh
+deployment does.
+
+**Specific things worth an opinion, because each was a judgement call:**
+
+1. **The estimate sits above the button, not beside the result.** It reads
+   "Asking costs at most $0.01336. One model call plus up to 10 web searches,
+   which is the most phase 1 may use. Bounded, not typical." A ceiling rather
+   than a typical figure, because a run may use the whole allowance. Two
+   opinions wanted: does a bound read as reassuring or as evasive, and are five
+   decimal places on a hundredth of a dollar precision or noise? The figure is a
+   `Decimal` for good reasons and rendering fewer digits is a display choice
+   nothing else depends on.
+2. **A second estimate appears at the approval gate**, because that is where the
+   phase-2 decision is actually made. It reads "Approving costs $0. Resolving
+   the N works this run proposed. Phase 2 asks museum APIs, which are free, and
+   identifies works locally — so approving this run spends nothing further. The
+   gate is on the work count, not the price." The basis is doing the work there;
+   a bare "$0" beside an approve button would invite reading the gate as being
+   about money.
+3. **Two badges per work: where it came from, and whether it got an image.**
+   Offered works — the ones a wired collection volunteered rather than ones the
+   model named — carry a 2px dashed border and the word "offered", against the
+   plain border and "asked for" of the rest. The whole design rests on a curator
+   seeing that difference *without reading*, because accepting an offered work
+   believing you asked for it is the failure this labelling exists to prevent.
+   Can you? Two badges sit in one cell and this is the densest thing on the
+   screen; if it reads as clutter, say so.
+4. **An unresolved work's reason is a badge with the sentence in its tooltip.**
+   "too small", "wrong artist", "not held". Only "not held" suggests the work may
+   not exist. Is the short word enough on its own, or does the distinction that
+   matters need to be on the page rather than on hover? A tooltip is invisible on
+   a touch screen and to anyone not hunting for it, which is the argument against
+   the current choice.
+5. **The page polls every two seconds and stops when the run ends.** Watch a run
+   from `resolving_works` through to a terminal state. Does it feel live, or does
+   it feel like it is doing nothing? Two seconds was chosen against a Pi's
+   modesty, not measured against a curator's patience.
+6. **The completed sentence rates over what the model proposed.** "This run
+   finished: 1 of 3 works it was asked for have an image", with the offered works
+   named in a separate clause. The alternative — one merged count — reads better
+   and reports a resolution rate the run never achieved. Confirm the honest
+   version is legible enough to keep.
+
 ### The mat corpus look — is the new engine at least as good as 2024? — added 2026-08-03
 
 **This is the product's stated quality bar and no test can settle it.**

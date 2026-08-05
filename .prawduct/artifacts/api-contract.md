@@ -927,7 +927,7 @@ the client with them.
 
 | Route | What it is |
 |---|---|
-| `GET /`, `/works`, `/themes`, `/manifest`, `/health` | The client shell. Listed rather than globbed, so a mistyped `/api/...` 404s instead of returning HTML a client parses as JSON. |
+| `GET /`, `/works`, `/discovery`, `/themes`, `/manifest`, `/health` | The client shell. Listed rather than globbed, so a mistyped `/api/...` 404s instead of returning HTML a client parses as JSON. |
 | `GET /static/app.css`, `/static/app.js` | The client. One stylesheet, one script, no build step. |
 | `GET /api/works` | A page of works, each with its fit verdict and image state. |
 | `GET /api/works/{id}` | One work with sources, renditions and mat history. |
@@ -939,6 +939,46 @@ the client with them.
 | `GET /api/manifest` | What a theme *would* put on the wall, evaluated without writing. |
 | `GET /api/health` | The heartbeat reading, and this deployment's resolved artwork box. |
 
+Added 2026-08-05 with the run half of the browser surface, and exercised by
+`curation/tests/integration/test_browser_discovery.py`:
+
+| Route | What it is |
+|---|---|
+| `GET /api/estimate` | What asking would cost, before anything is committed. Optional `run_id` asks the phase-2 question instead. Spends nothing. |
+| `POST /api/runs` | Begin a run. Returns a handle at once; phase 1 proceeds on a worker behind it. Records `initiated_by: web_ui`. |
+| `GET /api/runs` | Every run, newest first. Optional `status` and `kind` narrow it. |
+| `GET /api/runs/{id}` | The run, its works, its tallies and its search usage. |
+| `POST /api/runs/{id}/approve`, `/decline`, `/cancel` | The approval gate and the stop. Each returns the whole resulting view, as the MCP surface does, so the client repaints from the response. |
+| `GET /api/runs/{id}/spend` | What the run actually cost, including every re-search descended from it. |
+
+**`GET /api/runs/{id}` answers immediately; the MCP `status` action holds for up
+to 45 seconds.** This is a deliberate divergence between the two surfaces rather
+than an oversight. A model calls `status` once and waits, so holding is what
+keeps it from spinning; a browser is already an event loop and polls on a timer.
+Because these handlers are synchronous, a held request occupies one of
+Starlette's worker threads for the whole hold — with a few tabs open that starves
+the same pool serving thumbnails. The client polls every two seconds and stops
+when the run reports `is_terminal`.
+
+**`is_terminal` is on the wire rather than derived by the client** from a list of
+finished status names. That list is the part that goes stale: a tenth status
+would leave a browser either polling a finished run forever or abandoning a live
+one, and neither failure announces itself.
+
+**The two surfaces compose their own prose and share their arithmetic.** The MCP
+notice is written for a model — it names fields in backticks and says to call
+`status` again — and neither sentence suits a page with buttons on it. What must
+not be written twice is the *figures*, and they are not: every count on both
+surfaces is a property of `RunView`, computed once. That is the defect this
+splits to avoid, and it is not hypothetical — a run-level figure computed as
+`len(works)` beside a view that counted provenance apart is what reached a
+review on the chunk before this one.
+
+**A resolution rate is stated over what the model proposed, never over the
+total,** on this surface as on the MCP one. Works a wired collection offered
+arrived carrying their own images, so counting them in the numerator reports a
+retrieval rate the run never achieved.
+
 **One error shape, one status.** Every refusal is `400` with `{"error": "..."}`.
 The service layer raises a single exception type by design, so a per-error status
 table here would be this surface inventing a taxonomy the layer below it does not
@@ -948,8 +988,13 @@ have — and the message is already written to be shown to whoever asked.
 update or delete route — the first surface covers create, add, remove, reorder
 and activate, and renaming a theme was not among the things a curator needed to
 do from a browser before they could build one and hang it. Nothing here writes an
-artwork, a source, an original or a mat either; those belong to acquisition,
-which is not built.
+artwork, a source, an original or a mat either. *(Corrected 2026-08-05: that
+absence used to be explained by "those belong to acquisition, which is not
+built". Acquisition **is** built — `art_catalogue` gained the fetch, retry and
+mat actions on 2026-08-03 — so the routes are absent because no browser screen
+has needed them yet, not because the capability is missing. The review half is
+where a curator first acts on an image, and it is the chunk that will decide
+which of these the browser needs.)*
 
 **Annotations are mandatory on every tool**, because their defaults are worst-case:
 omit them and MCP assumes `destructiveHint: true` and `openWorldHint: true`, which

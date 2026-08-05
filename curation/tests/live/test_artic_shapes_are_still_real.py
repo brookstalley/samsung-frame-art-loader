@@ -262,7 +262,7 @@ def test_a_browse_still_returns_per_facet_buckets_with_their_own_works(collectio
 
 
 def test_the_surname_retry_still_recovers_a_name_the_museum_spells_its_own_way(collection):
-    """"Wassily Kandinsky" reaches the works filed under "Vasily Kandinsky".
+    """ "Wassily Kandinsky" reaches the works filed under "Vasily Kandinsky".
 
     This is the whole of what the retry buys. If the museum renamed the artist to
     match the ordinary spelling, this test goes green for a new reason and the

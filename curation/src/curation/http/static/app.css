@@ -345,6 +345,43 @@ h2 {
   font-weight: 600;
 }
 
+/* Where a work came from. An offered work is by an artist the run named and is
+   not one of the works it asked for, so the two must not paint alike — a curator
+   scanning the list has to be able to see the difference without reading it. The
+   distinction is carried by border and weight, as every other pair here is,
+   because colour is never the first signal. */
+.badge-offered {
+  border-style: dashed;
+  border-width: 2px;
+  background: var(--surface-0);
+}
+
+/* Whether a work ended up with an image. Its own axis again: a work can be
+   offered and unresolved, and the two badges sit side by side on one row. */
+.badge-resolved {
+  border-style: solid;
+}
+
+.badge-unresolved {
+  border-style: double;
+  border-width: 3px;
+  font-weight: 600;
+}
+
+.badge-pending {
+  border-style: dotted;
+  color: var(--text-muted);
+}
+
+/* Two badges stacked inside one table cell, closer than `.stack` sets things —
+   they are one statement about a work, not two sections. */
+.stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: flex-start;
+}
+
 /* -- tables ---------------------------------------------------------------- */
 
 table {
@@ -406,6 +443,7 @@ label {
 }
 
 input[type="text"],
+textarea,
 select {
   font: var(--text-md) / 1.4 var(--font-ui);
   color: var(--text);

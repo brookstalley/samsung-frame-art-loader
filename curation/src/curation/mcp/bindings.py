@@ -1359,9 +1359,7 @@ def _run_notice(view: RunView) -> str:
             # subtracting the offered works goes negative the moment one of them
             # is re-searched to nothing, which is a flow this same file
             # recommends.
-            settled = (
-                f"This run finished: {view.resolved_proposals} of {view.proposed_count} proposed works have an image."
-            )
+            settled = f"This run finished: {view.resolved_proposals} of {view.proposed_count} proposed works have an image."
             if view.offered_count:
                 settled += (
                     f" Separately, the collection offered {view.offered_count} more works by artists this run named "

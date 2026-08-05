@@ -265,6 +265,158 @@ class HealthOut(BaseModel):
     artwork_box: ArtworkBoxOut
 
 
+class RunOut(BaseModel):
+    """One discovery run as a list row shows it.
+
+    The terminal state is carried as itself and never collapsed into a
+    succeeded/failed flag, for the same reason the MCP surface refuses to: out of
+    money, broke, and the process restarted underneath it call for three
+    different responses from the person reading the row.
+    """
+
+    run_id: str
+    #: `discovery` or `resolve`. A re-search is a run, which is what lets one
+    #: screen follow either without knowing which it is looking at.
+    kind: str
+    status: str
+    #: Whether this run has ended. Carried rather than left for the client to
+    #: derive from a list of status names, because that list is the thing that
+    #: goes stale: a tenth status added to the enum would leave a browser polling
+    #: a finished run forever, with nothing failing to say so.
+    is_terminal: bool
+    initiated_by: str
+    intent: str | None
+    #: How the engine read the intent, in its own words. A work list is judged
+    #: against the reading of the request rather than its wording, so a
+    #: surprising list is explicable instead of merely wrong. Null while phase 1
+    #: is still working: nothing has read the intent yet.
+    strategy: str | None
+    approval_required: bool
+    #: Prices are strings, never floats. A tenth of a cent that cannot be
+    #: represented exactly is a rounding error in the figure a curator authorised
+    #: against, and then in a total nobody reconciles.
+    estimated_cost_usd: str | None
+    actual_cost_usd: str | None
+    unresolved_work_count: int | None
+    parent_run_id: str | None
+    started_at: str
+    completed_at: str | None
+
+
+class CandidateWorkOut(BaseModel):
+    """One work a run proposed or was offered, in the fields the run view shows."""
+
+    work_id: str
+    title: str
+    artist: str | None
+    #: Why the engine named this work. Shown because a curator judging a work
+    #: list is judging the reasoning as much as the titles.
+    rationale: str
+    #: `proposed` — the model named it — or `offered`, meaning a wired collection
+    #: volunteered it on top of the list. Never merged into one count: the
+    #: curator authorised a list of a stated size and the supplement adds to it.
+    provenance: str
+    verdict: str
+    resolution_status: str
+    #: Which kind of nothing an unresolved work came back with, or null. A bare
+    #: `unresolved` cannot tell a title nobody holds from a scan too small for
+    #: the wall, and those lead to opposite actions.
+    unresolved_reason: str | None
+
+
+class RunTallyOut(BaseModel):
+    """How many works a run has, cut the ways a curator reads them.
+
+    Proposed and offered are counted apart wherever a number is shown. With
+    twelve offered works behind one unresolved proposal, a merged "12 of 13 have
+    an image" reports a resolution rate the run never achieved.
+    """
+
+    total: int
+    proposed: int
+    offered: int
+    resolved: int
+    #: How many of the model's own works ended up with an image — the numerator
+    #: any resolution rate is stated over. Counted directly rather than derived
+    #: by subtracting offered works from resolved, which goes negative as soon as
+    #: an offered work is re-searched to nothing.
+    resolved_proposals: int
+    unresolved: int
+    pending: int
+
+
+class SearchUsageOut(BaseModel):
+    """What a run has used of its search allowance.
+
+    Two numbers rather than one verdict: the usage is this run's own history and
+    the allowance is the deployment's current setting, so a run read after the
+    setting changed shows both instead of a boolean recomputed against a rule it
+    never ran under.
+    """
+
+    used: int
+    allowance: int
+    exhausted: bool
+
+
+class RunViewOut(BaseModel):
+    """A run in full — its state, its works, and what it has spent looking."""
+
+    run: RunOut
+    tally: RunTallyOut
+    #: Every work, uncapped. The MCP surface stops at 100 because a model's
+    #: context is the scarce thing; a browser's is not, and a run's list is
+    #: bounded by the approval threshold and the search allowance in any case.
+    works: list[CandidateWorkOut]
+    searches: SearchUsageOut
+    #: Whether this deployment can resolve images at all. A run sitting in
+    #: `resolving_images` means work under way or work nothing will ever pick up,
+    #: and there is no other way to tell those apart.
+    image_resolution_available: bool
+
+
+class RunListOut(BaseModel):
+    """Every run, newest first."""
+
+    runs: list[RunOut]
+    count: int
+
+
+class EstimateOut(BaseModel):
+    """What something is expected to cost, and which question was answered.
+
+    `phase` is carried rather than inferred from whether a run was named: "what
+    will asking cost" and "what will resolving what I found cost" are different
+    questions, and a number whose meaning depends on remembering what you sent
+    gets read wrong.
+    """
+
+    phase: str
+    estimated_cost_usd: str
+    basis: str
+    run_id: str | None
+
+
+class SpendOut(BaseModel):
+    """What was actually spent, over a run or over a calendar month."""
+
+    scope: str
+    cost_usd: str
+    run_id: str | None
+    #: What this run alone was billed, beside what asking altogether cost. A run
+    #: billed little whose re-searches cost ten times more is worth being able to
+    #: see rather than totalled away.
+    run_direct_cost_usd: str | None
+    year: int | None
+    month: int | None
+
+
+class StartRun(BaseModel):
+    """An intent to search for, in the curator's own words."""
+
+    intent: str
+
+
 class CreateTheme(BaseModel):
     """Everything needed to record a theme."""
 

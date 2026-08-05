@@ -12,7 +12,7 @@
  * trusting one field is a UI someone extends to the next one.
  */
 
-const state = { view: "works", workId: null };
+const state = { view: "works", detailId: null, poll: 0 };
 
 /* -- plumbing -------------------------------------------------------------- */
 
@@ -596,9 +596,360 @@ async function viewHealth() {
   );
 }
 
+/* -- discovery ------------------------------------------------------------- */
+
+/* Which kind of nothing an unresolved work came back with, in words a curator
+ * acts on. The enum values are diagnostic labels; only one of them ("not held")
+ * suggests the work may not exist, and a screen showing the raw value leaves
+ * that distinction to be guessed.
+ *
+ * Every member of UnresolvedReason must appear here — a test reads this map and
+ * the enum and fails when they disagree, so a sixth reason arrives as a failure
+ * rather than as a raw token on a card. */
+const REASON_SENTENCES = {
+  not_held: "No wired collection holds it — this is the one reason that suggests the work may not exist.",
+  identity_refused: "Something was found under this title, but its artist did not match, so it was refused.",
+  size_unknown: "A scan was found, but nothing said how large it is, so it could not be judged.",
+  below_floor: "Every scan found is too small to show on this wall at a size worth looking at.",
+  all_rejected: "You have turned down everything that was found for it.",
+};
+
+const REASON_WORDS = {
+  not_held: "not held",
+  identity_refused: "wrong artist",
+  size_unknown: "size unknown",
+  below_floor: "too small",
+  all_rejected: "all turned down",
+};
+
+function reasonBadge(work) {
+  if (!work.unresolved_reason) return null;
+  const value = work.unresolved_reason;
+  return el("span", { class: "badge badge-unknown", title: REASON_SENTENCES[value] || "" }, [
+    el("span", { class: "glyph", text: "▲", "aria-hidden": true }),
+    el("span", { text: REASON_WORDS[value] || value }),
+  ]);
+}
+
+/* The curator authorised a work list of a stated size, and a wired collection may
+ * add to it. Labelled on every row rather than counted only in the summary: an
+ * offered work is not what was asked for, and a grid that renders the two alike
+ * invites accepting one as though it were. */
+function provenanceBadge(work) {
+  const offered = work.provenance === "offered";
+  return el("span", { class: offered ? "badge badge-offered" : "badge" }, [
+    el("span", { class: "glyph", text: offered ? "◈" : "◆", "aria-hidden": true }),
+    el("span", { text: offered ? "offered" : "asked for" }),
+  ]);
+}
+
+const RESOLUTION_GLYPHS = { resolved: "●", unresolved: "▲", pending: "◌" };
+const RESOLUTION_WORDS = { resolved: "has an image", unresolved: "no image", pending: "not looked up" };
+
+function resolutionBadge(work) {
+  const status = work.resolution_status;
+  return el("span", { class: `badge badge-${status}` }, [
+    el("span", { class: "glyph", text: RESOLUTION_GLYPHS[status] || "●", "aria-hidden": true }),
+    el("span", { text: RESOLUTION_WORDS[status] || status }),
+  ]);
+}
+
+/* What this run's state means, in a sentence.
+ *
+ * Composed here rather than taken from the MCP surface's notice, which is
+ * written for a model — it names fields in backticks and tells the caller to
+ * call status again, neither of which is true of a page with buttons on it. The
+ * numbers are the part that must not be written twice, and they are not: every
+ * figure below is read from the tally the server computed.
+ *
+ * THE RATE IS STATED OVER WHAT THE MODEL PROPOSED, NEVER OVER THE TOTAL. Works a
+ * collection offered arrived carrying their own images, so counting them in the
+ * numerator reports a retrieval rate the run never achieved — with twelve
+ * offered works behind one unresolved proposal, "12 of 13" describes a run that
+ * in fact resolved nothing it was asked for. */
+function runSentence(view) {
+  const run = view.run;
+  const tally = view.tally;
+  if (run.status === "resolving_works") {
+    return "Working out which works match the intent.";
+  }
+  if (run.status === "awaiting_approval") {
+    return `This run proposed ${tally.proposed} works, which is more than the threshold, so it stopped to ask. Nothing further is spent until you decide.`;
+  }
+  if (run.status === "resolving_images") {
+    if (!view.image_resolution_available) {
+      return `There are ${tally.proposed} works to find images for, but no image provider is configured in this deployment, so the run will stay here. Cancel it when you are done reading it.`;
+    }
+    if (run.kind === "resolve") {
+      return `Looking again for images of the ${tally.total} works this re-search covers.`;
+    }
+    return `The work list of ${tally.proposed} works is settled, and the run is looking for an image of each.`;
+  }
+  if (run.status === "completed") {
+    let sentence =
+      run.kind === "resolve"
+        ? `This re-search finished: ${tally.resolved} of the ${tally.total} works it covers have an image.`
+        : `This run finished: ${tally.resolved_proposals} of ${tally.proposed} works it was asked for have an image.`;
+    if (run.kind !== "resolve" && tally.offered) {
+      sentence += ` Separately, the collection offered ${tally.offered} more works by artists this run named but could not confirm. They are labelled below and are not what was asked for.`;
+    }
+    if (tally.unresolved) {
+      sentence += ` ${tally.unresolved} could not be matched to any image and are reported rather than dropped — each says which kind of nothing below.`;
+    }
+    if (tally.pending) {
+      // Held apart from unresolved deliberately. "We looked and it is not
+      // there" and "we could not look" lead to opposite actions, and merging
+      // them tells a curator their painting does not exist because a museum was
+      // briefly unreachable.
+      sentence += ` ${tally.pending} could not be looked up at all — the image provider was unreachable for them, which says nothing about whether they exist.`;
+    }
+    return sentence;
+  }
+  if (run.status === "halted_by_budget") {
+    return "The provider refused further spend, so this run stopped where it was. Retrying will fail the same way until the credit limit resets or is raised.";
+  }
+  if (run.status === "interrupted") {
+    return "The process working on this run stopped underneath it — a restart or a crash, not a fault in the run. Start it again with the same intent.";
+  }
+  if (run.status === "failed") {
+    return "This run hit an error and stopped. The server log has the details.";
+  }
+  if (run.status === "declined") {
+    return "The work list was declined, so no images were looked for and nothing further was spent.";
+  }
+  if (run.status === "cancelled") {
+    return "This run was cancelled. Anything already spent is still recorded.";
+  }
+  return `This run is ${run.status}.`;
+}
+
+async function viewDiscovery() {
+  // Both in one round trip: the estimate exists to inform the decision being
+  // made in the field beside it, so a screen that fetched it afterwards would
+  // be showing a receipt.
+  const [estimate, runs] = await Promise.all([api("/api/estimate"), api("/api/runs")]);
+
+  const intent = el("textarea", { id: "intent", rows: 3, required: true });
+  const start = el("button", {
+    class: "action",
+    type: "button",
+    text: "Start the search",
+    onclick: () =>
+      guard(async () => {
+        const run = await api("/api/runs", {
+          method: "POST",
+          body: JSON.stringify({ intent: intent.value }),
+        });
+        go("run", run.run_id);
+      }),
+  });
+
+  const entry = el("div", { class: "panel" }, [
+    el("h3", { text: "Ask for something" }),
+    el("div", { class: "field" }, [
+      el("label", { for: "intent", text: "What are you looking for?" }),
+      intent,
+    ]),
+    el("p", {
+      class: "note",
+      // The price before the decision, and what it buys. Stated as a bound
+      // rather than a typical figure, because a run may freely use the whole
+      // allowance and an estimate it can exceed is not an estimate.
+      text: `Asking costs at most $${estimate.estimated_cost_usd}. ${estimate.basis}`,
+    }),
+    el("div", { class: "row" }, [start]),
+  ]);
+
+  const panels = [el("h2", { text: "Discovery" }), entry];
+
+  if (!runs.runs.length) {
+    panels.push(el("p", { class: "muted", text: "No searches yet. Ask for something above." }));
+  } else {
+    panels.push(
+      el("div", { class: "panel" }, [
+        el("h3", { text: `Searches (${runs.count})` }),
+        table(
+          "Every search, newest first. A re-search is a run too, and is listed here with its parent.",
+          ["Asked for", "Kind", "State", "Started", "Open"],
+          runs.runs.map((run) => [
+            run.intent || "—",
+            run.kind === "resolve" ? "re-search" : "search",
+            run.status,
+            run.started_at,
+            el("button", {
+              class: "action quiet",
+              type: "button",
+              text: "Open",
+              "aria-label": `Open the search for ${run.intent || run.run_id}`,
+              onclick: () => go("run", run.run_id),
+            }),
+          ]),
+        ),
+      ]),
+    );
+  }
+  render(...panels);
+}
+
+/* Slow enough not to hammer a Pi, fast enough that a curator watching a run does
+ * not wonder whether the page is live. The server answers immediately rather
+ * than holding the request open, so this interval is the whole of the latency. */
+const RUN_POLL_MS = 2000;
+
+async function viewRun(runId) {
+  // Every paint of this view supersedes any refresh an earlier one scheduled,
+  // so a repaint triggered by a button leaves exactly one timer running rather
+  // than one per press.
+  state.poll += 1;
+  const view = await api(`/api/runs/${encodeURIComponent(runId)}`);
+  const run = view.run;
+  const tally = view.tally;
+
+  // The gate is the point of decision for phase 2, so its price and what that
+  // price is made of belong beside the buttons rather than on a costs panel
+  // further down. Asked for only at the gate: every other state either has no
+  // decision pending or has already spent whatever it was going to.
+  let gateEstimate = null;
+  let gateEstimateProblem = null;
+  if (run.status === "awaiting_approval") {
+    // A failure to price must not cost the curator their approve button — the
+    // estimate explains a decision, it is not the decision. But it is said
+    // rather than swallowed: a gate that silently stops showing a price looks
+    // exactly like a gate whose price is nothing.
+    try {
+      gateEstimate = await api(`/api/estimate?run_id=${encodeURIComponent(runId)}`);
+    } catch (failure) {
+      gateEstimateProblem = `The cost of approving could not be read: ${failure.message}`;
+    }
+  }
+
+  const decisions = el("div", { class: "row" }, [
+    run.status === "awaiting_approval"
+      ? el("button", {
+          class: "action",
+          type: "button",
+          text: "Approve the list",
+          onclick: () => guard(async () => {
+            await api(`/api/runs/${encodeURIComponent(runId)}/approve`, { method: "POST" });
+            await refresh();
+          }),
+        })
+      : null,
+    run.status === "awaiting_approval"
+      ? el("button", {
+          class: "action quiet",
+          type: "button",
+          text: "Decline it",
+          onclick: () => guard(async () => {
+            await api(`/api/runs/${encodeURIComponent(runId)}/decline`, { method: "POST" });
+            await refresh();
+          }),
+        })
+      : null,
+    run.is_terminal
+      ? null
+      : el("button", {
+          class: "action quiet",
+          type: "button",
+          text: "Cancel this run",
+          onclick: () => guard(async () => {
+            await api(`/api/runs/${encodeURIComponent(runId)}/cancel`, { method: "POST" });
+            await refresh();
+          }),
+        }),
+  ]);
+
+  const panels = [
+    el("p", {}, [
+      el("button", { class: "action quiet", type: "button", text: "← All searches", onclick: () => go("discovery") }),
+    ]),
+    el("h2", { text: run.intent || "Re-search" }),
+    el("div", { class: "panel" }, [
+      el("p", { class: "note", text: runSentence(view) }),
+      // The engine's own reading of the request, beside the request. A work list
+      // is judged against how the intent was read rather than against its
+      // wording, which is what makes a surprising list explicable.
+      run.strategy ? el("p", { class: "muted", text: `How it read the request: ${run.strategy}` }) : null,
+      // What approving commits to, in the place the commitment is made. The
+      // basis is the load-bearing half: the figure is currently zero because
+      // phase 2 asks museum APIs, and a bare "$0" beside an approve button
+      // invites the reading that the gate is about money. It is about the size
+      // of the work list, and the basis says so.
+      gateEstimate
+        ? el("p", { class: "muted", text: `Approving costs $${gateEstimate.estimated_cost_usd}. ${gateEstimate.basis}` })
+        : null,
+      gateEstimateProblem ? el("p", { class: "note", text: gateEstimateProblem }) : null,
+      decisions,
+    ]),
+    el("div", { class: "panel" }, [
+      el("h3", { text: "What it cost" }),
+      facts([
+        // Named for what it actually is. This figure is written when phase 1
+        // finishes and the work count is known, so it prices *resolving the work
+        // list* — labelling it as the estimate made before starting would put
+        // the phase-1 price under a heading describing phase 2.
+        ["Estimated to find the images", run.estimated_cost_usd === null ? null : `$${run.estimated_cost_usd}`],
+        ["Actually spent", run.actual_cost_usd === null ? null : `$${run.actual_cost_usd}`],
+        // Two numbers, never a verdict: the usage is this run's history and the
+        // allowance is the deployment's setting as it stands now.
+        ["Searches used", `${view.searches.used} of an allowance of ${view.searches.allowance}`],
+      ]),
+    ]),
+  ];
+
+  panels.push(
+    el("div", { class: "panel" }, [
+      el("h3", { text: `Works (${tally.total})` }),
+      el("p", {
+        class: "muted",
+        // Both counts, always, including when the collection offered nothing —
+        // a line that appeared only when there was a supplement would train a
+        // reader to read its absence as "these are all what I asked for".
+        text: `${tally.proposed} asked for, ${tally.offered} offered by the collection on top of them.`,
+      }),
+      view.works.length
+        ? table(
+            "Every work this run holds. Works the collection offered are labelled: they are by an artist the run named, not the works it asked for.",
+            ["Title", "Artist", "Where it came from", "Image", "Why the run named it"],
+            view.works.map((work) => [
+              work.title,
+              work.artist || "—",
+              provenanceBadge(work),
+              el("div", { class: "stack-tight" }, [resolutionBadge(work), reasonBadge(work)]),
+              work.rationale,
+            ]),
+          )
+        : el("p", { class: "muted", text: "This run has not settled on any works yet." }),
+    ]),
+  );
+
+  render(...panels);
+
+  // Poll only while there is something to wait for, and only for as long as
+  // this view is the one on screen. `is_terminal` comes from the server rather
+  // than from a list of finished states written here, which would go stale the
+  // day a tenth state is added and leave this polling a finished run forever.
+  if (!run.is_terminal) {
+    const generation = state.poll;
+    window.setTimeout(() => {
+      if (state.poll === generation && state.view === "run" && state.detailId === runId) refresh();
+    }, RUN_POLL_MS);
+  }
+}
+
 /* -- routing --------------------------------------------------------------- */
 
-const VIEWS = { works: viewWorks, themes: viewThemes, manifest: viewManifest, health: viewHealth };
+const VIEWS = { works: viewWorks, discovery: viewDiscovery, themes: viewThemes, manifest: viewManifest, health: viewHealth };
+
+/* The views that address one thing and carry its id in the fragment. Held as a
+ * map rather than as a chain of comparisons about which view is which: the
+ * dispatch, the fragment and the tab highlight all read it, and three
+ * hand-written conditions are three chances for them to disagree about the same
+ * view. `tab` is which section stays lit while a detail view is open. */
+const DETAIL_VIEWS = {
+  work: { render: viewWork, tab: "works" },
+  run: { render: viewRun, tab: "discovery" },
+};
 
 async function guard(work) {
   try {
@@ -609,10 +960,13 @@ async function guard(work) {
   }
 }
 
-function go(view, workId = null) {
+function go(view, detailId = null) {
   state.view = view;
-  state.workId = workId;
-  const hash = view === "work" ? `#work/${workId}` : `#${view}`;
+  state.detailId = detailId;
+  // Leaving a view invalidates any refresh it had scheduled, so a run page left
+  // open does not keep repainting behind whatever replaced it.
+  state.poll += 1;
+  const hash = DETAIL_VIEWS[view] ? `#${view}/${detailId}` : `#${view}`;
   if (window.location.hash !== hash) {
     window.location.hash = hash;
     return; // hashchange re-enters here
@@ -621,12 +975,13 @@ function go(view, workId = null) {
 }
 
 function refresh(moveFocus = false) {
+  const detail = DETAIL_VIEWS[state.view];
+  const lit = detail ? detail.tab : state.view;
   for (const tab of document.querySelectorAll("nav.tabs button")) {
-    const selected = tab.dataset.view === state.view || (state.view === "work" && tab.dataset.view === "works");
-    if (selected) tab.setAttribute("aria-current", "page");
+    if (tab.dataset.view === lit) tab.setAttribute("aria-current", "page");
     else tab.removeAttribute("aria-current");
   }
-  const done = guard(state.view === "work" ? () => viewWork(state.workId) : VIEWS[state.view]);
+  const done = guard(detail ? () => detail.render(state.detailId) : VIEWS[state.view]);
   if (moveFocus) {
     // Navigating replaces the whole view, which destroys the control that was
     // focused — leaving focus on <body>, so the next Tab starts from the top of
@@ -640,13 +995,18 @@ function refresh(moveFocus = false) {
 
 function readHash() {
   const hash = window.location.hash.replace(/^#/, "");
-  if (hash.startsWith("work/")) {
-    state.view = "work";
-    state.workId = decodeURIComponent(hash.slice("work/".length));
+  const slash = hash.indexOf("/");
+  const head = slash === -1 ? hash : hash.slice(0, slash);
+  if (slash !== -1 && DETAIL_VIEWS[head]) {
+    state.view = head;
+    state.detailId = decodeURIComponent(hash.slice(slash + 1));
   } else {
     state.view = VIEWS[hash] ? hash : "works";
-    state.workId = null;
+    state.detailId = null;
   }
+  // A fragment change is a navigation like any other, and the view being left
+  // may have had a refresh scheduled.
+  state.poll += 1;
 }
 
 for (const tab of document.querySelectorAll("nav.tabs button")) {
