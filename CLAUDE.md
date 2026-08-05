@@ -58,6 +58,33 @@ so an in-process test would pass against an app that fails every real request.
 `pdb` breakpoint has no terminal to stop in. The root suite is 52 tests in a
 fifth of a second and is left serial.
 
+## The live suites
+
+Four markers — `live_museum`, `live_binary`, `live_api`, `llm_eval` — all
+deselected by default. They are not correctness tests; the fakes cover that.
+They are the durable form of the `*-api-findings.md` documents, and they fail
+when a foreign API stops matching what the product was built against.
+
+**Always pass `-n0` when you run one.** A `-m` on the command line replaces the
+marker expression but leaves `-n auto` in place, so `-m live_museum` alone fires
+concurrent requests at a public museum API — which comes back as a rate limit and
+is indistinguishable from the contract change you were looking for.
+
+```sh
+cd curation && uv run pytest -m live_museum -n0     # free, needs the network
+cd curation && uv run pytest -m live_binary -n0     # free, needs dezoomify-rs
+cd curation && uv run pytest -m live_api -n0        # SPENDS REAL MONEY
+```
+
+Run one when your work touches that client. Otherwise leave them to
+`.github/workflows/api-drift.yml`, which runs the free tiers weekly and the paid
+one monthly — drift is on the provider's schedule, not on our commit rate.
+
+**Every one of these tests skips itself when its dependency is missing**, which
+is right locally and a trap in CI, where a green run that made no request looks
+identical to a passing one. `.github/scripts/assert_tests_ran.py` is what closes
+that: it fails the job on any skip and names which dependency was absent.
+
 **A green suite says nothing about a branch no test reaches.** Before believing
 new branches are covered, break them on purpose:
 `cd curation && uv run python tools/mutation_sweep.py <mutations.json> <test paths>`.

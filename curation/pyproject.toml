@@ -198,4 +198,12 @@ markers = [
 # it, and handing uvicorn the number leaves a window another worker can take).
 # **Use `-n0` to debug a failure**: parallel workers interleave output and a
 # `pdb` breakpoint has no terminal to stop in.
+#
+# **And `-n0` is REQUIRED for the live suites, not merely tidier.** A `-m` on the
+# command line replaces the marker expression below and leaves `-n auto` in
+# place, so `-m live_museum` alone fires concurrent requests at a public museum
+# API — which reads back as a rate limit and is indistinguishable from the
+# contract change the probe exists to detect. Run them as
+# `uv run pytest -m live_museum -n0`. `.github/workflows/api-drift.yml` does the
+# same and says so at each call site.
 addopts = "-n auto -m 'not llm_eval and not live_api and not live_museum and not live_binary'"

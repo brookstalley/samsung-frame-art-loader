@@ -48,6 +48,60 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-05: The live probes get a schedule, and a guard against passing for free
+
+**Why:** the four `live_*` suites are the durable form of the
+`*-api-findings.md` documents — each records a measurement the product is written
+against, and a document nobody re-runs quietly stops describing the world. They
+were correctly split by marker and deselected by default, and **nothing ever ran
+them.** There is no CI in this repository at all, so the split was the whole of
+the design and the trigger was missing.
+
+**On push would have been the wrong trigger, and that is worth stating rather
+than just not doing.** A museum API does not change because we committed: cost
+would scale with our commit rate while information scales with the provider's,
+so we would pay repeatedly to re-answer a question that moves monthly at most.
+The two right triggers are on demand *scoped* — run `-m live_museum` when your
+work touches that client, which already worked — and **scheduled**, which is what
+this adds.
+
+**Three jobs, not one stage, because the four markers do not cost the same.**
+`live_museum` and `live_binary` are free and run weekly. `live_api` spends real
+money and runs monthly, or on a dispatch that explicitly opts in — a manual run
+must not spend by surprise because someone wanted to check the museum probes.
+`llm_eval` is non-deterministic and gates nothing, so it stays on demand only.
+Each marker gets its own job so a museum outage cannot mask the binary result.
+
+**The load-bearing part is `.github/scripts/assert_tests_ran.py`, and the reason
+is a trap the design walks straight into.** Every one of these tests skips itself
+cleanly when its dependency is absent — `skipif(not OPENROUTER_API_KEY)`,
+`pytest.skip("dezoomify-rs is not installed")` — which is right on a developer's
+machine and is exactly wrong in CI. An expired secret or a failed install would
+produce a completely green run that made no request and verified nothing, and a
+scheduled job whose purpose is noticing change would report success for as long
+as it stayed broken. So a skip in CI is read as a provisioning failure: the job
+fails and names which dependency was missing.
+
+**A hazard introduced by the xdist change three commits earlier, fixed here.**
+`-n auto` is in `addopts`, and a `-m` on the command line replaces the marker
+expression while leaving the parallelism in place — so `-m live_museum` alone
+fires concurrent requests at a public museum API, which comes back as a rate
+limit and is indistinguishable from the contract change the probe exists to
+detect. Every live invocation now passes `-n0`, in the workflow and in the
+documented local commands.
+
+**`.github/scripts/*.py` waives `T20`**, a third kind of per-file carve-out in
+the root ruff config: GitHub Actions raises annotations by reading `::error::`
+lines off stdout, so `print()` there is the interface rather than a substitute
+for logging. Written above the two existing groups rather than appended, because
+that config's own comments make both lists load-bearing — one is dated debt, the
+other hand-run tools, and this is neither. Recorded in the linting norm too.
+
+**It will not fire until it reaches the default branch.** GitHub fires
+`schedule` only for workflows on the default branch, so the first scheduled run
+is the Monday after merge. Dispatch it once by hand after merging to prove the
+wiring rather than waiting a week to discover a typo.
+
 ## 2026-08-05: The curation suite runs across cores
 
 **Why:** 1,752 tests at ~118s, with no hotspot to attack — roughly 67ms mean and

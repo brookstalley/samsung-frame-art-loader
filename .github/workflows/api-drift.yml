@@ -1,0 +1,137 @@
+# Re-run the live probes on a schedule, so a foreign API changing under us is
+# something we are told rather than something a curator discovers.
+#
+# WHAT THIS IS FOR. The `live_*` suites are the durable form of the
+# `*-api-findings.md` documents: each records a measurement the product is
+# written against, and a document nobody re-runs quietly stops describing the
+# world. Correctness is covered by the fakes in the default suite — nothing here
+# is about whether our code is right. It is about whether the facts it was built
+# on still hold.
+#
+# WHY A SCHEDULE AND NOT A PUSH. A museum API does not change because we
+# committed. On push, cost scales with our commit rate while information scales
+# with the provider's change rate, so we would pay repeatedly to re-answer a
+# question that moves monthly at most. The other correct trigger is on demand,
+# scoped, when work touches the client for that API — that is a local
+# `uv run pytest -m live_museum -n0`, not this file.
+#
+# THIS WILL NOT RUN UNTIL IT IS ON THE DEFAULT BRANCH. GitHub fires `schedule`
+# only for workflows on the repository's default branch. Merged from a feature
+# branch, the first scheduled run is the Monday (or the 1st) after the merge.
+# Dispatch it once by hand after merging to prove the wiring, rather than waiting
+# a week to discover a typo.
+
+name: API drift
+
+on:
+  schedule:
+    # The free probes weekly, Mondays. Deliberately not on the hour: GitHub's
+    # scheduler is heavily contended at :00 and delays runs, and nothing here is
+    # time-critical.
+    - cron: "17 6 * * 1"
+    # The paid probe monthly, on the 1st. Prices and endpoint shapes move slower
+    # than a week, and this is the tier that spends real money.
+    - cron: "43 6 1 * *"
+  workflow_dispatch:
+    inputs:
+      include_paid:
+        description: "Also run the OpenRouter probes (spends real money)"
+        type: boolean
+        default: false
+
+# A scheduled run overlapping a dispatched one would double the spend on the paid
+# tier for no extra information.
+concurrency:
+  group: api-drift
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # One job per marker rather than a single `-m "a or b"` run, so a museum outage
+  # does not mask the binary result and the failure notification names which
+  # contract moved.
+
+  museum:
+    name: "Museum APIs (free)"
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 6 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Run the museum probes
+        working-directory: curation
+        # -n0 is REQUIRED, not tidiness. `-n auto` is in addopts for the default
+        # suite, and a `-m` on the command line overrides the marker expression
+        # while leaving the parallelism in place — so without this we would fire
+        # concurrent requests at a public museum API and read a rate-limit as a
+        # contract change.
+        run: uv run pytest -m live_museum -n0 -v --junitxml=results.xml
+      - name: Fail if nothing actually ran
+        if: always()
+        run: python3 .github/scripts/assert_tests_ran.py curation/results.xml
+
+  binary:
+    name: "dezoomify-rs (free)"
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '17 6 * * 1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install dezoomify-rs
+        # The latest release rather than the probed version, on purpose: this job
+        # exists to notice when the tool's contract moves, and pinning the version
+        # already measured would guarantee it never does.
+        # `dezoomify-cli-findings.md` records which version each measurement came
+        # from, which is where a failure here should be reconciled against.
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          gh release download --repo lovasoa/dezoomify-rs \
+            --pattern 'dezoomify-rs-linux.tgz' --dir "$RUNNER_TEMP" --clobber
+          tar -xzf "$RUNNER_TEMP/dezoomify-rs-linux.tgz" -C "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/dezoomify-rs" --version
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Run the binary probes
+        working-directory: curation
+        run: uv run pytest -m live_binary -n0 -v --junitxml=results.xml
+      - name: Fail if nothing actually ran
+        if: always()
+        run: python3 .github/scripts/assert_tests_ran.py curation/results.xml
+
+  openrouter:
+    name: "OpenRouter (spends money)"
+    # Monthly, or on a dispatch that explicitly opts in. A manual run must not
+    # spend by surprise just because someone wanted to check the museum probes.
+    if: >-
+      github.event.schedule == '43 6 1 * *' ||
+      (github.event_name == 'workflow_dispatch' && inputs.include_paid)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Run the OpenRouter probes
+        working-directory: curation
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: uv run pytest -m live_api -n0 -v --junitxml=results.xml
+      - name: Fail if nothing actually ran
+        # THE LOAD-BEARING STEP FOR THIS JOB. Every test here is
+        # `skipif(not OPENROUTER_API_KEY)`, so an absent or expired secret gives a
+        # completely green run that made no API call and verified nothing —
+        # precisely the green-suite-that-means-nothing this repo refuses. A skip
+        # in CI is a provisioning failure, not a legitimate absence.
+        if: always()
+        run: python3 .github/scripts/assert_tests_ran.py curation/results.xml

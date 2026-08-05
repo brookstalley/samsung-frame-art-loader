@@ -78,8 +78,17 @@ Developer preferences for how code is written in this project. Captured during d
 - **Linting**: ruff, configured per plane. Both select `E,F,I,UP,B,T20,TRY` at
   `line-length = 130`. The two configs differ, and the differences are the norm:
   - **Root** (`pyproject.toml`, excludes `curation/` and `display/`) also ignores
-    `TRY400` and `TRY003` project-wide, and carries a per-file carve-out over
-    twelve files of two kinds. Eight are 2024 wall modules waiving `T20`,
+    `TRY400` and `TRY003` project-wide, and carries a per-file carve-out of
+    **three kinds**. *(A third kind was added 2026-08-05:
+    `.github/scripts/*.py` waives `T20`, because GitHub Actions raises
+    annotations by reading `::error::` lines off a step's **stdout** — so
+    `print()` there is the interface rather than a substitute for logging, and a
+    logger writing to stderr would produce a job that fails with its reason
+    invisible in the summary. It is written above the other two groups in the
+    config rather than appended, because that file's own comments make both of
+    those lists load-bearing: one is dated debt with a deletion date, the other
+    is hand-run tools, and this is neither. Permanent, like the tools group.)*
+    Of the original twelve files in two kinds: eight are 2024 wall modules waiving `T20`,
     `E501`, `F841`, `TRY002`, `TRY201`, `TRY300`, `B007` (plus `E402` on
     `art.py` and `display.py`); their carve-out has a scheduled end date — they
     are deleted once both planes exist. Four are hand-run operator tools, because
