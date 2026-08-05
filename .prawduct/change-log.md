@@ -48,6 +48,31 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-05: The guard against a thrice-recurring defect could not see the documented form
+
+<!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
+
+**Why:** the second `verify-resolutions` came back clean, and its demoted
+observations named a real hole in the guard added one commit earlier — together
+with a docstring asserting the opposite of what the code did.
+
+It matched two prefixes and claimed an invocation it did not match "would simply
+not match the prefix and would be reported". It would not: an unmatched line
+never enters the list, so it is skipped in silence. A coverage hole rather than a
+loss of precision — and it sat exactly where `CLAUDE.md` points, since every
+command that file documents is written `cd curation && uv run pytest …`, which
+the prefixes missed, as would anything inside a `run: |` block.
+
+**The shape is worth naming because it is this session's recurring one.** A guard
+whose stated limitation is not its actual limitation cannot warn you: the
+docstring said the failure mode was noisy (reported) when it was silent
+(skipped), which is the difference between a check you can trust and one you only
+believe. Verified the fix by dropping a probe workflow written in the documented
+form and watching it fail, rather than by reading the matcher again.
+
+`CLAUDE.md` now says the rest: the marker alone is right at a terminal and wrong
+in a job, and the difference is which one has a guard reading the report.
+
 ## 2026-08-05: The Critic's findings on the review half, closed in one pass
 
 <!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
