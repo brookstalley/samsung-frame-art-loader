@@ -122,9 +122,10 @@ re-created the same silence one line further down.
 - [x] Chunk 17B: The verdict, the artist, and the preview's death
 - [x] Chunk 18A: Acquisition — the fetch paths, the guards, and a work's sources
 - [x] Chunk 18B: Preparation — the mat engine, the 4K render, and the corpus look
-- [ ] Chunk 21: Say which kind of nothing — `unresolved_reason`, and the artist fold (issue #78)
-- [ ] Chunk 22: Grounded alternatives — the collection's own answer when the gate refuses
-- [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
+- [x] Chunk 21: Say which kind of nothing — `unresolved_reason`, and the artist fold (issue #78)
+- [x] Chunk 22: Grounded alternatives — the collection's own answer when the gate refuses
+- [ ] Chunk 19A: The run half — intent entry, the estimate, the run view and its gate
+- [ ] Chunk 19B: The review half — the grid, its alternates, the verdict, the panel
 - [x] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [x] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
@@ -2331,46 +2332,115 @@ binds already exists and is contract-tested.
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-### Chunk 19: Curation web UI and HTTP API — the discovery half
+### Chunk 19 was split into 19A and 19B (2026-08-05)
 
-- **Description:** The rest of the browser surface, built **onto Chunk 10B's**
-  rather than standing one up: same thin HTTP bindings over the same service layer
-  (typed, paginated, partial data — the recorded reason the UI does not ride MCP),
-  same design decisions, same accessibility baseline. What 10B could not build
-  because the services did not exist yet: intent entry with the estimate at the
-  point of decision; the run view (status, work list trimming, approval gate, costs
-  before and after); and the review grid (image-forward, one card per work,
-  **alternates behind it** — 10B's grid shows accepted works only, with no
-  alternates to stack). It also completes the health panel 10B started, adding
-  backup age (fed by Chunk 20) and **no budget balance at all** — the gate this
-  entry used to name is resolved. This line originally listed `limit_remaining` as
-  a deliverable outright; the operator settled on 2026-08-04 that the panel does
-  not surface it in any form, because the figure fails by reading *non-zero while
-  calls are already refused*, which stating its age would not warn anyone about.
-  Per-run spend and the `halted_by_budget` outcome are the budget signals, and both
-  already exist. Do not add the field back without reopening that decision.
-  **What 10B already delivered — the work grid, work detail, themes, the manifest
-  view with its exclusion reasons, and heartbeat age — is not rebuilt here.**
-  The pre-UI governance checkpoint disposed issues #2 (design system) and #10 (MCP
-  second-look shelf) before 10B; if #2 was settled as one-off CSS with a recorded
-  revisit, this is the chunk that revisits it, since it is where the surface stops
-  being small.
-- **Depends on:** Chunk 10B (the surface it extends), Chunks 14–18 (every
-  operation it newly binds), 13 (heartbeat to display)
-- **Artifacts consumed:** `product-brief.md` (§ Identity, flows 1/3/5),
-  `design_decisions.accessibility_approach`,
-  `observability-strategy.md` § The Health Surface, `api-contract.md` (the HTTP
-  surface carries no stability obligation)
-- **Visual change:** yes — a human-facing surface end to end
-- **Deliverables:** new `curation/src/curation/http/` handlers (thin bindings);
-  the UI pages above; health panel
+At the operator's call, for the same reason 08, 14, 16, 17 and 18 were split: one
+Critic round over the whole of it reads more than a round can hold well. 10B's
+entire surface is ~1,970 lines, and 19 binds `DiscoveryService`, the runner and
+the review service on top of it, so the undivided chunk more than doubles the
+surface under a single review.
+
+**The seam is the curator's own two motions — commissioning a run, then judging
+what it brought back** — which is the seam 17A/17B already used one layer down,
+at the MCP surface. Each half is independently demoable: 19A ends with a run that
+has finished and a curator who can see what it cost, 19B ends with the loop
+closed onto the wall.
+
+**What is shared, and holds for both halves:** the surface is built **onto Chunk
+10B's** rather than standing one up — same thin HTTP bindings over the same
+service layer (typed, paginated, partial data, which is the recorded reason the
+UI does not ride MCP), same design decisions, same accessibility baseline.
+**What 10B already delivered — the work grid, work detail, themes, the manifest
+view with its exclusion reasons, and heartbeat age — is not rebuilt in either.**
+
+**Issue #2 spans both halves and closes at the end of 19B.** Its still-open box
+names components for "the candidate review grid *and* intent entry"; its
+2026-08-01 disposition settled the sequencing as **tokens lead, components are
+extracted as screens land**. So 19A extracts the intent-entry and run-view
+components, 19B extracts the grid's, and only 19B can close the issue.
+
+**One dependency the undivided entry claimed is not real and is dropped:** it
+listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
+`/health` reads `services.display.wall_status()` today. Nothing here waits on 13.
+
+### Chunk 19A: The run half — intent entry, the estimate, the run view and its gate
+
+- **Description:** The curator commissions a run and watches it, in the browser.
+  **Intent entry with the estimate at the point of decision** — not on a later
+  screen, because the estimate exists to inform the choice being made. **The run
+  view**: status, work-list trimming, the approval gate, and costs before and
+  after. Both are what 10B could not build because the services did not exist.
+  **The run view is where Chunks 21 and 22 become visible to a human, and that is
+  a requirement rather than a nicety:** 21 exists so a run that resolves nothing
+  can say *which kind of nothing*, and a browser surface that renders a bare
+  `unresolved` throws away the whole chunk. So the view reports
+  `unresolved_reason` per work, and labels offered works apart from proposed ones
+  — the provenance 22 put on the wire — including the run-level counts that
+  Chunk 22's Critic round found computed and wired to nothing.
+- **Depends on:** Chunk 10B (the surface it extends), 14A/14B (the run, the
+  estimate, the ceiling), 16A/16B (a run that resolves, and the re-search),
+  21 (`unresolved_reason`), 22 (offered/proposed provenance and its counts)
+- **Artifacts consumed:** `product-brief.md` (§ Identity, flows 1/3),
+  `design_decisions.accessibility_approach`, `api-contract.md` (the HTTP surface
+  carries no stability obligation)
+- **Visual change:** yes — two human-facing screens
+- **Deliverables:** intent-entry and run-view handlers in
+  `curation/src/curation/http/` (thin bindings); the two pages; the intent-entry
+  and run-view component extraction against 10B's existing tokens
 - **Tests:** integration — every handler is dispatch + formatting over an
-  existing service method (the service-layer norm holds by construction);
-  the flows above exercised through the HTTP surface
+  existing service method (the service-layer norm holds by construction); the
+  flows exercised through the HTTP surface; the token/contrast test 10B built
+  extends to the new components rather than being bypassed
+- **Acceptance criteria:** a curator enters an intent, reads the estimate before
+  deciding, approves or declines, and watches the run to a terminal state without
+  touching the filesystem, JSON, or SSH; a run that resolves nothing says which
+  kind of nothing, per work; offered works are distinguishable from proposed ones
+  on the screen and in the run-level counts
+- **Done when:**
+  1. Acceptance criteria met and tests pass, plus the operator's look
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+### Chunk 19B: The review half — the grid, its alternates, the verdict, the panel
+
+- **Description:** The curator judges what the run brought back, and the loop
+  closes. **The review grid** — image-forward, one card per work, **alternates
+  behind it**; 10B's grid shows accepted works only, with no alternates to stack,
+  so the stacking is new here. The verdict and image selection ride the review
+  service Chunk 17 built. It also **completes the health panel** 10B started,
+  adding backup age and **no budget balance at all** — the gate the undivided
+  entry used to name is resolved. That entry originally listed `limit_remaining`
+  as a deliverable outright; the operator settled on 2026-08-04 that the panel
+  does not surface it in any form, because the figure fails by reading *non-zero
+  while calls are already refused*, which stating its age would not warn anyone
+  about. Per-run spend and the `halted_by_budget` outcome are the budget signals,
+  and both already exist. Do not add the field back without reopening that
+  decision. **Backup age is built here against a source nothing populates yet**
+  (operator, 2026-08-05): the panel's contract is that it states observations
+  with ages and never verdicts, so "no backup recorded" is a true and useful
+  observation before the backup exists, and the field reports real ages the moment
+  the backup job lands with nothing further to wire. This is what breaks the
+  circular dependency the two entries used to carry between them.
+- **Depends on:** Chunk 19A (the run view a reviewed work is reached from),
+  17A/17B (the review surface and the verdict), 18A/18B (images on disk to show)
+- **Artifacts consumed:** `product-brief.md` (§ Identity, flows 1/5),
+  `design_decisions.accessibility_approach`, `observability-strategy.md` § The
+  Health Surface, `api-contract.md` (the HTTP surface carries no stability
+  obligation), issue #2
+- **Visual change:** yes — the surface a curator spends their time in
+- **Deliverables:** review-grid and health handlers in
+  `curation/src/curation/http/` (thin bindings); the grid with its alternates;
+  the completed health panel; the grid's component extraction, which closes the
+  last open box on issue #2
+- **Tests:** integration — every handler is dispatch + formatting over an
+  existing service method; the flows exercised through the HTTP surface; the
+  non-colour state indicator holds for the grid's accept/reject, asserted rather
+  than asserted-of
 - **Acceptance criteria:** the full curator loop — intent → estimate → review
-  with images → accept → theme → wall — runs in the browser without touching
-  the filesystem, JSON, or SSH; the health panel states observations with ages,
-  never verdicts
+  with images → accept → theme → wall — runs in the browser without touching the
+  filesystem, JSON, or SSH; the health panel states observations with ages, never
+  verdicts, and says so plainly when it has no observation to state; issue #2's
+  component box is closed
 - **Done when:**
   1. Acceptance criteria met and tests pass, plus the operator's look
   2. `/prawduct:critic` run and blocking findings resolved
@@ -2389,7 +2459,9 @@ binds already exists and is contract-tested.
   confirmed as documented, the legacy 2024 modules deleted now that nothing
   runs them, and the final cumulative review makes the branch release-ready.
 - **Depends on:** Chunks 13 (health panel target exists), 18 (re-acquisition
-  refills a restored catalogue), 19 (panel shows backup age)
+  refills a restored catalogue), 19B (the panel's backup-age field already exists
+  and reads empty — this chunk fills it, so the dependency runs one way only;
+  the two entries used to name each other)
 - **Artifacts consumed:** `operational-spec.md` (§ Backup and Restore, § Routine
   Operations), issue #14, `nonfunctional-requirements.md` § Durability
 - **Carried findings (hygiene, close-out):** `deploy/README.md` and the committed
@@ -2401,9 +2473,11 @@ binds already exists and is contract-tested.
   not exist, on behalf of a user that does not exist. Chunk 13 creates the
   account and writes the new units, so what reaches this chunk is whatever
   `deploy/` still carries afterwards.
-- **Deliverables:** backup job + schedule in `deploy/`; backup age on the
-  health panel; the restore exercise performed and its outcome recorded; legacy
-  modules removed; README brought current
+- **Deliverables:** backup job + schedule in `deploy/`; the health panel's
+  backup-age field going from "no backup recorded" to a real age — the field
+  itself ships with 19B, so what lands here is the source behind it; the restore
+  exercise performed and its outcome recorded; legacy modules removed; README
+  brought current
 - **Tests:** the restore exercise is the test, plus a unit test that the backup
   path refuses the file-copy shape
 - **Acceptance criteria:** issue #14's four boxes checked; a restored catalogue
