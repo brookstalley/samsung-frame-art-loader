@@ -1461,20 +1461,37 @@ two missing deliverables.)*
   `display/src/display/tv/`, new `display/src/display/state/` with
   `display-state.sqlite` (TvBinding + last-acted-on sequence), structured logging
   with `work_id` correlation, resolved `ART_ROOT` and the **e-paper panel's**
-  geometry logged at startup (display never reads the TV's physical size); **a one-shot TvBinding adoption path** seeded from the 41 legacy
-  `tv_content_id` values in `all.json` — the works are already uploaded to this
-  TV, so a fresh empty binding table would re-upload 41 4K images and orphan the
-  existing set. Adoption is verified against the TV's own list, not trusted:
-  a `tv_content_id` the TV does not report is discarded and the work re-uploads
-  normally
+  geometry logged at startup (display never reads the TV's physical size);
+  **the binding table starts empty, and the television's pre-existing uploads are
+  orphans to be removed rather than assets to adopt.**
+
+  > **This replaces a one-shot TvBinding adoption path, descoped 2026-08-05 on
+  > evidence rather than on preference.** The deliverable was to seed bindings
+  > from the 41 legacy `tv_content_id` values in `all.json`, so that a fresh empty
+  > table would not re-upload 41 images and orphan the set already on the
+  > television. **Its premise no longer holds.** The 2024 renders those uploads
+  > were made from are gone from the art tree — `ready/` holds exactly one file —
+  > and seeding only ever recorded a 2024 render as a work's television rendition
+  > when that file was present, so 39 of 40 accepted works have no television
+  > rendition at all and the one that does was composed by the current pipeline
+  > and is named by artwork id. Adoption would therefore bind a work to an image
+  > that is **not** the render its manifest entry names: the wall would show the
+  > 2024 composition while the catalogue recorded the current one as displayed.
+  > No join survives either — the legacy index addresses works by source URL and
+  > by `ready/{stem}_r{resize}.jpg`, and neither reaches a manifest whose entries
+  > carry an artwork id and a UUID-named render path.
+  >
+  > So the mass upload the deliverable existed to avoid is the correct behaviour:
+  > those images have never been on the television. What is owed instead is that
+  > the legacy uploads are recognised as orphans and removed, so the single
+  > user-upload category does not accumulate two generations of the same corpus.
 - **Tests:** unit — manifest parsing, version refusal, directive
   persistence/coalescing/regression, binding state machine (TV faked at its
-  interface, built after Chunk 05's verified shapes); TvBinding adoption —
-  a content id the TV still reports is adopted, one it does not is discarded and
-  re-uploaded, and adoption is idempotent across restarts; hardware — a live pass
-  on the Pi: theme on the wall with no mass re-upload, `next`/`show_now` land
-  within the poll interval, a deleted render file skips with a WARNING and
-  rotation continues
+  interface, built after Chunk 05's verified shapes); orphan removal — an upload
+  the binding table does not account for is removed, and a work the manifest
+  still names is never removed; hardware — a live pass on the Pi: the theme
+  reaches the wall, `next`/`show_now` land within the poll interval, a deleted
+  render file skips with a WARNING and rotation continues
 - **Acceptance criteria:** the wall rotates the active theme from the new
   daemon; killing curation changes nothing about display's behaviour; a display
   restart neither re-executes the last directive nor loses its place
