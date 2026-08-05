@@ -184,6 +184,19 @@ def test_every_ci_pytest_invocation_scopes_a_path():
     Comment lines are skipped, because a workflow may legitimately document the
     unscoped *local* command in prose — `api-drift.yml` does — and nothing runs a
     comment.
+
+    **What is still not checked, stated as the limitation it is.** The breadth
+    above is about which lines are *collected*; the assertion below reads the
+    first token after the command on that one line, so a shell continuation —
+    `uv run pytest \\` with the arguments on the next line — collects and then
+    passes, because the token it inspects is the backslash. No workflow here is
+    written that way and the check would have to grow a line-joining pass to
+    cover it.
+
+    Written out because the previous version of this docstring overstated its
+    reach in exactly this way, and that is the more dangerous half of the defect
+    it describes: a guard whose stated limitation is not its real one cannot warn
+    you, so the limit gets recorded rather than rounded off.
     """
     directory = GUARD.parents[2] / ".github" / "workflows"
     workflows = sorted(set(directory.glob("*.yml")) | set(directory.glob("*.yaml")))
@@ -206,3 +219,40 @@ def test_every_ci_pytest_invocation_scopes_a_path():
             f"{name}: `{line}` runs pytest with no path scope, so it collects the whole tree — "
             "the opt-in suites' import skips will land in the report and fail the guard"
         )
+
+
+def test_a_documented_command_in_a_comment_does_not_fail_the_scope_check(tmp_path):
+    """The comment skip is a branch, and a branch is not covered by running near it.
+
+    Deleting it turns no other test red: the one comment in this repo carrying the
+    command happens to be path-scoped itself, so it would satisfy the assertion
+    anyway. That makes the branch undefended by the repo's own bar, and its
+    failure mode is a false red on a workflow whose prose documents the *local*
+    invocation — which is unscoped on purpose, because no guard reads a report at
+    a terminal.
+
+    Driven against a written file rather than by calling an inner helper, because
+    the thing under test is which lines the scan collects out of real YAML.
+    """
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "probe.yml").write_text(
+        "jobs:\n"
+        "  j:\n"
+        "    steps:\n"
+        "      # Locally this is right: `uv run pytest -m live_museum -n0`\n"
+        "      - run: uv run pytest tests/live -m live_museum -n0 --junitxml=results.xml\n",
+        encoding="utf-8",
+    )
+
+    offenders = []
+    for workflow in sorted(workflows.glob("*.yml")):
+        for line in workflow.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#") or "uv run pytest" not in stripped:
+                continue
+            after = stripped.split("uv run pytest", 1)[1].split()
+            if not after or after[0].startswith("-"):
+                offenders.append(stripped)
+
+    assert offenders == [], f"a commented local command was read as a CI invocation: {offenders}"
