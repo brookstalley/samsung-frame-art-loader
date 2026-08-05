@@ -52,9 +52,21 @@ Do not replace that with an in-process ASGI transport: Starlette does not run a
 mounted sub-app's lifespan, and the lifespan is what makes the MCP mount work,
 so an in-process test would pass against an app that fails every real request.
 
+**That suite runs across cores** — `-n auto` is in the curation plane's
+`addopts`, so `uv run pytest` is already parallel (118s → 21s, measured
+2026-08-05). **Add `-n0` to debug a failure**: workers interleave output and a
+`pdb` breakpoint has no terminal to stop in. The root suite is 52 tests in a
+fifth of a second and is left serial.
+
 **A green suite says nothing about a branch no test reaches.** Before believing
 new branches are covered, break them on purpose:
 `cd curation && uv run python tools/mutation_sweep.py <mutations.json> <test paths>`.
 Its docstring has the format. It has found something on every change it has been
 run on, and it is the check that a diff review does not substitute for — the
 undefended branches all looked right when read.
+
+Budget `(mutations + 1) x the time your chosen test paths take`. **Parallelism
+does not help a narrow sweep** — measured at 67s serial against 65s parallel for
+ten mutations over two files, because a small slice is dominated by per-run
+worker startup, which `-n auto` adds rather than removes. It pays off when the
+slice is broad enough that each run costs something like the full suite.

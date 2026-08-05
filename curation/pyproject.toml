@@ -98,6 +98,23 @@ dependencies = [
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
+    # The suite has no hotspot — ~1,750 tests at roughly 67ms mean, the slowest
+    # single one 1.4s — and most of the total is integration tests booting a real
+    # uvicorn per class and waiting on it. That wait is exactly what
+    # parallelises, and it is a wait this repo will not remove the other way: an
+    # in-process ASGI transport would skip the mounted MCP lifespan and pass
+    # against an app that fails every real request.
+    #
+    # Measured 2026-08-05: **118s serial, 21s under `-n auto`.**
+    #
+    # It does NOT speed up a narrow `tools/mutation_sweep.py` run, and that was
+    # worth measuring rather than assuming, because the sweep is the obvious
+    # thing to expect a win on. The same ten-mutation sweep over two test files
+    # took 67s serial and 65s parallel: a small slice is dominated by per-run
+    # worker startup, which parallelism adds rather than removes. The win arrives
+    # when a sweep targets a broad slice, where each run pays the full-suite cost
+    # the `(mutations + 1) x suite time` budget is written against.
+    "pytest-xdist>=3.6",
     "ruff>=0.6",
     "black>=24",
     "httpx",
@@ -173,4 +190,12 @@ markers = [
 # was in the environment — an invitation to spend money written in a file
 # arguing the suite was free. A command-line `-m` overrides this line, which is
 # how any of them is opted into.
-addopts = "-m 'not llm_eval and not live_api and not live_museum and not live_binary'"
+#
+# `-n auto` runs the suite across cores. It is safe here because the fixtures
+# already isolate everything a worker could collide on — `tmp_path` per test, a
+# fresh sqlite file per test, and a server that now lets uvicorn bind port 0 and
+# reads the port back, which closed the one real race (claiming a port, closing
+# it, and handing uvicorn the number leaves a window another worker can take).
+# **Use `-n0` to debug a failure**: parallel workers interleave output and a
+# `pdb` breakpoint has no terminal to stop in.
+addopts = "-n auto -m 'not llm_eval and not live_api and not live_museum and not live_binary'"

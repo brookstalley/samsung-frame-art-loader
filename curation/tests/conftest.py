@@ -7,7 +7,6 @@ the mounted MCP server work. A test that skipped it would pass against an
 application that fails every request in production.
 """
 
-import socket
 import struct
 import threading
 import time
@@ -336,9 +335,19 @@ def seeded_service(service: CatalogueService) -> CatalogueService:
 
 @pytest.fixture
 def server_url(services: Services, seeded_service: CatalogueService) -> Iterator[str]:
-    """A real HTTP server on an ephemeral port, serving the real application."""
+    """A real HTTP server on an ephemeral port, serving the real application.
+
+    **uvicorn is asked for port 0 and the port is read back from the socket it
+    actually bound.** The obvious alternative — claim a port from the OS, close
+    it, and hand uvicorn the number — has a window between the close and
+    uvicorn's bind in which anything else on the machine can take it. That window
+    is nearly harmless when one suite runs alone and is a live race the moment
+    tests run in parallel, because every worker boots servers continuously and
+    they draw from the same ephemeral range. Reading the port back is a little
+    more to know about uvicorn and has no window at all.
+    """
     app = create_app(services)
-    config = uvicorn.Config(app, host="127.0.0.1", port=_free_port(), log_level="warning")
+    config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning")
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
@@ -350,8 +359,13 @@ def server_url(services: Services, seeded_service: CatalogueService) -> Iterator
             pytest.fail("the curation server did not start within 20 seconds")
         time.sleep(0.02)
 
+    # Only valid once `started` is set — that is what puts the bound sockets on
+    # the server — which is why this reads after the wait rather than beside the
+    # config above.
+    port = server.servers[0].sockets[0].getsockname()[1]
+
     try:
-        yield f"http://{config.host}:{config.port}"
+        yield f"http://{config.host}:{port}"
     finally:
         server.should_exit = True
         thread.join(timeout=20)
@@ -418,17 +432,6 @@ def decodable_jpeg():
         return path
 
     return _write
-
-
-def _free_port() -> int:
-    """Claim a port from the OS and hand it straight to uvicorn.
-
-    uvicorn can bind port 0 itself, but then the chosen port is only readable
-    through its internal socket list. Asking first is less to know about.
-    """
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return probe.getsockname()[1]
 
 
 @pytest.fixture
