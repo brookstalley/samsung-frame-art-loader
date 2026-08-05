@@ -54,6 +54,125 @@ uv run python -m curation
    Chunk 20. It is a true observation and the panel's whole contract is stating
    those. Say if it reads as a defect rather than as a fact.
 
+**The operator walked this on 2026-08-05.** Against a corpus of 40 accepted works
+— all rendered for the first time that day — and the 19-work Dali run. Findings
+below; each was checked against the code or the catalogue before being written
+down, and which ones are defects rather than preferences is stated rather than
+left to the reader.
+
+*On the five questions above:* only **#5** was answered — the backup line reads as
+a fact, not a defect, and stays. #4 was not reachable (nothing writes a heartbeat
+yet, so the panel shows the absence sentence rather than the key/value rows the
+question is about); re-ask it when Chunk 13 lands. #1 was answered *against* the
+current design, by #C below. #2 and #3 went unremarked.
+
+**Confirmed defects — verified, not merely reported:**
+
+- **A. `Other scans (N)` counts the scan already on the card.** The disclosure is
+  labelled from `instances_held`, which is every instance the work holds
+  *including the one pictured above it*. Every work in the Dali run holds exactly
+  one, so nineteen cards invite a curator to open "Other scans (1)" and find
+  nothing they had not already seen. The operator guessed this from the screen and
+  the catalogue confirms it: one instance per work, and it is the selected one.
+  Either the count drops the shown instance or the label stops saying "other" —
+  and the two are not equivalent, because a curator uses the number to decide
+  whether opening it is worth the scroll.
+
+- **B. Seven `proposed_title` values are corrupted, and it is the data, not the
+  rendering.** They end mid-citation on a dangling open parenthesis — *"The
+  Persistence of Memory (1931) - cited from blog.artsper.com ("*. Nothing in this
+  codebase truncates a title, so phase 1's model emitted them this way and the
+  product stores and displays them verbatim on the screen a curator judges works
+  from. Whatever the fix (reject, repair, or constrain the model's schema), a
+  title is the one field a curator cannot work around.
+
+**Requirements the walkthrough surfaced — none of them designed here:**
+
+- **C. The alternates disclosure is unusable in a grid column.** This answers
+  question #1 above with a failure rather than an opinion: expanding "other scans"
+  crams the alternates into the narrow column the card occupies. The disclosure
+  shape is the problem, not its contents.
+
+- **D. An accepted work should be pictured as it will hang** — the composed
+  render, mat and mat colour included, rather than the bare image. The preview a
+  curator judges by should be the thing the television shows.
+
+- **E. Mat colour has no control on any human surface.** `set_mat` and
+  `choose_mat` exist as services and as MCP tools, so an agent can do what a
+  curator cannot. What is asked for is re-running the AI choice, plus one-press
+  black and one-press off-white — the two neutrals a curator reaches for without
+  wanting a judgement made about them.
+
+- **F. The run table should show a thumbnail where it says "has an image".** On
+  the run detail view the Image column renders the words `has an image`; the
+  review grid beside it shows the picture. A curator scanning a run is asking
+  *which* image, and the answer is already on disk.
+
+- **G. "Where it came from" is not understood.** It heads the run table's
+  provenance column and means *how this row entered the run* — asked for by the
+  model, or offered by the collection on top. In an art catalogue that phrase
+  reads as the work's own provenance, which museum holds it. The column is doing
+  necessary work under a name that collides with the domain.
+
+- **H. A per-work preview of the e-paper card** would be welcome once that card
+  exists. Depends on Chunk 13; recorded here so it is not rediscovered.
+
+- **I. The offered-work sentence contradicts the screen it is printed on.** Every
+  offered card reads *"…an artist this run named but could not confirm a work
+  for"*, while seven works the run named for that same artist sit on the same
+  page. The Dali run holds 7 `proposed` and 12 `offered`; the seven are real
+  proposals — *The Persistence of Memory*, *Lobster Telephone*, *Metamorphosis of
+  Narcissus* and four more — and each is badged `not held`. So the sentence is
+  true only under a narrow reading of *confirm* ("resolved to a work the
+  collection holds"), and nothing on the screen teaches that reading. The
+  operator's objection was that the works say "Salvador Dalí" right underneath;
+  the sharper version is that the run demonstrably *did* name works for the
+  artist, and the sentence appears to deny it.
+
+  `_offer_rationale`'s docstring anticipates the near miss — it notes the artist
+  named is the run's spelling while the work carries the collection's own
+  attribution — so the collision was seen from the writing end and judged
+  survivable. Seen from the reading end, on a page carrying both halves at once,
+  it is not.
+
+  **A second unexplained number sits beside it.** The sentence says *"one of 25
+  works it holds"* and twelve cards appear, because `offered_works_per_run` caps
+  the offer at twelve. Each number is honest alone; together, and split across
+  two views, they invite a curator to go looking for thirteen missing works. Any
+  rewording should carry the cap or drop the total.
+
+  Repetition compounds all of it: this is one identical 30-word sentence printed
+  twelve times down a single page, carrying per-*group* information on a per-card
+  line.
+
+## Decisions taken during the 2026-08-05 walkthrough
+
+**The mat policy, settled with the operator against the corpus rather than in the
+abstract.** Recorded here because it changes what item **E** above asks for, and a
+reader finding E alone would build the wrong thing.
+
+- **Every work always has a mat**, and the non-AI default is the **existing
+  dominant-colour derivation** (Pillow median-cut), not off-white. Off-white was
+  the operator's opening proposal and was withdrawn on evidence: the 41 hand-tuned
+  2024 mats run L\* 6.7–45.2 with a median of 20.7, `nonfunctional-requirements.md`
+  § Output Quality makes that corpus the regression bar, and
+  `test_mat_corpus.py`'s `CORPUS_MAX_LIGHTNESS = 50.0` enforces it. The named
+  failure mode — a pale work competing with a lighter mat — is the reason the bar
+  exists. The mechanical fallback is free, deterministic, already built, and lands
+  in the region the corpus occupies.
+- **Black and off-white become presets a curator presses**, so choosing one is a
+  judgement someone made rather than something applied silently to forty works.
+- **The AI becomes an opt-in button that offers several candidate colours** shown
+  against the work, with nothing applied until the curator picks one. The current
+  choice stays current until then. This makes the spend buy options rather than a
+  fait accompli, and it is the control that must say on itself that it spends.
+- **Existing mats are never overwritten** — already true today and not a change:
+  `prepare(force=True)` re-renders without re-choosing, and `mat_colors` keeps
+  every choice with one marked current.
+- **Consequence to retire deliberately:** a guaranteed default means the
+  `NO_MAT_COLOR` exclusion can never fire again, so that branch and its reason
+  become dead and should be removed rather than left looking live.
+
 ### The run half of the browser surface — added 2026-08-05
 
 **What to look at.** The Discovery tab: entering an intent with the estimate
