@@ -252,9 +252,12 @@ def test_a_re_search_never_hands_back_the_instance_that_was_turned_down(discover
 # -- Q12: which works could not be resolved, and which kind of nothing was it? --
 #
 # A model asked for an artist's famous works will occasionally invent a
-# plausible title. A work no credible instance can be found for is evidence of
-# exactly that, so the run must be able to say "these N could not be resolved"
-# rather than quietly returning a shorter list.
+# plausible title, so the run must be able to say "these N could not be
+# resolved" rather than quietly returning a shorter list. Which of those N are
+# evidence of an invented title is a narrower question than it looks: only the
+# ones whose `unresolved_reason` is `not_held`. The rest are works the
+# collection holds and cannot offer usably, or works whose every scan the
+# curator has already turned down.
 
 
 def test_a_run_reports_how_many_works_it_could_not_resolve(discovery, run, propose, add_image):

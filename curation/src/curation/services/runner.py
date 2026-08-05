@@ -791,8 +791,12 @@ class DiscoveryRunner:
         Four outcomes, and they are genuinely different — which is why this
         returns a named one rather than a boolean with a null for "don't know".
         `RESOLVED`: an instance was found and selected. `UNRESOLVED`: the
-        provider was asked and holds nothing credible, which is the signal that
-        phase 1 may have proposed something that does not exist. `UNREACHABLE`:
+        provider was asked and nothing usable came back — and the work's
+        `unresolved_reason` says which kind of nothing, because only one of the
+        routes there (`NOT_HELD`) is the signal that phase 1 may have proposed
+        something that does not exist. The others mean the collection has the
+        work and cannot offer it usably, or that the curator has already turned
+        down everything it offered. `UNREACHABLE`:
         the provider could not be asked at all, which says nothing about the work
         and so must not be recorded as a verdict on it. `VERDICT_STOOD`: the
         curator had already decided, so whatever was found is reported and not

@@ -362,11 +362,18 @@ API consumers. Three consequences that are easy to miss:
   resolution states its own figure against that baseline; a change that does not
   move it says so. Lowering the floor takes the ratification that raising it does.
 
-  > **The asserting test does not exist yet**, and this is recorded as owed rather
-  > than written as though it were live. A criterion whose mechanism is imaginary
-  > is worse than one with no mechanism at all, because it reads as covered — this
-  > repo has twice found a norm naming a test file that had never been created.
-  > The first chunk that touches resolution owes it.
+  > **The asserting test is
+  > `curation/tests/live/test_the_resolution_floor_still_holds.py`**, written the
+  > same day this criterion was and deselected by default under `live_museum`,
+  > because it needs the network. It was recorded here as *owed* for the few hours
+  > before it existed rather than described as live — a criterion whose mechanism
+  > is imaginary is worse than one with no mechanism, because it reads as covered,
+  > and this repo has twice found a norm naming a test file that had never been
+  > created.
+  >
+  > **It measured 5 of 51 on the day it was written**, one above the baseline
+  > above, and the constant it asserts carries its own history so the trend is
+  > legible from the one place that cannot go stale.
 
 - Themes are switchable from the web UI and materialise on the TV without a
   redeploy.

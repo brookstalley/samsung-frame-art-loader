@@ -220,13 +220,19 @@ def services(
         # arrangement — and without it every such fetch refuses before reaching
         # the code the test is about.
         tile_targets={"artic": lambda url: f"https://www.artic.edu/iiif/2/{abs(hash(url)) % 100000}"},
+        # Stated rather than looked up, for every test that reaches acquisition. A
+        # suite whose job is to be green cannot depend on the network — pyproject
+        # says so and deselects the tests that deliberately do. Without this the
+        # fetch policy resolves real hostnames, so a machine with no DNS fails tests
+        # about wiring, and one with hostile DNS could pass them for the wrong reason.
+        #
+        # Passed through the container rather than assigned onto the built service.
+        # It was `bound.acquisition._resolve = …` until 2026-08-04, and a private
+        # attribute written from outside is a guard that disarms in silence: rename
+        # it and every acquisition test starts resolving real hostnames again with
+        # nothing failing to say so.
+        resolve=lambda _host: ["93.184.216.34"],
     )
-    # Stated rather than looked up, for every test that reaches acquisition. A
-    # suite whose job is to be green cannot depend on the network — pyproject
-    # says so and deselects the tests that deliberately do. Without this the
-    # fetch policy resolves real hostnames, so a machine with no DNS fails tests
-    # about wiring, and one with hostile DNS could pass them for the wrong reason.
-    bound.acquisition._resolve = lambda _host: ["93.184.216.34"]
     return bound
 
 

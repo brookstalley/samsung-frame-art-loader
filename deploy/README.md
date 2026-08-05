@@ -11,6 +11,16 @@ plausible-looking default. The unit names that file in `EnvironmentFile=`, and
 `load_dotenv` independently resolves it next to `config.py`; both point at the
 repository root, which is also the unit's `WorkingDirectory`.
 
+> **This unit will not start on the current Pi, and the block below is not enough
+> to make it.** The card was rebuilt on 2026-08-04 and **there is no `tvpi` user
+> on the machine at all**, while the committed unit runs as `User=tvpi` with
+> absolute `/home/tvpi/…` paths that name a home directory which does not exist.
+> Creating the account, deciding where the art tree actually lives, and moving
+> both unit files onto it is one coherent change and it belongs to the cutover —
+> it has deliberately not been done piecemeal. Until then, treat the recipe below
+> as the shape of the install rather than a working one. The Provenance section
+> at the foot of this file records what else was assumed from the original card.
+
     cp .env.example .env      # then fill it in
     sudo cp deploy/samsung-frame-art-loader.service /etc/systemd/system/
     sudo mkdir -p /etc/systemd/journald.conf.d

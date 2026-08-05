@@ -162,13 +162,24 @@ between planes.
 > | Event | Says |
 > |---|---|
 > | `phase_two.searched` | which collection was asked about which work, how many results came back, and how many were usable at all |
-> | `phase_two.judged` | how many instances were credible, and how many of those are below the floor |
+> | `phase_two.judged` | how many instances were credible, how many of those are below the floor, and `refused_at` — the gates that turned the rest away, which is the per-work summary of the `not_the_work` and `size_unknown` lines below |
 > | `phase_two.not_the_work` | a result was discarded as a different painting, naming what the provider called it and who it says painted it |
 > | `phase_two.size_unknown` | a result was discarded because the provider reported no dimensions |
 > | `phase_two.unreachable` | a provider could not be asked about a work, which leaves it pending rather than unresolved |
 > | `phase_two.verdict_stands` | a resolution finished against a work the curator had already decided; the result is reported, not applied |
 > | `preview.cached` / `preview.absent` | whether a review card will have local bytes to show |
 > | `run.completed` | the run's works split into resolved, unresolved and unreachable |
+>
+> **Acquisition's events, which start here.** `acquisition.tile_target_resolved`
+> is the product's first, and it exists because the fetch that follows it is
+> against an address no record holds — without the line, a failed tile fetch
+> cannot be told apart from a museum that went away, and the recorded failure
+> names only the URL the source carries, which was never the one fetched.
+>
+> | Event | Says |
+> |---|---|
+> | `acquisition.tile_target_resolved` | a source's image service was resolved before fetching, naming both the recorded URL and the one actually used |
+> | `acquisition.deployment_fault` | acquisition refused before it started for a reason no source is at fault for — a full disk, a missing binary, an unwired provider. **At ERROR, and it is the only acquisition signal the operator gets**: these reach the caller as a refusal the tool boundary answers without logging, and the person who can fix them is not the one holding the tool result |
 >
 > **`phase_two.not_the_work` is the one to read first when a run comes back
 > emptier than expected.** It carries the museum's own title and artist beside the

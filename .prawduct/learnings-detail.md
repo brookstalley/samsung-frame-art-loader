@@ -835,3 +835,19 @@ unowned and unmaintained.
 **Why the read-back generalises.** It is one extra read against a system you are
 already connected to, and it is the only thing that survives a library that is
 wrong in both directions — which this one is.
+
+## A claim about a live machine's current state decays silently — read the machine, never a comment that describes it
+
+Config comments, deploy docs and prior findings record what a box looked like when
+someone last looked. The box gets reimaged, users get renamed and trees get emptied
+without touching a single line of the text that describes them.
+
+The worked instance: the operator was told the 41 masters were on the Pi at
+`/home/tvpi/art`, taken from a **comment in `.env`** and stated as an observation.
+There was no `tvpi` user on that machine and the art tree was empty — the card had
+been rebuilt under the SD-card decision. Working SSH access was one command away.
+
+This is the same shape as the adjacent rule about inferences and observations
+entering a sentence in the same voice, with one difference worth keeping separate:
+a code comment's claim may stay true indefinitely, while an environment claim decays
+on its own and gives no signal when it does.

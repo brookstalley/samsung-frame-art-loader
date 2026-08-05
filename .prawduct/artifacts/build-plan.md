@@ -2116,8 +2116,8 @@ binds already exists and is contract-tested.
   Ellsworth Kelly resolves 0 of 12 held works against 10 of 12 title-only. Issue
   the title-only query; keep the artist for the gate, not the retrieval.
 - **The test that pins the fold is a decision, not a formality.**
-  `tests/unit/test_artic_client.py` asserts the current behaviour under a name
-  claiming the artist "narrows the query text" — which the live API refutes. Tests
+  `curation/tests/unit/test_artic_client.py` asserts the current behaviour under a
+  name claiming the artist "narrows the query text" — which the live API refutes. Tests
   are contracts here and the code gets fixed, never the test; this is the case that
   rule exists to make hard. The reading to be ruled on is that a test pinning a
   measured-false claim is a recorded measurement rather than a contract, so the
@@ -2134,8 +2134,8 @@ binds already exists and is contract-tested.
 - **Deliverables:** the `unresolved_reason` column (additive and nullable, so the
   durable store's widening step applies it on open with no written migration) and
   its derivation threaded from the phase-2 engine through the runner to the write
-  site; the title-only artic query; the resolution-floor test that R2 records as
-  owed, naming its own figure; a re-measured `list_works` page, since the row gains
+  site; the title-only artic query; the resolution-floor test R2 calls for, naming
+  its own figure; a re-measured `list_works` page, since the row gains
   a field and the ceiling already ran 2% over; `observability-strategy.md`'s split
   widened to name a record that was never retrieved — today it names two failure
   modes behind `phase_two.not_the_work`, and the Stella case is a third it cannot

@@ -18,6 +18,7 @@ to read, HTTP responses for a UI to render, and forcing one shape on both is
 what the shared service layer exists to avoid.
 """
 
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Final
@@ -47,6 +48,27 @@ from curation.services.runner import RunView
 #: takes the whole container rather than the one service it happens to need, so
 #: an action moving between concerns is not also a change to the dispatcher.
 Binding = Callable[[Services, Mapping[str, Any]], dict[str, Any]]
+
+log = logging.getLogger(__name__)
+
+
+def _deployment_fault(reason: str, *, condition: str, artwork_id: str) -> None:
+    """Journal a fault that is the deployment's rather than the caller's.
+
+    These three refusals reach the caller as a `ServiceError`, and the tool
+    boundary answers a `ServiceError` with a failure envelope and **no log line**
+    — correct for the ordinary case, where a bad id is the caller's problem and
+    the caller is told. It is wrong here: a missing binary, a full disk or an
+    unset user agent breaks *every* acquisition in the deployment, and the only
+    person who can fix it is the operator, who is not holding the tool result.
+    Logged where the condition is still named, rather than at the boundary, so
+    the journal does not fill with ordinary usage errors to catch these three.
+    """
+    log.error(
+        "acquisition refused before it started: %s",
+        reason,
+        extra={"event": "acquisition.deployment_fault", "condition": condition, "artwork_id": artwork_id},
+    )
 
 
 def _list_artworks(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -105,28 +127,32 @@ def _retry_acquisition(services: Services, arguments: Mapping[str, Any]) -> dict
             arguments["artwork_id"],
             source_id=arguments.get("source_id"),
         )
+    # Translated rather than allowed to reach the generic handler. These are the
+    # conditions acquisition deliberately raises for instead of recording,
+    # because no source is at fault — and a caller told only that the call
+    # "failed unexpectedly" would go looking at the museum. Each carries the
+    # remedy that actually fixes it, and each journals first, because the person
+    # who can act on a deployment fault is not the one holding the tool result.
+    #
+    # **Every raise-rather-record condition needs a clause here.** Adding one to
+    # the service without one here is silent: the generic handler drops the
+    # exception text, so the deliberate refusal arrives as the very "failed
+    # unexpectedly" these clauses exist to prevent.
     except NotEnoughSpace as exc:
-        # Translated rather than allowed to reach the generic handler. These are
-        # the conditions acquisition deliberately raises for instead of
-        # recording, because no source is at fault — and a caller told only that
-        # the call "failed unexpectedly" would go looking at the museum. Each
-        # carries the remedy that actually fixes it.
-        #
-        # **Every raise-rather-record condition needs a clause here.** Adding one
-        # to the service without one here is silent: the generic handler drops
-        # the exception text, so the deliberate refusal arrives as the very
-        # "failed unexpectedly" these clauses exist to prevent.
+        _deployment_fault(str(exc), condition="NotEnoughSpace", artwork_id=arguments["artwork_id"])
         raise ServiceError(
             f"Acquisition did not start: {exc} Free space on the art tree's disk, or lower MIN_FREE_BYTES "
             "if this deployment means to run closer to full."
         ) from exc
     except DezoomifyUnavailable as exc:
+        _deployment_fault(str(exc), condition="DezoomifyUnavailable", artwork_id=arguments["artwork_id"])
         raise ServiceError(
             f"Acquisition did not start: {exc} This is a deployment problem rather than a bad source — "
             "install dezoomify-rs, or set DEZOOMIFY_PATH to where it lives. Every source using "
             "acquisition_method='dezoomify' is affected, and no source is at fault."
         ) from exc
     except TileTargetUnavailable as exc:
+        _deployment_fault(str(exc), condition="TileTargetUnavailable", artwork_id=arguments["artwork_id"])
         raise ServiceError(
             f"Acquisition did not start: {exc} Set ARTIC_USER_AGENT in .env to a string naming this "
             "deployment and a contact address — the museum's API is open, but it asks callers to identify "

@@ -128,3 +128,33 @@ def test_only_the_client_beyond_the_engine_seam_can_reach_the_network():
         + "; ".join(f"{name} imports {hits}" for name, hits in sorted(offenders.items()))
         + ". A transport belongs beyond the engine seam — add it to _MAY_REACH_THE_NETWORK only with a reason."
     )
+
+
+def test_no_test_reaches_past_the_container_to_arm_the_no_network_guard():
+    """The DNS guard has to be a wiring argument, not an attribute poke.
+
+    Every suite that touches acquisition depends on hostnames resolving to a
+    fixed address, because a suite whose job is to be green cannot depend on the
+    network. That guard used to be armed by assigning `acquisition._resolve`
+    from the outside, which fails in the worst available direction: rename the
+    attribute and the assignment still succeeds, binding a name nothing reads,
+    while every acquisition test quietly starts resolving real hostnames. Green
+    either way, and on hostile DNS green for the wrong reason.
+
+    `Services.bind(resolve=...)` is the supported seam, and it fails loudly.
+    This asserts nobody has gone back to the private one — including in a new
+    module, which is why it greps the tree rather than naming today's two sites.
+
+    Comments are stripped before the check, and that is not a convenience: the
+    conftest comment explaining *why* the assignment was abandoned names the old
+    form verbatim, and a guard that forbids describing the mistake it prevents
+    would be paid for by deleting the explanation.
+    """
+    offenders = [
+        f"{path.relative_to(_SOURCE_ROOT.parent)}:{number}"
+        for path in (_SOURCE_ROOT.parent / "tests").rglob("*.py")
+        for number, line in enumerate(path.read_text().splitlines(), start=1)
+        if "._resolve" in (code := line.split("#", 1)[0]) and "=" in code.split("._resolve", 1)[1][:3]
+    ]
+
+    assert offenders == [], f"arm the no-network guard with Services.bind(resolve=...), not by assignment: {offenders}"

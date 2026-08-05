@@ -26,6 +26,7 @@ from curation.acquisition.preparation import PreparationService, PreparationSett
 from curation.acquisition.service import AcquisitionService, AcquisitionSettings
 from curation.acquisition.tiles import TileTargetResolver
 from curation.acquisition.transport import no_transport
+from curation.acquisition.urls import Resolver
 
 # Module scope, and the three `_default_*` helpers below used to import this at
 # function scope instead, explained as breaking a cycle: "config reads this
@@ -127,6 +128,13 @@ class Services:
         acquisition: AcquisitionSettings | None = None,
         open_stream: StreamOpener | None = None,
         tile_targets: Mapping[str, TileTargetResolver] | None = None,
+        #: How a hostname becomes addresses for the fetch policy. Defaults to the
+        #: system resolver, which is what a deployment wants and what a test suite
+        #: must not have — a suite whose job is to be green cannot depend on DNS.
+        #: Exposed here rather than left to whoever knows the attribute name: a
+        #: caller reaching past this to write `acquisition._resolve` gets no error
+        #: when the attribute is renamed, it just silently resolves for real again.
+        resolve: Resolver | None = None,
         preparation: PreparationSettings | None = None,
         mat_engine: MatEngine | None = None,
     ) -> Services:
@@ -208,6 +216,7 @@ class Services:
                     if tile_targets is not None
                     else ({} if image_search is None else {image_search.provider: image_search.tile_url})
                 ),
+                **({} if resolve is None else {"resolve": resolve}),
             ),
             preparation=PreparationService(
                 catalogue_service,

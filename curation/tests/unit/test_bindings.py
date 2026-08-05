@@ -11,15 +11,28 @@ scattering its tests into a file that disclaims it is how that boundary stops
 being legible.
 """
 
+import logging
 from dataclasses import replace
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 
+from curation.acquisition.dezoomify import DezoomifyUnavailable
 from curation.acquisition.service import AcquisitionOutcome, AcquisitionResult
-from curation.mcp.bindings import MAX_WORKS_LISTED, _acquisition_notice, _run_notice, _run_view, _truncation_notice
+from curation.acquisition.space import NotEnoughSpace
+from curation.acquisition.tiles import TileTargetUnavailable
+from curation.mcp.bindings import (
+    MAX_WORKS_LISTED,
+    _acquisition_notice,
+    _retry_acquisition,
+    _run_notice,
+    _run_view,
+    _truncation_notice,
+)
 from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, ResolutionStatus, RunKind, RunStatus
 from curation.services.catalogue import MAX_LIST_LIMIT
+from curation.services.errors import ServiceError
 from curation.services.runner import RunView
 
 
@@ -287,3 +300,44 @@ def test_every_acquisition_outcome_is_accounted_for():
     for outcome in AcquisitionOutcome:
         notice = _acquisition_notice(_acquisition(outcome))
         assert (notice is not None) == (outcome in explained), f"{outcome} lost or gained its notice"
+
+
+# -- the deployment faults, which the caller cannot fix ------------------------
+#
+# Three conditions refuse acquisition before it starts, and none of them is the
+# caller's doing: a full disk, a missing binary, an unset user agent. Each breaks
+# EVERY acquisition in the deployment, so each is translated into advice a caller
+# can read and journalled for the operator who can act on it. Nothing covered
+# these clauses until 2026-08-04 — the translation and the log line alike.
+
+
+@pytest.mark.parametrize(
+    ("raised", "condition", "remedy"),
+    [
+        (NotEnoughSpace("Only 1 byte free."), "NotEnoughSpace", "MIN_FREE_BYTES"),
+        (DezoomifyUnavailable("dezoomify-rs is not on PATH."), "DezoomifyUnavailable", "DEZOOMIFY_PATH"),
+        (TileTargetUnavailable("no resolver for provider 'artic'."), "TileTargetUnavailable", "ARTIC_USER_AGENT"),
+    ],
+)
+def test_a_deployment_fault_is_translated_and_journalled(raised, condition, remedy, caplog):
+    """The caller gets a remedy; the operator gets a line they can find.
+
+    Parametrised over the three rather than written once, because the clauses are
+    three separate `except` branches and a test over one of them says nothing
+    about the other two — which is how the third came to exist with no coverage.
+    """
+
+    class _Refusing:
+        def acquire(self, artwork_id, *, source_id=None):
+            raise raised
+
+    services = SimpleNamespace(acquisition=_Refusing())
+
+    with caplog.at_level(logging.ERROR), pytest.raises(ServiceError) as failure:
+        _retry_acquisition(services, {"artwork_id": "art-1"})
+
+    assert remedy in str(failure.value), "the caller is told nothing it can act on"
+    events = [record for record in caplog.records if getattr(record, "event", None) == "acquisition.deployment_fault"]
+    assert len(events) == 1, "a fault that breaks every acquisition left no journal line"
+    assert events[0].condition == condition
+    assert events[0].artwork_id == "art-1"

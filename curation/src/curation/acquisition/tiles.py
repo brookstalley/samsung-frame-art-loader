@@ -31,6 +31,17 @@ from curation.persistence.records import Source
 #: rather than returning a sentinel: every failure here is either a URL the
 #: provider does not recognise or a provider that could not be asked, and both
 #: are worth a sentence naming which.
+#:
+#: **An implementation may raise `ImageSearchFailure` and nothing else**, and the
+#: contract is named here because a `Callable` alias cannot carry it. The caller
+#: translates that one type into a recorded failure against the source; anything
+#: else propagates out of `acquire`, past the deliberate clauses at the tool
+#: boundary, and reaches a curator as "failed unexpectedly" — the exact outcome
+#: those clauses exist to prevent, and it would name no source, no provider and
+#: no remedy. This matters because the seam is a declared extension point: the
+#: container's map is overridable, so the next resolver is written by someone
+#: reading this line and not the caller's `except` list. A resolver that talks to
+#: something with its own exceptions wraps them here.
 TileTargetResolver = Callable[[str], str]
 
 #: Providers whose recorded URL is an identity and never a tile manifest, so a

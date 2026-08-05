@@ -92,9 +92,10 @@ def test_a_real_work_by_a_real_artist_is_refused_when_it_is_not_the_work_asked_f
 
     Every candidate here scored well against the live query. None is the
     requested work, and the correct answer is nothing at all — because an empty
-    result makes the work `unresolved`, which is the signal that phase 1 may have
-    proposed something that does not exist, and a low-confidence near-match
-    launders exactly that signal away.
+    result makes the work `unresolved` for the one reason that carries the
+    invented-work signal, `NOT_HELD`, and a low-confidence near-match launders
+    exactly that signal away. Scoped to this case on purpose: the other routes to
+    `unresolved` say the collection *has* the work, which is nearly the opposite.
     """
     judged = resolve(
         an_instance("Ann-In Memory", artist="Joseph Cornell"),

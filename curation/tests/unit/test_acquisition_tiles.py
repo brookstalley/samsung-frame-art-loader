@@ -102,7 +102,9 @@ class TestTheContainerWiresResolutionFromTheConfiguredProvider:
     than re-deriving the expression it evaluates.
     """
 
-    def _container(self, store, discovery_store, wall, thumbnail_settings, settings, engine, image_search, tmp_path):
+    def _container(
+        self, store, discovery_store, wall, thumbnail_settings, settings, engine, image_search, tmp_path, resolve=None
+    ):
         from curation.services.container import Services
         from curation.services.previews import PreviewSettings
 
@@ -136,10 +138,13 @@ class TestTheContainerWiresResolutionFromTheConfiguredProvider:
             ),
             # Deliberately NOT passing tile_targets: the default derivation is
             # what is under test, and passing one would test the override.
+            #
+            # Stated rather than looked up, so a rule about wiring is not a rule
+            # about this machine's DNS. Through the container rather than onto the
+            # built service: writing the private attribute is a guard that
+            # disarms silently the day the attribute is renamed.
+            resolve=resolve or (lambda _host: ["93.184.216.34"]),
         )
-        # Stated rather than looked up, so a rule about wiring is not a rule
-        # about this machine's DNS.
-        services.acquisition._resolve = lambda _host: ["93.184.216.34"]
         return services
 
     def _artic_work(self, services):
@@ -184,3 +189,39 @@ class TestTheContainerWiresResolutionFromTheConfiguredProvider:
 
         with pytest.raises(TileTargetUnavailable):
             services.acquisition.acquire(work.id)
+
+    def test_a_tiled_source_is_not_gated_on_its_provenance_url_being_reachable(
+        self, store, discovery_store, wall, thumbnail_settings, settings, engine, tmp_path
+    ):
+        """`Source.url` identifies the object. On this path nothing ever fetches it.
+
+        The recorded URL here resolves nowhere, and that must not stop the
+        acquisition or be written against the source: for a provider whose tiles
+        are resolved, the provenance link's reachability says nothing about
+        whether the image can be got. Gating on it produced a `failed` row naming
+        a URL nobody would have fetched — the exact misattribution this seam
+        exists to prevent — and paid a DNS lookup per tiled fetch to do it.
+
+        Proven by reaching the resolver: `museum.resolved` is only appended to
+        after the dispatch, so a run that got there was not turned away by the
+        recorded URL. The provider then refuses, which keeps the test off the
+        network and off the real dezoomify-rs.
+        """
+        from fakes import FakeImageSearch
+
+        museum = FakeImageSearch(unreachable=True)
+
+        def _no_such_host(_host):
+            raise OSError("no address associated with hostname")
+
+        services = self._container(
+            store, discovery_store, wall, thumbnail_settings, settings, engine, museum, tmp_path, resolve=_no_such_host
+        )
+        work = self._artic_work(services)
+
+        result = services.acquisition.acquire(work.id)
+
+        assert museum.resolved == [
+            "https://api.artic.edu/api/v1/artworks/91194"
+        ], "the unreachable provenance URL blocked the dispatch"
+        assert "source URL was refused" not in (result.detail or "")

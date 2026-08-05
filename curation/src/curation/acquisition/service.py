@@ -170,11 +170,6 @@ class AcquisitionService:
         # a 900 MB download would be checking it too late to prevent anything.
         require_free_space(self._settings.originals_path, required_bytes=self._settings.min_free_bytes)
 
-        try:
-            url = check_fetchable(source.url, resolve=self._resolve)
-        except UrlRefused as exc:
-            return self._record_failure(source, f"the source URL was refused: {exc}")
-
         destination = self._settings.originals_path / _FILENAME.format(artwork_id=artwork_id)
         if source.acquisition_method is AcquisitionMethod.DEZOOMIFY:
             # The recorded URL identifies the object; the tile fetcher needs the
@@ -216,6 +211,19 @@ class AcquisitionService:
                 return self._record_failure(source, f"the resolved image service URL was refused: {exc}")
             return self._acquire_tiled(source, url=url, destination=destination)
         if source.acquisition_method is AcquisitionMethod.DIRECT_HTTP:
+            # Checked here rather than before the dispatch, and the difference is
+            # not tidiness. `Source.url` identifies the object and is *not*
+            # necessarily fetchable — for a provider whose tiles are resolved,
+            # nothing ever fetches it. Gating every method on it charged a DNS
+            # lookup for an address no tiled fetch would use, and recorded "the
+            # source URL was refused" against a source whose provenance link
+            # being unreachable says nothing about whether its image can be got.
+            # That `failed` row is exactly the misattribution the resolution seam
+            # exists to prevent. This is the one path that really does fetch it.
+            try:
+                url = check_fetchable(source.url, resolve=self._resolve)
+            except UrlRefused as exc:
+                return self._record_failure(source, f"the source URL was refused: {exc}")
             return self._acquire_direct(source, url=url, destination=destination)
         # `api` is a declared method with no producer: nothing in this deployment
         # records a source that carries it, because the one museum client in the

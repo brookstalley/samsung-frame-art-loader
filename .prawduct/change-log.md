@@ -48,6 +48,54 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-04: #77 — a museum source's tile target, resolved rather than assumed
+
+**Why:** no artic work could be acquired at all. `Source.url` records the object's
+`api_link`, and the tile fetcher was handed that string — but `dezoomify-rs` needs
+an IIIF **image service** URL, and the `image_id` that builds one was used once at
+search time and never persisted. Recorded here late, and that is itself the
+finding: this shipped across four commits with the architectural decisions written
+into three artifacts and **no change-log entry**, in a bundle marked ready for
+merge. Reconstructed from the diff at the Critic's prompting.
+
+**The design decision, which was the open question in the issue.** Resolve at
+*fetch* time through a **provider seam** rather than persisting a derived URL.
+`ArticImageSearch.tile_url` asks `/artworks/{id}?fields=image_id` and joins
+`data.image_id` to the response's own `config.iiif_url`, host-prefix-checked.
+`Source.url` keeps the identity URL, which is what provenance means. Two
+consequences follow and both are why this shape was chosen: **no migration** —
+nothing persisted changes shape, so the 40 already-recorded artic sources are
+fixed by the same code that fixes the next one — and the seam is the place a
+second provider plugs in.
+
+**A new module (`acquisition/tiles.py`), two new `ImageSearch` members
+(`provider`, `tile_url`), and a required constructor argument.** `tile_targets` is
+required with no default *deliberately*: an empty map is indistinguishable from a
+correctly wired one right up to the moment a museum source fails, and by then the
+failure looks like the museum's.
+
+**A third raise-rather-record condition.** A provider in `RESOLUTION_REQUIRED`
+with no resolver wired raises `TileTargetUnavailable` rather than recording a
+`failed` row, because no source is at fault and a recorded failure would send
+whoever reads it to the museum to look for a problem that is in the wiring. The
+general rule is now stated in `architecture.md` rather than left as a list.
+
+**A new operator prerequisite, which is the part most likely to bite.**
+`ARTIC_USER_AGENT` now gates *acquiring* artic works that are already in the
+catalogue, not just discovering new ones — the museum's API is open but asks
+callers to identify themselves, and an object's image service can only be reached
+by asking. A deployment that never set it acquires nothing from artic and the tool
+result says so with the remedy.
+
+**The security bound narrowed, and `security-model.md` says what carries the
+weight instead.** The fetched URL is no longer one the deployment recorded, so
+"we only fetch what we wrote down" no longer holds; the trusted-host prefix pin
+plus re-running `check_fetchable` on the *resolved* address is what stands in its
+place.
+
+**Evidence:** verified against the live museum — the two masters that failed that
+morning landed. A mutation sweep over the new branches caught all ten.
+
 ## 2026-08-04: Chunk 21 — which kind of nothing, and the artist out of the query
 
 <!-- prawduct: chunks=21 | scope=v1-build -->
@@ -108,8 +156,20 @@ live server. `observability-strategy.md`'s two-way split gains the third failure
 mode it was structurally blind to: a record the query never retrieved emits no
 event at all, so a run whose journal is all `not_the_work` should prompt a
 question about the query, not about the results. And the claim that `unresolved`
-means phase 1 invented the work is narrowed to `not_held` at all six sites that
-asserted it, found by the grep rather than by memory.
+means phase 1 invented the work is narrowed to `not_held` wherever it was asserted.
+
+> **The sweep that closed that claim was incomplete, and the reason generalises.**
+> It was a grep for three phrases — and those phrases came from the text this same
+> diff had just written, so it structurally could not match the paraphrase the diff
+> had *removed* from `phase_two.py`: "proposed something that does not exist".
+> Three sites survived in that wording, one of them the docstring of the very
+> function the chunk changed three lines lower. The Critic found them; the sweep
+> could not have. **A grep built from the text you just wrote searches for your own
+> vocabulary**, so the second pass has to use a pattern the earlier text would not
+> have produced — here `grep -rn 'does not exist' curation/src curation/tests`,
+> which is what found them. No corrected count replaces the old one on purpose: a
+> count is a claim about a search, and the search is the part that proved
+> unreliable.
 
 **Evidence:** both default suites green (52 + 1647). The **live museum suite is
 green at 10 passed**, having started this chunk at 1 failed. A ten-mutation sweep
