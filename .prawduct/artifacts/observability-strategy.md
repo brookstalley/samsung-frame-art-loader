@@ -397,7 +397,7 @@ signal exists:
 
 | Failure | Signal |
 |---|---|
-| The wired collection could not be browsed | `browse.unreachable` at WARNING, and nothing else — a supplement is swallowed so it cannot fail the run, which makes this line the only trace that one was attempted. A run that logged `browse.searched` and never `browse.offered` reached the collection and offered nothing, which is a different fault from this one |
+| The wired collection could not be browsed | `browse.unreachable` at WARNING, and nothing else — a supplement is swallowed so it cannot fail the run, which makes this line the only trace that one was attempted. **Distinguish it from a collection that answered and offered nothing**, which is `browse.offered` carrying `works_offered: 0` against a non-zero `collection_holds`: that is every candidate declined, and `browse.below_floor` / `work.suppressed` / `work.already_present` say which gate did it |
 | Display plane stalled or dead | Heartbeat stops advancing; panel shows its age |
 | TV unreachable | Heartbeat carries TV connectivity state; WARNING in the journal |
 | Manifest references a missing file | WARNING per work, and the work is skipped — the run continues |

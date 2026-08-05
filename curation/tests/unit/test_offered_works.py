@@ -613,13 +613,18 @@ def test_a_re_search_reports_what_it_covers_rather_than_a_proposed_rate(services
 
     run_id = start(runner).id
     (gift,) = offered(services, run_id)
-    named = next(work for work in proposed(services, run_id))
+    (named,) = proposed(services, run_id)
     resolve = runner.resolve_images(candidate_work_ids=[gift.id, named.id], initiated_by=InitiatedBy.MCP_CLIENT)
 
     notice = _run_notice(runner.run_status(resolve.id, wait=False))
 
     assert "This re-search finished:" in notice
-    assert "of the 2 works it covers" in notice, "a re-search must count what it covers, not a proposed list"
+    # Numerator and denominator both pinned: the museum fake holds nothing, so
+    # the proposed work stays unresolved while the offered one keeps the instance
+    # it arrived with. A numerator that counted only proposals would read 0 here,
+    # and one that counted the covered set reads 1 — the two are distinguishable
+    # in this fixture, which is what makes the assertion worth making.
+    assert "1 of the 2 works it covers have an image" in notice
     assert "proposed works have an image" not in notice
     assert "collection offered" not in notice
 
