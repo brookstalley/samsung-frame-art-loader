@@ -472,10 +472,12 @@ class SpendOut(BaseModel):
     scope: str
     cost_usd: str
     run_id: str | None
-    #: What this run alone was billed, beside what asking altogether cost. A run
-    #: billed little whose re-searches cost ten times more is worth being able to
-    #: see rather than totalled away.
-    run_direct_cost_usd: str | None
+    #: **Deliberately absent, unlike the MCP twin.** This surface's costs panel
+    #: reads "what this run alone spent" off the run record's `actual_cost_usd`,
+    #: which is the same figure — so carrying it here too would give one screen
+    #: two sources for one number, and the unread one is where they would
+    #: silently diverge. What this payload is fetched for is the family total,
+    #: which lives nowhere else.
     year: int | None
     month: int | None
 

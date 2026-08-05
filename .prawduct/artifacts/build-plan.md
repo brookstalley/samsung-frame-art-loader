@@ -122,11 +122,11 @@ re-created the same silence one line further down.
 - [x] Chunk 17B: The verdict, the artist, and the preview's death
 - [x] Chunk 18A: Acquisition — the fetch paths, the guards, and a work's sources
 - [x] Chunk 18B: Preparation — the mat engine, the 4K render, and the corpus look
-- [ ] Chunk 21: Say which kind of nothing — `unresolved_reason`, and the artist fold (issue #78)
-- [ ] Chunk 22: Grounded alternatives — the collection's own answer when the gate refuses
-- [ ] Chunk 19A: The run half — intent entry, the estimate, the run view and its gate
-- [ ] Chunk 23: The browser client gets executed coverage — Playwright (issue #30)
-- [ ] Chunk 19B: The review half — the grid, its alternates, the verdict, the panel
+- [x] Chunk 21: Say which kind of nothing — `unresolved_reason`, and the artist fold (issue #78)
+- [x] Chunk 22: Grounded alternatives — the collection's own answer when the gate refuses
+- [x] Chunk 19A: The run half — intent entry, the estimate, the run view and its gate
+- [x] Chunk 23: The browser client gets executed coverage — Playwright (issue #30)
+- [x] Chunk 19B: The review half — the grid, its alternates, the verdict, the panel
 - [x] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [x] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)

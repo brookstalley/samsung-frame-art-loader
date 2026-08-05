@@ -1250,6 +1250,14 @@ def _run_view(view: RunView) -> dict[str, Any]:
             "proposed": view.proposed_count,
             "offered": view.offered_count,
             "resolved": view.resolved,
+            # The numerator any resolution rate is stated over, and it is here
+            # because the notice beside it already quotes this figure. Without
+            # it a caller can only compute `resolved / proposed` — `resolved`
+            # counts every provenance — which is the mixed rate `api-contract.md`
+            # and `data-model.md` both forbid: twelve offered works resolved
+            # behind one unresolved proposal reads as 12 of 1, contradicting the
+            # notice in the same response.
+            "resolved_proposals": view.resolved_proposals,
             "unresolved": view.unresolved,
             "pending": view.pending,
             # The works themselves, because the counts alone cannot be acted on —

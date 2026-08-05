@@ -7,6 +7,8 @@ also collected everything, and a focus move that always fires steals focus from
 a freshly loaded page.
 """
 
+import json
+
 import pytest
 from payloads import a_catalogue_work, a_listing
 
@@ -168,3 +170,57 @@ def test_the_first_paint_does_not_steal_focus(ui, seeded_service):
     ui.page.wait_for_selector("ul.grid")
 
     assert ui.focused() != "view"
+
+
+# -- a paint that lost its view ----------------------------------------------
+
+
+def test_a_slow_view_does_not_paint_over_the_one_navigated_to(ui):
+    """The generation guard `viewRun` had and the other four views did not.
+
+    A grid that pages through up to fifty round trips can finish long after a
+    curator has clicked away, and `render` does `replaceChildren` on `#view` — so
+    the grid landed on top of whatever replaced it, with the tab highlight and
+    the fragment both naming the other view. A stale screen that looks live is the
+    class of defect this client has shipped three times.
+
+    Driven by holding the works request open and navigating during it, rather than
+    by racing a real slow response: the defect is a lost race, and a test that had
+    to win one would report a green meaning only that the machine was fast.
+    """
+    held = []
+    ui.page.route("**/api/works?*", lambda route: held.append(route))
+
+    ui.open("#health")
+    ui.page.wait_for_selector("h2:has-text('Health')")
+
+    # The works grid starts loading, and is left before its request answers.
+    ui.page.evaluate("() => go('works')")
+    ui.page.wait_for_timeout(300)
+    ui.page.evaluate("() => go('health')")
+    ui.page.wait_for_selector("h2:has-text('Health')")
+
+    # Now let the abandoned request finish. Its paint must not land.
+    for route in held:
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(a_listing([a_catalogue_work(title="A work still arriving")])),
+        )
+    ui.page.wait_for_timeout(500)
+
+    assert "Health" in ui.text()
+    assert "A work still arriving" not in ui.text()
+
+
+def test_the_view_a_curator_is_actually_on_still_paints(ui):
+    """The paired negative: dropping superseded paints must not drop every paint.
+
+    A guard comparing the wrong pair of generations would silently paint nothing
+    at all, and the test above asserts an absence — so it would pass against a
+    client that had stopped rendering entirely.
+    """
+    ui.open("#works")
+    ui.page.wait_for_selector("ul.grid")
+
+    assert "works" in ui.text()

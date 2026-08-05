@@ -52,6 +52,17 @@ jobs:
   # One job per marker rather than a single `-m "a or b"` run, so a museum outage
   # does not mask the binary result and the failure notification names which
   # contract moved.
+  #
+  # EVERY JOB SCOPES THE PATH AS WELL AS THE MARKER, and that is load-bearing
+  # rather than tidy. `-m live_museum` alone still *collects* the whole tests
+  # tree, so four modules whose opt-in groups are deliberately not installed here
+  # — the eval one and the three browser ones — land import skips in the report,
+  # and `assert_tests_ran.py` reads any skip as a provisioning failure and fails
+  # the job. Every one of these three would have gone red on every scheduled run
+  # while every probe passed, which is the alarm that cries wolf until nobody
+  # reads it. Verified: unscoped, a run reported "1 skipped, 1873 deselected" and
+  # the guard exited 1; scoped to `tests/live`, the same marker collects its 13
+  # tests and no skips. `browser.yml` hit and fixed the identical defect.
 
   museum:
     name: "Museum APIs (free)"
@@ -70,7 +81,7 @@ jobs:
         # while leaving the parallelism in place — so without this we would fire
         # concurrent requests at a public museum API and read a rate-limit as a
         # contract change.
-        run: uv run pytest -m live_museum -n0 -v --junitxml=results.xml
+        run: uv run pytest tests/live -m live_museum -n0 -v --junitxml=results.xml
       - name: Fail if nothing actually ran
         if: always()
         run: python3 .github/scripts/assert_tests_ran.py curation/results.xml
@@ -103,7 +114,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - name: Run the binary probes
         working-directory: curation
-        run: uv run pytest -m live_binary -n0 -v --junitxml=results.xml
+        run: uv run pytest tests/live -m live_binary -n0 -v --junitxml=results.xml
       - name: Fail if nothing actually ran
         if: always()
         run: python3 .github/scripts/assert_tests_ran.py curation/results.xml
@@ -126,7 +137,7 @@ jobs:
         working-directory: curation
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-        run: uv run pytest -m live_api -n0 -v --junitxml=results.xml
+        run: uv run pytest tests/live -m live_api -n0 -v --junitxml=results.xml
       - name: Fail if nothing actually ran
         # THE LOAD-BEARING STEP FOR THIS JOB. Every test here is
         # `skipif(not OPENROUTER_API_KEY)`, so an absent or expired secret gives a

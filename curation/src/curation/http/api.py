@@ -870,7 +870,6 @@ def _spend(report: SpendReport) -> SpendOut:
         scope=report.scope,
         cost_usd=str(report.cost_usd),
         run_id=report.run_id,
-        run_direct_cost_usd=None if report.run_direct_usd is None else str(report.run_direct_usd),
         year=report.year,
         month=report.month,
     )

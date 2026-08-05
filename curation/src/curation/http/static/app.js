@@ -16,7 +16,7 @@
  * nothing changed can leave the DOM — and the focus in it — alone. Cleared on
  * every navigation, because leaving a view and coming back must repaint even
  * when the data is identical: the DOM it describes is gone by then. */
-const state = { view: "works", detailId: null, poll: 0, painted: null };
+const state = { view: "works", detailId: null, nav: 0, poll: 0, painted: null };
 
 /* -- plumbing -------------------------------------------------------------- */
 
@@ -97,7 +97,30 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
-function render(...nodes) {
+/* Write a view's nodes to the page, unless the curator has moved on.
+ *
+ * `generation` is `state.nav` as it stood when this paint began, and passing it
+ * is not ceremony: every view here awaits at least one request and three page
+ * through up to fifty, so a paint routinely completes after the view it belongs
+ * to is gone — and `replaceChildren` would put it over whatever replaced it,
+ * with the tab highlight and the fragment both naming the other view. A stale
+ * screen that looks live is the class of defect this client has shipped three
+ * times.
+ *
+ * Taken as an argument rather than read from a shared variable, which is what
+ * this was first written as. A module-level "currently painting" is overwritten
+ * by the LATER navigation, so the abandoned paint reads the generation that
+ * superseded it and lands anyway — the guard passes and does nothing. A test
+ * caught that; the value has to travel with the paint that captured it.
+ *
+ * It is also why the argument comes first and is required: a view that forgets
+ * it passes a DOM node where a number belongs, and the check below throws
+ * instead of silently painting whatever it was handed. */
+function render(generation, ...nodes) {
+  if (typeof generation !== "number") {
+    throw new TypeError("render() takes the navigation generation first; a view that omits it cannot be superseded.");
+  }
+  if (generation !== state.nav) return;
   const view = document.getElementById("view");
   // Filtered, not passed straight through: `replaceChildren` coerces a null to
   // the *string* "null" and puts it on the page, so an omitted optional panel
@@ -119,17 +142,27 @@ const FIT_WORDS = {
   below_floor: "below floor",
 };
 
-/* A badge always carries a glyph and a word beside its colour, so the state
- * survives greyscale, colour blindness, and a dimmed room. */
-function fitBadge(work) {
-  if (!work.fit) {
-    return el("span", { class: "badge badge-unknown", title: work.fit_note || "" }, [
+/* How large this would hang, or why that cannot be said.
+ *
+ * A badge always carries a glyph and a word beside its colour, so the state
+ * survives greyscale, colour blindness, and a dimmed room.
+ *
+ * One function for a held work and for a candidate scan. Both carry the same
+ * `fit`/`fit_note` pair and the same rule — a thing whose dimensions nobody
+ * recorded must not read like a thing known to be small — so the only real
+ * difference is what to call the absence, and that is the argument. Two copies
+ * were written first, and their comment claimed "same rule, different shape"
+ * when the shapes were identical; the size wording then lived in two places on
+ * the one surface whose whole justification is stating it. */
+function fitBadge(sized, absentWord = "no size known") {
+  if (!sized.fit) {
+    return el("span", { class: "badge badge-unknown", title: sized.fit_note || "" }, [
       el("span", { class: "glyph", text: "—", "aria-hidden": true }),
-      el("span", { text: "no size known" }),
+      el("span", { text: absentWord }),
     ]);
   }
-  const verdict = work.fit.verdict;
-  const inches = work.fit.rendered_long_edge_inches.toFixed(1);
+  const verdict = sized.fit.verdict;
+  const inches = sized.fit.rendered_long_edge_inches.toFixed(1);
   return el("span", { class: `badge badge-${verdict}` }, [
     el("span", { class: "glyph", text: FIT_GLYPHS[verdict] || "●", "aria-hidden": true }),
     // The number is the point: a thumbnail cannot convey resolution, so the size
@@ -233,13 +266,13 @@ function table(caption, headers, rows) {
 
 /* -- views ----------------------------------------------------------------- */
 
-async function viewWorks() {
+async function viewWorks(generation) {
   const page = await fetchAllWorks();
   const heading = el("h2", {
     text: page.works.length === page.total ? `${page.total} works` : `${page.works.length} of ${page.total} works`,
   });
   const note = shortfallNote(page);
-  render(heading, note, el("ul", { class: "grid" }, page.works.map(workCard)));
+  render(generation, heading, note, el("ul", { class: "grid" }, page.works.map(workCard)));
 }
 
 /* Only ever shown when the runaway guard actually bit. Named rather than
@@ -253,7 +286,7 @@ function shortfallNote(page) {
   });
 }
 
-async function viewWork(artworkId) {
+async function viewWork(artworkId, generation) {
   const detail = await api(`/api/works/${encodeURIComponent(artworkId)}`);
   const work = detail.work;
   const image = work.image.available
@@ -357,10 +390,10 @@ async function viewWork(artworkId) {
     ]),
   );
 
-  render(...panels);
+  render(generation, ...panels);
 }
 
-async function viewThemes() {
+async function viewThemes(generation) {
   const [themes, works] = await Promise.all([api("/api/themes"), fetchAllWorks()]);
 
   const name = el("input", { type: "text", id: "new-theme-name", required: true });
@@ -393,7 +426,7 @@ async function viewThemes() {
   for (const theme of themes.themes) {
     panels.push(themePanel(theme, works.works));
   }
-  render(...panels);
+  render(generation, ...panels);
 }
 
 function themePanel(theme, allWorks) {
@@ -519,7 +552,7 @@ function memberList(themeId, works, after) {
   );
 }
 
-async function viewManifest() {
+async function viewManifest(generation) {
   const manifest = await api("/api/manifest");
   const panels = [
     el("h2", { text: `On the wall: ${manifest.theme.name}` }),
@@ -556,7 +589,7 @@ async function viewManifest() {
       ]),
     ]),
   ];
-  render(...panels);
+  render(generation, ...panels);
 }
 
 /* The display plane's own report, whatever it chose to put in it.
@@ -582,10 +615,11 @@ function reportedFacts(reported) {
   return pairs.length ? facts(pairs) : null;
 }
 
-async function viewHealth() {
+async function viewHealth(generation) {
   const health = await api("/api/health");
   const box = health.artwork_box;
   render(
+    generation,
     el("h2", { text: "Health" }),
     el("div", { class: "panel" }, [
       el("h3", { text: "The display plane" }),
@@ -788,7 +822,7 @@ function runSentence(view) {
   return `This run is ${run.status}.`;
 }
 
-async function viewDiscovery() {
+async function viewDiscovery(generation) {
   // Both in one round trip: the estimate exists to inform the decision being
   // made in the field beside it, so a screen that fetched it afterwards would
   // be showing a receipt.
@@ -853,7 +887,7 @@ async function viewDiscovery() {
       ]),
     );
   }
-  render(...panels);
+  render(generation, ...panels);
 }
 
 /* Slow enough not to hammer a Pi, fast enough that a curator watching a run does
@@ -861,14 +895,14 @@ async function viewDiscovery() {
  * than holding the request open, so this interval is the whole of the latency. */
 const RUN_POLL_MS = 2000;
 
-async function viewRun(runId) {
+async function viewRun(runId, generation) {
   // Claimed at the top and checked after every await. This paint supersedes any
   // earlier one, and an earlier one still in flight must not paint over it or
   // schedule a second timer beside its own — pressing Approve while a poll is
   // mid-request is enough to have two running, and two chains double the request
   // rate on every tick thereafter.
   state.poll += 1;
-  const generation = state.poll;
+  const pollGeneration = state.poll;
   let view;
   try {
     view = await api(`/api/runs/${encodeURIComponent(runId)}`);
@@ -879,10 +913,10 @@ async function viewRun(runId) {
     // through a single 502 is left with a stale page that never recovers and
     // never says it stopped. Re-arm first, then re-throw so the message is
     // still shown: the next tick repaints and clears it if the blip has passed.
-    scheduleRunPoll(runId, generation);
+    scheduleRunPoll(runId, pollGeneration);
     throw failure;
   }
-  if (state.poll !== generation) return;
+  if (state.poll !== pollGeneration) return;
   const run = view.run;
   const tally = view.tally;
 
@@ -895,7 +929,7 @@ async function viewRun(runId) {
    * settled status is exactly the change worth repainting for. */
   const body = JSON.stringify(view);
   if (state.painted !== null && state.painted.runId === runId && state.painted.body === body) {
-    if (!run.is_terminal) scheduleRunPoll(runId, generation);
+    if (!run.is_terminal) scheduleRunPoll(runId, pollGeneration);
     return;
   }
 
@@ -915,7 +949,7 @@ async function viewRun(runId) {
     } catch (failure) {
       gateEstimateProblem = `The cost of approving could not be read: ${failure.message}`;
     }
-    if (state.poll !== generation) return;
+    if (state.poll !== pollGeneration) return;
   }
 
   /* What asking for this actually cost, all in. The run record carries only its
@@ -939,7 +973,7 @@ async function viewRun(runId) {
       // exact misreading that row was added to prevent.
       familySpendProblem = `The total including every re-search could not be read: ${failure.message}`;
     }
-    if (state.poll !== generation) return;
+    if (state.poll !== pollGeneration) return;
   }
 
   const decisions = el("div", { class: "row" }, [
@@ -1072,7 +1106,7 @@ async function viewRun(runId) {
     ]),
   );
 
-  render(...panels);
+  render(generation, ...panels);
 
   // Recorded only when the paint is one worth leaving alone. A gate whose price
   // could not be read is not: the run itself is unchanged, so every later poll
@@ -1091,7 +1125,7 @@ async function viewRun(runId) {
   // from the server rather than from a list of finished states written here,
   // which would go stale the day a tenth state is added and leave this polling
   // a finished run forever.
-  if (!run.is_terminal) scheduleRunPoll(runId, generation);
+  if (!run.is_terminal) scheduleRunPoll(runId, pollGeneration);
 }
 
 /* -- review ---------------------------------------------------------------- */
@@ -1141,25 +1175,6 @@ function instanceImage(instance, alt) {
   return el("div", { class: "card-image" }, [image]);
 }
 
-/* How large this scan would hang, or why that cannot be said.
- *
- * Distinct from `fitBadge`, which reads a catalogue work's own `fit`/`fit_note`
- * pair. Same rule, different shape: a scan whose dimensions nobody recorded must
- * not read like one known to be small. */
-function instanceFitBadge(instance) {
-  if (!instance.fit) {
-    return el("span", { class: "badge badge-unknown", title: instance.fit_note || "" }, [
-      el("span", { class: "glyph", text: "—", "aria-hidden": true }),
-      el("span", { text: "size unrecorded" }),
-    ]);
-  }
-  const verdict = instance.fit.verdict;
-  return el("span", { class: `badge badge-${verdict}` }, [
-    el("span", { class: "glyph", text: FIT_GLYPHS[verdict] || "●", "aria-hidden": true }),
-    el("span", { text: `${FIT_WORDS[verdict] || verdict} — would show at ${instance.fit.rendered_long_edge_inches.toFixed(1)}″` }),
-  ]);
-}
-
 function instanceStateBadges(instance) {
   return [
     instance.rejected
@@ -1189,7 +1204,7 @@ function instanceRow(instance, title, after) {
   return el("li", { class: "alternate" }, [
     instanceImage(instance, ""),
     el("div", { class: "alternate-body" }, [
-      el("div", { class: "card-footer" }, [instanceFitBadge(instance), ...instanceStateBadges(instance)]),
+      el("div", { class: "card-footer" }, [fitBadge(instance, "size unrecorded"), ...instanceStateBadges(instance)]),
       facts([
         ["Provider", instance.provider],
         ["Confidence", instance.confidence.toFixed(2)],
@@ -1321,7 +1336,7 @@ function candidateCard(card, notice, alternatesOpen = false) {
         provenanceBadge(work),
         resolutionBadge(work),
         reasonBadge(work),
-        card.shown ? instanceFitBadge(card.shown) : null,
+        card.shown ? fitBadge(card.shown, "size unrecorded") : null,
       ]),
       el("p", { class: "card-meta", text: work.rationale }),
       // The picture is not the one a verdict would accept on, and saying so is
@@ -1374,7 +1389,7 @@ async function fetchAllCandidates(runId) {
   return { run, works, total };
 }
 
-async function viewReview(runId) {
+async function viewReview(runId, generation) {
   const page = await fetchAllCandidates(runId);
   const wanting = page.works.filter((card) => card.work.verdict === "awaiting_better_image");
 
@@ -1385,12 +1400,10 @@ async function viewReview(runId) {
       el("button", { class: "action quiet", type: "button", text: "← The search", onclick: () => go("run", runId) }),
     ]),
     el("h2", { text: page.run.intent || "Re-search" }),
-    page.works.length < page.total
-      ? el("p", {
-          class: "note",
-          text: `Showing ${page.works.length} of ${page.total}; ${page.total - page.works.length} more are held and are not on this page.`,
-        })
-      : null,
+    // The catalogue grid's own helper: `fetchAllCandidates` returns the
+    // `{works, total}` shape it takes, and a second copy of the sentence is how
+    // one grid comes to word truncation differently from the other.
+    shortfallNote(page),
     // Offered only when there is something to re-search. A button that spends
     // and would do nothing is worse than no button: it invites a curator to pay
     // for a run over an empty list.
@@ -1424,7 +1437,7 @@ async function viewReview(runId) {
       : null,
     page.works.length ? grid : el("p", { class: "muted", text: "This run settled on no works, so there is nothing to review." }),
   ];
-  render(...panels);
+  render(generation, ...panels);
 }
 
 /* The next look at a run, if this view is still the one on screen when it comes
@@ -1471,6 +1484,15 @@ function go(view, detailId = null) {
   // Leaving a view invalidates any refresh it had scheduled, so a run page left
   // open does not keep repainting behind whatever replaced it — and discards
   // what was painted, since the DOM that record describes is about to go.
+  //
+  // The `nav` bump here is load-bearing only on the path that does NOT change
+  // the hash — navigating to the view already displayed, which is what clicking
+  // the current tab does. Every other path writes the fragment and re-enters
+  // through `readHash`, which bumps it again. Written down because a mutation
+  // sweep survives its removal: the cross-view case is covered, and this is the
+  // narrow one that is not, so the next reader should not take the survivor for
+  // proof that the line does nothing.
+  state.nav += 1;
   state.poll += 1;
   state.painted = null;
   const hash = DETAIL_VIEWS[view] ? `#${view}/${detailId}` : `#${view}`;
@@ -1488,7 +1510,10 @@ function refresh(moveFocus = false) {
     if (tab.dataset.view === lit) tab.setAttribute("aria-current", "page");
     else tab.removeAttribute("aria-current");
   }
-  const done = guard(detail ? () => detail.render(state.detailId) : VIEWS[state.view]);
+  // Captured here, before the view starts, so it is the navigation that
+  // commissioned this paint rather than whatever is current when it finishes.
+  const generation = state.nav;
+  const done = guard(detail ? () => detail.render(state.detailId, generation) : () => VIEWS[state.view](generation));
   if (moveFocus) {
     // Navigating replaces the whole view, which destroys the control that was
     // focused — leaving focus on <body>, so the next Tab starts from the top of
@@ -1519,6 +1544,7 @@ function readHash() {
   }
   // A fragment change is a navigation like any other, and the view being left
   // may have had a refresh scheduled over a page it is about to lose.
+  state.nav += 1;
   state.poll += 1;
   state.painted = null;
 }

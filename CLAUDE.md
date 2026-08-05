@@ -116,9 +116,16 @@ cd curation && uv run pytest -m live_binary -n0     # free, needs dezoomify-rs
 cd curation && uv run pytest -m live_api -n0        # SPENDS REAL MONEY
 ```
 
-Run one when your work touches that client. Otherwise leave them to
-`.github/workflows/api-drift.yml`, which runs the free tiers weekly and the paid
-one monthly — drift is on the provider's schedule, not on our commit rate.
+Run one when your work touches that client. Otherwise leave the **three
+`live_*` markers** to `.github/workflows/api-drift.yml`, which runs the two free
+tiers weekly and the paid one monthly — drift is on the provider's schedule, not
+on our commit rate.
+
+**`llm_eval` is not in that workflow and is not meant to be.** It drives the
+surface with a real model, so it spends and it can reach the same goal by a
+different route next time; a non-deterministic check on a schedule either flakes
+or gets loosened until it asserts nothing. It measures, and the contract level
+gates. Run it by hand before shipping a tool-surface change — nothing else will.
 
 **Every one of these tests skips itself when its dependency is missing**, which
 is right locally and a trap in CI, where a green run that made no request looks

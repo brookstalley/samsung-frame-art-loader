@@ -260,7 +260,6 @@ def a_spend(**overrides) -> dict:
         "scope": "run_family",
         "cost_usd": "0.0134",
         "run_id": "run-under-test",
-        "run_direct_cost_usd": "0.0134",
         "year": None,
         "month": None,
     }

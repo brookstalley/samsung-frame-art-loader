@@ -50,7 +50,7 @@
 
 ## 2026-08-05: The review half — the grid, its alternates, the verdict, the panel
 
-<!-- prawduct: chunks=19B | scope=v1-build -->
+<!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
 
 **Why:** a curator could commission a run in the browser and not judge what it
 brought back. The loop now closes onto the wall with no MCP client in it: intent,
@@ -93,7 +93,7 @@ wording `observability-strategy.md` specified and the code had never produced.
 
 ## 2026-08-05: The mutation sweep was reporting on runs that executed nothing
 
-<!-- prawduct: chunks=19B | scope=v1-build -->
+<!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
 
 **Why:** found while trying to prove this chunk's browser tests could fail. The
 sweep read any non-zero pytest exit as a caught mutation, and pytest exits **5**
@@ -133,7 +133,7 @@ does not depend on a comparison. Do not run git and a sweep at the same time.
 
 ## 2026-08-05: The Critic's findings on the harness, closed in one pass
 
-<!-- prawduct: chunks=23 | scope=v1-build -->
+<!-- prawduct: chunks=23 | status=shipped | scope=v1-build -->
 
 **Why:** the cumulative round returned 0 blocking, 6 warnings and 10 notes across
 three reviewers. Ten fixed, four accepted, two filed (#83, #84).
@@ -187,7 +187,7 @@ detail file was also still carrying the retired form of a rule as a live heading
 
 ## 2026-08-05: The browser client gets executed, and the tests get proved
 
-<!-- prawduct: chunks=23 | scope=v1-build -->
+<!-- prawduct: chunks=23 | status=shipped | scope=v1-build -->
 
 **Why:** `app.js` is the only human interface this product has, and neither
 Python suite ran a line of it. Three defects had already reached a running
@@ -361,7 +361,7 @@ the main beneficiary before the measurement contradicted it.
 
 ## 2026-08-05: Chunk 19A — the run half of the browser surface
 
-<!-- prawduct: chunks=19A | scope=v1-build -->
+<!-- prawduct: chunks=19A | status=shipped | scope=v1-build -->
 
 **Why:** discovery has been drivable only by an agent. Every operation a curator
 needs to commission a search and watch it existed in the service layer and on the
@@ -471,7 +471,7 @@ the suite, and the shipped client stays one hand-written file with no build step
 
 ## 2026-08-04: Chunk 22 — the collection's own answer when the gate refuses
 
-<!-- prawduct: chunks=22 | scope=v1-build -->
+<!-- prawduct: chunks=22 | status=shipped | scope=v1-build -->
 
 **Why:** two real runs proposed eight works, resolved none, and told the curator
 nothing about a collection that holds a great deal for their intent. A run may now
@@ -522,7 +522,7 @@ widening, and `_iiif_base` had three callers and a docstring about one.
 
 ## 2026-08-04: Chunk 22 Step 0 — the artist facet, measured before it is built
 
-<!-- prawduct: chunks=22 | scope=v1-build -->
+<!-- prawduct: chunks=22 | status=shipped | scope=v1-build -->
 
 **Why:** Chunk 22's whole mechanism rests on the model's artist field naming
 artists the collection actually holds, and the evidence for that was n=2 with one
@@ -611,7 +611,7 @@ morning landed. A mutation sweep over the new branches caught all ten.
 
 ## 2026-08-04: Chunk 21 — which kind of nothing, and the artist out of the query
 
-<!-- prawduct: chunks=21 | scope=v1-build -->
+<!-- prawduct: chunks=21 | status=shipped | scope=v1-build -->
 
 **Why:** two runs proposed works and resolved none of them with both suites green,
 and nothing in the product could say why. This makes the failure diagnosable. It
