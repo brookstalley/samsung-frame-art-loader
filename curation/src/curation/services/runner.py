@@ -887,6 +887,19 @@ class DiscoveryRunner:
         """
         if self._collection is None or self._settings.offered_works_per_run <= 0:
             return
+        if self._discovery.get_run(run_id).kind is not RunKind.DISCOVERY:
+            # A re-search asks for better images for works a curator already
+            # named; it does not supplement them. Stated here rather than left to
+            # the record layer, which refuses an offer on a resolve run by
+            # *raising* — and this runs on a worker whose caller turns a
+            # ServiceError into a failed run, so a curator asking for a better
+            # image would be told the re-search broke. Today the refusal is never
+            # reached, because a resolve run owns no candidate works of its own
+            # and the facet list comes back empty first; that is an accident of
+            # where coverage is stored, not a guard, and it would stop holding
+            # the moment this read `covered_works` the way `_works_to_resolve`
+            # does.
+            return
         try:
             self._offer_from_collection(run_id, previews)
         except CollectionBrowseFailure as exc:
@@ -898,7 +911,7 @@ class DiscoveryRunner:
 
     def _offer_from_collection(self, run_id: str, previews: PreviewCache) -> None:
         """Browse for each unconfirmed artist, then record an even spread of what came back."""
-        assert self._collection is not None  # noqa: S101 -- guarded by the caller, narrowing for the reader
+        assert self._collection is not None  # noqa: S101 - guarded by the caller, narrowing for the reader
         bound = self._settings.offered_works_per_run
         artists = self._artists_needing_a_supplement(run_id)
         if not artists:

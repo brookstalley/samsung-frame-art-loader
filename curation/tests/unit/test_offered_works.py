@@ -467,3 +467,26 @@ def test_a_record_whose_size_is_unknown_does_not_clear_the_floor(services):
     assert services.discovery.clears_display_floor(width=None, height=4500) is False
     assert services.discovery.clears_display_floor(width=6000, height=None) is False
     assert services.discovery.clears_display_floor(width=6000, height=4500) is True
+
+
+def test_a_re_search_offers_nothing_and_does_not_fail_trying(services, engine, runner, collection):
+    """A resolve run re-searches works a curator named; it does not supplement them.
+
+    The supplement runs at the end of phase 2, and a re-search is phase 2 — so
+    this path is reached by both kinds of run. Offering is refused for a resolve
+    run at the record layer, and a refusal that travelled as an exception would
+    surface as the whole re-search *failing*: the curator asks for a better image
+    and is told the run broke.
+    """
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Train Landscape"]}).holdings
+
+    run_id = start(runner).id
+    named = next(work for work in proposed(services, run_id) if work.resolution_status is ResolutionStatus.UNRESOLVED)
+    collection.asked.clear()
+
+    resolve = runner.resolve_images(candidate_work_ids=[named.id], initiated_by=InitiatedBy.MCP_CLIENT)
+
+    assert services.discovery.get_run(resolve.id).status is RunStatus.COMPLETED, "the re-search failed instead of finishing"
+    assert offered(services, resolve.id) == []
+    assert collection.asked == [], "a re-search should not browse the collection at all"
