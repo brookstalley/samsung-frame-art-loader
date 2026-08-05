@@ -150,6 +150,42 @@ def test_every_workflow_that_runs_a_suite_calls_the_guard():
         assert "assert_tests_ran.py" in text, f"{workflow.name} runs pytest but never checks that anything actually ran"
 
 
+def _ci_pytest_invocations(directory: pathlib.Path) -> list[tuple[str, str]]:
+    """Every line in a workflow directory that actually runs pytest.
+
+    Shared by the two tests below so there is one scan rather than a scan and a
+    copy of it — a test that re-implements the loop it names defends nothing,
+    which is how the comment skip below came to be asserted and undefended at the
+    same time.
+
+    **Both spellings of the extension**, because GitHub accepts either and a walk
+    over one has a hole exactly the width of someone typing `.yaml`.
+
+    Comment lines are skipped: a workflow may legitimately document the unscoped
+    *local* command in prose — `api-drift.yml` does — and nothing runs a comment.
+    """
+    workflows = sorted(set(directory.glob("*.yml")) | set(directory.glob("*.yaml")))
+    assert workflows, f"no workflows found in {directory} — the caller is asserting nothing"
+    found = []
+    for workflow in workflows:
+        for line in workflow.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#") or "uv run pytest" not in stripped:
+                continue
+            found.append((workflow.name, stripped))
+    return found
+
+
+def _is_scoped(line: str) -> bool:
+    """Whether an invocation names a path before its flags.
+
+    The path comes first by convention, and it is the token that is neither the
+    command nor an option nor an option's value.
+    """
+    after = line.split("uv run pytest", 1)[1].split()
+    return bool(after) and not after[0].startswith("-")
+
+
 def test_every_ci_pytest_invocation_scopes_a_path():
     """An unscoped run collects the whole tree, and this guard fails on any skip.
 
@@ -198,24 +234,11 @@ def test_every_ci_pytest_invocation_scopes_a_path():
     it describes: a guard whose stated limitation is not its real one cannot warn
     you, so the limit gets recorded rather than rounded off.
     """
-    directory = GUARD.parents[2] / ".github" / "workflows"
-    workflows = sorted(set(directory.glob("*.yml")) | set(directory.glob("*.yaml")))
-    assert workflows, "no workflows found — this test is asserting nothing"
-
-    invocations = []
-    for workflow in workflows:
-        for line in workflow.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if stripped.startswith("#") or "uv run pytest" not in stripped:
-                continue
-            invocations.append((workflow.name, stripped))
+    invocations = _ci_pytest_invocations(GUARD.parents[2] / ".github" / "workflows")
     assert invocations, "no pytest invocations found in any workflow — this test is asserting nothing"
 
     for name, line in invocations:
-        # The path comes before the flags by convention, and it is the token that
-        # is neither the command nor an option nor an option's value.
-        after = line.split("uv run pytest", 1)[1].split()
-        assert after and not after[0].startswith("-"), (
+        assert _is_scoped(line), (
             f"{name}: `{line}` runs pytest with no path scope, so it collects the whole tree — "
             "the opt-in suites' import skips will land in the report and fail the guard"
         )
@@ -224,15 +247,21 @@ def test_every_ci_pytest_invocation_scopes_a_path():
 def test_a_documented_command_in_a_comment_does_not_fail_the_scope_check(tmp_path):
     """The comment skip is a branch, and a branch is not covered by running near it.
 
-    Deleting it turns no other test red: the one comment in this repo carrying the
-    command happens to be path-scoped itself, so it would satisfy the assertion
-    anyway. That makes the branch undefended by the repo's own bar, and its
-    failure mode is a false red on a workflow whose prose documents the *local*
-    invocation — which is unscoped on purpose, because no guard reads a report at
-    a terminal.
+    Its failure mode is a false red on a workflow whose prose documents the
+    *local* invocation — which is unscoped on purpose, because no guard reads a
+    report at a terminal.
 
-    Driven against a written file rather than by calling an inner helper, because
-    the thing under test is which lines the scan collects out of real YAML.
+    **This drives the real scan**, which is the whole point and is what the first
+    version of this test got wrong: it re-implemented the loop in its own body, so
+    deleting the comment skip from the actual scanner turned nothing red and the
+    branch stayed undefended while a docstring claimed otherwise. The Critic
+    caught it by simulating exactly that mutation. Both tests call
+    `_ci_pytest_invocations` now — that one over `.github/workflows`, this one
+    over a fixture — so there is one loop and mutating it is visible from here.
+
+    The fixture is a workflow whose comment carries the unscoped local form and
+    whose step carries the scoped CI form: with the branch removed the comment
+    yields `-m` as its first token and is reported.
     """
     workflows = tmp_path / ".github" / "workflows"
     workflows.mkdir(parents=True)
@@ -245,14 +274,9 @@ def test_a_documented_command_in_a_comment_does_not_fail_the_scope_check(tmp_pat
         encoding="utf-8",
     )
 
-    offenders = []
-    for workflow in sorted(workflows.glob("*.yml")):
-        for line in workflow.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if stripped.startswith("#") or "uv run pytest" not in stripped:
-                continue
-            after = stripped.split("uv run pytest", 1)[1].split()
-            if not after or after[0].startswith("-"):
-                offenders.append(stripped)
+    collected = _ci_pytest_invocations(workflows)
 
-    assert offenders == [], f"a commented local command was read as a CI invocation: {offenders}"
+    assert [line for _, line in collected] == [
+        "- run: uv run pytest tests/live -m live_museum -n0 --junitxml=results.xml"
+    ], f"the commented local command was read as a CI invocation: {collected}"
+    assert all(_is_scoped(line) for _, line in collected)
