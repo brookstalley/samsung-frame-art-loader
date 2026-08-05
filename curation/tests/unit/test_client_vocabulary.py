@@ -14,13 +14,43 @@ which is the point at which it is cheap to write one.
 """
 
 import re
+import shutil
+import subprocess
 
 import pytest
 
 from curation.http.pages import STATIC_DIR
 from curation.persistence.discovery_records import ResolutionStatus, UnresolvedReason, WorkProvenance
 
-CLIENT = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
+CLIENT_PATH = STATIC_DIR / "app.js"
+CLIENT = CLIENT_PATH.read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed; this check is opportunistic")
+def test_the_client_parses():
+    """A syntax error here kills the entire browser surface and no other test notices.
+
+    Every Python test asserts what the *server* sends and that the script is
+    served; none of them runs a line of it. So a stray brace ships a page that
+    loads, fetches nothing, and shows the "Loading the catalogue…" placeholder
+    forever, against a fully green suite — the shape of failure this product
+    exists to refuse.
+
+    **This is a check, not a toolchain.** It shells out to whatever `node`
+    happens to be on the machine and skips when there is none, so it adds no
+    dependency and no build step, and the deliberate decision against a Node
+    toolchain on a Pi (Chunk 10B) is untouched. It cannot say the client is
+    *correct* — only that it is parseable, which is the cheapest fact worth
+    having about a file nothing else executes.
+    """
+    result = subprocess.run(
+        ["node", "--check", str(CLIENT_PATH)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, f"the browser client does not parse:\n{result.stderr}"
 
 
 def _object_keys(name: str) -> set[str]:

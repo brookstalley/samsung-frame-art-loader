@@ -364,9 +364,17 @@ class RunViewOut(BaseModel):
 
     run: RunOut
     tally: RunTallyOut
-    #: Every work, uncapped. The MCP surface stops at 100 because a model's
-    #: context is the scarce thing; a browser's is not, and a run's list is
-    #: bounded by the approval threshold and the search allowance in any case.
+    #: Every work, uncapped, and **nothing bounds how many there are** — phase 1
+    #: is deliberately not capped at a work count, because the approval gate
+    #: exists to catch exactly the run that read an intent too broadly ("you
+    #: asked for Dalí and I found 200 works, really?"), and a cap would mean the
+    #: gate could never fire. So this list is as long as the run is wide.
+    #:
+    #: Sent whole anyway. The MCP surface stops at 100 because a model's context
+    #: is the scarce thing; here the reader is a curator deciding whether to
+    #: approve, and a truncated list is precisely the one they cannot answer the
+    #: gate's question from. The cost is real and bounded by that same
+    #: judgement: a 200-work run re-fetched while it is being deliberated over.
     works: list[CandidateWorkOut]
     searches: SearchUsageOut
     #: Whether this deployment can resolve images at all. A run sitting in

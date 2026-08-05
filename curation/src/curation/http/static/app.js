@@ -12,7 +12,11 @@
  * trusting one field is a UI someone extends to the next one.
  */
 
-const state = { view: "works", detailId: null, poll: 0 };
+/* `painted` is what the run view last put on the page, so a poll that finds
+ * nothing changed can leave the DOM — and the focus in it — alone. Cleared on
+ * every navigation, because leaving a view and coming back must repaint even
+ * when the data is identical: the DOM it describes is gone by then. */
+const state = { view: "works", detailId: null, poll: 0, painted: null };
 
 /* -- plumbing -------------------------------------------------------------- */
 
@@ -797,13 +801,30 @@ async function viewDiscovery() {
 const RUN_POLL_MS = 2000;
 
 async function viewRun(runId) {
-  // Every paint of this view supersedes any refresh an earlier one scheduled,
-  // so a repaint triggered by a button leaves exactly one timer running rather
-  // than one per press.
+  // Claimed at the top and checked after every await. This paint supersedes any
+  // earlier one, and an earlier one still in flight must not paint over it or
+  // schedule a second timer beside its own — pressing Approve while a poll is
+  // mid-request is enough to have two running, and two chains double the request
+  // rate on every tick thereafter.
   state.poll += 1;
+  const generation = state.poll;
   const view = await api(`/api/runs/${encodeURIComponent(runId)}`);
+  if (state.poll !== generation) return;
   const run = view.run;
   const tally = view.tally;
+
+  /* A poll that repaints an unchanged view is not free: `render` replaces the
+   * whole subtree, which destroys whatever the keyboard user was standing on —
+   * so tabbing to "Approve" and pausing to read loses the focus two seconds
+   * later, every time, on the one screen whose whole job is to be decided on.
+   * Nothing changed means nothing to touch. Compared against the payload rather
+   * than against the status alone, because a work list filling in underneath a
+   * settled status is exactly the change worth repainting for. */
+  const body = JSON.stringify(view);
+  if (state.painted !== null && state.painted.runId === runId && state.painted.body === body) {
+    if (!run.is_terminal) scheduleRunPoll(runId, generation);
+    return;
+  }
 
   // The gate is the point of decision for phase 2, so its price and what that
   // price is made of belong beside the buttons rather than on a costs panel
@@ -821,6 +842,7 @@ async function viewRun(runId) {
     } catch (failure) {
       gateEstimateProblem = `The cost of approving could not be read: ${failure.message}`;
     }
+    if (state.poll !== generation) return;
   }
 
   const decisions = el("div", { class: "row" }, [
@@ -925,16 +947,29 @@ async function viewRun(runId) {
 
   render(...panels);
 
-  // Poll only while there is something to wait for, and only for as long as
-  // this view is the one on screen. `is_terminal` comes from the server rather
-  // than from a list of finished states written here, which would go stale the
-  // day a tenth state is added and leave this polling a finished run forever.
-  if (!run.is_terminal) {
-    const generation = state.poll;
-    window.setTimeout(() => {
-      if (state.poll === generation && state.view === "run" && state.detailId === runId) refresh();
-    }, RUN_POLL_MS);
-  }
+  // Recorded only when the paint is one worth leaving alone. A gate whose price
+  // could not be read is not: the run itself is unchanged, so every later poll
+  // would match the signature and the failure sentence would sit there until
+  // something else about the run moved. Not recording it is what makes the next
+  // poll try the price again.
+  if (gateEstimateProblem === null) state.painted = { runId, body };
+
+  // Poll only while there is something still to wait for. `is_terminal` comes
+  // from the server rather than from a list of finished states written here,
+  // which would go stale the day a tenth state is added and leave this polling
+  // a finished run forever.
+  if (!run.is_terminal) scheduleRunPoll(runId, generation);
+}
+
+/* The next look at a run, if this view is still the one on screen when it comes
+ * round. Both conditions are checked at fire time rather than cancelled on
+ * navigation: a stale timer that finds the world moved on simply does nothing,
+ * which is one mechanism instead of a handle to remember to clear on every path
+ * out of the view. */
+function scheduleRunPoll(runId, generation) {
+  window.setTimeout(() => {
+    if (state.poll === generation && state.view === "run" && state.detailId === runId) refresh();
+  }, RUN_POLL_MS);
 }
 
 /* -- routing --------------------------------------------------------------- */
@@ -964,8 +999,10 @@ function go(view, detailId = null) {
   state.view = view;
   state.detailId = detailId;
   // Leaving a view invalidates any refresh it had scheduled, so a run page left
-  // open does not keep repainting behind whatever replaced it.
+  // open does not keep repainting behind whatever replaced it — and discards
+  // what was painted, since the DOM that record describes is about to go.
   state.poll += 1;
+  state.painted = null;
   const hash = DETAIL_VIEWS[view] ? `#${view}/${detailId}` : `#${view}`;
   if (window.location.hash !== hash) {
     window.location.hash = hash;
@@ -1005,8 +1042,9 @@ function readHash() {
     state.detailId = null;
   }
   // A fragment change is a navigation like any other, and the view being left
-  // may have had a refresh scheduled.
+  // may have had a refresh scheduled over a page it is about to lose.
   state.poll += 1;
+  state.painted = null;
 }
 
 for (const tab of document.querySelectorAll("nav.tabs button")) {

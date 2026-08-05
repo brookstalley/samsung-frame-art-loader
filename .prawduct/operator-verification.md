@@ -69,7 +69,33 @@ deployment does.
    from `resolving_works` through to a terminal state. Does it feel live, or does
    it feel like it is doing nothing? Two seconds was chosen against a Pi's
    modesty, not measured against a curator's patience.
-6. **The completed sentence rates over what the model proposed.** "This run
+
+   **One check here is worth doing deliberately, because no test can make it and
+   it is the kind of fault that is invisible until it is infuriating.** On a run
+   sitting at the approval gate, press Tab until "Approve the list" has the focus
+   ring, then take your hands off the keyboard for ten seconds and press Enter.
+   It must approve. A repaint on each poll would have thrown the focus away
+   silently, so what you are checking is that the page leaves the DOM alone when
+   nothing about the run changed. Do the same on a run that *is* changing —
+   focus will legitimately move there, and that is the cost of the view being
+   live.
+
+   **This is the honest limit of what is covered.** The client has no test
+   runner — 10B decided against a Node toolchain on a Pi for a single-operator
+   tool, and that decision stands — so the Python suite verifies every byte the
+   server sends and nothing the browser does with it. The polling, the
+   supersession of an in-flight repaint, and the repaint-suppression above are
+   all reasoned and none of them is executed by a test. If the surface keeps
+   growing logic of this kind, that trade is worth reopening; today it is one
+   view's worth.
+6. **The searches table prints raw ISO timestamps** — `2026-08-05T13:14:25.812…`
+   — because that is what the rest of this surface does (the health panel shows
+   `reported_at` the same way) and inventing a date format for one table would
+   make it the odd one out. It is still the worst-reading thing on the screen,
+   and the run list is the one place a curator scans many of them at once. If
+   you want them humanised, that is a convention decision for the whole surface
+   rather than a fix here, and it is yours to make.
+7. **The completed sentence rates over what the model proposed.** "This run
    finished: 1 of 3 works it was asked for have an image", with the offered works
    named in a separate clause. The alternative — one merged count — reads better
    and reports a resolution rate the run never achieved. Confirm the honest
