@@ -289,11 +289,82 @@ credit. `tests/live/test_artic_shapes_are_still_real.py` is the durable form of
 everything above: the shapes here are prose, and prose nobody re-runs quietly
 stops describing the API.
 
+## Browsing by artist: filters work where relevance does not
+
+Measured 2026-08-04, against the question of whether the collection can be asked
+for *works by an artist* rather than for one named work. It can, over a `POST` to
+the same `/artworks/search` endpoint carrying an Elasticsearch `bool.filter`.
+
+**A filter context does not neutralise the boost.** Inside `bool.filter`, with no
+scoring clause at all, one Ellsworth Kelly painting came back at `_score`
+13535.94 and the rest between 6.4 and 7.9. Whatever produces that spread is
+applied after the filter, so **ranking a browse by score reproduces the same
+hazard ranking a search by score does** — the filters decide the set, and nothing
+should read the order.
+
+**`match` with `operator: and` is the artist query; `artist_title.keyword` is
+not.** This corrects the alternative recorded above as unusable. A token-AND on
+the analysed field is neither the free-text fold (which makes the artist compete
+with the title) nor the exact keyword (which fails on the museum's own spelling):
+
+```
+artist_title.keyword  "Sonia Delaunay"        ->  0     (recorded above)
+match/and             "Sonia Delaunay"        -> 13     spelled "Sonia Delaunay-Terk"
+match/and             "El Greco (Domenikos Theotokopoulos)"
+                                              ->  1     spelled "El Greco (Doménikos
+                                                        Theotokópoulos) and workshop"
+```
+
+So the analyser folds diacritics and the AND matches a *subset* of the museum's
+own name. Both are why the token-AND recovers names the keyword refuses.
+
+**What it does not survive is a different name-form**, and this is the residual
+failure. The AND requires every token, so a spelling the museum does not use
+returns nothing while the artist sits in the collection:
+
+```
+"Wassily Kandinsky"          ->  0     while "Kandinsky" -> 24, all "Vasily Kandinsky"
+"Titian (Tiziano Vecellio)"  ->  0     while "Titian"    -> 20
+```
+
+**A surname retry is the obvious repair and it is unsafe — measured, not
+supposed.** Surnames collide, and the collision returns a *different artist*
+under the first one's name:
+
+```
+"Martorell" -> antonio martorell (1), bernat martorell (1)
+"Stella"    -> claudine bouzonnet-stella (18), frank stella (14), joseph stella (3), jacques stella (2)
+"Delaunay"  -> nicolas delaunay (20), sonia delaunay-terk (13), jules-elie delaunay (11), robert delaunay (4)
+```
+
+**A `terms` aggregation on `artist_title.keyword` prices that ambiguity before
+committing to it**, in the same request: it reports how many distinct artists a
+surname reaches, so "one" and "several" are told apart by measurement rather than
+by guessing. `Kandinsky` and `Monet` return exactly one; the three above return
+two, six and four.
+
+**The artwork-type filter is load-bearing, not cosmetic.** `artwork_type_title`
+is a closed vocabulary (`Print` 45,961, `Photograph` 23,373, `Drawing and
+Watercolor` 13,806, `Textile` 9,543, `Painting` 3,651, and 34 more). Restricting
+to what hangs on a wall is what keeps a browse from offering a fabric swatch or a
+poster layout as a painting:
+
+```
+Sonia Delaunay-Terk   13 works held, 0 of them Painting/Print/Drawing  (all Textile)
+Antonio Martorell      1 work  held, 0 of them Painting/Print/Drawing  (Graphic Design)
+```
+
+**`thumbnail.width`/`height` come back on a browse too**, so the display floor is
+applied to the same response that found the work — no per-result round trip, the
+same property the per-work search has.
+
 ## What this hands off
 
 | To | What |
 |---|---|
 | Phase-2 engine | Confidence is a title/artist comparison, never `_score` — and since the zero score went, that comparison is the only defence, not the main one |
+| A browse by artist | `POST` a `bool.filter`: `exists image_id`, `terms artwork_type_title.keyword`, `match artist_title` with `operator: and`. Read the set, never the order |
+| A browse by artist | The token-AND fails on an unused name-form, and a surname retry collides across artists — a `terms` aggregation on `artist_title.keyword` measures that ambiguity instead of assuming it |
 | Museum query | The title alone is sent; the artist would compete with it for the ten result places, and is applied by the comparison instead |
 | Phase-2 engine | One search request per work returns dimensions, rights and preview URL together |
 | `CandidateImage` | `estimated_width`/`estimated_height` from `thumbnail.width`/`height`; `rights_status` from `is_public_domain`; `acquisition_method = dezoomify`; `provider = artic` |

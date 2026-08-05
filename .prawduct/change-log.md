@@ -48,6 +48,47 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-04: Chunk 22 Step 0 — the artist facet, measured before it is built
+
+<!-- prawduct: chunks=22 -->
+
+**Why:** Chunk 22's whole mechanism rests on the model's artist field naming
+artists the collection actually holds, and the evidence for that was n=2 with one
+hit — both observed runs having named their artists in the intent text themselves.
+The plan therefore gated the chunk on a live experiment. It ran; the claim holds;
+the chunk keeps its shape and needs no facet-compile step. No code changed.
+
+**The recorded intents could not be re-run, and the substitute is stronger.**
+`phase_one_proposals.json` keeps slug labels, never the prompt texts, so
+reconstructing them would have measured intents written after the fact while
+reporting them as the originals. Instead: six thematic intents matching those
+labels, each naming no artist, which makes every artist returned model-originated
+by construction rather than by argument.
+
+**Two measurements.** Provenance, paid, $0.0084 over six live phase-1 runs: the
+model originated 12 distinct artists and the collection holds wall-appropriate,
+floor-clearing work for 10. Reach, free and deterministic: 26 of the 29 artists
+already in the corpus, 932 works, against a pipeline that resolves 5 of 51 named
+works. Supply is abundant per *artist* and binding per *named work*, which is the
+gap the chunk exists to fill.
+
+**What Step 0 changed is the failure mode, not the verdict.** It is name-form
+mismatch, not absent supply: "Wassily Kandinsky" returns nothing against the
+collection's 24 "Vasily Kandinsky". The obvious repair is unsafe and was measured
+rather than supposed — "Martorell" reaches two different artists, "Stella" four.
+That is a requirement, not a build detail, so it was written into
+`product-brief.md` and ratified before any design: a surname may be retried only
+where the collection reports it reaching exactly one artist. Titian is refused by
+that rule and the loss is taken deliberately, the alternative being a qualifier
+vocabulary that drifts silently.
+
+**Also settled:** the wall type set is Painting/Print/Drawing — measured to change
+nothing across all 29 corpus artists — and the honest expectation is now measured
+rather than predicted, both predictions having been too pessimistic (69 offerable
+works for one real run, 4 for the other). Sixty-nine turns the per-run bound into
+the primary selection mechanism, so it carries a stated round-robin rule rather
+than an implicit one.
+
 ## 2026-08-04: #77 — a museum source's tile target, resolved rather than assumed
 
 **Why:** no artic work could be acquired at all. `Source.url` records the object's

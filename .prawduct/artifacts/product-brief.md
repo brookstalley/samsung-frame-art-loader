@@ -200,6 +200,35 @@ relevance instead returns *American Gothic* for a Dutch still-life query. So the
 first form of this is artist adjacency, and each widening past it is a measurement
 before it is a feature.
 
+**An artist the collection spells its own way is a miss, and the repair for it is
+bounded by ambiguity rather than by cleverness.** Measured 2026-08-04: the
+token-AND requires every token, so `"Wassily Kandinsky"` returns nothing while
+the collection holds twenty-four works under `"Vasily Kandinsky"`. The obvious
+repair — retry on the surname — is not safe, and this was measured rather than
+supposed: `"Martorell"` reaches both Antonio and Bernat, `"Stella"` reaches
+Frank, Joseph, Jacques and Claudine. Offering one artist's work under another's
+name is the same misattribution this flow already forbids, and here nothing
+catches it, because a browse is *expected* to return works nobody named — there
+is no identity comparison above it to refuse a near miss.
+
+So the rule is: **when the full name matches nothing, the surname may be retried
+only if the collection itself reports that surname reaching exactly one artist.**
+The collection is asked how ambiguous the name is instead of being guessed at,
+and a surname reaching two artists is refused for the same reason a surname
+reaching six is. This recovers the clean case and declines every measured
+collision. It does **not** recover a name the collection splits across
+attribution qualifiers — `"Titian"` reaches `titian` alongside `circle of
+titian`, `follower of titian` and `imitator of titian`, and is therefore
+ambiguous by this rule and refused. That loss is accepted deliberately: the
+alternative is a maintained vocabulary of qualifier prefixes, which drifts
+silently as a collection adds forms, and a silent drift here spends a curator's
+attention on a work by the wrong hand.
+
+**A miss is a miss, not an error.** An artist whose name cannot be matched
+offers nothing and the run says so, exactly as an artist the collection genuinely
+does not hold does — the curator is never told a collection was searched in a
+form it could not answer.
+
 **This does not make the product a collection filter**, which the Vision above
 distinguishes it from. Phase 1's universe is unchanged: it proposes from all of art
 history, and every model-named work still goes through the gate. What is filtered

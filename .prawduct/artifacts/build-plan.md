@@ -2207,14 +2207,42 @@ binds already exists and is contract-tested.
   a browse returning the collection's own titles produces by definition — and add
   a model-vs-museum identity corpus beside `phase_one_proposals.json`, which is
   phase-1-vs-phase-1 only and so cannot measure the comparison this chunk leans on.
-- **Step 0, before design — the packet's own headline claim is unverified.** The
-  mechanism rests on the model's artist field being grounded, and both observed
-  runs *named their artists in the intent text*; the only artists the model
-  originated were two, of which one yielded nothing. Re-run the recorded fixture
-  intents through live phase 1 and record which artists the model **originates**
-  versus which the intent supplied. If they are mostly artists the collection does
-  not hold, the artist facet is weak and a compile step becomes necessary rather
-  than optional — which changes this chunk's shape, so it runs first.
+- **Step 0 ran 2026-08-04. The artist facet is grounded, so this chunk keeps its
+  shape and needs no facet-compile step.** The claim under test was that the
+  model's artist field names artists the collection actually holds; the prior
+  evidence was n=2 with 1 hit, and both observed runs had named their artists in
+  the intent text themselves.
+  - **The recorded intents could not be re-run: their texts were never captured.**
+    `phase_one_proposals.json` keeps slug labels (`dutch_golden_age`, …), not
+    prompts. Reconstructing them would have measured intents written after the
+    fact while reporting them as the originals, so the substitute is a stronger
+    control rather than a weaker copy: **six thematic intents matching those
+    labels, each naming no artist at all**, which makes every artist that comes
+    back model-originated by construction.
+  - **Provenance (paid, $0.0084 over six live phase-1 runs):** the model
+    originated **12 distinct artists** from intents naming none, and the
+    collection holds wall-appropriate, floor-clearing work for **10 of the 12**.
+  - **Reach (free, deterministic, no model call):** over the **29 distinct
+    artists** already in the recorded corpus, **26** have such work — **932 works
+    in total**, against a pipeline that currently resolves 5 of 51 named works.
+    Supply at the *artist* level is therefore abundant where supply at the
+    *named-work* level is the binding constraint, which is exactly the gap this
+    chunk exists to fill.
+  - **The two clean misses are honest ones**: the collection holds no Vermeer
+    under any spelling, and its one Antonio Martorell is `Graphic Design`, which
+    the wall-type filter correctly excludes.
+  - **What Step 0 changed instead**: the facet's real failure mode is **name-form
+    mismatch, not absent supply** — `"Wassily Kandinsky"` returns nothing while
+    the museum's 24 "Vasily Kandinsky" works sit there, and `"Titian (Tiziano
+    Vecellio)"` returns nothing against 20. That is a new requirement rather than
+    a build detail, so it was written before design and ratified by the operator
+    the same day: `product-brief.md`, the paragraph beginning "An artist the
+    collection spells its own way is a miss". The measurements behind it are in
+    `artic-api-findings.md` § Browsing by artist.
+  - **Rights, now quantified rather than anticipated:** of the 932 works, **637
+    are public domain and 295 are in copyright** (~32%). The ratified policy is
+    record-and-show-never-gate, so this is the honest cost that policy carries,
+    stated in a number.
 - **Depends on:** Chunk 21 (`unresolved_reason` is what makes this falsifiable —
   without it nobody can tell whether this chunk worked), Chunk 16A/16B
 - **Artifacts consumed:** `product-brief.md` flow 2 (the ratified requirement and
@@ -2227,8 +2255,19 @@ binds already exists and is contract-tested.
   not a patch.
 - **Deliverables:** a `CollectionBrowse` Protocol beside the image-search seam,
   with an Art Institute implementation issuing **one POST per run** (not per work)
-  — a `bool.filter` on image presence, a width range at the display floor and a
-  wall-appropriate type set, with a token-AND on the artist field. **Filters, not
+  — a `bool.filter` on image presence, the display floor and a
+  wall-appropriate type set, with a token-AND on the artist field. **The type set
+  is `Painting`, `Print`, `Drawing and Watercolor`** (operator, 2026-08-04):
+  measured across all 29 corpus artists, adding `Textile` or `Photograph` changes
+  nothing at all — 3,158 works either way — so the widening buys only artists the
+  collection holds *exclusively* as textile, and offering a flat-photographed
+  fabric sample as wall art would make "offered work" mean two different things.
+  **The ambiguity-bounded surname retry** the brief requires is a second POST on
+  the miss path only, which keeps the per-run bound at two requests rather than
+  per-work. **The display floor is applied from `thumbnail.width`/`height` on the
+  browse response** — the same property the per-work search has, so no per-result
+  round trip — and it is the pipeline's own `assess_display_fit`, not a width
+  threshold restated in a query, because two thresholds that can disagree will. **Filters, not
   relevance**: the score is boost-dominated and a constant score does not
   neutralise it, so a text-relevance query for a Dutch still life returns
   *American Gothic*. Facets derive from the run's own works — the artists it named,
@@ -2250,12 +2289,31 @@ binds already exists and is contract-tested.
   bounded and counted separately; the resolution-floor figure from Chunk 21 is
   restated against the 4/51 baseline; **no offered image is ever attached to a
   model-named work**, asserted rather than asserted-about
-- **Honest expectation, recorded now so the chunk is judged against it rather than
-  against hope:** the run naming Kelly, Noland, Louis and Stella goes from nothing
-  to at least four works. The run naming the Delaunays and Banksy goes from nothing
-  to roughly one, and that one is a dress-fabric swatch — or to nothing, if
-  textiles fall outside the type set. This is not a general fix for the supply
-  horizon and must not be sold as one.
+- **Honest expectation — now measured (2026-08-04) rather than predicted, and both
+  predictions were too pessimistic.** Against the two real runs that resolved
+  nothing, under the settled type set and the pipeline's own display floor:
+  - the run naming **Kelly, Noland, Louis and Stella** goes from nothing to **69
+    offerable works** (Kelly 51, Stella 12, Noland 5, Louis 1), against a
+    predicted "at least four";
+  - the run naming **the Delaunays and Banksy** goes from nothing to **4**, all
+    Robert Delaunay and all ordinary wall types — not the dress-fabric swatch
+    that was predicted. Sonia Delaunay contributes nothing because her thirteen
+    holdings are all `Textile`, and Banksy nothing because the collection holds
+    none.
+
+  **This remains not a general fix for the supply horizon and must not be sold as
+  one** — it lifts artist-named runs and does nothing for a work no collection
+  holds, which is still the binding constraint.
+
+  **One consequence is a design obligation, not a happy number.** Sixty-nine
+  candidates for a single run means the per-run bound is not a safety rail but
+  the *primary selection mechanism*, and `_score` cannot break the tie — it is
+  boost-dominated even inside a filter context (`artic-api-findings.md`). So the
+  bound needs a stated rule for *which* works it keeps. **Round-robin across the
+  run's own artists**, taking one per artist per pass: without it Kelly's 51
+  crowd out Noland's 5 and the offer silently becomes about one artist rather
+  than about the intent. Recorded here as the decision it is, so the review can
+  disagree with it rather than discover it.
 - **Done when:**
   1. Step 0 run and its result recorded, then acceptance criteria met and tests pass
   2. `/prawduct:critic` run and blocking findings resolved
