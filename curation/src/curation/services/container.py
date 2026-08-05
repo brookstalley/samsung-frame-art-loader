@@ -50,6 +50,7 @@ from curation.config import (
     READY_DIRNAME,
     TILE_CACHE_DIRNAME,
 )
+from curation.discovery.browse import CollectionBrowse
 from curation.discovery.engine import DiscoveryEngine
 from curation.discovery.images import ImageSearch
 from curation.discovery.phase_two import PhaseTwoEngine
@@ -124,6 +125,7 @@ class Services:
         engine: DiscoveryEngine,
         discovery_settings: DiscoverySettings,
         image_search: ImageSearch | None = None,
+        collection: CollectionBrowse | None = None,
         previews: PreviewSettings | None = None,
         acquisition: AcquisitionSettings | None = None,
         open_stream: StreamOpener | None = None,
@@ -187,6 +189,10 @@ class Services:
                 discovery_settings,
                 images=None if image_search is None else PhaseTwoEngine(image_search, box=artwork_box),
                 previews=None if image_search is None or previews is None else PreviewCache(previews, image_search.fetch_preview),
+                # Independent of the phase-2 pair: a deployment may resolve
+                # images without supplementing, and a run with no collection
+                # simply offers nothing.
+                collection=collection,
             ),
             # `art_root` off the thumbnail settings for the same reason `review`
             # takes it from there: it is one deployment value, already validated,

@@ -41,12 +41,13 @@ what this paragraph exists to prevent.
 
 import logging
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Final
 from urllib.parse import quote
 
 import httpx
 
+from curation.discovery.browse import BrowseQuery, CollectionBrowse, CollectionBrowseFailure, OfferedGroup
 from curation.discovery.images import FoundImage, ImageQuery, ImageSearch, ImageSearchFailure
 from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
 
@@ -109,6 +110,48 @@ _PREVIEW_WIDTH: Final[int] = 843
 #: it is the identity check above the seam, not this number, that decides what
 #: survives.
 _RESULT_LIMIT: Final[int] = 10
+
+#: What a browse will offer, as the museum's own `artwork_type_title` vocabulary
+#: spells it. **Case matters and is not uniform across this API's keyword
+#: fields**: `artwork_type_title.keyword` preserves the museum's capitalisation,
+#: while `artist_title.keyword` is folded to lower case — so a value copied from
+#: one field's aggregation into the other's filter silently matches nothing.
+#:
+#: The set is what a curator would hang. `Photograph` and `Textile` are held out
+#: deliberately rather than forgotten: across the whole recorded corpus their
+#: inclusion changed nothing at all, so all they buy is an artist held *only* as
+#: textile, whose offer would be a flat-photographed fabric sample presented
+#: beside paintings. Widening is a measurement before it is a feature
+#: (`product-brief.md`).
+_WALL_TYPES: Final[tuple[str, ...]] = ("Painting", "Print", "Drawing and Watercolor")
+
+_TYPE_KEYWORD: Final[str] = "artwork_type_title.keyword"
+_ARTIST_KEYWORD: Final[str] = "artist_title.keyword"
+
+#: The aggregations a browse reads. Named here rather than spelled at both the
+#: request and the response, because the two must agree and a typo in either
+#: reads as a collection that holds nothing.
+_FACET_AGG: Final[str] = "by_facet"
+_TOP_AGG: Final[str] = "top"
+_VOCABULARY_AGG: Final[str] = "by_surname"
+_WHO_AGG: Final[str] = "who"
+
+#: What a browse hit must carry to become an instance. The same fields the
+#: per-work search asks for, because the row it builds is the same row.
+_SOURCE_FIELDS: Final[tuple[str, ...]] = (
+    "id",
+    "title",
+    "artist_title",
+    "image_id",
+    "is_public_domain",
+    "thumbnail",
+    "api_link",
+)
+
+#: A parenthesised aside in an artist's name, which the model supplies often
+#: enough to matter — "Titian (Tiziano Vecellio)", "El Greco (Domenikos
+#: Theotokopoulos)" — and whose last word is not the surname.
+_PARENTHETICAL: Final[re.Pattern[str]] = re.compile(r"\([^)]*\)")
 
 #: How long each phase of one request may take. A work whose provider timed out
 #: is a failed search, which the caller reports rather than treating as "not in
@@ -220,8 +263,7 @@ class ArticImageSearch:
         object_id = _object_id(url)
         if object_id is None:
             raise ImageSearchFailure(
-                f"{url!r} does not name an Art Institute object, so there is no collection record to ask "
-                "for its image service."
+                f"{url!r} does not name an Art Institute object, so there is no collection record to ask for its image service."
             )
         payload = self._get(
             f"{_OBJECT_URL}/{object_id}?fields=id,image_id",
@@ -259,20 +301,289 @@ class ArticImageSearch:
 
     def _get(self, url: str, *, what: str) -> Mapping[str, Any]:
         """One GET, with every transport and shape failure named as one kind."""
-        try:
-            response = self._http.get(url, headers=self._headers, follow_redirects=True)
-            response.raise_for_status()
-            payload = response.json()
-        except httpx.HTTPError as exc:
-            raise ImageSearchFailure(f"Could not {what}: {exc}") from exc
-        except ValueError as exc:
-            raise ImageSearchFailure(f"Could not {what}: the response was not JSON ({exc}).") from exc
-        if not isinstance(payload, dict):
-            raise ImageSearchFailure(f"Could not {what}: the response was {type(payload).__name__}, not an object.")
-        return payload
+        return _request(self._http, self._headers, "GET", url, what=what, failure=ImageSearchFailure)
 
 
-def _instance(entry: object, *, iiif: str) -> FoundImage | None:
+def _request(
+    http: httpx.Client,
+    headers: Mapping[str, str],
+    method: str,
+    url: str,
+    *,
+    what: str,
+    failure: type[Exception],
+    json_body: Mapping[str, Any] | None = None,
+) -> Mapping[str, Any]:
+    """One request, with every transport and shape failure named as one kind.
+
+    `failure` travels in rather than being fixed here because the two questions
+    this module asks the museum are reported in different vocabularies — a search
+    that cannot be run and a collection that cannot be browsed are different
+    facts to whoever catches them — while the ways an HTTP call can go wrong are
+    identical for both.
+    """
+    try:
+        response = http.request(method, url, headers=dict(headers), json=json_body, follow_redirects=True)
+        response.raise_for_status()
+        payload = response.json()
+    except httpx.HTTPError as exc:
+        raise failure(f"Could not {what}: {exc}") from exc
+    except ValueError as exc:
+        raise failure(f"Could not {what}: the response was not JSON ({exc}).") from exc
+    if not isinstance(payload, dict):
+        raise failure(f"Could not {what}: the response was {type(payload).__name__}, not an object.")
+    return payload
+
+
+class ArticCollectionBrowse:
+    """Ask the Art Institute what it holds by an artist, rather than for a work.
+
+    **One POST for the whole run.** A named `filters` aggregation gives each
+    facet its own bucket, so the collection does the matching and labels the
+    result with the caller's own spelling — the alternative, partitioning one
+    merged list by re-deriving which query matched which record, would be a
+    second implementation of the museum's matcher, free to drift from it. Each
+    bucket carries its own `top_hits`, which is what makes an even spread across
+    artists possible at all: a single capped list orders by a score this API
+    makes unreadable, and a prolific artist would fill it.
+    """
+
+    def __init__(self, *, user_agent: str, client: httpx.Client | None = None) -> None:
+        if not user_agent:
+            raise ValueError(
+                "The Art Institute's API asks callers to identify themselves. Set ARTIC_USER_AGENT to a "
+                "string naming this deployment and a contact address."
+            )
+        self._http = client or httpx.Client(
+            timeout=httpx.Timeout(
+                connect=_CONNECT_TIMEOUT_SECONDS,
+                read=_READ_TIMEOUT_SECONDS,
+                write=_READ_TIMEOUT_SECONDS,
+                pool=_READ_TIMEOUT_SECONDS,
+            )
+        )
+        self._headers = {"AIC-User-Agent": user_agent}
+
+    @property
+    def provider(self) -> str:
+        """The name works offered from this collection are recorded under."""
+        return PROVIDER
+
+    def browse(self, queries: Sequence[BrowseQuery], *, per_query: int) -> Sequence[OfferedGroup]:
+        """Wall-appropriate works held for each facet, plus what each facet matched."""
+        wanted = [query for query in queries if query.artist.strip()]
+        if not wanted or per_query <= 0:
+            return tuple(OfferedGroup(query=query, matched=0, works=()) for query in queries)
+
+        found = self._holdings({query.artist: query.artist for query in wanted}, per_query=per_query)
+        recovered = self._recover_misses(
+            [query.artist for query in wanted if found.get(query.artist, (0, ()))[0] == 0],
+            per_query=per_query,
+        )
+        found.update(recovered)
+        groups = []
+        for query in queries:
+            matched, works = found.get(query.artist, (0, ()))
+            groups.append(OfferedGroup(query=query, matched=matched, works=works))
+        return tuple(groups)
+
+    def _recover_misses(self, missed: Sequence[str], *, per_query: int) -> dict[str, tuple[int, tuple[FoundImage, ...]]]:
+        """Retry each missed artist on its surname, where the surname names one artist.
+
+        A name the museum spells its own way returns nothing — `"Wassily
+        Kandinsky"` against the twenty-four works it files under `"Vasily
+        Kandinsky"`. Retrying the surname recovers those and would, unguarded,
+        also offer one artist's work under another's name: `"Martorell"` reaches
+        Antonio and Bernat, `"Stella"` four different artists. So the collection
+        is asked how many artists the surname names, and the retry proceeds only
+        where the answer is one (`product-brief.md`).
+        """
+        surnames = {artist: surname for artist in missed if (surname := _surname(artist)) and surname != artist}
+        if not surnames:
+            return {}
+        # One call for every missed artist, not one per artist: the verdicts are
+        # read out of a single aggregation, and asking inside the comprehension
+        # would issue a request per iteration.
+        verdicts = self._names_one_artist(surnames)
+        unambiguous = {artist: surname for artist, surname in surnames.items() if verdicts.get(artist)}
+        return self._holdings(unambiguous, per_query=per_query) if unambiguous else {}
+
+    def _names_one_artist(self, surnames: Mapping[str, str]) -> Mapping[str, bool]:
+        """Whether each surname reaches exactly one artist in the whole collection.
+
+        **Deliberately unfiltered, and this is the load-bearing detail.** Asking
+        this question inside the browse's own filters manufactures the confidence
+        it exists to withhold: the Art Institute holds one Antonio Martorell, a
+        `Graphic Design` the wall-type filter removes, so a filtered check sees
+        only Bernat Martorell, reports "one artist", and offers his painting to a
+        run that named Antonio. The collision is a fact about the collection's
+        names, so it is measured against the collection's names.
+        """
+        payload = _request(
+            self._http,
+            self._headers,
+            "POST",
+            _SEARCH_URL,
+            what=f"ask how many artists {sorted(set(surnames.values()))} name",
+            failure=CollectionBrowseFailure,
+            json_body={
+                "limit": 0,
+                "query": {"bool": {"filter": [_any_of(surnames.values())]}},
+                "aggs": {
+                    _VOCABULARY_AGG: {
+                        "filters": {"filters": {artist: _artist_match(surname) for artist, surname in surnames.items()}},
+                        # Two is all the decision needs: one is unambiguous and
+                        # anything above one is refused identically, so asking
+                        # for more buckets would cost the museum work to produce
+                        # a number nothing reads.
+                        "aggs": {_WHO_AGG: {"terms": {"field": _ARTIST_KEYWORD, "size": 2}}},
+                    }
+                },
+            },
+        )
+        buckets = _buckets(payload, _VOCABULARY_AGG)
+        verdicts = {}
+        for artist in surnames:
+            names = _bucket_keys(buckets.get(artist), _WHO_AGG)
+            verdicts[artist] = len(names) == 1
+            if len(names) != 1:
+                log.info(
+                    "not retrying an artist on its surname: the collection files that surname under several artists",
+                    extra={
+                        "event": "browse.surname_ambiguous",
+                        "provider": PROVIDER,
+                        "artist": artist,
+                        "surname": surnames[artist],
+                        "names_found": sorted(names),
+                    },
+                )
+        return verdicts
+
+    def _holdings(self, facets: Mapping[str, str], *, per_query: int) -> dict[str, tuple[int, tuple[FoundImage, ...]]]:
+        """What the collection holds for each facet, keyed by the caller's own name.
+
+        `facets` maps the name to report under to the name to actually ask about;
+        they differ only on the surname-retry path, which is what lets a
+        recovered artist come back under the spelling the run used rather than
+        the museum's.
+        """
+        if not facets:
+            return {}
+        payload = _request(
+            self._http,
+            self._headers,
+            "POST",
+            _SEARCH_URL,
+            what=f"browse the collection for {sorted(facets.values())}",
+            failure=CollectionBrowseFailure,
+            json_body={
+                "limit": 0,
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {"exists": {"field": "image_id"}},
+                            {"terms": {_TYPE_KEYWORD: list(_WALL_TYPES)}},
+                            _any_of(facets.values()),
+                        ]
+                    }
+                },
+                "aggs": {
+                    _FACET_AGG: {
+                        "filters": {"filters": {name: _artist_match(asked) for name, asked in facets.items()}},
+                        "aggs": {_TOP_AGG: {"top_hits": {"size": per_query, "_source": {"includes": list(_SOURCE_FIELDS)}}}},
+                    }
+                },
+            },
+        )
+        iiif = _iiif_base(payload.get("config"))
+        buckets = _buckets(payload, _FACET_AGG)
+        holdings = {}
+        for name in facets:
+            bucket = buckets.get(name) or {}
+            hits = bucket.get(_TOP_AGG, {}).get("hits", {}).get("hits", [])
+            works = tuple(
+                image
+                for hit in hits
+                if isinstance(hit, dict) and (image := _instance(hit.get("_source"), iiif=iiif, scored=False)) is not None
+            )
+            holdings[name] = (_count(bucket.get("doc_count")), works)
+        log.info(
+            "browsed a collection by artist",
+            extra={
+                "event": "browse.searched",
+                "provider": PROVIDER,
+                "facets": len(facets),
+                "facets_with_holdings": sum(1 for matched, _ in holdings.values() if matched),
+                "works_brought_back": sum(len(works) for _, works in holdings.values()),
+            },
+        )
+        return holdings
+
+
+def _surname(artist: str) -> str:
+    """The name a failed full-name match may be retried on, or empty.
+
+    A parenthesised aside is dropped before the last word is taken, so `"Titian
+    (Tiziano Vecellio)"` retries as `"Titian"` rather than as `"Vecellio)"`. What
+    that recovers is decided by the ambiguity check, not here — Titian is refused
+    by it, and correctly so.
+
+    A one-word name yields itself, and the caller drops it: whether a retry is
+    worth making is that caller's question, since it already has to compare the
+    surname against the name that failed. Answering it here as well left a branch
+    no test could reach, because the second guard caught everything the first did.
+    """
+    plain = _PARENTHETICAL.sub(" ", artist).strip()
+    words = plain.split()
+    return words[-1] if len(words) > 1 else plain
+
+
+def _artist_match(artist: str) -> Mapping[str, Any]:
+    """A token-AND on the artist field.
+
+    Not the free-text `q=` (where the artist's tokens compete with a title's for
+    the result window) and not `artist_title.keyword` (an exact match that fails
+    on the museum's own spelling, returning nothing for "Sonia Delaunay" against
+    the fifteen it files under "Sonia Delaunay-Terk"). Measured, both of them —
+    `artic-api-findings.md`.
+    """
+    return {"match": {"artist_title": {"query": artist, "operator": "and"}}}
+
+
+def _any_of(artists: Iterable[str]) -> Mapping[str, Any]:
+    """A filter matching a record by any one of these artists."""
+    return {"bool": {"should": [_artist_match(artist) for artist in artists], "minimum_should_match": 1}}
+
+
+def _buckets(payload: Mapping[str, Any], name: str) -> Mapping[str, Any]:
+    """The named `filters` aggregation's buckets, or empty if it did not arrive.
+
+    An aggregation that did not come back is an empty browse rather than a
+    crash: the collection answered, and what it answered carries no holdings.
+    """
+    aggregations = payload.get("aggregations")
+    if not isinstance(aggregations, dict):
+        return {}
+    buckets = (aggregations.get(name) or {}).get("buckets")
+    return buckets if isinstance(buckets, dict) else {}
+
+
+def _bucket_keys(bucket: object, name: str) -> set[str]:
+    """The distinct keys a `terms` sub-aggregation reported."""
+    if not isinstance(bucket, dict):
+        return set()
+    inner = (bucket.get(name) or {}).get("buckets")
+    if not isinstance(inner, list):
+        return set()
+    return {key for entry in inner if isinstance(entry, dict) and (key := _text(entry.get("key")))}
+
+
+def _count(raw: object) -> int:
+    """A non-negative bucket count, or zero when the field is missing or not one."""
+    return raw if isinstance(raw, int) and not isinstance(raw, bool) and raw >= 0 else 0
+
+
+def _instance(entry: object, *, iiif: str, scored: bool = True) -> FoundImage | None:
     """One search result as an instance, or `None` where it cannot be one.
 
     Three things disqualify a result and each is a fact about the record rather
@@ -284,10 +595,15 @@ def _instance(entry: object, *, iiif: str) -> FoundImage | None:
     **No dimensions** means the rendered size on the wall cannot be computed, and
     an instance recorded without them would be indistinguishable from one that
     clears the floor.
+
+    `scored` is false for a browse hit, which carries no score to read: a filter
+    decided it, not a ranker. Skipping the check explicitly rather than letting a
+    missing field fall through it keeps "there is no score here" from resting on
+    `None` not comparing equal to zero.
     """
     if not isinstance(entry, dict):
         return None
-    if _number(entry.get("_score")) == 0:
+    if scored and _number(entry.get("_score")) == 0:
         return None
     image_id = _text(entry.get("image_id"))
     title = _text(entry.get("title"))
@@ -337,7 +653,12 @@ def _rights(raw: object) -> RightsStatus:
 
 
 def _iiif_base(config: object) -> str:
-    """Where previews are fetched from, taken from the response but not blindly.
+    """Where this museum's image service lives, taken from the response but not blindly.
+
+    Three callers now, which is why this no longer says "previews": a per-work
+    search and a browse both build preview URLs from it, and `tile_url` builds the
+    image service a tiled acquisition walks. All three fetch what it addresses, so
+    the check below guards all three.
 
     Read from `config.iiif_url` so a service move needs no release here, and
     checked because the value is used to build a URL this process then fetches
@@ -384,3 +705,8 @@ def _size(raw: object) -> int | None:
 def build_image_search(*, user_agent: str, client: httpx.Client | None = None) -> ImageSearch:
     """The image provider a deployment gets. One museum today, by name."""
     return ArticImageSearch(user_agent=user_agent, client=client)
+
+
+def build_collection_browse(*, user_agent: str, client: httpx.Client | None = None) -> CollectionBrowse:
+    """The collection a deployment supplements from. The same museum, asked differently."""
+    return ArticCollectionBrowse(user_agent=user_agent, client=client)

@@ -930,6 +930,7 @@ def _work_summary(work: CandidateWork) -> dict[str, Any]:
         "work_id": work.id,
         "title": work.proposed_title,
         "artist": work.proposed_artist,
+        "provenance": str(work.provenance),
         "verdict": str(work.verdict),
         "resolution_status": str(work.resolution_status),
         "unresolved_reason": _reason(work),
@@ -1120,8 +1121,15 @@ def _candidate_summary(view: CandidateView, pictures: _Pictures) -> dict[str, An
         "work_id": view.work.id,
         "title": view.work.proposed_title,
         # As phase 1 wrote it, unparsed. Matching it to a catalogue artist is
-        # acceptance's job and does not happen until a work is promoted.
+        # acceptance's job and does not happen until a work is promoted. On an
+        # offered work this is the collection's own attribution instead, which is
+        # the point: it is recorded verbatim and never reconciled with whatever
+        # the model named.
         "artist": view.work.proposed_artist,
+        # Whether the model named this work or the collection volunteered it.
+        # On every row rather than only where it differs, because a label that
+        # appears only sometimes is one a reader learns to stop looking for.
+        "provenance": str(view.work.provenance),
         "verdict": str(view.work.verdict),
         "resolution_status": str(view.work.resolution_status),
         "unresolved_reason": _reason(view.work),
@@ -1142,6 +1150,7 @@ def _candidate_detail(view: CandidateView, pictures: _Pictures) -> dict[str, Any
         "work_id": view.work.id,
         "title": view.work.proposed_title,
         "artist": view.work.proposed_artist,
+        "provenance": str(view.work.provenance),
         "verdict": str(view.work.verdict),
         "resolution_status": str(view.work.resolution_status),
         "unresolved_reason": _reason(view.work),

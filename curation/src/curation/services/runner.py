@@ -25,7 +25,7 @@ that the figure a curator authorised is one the run cannot freely exceed.
 import logging
 import threading
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -33,6 +33,13 @@ from enum import StrEnum
 from time import monotonic
 from typing import Final
 
+from curation.discovery.browse import (
+    OFFERED_CONFIDENCE,
+    BrowseQuery,
+    CollectionBrowse,
+    CollectionBrowseFailure,
+    OfferedGroup,
+)
 from curation.discovery.dedup import work_dedup_key
 from curation.discovery.engine import (
     BudgetExhausted,
@@ -42,7 +49,7 @@ from curation.discovery.engine import (
     WorkList,
     WorkListRequest,
 )
-from curation.discovery.images import ImageQuery, ImageSearchFailure
+from curation.discovery.images import FoundImage, ImageQuery, ImageSearchFailure
 from curation.discovery.phase_two import JudgedImage, PhaseTwoEngine
 from curation.logs import run_context
 from curation.persistence.discovery_records import (
@@ -52,6 +59,7 @@ from curation.persistence.discovery_records import (
     ResolutionStatus,
     RunKind,
     RunStatus,
+    WorkProvenance,
 )
 from curation.services.discovery import DiscoveryService
 from curation.services.errors import ServiceError
@@ -106,6 +114,11 @@ class DiscoverySettings:
     approval_threshold: int
     phase1_search_allowance: int
     phase2_searches_per_work: int
+    #: How many works a run may offer from a wired collection on top of what it
+    #: proposed. Not a cost bound — browsing a museum API is free — but a bound on
+    #: a curator's attention and on how far a supplement may outweigh the list
+    #: they approved. Zero switches the supplement off without unwiring it.
+    offered_works_per_run: int
     search_cost_usd: Decimal
     input_cost_usd_per_mtok: Decimal
     output_cost_usd_per_mtok: Decimal
@@ -223,6 +236,21 @@ class RunView:
     def work_count(self) -> int:
         return len(self.works)
 
+    # Offered and proposed works are counted apart wherever a number is shown,
+    # because the curator authorised a work list of a stated size and the
+    # supplement adds to it (`product-brief.md`). A single total would report a
+    # run as having found more than it did, and the difference is exactly what
+    # the offered/proposed distinction exists to keep visible.
+    @property
+    def proposed_count(self) -> int:
+        """How many works the model named — the list the approval gate sized."""
+        return sum(1 for work in self.works if work.provenance is WorkProvenance.PROPOSED)
+
+    @property
+    def offered_count(self) -> int:
+        """How many works a wired collection volunteered on top of that list."""
+        return sum(1 for work in self.works if work.provenance is WorkProvenance.OFFERED)
+
     # The three tallies are counted off the works rather than carried beside
     # them, because a view holding both could be built with a count that
     # disagrees with the list under it — and the notice quotes the counts while
@@ -246,6 +274,52 @@ class RunView:
     def searches_exhausted(self) -> bool:
         """Whether this run has used every search its allowance currently permits."""
         return self.searches_used >= self.search_allowance
+
+
+def _round_robin(groups: Sequence[OfferedGroup]) -> Iterator[tuple[FoundImage, OfferedGroup]]:
+    """Every offered work, one artist at a time round the facets, never twice.
+
+    **The spread is the point, not the order within a facet.** One real run's
+    four artists held 51, 12, 5 and 1 offerable works; taking them in any
+    collection-given order would fill the whole allowance with the first artist
+    and turn a supplement for the intent into a supplement for Ellsworth Kelly.
+    Taking one each per pass means a bound of twelve reaches all four.
+
+    Deduplicated by URL because facets overlap: a run naming both "Rembrandt" and
+    "Rembrandt van Rijn" gets two buckets over largely the same works, and the
+    same painting offered twice is two cards for one thing.
+
+    Yields everything rather than stopping at a bound: the caller declines works
+    for reasons only it knows — below the floor, already in the run, suppressed —
+    so a generator that counted its own yields would count the wrong thing.
+    """
+    queues = [list(group.works) for group in groups]
+    seen: set[str] = set()
+    while any(queues):
+        for queue, group in zip(queues, groups, strict=True):
+            while queue:
+                found = queue.pop(0)
+                if found.url in seen:
+                    continue
+                seen.add(found.url)
+                yield found, group
+                break
+
+
+def _offer_rationale(found: FoundImage, group: OfferedGroup) -> str:
+    """Why this work is on the card, in the terms `product-brief.md` requires.
+
+    Names the facet that produced it and how many works that facet matched,
+    because being offered one work out of four hundred reads differently from
+    being offered one out of one — and a curator cannot tell which from the work
+    alone. The artist named is the run's spelling, which is what they asked
+    about; the work carries the collection's own attribution separately.
+    """
+    held = "the only work" if group.matched == 1 else f"one of {group.matched} works"
+    return (
+        f"Offered by the collection, not proposed by the model: {held} it holds by "
+        f"{group.query.artist}, an artist this run named but could not confirm a work for."
+    )
 
 
 def _daemon_thread(work: Callable[[], None]) -> None:
@@ -272,11 +346,18 @@ class DiscoveryRunner:
         *,
         images: PhaseTwoEngine | None = None,
         previews: PreviewCache | None = None,
+        collection: CollectionBrowse | None = None,
         spawn: Callable[[Callable[[], None]], None] = _daemon_thread,
     ) -> None:
         self._discovery = discovery
         self._engine = engine
         self._settings = settings
+        #: The collection a run supplements from, if one is wired. Optional on its
+        #: own — unlike the phase-2 pair above — because a deployment can sensibly
+        #: resolve images without offering adjacent works, while the reverse is
+        #: incoherent: there is nothing to supplement until the gate has refused
+        #: something. A run with no collection simply offers nothing.
+        self._collection = collection
         #: Phase 2, and the cache its previews land in. Optional together: a
         #: deployment without an image provider runs phase 1 and stops, which is
         #: a coherent configuration and the one every phase-1 test uses. What is
@@ -783,7 +864,114 @@ class DiscoveryRunner:
                 )
                 return
             tally[self._resolve_work(work, images, previews)] += 1
+        self._supplement(run_id, previews)
         self._close_phase_two(run_id, tally=tally, works=len(works))
+
+    def _supplement(self, run_id: str, previews: PreviewCache) -> None:
+        """Offer works the collection holds by the artists this run could not confirm.
+
+        **After the gate, never instead of it.** Every proposed work has already
+        been searched and judged by the time this runs, so nothing here can become
+        the route by which a named work gets its image — the browse is not told
+        which work failed and has nothing to attach an image to.
+
+        **The facets are the artists of the works that came back unresolved**, not
+        every artist the run named. A work that resolved needs no supplement, and
+        offering more of its artist would pad a successful run rather than answer
+        a failed one.
+
+        Failure is swallowed to a log on purpose. A supplement is an extra, and a
+        collection that could not be browsed must not take down a run that
+        resolved works perfectly well — the opposite of phase 2, where being
+        unable to reach the provider is the whole answer for that work.
+        """
+        if self._collection is None or self._settings.offered_works_per_run <= 0:
+            return
+        try:
+            self._offer_from_collection(run_id, previews)
+        except CollectionBrowseFailure as exc:
+            log.warning(
+                "could not browse the collection for adjacent works; the run keeps what it resolved: %s",
+                exc,
+                extra={"event": "browse.unreachable"},
+            )
+
+    def _offer_from_collection(self, run_id: str, previews: PreviewCache) -> None:
+        """Browse for each unconfirmed artist, then record an even spread of what came back."""
+        assert self._collection is not None  # noqa: S101 -- guarded by the caller, narrowing for the reader
+        bound = self._settings.offered_works_per_run
+        artists = self._artists_needing_a_supplement(run_id)
+        if not artists:
+            return
+        groups = self._collection.browse([BrowseQuery(artist=artist) for artist in artists], per_query=bound)
+        offered = 0
+        for found, group in _round_robin(groups):
+            if offered >= bound:
+                break
+            if self._offer_one(run_id, found, group, previews):
+                offered += 1
+        log.info(
+            "offered works the collection holds for artists this run could not confirm",
+            extra={
+                "event": "browse.offered",
+                "artists_asked": len(artists),
+                "works_offered": offered,
+                "collection_holds": sum(group.matched for group in groups),
+            },
+        )
+
+    def _artists_needing_a_supplement(self, run_id: str) -> Sequence[str]:
+        """Each distinct artist whose work this run failed to confirm, once.
+
+        Distinct because two unresolved works by one artist are one question to
+        the collection, and asking twice would spend a facet of the bound on a
+        duplicate. Ordered by first appearance rather than sorted, so the spread
+        below is stable and a run's offer does not reshuffle for a reason nobody
+        can see.
+        """
+        seen: dict[str, None] = {}
+        for work in self._discovery.list_candidate_works(run_id):
+            if work.resolution_status is ResolutionStatus.UNRESOLVED and work.proposed_artist:
+                seen.setdefault(work.proposed_artist, None)
+        return tuple(seen)
+
+    def _offer_one(self, run_id: str, found: FoundImage, group: OfferedGroup, previews: PreviewCache) -> bool:
+        """Record one offered work and the instance that is it. `False` if it was declined."""
+        if not self._discovery.clears_display_floor(width=found.estimated_width, height=found.estimated_height):
+            return False
+        work = self._discovery.offer_work(
+            run_id=run_id,
+            title=found.title,
+            artist=found.artist,
+            rationale=_offer_rationale(found, group),
+            work_dedup_key=work_dedup_key(title=found.title, artist=found.artist),
+        )
+        if work is None:
+            return False
+        self._discovery.record_image(
+            candidate_work_id=work.id,
+            url=found.url,
+            provider=found.provider,
+            source_class=found.source_class,
+            acquisition_method=found.acquisition_method,
+            # The collection identified this image as this work: the record and
+            # the picture are one row in its own catalogue. That is not the
+            # textual title/artist comparison phase 2 makes against a work someone
+            # else named, so it is not scored as one — there is no near-match
+            # question to answer when the answer is the question.
+            confidence=OFFERED_CONFIDENCE,
+            preview_url=found.preview_url,
+            preview_path=previews.store(found.preview_url) if found.preview_url else None,
+            estimated_width=found.estimated_width,
+            estimated_height=found.estimated_height,
+            rights_status=found.rights_status,
+            selection_rationale="The collection's own record for this work.",
+        )
+        # Derived, not asserted: the same call phase 2 closes a work with, so an
+        # offered work's status comes from the rows it holds rather than from
+        # this path's confidence that it wrote one.
+        self._discovery.record_resolution(work.id)
+        return True
 
     def _resolve_work(self, work: CandidateWork, images: PhaseTwoEngine, previews: PreviewCache) -> WorkOutcome:
         """Find and record one work's instances.

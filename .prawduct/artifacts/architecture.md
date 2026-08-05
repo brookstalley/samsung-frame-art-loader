@@ -335,9 +335,26 @@ is no network between planes.
   callers with different concerns. It went here anyway because the alternative is
   worse: a second protocol over the same museum client, implemented by the same
   class, wired from the same configuration, would be two names for one seam. The
-  cost is that `AcquisitionService` now depends on a discovery-package protocol,
-  which is the direction `acquisition/mat.py` already established. If a third
-  concern arrives, split it then — with two callers the seam is still honest.
+  cost is narrower than this entry first claimed, and the correction is worth
+  keeping because it changes what the coupling actually costs: **`AcquisitionService`
+  does not depend on the protocol at all.** It imports one *exception*
+  (`ImageSearchFailure`) and is handed `tile_url` by the container as a plain
+  callable keyed by provider. So the dependency is on a discovery-package error
+  vocabulary, not on a discovery-package interface, and the seam is looser than
+  "two callers share a protocol" suggests.
+
+  **The third concern arrived on 2026-08-04, and it was split rather than
+  added.** Browsing a collection by artist is a different question from searching
+  it for a work: a search is given a work and must judge whether what came back
+  is it, while a browse is given a facet and everything matching is by
+  construction a work the collection holds. `CollectionBrowse` is therefore its
+  own protocol beside `ImageSearch`, not a member on it. The rule this follows is
+  the one stated above — split when a third concern arrives — and the test that
+  decided it is whether a caller would ever want one without the other: a
+  deployment can sensibly resolve images without offering adjacent works, and the
+  reverse is incoherent, so they are genuinely separable. They are implemented by
+  two classes over the same museum, wired independently from the same
+  identifier.
 
   **What is deliberately *not* behind it: the judgement.** A provider reports
   what its collection holds; whether any of it is the work that was asked for is

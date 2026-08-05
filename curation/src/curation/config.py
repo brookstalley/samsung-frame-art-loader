@@ -167,6 +167,20 @@ DEFAULT_RESOLUTION_FLOOR_INCHES: Final[float] = 12.0
 #: more broadly than intended.
 DEFAULT_DISCOVERY_APPROVAL_THRESHOLD: Final[int] = 25
 
+#: How many works a run may offer from a wired collection, on top of the list it
+#: proposed. A bound rather than everything held, because the collection's supply
+#: dwarfs a work list — one real run's four artists have 69 offerable works
+#: between them, and Ellsworth Kelly alone has 51.
+#:
+#: **At that ratio the bound is the selection mechanism, not a safety rail**, and
+#: nothing else can be: the museum's relevance score survives a filter-only query
+#: and cannot order the candidates (`artic-api-findings.md`). So the works kept
+#: are taken round-robin across the artists the run named, and this number is how
+#: many rounds that gets. Twelve is about half the approval threshold, which keeps
+#: a supplement visibly secondary to the list a curator actually approved while
+#: still giving a four-artist run three works each.
+DEFAULT_OFFERED_WORKS_PER_RUN: Final[int] = 12
+
 #: How many web searches phase 1 may make. Flat, because phase 1's entire job is
 #: to *produce* the work count that phase 2's allowance derives from — there is
 #: nothing to derive from yet.
@@ -348,6 +362,7 @@ class Settings:
     approval_threshold: int
     phase1_search_allowance: int
     phase2_searches_per_work: int
+    offered_works_per_run: int
     search_cost_usd: Decimal
     input_cost_usd_per_mtok: Decimal
     output_cost_usd_per_mtok: Decimal
@@ -398,6 +413,7 @@ class Settings:
             approval_threshold=self.approval_threshold,
             phase1_search_allowance=self.phase1_search_allowance,
             phase2_searches_per_work=self.phase2_searches_per_work,
+            offered_works_per_run=self.offered_works_per_run,
             search_cost_usd=self.search_cost_usd,
             input_cost_usd_per_mtok=self.input_cost_usd_per_mtok,
             output_cost_usd_per_mtok=self.output_cost_usd_per_mtok,
@@ -545,6 +561,9 @@ class Settings:
             approval_threshold=_counted("DISCOVERY_APPROVAL_THRESHOLD", DEFAULT_DISCOVERY_APPROVAL_THRESHOLD),
             phase1_search_allowance=_counted("DISCOVERY_PHASE1_SEARCH_ALLOWANCE", DEFAULT_PHASE1_SEARCH_ALLOWANCE),
             phase2_searches_per_work=_counted("DISCOVERY_PHASE2_SEARCHES_PER_WORK", DEFAULT_PHASE2_SEARCHES_PER_WORK),
+            # Zero is a coherent setting here too: a deployment that wants only
+            # what the model named turns the supplement off without unwiring it.
+            offered_works_per_run=_counted("DISCOVERY_OFFERED_WORKS_PER_RUN", DEFAULT_OFFERED_WORKS_PER_RUN),
             search_cost_usd=_priced("DISCOVERY_SEARCH_COST_USD", DEFAULT_SEARCH_COST_USD),
             input_cost_usd_per_mtok=_priced("DISCOVERY_INPUT_COST_USD_PER_MTOK", DEFAULT_INPUT_COST_USD_PER_MTOK),
             output_cost_usd_per_mtok=_priced("DISCOVERY_OUTPUT_COST_USD_PER_MTOK", DEFAULT_OUTPUT_COST_USD_PER_MTOK),

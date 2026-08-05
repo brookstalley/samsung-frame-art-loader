@@ -223,3 +223,70 @@ def test_the_resolved_image_service_is_really_a_iiif_endpoint(museum):
     response.raise_for_status()
     payload = response.json()
     assert int(payload["width"]) > 0 and int(payload["height"]) > 0
+
+
+# -- browsing the collection by artist ---------------------------------------
+#
+# The per-facet aggregation a browse depends on is a different API surface from
+# the per-work search above, and it is the one every offered work rests on. The
+# fixtures in `tests/unit/test_artic_browse.py` are shaped from these responses;
+# these tests are what notice when the shape stops being real.
+
+
+@pytest.fixture(scope="module")
+def collection():
+    """The real browse client, against the live collection. Free, like its sibling."""
+    from curation.discovery.artic import build_collection_browse
+
+    return build_collection_browse(user_agent=USER_AGENT)
+
+
+def test_a_browse_still_returns_per_facet_buckets_with_their_own_works(collection):
+    """One request, one group per artist, each carrying its own holdings.
+
+    If the named `filters` aggregation stopped being supported, every facet would
+    come back empty and a run would silently offer nothing — the failure mode
+    that looks exactly like a collection holding nothing for the intent.
+    """
+    from curation.discovery.browse import BrowseQuery
+
+    groups = collection.browse([BrowseQuery(artist="Ellsworth Kelly"), BrowseQuery(artist="Morris Louis")], per_query=3)
+
+    by_artist = {group.query.artist: group for group in groups}
+    assert by_artist["Ellsworth Kelly"].matched > 10, "the collection's Kelly holdings vanished, or the aggregation did"
+    assert by_artist["Morris Louis"].matched >= 1
+    assert by_artist["Ellsworth Kelly"].works, "a facet reported matches but brought back no work"
+    for work in by_artist["Ellsworth Kelly"].works:
+        assert work.estimated_width and work.estimated_height, "a browse hit must carry the master's dimensions"
+        assert work.preview_url and work.title
+
+
+def test_the_surname_retry_still_recovers_a_name_the_museum_spells_its_own_way(collection):
+    """"Wassily Kandinsky" reaches the works filed under "Vasily Kandinsky".
+
+    This is the whole of what the retry buys. If the museum renamed the artist to
+    match the ordinary spelling, this test goes green for a new reason and the
+    retry becomes dead weight — worth knowing either way.
+    """
+    from curation.discovery.browse import BrowseQuery
+
+    (group,) = collection.browse([BrowseQuery(artist="Wassily Kandinsky")], per_query=3)
+
+    assert group.matched > 0, "the unambiguous-surname retry no longer recovers a differently-spelled name"
+    assert group.works
+    assert all("Kandinsky" in (work.artist or "") for work in group.works)
+
+
+def test_a_surname_two_artists_share_is_still_refused(collection):
+    """Antonio Martorell must never come back as Bernat Martorell.
+
+    The collection holds one of each, and only Bernat's is a wall type — so a
+    check scoped by the browse's own filters would see one artist and offer the
+    wrong one. A failure here means that guard stopped holding against the live
+    collection, whatever the unit fixtures say.
+    """
+    from curation.discovery.browse import BrowseQuery
+
+    (group,) = collection.browse([BrowseQuery(artist="Antonio Martorell")], per_query=3)
+
+    assert group.works == (), f"offered work under a shared surname: {[w.artist for w in group.works]}"

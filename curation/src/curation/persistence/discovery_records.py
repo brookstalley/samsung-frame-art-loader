@@ -130,6 +130,26 @@ class ResolutionStatus(StrEnum):
     UNRESOLVED = "unresolved"
 
 
+class WorkProvenance(StrEnum):
+    """Who put this work in front of the curator — the model, or the collection.
+
+    **The distinction is a promise, not a label.** A `PROPOSED` work is one phase
+    1 named and phase 2 tried to confirm; an `OFFERED` work is one a wired
+    collection holds, drawn by filtering that collection and carrying its own
+    title and attribution verbatim. Presenting the second as the first is exactly
+    the confident near-match this product forbids — the curator would be shown a
+    work the model never named, under a name it did — so the two are held apart
+    at the record rather than at each surface that renders them.
+
+    `PROPOSED` is the default everywhere it is absent, which is what lets rows
+    written before the column existed read correctly: every one of them came from
+    phase 1, because nothing else could write a candidate work then.
+    """
+
+    PROPOSED = "proposed"
+    OFFERED = "offered"
+
+
 class UnresolvedReason(StrEnum):
     """Which kind of nothing an unresolved work came back with.
 
@@ -285,6 +305,13 @@ class CandidateWork:
     proposed_title: str
     rationale: str
     work_dedup_key: str
+    #: Whether the model named this work or a wired collection offered it. Not
+    #: optional and not nullable in the record, because every work has one: a row
+    #: whose provenance nobody set is a row phase 1 proposed, that being the only
+    #: thing that could write one before collections were browsable. The *column*
+    #: is nullable so the widening step can add it to files already on disk, and
+    #: a null read back means `PROPOSED` for the same reason.
+    provenance: WorkProvenance = WorkProvenance.PROPOSED
     resolution_status: ResolutionStatus = ResolutionStatus.PENDING
     verdict: Verdict = Verdict.PENDING
     artwork_id: str | None = None

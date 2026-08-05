@@ -8,6 +8,7 @@ and the backup path restores whatever the file actually holds.
 """
 
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -26,6 +27,7 @@ from curation.persistence.discovery_records import (
     SpendCategory,
     SpendRecord,
     Verdict,
+    WorkProvenance,
 )
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
@@ -55,6 +57,7 @@ _EXPECTED_SCHEMA = {
         "proposed_artist",
         "rationale",
         "work_dedup_key",
+        "provenance",
         "resolution_status",
         "unresolved_reason",
         "verdict",
@@ -353,3 +356,48 @@ def test_a_refusal_about_a_candidate_does_not_call_it_a_catalogue_record(discove
 
     assert "catalogue" not in str(refused.value)
     assert "candidate work" in str(refused.value)
+
+
+def test_a_work_written_before_provenance_existed_reads_as_proposed(tmp_path):
+    """The null a widened file carries has one honest meaning, not a third state.
+
+    A candidate work on disk before collections could be browsed came from phase
+    1, because nothing else could mint one. Reading that row as anything other
+    than `proposed` — an absent value, a distinct "unknown" — would invent a
+    provenance nobody recorded and put works of unknown origin in front of a
+    curator who is being asked to trust the distinction.
+
+    The legacy file is made by removing the column from a real one rather than by
+    hand-writing an old schema, so the rest of the table stays exactly what the
+    code creates and this cannot drift into testing a shape the product never had.
+    """
+    path = tmp_path / "catalogue.sqlite"
+    open_catalogue_file(path).close()
+
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute("ALTER TABLE candidate_works DROP COLUMN provenance")
+        connection.execute(
+            "INSERT INTO discovery_runs (id, kind, initiated_by, status, approval_required, started_at) "
+            "VALUES ('r1', 'discovery', 'mcp_client', 'resolving_works', 0, '2026-01-01T00:00:00+00:00')"
+        )
+        connection.execute(
+            "INSERT INTO candidate_works (id, discovery_run_id, proposed_title, rationale, work_dedup_key, "
+            "resolution_status, verdict) VALUES ('c1', 'r1', 'The Night Watch', 'A famous work.', 'k', "
+            "'pending', 'pending')"
+        )
+        connection.commit()
+        assert "provenance" not in {row[1] for row in connection.execute("PRAGMA table_info(candidate_works)")}
+    finally:
+        connection.close()
+
+    store = SqliteDiscovery(open_catalogue_file(path))
+    try:
+        held = store.get_candidate_work("c1")
+        assert held.provenance is WorkProvenance.PROPOSED
+
+        # And the widened file takes a write that names the column.
+        store.update_candidate_work(replace(held, provenance=WorkProvenance.OFFERED))
+        assert store.get_candidate_work("c1").provenance is WorkProvenance.OFFERED
+    finally:
+        store.close()

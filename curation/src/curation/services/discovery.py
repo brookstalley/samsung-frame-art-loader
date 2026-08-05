@@ -46,11 +46,12 @@ from curation.persistence.discovery_records import (
     SpendRecord,
     UnresolvedReason,
     Verdict,
+    WorkProvenance,
 )
 from curation.persistence.records import AcquisitionMethod, Artist, RightsStatus, SourceClass
 from curation.services import attribution, selection
 from curation.services.catalogue import CatalogueService
-from curation.services.display_fit import ArtworkBox
+from curation.services.display_fit import ArtworkBox, DisplayFit, assess_display_fit
 from curation.services.errors import ServiceError
 from curation.services.fields import relative_path, require_member, require_text
 from curation.services.store import store_write
@@ -518,6 +519,66 @@ class DiscoveryService:
                 rationale=require_text(rationale, field="rationale"),
                 work_dedup_key=key,
                 proposed_artist=proposed_artist,
+            )
+            store_write(self._store.add_candidate_work, work)
+        return work
+
+    def offer_work(
+        self,
+        *,
+        run_id: str,
+        title: str,
+        artist: str | None,
+        rationale: str,
+        work_dedup_key: str,
+    ) -> CandidateWork | None:
+        """Record a work the collection offered, or `None` if it should not be shown.
+
+        The counterpart to `propose_work`, and separate from it in three ways that
+        each matter. It writes `OFFERED`, so no surface has to infer provenance
+        from which code path made the row. It runs while the run is *resolving
+        images* rather than works, because an offer supplements what phase 2 could
+        not confirm and cannot be made before there is something to supplement.
+        And it declines rather than raising, because a supplement meeting a work
+        the curator already declined is an ordinary event on a path with nobody to
+        report to — phase 2 runs on a worker — while `propose_work` refuses loudly
+        because a caller naming a suppressed work has made a mistake.
+
+        Two reasons to decline, and both are silent by design. A **suppressed**
+        work is one the curator rejected in an earlier run, and constraint 7's
+        whole point is that it does not come back. A work **already in this run**
+        is one phase 1 named: offering it a second time would put the same
+        painting on two cards, one of them labelled as though the collection
+        volunteered it, which is precisely the merge `product-brief.md` forbids.
+        """
+        key = require_text(work_dedup_key, field="work_dedup_key")
+        with self._store.transaction():
+            if self.get_run(run_id).kind is not RunKind.DISCOVERY:
+                raise ServiceError(
+                    f"Run {run_id!r} is a resolve run, which re-searches works an earlier run proposed rather "
+                    "than offering new ones."
+                )
+            self._require_status(run_id, RunStatus.RESOLVING_IMAGES, doing="offer works")
+            if self.is_work_suppressed(key):
+                log.info(
+                    "not offering a work the curator has already rejected",
+                    extra={"event": "work.suppressed", "work_title": title},
+                )
+                return None
+            if any(held.work_dedup_key == key for held in self._store.list_candidate_works(run_id)):
+                log.info(
+                    "not offering a work this run already carries",
+                    extra={"event": "work.already_present", "work_title": title},
+                )
+                return None
+            work = CandidateWork(
+                id=str(uuid.uuid4()),
+                discovery_run_id=run_id,
+                proposed_title=require_text(title, field="title"),
+                rationale=require_text(rationale, field="rationale"),
+                work_dedup_key=key,
+                provenance=WorkProvenance.OFFERED,
+                proposed_artist=artist,
             )
             store_write(self._store.add_candidate_work, work)
         return work
@@ -1016,6 +1077,29 @@ class DiscoveryService:
             # the sentence that matters.
             duplicate_candidates=attributed.near_misses if minted is not None else (),
         )
+
+    def clears_display_floor(self, *, width: int | None, height: int | None) -> bool:
+        """Whether an image this size could be selected without a curator asking.
+
+        Public because the supplement has to answer it *before* writing anything.
+        A work phase 1 named is worth showing whatever size the collection holds
+        it at — it is the work that was asked for, and its below-floor instance is
+        recorded, labelled and offered. A work the collection merely *volunteered*
+        is not: there are hundreds more behind it, and one that cannot go on the
+        wall is padding a curator has to read past.
+
+        The box is the only thing that can answer this, and it lives here, so the
+        question is asked here rather than a caller being handed the geometry and
+        trusted to apply the same rule. `False` for dimensions that are absent:
+        an unsizeable record cannot be shown to clear anything.
+        """
+        if width is None or height is None:
+            return False
+        if self._artwork_box is None:
+            # No geometry configured is no floor stated — the same reading
+            # `selection.best` takes, rather than this inventing one.
+            return True
+        return assess_display_fit(width=width, height=height, box=self._artwork_box).fit is not DisplayFit.BELOW_FLOOR
 
     def _below_floor(self, image: CandidateImage) -> bool:
         """Whether this instance is too small to be selected without being asked for.

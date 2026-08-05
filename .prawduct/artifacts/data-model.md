@@ -545,11 +545,27 @@ artworks.
 | `proposed_artist` | string | nullable | |
 | `rationale` | text | required | Why the model matched this work to the intent. **Q5.** |
 | `work_dedup_key` | string | required, indexed | Normalised work identity for cross-run suppression. **Q3.** |
+| `provenance` | enum | required, defaults `proposed` | `proposed` \| `offered`. Who put this work in front of the curator: the model named it, or a wired collection volunteered it. Nullable *on disk* only so the column can be added to files written before collections were browsable — a null reads as `proposed`, that being the only thing which could have written a row then. |
 | `resolution_status` | enum | required | `pending` \| `resolved` \| `unresolved`. Reflects the **latest** resolution attempt, whether that was the original phase 2 or a later re-search. `unresolved` ⇒ that attempt found no credible instance the curator has not already rejected. **Q12.** |
 | `unresolved_reason` | enum | nullable | Which kind of nothing: `not_held` \| `identity_refused` \| `size_unknown` \| `below_floor` \| `all_rejected`. Set whenever `resolution_status = unresolved`, null otherwise. **Q12.** |
 | `verdict` | enum | required | `pending` \| `accepted` \| `rejected` \| `awaiting_better_image`. See State Machines. |
 | `rejected_reason` | text | nullable | Optional curator note. |
 | `decided_at` | datetime | nullable | |
+
+> **An `offered` work is a candidate in every respect but its origin.** It takes a
+> verdict, it can be accepted into the catalogue, and its instance is recorded and
+> selected like any other — the label is not a lesser class of row. What the label
+> forbids is the merge: an offered work's image may never be attached to a
+> `proposed` work, and an offered work is never presented under a title the model
+> named. Those are the same rule from two directions, and together they are what
+> keeps this from becoming the confident near-match constraint 9 forbids. The two
+> counts are also reported apart wherever a surface shows a number, because the
+> curator approved a work list of a stated size and the supplement adds to it.
+>
+> **The approval gate cannot see offered works, structurally rather than by rule.**
+> It is computed when the work list settles, which is before phase 2 has run and
+> therefore before anything could have been offered — an offer exists only to
+> supplement what phase 2 failed to confirm.
 
 > **`awaiting_better_image` is the verdict an accept/reject binary cannot express**
 > — "I want this work; this instance is not good enough; find another." It is not

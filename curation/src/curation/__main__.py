@@ -12,7 +12,8 @@ from curation.acquisition.service import AcquisitionSettings
 from curation.acquisition.transport import http_stream
 from curation.app import create_app
 from curation.config import Settings
-from curation.discovery.artic import build_image_search
+from curation.discovery.artic import build_collection_browse, build_image_search
+from curation.discovery.browse import CollectionBrowse
 from curation.discovery.engine import DiscoveryEngine, unavailable_engine
 from curation.discovery.images import ImageSearch
 from curation.discovery.openrouter import OpenRouterClient
@@ -88,6 +89,19 @@ def _image_search(settings: Settings) -> ImageSearch | None:
     if not settings.artic_user_agent:
         return None
     return build_image_search(user_agent=settings.artic_user_agent)
+
+
+def _collection(settings: Settings) -> CollectionBrowse | None:
+    """The collection a run supplements from, or nothing when none is configured.
+
+    Gated on the same identifier as phase 2 and for the same reason: it is the
+    same museum, asked a second kind of question, and that museum asks callers to
+    say who they are. A deployment that has not said so browses nothing rather
+    than browsing anonymously.
+    """
+    if not settings.artic_user_agent:
+        return None
+    return build_collection_browse(user_agent=settings.artic_user_agent)
 
 
 def main() -> None:
@@ -217,6 +231,7 @@ def main() -> None:
             engine=_engine(settings),
             discovery_settings=settings.discovery_settings,
             image_search=image_search,
+            collection=_collection(settings),
             previews=(
                 None if image_search is None else PreviewSettings(art_root=settings.art_root, directory=settings.previews_path)
             ),

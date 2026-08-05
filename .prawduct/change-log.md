@@ -48,6 +48,57 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-04: Chunk 22 — the collection's own answer when the gate refuses
+
+<!-- prawduct: chunks=22 -->
+
+**Why:** two real runs proposed eight works, resolved none, and told the curator
+nothing about a collection that holds a great deal for their intent. A run may now
+**additionally** offer works drawn from a wired collection, after the gate has
+refused and never instead of it.
+
+**A second seam rather than a wider one.** `CollectionBrowse` sits beside
+`ImageSearch` because the two ask different questions: a search is given a work
+and must judge whether what came back is it; a browse is given a facet, and
+everything matching is by construction a work the collection holds under its own
+name. There is nothing to judge, and a browse is never told which work failed —
+so "no offered image is ever attached to a model-named work" holds structurally
+rather than by rule.
+
+**One POST per run, and the shape is what makes fairness possible.** A named
+`filters` aggregation gives each artist its own bucket with its own `top_hits`, so
+the collection does the matching and labels it with the caller's own spelling.
+That matters because the supply is wildly uneven — one real run's artists held 51,
+12, 5 and 1 offerable works — and a single capped list ordered by a score this API
+makes unreadable would have filled the whole allowance with one painter. Works are
+taken round-robin across facets.
+
+**The surname retry, and the trap under it.** A name the museum spells its own way
+returns nothing, so an unambiguous surname may be retried — recovering the 24
+works filed under "Vasily Kandinsky" from a run that said "Wassily". The check
+that licenses it **must not inherit the browse's own filters**, and this was
+measured rather than reasoned: the collection's one Antonio Martorell is a
+`Graphic Design` the wall-type filter removes, so a filtered check sees only
+Bernat Martorell, calls the surname unambiguous, and offers his painting to a run
+that named Antonio. The unit test reproduces that asymmetry, so an implementation
+that scopes it wrongly fails by offering a work rather than by looking wrong.
+
+**The identity corpus found a defect on its first run.** Twenty real
+(model proposed, museum returned) pairs, labelled by reading: the comparison
+refuses "Yoshisuke Funasaka" against the museum's "Funasaka Yoshisuke" — the same
+artist, family-name-first — and loses a genuine resolution. Not fixed here and
+not silently dropped: the same function derives `work_dedup_key`, so sorting its
+tokens changes the stored suppression key for most multi-token names, and
+`attribution._near_misses` reads that key's last token as the surname. Filed as
+issue #79 with an `xfail(strict=True)` holding the repro.
+
+**Also:** the museum fake can now hold a work under a title other than the one
+asked for, which the query-keyed shape could not express; the page token budget
+was re-measured after `provenance` joined the row (10,842 full, 8,173 default,
+both thresholds holding); and two findings Chunk 21 routed here are closed —
+`architecture.md` named the wrong dependency as the cost of the fetch-path
+widening, and `_iiif_base` had three callers and a docstring about one.
+
 ## 2026-08-04: Chunk 22 Step 0 — the artist facet, measured before it is built
 
 <!-- prawduct: chunks=22 -->

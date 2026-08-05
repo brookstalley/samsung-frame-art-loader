@@ -514,6 +514,23 @@ threshold on a live server, so this is a measurement with a mechanism behind it
 rather than a number in prose — the next field added to this row fails there before
 it costs a curator their images.
 
+**The row also carries `provenance`** — whether the model named this work or a
+wired collection offered it (`data-model.md` § CandidateWork). It is on every row
+rather than only on offered ones, because a label that appears sometimes is one a
+reader learns to stop looking for, and the whole value of the distinction is that
+a curator can trust it without checking.
+
+**Re-measured again when that field was added, 2026-08-04.** A full 40-row page is
+**10,842 tokens** — 6,400 of picture, still unchanged, and **4,442 of text**, up
+from 4,122. The default 30-row page is **8,173** against the 10,000 warning. So
+this field cost about 8 tokens a row, the same as the last one, and both
+thresholds still hold with neither cap moved. **The pattern across two additions
+is the thing to carry forward**: the pictures are fixed and every field lands on
+the text, so the default page's headroom is what each one spends — it has gone
+from 2,067 tokens to 1,827 across these two, and roughly seven more fields of this
+size would exhaust it. The next addition should say what it displaces rather than
+assume there is room.
+
 **Image content blocks correlate by position and by nothing else.** The protocol
 gives a block no identity, and a result's blocks are only the instances that had a
 local copy — so block *n* is not row *n* the moment one preview is missing. Every
