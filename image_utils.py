@@ -275,6 +275,13 @@ async def get_dezoomify_file(
 ) -> tuple[bool, str]:
     # Run dezoomify-rs, passing dezoomify_params as arguments and starting in the art_folder_raw directory
     # See https://github.com/lovasoa/dezoomify-rs for info
+    if not url.startswith(("http://", "https://")):
+        # Nothing upstream checks the scheme, and this binary is only ever meant to
+        # fetch over HTTP. Refused before the output file is touched, so a URL this
+        # function will not act on cannot delete a file on the way to being rejected.
+        logging.error(f"Refusing an image URL that is not http/https: {url!r}")
+        return False, None
+
     if out_file is not None and out_file != "":
         out_file = os.path.join(destination_dir, out_file)
         # Dezoomify will error out if the file already exists. If out_file is specified, delete it if it does exist
@@ -284,6 +291,19 @@ async def get_dezoomify_file(
     argv = [dezoomify_rs_path, *dezoomify_params]
     if http_referer is not None:
         argv += ["--header", f"Referer: {http_referer}"]
+    # `--` ends the options, so nothing after it can be read as a flag. An argv list
+    # makes shell metacharacters inert; it does nothing about a remote value the
+    # *receiving program* parses as an option, which is a separate bug class needing
+    # this separate guard — `--tile-cache` and `--max-width` are pinned above and a
+    # later occurrence would override either.
+    #
+    # The scheme check at the top of this function is what actually stops that today:
+    # no `http://`/`https://` string can begin with `-`, so this line currently has no
+    # reachable case through `url`. It stays because it is the guard that does not
+    # depend on the check above staying as strict as it is, and because the positional
+    # after it is remote-derived. Do not delete it as dead: it is load-bearing the
+    # moment either assumption moves.
+    argv.append("--")
     argv.append(url)
     if out_file is not None and out_file != "":
         argv.append(out_file)

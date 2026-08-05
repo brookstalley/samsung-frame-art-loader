@@ -230,6 +230,26 @@
   `[DECISION: curation's thumbnail cache is thumbs/, not tv-thumbs/ | tv-thumbs/
   holds per-device TV state and reusing it would re-import the identity defect
   the catalogue was rebuilt to remove | user can veto/override]`
+- **Who removes a thumbnail: nobody. Settled 2026-08-05.** *Invalidation* was
+  handled from the start and *eviction* was simply never stated, which left the
+  answer readable only by inference from code. A thumbnail rendition carries its
+  master's content hash, so a changed master makes it stale and the next request
+  rewrites it at the same path with an upserted row; a missing file does the
+  same. Nothing else ever deletes one, and archiving a work therefore leaves its
+  file and its `RenditionKind.THUMBNAIL` row where they are.
+  `[DECISION: thumbnails are never evicted — regenerated when stale or absent,
+  retained otherwise, including for archived works | archiving is reversible and
+  a thumbnail rebuilds from a master still on disk for one bounded decode, so a
+  sweep would spend a mechanism and its own failure mode on the cheapest thing
+  in the tree | user can veto/override]`
+- **The contrast with candidate previews above is the reasoning, not an
+  inconsistency**, and it is worth stating because the two sit in one section
+  and reach opposite answers. A preview belongs to a work that may never be
+  accepted, and nothing re-fetches one — so a leaked preview is permanent growth
+  in files nothing will ever want, which is what earns a sweep. A thumbnail
+  belongs to a work already held and is one decode from returning. The two
+  directories differ in whether the cached thing is *recoverable*, and that is
+  the whole of why one is swept and the other is not.
 - Each derived directory is device-specific in a different way, which is worth
   stating because the row above reads as if they were alike: `ready/` and
   `tv-thumbs/` are specific to the *television*, while `thumbs/` is specific to

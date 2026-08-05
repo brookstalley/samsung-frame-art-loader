@@ -143,6 +143,63 @@ def test_a_hostile_referer_arrives_as_one_inert_element(image_utils, captured_ar
     assert args[args.index(f"Referer: {HOSTILE_URL}") - 1] == "--header"
 
 
+def test_a_url_the_binary_would_read_as_a_flag_is_refused(image_utils, captured_argv, tmp_path):
+    """Argument injection: a different bug class from the shell injection above.
+
+    The ARTIC path builds its URL out of two remote fields —
+    `f"{metadata['config']['iiif_url']}/{image_id}/info.json"` — so a document
+    supplying an `iiif_url` of `--tile-cache=/somewhere` yields a whole URL that
+    `dezoomify-rs` parses as an option rather than as the thing to fetch. That
+    silently overrides one of the settings pinned in `dezoomify_params`, which is a
+    remote document reconfiguring the fetch on the loader host.
+
+    Asserting the process was never launched, not merely that the return was falsey:
+    a refusal that still ran the binary would have refused nothing.
+    """
+    hostile = asyncio.run(
+        image_utils.get_dezoomify_file(
+            url="--tile-cache=/tmp/attacker",
+            destination_dir=str(tmp_path),
+            destination_fullpath="",
+        )
+    )
+
+    assert hostile == (False, None)
+    assert "args" not in captured_argv, "the binary was launched with a flag as its URL"
+
+
+def test_a_non_http_url_never_reaches_the_binary(image_utils, captured_argv, tmp_path):
+    # Every caller reaches this with a museum URL, but nothing on the way in checks
+    # that. `file://` is the case that matters: the binary would be pointed at the
+    # loader host's own disk by a remote document.
+    assert asyncio.run(
+        image_utils.get_dezoomify_file(
+            url="file:///etc/passwd",
+            destination_dir=str(tmp_path),
+            destination_fullpath="",
+        )
+    ) == (False, None)
+    assert "args" not in captured_argv
+
+
+def test_the_url_is_fenced_off_from_the_options(image_utils, captured_argv, tmp_path):
+    """The end-of-options separator is present, immediately before the positionals.
+
+    Structural rather than behavioural on purpose, and the reason is worth stating:
+    the scheme check tested above means no URL that survives to here can begin with
+    `-`, so there is no input that makes this separator change the outcome. It is the
+    guard that holds if that check is ever loosened, and a guard nothing asserts is
+    one a later reader deletes as dead code. Deleting `argv.append("--")` fails this.
+    """
+    _run(image_utils, tmp_path, out_file="Artist - Title.jpg")
+
+    args = _argv(captured_argv)
+    assert "--" in args, "the end-of-options separator is gone"
+    assert args[args.index(HOSTILE_URL) - 1] == "--", "the separator no longer fences the URL"
+    # Everything after it is positional: the URL, then the output filename.
+    assert args[args.index("--") + 1 :] == [HOSTILE_URL, str(tmp_path / "Artist - Title.jpg")]
+
+
 def test_the_output_filename_is_its_own_element(image_utils, captured_argv, tmp_path):
     # `out_file` is derived from the same remote document as the URL. It is
     # sanitised upstream, but the argv form is what makes that belt-and-braces
