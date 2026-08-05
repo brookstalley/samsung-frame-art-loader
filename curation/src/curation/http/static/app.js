@@ -1274,6 +1274,26 @@ async function alternatesPanel(workId, after) {
   ]);
 }
 
+/* Why a card carries no picture — two states the producer distinguishes and this
+ * client used to flatten into one sentence.
+ *
+ * `CandidateCardOut.shown` is null both when nothing was ever found and when the
+ * curator turned every scan down, and its own docstring points at the pair that
+ * tells them apart. Reading only `shown` told a curator "No scan was found for
+ * this work" directly above a disclosure listing the scans they had just
+ * rejected, beside a badge still reading "has an image" — because rejecting an
+ * image deliberately does not rewrite `resolution_status`. Three parts of one
+ * card disagreeing, and the MCP surface said the opposite for the same work.
+ *
+ * The second sentence names the way back, because this state is one the curator
+ * created and can undo from the panel directly below it. */
+function absentScanReason(card) {
+  if (card.instances_held > 0 && card.instances_surviving === 0) {
+    return "Every scan found for this work was turned down. Restore one from the scans below to judge it again.";
+  }
+  return "No scan was found for this work.";
+}
+
 /* One proposed work, as the thing a curator decides about.
  *
  * `notice` is carried across a repaint rather than shown from a fresh fetch,
@@ -1336,7 +1356,7 @@ function candidateCard(card, notice, alternatesOpen = false) {
   if (alternatesOpen) disclosure.open = true;
 
   node.append(
-    card.shown ? instanceImage(card.shown, work.artist ? `${work.title}, by ${work.artist}` : work.title) : el("div", { class: "card-image" }, [absentImage("No scan was found for this work.")]),
+    card.shown ? instanceImage(card.shown, work.artist ? `${work.title}, by ${work.artist}` : work.title) : el("div", { class: "card-image" }, [absentImage(absentScanReason(card))]),
     el("div", { class: "card-body" }, [
       el("h3", { class: "card-title", text: work.title }),
       el("p", { class: "card-artist", text: work.artist || "Artist unrecorded" }),

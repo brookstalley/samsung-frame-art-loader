@@ -346,9 +346,9 @@ is the job's to shape and reaches the panel the same way the heartbeat's does.
 > user can veto/override]`
 
 Both ends of this one are ours, unlike the heartbeat's, so the key cannot drift
-across planes. It can drift across chunks — the reader is built and the writer is
-Chunk 20's — which is why the name is written here rather than left in the code
-that reads it.
+across planes. It can still drift in time — the reader is built and the writing
+job is separate, later work — which is why the name is written here rather than
+left in the code that reads it.
 
 ### The panel shows staleness in absolute terms
 

@@ -46,7 +46,8 @@ card and `tvpi` did not survive it — see `platform-and-dependency-findings.md`
 **Create it as part of the systemd-unit cutover, not before.** The account, its
 group memberships, moving `ART_ROOT` under it, and both unit files are one
 change: any of them landing alone leaves a machine that is neither the old
-arrangement nor the new one. The build plan puts that cutover in Chunk 13.
+arrangement nor the new one. That cutover is the work that installs the new
+systemd units, and this account is created as part of it.
 
 **`ART_ROOT` is not settled by this section.** The committed unit puts the art
 tree at `/home/tvpi/art`, inside a home directory that a service account with no
@@ -380,7 +381,7 @@ was thought to have exactly two — the journal and the display heartbeat.
 > The journal still gets an explicit bound, for the different reason given below,
 > and **that bound is in force as of 2026-08-04** — evidenced by journald's own
 > startup line moving from `max 156.1M` to `max 256M` across the restart, which is
-> the check Chunk 03's criterion asked for. An earlier version of this paragraph
+> the check that proves the bound took. An earlier version of this paragraph
 > cited `systemd-analyze cat-config` instead; that proves only that the drop-in
 > parses, and it would have reported success just as happily while the directive
 > bound nothing — which is exactly what was happening, because the file set only

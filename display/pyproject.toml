@@ -48,11 +48,20 @@ dependencies = [
 #     and streams the file itself; composing the canvas is the curation plane's
 #     job and its output crosses as a file, not as pixels.
 #
-#   Any HTTP client. This is not an omission — it is the norm. The theme
-#     manifest file is the only channel from curation to display, and
-#     `tests/preferences/test_plane_isolation.py` fails the build if a module
-#     here constructs one. The television websocket is the exemption, because
-#     talking to the television is this plane's whole job.
+#   Any HTTP client. This is not an omission — it is the norm: the theme manifest
+#     file is the only channel from curation to display. The television websocket
+#     is the exemption, because talking to the television is this plane's whole
+#     job.
+#
+#     **Nothing enforces that mechanically yet, and this comment must not claim
+#     otherwise.** `tests/preferences/test_plane_isolation.py` is owed and does
+#     not exist; it is a deliverable of the chunk creating this plane and has to
+#     arrive WITH the first module here, because a check written over an empty
+#     package passes vacuously and a green suite is exactly what a violation
+#     looks like without it. Until then the norm is held by Critic judgement
+#     alone — see `project-preferences.md` § Enforcement, which retracted this
+#     same claim about this same path on 2026-08-01 and keeps it as the repo's
+#     cautionary example. An earlier draft of this file wrote it a second time.
 
 [dependency-groups]
 dev = [

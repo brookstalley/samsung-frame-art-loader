@@ -596,6 +596,45 @@ def test_a_work_the_run_found_nothing_for_says_so_without_asking_for_a_picture(u
     assert "not held" in ui.text()
 
 
+def test_a_work_whose_every_scan_was_turned_down_is_not_told_nothing_was_found(ui):
+    """The other reason a card carries no picture, and it reads oppositely.
+
+    `shown` is null in two states — nothing was ever found, and the curator
+    rejected all of it — and the producer distinguishes them with
+    `instances_surviving`, saying so in its own docstring. Flattening both into
+    "No scan was found for this work" put that sentence directly above a
+    disclosure listing the scans just turned down, beside a badge still reading
+    "has an image", because rejecting an image deliberately does not rewrite
+    `resolution_status`. Three parts of one card disagreeing, and the MCP surface
+    answering the opposite for the same work.
+
+    The counts are set explicitly because `a_card` derives both from `shown`, so
+    its defaults cannot express a work that holds scans and shows none — which is
+    exactly why nothing caught this.
+    """
+    ui.serve(
+        f"**/api/runs/{RUN_ID}/candidates*",
+        a_candidate_page(
+            [
+                a_card(
+                    work=a_candidate(resolution_status=ResolutionStatus.RESOLVED.value),
+                    shown=None,
+                    instances_held=5,
+                    instances_surviving=0,
+                )
+            ]
+        ),
+    )
+    ui.open(f"#review/{RUN_ID}")
+    ui.page.wait_for_selector("li.card")
+
+    assert "Every scan found for this work was turned down." in ui.text()
+    assert "No scan was found for this work." not in ui.text()
+    # The way back is named, because this is a state the curator made and can undo
+    # from the panel immediately below the sentence.
+    assert "Restore one from the scans below" in ui.text()
+
+
 # -- getting there and back ---------------------------------------------------
 
 

@@ -11,8 +11,9 @@ the panel says it means. A job that stamped every attempt would report a fresh
 age for a backup that has been failing since Tuesday, and the panel would be
 confidently wrong about the one asset nothing else protects.
 
-**Nothing writes one yet.** The job is Chunk 20's; this side is built first
-deliberately, and the reason is the panel's own contract: it states observations
+**Nothing writes one yet.** The scheduled backup job is separate work; this
+reading side is built first deliberately, and the reason is the panel's own
+contract: it states observations
 with ages and never verdicts, so *no backup has ever been recorded* is a true and
 useful observation on a deployment that has never run one. It reports real ages
 the moment a writer lands, with nothing further to wire — and the alternative,

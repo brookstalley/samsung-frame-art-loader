@@ -1,6 +1,15 @@
-"""Fail when a live suite reported success without actually testing anything.
+"""Fail when an opt-in suite reported success without actually testing anything.
 
-**The whole live-probe design depends on this.** Every test in those suites skips
+**Two kinds of suite depend on this, not one.** The live probes are the obvious
+half; `browser.yml` is the other, and it needs exactly the same protection for a
+different missing dependency — the browser suite skips itself when the `browser`
+group or the downloaded Chromium is absent, which in CI is a provisioning failure
+that would otherwise report a green client-coverage job having executed no line of
+the client. Written out because an earlier version of this docstring described
+only the live suites, so the guard read as narrower than the workflows that
+actually call it.
+
+**The whole opt-in-probe design depends on this.** Every test in those suites skips
 itself cleanly when its dependency is absent — `skipif(not OPENROUTER_API_KEY)`,
 `pytest.skip("dezoomify-rs is not installed")` — which is right for a developer's
 machine and is a trap in CI. An expired secret, a rename, a failed binary install:
