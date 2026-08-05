@@ -53,8 +53,8 @@
 <!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
 
 **Why:** the cumulative round over five chunks returned 1 blocking, 7 warnings
-and 10 notes across three reviewers. Nine fixed, six accepted, five filed
-(#5, #26, #81, #86).
+and 9 notes across three reviewers. Nine fixed, six accepted, and five findings
+filed against four issues — #26 took two of them (#5, #26, #81, #86).
 
 **The blocking one was CI lying in the safe-looking direction.** All three
 api-drift jobs ran `pytest -m live_*` unscoped, so collection reached four modules

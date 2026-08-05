@@ -148,3 +148,48 @@ def test_every_workflow_that_runs_a_suite_calls_the_guard():
         if "pytest" not in text:
             continue
         assert "assert_tests_ran.py" in text, f"{workflow.name} runs pytest but never checks that anything actually ran"
+
+
+def test_every_ci_pytest_invocation_scopes_a_path():
+    """An unscoped run collects the whole tree, and this guard fails on any skip.
+
+    Five suites here are deselected by a marker expression in `addopts` — the
+    browser one and the four live/eval ones — and their modules `importorskip`
+    at collection when the opt-in group is absent, which it is in CI. So a job
+    running `pytest -m live_museum` with no path still *collects* those modules,
+    lands their skips in the report, and this guard fails the job while every
+    probe passed. The alarm then cries wolf until nobody reads it, which is
+    strictly worse than not having wired it.
+
+    **Asserted rather than remembered because it has now been found and
+    hand-fixed twice in one bundle** — `browser.yml` on 2026-08-05 and all three
+    `api-drift.yml` jobs hours later, the second time by Critic review rather than
+    by anyone noticing. A defect that recurs across files in one day is one a
+    reviewer should not have to catch a third time.
+
+    Matched textually rather than through a YAML parse, for the reason the test
+    above gives: pyyaml is not a dependency of this plane. What that costs is
+    precision about *which* line, not coverage — every invocation is on one line
+    by convention here, and a multi-line one would simply not match the prefix
+    and would be reported.
+    """
+    directory = GUARD.parents[2] / ".github" / "workflows"
+    workflows = sorted(set(directory.glob("*.yml")) | set(directory.glob("*.yaml")))
+    assert workflows, "no workflows found — this test is asserting nothing"
+
+    invocations = []
+    for workflow in workflows:
+        for line in workflow.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("run: uv run pytest") or stripped.startswith("- uv run pytest"):
+                invocations.append((workflow.name, stripped))
+    assert invocations, "no pytest invocations found in any workflow — this test is asserting nothing"
+
+    for name, line in invocations:
+        # The path comes before the flags by convention, and it is the token that
+        # is neither the command nor an option nor an option's value.
+        after = line.split("uv run pytest", 1)[1].split()
+        assert after and not after[0].startswith("-"), (
+            f"{name}: `{line}` runs pytest with no path scope, so it collects the whole tree — "
+            "the opt-in suites' import skips will land in the report and fail the guard"
+        )

@@ -467,17 +467,24 @@ class EstimateOut(BaseModel):
 
 
 class SpendOut(BaseModel):
-    """What was actually spent, over a run or over a calendar month."""
+    """What was actually spent, over a run or over a calendar month.
+
+    **No `run_direct_cost_usd`, unlike the MCP twin, and the absence is a
+    decision.** This surface's costs panel reads "what this run alone spent" off
+    the run record's `actual_cost_usd`, which is the same figure — so carrying it
+    here as well would give one screen two sources for one number, and the unread
+    one is where they would silently diverge. What this payload is fetched for is
+    the family total, which lives nowhere else.
+
+    Stated here rather than as a `#:` comment where the field used to be: a
+    comment in that position documents the field *below* it, so an explanation of
+    something absent would be read as describing `year`.
+    """
 
     scope: str
     cost_usd: str
     run_id: str | None
-    #: **Deliberately absent, unlike the MCP twin.** This surface's costs panel
-    #: reads "what this run alone spent" off the run record's `actual_cost_usd`,
-    #: which is the same figure — so carrying it here too would give one screen
-    #: two sources for one number, and the unread one is where they would
-    #: silently diverge. What this payload is fetched for is the family total,
-    #: which lives nowhere else.
+
     year: int | None
     month: int | None
 

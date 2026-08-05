@@ -516,7 +516,17 @@ def test_the_run_notice_rates_resolution_over_proposed_works_only(services, engi
 
 
 def test_the_run_payload_reports_the_two_kinds_apart(services, engine, runner, collection):
-    """The counts have to reach the wire, not just exist on the view."""
+    """The counts have to reach the wire, not just exist on the view.
+
+    **Including the numerator**, which is the one a caller cannot reconstruct.
+    `resolved` counts every provenance, so a payload carrying only that and
+    `proposed` lets a model compute nothing but the mixed rate `api-contract.md`
+    and `data-model.md` both forbid — two offered works resolved behind one
+    unresolved proposal reads as 2 of 1, contradicting the notice in the same
+    response. There is no output schema on this tool and no contract test over
+    the payload's keys, so this assertion is the only thing standing between that
+    key and the next edit to the dict.
+    """
     from curation.mcp.bindings import _run_view
 
     engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
@@ -528,6 +538,7 @@ def test_the_run_payload_reports_the_two_kinds_apart(services, engine, runner, c
     assert payload["works"]["proposed"] == 1
     assert payload["works"]["offered"] == 2
     assert payload["works"]["total"] == 3
+    assert payload["works"]["resolved_proposals"] == 0
 
 
 def test_the_search_allowance_is_sized_on_the_works_phase_two_searched(services, engine, runner, collection, settings):

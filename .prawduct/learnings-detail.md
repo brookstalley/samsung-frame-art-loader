@@ -908,9 +908,22 @@ Chunk 23, 2026-08-05. Three chunks had landed with their `## Status` boxes
 unticked in `build-plan.md`, which read exactly like bookkeeping nobody got round
 to, and a commit ticked them. It was not: `views_enabled` is true, so that block
 is regenerated from the `status=` tag on each change-log entry, and an entry
-carrying no `status=` is release-pending **by design**. The boxes were right and
-the tidy-up was wrong — a commit that edited generated output to match an
-assumption, on a file whose own header says not to.
+carrying no `status=` is release-pending. The boxes were right and the tidy-up
+was wrong — a commit that edited generated output to match an assumption, on a
+file whose own header says not to.
+
+> **Corrected 2026-08-05, the same day, by Critic review.** The words "by design"
+> were mine and were wrong, and they went on to mislead the next session, which is
+> exactly the harm a durable narrative can do. A statusless entry is release-*pending*
+> — a real state the generator understands — but it is not this repo's convention
+> for a chunk that has shipped: all 23 prior chunks carry `status=shipped`, written
+> on the feature branch pre-merge (`ab34a5a`, `16fd48c`). Five built chunks were
+> therefore showing unstarted, and the tooling takes the first unchecked box as the
+> current chunk. **The heading's rule is untouched and was never the problem** — do
+> not hand-edit derived output, ask the generator. What was wrong was the second
+> step: having asked, I read "no tag" as a deliberate state rather than as a missing
+> tag. Running the generator tells you *what* it will do, not whether its input is
+> right.
 
 The tell was available before the edit and cost one read: **the file said so.**
 `change-log.md`'s header documents the tag format and ends "Don't hand-edit them

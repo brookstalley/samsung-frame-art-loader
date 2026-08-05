@@ -13,7 +13,7 @@
 # with the provider's change rate, so we would pay repeatedly to re-answer a
 # question that moves monthly at most. The other correct trigger is on demand,
 # scoped, when work touches the client for that API — that is a local
-# `uv run pytest -m live_museum -n0`, not this file.
+# `uv run pytest tests/live -m live_museum -n0`, not this file.
 #
 # THIS WILL NOT RUN UNTIL IT IS ON THE DEFAULT BRANCH. GitHub fires `schedule`
 # only for workflows on the repository's default branch. Merged from a feature
