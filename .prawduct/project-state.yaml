@@ -557,7 +557,7 @@ product_definition:
       - "Hard monthly LLM spend cap that fails closed"
       - "OpenRouter multi-provider model access"
       - "E-paper label rendering behind a display interface"
-      - "Test suite established — done 2026-07-27, one suite per plane, both declared as test_commands (this read 'none exists today' until 2026-08-01)"
+      - "Test suite established — done 2026-07-27, one per plane that has code, both declared as test_commands (this read 'none exists today' until 2026-08-01, and 'one suite per plane' until 2026-08-05, when a third plane's manifest landed ahead of its first module)"
       - "Deployment values out of source (ART_ROOT first); token_file out of git"
     accommodate:          # Design for but don't build yet
       - "Multiple household accounts with per-user curation (explicitly not v1 — single operator with named profiles)"
@@ -2841,11 +2841,17 @@ coverage_required: false
 #   Whitespace-separated test trees for the coverage verifier (default:
 #   `tests`). One verifier run unions discovery across all of them.
 
-# Two independent projects, two interpreters, two suites — both must pass, and
-# the hook must run the real invocations rather than its `sys.executable -m
-# pytest` default, which resolves neither. The curation plane is uv-managed on
-# its own pinned interpreter, so it is reached with `--directory` (shell
-# operators are unsupported here, and `cd` is a shell operator).
+# Three independent projects, three interpreters, two suites — both of the two
+# must pass, and the hook must run the real invocations rather than its
+# `sys.executable -m pytest` default, which resolves neither. The curation plane
+# is uv-managed on its own pinned interpreter, so it is reached with `--directory`
+# (shell operators are unsupported here, and `cd` is a shell operator).
+#
+# The display plane is deliberately absent rather than forgotten: it holds a
+# project manifest and no module, so its pytest would collect nothing and exit 5
+# — neither a pass nor a failure. A declared command that cannot fail is worse
+# than an absent one, so its entry lands with the commit that writes its first
+# module. Same commit, same reason, as the plane-isolation test.
 test_commands:
   - uv run pytest tests --junit-xml={junit_xml} -q
   - uv run --directory curation pytest --junit-xml={junit_xml} -q

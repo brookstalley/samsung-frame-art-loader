@@ -246,14 +246,23 @@ def clean_name(value: str) -> str:
     Deliberately not a general sanitiser: it removes link *syntax*, not
     punctuation, diacritics or parentheses, all of which occur in real titles.
 
-    The two citation rules cannot reach inside a markdown link, which is what
-    lets three rules share one string without any of them having to know the
-    order they run in: both require a *bare* hostname immediately before the
-    bracket, and in `[nga.gov](https://nga.gov/...)` the character there is `]`.
-    An earlier draft matched the bracketed URL alone, took it out from under the
-    markdown rule, and stranded the `[nga.gov]` that rule was the only thing able
-    to recognise — which cost ten of the corpus's united works, and is why the
-    hostname is required rather than optional.
+    **Order is load-bearing, and it is the only thing keeping the citation rules
+    out of a markdown link.** `_BARE_CITATION` matches a bracketed URL with or
+    without a hostname in front of it, so it fits `](https://nga.gov/...)` as
+    readily as `nga.gov (https://nga.gov/...)`. Running the markdown pass first is
+    what means it never sees one: by then the whole link is gone. An earlier draft
+    ran them the other way round, took the URL out from under the markdown rule
+    and stranded the `[nga.gov]` that rule was the only thing able to recognise,
+    which cost ten of the corpus's united works.
+
+    That safety used to live in the pattern — the hostname was mandatory, and `]`
+    is not a hostname character — and it was moved into the sequence deliberately.
+    A mandatory hostname made `Composition No.5 (https://example.com/x)` clean to
+    `Composition`, because a title's last word is dot-joined word characters
+    exactly as a hostname is. `_drop_citation` tells those apart by asking the URL
+    which host it names, and asking requires matching the URL whether or not a
+    hostname precedes it. `test_the_bare_citation_rules_do_not_reach_inside_a_markdown_one`
+    is what now holds the order.
 
     **Can return an empty string**, for a value that was nothing but a citation.
     Callers decide what that means: the engine seam drops the proposal, and
@@ -298,11 +307,23 @@ def _drop_citation(match: re.Match[str]) -> str:
     Agreement is by suffix, because a citation names the site and the URL names
     the server — `tate.org.uk` against `www.tate.org.uk` is one source, not two.
     The bracketed URL goes either way: it is unambiguously not part of a title.
+
+    **A URL that will not parse keeps the word.** `urlsplit` raises on an
+    unbalanced `[` or `]` in the authority — it reads one as the start of an IPv6
+    address — and a model is as free to emit `(https://tate.org.uk])` as anything
+    else. Raising here would be the expensive kind of failure twice over: at the
+    engine seam it fails a run that has already been paid for, and inside
+    `reconcile` it fails *startup*, for as long as the row is stored, which is a
+    plane that will not boot because of one bad title. Unparseable means the
+    hostname cannot be proved, and unproved means the word stays.
     """
     named, url = match.group(1), match.group(2)
     if named is None:
         return " "
-    host = urlsplit(url).hostname or ""
+    try:
+        host = urlsplit(url).hostname or ""
+    except ValueError:
+        return f" {named}"
     site = named.casefold()
     return " " if host == site or host.endswith(f".{site}") else f" {named}"
 

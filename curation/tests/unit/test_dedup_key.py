@@ -334,6 +334,30 @@ def test_a_stored_row_whose_last_word_is_numbered_is_not_repaired_as_a_citation(
     assert clean_name("Composition No.5 (") == "Composition No.5 ("
 
 
+@pytest.mark.parametrize(
+    "written",
+    [
+        "Mountain Lake tate.org.uk (https://tate.org.uk])",
+        "Mountain Lake tate.org.uk (https://[tate.org.uk)",
+        "Mountain Lake tate.org.uk (https://ex[a]mple.com/x)",
+    ],
+)
+def test_a_url_that_will_not_parse_keeps_the_word_rather_than_raising(written):
+    """Cleaning a name is not allowed to fail, and here it nearly could.
+
+    `urlsplit` reads a `[` in the authority as the start of an IPv6 address and
+    raises `ValueError` on an unbalanced one, which a model is as free to emit as
+    anything else. Raising would be expensive in both callers: at the engine seam
+    it fails a run already paid for, and inside `reconcile` it fails *startup*,
+    every start, for as long as the row is stored — a plane that will not boot
+    because of one bad title. Unparseable means the host cannot be proved, and
+    unproved means the word stays.
+    """
+    cleaned = clean_name(written)
+
+    assert cleaned == "Mountain Lake tate.org.uk"
+
+
 def test_a_citation_names_its_own_host_however_the_site_is_spelled():
     """`tate.org.uk` beside `www.tate.org.uk` is one source, not two.
 

@@ -140,8 +140,9 @@ Developer preferences for how code is written in this project. Captured during d
 
 ## Testing
 
-- **Framework**: pytest, one suite per plane — `tests/` at the root for the 2024
-  modules, `curation/tests/` for the curation plane, each on its own interpreter.
+- **Framework**: pytest, one suite per plane *that has code* — `tests/` at the
+  root for the 2024 modules, `curation/tests/` for the curation plane, each on its
+  own interpreter.
   Both are declared as `test_commands` in `project-state.yaml` so the evidence hook
   runs the real invocations rather than a default that resolves neither.
   **The display plane has a configured `testpaths` and no `tests/` directory yet**,
