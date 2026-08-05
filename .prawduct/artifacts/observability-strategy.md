@@ -179,7 +179,7 @@ between planes.
 > | Event | Says |
 > |---|---|
 > | `acquisition.tile_target_resolved` | a source's image service was resolved before fetching, naming both the recorded URL and the one actually used |
-> | `acquisition.deployment_fault` | acquisition refused before it started for a reason no source is at fault for — a full disk, a missing binary, an unwired provider. **At ERROR, and it is the only acquisition signal the operator gets**: these reach the caller as a refusal the tool boundary answers without logging, and the person who can fix them is not the one holding the tool result |
+> | `acquisition.deployment_fault` | acquisition refused before it started for a reason no source is at fault for — a full disk, a missing binary, an unwired provider. **At ERROR, and for these three conditions it is the only journal signal there is**: unlike a failed fetch, which is recorded against the source and readable afterwards, these reach the caller as a refusal the tool boundary answers without logging — and the person who can fix them is not the one holding the tool result |
 >
 > **`phase_two.not_the_work` is the one to read first when a run comes back
 > emptier than expected.** It carries the museum's own title and artist beside the

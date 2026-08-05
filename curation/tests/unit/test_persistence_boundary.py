@@ -150,11 +150,17 @@ def test_no_test_reaches_past_the_container_to_arm_the_no_network_guard():
     form verbatim, and a guard that forbids describing the mistake it prevents
     would be paid for by deleting the explanation.
     """
+    scanned = list((_SOURCE_ROOT.parent / "tests").rglob("*.py"))
     offenders = [
         f"{path.relative_to(_SOURCE_ROOT.parent)}:{number}"
-        for path in (_SOURCE_ROOT.parent / "tests").rglob("*.py")
+        for path in scanned
         for number, line in enumerate(path.read_text().splitlines(), start=1)
         if "._resolve" in (code := line.split("#", 1)[0]) and "=" in code.split("._resolve", 1)[1][:3]
     ]
 
+    # A guard that scans nothing passes forever, and this one is a path away from
+    # scanning nothing — move the tree and `rglob` returns empty rather than
+    # failing. Its two siblings in this module assert the same thing for the same
+    # reason.
+    assert scanned, "the test tree moved; this guard was scanning nothing"
     assert offenders == [], f"arm the no-network guard with Services.bind(resolve=...), not by assignment: {offenders}"
