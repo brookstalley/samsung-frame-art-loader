@@ -7,11 +7,12 @@ exactly one file between them:
 
 - **curation** (`curation/`, Python 3.14) — the catalogue, discovery, image
   preparation, an HTTP API and an MCP server. It writes the theme manifest.
-  **Built**, and the only plane in the repository today.
-- **display** (Python 3.13) — polls that manifest, drives the TV and the e-paper
-  panel, and keeps showing art whether or not curation is running. **Not built
-  yet:** there is no `display/` package. The root `display.py` is a 2024 module
-  and does none of this.
+  **Built**, and the only plane with code in it today.
+- **display** (`display/`, Python 3.12 on the Pi) — polls that manifest, drives
+  the TV and the e-paper panel, and keeps showing art whether or not curation is
+  running. **Not built yet:** `display/` holds a project manifest and no module,
+  so the package exists as a place for the first one to land and nothing more.
+  The root `display.py` is a 2024 module and does none of this.
 
 **What runs the wall right now is the 2024 loader at the repository root**, and it
 does so until the display plane exists. Said plainly because a reader who takes

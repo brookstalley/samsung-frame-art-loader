@@ -292,6 +292,58 @@ def test_a_title_ending_in_a_citation_word_keeps_it():
     assert "source" in work_dedup_key(title="The Source", artist="Jean-Auguste-Dominique Ingres")
 
 
+def test_a_hostlike_word_in_a_title_is_not_a_citation_even_beside_a_url():
+    """The over-merge a bracketed URL nearly bought back.
+
+    Requiring the URL made a trailing hostname safe to drop, but the word before
+    the brackets is the *title's* last word as often as the citation's:
+    `Composition No.5 (https://example.com/x)` has both halves of the pattern and
+    only one of them is a citation. The URL names its own host, so the two are
+    told apart by asking it rather than by guessing — and where they disagree the
+    URL still goes, because a URL is never part of a title.
+    """
+    written = "Composition No.5 (https://example.com/x)"
+
+    assert clean_name(written) == "Composition No.5"
+    assert work_dedup_key(title=written, artist="Serge Poliakoff") != work_dedup_key(
+        title="Composition", artist="Serge Poliakoff"
+    )
+
+
+def test_a_title_word_shaped_exactly_like_a_hostname_survives_beside_a_url():
+    """The host check on its own, with the shape check unable to help.
+
+    `St.Mark` is a hostname to any pattern — dot-joined word characters ending in
+    letters — so nothing about its *shape* separates it from `tate.org.uk`. Only
+    the URL beside it can: it names `example.com`, which is not this word, so the
+    word stays. Without that comparison the title would read `The Miracle of`.
+    """
+    assert clean_name("The Miracle of St.Mark (https://example.com/x)") == "The Miracle of St.Mark"
+
+
+def test_a_stored_row_whose_last_word_is_numbered_is_not_repaired_as_a_citation():
+    """The shape check on its own, with the host check unable to help.
+
+    A row damaged by the old rule has no URL left in it — that is what the old
+    rule removed — so nothing can be compared and the shape is the only evidence
+    there is. `No.5 (` and `tate.org.uk (` are identical but for the last
+    segment, and a top-level domain is letters. Leaving the row unrepaired is the
+    recoverable direction; reading it as a citation would key `Composition No.5`
+    as `Composition` and swallow every numbered canvas by that painter.
+    """
+    assert clean_name("Composition No.5 (") == "Composition No.5 ("
+
+
+def test_a_citation_names_its_own_host_however_the_site_is_spelled():
+    """`tate.org.uk` beside `www.tate.org.uk` is one source, not two.
+
+    A citation names the site and the URL names the server, so the match has to
+    be by suffix — an equality test would leave the commonest real spelling of
+    all seven stored rows unrecognised.
+    """
+    assert clean_name("Mountain Lake - tate.org.uk (https://www.tate.org.uk/art/x)") == "Mountain Lake"
+
+
 def test_a_hostlike_word_in_a_title_is_not_a_citation():
     """The over-merge the citation rule could cause, pinned.
 

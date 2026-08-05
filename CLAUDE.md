@@ -27,15 +27,23 @@ stays version-free.
 
 ## Dev commands
 
-Two independent projects, two interpreters, two suites. Both must pass.
+Three independent projects, three interpreters. **Two suites — and the third
+column is why that is not a typo.**
 
-| | 2024 modules (repo root) | curation plane |
-|---|---|---|
-| Test | `uv run pytest tests` | `cd curation && uv run pytest` |
-| Lint | `uv run ruff check .` | `cd curation && uv run ruff check .` |
-| Format | `uv run black .` | `cd curation && uv run black .` |
+| | 2024 modules (repo root) | curation plane | display plane |
+|---|---|---|---|
+| Test | `uv run pytest tests` | `cd curation && uv run pytest` | *(no suite yet — see below)* |
+| Lint | `uv run ruff check .` | `cd curation && uv run ruff check .` | `cd display && uv run ruff check .` |
+| Format | `uv run black .` | `cd curation && uv run black .` | `cd display && uv run black .` |
 
-**`uv run` in both columns, including the root.** pytest, ruff and black live in a
+**The two suites that exist must both pass.** `display/` currently holds a project
+manifest and no module, so its lint and format commands run against an empty tree
+and its `pytest` would collect nothing and exit 5 — which is not a pass and not a
+failure. It gets its suite, and its `test_commands` entry, from the commit that
+writes its first module; that same commit owes the plane-isolation test, because
+both are the same claim about when a guard starts guarding.
+
+**`uv run` in every column, including the root.** pytest, ruff and black live in a
 `[dependency-groups] dev` group that only uv installs — `pip install -e .` does
 not. Dropping the prefix gets either command-not-found or, worse, a system-Python
 pytest that resolves different dependencies and reports a green suite that means

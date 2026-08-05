@@ -425,6 +425,45 @@ def test_a_stored_title_that_was_nothing_but_a_citation_is_left_to_be_read(disco
     assert discovery.get_candidate_work(work.id).proposed_title == "tate.org.uk ("
 
 
+def test_a_repaired_row_and_a_clean_one_become_the_same_work(discovery, run, propose):
+    """The split the corruption caused, closed — and closed without deleting a row.
+
+    A curator who saw the painting twice, once titled with a citation and once
+    without, was looking at one work under two identities. After the repair they
+    share one, so a verdict on either answers for both. Both rows stay: the key
+    is an index rather than a unique constraint, and suppression asks whether
+    *any* row sharing a key was rejected, so merging rows would only risk losing a
+    decision that this keeps.
+    """
+    damaged = propose(DAMAGED_TITLE, dedup_key="dali::lobster telephone 1938 cited from tate org uk")
+    clean = propose("Lobster Telephone", dedup_key=work_dedup_key(title="Lobster Telephone"))
+
+    discovery.reconcile()
+
+    repaired = discovery.get_candidate_work(damaged.id)
+    assert repaired.work_dedup_key == discovery.get_candidate_work(clean.id).work_dedup_key
+    discovery.set_verdict(clean.id, Verdict.REJECTED, reason="A studio copy.")
+    assert discovery.is_work_suppressed(repaired.work_dedup_key) is True
+
+
+def test_an_artist_the_cleaning_removes_entirely_becomes_unattributed_not_empty(discovery, run, propose):
+    """The write path spells "no artist" `None`, and so must the repair.
+
+    Storing `""` would put a value in the column that no proposal could produce —
+    `_read_works` writes `artist or None` — leaving one path in the product able
+    to mint a third state out of a two-state field.
+    """
+    work = propose(
+        DAMAGED_TITLE,
+        dedup_key="dali::lobster telephone 1938 cited from tate org uk",
+        proposed_artist="tate.org.uk (",
+    )
+
+    discovery.reconcile()
+
+    assert discovery.get_candidate_work(work.id).proposed_artist is None
+
+
 def test_recleaning_stored_titles_says_how_many_a_curator_was_shown(discovery, run, propose, caplog):
     """A repair firing long after the rule changed means rows sat in front of
     someone carrying markup, and the count is the size of what they were shown."""

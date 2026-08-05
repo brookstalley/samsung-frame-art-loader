@@ -75,8 +75,8 @@ Developer preferences for how code is written in this project. Captured during d
 - **Naming**: `snake_case` functions and module-level names, `PascalCase` classes
   (`ArtFile`, `ArtSet`, `DisplayLabel`, `ResizeOptions`) _(inferred — consistent across all modules)_
 - **Formatting**: black, `line-length = 130` (configured in `pyproject.toml`)
-- **Linting**: ruff, configured per plane. Both select `E,F,I,UP,B,T20,TRY` at
-  `line-length = 130`. The two configs differ, and the differences are the norm:
+- **Linting**: ruff, configured per plane. All three select `E,F,I,UP,B,T20,TRY`
+  at `line-length = 130`. The configs differ, and the differences are the norm:
   - **Root** (`pyproject.toml`, excludes `curation/` and `display/`) also ignores
     `TRY400` and `TRY003` project-wide, and carries a per-file carve-out of
     **three kinds**. *(A third kind was added 2026-08-05:
@@ -107,6 +107,16 @@ Developer preferences for how code is written in this project. Captured during d
     "retiring a claim is a repo-wide grep, not a local edit".)_
   - **Curation** (`curation/pyproject.toml`) adds `ANN`, ignores `TRY003`, and
     turns `ANN` off under `tests/*`. No legacy carve-out: this plane is new code.
+  - **Display** (`display/pyproject.toml`) is the same set as Curation — adds
+    `ANN`, ignores `TRY003`, turns `ANN` off under `tests/*` — at
+    `target-version = py312`, which is the Pi's interpreter rather than a
+    preference. It arrived with the plane's manifest and **before any module**, so
+    it currently lints an empty tree; that is deliberate, because a config landing
+    after the first module is a config the first module was never held to.
+    _(Added 2026-08-05. `ANN` was described here as a curation-only addition while
+    a third config selecting it sat in the tree, which is exactly the drift the
+    Norm Health sweep reads this list to find — it would have audited two configs
+    of three and reported no gap.)_
 
   The mechanical style norms below that ruff covers are enforced by it rather than
   by the Critic.
@@ -134,6 +144,12 @@ Developer preferences for how code is written in this project. Captured during d
   modules, `curation/tests/` for the curation plane, each on its own interpreter.
   Both are declared as `test_commands` in `project-state.yaml` so the evidence hook
   runs the real invocations rather than a default that resolves neither.
+  **The display plane has a configured `testpaths` and no `tests/` directory yet**,
+  so it is deliberately *not* a third `test_commands` entry: an invocation that
+  collects nothing exits 5, and a declared command that cannot fail is worse than
+  an absent one. It is added by the commit that creates that directory — the same
+  commit `build-plan.md` requires to carry the plane-isolation test, since both
+  are the same claim about when a guard starts guarding.
 - **Style**: descriptive test names stating the behaviour under test.
 - **Coverage expectations**: _(target)_ happy path + error cases for pure logic
   (`image_utils`, `metadata` parsing, `source_utils`, the `all.json` catalogue round-trip).

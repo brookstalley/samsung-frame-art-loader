@@ -80,6 +80,7 @@ cleanly.
 
 import re
 import unicodedata
+from urllib.parse import urlsplit
 
 #: An inline markdown link, `[text](url)`. A search-augmented answer cites as it
 #: writes and does not confine that to prose: real runs returned titles like
@@ -89,18 +90,22 @@ _MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\(\s*<?[^)\s]*>?\s*\)")
 #: A URL that arrived without the markdown wrapper around it.
 _BARE_URL = re.compile(r"https?://\S+")
 
+#: A hostname as it appears in running text. The last segment must be alphabetic,
+#: which is what a top-level domain is and what a title's own numbering is not:
+#: `No.5` and `Op.12` are dot-joined word characters exactly as `tate.org.uk` is,
+#: and only the final segment tells them apart.
+_HOSTNAME = r"[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}"
+
 #: The same citation written without markdown around the hostname:
 #: `blog.artsper.com (https://blog.artsper.com/en/a-closer-look/dali/)`. Seven
 #: real proposals carried this, and `_MARKDOWN_LINK` cannot see it — there are no
 #: brackets to match, so the hostname is plain text and only the URL was ever
 #: removed.
 #:
-#: **The bracketed URL is required, and that is the whole safety of it.** A
-#: trailing hostname on its own is not evidence of a citation: `Composition No.5`
-#: satisfies any pattern loose enough to match `tate.org.uk`, and dropping the
-#: tail would leave `Composition` — a merge, which is the direction this module
-#: refuses to fail in. A hostname that brought its own URL is not that.
-_BARE_CITATION = re.compile(r"\s*[\w-]+(?:\.[\w-]+)+\s*\(\s*https?://[^\s)]*\s*\)?")
+#: The hostname is optional here and the bracketed URL is not, because the URL is
+#: the part that is unambiguously not a title. What the optional half costs is
+#: covered by `_drop_citation` below, which drops it only when it can prove it.
+_BARE_CITATION = re.compile(rf"\s*(?:({_HOSTNAME})\s*)?\(\s*(https?://[^\s)]*)\s*\)?")
 
 #: The same citation after `_BARE_URL` has already eaten it, which is what the
 #: catalogue holds: `https?://\S+` is greedy to the next space, so it consumed the
@@ -108,7 +113,13 @@ _BARE_CITATION = re.compile(r"\s*[\w-]+(?:\.[\w-]+)+\s*\(\s*https?://[^\s)]*\s*\
 #: (1938) - cited from tate.org.uk (`. Recognising the damaged form is what lets
 #: `reconcile` repair rows written before the rule above existed, rather than
 #: needing a one-off script that would then be dead code.
-_DAMAGED_CITATION = re.compile(r"\s*[\w-]+(?:\.[\w-]+)+\s*\($")
+#:
+#: **Here the hostname cannot be proved**, because the URL that would have named
+#: its host is exactly what the old rule removed. The alphabetic top-level domain
+#: is what stands in for that proof, and it is why the shape of `_HOSTNAME`
+#: matters more here than above: this rule rewrites rows already on disk, and the
+#: only evidence left in one is the shape of the text.
+_DAMAGED_CITATION = re.compile(rf"\s*{_HOSTNAME}\s*\($")
 
 #: Link text that is a hostname rather than words — `artic.edu`,
 #: `access-ok.okeeffemuseum.org`. Across 128 captured proposals every citation
@@ -260,7 +271,7 @@ def clean_name(value: str) -> str:
         return text
 
     cleaned = _MARKDOWN_LINK.sub(unlink, value)
-    cleaned, bare = _BARE_CITATION.subn(" ", cleaned)
+    cleaned, bare = _BARE_CITATION.subn(_drop_citation, cleaned)
     cleaned, damaged = _DAMAGED_CITATION.subn(" ", cleaned)
     cleaned = _WHITESPACE.sub(" ", _BARE_URL.sub(" ", cleaned)).strip()
     cleaned = _DANGLING_TAIL.sub("", cleaned).strip()
@@ -270,6 +281,30 @@ def clean_name(value: str) -> str:
     # there is no citation left to remove, so the words that introduced one are
     # never treated as a lead-in on a value that has already been cleaned.
     return _DANGLING_TAIL.sub("", _CITATION_LEAD_IN.sub("", cleaned)).strip()
+
+
+def _drop_citation(match: re.Match[str]) -> str:
+    """Remove a bracketed URL, and the hostname before it only where it *is* the host.
+
+    **The word before a citation's brackets is not always the citation's.** It is
+    the hostname when a model writes `tate.org.uk (https://www.tate.org.uk/...)`,
+    and it is the title's own last word when one writes `Composition No.5
+    (https://example.com/x)` — both are dot-joined word characters, and taking the
+    second leaves `Composition`, which merges every numbered canvas by that
+    painter under one identity. That is the failure a curator never sees, so the
+    rule is not allowed to guess: the URL names its own host, and the word is
+    dropped only when the two agree.
+
+    Agreement is by suffix, because a citation names the site and the URL names
+    the server — `tate.org.uk` against `www.tate.org.uk` is one source, not two.
+    The bracketed URL goes either way: it is unambiguously not part of a title.
+    """
+    named, url = match.group(1), match.group(2)
+    if named is None:
+        return " "
+    host = urlsplit(url).hostname or ""
+    site = named.casefold()
+    return " " if host == site or host.endswith(f".{site}") else f" {named}"
 
 
 def title_key(title: str) -> str:

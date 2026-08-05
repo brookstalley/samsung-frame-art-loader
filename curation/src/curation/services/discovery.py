@@ -473,6 +473,11 @@ class DiscoveryService:
         pays that debt once while this pays it every time. It is idempotent and
         almost always a no-op, which is what makes it safe to run at every start.
 
+        The cost is one walk of a household's candidate rows, in the transaction
+        the run repair above already opened — so a start either applies both
+        repairs or neither, and a failure here is retried next start rather than
+        leaving the catalogue half-repaired with nothing recording which half.
+
         Deliberately not a verdict-preserving merge. Two rows whose keys converge
         stay two rows — suppression reads every row sharing a key and asks whether
         *any* was rejected, so a converged pair suppresses correctly without
@@ -483,7 +488,12 @@ class DiscoveryService:
         for run in self._store.list_runs():
             for work in self._store.list_candidate_works(run.id):
                 title = clean_name(work.proposed_title)
-                artist = clean_name(work.proposed_artist) if work.proposed_artist else None
+                # `or None` rather than the cleaned string, because an artist that
+                # cleans away is *unattributed* and the write path spells that
+                # `None` — a repair storing `""` would put a value in the column
+                # that no proposal could have written, and only this path could
+                # ever produce it.
+                artist = (clean_name(work.proposed_artist) or None) if work.proposed_artist else None
                 # An empty title is left exactly as it is. `require_text` refuses
                 # one on the way in, so a cleaning that emptied a title would be
                 # a rule reaching too far, and overwriting the row would destroy

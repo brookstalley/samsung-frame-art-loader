@@ -109,6 +109,24 @@ class TestWhatObserveFinds:
         assert seen.problem is not None
         assert seen.contents is None
 
+    def test_a_document_that_is_not_utf8_is_a_problem_rather_than_an_exception(self, tmp_path):
+        """The one malformation that used to take the health panel down with it.
+
+        A reader can catch a document mid-write, and bytes that are not UTF-8
+        raise `UnicodeDecodeError` — a `ValueError`, not a `JSONDecodeError`, so
+        it escaped the catch, escaped `HealthService.observe`, and reached the
+        browser as a 500. The panel that exists to report that a document is
+        unreadable is the one thing that must not fail on an unreadable document.
+        """
+        path = tmp_path / "mid-write.json"
+        path.write_bytes(b'{"reported_at": "\xff\xfe not utf-8"}')
+
+        seen = observations.observe(path, key="reported_at")
+
+        assert seen.absent is False
+        assert seen.problem is not None
+        assert seen.contents is None
+
     def test_a_document_that_is_not_an_object_is_refused_by_name(self, tmp_path):
         """Valid JSON is not the same as a document. A bare list parses fine."""
         path = tmp_path / "list.json"

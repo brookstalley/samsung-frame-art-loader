@@ -784,8 +784,8 @@ artworks.
 > **The re-key shipped on 2026-08-05, as a mechanism rather than a one-off.**
 > When it was written this said "no re-key shipped, because no rows exist to
 > re-key" — true then, and false by the time the citation rules gained the bare
-> form: the catalogue held 27 `CandidateWork` rows and seven of them were keyed
-> under a citation the rules now strip. `DiscoveryService.reconcile` re-cleans
+> form, by which point the catalogue held rows and seven of them were keyed under
+> a citation the rules now strip. `DiscoveryService.reconcile` re-cleans
 > every stored title at startup and rewrites the key of any it changed, so the
 > obligation is discharged by each start rather than owed by each change. It is
 > idempotent and normally a no-op. A title the cleaning empties is left exactly as

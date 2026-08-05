@@ -64,7 +64,14 @@ def observe(path: Path, *, key: str, now: datetime | None = None) -> Observation
 
     try:
         contents = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    # `ValueError` rather than `JSONDecodeError`, which it is a subclass of, so
+    # the decode above is covered by naming its parent. Bytes that are not UTF-8
+    # raise `UnicodeDecodeError` — also a `ValueError`, and reachable by reading
+    # a document while its writer is partway through it. Catching only the JSON
+    # error let that one escape to the surface as a 500, which is the outage this
+    # function's whole contract exists to prevent: the panel that would have said
+    # "the heartbeat could not be read" is the panel that goes dark instead.
+    except (OSError, ValueError) as exc:
         log.warning("The document at %s exists but could not be read: %s", path, exc)
         return Observation(path=path, at=None, age_seconds=None, contents=None, problem=str(exc))
 

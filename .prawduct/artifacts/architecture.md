@@ -205,8 +205,24 @@ is no network between planes.
         │  │                                  │          any more: MatEngine is the second, below
         │  ├─ ImageSearch (Protocol)          │          phase 2 — the museum seam. Free, but
         │  │    ArticImageSearch ships        │          behind a seam for the same reason
+        │  ├─ CollectionBrowse (Protocol)     │          what the collection HOLDS by an artist, as
+        │  │                                  │          opposed to what it can find: the offer
+        │  │                                  │          supplementing works phase 2 could not confirm
         │  └─ PreviewCache                    │          writes the disposable local copy an
         │                                     │          instance is reviewed from
+        │                                HealthService    every signal the health panel states, in one
+        │                                     │          call. A service and not a handler concern
+        │                                  observations   because WHICH signals the panel makes is a
+        │                                     │          product rule — so the next one is added in
+        │                                     │          one place, testable without HTTP, rather
+        │                                     │          than in a handler and a client separately.
+        │                                     │          `observations.observe` is the single parse
+        │                                     │          under both observed documents (the display
+        │                                     │          heartbeat, the backup receipt): one parser,
+        │                                     │          because two would drift. Absent, unreadable
+        │                                     │          and aged are three answers, never an
+        │                                     │          exception — a panel that raised where an age
+        │                                     │          belongs would be an outage of its own
   Discovery ── ReviewService                  │          the pre-acceptance twin of SurveyService
   Service ──── PreviewSweep                   │          reclaims the previews of decided works;
         │       │              │              │          the plane's second background thread

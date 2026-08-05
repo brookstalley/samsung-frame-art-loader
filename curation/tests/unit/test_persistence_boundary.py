@@ -80,6 +80,13 @@ _MAY_REACH_THE_NETWORK = {
     # and `urllib.parse` splits the URL. It sends no request, and its resolver is
     # an argument so the rules can be exercised against stated answers.
     "curation.acquisition.urls",
+    # `urllib.parse` only, to read the host out of a citation's own URL. A
+    # cited hostname and a title's last word are the same shape — `tate.org.uk`
+    # and `No.5` are both dot-joined word characters — so the only thing that
+    # tells them apart is whether the URL beside it names that host, and getting
+    # *that* wrong merges two works under one identity. Standard parsing rather
+    # than a hand-rolled split for exactly that reason. No request is made.
+    "curation.discovery.dedup",
 }
 
 _REACHES_THE_NETWORK = {"httpx", "requests", "urllib", "urllib3", "http", "socket", "aiohttp", "openai", "anthropic"}

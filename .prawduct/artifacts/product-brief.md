@@ -434,9 +434,11 @@ API consumers. Three consequences that are easy to miss:
 - OpenRouter multi-provider model access, with a separate cheap vision model for
   mat-colour selection
 - E-paper label rendering behind a display interface
-- **A test suite** *(done 2026-07-27 — one suite per plane, both declared as
-  `test_commands`. This read "none exists today" until 2026-08-01, five days after
-  it stopped being true.)*
+- **A test suite** *(done 2026-07-27 — one per plane that has code, both declared
+  as `test_commands`. This read "none exists today" until 2026-08-01, five days
+  after it stopped being true; and read "one suite per plane" until 2026-08-05,
+  when a third plane's manifest landed ahead of its first module and made the
+  count and the planes stop matching.)*
 - Deployment values out of source (`ART_ROOT` first); `token_file` out of git
 
 ### Accommodate (design for, don't build)
