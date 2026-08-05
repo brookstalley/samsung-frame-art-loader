@@ -181,7 +181,10 @@ def test_a_newly_minted_artist_notice_survives_the_repaint(grid):
         a_verdict(
             minted_artist=an_artist(name="Jacob van Ruisdael"),
             possible_duplicate_artists=[an_artist(artist_id="artist-2", name="Jacob Isaacksz van Ruisdael")],
-            notice="A new artist 'Jacob van Ruisdael' was recorded, and the catalogue already holds 'Jacob Isaacksz van Ruisdael'. They may be the same painter.",
+            notice=(
+                "A new artist 'Jacob van Ruisdael' was recorded, and the catalogue already holds "
+                "'Jacob Isaacksz van Ruisdael'. They may be the same painter."
+            ),
         ),
     )
     grid.serve("**/api/candidates/work-1", a_card(work=a_candidate(verdict=Verdict.ACCEPTED.value)).model_dump(mode="json"))

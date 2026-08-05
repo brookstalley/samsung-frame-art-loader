@@ -114,9 +114,22 @@ already-red target set, where every mutation would be "caught" by the failure th
 was already there. Anything other than a pass or a failure stops the sweep and
 says which exit code it got. Extra pytest arguments pass through after a `--`.
 
-**This casts doubt on Chunk 23's recorded acceptance**, which was "twelve
-mutations, twelve caught" against the same tool over the same deselected suite.
-Re-swept here with the fix in place rather than assumed.
+**Chunk 23's recorded acceptance was reached the same way, and it was re-swept
+rather than assumed.** Fourteen mutations over its six behaviours and their
+over-fire pairs — `fetchAllWorks` termination, the shortfall note, the image
+fallback, the focus move, poll suppression, paint supersession, the stale timer,
+and the unresolved reason as words — **all fourteen caught** with the marker
+passed through. That suite is genuinely covered; the evidence for it simply was
+not evidence. Worth separating: a vacuous proof and a false claim are different
+faults, and this was the first.
+
+**One thing this cost, recorded because it nearly shipped.** A sweep rewrites the
+file in place, so committing while one runs can capture a deliberate defect. It
+did: a `git add -A` landed inside the window and put a mutated `app.js` and a
+stray `.sweepbak` into a commit, with `git diff` against HEAD showing *identical*
+because both sides were mutated. Caught by checking that every mutation's
+`find` string was still present in the committed file, which is the check that
+does not depend on a comparison. Do not run git and a sweep at the same time.
 
 ## 2026-08-05: The Critic's findings on the harness, closed in one pass
 
