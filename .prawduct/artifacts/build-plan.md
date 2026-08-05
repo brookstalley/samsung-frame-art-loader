@@ -125,6 +125,7 @@ re-created the same silence one line further down.
 - [ ] Chunk 21: Say which kind of nothing — `unresolved_reason`, and the artist fold (issue #78)
 - [ ] Chunk 22: Grounded alternatives — the collection's own answer when the gate refuses
 - [ ] Chunk 19A: The run half — intent entry, the estimate, the run view and its gate
+- [ ] Chunk 23: The browser client gets executed coverage — Playwright (issue #30)
 - [ ] Chunk 19B: The review half — the grid, its alternates, the verdict, the panel
 - [x] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [x] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
@@ -2398,6 +2399,45 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   on the screen and in the run-level counts
 - **Done when:**
   1. Acceptance criteria met and tests pass, plus the operator's look
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+### Chunk 23: The browser client gets executed coverage — Playwright (issue #30)
+
+- **Description:** The client is not rendering-only any more and no test runs a
+  line of it. Issue #30 said this stops being tolerable at Chunk 19 and asked for
+  the decision *before* it; 19A shipped first, so this chunk pays that debt
+  before 19B adds the most stateful screen in the product. **The option is
+  settled — Playwright against the real surface** (operator, 2026-08-05, recorded
+  in `technical_decisions.technology` with its costs and the reason the three
+  cheaper options lose). What is left is building it.
+  **The shipped client does not change.** `app.js` stays one hand-written file
+  served as-is with no build step; what lands is a dev/CI harness in its own
+  directory. The Pi runs the product, not the suite — the objection issue #30
+  records against a Node toolchain is about the wrong thing, and the decision
+  entry says so, so it is not re-litigated here.
+- **Depends on:** Chunk 19A (the screens with the most untested logic), 10B (the
+  three behaviours issue #30 names by hand)
+- **Artifacts consumed:** issue #30, `technical_decisions.technology`,
+  `boundary-patterns.md` § Test Levels, `project-preferences.md`
+- **Visual change:** no — this is coverage of a surface that already exists
+- **Deliverables:** a Playwright harness driving the booted server; its
+  dependency manifest, kept out of the two Python planes; the CI/dev invocation
+  written down where `CLAUDE.md`'s command table can point at it
+- **Tests:** the harness *is* the deliverable. **Issue #30's acceptance names
+  three from 10B that must each fail when their behaviour is removed** —
+  `fetchAllWorks` termination, the image-error fallback, and the post-navigation
+  focus move. Add 19A's, which are the reason this moved up the order: the run
+  view leaving the DOM alone when a poll changes nothing (assert focus survives),
+  two concurrent paints resolving to one, and an unresolved work reaching the
+  page as a sentence rather than a raw enum token.
+- **Acceptance criteria:** every behaviour above is covered by a test that
+  demonstrably fails when the behaviour is removed — demonstrated by the mutation
+  sweep, not asserted; `boundary-patterns.md` § Test Levels and this plan's test
+  strategy state what the harness covers and what it does not; issue #30 closes
+  with its option recorded
+- **Done when:**
+  1. Acceptance criteria met and tests pass
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 

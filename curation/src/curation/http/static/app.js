@@ -671,6 +671,13 @@ function resolutionBadge(work) {
  * numerator reports a retrieval rate the run never achieved — with twelve
  * offered works behind one unresolved proposal, "12 of 13" describes a run that
  * in fact resolved nothing it was asked for. */
+/* An if-chain rather than an object literal like the badge maps above, and the
+ * asymmetry is a decision rather than an oversight: several of these branches
+ * read the tally, the run kind and whether image resolution is wired, so a map
+ * of bare strings could not hold them. The cost is that the checker which reads
+ * those maps cannot parse this, so `test_every_run_status_is_named_in_the_client`
+ * takes the weaker form of asserting each status value appears here at all —
+ * enough to fail when a tenth state is added, which is the property wanted. */
 function runSentence(view) {
   const run = view.run;
   const tally = view.tally;
@@ -808,7 +815,19 @@ async function viewRun(runId) {
   // rate on every tick thereafter.
   state.poll += 1;
   const generation = state.poll;
-  const view = await api(`/api/runs/${encodeURIComponent(runId)}`);
+  let view;
+  try {
+    view = await api(`/api/runs/${encodeURIComponent(runId)}`);
+  } catch (failure) {
+    // One blip must not end the watch. Without this the throw leaves the last
+    // paint on screen looking current, `guard` writes a message naming a URL,
+    // and no further poll is ever scheduled — so a curator watching a live run
+    // through a single 502 is left with a stale page that never recovers and
+    // never says it stopped. Re-arm first, then re-throw so the message is
+    // still shown: the next tick repaints and clears it if the blip has passed.
+    scheduleRunPoll(runId, generation);
+    throw failure;
+  }
   if (state.poll !== generation) return;
   const run = view.run;
   const tally = view.tally;
@@ -841,6 +860,26 @@ async function viewRun(runId) {
       gateEstimate = await api(`/api/estimate?run_id=${encodeURIComponent(runId)}`);
     } catch (failure) {
       gateEstimateProblem = `The cost of approving could not be read: ${failure.message}`;
+    }
+    if (state.poll !== generation) return;
+  }
+
+  /* What asking for this actually cost, all in. The run record carries only its
+   * OWN spend, so a run billed little whose re-searches cost ten times more
+   * reads as cheap from the run alone — and "what did asking for Dalí cost" is
+   * the family total, which lives nowhere else. Fetched once the run has
+   * stopped: while it is still working the figure is mid-flight, and a total
+   * that climbs under a heading saying what something cost invites reading a
+   * partial as a final. */
+  let familySpend = null;
+  if (run.is_terminal) {
+    try {
+      familySpend = await api(`/api/runs/${encodeURIComponent(runId)}/spend`);
+    } catch {
+      // Left null. The panel below simply omits the row, because the two figures
+      // beside it are read off the run record and are still true — losing the
+      // rollup must not cost the curator the costs panel.
+      familySpend = null;
     }
     if (state.poll !== generation) return;
   }
@@ -911,7 +950,19 @@ async function viewRun(runId) {
         // list* — labelling it as the estimate made before starting would put
         // the phase-1 price under a heading describing phase 2.
         ["Estimated to find the images", run.estimated_cost_usd === null ? null : `$${run.estimated_cost_usd}`],
-        ["Actually spent", run.actual_cost_usd === null ? null : `$${run.actual_cost_usd}`],
+        // Labelled as this run's own, because that is what it is: the record
+        // carries `run_cost(run_id).direct`. Left unqualified it reads as the
+        // whole cost of having asked, which it is not the moment a re-search
+        // descends from it.
+        ["Spent by this run alone", run.actual_cost_usd === null ? null : `$${run.actual_cost_usd}`],
+        // The family total — what asking for this cost altogether, re-searches
+        // included. A run billed little whose re-searches cost ten times more is
+        // exactly the case the two figures exist to keep apart, and it is the
+        // only place this number appears.
+        [
+          "Spent including every re-search",
+          familySpend === null ? null : `$${familySpend.cost_usd}`,
+        ],
         // Two numbers, never a verdict: the usage is this run's history and the
         // allowance is the deployment's setting as it stands now.
         ["Searches used", `${view.searches.used} of an allowance of ${view.searches.allowance}`],
@@ -1038,7 +1089,13 @@ function readHash() {
     state.view = head;
     state.detailId = decodeURIComponent(hash.slice(slash + 1));
   } else {
-    state.view = VIEWS[hash] ? hash : "works";
+    // The path is consulted when there is no fragment, so the typed and
+    // bookmarked URLs `pages.py` serves actually open the view they name.
+    // Without this every one of them fell through to the Works grid: the server
+    // answered 200 for /discovery and the client then rendered something else,
+    // which is a worse failure than a 404 because it looks like it worked.
+    const typed = window.location.pathname.replace(/^\//, "");
+    state.view = VIEWS[hash] ? hash : VIEWS[typed] ? typed : "works";
     state.detailId = null;
   }
   // A fragment change is a navigation like any other, and the view being left

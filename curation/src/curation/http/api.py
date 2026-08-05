@@ -6,9 +6,13 @@ belongs to the service layer, which the MCP tools call too. This is the same rul
 `mcp/bindings.py` states, and it is stated twice on purpose: it is the only thing
 keeping an agent and a click from disagreeing about the same catalogue.
 
-**Half the handlers below do not meet it today, and it binds anyway** — read it as
-what to write next, not as a description of what is here. Three shapes depart:
-read-back-after-mutate, composite reads, and HTTP conditional-request handling.
+**Some handlers below do not meet it today, and it binds anyway** — read it as
+what to write next, not as a description of what is here. **Three shapes depart**,
+and the shapes are the durable statement: read-back-after-mutate, composite reads,
+and HTTP conditional-request handling. (This paragraph said "half the handlers"
+while there were twelve; the run half took it to twenty without adding a
+departure, so the fraction moved and the sentence did not. A count of a thing
+that grows goes stale by being right once — the shapes do not.)
 Each carries its reason where it happens, and all of them are recorded with an
 open disposition under "Known departures" in the project preferences — which is
 the point, because a norm with unrecorded exceptions dies by accumulation rather
@@ -246,7 +250,25 @@ def list_runs(
     status: Annotated[str | None, Query()] = None,
     kind: Annotated[str | None, Query()] = None,
 ) -> RunListOut:
-    """Every run, newest first, optionally narrowed."""
+    """Every run, newest first, optionally narrowed.
+
+    **Nothing bounds this, and the bound is written down rather than assumed.**
+    `status` and `kind` are filters, not limits: omit both and the whole
+    `discovery_runs` table comes back, one row per search plus one per
+    re-search, for ever, with nothing pruning them. That is the only collection
+    on this surface with no page — `/api/works` caps at `MAX_LIST_LIMIT` and the
+    client pages it.
+
+    What makes it tolerable today is a fact about the deployment rather than a
+    mechanism: one household, one operator, searching in leisure-time sessions,
+    so a year of use is hundreds of rows and not millions. That is a real bound
+    but it is an editorial one, and the moment this surface serves anything else
+    it stops holding. Recorded here so the next reader inherits the reasoning
+    rather than the silence — and tracked as **issue #54**, which owns the cap
+    for both surfaces at once, because the MCP twin reads the same unbounded
+    method into a model's context window and fixing one alone is how the two
+    come to disagree.
+    """
     runs = _services(request).runner.list_runs(status=status, kind=kind)
     return RunListOut(runs=[_run(run) for run in runs], count=len(runs))
 

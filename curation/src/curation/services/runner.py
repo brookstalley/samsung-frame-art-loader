@@ -1,12 +1,25 @@
-"""Running a discovery run: starting it, gating it, pricing it, and reporting it.
+"""Running a discovery run, end to end: starting it, gating it, driving both
+phases, supplementing what they could not confirm, pricing it, and reporting it.
 
 `DiscoveryService` owns the *records* — the two state machines, the verdicts, the
 spend rows — and is deliberately synchronous and free of any notion of a process.
 This is the concern above it: the thing that decides a run should begin, hands
-phase 1 to an engine, writes what came back, and answers "where is it now". The
-split is the same one the catalogue and discovery services already draw. A record
-layer that also knew about worker threads and long-polls would be untestable
-without both.
+phase 1 to an engine, orchestrates phase 2 over `PhaseTwoEngine`, asks a wired
+collection for grounded alternatives when the identity gate refuses, writes what
+came back, and answers "where is it now". The split is the same one the catalogue
+and discovery services already draw. A record layer that also knew about worker
+threads and long-polls would be untestable without both.
+
+**This module is doing more than one thing, and that is recorded rather than
+denied.** Phase 2's provider work sits behind its own collaborator; the
+collection supplement's policy — which artists to ask about, how far to spread
+the answers, what bounds them, how a decline is handled — does not, so it shares
+a class with the worker threads, the wake protocol, the approval gate, pricing
+and view assembly. The seam is meant to widen when a facet compiled by a model
+arrives, and it would widen here. Extracting the supplement into a collaborator
+of its own, taking `(discovery, collection, bound)` and exposing `offer(...)`,
+is tracked rather than done in passing, because it moves code no chunk in flight
+is changing and deserves its own review.
 
 **Discovery must not block.** `start` returns a run handle and the work happens
 behind it, because a call that ran for the length of a discovery run would be

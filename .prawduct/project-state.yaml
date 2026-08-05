@@ -893,6 +893,42 @@ technical_decisions:
       alternatives_considered: ["Display plane as a thin client that fails when the server is down — rejected; inverts the availability priority."]
       date: 2026-07-19
   technology:
+    - decision: "Cover the browser client with Playwright against the real surface — a dev-only harness, with the shipped client staying a plain served file and no build step."
+      rationale: >
+        Operator's call 2026-08-05, settling issue #30 and its four options. The
+        client began as pure rendering and is not any more: Chunk 19A alone added
+        nine branches of prose composition over a run's tallies, a poll loop with
+        generation-based supersession, repaint suppression against a payload
+        signature, and a gate estimate with its own failure path. Chunk 19B adds
+        the review grid, alternates, verdicts and image selection — the most
+        stateful screen in the product. Neither Python suite executes a line of
+        any of it.
+
+        Playwright over the three cheaper options because it is the only one that
+        covers the defect class that has actually escaped here twice. Both
+        escapees were visual or wiring — `replaceChildren` coercing null to the
+        string "null" and putting it on the page, and every image tile silently
+        taking the shape of its own picture — and a jsdom harness over the pure
+        functions would have caught neither. A third arrived this session and was
+        found by reading rather than by any test: the run view repainted on every
+        poll, so a keyboard user standing on "Approve the list" lost the focus
+        every two seconds.
+
+        THE PI OBJECTION IN THE ISSUE DOES NOT APPLY AND SHOULD NOT BE REPEATED.
+        It reads as "a Node toolchain in a repo that has deliberately avoided
+        one, on a plane that has to run on a Pi" — but the Pi runs the *product*,
+        not the suite. The decision this could have violated is "no framework and
+        no build step" for the shipped client (`design_decisions.visual_direction`,
+        Chunk 10B), and that decision is untouched: `app.js` remains one hand-written
+        file served as-is, and nothing about deploying to the Pi changes. What
+        lands is a dev/CI dependency, in its own directory, that the display and
+        curation planes neither import nor know about.
+
+        The costs are named rather than discovered: ~200MB of downloaded browsers
+        on a dev machine, a slower CI leg, and a second language's package
+        manifest inside `curation/`. Accepted against a product whose only human
+        interface is this client.
+
     - decision: "Build the catalogue's durable tier as first-party SQLite shaped to 3tears' DurableStore contract; do not adopt 3tears collections, and take no 3tears core dependency."
       rationale: >
         Verified against the source rather than assumed (artifacts/3tears-integration-findings.md):
@@ -1680,6 +1716,7 @@ technical_decisions:
       date: 2026-07-19
   operational:
     - decision: "The service account for both systemd units is `tvpi`; ART_ROOT's path is deliberately left open until the cutover."
+      date: 2026-08-04
       rationale: >
         Decided 2026-08-04 by the operator. The name was the only part in
         question and it is kept: it is what the committed unit, deploy/README.md

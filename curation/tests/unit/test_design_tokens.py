@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from curation.http.pages import STATIC_DIR
+from curation.persistence.discovery_records import ResolutionStatus, WorkProvenance
 from curation.persistence.records import ArtworkStatus
 from curation.services.display_fit import DisplayFit
 
@@ -184,6 +185,18 @@ def test_every_state_a_badge_can_carry_has_a_block_of_its_own():
     states = [str(fit) for fit in DisplayFit]
     states += [str(status) for status in ArtworkStatus if status is not ArtworkStatus.ACCEPTED]
     states += ["unknown"]
+    #: The run view's two axes, which emit a per-state class the same way.
+    #: `resolutionBadge` writes `badge-${resolution_status}` and
+    #: `provenanceBadge` writes `badge-offered`. Without these, a sixth
+    #: `ResolutionStatus` is forced by `test_client_vocabulary.py` to supply a
+    #: glyph and a sentence and gets no signal that a block is owed — and falls
+    #: through to base `.badge`, which is `border: 1px solid`, pixel-identical to
+    #: `.badge-resolved`. Two states then paint alike with this guard still green.
+    states += [str(status) for status in ResolutionStatus]
+    #: `proposed` is excluded for the same reason `accepted` is: `provenanceBadge`
+    #: renders it with the base class deliberately, so the supplement is the thing
+    #: that stands out rather than the ordinary case.
+    states += [str(provenance) for provenance in WorkProvenance if provenance is not WorkProvenance.PROPOSED]
 
     for state in states:
         assert f".badge-{state}" in COMPONENT_RULES, f"the {state} badge has no block of its own"

@@ -946,10 +946,10 @@ Added 2026-08-05 with the run half of the browser surface, and exercised by
 |---|---|
 | `GET /api/estimate` | What asking would cost, before anything is committed. Optional `run_id` asks the phase-2 question instead. Spends nothing. |
 | `POST /api/runs` | Begin a run. Returns a handle at once; phase 1 proceeds on a worker behind it. Records `initiated_by: web_ui`. |
-| `GET /api/runs` | Every run, newest first. Optional `status` and `kind` narrow it. |
+| `GET /api/runs` | Every run, newest first. Optional `status` and `kind` narrow it — they are filters, not limits. **Uncapped, and the bound is editorial rather than mechanical:** one household searching in leisure sessions is hundreds of rows a year, not millions. It is the only collection route here with no page. Issue #54 owns the cap for this and its MCP twin together. |
 | `GET /api/runs/{id}` | The run, its works, its tallies and its search usage. |
 | `POST /api/runs/{id}/approve`, `/decline`, `/cancel` | The approval gate and the stop. Each returns the whole resulting view, as the MCP surface does, so the client repaints from the response. |
-| `GET /api/runs/{id}/spend` | What the run actually cost, including every re-search descended from it. |
+| `GET /api/runs/{id}/spend` | What the run actually cost, including every re-search descended from it. Read by the run view's costs panel once the run is terminal — it is the only place the **family total** appears, since the run record carries only the run's own direct spend. |
 
 **`GET /api/runs/{id}` answers immediately; the MCP `status` action holds for up
 to 45 seconds.** This is a deliberate divergence between the two surfaces rather

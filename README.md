@@ -35,5 +35,6 @@ cd curation && uv run python -m curation
 ```
 
 Then open `http://127.0.0.1:$CURATION_PORT/` — the browser interface serves the
-catalogue, themes, the wall manifest and a health view. MCP clients connect to
-`/mcp` on the same port, and the UI's own JSON API answers under `/api`.
+catalogue, discovery runs, themes, the wall manifest and a health view. MCP
+clients connect to `/mcp` on the same port, and the UI's own JSON API answers
+under `/api`.

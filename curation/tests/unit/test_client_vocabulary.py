@@ -20,7 +20,12 @@ import subprocess
 import pytest
 
 from curation.http.pages import STATIC_DIR
-from curation.persistence.discovery_records import ResolutionStatus, UnresolvedReason, WorkProvenance
+from curation.persistence.discovery_records import (
+    ResolutionStatus,
+    RunStatus,
+    UnresolvedReason,
+    WorkProvenance,
+)
 
 CLIENT_PATH = STATIC_DIR / "app.js"
 CLIENT = CLIENT_PATH.read_text(encoding="utf-8")
@@ -94,6 +99,27 @@ def test_every_unresolved_reason_has_words_for_a_curator(name):
 
 def test_every_resolution_status_has_words_for_a_curator():
     assert _object_keys("RESOLUTION_WORDS") == {str(status) for status in ResolutionStatus}
+
+
+def test_every_run_status_is_named_in_the_client():
+    """`runSentence` says what a run's state means, and it must cover all of them.
+
+    **A weaker check than the maps above, deliberately, and worth being exact
+    about what it does and does not prove.** The sentences are an if-chain rather
+    than an object literal because several branches read the tally, the run kind
+    and whether image resolution is wired — they are not one-liners and a map of
+    bare strings could not hold them. So this asserts only that each status value
+    appears somewhere in the client, not that it has a branch, nor that the
+    branch is right.
+
+    What it does buy is the property that matters: a tenth `RunStatus` added to
+    the enum fails here, at the moment it is cheap to write a sentence for.
+    Without it the fallback renders "This run is halted_by_something." — a raw
+    diagnostic token in the one sentence on the page that exists to tell a
+    curator what happened and what to do about it.
+    """
+    for status in RunStatus:
+        assert f'"{status}"' in CLIENT, f"the client has no sentence naming the {status} state"
 
 
 def test_every_resolution_status_has_a_glyph():
