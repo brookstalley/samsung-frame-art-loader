@@ -851,3 +851,52 @@ This is the same shape as the adjacent rule about inferences and observations
 entering a sentence in the same voice, with one difference worth keeping separate:
 a code comment's claim may stay true indefinitely, while an environment claim decays
 on its own and gives no signal when it does.
+
+## A guard evaluated inside the filters it guards can manufacture the confidence it exists to withhold
+
+Chunk 22, 2026-08-04. A browse offers works by artists a run named, and retries an
+unmatched name on its surname *only where the collection reports that surname
+naming one artist* — the rule exists because surnames collide and offering one
+artist's work under another's name is a misattribution nothing downstream catches.
+
+The natural implementation asks that question in the same request as the browse,
+inheriting its filters. Measured against the live API, that is exactly wrong: the
+Art Institute holds one Antonio Martorell (a `Graphic Design`, which the
+wall-appropriate type filter removes) and one Bernat Martorell painting. Filtered,
+the check sees a single artist and licenses the retry; unfiltered, it sees both and
+refuses. **The filter that makes the feature correct is the filter that makes its
+guard wrong**, because it hides one of the two colliding artists.
+
+Generalises past this case: a check that answers "is this unambiguous?" must range
+over the space the ambiguity lives in. Narrowing first does not make the check
+cheaper, it makes it answer a different question — and the wrong answer is the
+confident one. The unit test reproduces the asymmetry (the fake responds
+differently depending on whether the request carries the type filter), so an
+implementation that scopes it wrongly fails by offering a work rather than by
+looking wrong.
+
+## A computed value with no production reader is an unimplemented requirement
+
+Chunk 22, 2026-08-04, and **all three Critic reviewers found it independently** —
+correctness, design and sustainability — which is the strongest signal this review
+process has produced.
+
+`product-brief.md` required that works a collection offers "count against a per-run
+bound reported separately from the proposed count". `RunView.proposed_count` and
+`RunView.offered_count` were written, and unit-tested, and read by nothing. Every
+run-level figure still counted `len(works)`, so for the chunk's own acceptance
+scenario — one proposed work unresolved, twelve offered — the MCP surface reported
+`{"total": 13, "resolved": 12}` and the sentence a curator reads said "12 of 13
+works have an image": a resolution rate the run had not achieved, on the same
+surface the resolution floor had just been made load-bearing on.
+
+The failure mode is specific and worth naming apart from forgetting. The
+requirement's *mechanism* was implemented and its *consequence* was not — and
+because the properties carried tests, the work looked complete from the inside.
+Tests over a value prove the value is right; they say nothing about whether
+anything asks for it. Four separate records asserted the reporting existed,
+including the comment directly above the two unused properties.
+
+The check that would have caught it costs one question: **name the surface that
+displays this and the caller that reads it.** If the only answer is a test, the
+requirement is not built.
