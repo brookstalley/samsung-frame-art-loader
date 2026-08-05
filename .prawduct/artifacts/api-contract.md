@@ -499,7 +499,11 @@ dropping `resolution_status` or `instances_held` from the row, and both carry th
 distinction between "nothing was found" and "we could not look".
 
 **The row gains `unresolved_reason` beside `resolution_status`** — which kind of
-nothing, null unless the work is unresolved (`data-model.md` § CandidateWork). It
+nothing, null unless the work is unresolved, **with the one exception
+`data-model.md` § CandidateWork records: a row whose attempt predates the
+column reads null beside `unresolved`.** The column was added nullable and
+existing files are widened without backfill, so a null there means "this
+attempt happened before the reason was recorded", never "no reason applies". It
 is a short enum and it is the answer to the question `resolution_status` raises, so
 a caller that has one and not the other has to fetch each work to act.
 

@@ -918,14 +918,6 @@ filenames encode identity in at least three mutually inconsistent conventions
 
 ## Reachability of an enum value is a property of the paths that ARRIVE at it, not of the site that looks most likely to set it — search for a route, never reason from one write site, or a value gets ruled out while a test covering its real path already passes
 
-## A guard evaluated inside the filters it guards can manufacture the confidence it exists to withhold
+## A guard evaluated inside the filters it guards can manufacture the confidence it exists to withhold — range a safety check over the population the HAZARD lives in, never the narrowed one the feature reads, because the filter that makes the feature correct is the one that can hide the colliding case
 
-**When a safety check narrows a population before asking its question, ask whether
-the narrowing can hide the very case the check exists to catch** — evaluate the
-check over the population the *hazard* lives in, not the one the feature reads.
-
-## A computed value with no production reader is an unimplemented requirement
-
-**Before calling a "report X separately" requirement done, name the surface that
-shows it and the caller that reads it** — a property with tests and no consumer
-looks finished from inside and changes nothing a user sees.
+## A computed value with no production reader is an unimplemented requirement — before calling a "report X separately" requirement done, name the surface that displays it and the caller that reads it, because a property with tests and no consumer looks finished from inside and changes nothing a user sees

@@ -402,3 +402,26 @@ def test_a_name_with_a_parenthesised_alias_retries_on_the_name_itself():
 
     assert group.matched == 21, "the parenthesised name was not retried on the name itself"
     assert asked_for(sent[-1]) == {"Kandinsky"}
+
+
+def test_a_bucket_whose_top_hits_are_null_is_an_empty_facet_rather_than_a_crash():
+    """The museum sending `null` where an object was expected must not fail a run.
+
+    A chained unwrap raises `AttributeError` here, which escapes a caller that
+    catches only a browse failure and ends an otherwise successful run as an
+    unexplained fault — the opposite of a supplement that must not take a run
+    down with it. Distinct from a *missing* aggregation, which the chained form
+    already survived, so that test could not have caught this.
+    """
+    for bucket in (
+        {"doc_count": 5, "top": None},
+        {"doc_count": 5, "top": {"hits": None}},
+        {"doc_count": 5, "top": {"hits": {"hits": None}}},
+        {"doc_count": 5},
+    ):
+        client, _ = browse_client(lambda body, b=bucket: httpx.Response(200, json=a_response({"Claude Monet": b})))
+
+        (group,) = client.browse([BrowseQuery(artist="Claude Monet")], per_query=3)
+
+        assert group.works == ()
+        assert group.matched == 5, "the facet still matched; it simply carried no readable hits"

@@ -1331,16 +1331,25 @@ def _run_notice(view: RunView) -> str:
                 "Call status again to keep watching."
             )
         return (
-            f"The work list of {view.work_count} works is settled and the run is looking for an image of each. "
+            # The proposed count, not the total: the supplement writes its works
+            # during this same window, so a total read mid-run climbs while the
+            # sentence claims a settled work list.
+            f"The work list of {view.proposed_count} works is settled and the run is looking for an image of each. "
             "Call status again to keep watching."
         )
     if status is RunStatus.COMPLETED:
         # Rated against what the model proposed, never against the total: the
         # works the collection offered arrived carrying their images, so counting
-        # them in the numerator reports a retrieval rate nothing achieved.
-        resolved_proposals = view.resolved - view.offered_count
-        settled = f"This run finished: {resolved_proposals} of {view.proposed_count} proposed works have an image."
-        if view.offered_count:
+        # them in the numerator reports a retrieval rate nothing achieved. Both
+        # figures are direct counts — a numerator derived by subtracting the
+        # offered works goes negative the moment one of them is re-searched to
+        # nothing, which is a flow this same file recommends.
+        settled = f"This run finished: {view.resolved_proposals} of {view.proposed_count} proposed works have an image."
+        # Only a discovery run can have offered anything: a re-search is refused
+        # at the record layer and returns early in the runner, so this sentence
+        # on one would describe an offer that never happened — over works whose
+        # provenance is the parent run's.
+        if view.offered_count and view.run.kind is RunKind.DISCOVERY:
             settled += (
                 f" Separately, the collection offered {view.offered_count} more works by artists this run named "
                 "but could not confirm. They are labelled `offered` and are not what was asked for."

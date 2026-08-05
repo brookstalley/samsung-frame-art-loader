@@ -2146,10 +2146,18 @@ binds already exists and is contract-tested.
   service and persistence docstrings, the phase-2 engine, and three test docstrings
   and comments that state it as the thing being tested. The sweep is
   `grep -rn --include='*.md' --include='*.py' -e 'invented the work' -e 'may have
-  invented' -e 'therefore suspect' .`, run before the chunk is called done, with
-  `change-log.md`, `reflections.md` and `learnings*.md` excluded as the historical
-  record they are. Written as a command rather than a count because a count is
-  wrong the moment anyone adds a seventh
+  invented' -e 'therefore suspect' -e 'may not exist' -e 'might not exist' .`, run
+  before the chunk is called done, with `change-log.md`, `reflections.md` and
+  `learnings*.md` excluded as the historical record they are. Written as a command
+  rather than a count because a count is wrong the moment anyone adds a seventh.
+
+  **The last two terms were added 2026-08-04, and their absence is the finding.**
+  The original three were built from the freshly-narrowed text, so they could not
+  match the paraphrase the surfaces actually shipped — "the signal a proposed work
+  may not exist", live on three MCP-facing strings — and the sweep came back clean
+  while the broad claim still reached callers. A sweep's blind spot is the
+  vocabulary of whoever just rewrote the text; the second pass has to be built from
+  what the OLD text would have said
 - **Tests:** unit over every reason route and the precedence rule, plus the
   round trip to the store and the wire, since a reason derived and not reported
   is not a reason a curator has.

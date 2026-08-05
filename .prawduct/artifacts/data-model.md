@@ -931,6 +931,15 @@ selected. Produced by phase 2.
 > *through* a provider that offers tiles, a file, or an API, and nothing
 > downstream can recover which.
 
+> **A fourth derivation exists and is not a comparison result.** An `offered`
+> candidate — one a wired collection volunteered rather than the model naming it
+> — was never checked against anything: the collection produced the work and the
+> picture of it from one row of its own catalogue. Its instance is recorded at the
+> same value as a confirmed title-and-artist match and means something different,
+> so **anything ranking, thresholding or auto-accepting on `confidence` is reading
+> two kinds of number** and must consult `provenance` to tell them apart. The
+> reasoning is restated at § CandidateWork, where `provenance` is defined.
+
 ### Where a candidate's fields land on acceptance
 
 Promotion is mechanical, and this table is what makes "mirror rather than

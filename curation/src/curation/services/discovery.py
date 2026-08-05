@@ -81,7 +81,12 @@ class VerdictOutcome:
 
 @dataclass(frozen=True, slots=True)
 class RunResults:
-    """A run's proposed works, split by whether an image was found for them.
+    """A run's works, split by whether an image was found for them.
+
+    **Not "proposed works" any more**: a run may also carry works a wired
+    collection offered, and they sit in these same buckets. Anything reporting a
+    number to a person has to split them by `provenance` first — the curator
+    approved a list of a stated size and the supplement adds to it.
 
     `unresolved` is a bucket rather than an omission: a run that quietly returned
     a shorter list would be discarding its own most useful signal. **What the

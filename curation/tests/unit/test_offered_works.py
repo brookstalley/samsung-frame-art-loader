@@ -9,6 +9,8 @@ named.
 Phase 2 runs on the calling thread via the `spawn` seam, as its sibling does.
 """
 
+from dataclasses import replace
+
 import pytest
 from fakes import FakeCollectionBrowse, FakeImageSearch, a_collection_holding, a_work, an_image
 
@@ -542,3 +544,97 @@ def test_the_search_allowance_is_sized_on_the_works_phase_two_searched(services,
 
     expected = settings.discovery_settings.phase1_search_allowance + 1 * settings.discovery_settings.phase2_searches_per_work
     assert view.search_allowance == expected
+
+
+def test_an_offered_work_re_searched_to_nothing_does_not_make_the_count_negative(services, engine, runner, collection):
+    """The state a subtraction cannot survive, and it is reachable by the documented route.
+
+    An offered work arrives resolved. A curator who turns down its instance is
+    told to re-search; a re-search that finds nothing derives `unresolved` on it.
+    The run stays completed, so `resolved` falls while `offered` does not — and a
+    numerator computed as `resolved - offered` goes negative, printing
+    "-1 of 1 proposed works have an image".
+    """
+    from curation.mcp.bindings import _run_notice
+
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Kelly 1", "Kelly 2"]}).holdings
+
+    run_id = start(runner).id
+    for gift in offered(services, run_id):
+        (image,) = services.discovery.list_candidate_images(gift.id)
+        services.discovery.reject_image(image.id)
+        services.discovery.record_resolution(gift.id)
+
+    view = runner.run_status(run_id, wait=False)
+
+    assert view.resolved_proposals == 0
+    assert "0 of 1 proposed works have an image" in _run_notice(view)
+    assert "-1" not in _run_notice(view)
+
+
+def test_a_re_search_of_an_offered_work_is_allowed_its_searches(services, engine, runner, collection, settings):
+    """A re-search covers works owned by its parent, carrying the parent's provenance.
+
+    Sizing its allowance by `proposed` therefore counts zero for a re-search of
+    offered works, and the surface publishes `exhausted: true` for a run that has
+    not spent a search yet — on the operation a curator may repeat freely.
+    """
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Kelly 1"]}).holdings
+
+    run_id = start(runner).id
+    (gift,) = offered(services, run_id)
+
+    resolve = runner.resolve_images(candidate_work_ids=[gift.id], initiated_by=InitiatedBy.MCP_CLIENT)
+    view = runner.run_status(resolve.id, wait=False)
+
+    assert view.search_allowance == settings.discovery_settings.phase2_searches_per_work
+    assert view.searches_exhausted is False
+
+
+def test_a_re_search_never_claims_the_collection_offered_anything(services, engine, runner, collection):
+    """The offered sentence belongs to the run that could have made an offer.
+
+    A re-search is refused at the record layer and returns early in the runner,
+    so a sentence about works it offered describes something that never happened
+    — over works whose provenance belongs to the parent run.
+    """
+    from curation.mcp.bindings import _run_notice
+
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Kelly 1"]}).holdings
+
+    run_id = start(runner).id
+    (gift,) = offered(services, run_id)
+    resolve = runner.resolve_images(candidate_work_ids=[gift.id], initiated_by=InitiatedBy.MCP_CLIENT)
+
+    assert "collection offered" not in _run_notice(runner.run_status(resolve.id, wait=False))
+
+
+def test_a_run_still_in_flight_describes_the_work_list_it_is_resolving(services, engine, runner, collection):
+    """The supplement writes during this window, so a merged total climbs mid-run.
+
+    Built as a view rather than driven, because the state is transient by
+    construction: the supplement's writes and `_close_phase_two` are consecutive
+    statements, so a run read from the outside is already finished. `_run_notice`
+    is a pure function of the view, which is how the other notice tests reach it.
+    """
+    from curation.mcp.bindings import _run_notice
+    from curation.services.runner import RunView
+
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Kelly 1", "Kelly 2"]}).holdings
+    run_id = start(runner).id
+
+    in_flight = RunView(
+        run=replace(services.discovery.get_run(run_id), status=RunStatus.RESOLVING_IMAGES),
+        works=works_of(services, run_id),
+        searches_used=1,
+        search_allowance=10,
+        image_resolution_available=True,
+    )
+
+    notice = _run_notice(in_flight)
+
+    assert "work list of 1 works is settled" in notice, "the sentence counted works the collection had just added"

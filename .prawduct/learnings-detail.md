@@ -852,7 +852,7 @@ entering a sentence in the same voice, with one difference worth keeping separat
 a code comment's claim may stay true indefinitely, while an environment claim decays
 on its own and gives no signal when it does.
 
-## A guard evaluated inside the filters it guards can manufacture the confidence it exists to withhold
+## A guard evaluated inside the filters it guards can manufacture the confidence it exists to withhold — range a safety check over the population the HAZARD lives in, never the narrowed one the feature reads, because the filter that makes the feature correct is the one that can hide the colliding case
 
 Chunk 22, 2026-08-04. A browse offers works by artists a run named, and retries an
 unmatched name on its surname *only where the collection reports that surname
@@ -875,7 +875,7 @@ differently depending on whether the request carries the type filter), so an
 implementation that scopes it wrongly fails by offering a work rather than by
 looking wrong.
 
-## A computed value with no production reader is an unimplemented requirement
+## A computed value with no production reader is an unimplemented requirement — before calling a "report X separately" requirement done, name the surface that displays it and the caller that reads it, because a property with tests and no consumer looks finished from inside and changes nothing a user sees
 
 Chunk 22, 2026-08-04, and **all three Critic reviewers found it independently** —
 correctness, design and sustainability — which is the strongest signal this review

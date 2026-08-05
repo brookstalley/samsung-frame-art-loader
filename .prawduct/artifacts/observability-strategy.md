@@ -397,6 +397,7 @@ signal exists:
 
 | Failure | Signal |
 |---|---|
+| The wired collection could not be browsed | `browse.unreachable` at WARNING, and nothing else — a supplement is swallowed so it cannot fail the run, which makes this line the only trace that one was attempted. A run whose `browse.offered` never appears after `browse.searched` was reached but offered nothing |
 | Display plane stalled or dead | Heartbeat stops advancing; panel shows its age |
 | TV unreachable | Heartbeat carries TV connectivity state; WARNING in the journal |
 | Manifest references a missing file | WARNING per work, and the work is skipped — the run continues |

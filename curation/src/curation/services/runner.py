@@ -251,6 +251,25 @@ class RunView:
         """How many works a wired collection volunteered on top of that list."""
         return sum(1 for work in self.works if work.provenance is WorkProvenance.OFFERED)
 
+    @property
+    def resolved_proposals(self) -> int:
+        """How many of the model's own works ended up with an image.
+
+        **Counted directly, never as `resolved` minus `offered_count`.** That
+        subtraction is right only while every offered work is still resolved, and
+        an offered work does not stay that way: a curator who turns down its
+        instance is told to re-search, and a re-search that finds nothing derives
+        `unresolved` on it. The run stays completed, the subtraction goes
+        negative, and the sentence a curator reads becomes "-1 of 1 proposed
+        works have an image". Every other tally on this view is a direct count
+        over the works for exactly this reason.
+        """
+        return sum(
+            1
+            for work in self.works
+            if work.provenance is WorkProvenance.PROPOSED and work.resolution_status is ResolutionStatus.RESOLVED
+        )
+
     # The three tallies are counted off the works rather than carried beside
     # them, because a view holding both could be built with a count that
     # disagrees with the list under it — and the notice quotes the counts while
@@ -274,6 +293,25 @@ class RunView:
     def searches_exhausted(self) -> bool:
         """Whether this run has used every search its allowance currently permits."""
         return self.searches_used >= self.search_allowance
+
+
+def _searchable(run: DiscoveryRun, works: Sequence[CandidateWork]) -> int:
+    """How many of a run's works phase 2 will actually search, for sizing its allowance.
+
+    The two run kinds count differently, and conflating them publishes a bound a
+    run cannot live under. A **discovery** run searches the works the model
+    proposed; one the collection offered arrived carrying its image and was never
+    searched, so counting it reports an allowance larger than anything the run
+    could have spent.
+
+    A **re-search** searches everything it covers, whatever provenance those works
+    carry. Its works belong to the *parent* run and carry the parent's
+    provenance — so filtering them by `PROPOSED` here would size a re-search of
+    offered works at zero and publish `exhausted: true` for a run about to spend.
+    """
+    if run.kind is RunKind.RESOLVE:
+        return len(works)
+    return sum(1 for work in works if work.provenance is WorkProvenance.PROPOSED)
 
 
 def _round_robin(groups: Sequence[OfferedGroup]) -> Iterator[tuple[FoundImage, OfferedGroup]]:
@@ -1140,14 +1178,7 @@ class DiscoveryRunner:
             run=results.run,
             works=results.works,
             searches_used=self._discovery.searches_in_run(run_id),
-            # Sized on the works phase 2 actually searched, which is the works
-            # the model proposed. An offered work reached the run *through* the
-            # collection rather than through a search, so counting it here would
-            # report an allowance larger than anything this run could have spent.
-            search_allowance=self._allowance_for(
-                results.run,
-                sum(1 for work in results.works if work.provenance is WorkProvenance.PROPOSED),
-            ),
+            search_allowance=self._allowance_for(results.run, _searchable(results.run, results.works)),
             image_resolution_available=self._images is not None,
         )
 
