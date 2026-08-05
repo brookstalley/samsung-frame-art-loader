@@ -920,4 +920,19 @@ filenames encode identity in at least three mutually inconsistent conventions
 
 ## A guard evaluated inside the filters it guards can manufacture the confidence it exists to withhold — range a safety check over the population the HAZARD lives in, never the narrowed one the feature reads, because the filter that makes the feature correct is the one that can hide the colliding case
 
-## A computed value with no production reader is an unimplemented requirement — before calling a "report X separately" requirement done, name the surface that displays it and the caller that reads it, because a property with tests and no consumer looks finished from inside and changes nothing a user sees
+## A computed value with no production reader is an unimplemented requirement — before calling a "report X separately" requirement done, grep the symbol and check that a caller outside `tests/` exists, because a property with tests and no consumer looks finished from inside and changes nothing a user sees
+
+**Recurred one chunk after it was written, which is why the rule now names a
+command rather than an intention.** Chunk 22 shipped `proposed_count` and
+`offered_count` computed, tested and wired to nothing; the rule was written. Chunk
+19A then shipped `GET /api/runs/{id}/spend`, whose one distinctive figure — the
+family total including descended re-searches — reached no screen, and the Critic
+quoted this rule back. Both were caught by review, neither by the author, and the
+author had written this line.
+
+The check is mechanical and takes seconds: **grep the symbol; if every hit is in
+`tests/`, it is not implemented.** "Name the surface that displays it" was the
+first form of this rule and it failed twice, because naming a surface is
+something you can do from memory while looking at the wrong thing. See
+[[a-fix-commit-earns-the-same-scrutiny]] for the neighbouring case — the same
+blindness to one's own just-written code.

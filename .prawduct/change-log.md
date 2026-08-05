@@ -48,6 +48,39 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-05: The curation suite runs across cores
+
+**Why:** 1,752 tests at ~118s, with no hotspot to attack — roughly 67ms mean and
+a slowest single test of 1.4s. The bulk is integration tests booting a real
+uvicorn per class and waiting on it, and that wait is one this repo deliberately
+will not remove: an in-process ASGI transport skips the mounted MCP lifespan and
+would pass against an application that fails every real request. Parallelism is
+the only lever that does not cost correctness.
+
+**118s → 21s**, stable across four runs, `-n auto` in the curation plane's
+`addopts`. The root suite is 52 tests in under two seconds and is left serial.
+
+**One race closed first, because parallelism is what would have exposed it.**
+`_free_port()` claimed a port from the OS, closed the socket, and handed uvicorn
+the *number* — a window in which anything else on the machine can take it. One
+suite alone almost never loses that race; eight workers booting servers
+continuously from the same ephemeral range lose it regularly, and it would have
+surfaced as an unexplained flake blamed on xdist rather than on the fixture.
+uvicorn is now given port 0 and the port is read back off the socket it bound.
+Nothing else needed isolating — `tmp_path` is per test and the catalogue is a
+fresh sqlite file per test.
+
+**A measurement recorded because it contradicts the obvious expectation.** The
+mutation sweep is what you would most want this to accelerate: CLAUDE.md makes it
+the acceptance evidence for every chunk and its cost is `(mutations + 1) × suite
+time`. It does not help. The same ten-mutation sweep over two test files took
+**67s serial against 65s parallel** — a narrow slice is dominated by per-run
+worker startup, which `-n auto` adds rather than removes. The win is real only
+when the slice is broad enough that each run pays something like the full-suite
+cost. Both figures are in `CLAUDE.md` and `pyproject.toml` so nobody re-derives
+them, and the first draft of that `pyproject.toml` comment claimed the sweep as
+the main beneficiary before the measurement contradicted it.
+
 ## 2026-08-05: Chunk 19A — the run half of the browser surface
 
 <!-- prawduct: chunks=19A | scope=v1-build -->
@@ -114,6 +147,49 @@ acquisition shipped 2026-08-03.
 review grid, the verdict, image selection, and the health panel's completion are
 Chunk 19B. Issue #2's component box stays open, because it names the grid as well
 as intent entry and only 19B can close it.
+
+**Critic — `rev-20260805T131544Z-6c659477`, cumulative over `dd0529a…de961bd`
+(28 commits, three reviewers): 0 blocking, 7 warnings, 8 notes.** Ten fixed in
+one pass, two filed, four accepted.
+
+The one worth carrying forward is **this chunk failing a learning this same
+branch added five days earlier**. `GET /api/runs/{id}/spend` shipped with no
+production reader, and the figure only it carries — the family total including
+every re-search descended from a run — reached no human surface, because the
+costs panel read the run record's own direct spend. That is exactly "a computed
+value with no production reader is an unimplemented requirement wearing the
+costume of a finished one". **The learning was written, and the same shape
+recurred in the next chunk anyway** — which is the second time this branch has
+demonstrated that naming a failure in prose does not prevent its next instance.
+The panel now reads it and the two figures are labelled apart.
+
+Also fixed: the badge-block guard did not cover the run view's two new per-state
+class axes, so a sixth `ResolutionStatus` would have painted identically to
+`resolved` with the guard written to prevent that still green (R-1); `/discovery`
+answered 200 and then rendered the Works grid, because routing read only the
+fragment (R-3); `api.py` went from 12 handlers to 20 without adding a departure,
+so "half the handlers" and "six of twelve" both became 50% against a real 30%
+(R-4); a failed poll threw before it could reschedule, leaving a stale page that
+read as current and never recovered (R-12); plus the README's tab list, a
+presence check for `RunStatus`'s nine client sentences, a missing `date:`, and
+the run-list bound written down.
+
+**Filed rather than done, both moving code no chunk in flight is touching:**
+[#80](https://github.com/brookstalley/samsung-frame-art-loader/issues/80),
+extracting the collection supplement out of a 1,260-line runner that also owns
+the worker threads, the wake protocol, the gate and pricing; and
+[#81](https://github.com/brookstalley/samsung-frame-art-loader/issues/81),
+offered works' previews having no reclaim path — twelve per run at `PENDING`,
+reclaimable only on a terminal verdict, and 19A ships no verdict control, so
+previews of works nobody asked for accumulate on the Pi's SD card.
+
+**Issue #30 was settled mid-chunk and became its own chunk.** Its acceptance
+required the client-coverage decision *before* Chunk 19, and 19A shipped first.
+The operator chose Playwright against the real surface (recorded in
+`technical_decisions.technology` with its costs); **Chunk 23** now sits between
+19A and 19B to build it. The objection the issue records against a Node toolchain
+is about the wrong thing and the decision says so: the Pi runs the product, not
+the suite, and the shipped client stays one hand-written file with no build step.
 
 ## 2026-08-04: Chunk 22 — the collection's own answer when the gate refuses
 
