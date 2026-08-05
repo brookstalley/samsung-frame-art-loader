@@ -278,6 +278,33 @@ Developer preferences for how code is written in this project. Captured during d
 - **PR merge**: wait_for_user (default: wait_for_user — present the PR for user review before merging; set to "automatic" to merge after CI passes and review is clean)
 - **PR merge strategy**: merge commit (default: merge commit — `gh pr merge --merge`; preserves each commit's identity so a reused branch's merge-base stays correct and the review/PR gates don't re-review already-merged work; set to "squash" for one linear commit per PR, or "rebase" — with either, branches are single-use: delete after merge and never reuse, because the rewritten history strands a reused branch's merge-base)
 - **Commit attribution**: none (default: none — no `Co-Authored-By`, `Signed-off-by`, or "Generated with …" trailers on commits or PR bodies; set to "co-authored" to add a Claude `Co-Authored-By` trailer)
+- **Found problems — fix or file**: **strong bias towards fixing.** Filing is the
+  exception and needs one of exactly two reasons:
+  1. it is **orthogonal to the current work AND would require design or
+     requirements**, or
+  2. it is **medium or larger** work.
+
+  Both halves of (1) must hold. Orthogonal but obvious is a fix; entangled but
+  fiddly is a fix. Only "not what I am doing" *and* "somebody has to decide
+  something" earns an issue.
+
+  **Why**, in the operator's terms: an issue is a promise to pay attention later,
+  and a backlog of small obvious repairs is a pile of promises nobody redeems.
+  A one-line fix costs less now — while the file is open and the cause is
+  understood — than it costs to write up, triage, re-find, re-understand and
+  re-verify. Prawduct's own guidance ("accept is the default; filing everything
+  turns the backlog into a guilt pile") argues the same way from the other end:
+  this preference says the third option, *just fix it*, is the one to reach for
+  first.
+
+  **Retroactive**: yes, to anything already filed. An open issue meeting neither
+  test is a fix waiting to be done, not a backlog item — closing it by doing it
+  is the intended outcome. Ratified 2026-08-05, prompted by a UX walkthrough that
+  filed nine items where several were small and self-evident.
+
+  **This does not license scope creep.** A fix taken under this preference is
+  still reported — silently widening a diff is the failure mode it trades
+  against, so say what you fixed and why it did not meet the filing bar.
 
 ---
 
@@ -299,6 +326,7 @@ This per-preference table is the product's **norm index** (`/prawduct:methodolog
 
 | Preference / norm | Mechanism | Enforcement artifact | Audit home | Why |
 |---|---|---|---|---|
+| **A found problem is fixed, not filed, unless it is (orthogonal AND needs design) or medium+** | Critic | — | janitor | Judgment-required by construction: "would this need design" and "is this medium+" are exactly the calls no check can make, and a mechanical rule would either block every issue or none. What a reviewer *can* check is the one thing that makes it auditable — a filed item should carry which of the two tests it met, and an issue asserting neither is the finding. Retroactive to open items, so the audit runs against the backlog rather than only against new work. |
 | black formatting, line-length 130 | Linter (the formatting) + Test (the plane boundary) | `[tool.black]`, both `pyproject.toml`s; `tests/preferences/test_tool_config.py` | janitor | Already configured; removes formatting from review entirely. *(Corrected 2026-08-01: the artifact read `pyproject.toml` singular, written when the repo had one. Both planes carry a `[tool.black]` at line-length 130 — the root at `py312`, curation at `py314` — and a reader checking the norm against "the" pyproject would have audited half of it.)* *(Extended 2026-08-02 by the norm sweep: the root config drew the plane boundary for ruff and not for black, so `black .` at the root walked both planes — 103 files, not 18 — and formatted curation under `py312`. Fixed, and given a Test half, because the boundary is now drawn twice in two syntaxes (ruff takes a list of paths, black a regex) with nothing making them agree. The output was byte-identical either way, which is the whole argument for a mechanical guard: the split had stopped holding for formatting while still holding for lint, and no green suite anywhere would have said so.)* |
 | The shipped browser client is executed by a test, not only read | Test | `curation/tests/browser/`, marker `browser`; `.github/workflows/browser.yml` runs it on pull requests and on pushes to `main`, and `.github/scripts/assert_tests_ran.py` fails the job if it skipped | advisory | Added 2026-08-05 with the harness (issue #30). `app.js` is the product's only human interface and neither Python suite ran a line of it, which is how three defects reached a running product — `replaceChildren` printing the string "null", every image tile taking the shape of its own picture, and a poll loop stealing focus every two seconds from the one screen with a decision on it. **The mechanism is a Test rather than the Critic because reading is what missed all three.** The bar for a behaviour being covered here is the mutation sweep, not the existence of a test: `tools/mutation_sweep.py` drives `app.js` and every behaviour this suite claims was demonstrated by deleting it and watching a test go red. It found a test whose fixture could not fail, which is exactly the failure mode a green suite cannot report. |
 | snake_case functions, PascalCase classes | Critic | — | janitor | Ruff landed 2026-07-27 and `N` was **deliberately not selected**: the 2024 modules would fail it in bulk on names that are load-bearing at call sites, and a rule that has to be waived everywhere teaches people to waive rules. Stays with the Critic; revisit when the legacy modules are retired. |
