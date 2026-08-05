@@ -1068,3 +1068,41 @@ The general form: a generator answers "what does this input produce". Whether th
 input is *right* is answered by comparing it to how every previous instance of the
 same thing was written. An absent field is the case where those two questions look
 identical and are not.
+
+## A sentence a UI shows is a claim about what the software can do, and needs the same verification as a docstring's claim about a guard — before writing "do X to fix this", grep for the endpoint and the control that would let a user do X, because the wording ships as a promise and a mutation check cannot tell a reachable assertion from a true one
+
+2026-08-05, and it arrived inside the fix for the defect it repeats.
+
+A review card said "No scan was found for this work" for a work whose every scan
+the curator had turned down — two states the producer distinguishes, flattened by
+a client that never read the field distinguishing them. The fix replaced the
+sentence with one that ended **"Restore one from the scans below to judge it
+again."** Nobody could. Every control in that panel renders as `null` once an
+instance is rejected; there is no restore endpoint; and `select_image` refuses a
+rejected instance *by design*, its docstring making the refusal a requirement so
+that a rejection survives the next re-search. The fix for a card that lied
+invented a new lie, on the same card, and shipped a test asserting the false
+string verbatim.
+
+**Two things make this worth a rule rather than a shrug.**
+
+*The true wording was already in the same file, sixty lines up.*
+`REASON_SENTENCES.all_rejected` reads "You have turned down everything that was
+found for it." Composing a new sentence rather than reaching for the existing one
+is what created the opportunity — retrieval over generation, arriving at the
+granularity of a single sentence, in a file whose reason-sentence table exists
+precisely so that this state reads identically everywhere a curator meets it.
+
+*The mutation check passed and proved nothing about it.* The test was broken on
+purpose and did go red, which confirmed the assertion was **reachable**. It was —
+and what it pinned was false. **Mutation testing asks whether a test can fail,
+never whether what it asserts is true.** That is a real limit on the technique
+this repo leans on hardest, and it is why a UI string needs the grep as well as
+the sweep.
+
+The whole session had been finding this exact shape in other forms — a guard whose
+stated limit was not its real one, a test that defended a copy of a branch rather
+than the branch, a package manifest asserting a check that had never existed
+(twice, the second time by me). The class is *durable text asserting a capability
+nobody checked*, and user-facing copy is the instance that reaches an actual human
+rather than the next maintainer.
