@@ -17,7 +17,7 @@ demonstrate them.
 
 import pytest
 
-from curation.discovery.dedup import work_dedup_key
+from curation.discovery.dedup import clean_name, work_dedup_key
 
 
 def test_the_same_work_named_the_same_way_keys_the_same():
@@ -224,3 +224,119 @@ def test_a_translated_title_still_splits_a_work_and_that_is_recorded():
     assert work_dedup_key(title="Les Demoiselles d'Avignon", artist="Pablo Picasso") != work_dedup_key(
         title="The Young Ladies of Avignon", artist="Pablo Picasso"
     )
+
+
+#: The seven titles a real Dalí run stored, and the title each one is. Written
+#: out rather than derived, because the point of the case is the exact string a
+#: curator was shown — a fixture that re-derived it from a rule would agree with
+#: whatever the rule currently does.
+DAMAGED_IN_THE_CATALOGUE = [
+    ("The Persistence of Memory (1931) - cited from blog.artsper.com (", "The Persistence of Memory"),
+    ("Lobster Telephone (1938) - cited from tate.org.uk (", "Lobster Telephone"),
+    ("Metamorphosis of Narcissus (1937) - cited from tate.org.uk (", "Metamorphosis of Narcissus"),
+    ("Illumined Pleasures (1929) - cited from moma.org (", "Illumined Pleasures"),
+    ("Mountain Lake (1938) - cited from tate.org.uk (", "Mountain Lake"),
+    ("Portrait of my Sister (1925) - cited from salvador-dali.org (", "Portrait of my Sister"),
+    ("Mae West Lips Sofa (1938) - cited from christies.com (", "Mae West Lips Sofa"),
+]
+
+
+@pytest.mark.parametrize(("stored", "work"), DAMAGED_IN_THE_CATALOGUE)
+def test_a_citation_the_old_rule_half_removed_keys_as_the_work_it_names(stored, work):
+    """The seven rows the catalogue actually held, each keyed as its painting.
+
+    These are not hypothetical shapes: a Dalí run stored every one of them, and
+    the curator judged the works from cards reading `Lobster Telephone (1938) -
+    cited from tate.org.uk (`. The damage was ours — a greedy URL pattern ate the
+    bracket that closed the citation and left the one that opened it — so the
+    same painting proposed cleanly keyed as a different work and suppression
+    would not have carried between them.
+    """
+    assert work_dedup_key(title=stored, artist="Salvador Dalí") == work_dedup_key(title=work, artist="Salvador Dalí")
+
+
+def test_a_bare_citation_is_dropped_before_it_can_be_stored():
+    """The same citation as the model writes it, which is where the fix belongs.
+
+    Repairing the rows above without this would let the next run write seven more.
+    """
+    written = "The Persistence of Memory (1931) - cited from blog.artsper.com (https://blog.artsper.com/dali/)"
+
+    assert work_dedup_key(title=written, artist="Salvador Dalí") == work_dedup_key(
+        title="The Persistence of Memory", artist="Salvador Dalí"
+    )
+
+
+def test_the_words_introducing_a_citation_go_with_it():
+    """`- cited from` is not part of a title and must not be part of an identity.
+
+    Removing only the link left it behind in every one of the seven real rows,
+    which is a visible defect on the review card and a silent one in the key.
+    """
+    key = work_dedup_key(title="Mountain Lake (1938) - cited from tate.org.uk (", artist="Salvador Dalí")
+
+    assert "cited" not in key and "from" not in key and "tate" not in key
+
+
+def test_a_title_ending_in_a_citation_word_keeps_it():
+    """The over-merge the lead-in rule could cause, pinned.
+
+    Ingres painted `The Source`. A rule that took a trailing `source`, `from` or
+    `see` off any title would reduce it to `The` and merge it with every other
+    title ending in one of those words. The words are only evidence when a
+    citation was removed alongside them, and here none was.
+    """
+    assert work_dedup_key(title="The Source", artist="Jean-Auguste-Dominique Ingres") != work_dedup_key(
+        title="The", artist="Jean-Auguste-Dominique Ingres"
+    )
+    assert "source" in work_dedup_key(title="The Source", artist="Jean-Auguste-Dominique Ingres")
+
+
+def test_a_hostlike_word_in_a_title_is_not_a_citation():
+    """The over-merge the citation rule could cause, pinned.
+
+    `No.5` matches any pattern loose enough to match `tate.org.uk`, so a rule
+    keying on a trailing hostname alone would leave `Composition` and merge every
+    numbered canvas under that name. A hostname counts as a citation only when it
+    brought a bracketed URL with it.
+    """
+    assert work_dedup_key(title="Composition No.5", artist="Serge Poliakoff") != work_dedup_key(
+        title="Composition", artist="Serge Poliakoff"
+    )
+
+
+def test_the_bare_citation_rules_do_not_reach_inside_a_markdown_one():
+    """Three rules share one string, and this is what keeps them out of each
+    other's way.
+
+    A rule matching the bracketed URL on its own would take it out from under the
+    markdown rule and strand the `[nga.gov]` only that rule can recognise.
+    Requiring a bare hostname before the bracket is what prevents it: in
+    `[nga.gov](https://...)` the character there is `]`.
+    """
+    assert clean_name("Manhattan (1932) – [americanart.si.edu](https://americanart.si.edu/artwork/manhattan-34289)") == (
+        "Manhattan (1932)"
+    )
+    assert clean_name("The Night Watch [rijksmuseum.nl](https://www.rijksmuseum.nl/en/collection/x)") == ("The Night Watch")
+
+
+def test_a_name_that_was_nothing_but_a_citation_cleans_to_nothing():
+    """The empty return every caller has to have an answer for.
+
+    The engine seam drops such a proposal and says so; `reconcile` leaves the
+    stored row alone rather than overwriting a title with nothing.
+    """
+    assert clean_name("tate.org.uk (https://www.tate.org.uk/art/x)") == ""
+    assert clean_name("tate.org.uk (") == ""
+
+
+def test_cleaning_a_name_twice_is_cleaning_it_once():
+    """Applied at the engine seam and again inside the key, so it must settle.
+
+    A citation rule that fired on its own output would keep eating words off the
+    end of a title every time the value passed through.
+    """
+    once = clean_name("Mountain Lake (1938) - cited from tate.org.uk (https://www.tate.org.uk/art/x)")
+
+    assert once == "Mountain Lake (1938)"
+    assert clean_name(once) == once

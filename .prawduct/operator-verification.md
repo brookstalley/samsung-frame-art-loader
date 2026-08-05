@@ -80,11 +80,24 @@ current design, by #C below. #2 and #3 went unremarked.
 
 - **B. Seven `proposed_title` values are corrupted, and it is the data, not the
   rendering.** They end mid-citation on a dangling open parenthesis — *"The
-  Persistence of Memory (1931) - cited from blog.artsper.com ("*. Nothing in this
-  codebase truncates a title, so phase 1's model emitted them this way and the
-  product stores and displays them verbatim on the screen a curator judges works
-  from. Whatever the fix (reject, repair, or constrain the model's schema), a
-  title is the one field a curator cannot work around.
+  Persistence of Memory (1931) - cited from blog.artsper.com ("*.
+
+  **Fixed 2026-08-05, and the cause was ours rather than the model's.** This
+  entry first read "nothing in this codebase truncates a title, so phase 1's
+  model emitted them this way", which was wrong: `clean_name` did it. The model
+  wrote an ordinary bare citation — `- cited from blog.artsper.com
+  (https://blog.artsper.com/en/a-closer-look/dali/)` — and the rule that strips a
+  URL was greedy to the next space, so it ate the bracket that *closed* the
+  citation and left the one that opened it. Feeding that exact string to
+  `clean_name` reproduced the stored value character for character. The
+  hypothesis was checkable in one command and was not checked before it was
+  written down.
+
+  **The visible half was the smaller half.** `work_dedup_key` is derived from the
+  same cleaned title, so each of the seven keyed as a different painting from the
+  same work proposed cleanly — a rejection would not have suppressed the work it
+  was about, silently, which is the failure a curator cannot see. Both halves are
+  repaired at startup and both are pinned by tests.
 
 **Requirements the walkthrough surfaced — none of them designed here:**
 

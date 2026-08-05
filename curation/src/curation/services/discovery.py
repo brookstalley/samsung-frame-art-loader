@@ -32,6 +32,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from curation.discovery.dedup import clean_name, work_dedup_key
 from curation.persistence.discovery import DiscoveryStore
 from curation.persistence.discovery_records import (
     CandidateImage,
@@ -453,6 +454,68 @@ class DiscoveryService:
                     # deleting its rows: the join records what the run's scope
                     # was, and that stays true after the run has ended.
                     store_write(self._store.update_run, self._ended(run, RunStatus.INTERRUPTED))
+            self._reclean_proposed_titles()
+
+    def _reclean_proposed_titles(self) -> None:
+        """Re-clean every stored title, and re-key any the cleaning changed.
+
+        **A stored title is a derived value, and this is what keeps it current.**
+        `clean_name` runs at the engine seam, so a row records whatever that rule
+        removed on the day it was written; improving the rule leaves every earlier
+        row carrying markup the product now knows how to strip. Seven real rows
+        reached a curator's review cards reading `Lobster Telephone (1938) - cited
+        from tate.org.uk (`, and each keyed as a different painting from the same
+        work proposed cleanly — so a rejection would not have carried between them.
+
+        Recomputing here rather than in a one-off script is what makes the
+        obligation self-discharging: the derivation's own account of itself says
+        that changing it against a populated catalogue owes a re-key, and a script
+        pays that debt once while this pays it every time. It is idempotent and
+        almost always a no-op, which is what makes it safe to run at every start.
+
+        Deliberately not a verdict-preserving merge. Two rows whose keys converge
+        stay two rows — suppression reads every row sharing a key and asks whether
+        *any* was rejected, so a converged pair suppresses correctly without
+        anything being deleted, and deleting is the direction that loses a
+        curator's decision.
+        """
+        repaired = 0
+        for run in self._store.list_runs():
+            for work in self._store.list_candidate_works(run.id):
+                title = clean_name(work.proposed_title)
+                artist = clean_name(work.proposed_artist) if work.proposed_artist else None
+                # An empty title is left exactly as it is. `require_text` refuses
+                # one on the way in, so a cleaning that emptied a title would be
+                # a rule reaching too far, and overwriting the row would destroy
+                # the evidence of it while making the row unreadable.
+                if not title or (title == work.proposed_title and artist == work.proposed_artist):
+                    continue
+                key = work_dedup_key(title=title, artist=artist)
+                log.info(
+                    "re-cleaned a stored title the citation rules now reach",
+                    extra={
+                        "event": "work.recleaned",
+                        "candidate_work_id": work.id,
+                        "run_id": run.id,
+                        "work_title": title,
+                        "rekeyed": key != work.work_dedup_key,
+                    },
+                )
+                store_write(
+                    self._store.update_candidate_work,
+                    replace(work, proposed_title=title, proposed_artist=artist, work_dedup_key=key),
+                )
+                repaired += 1
+        if repaired:
+            # At WARNING because a repair that fires long after the rule changed
+            # means rows sat in front of a curator carrying markup, and the count
+            # is the size of what they were shown.
+            log.warning(
+                "Re-cleaned %d stored title(s) whose citation markup the current rules remove; "
+                "their work identities were recomputed to match.",
+                repaired,
+                extra={"event": "works.recleaned", "works_recleaned": repaired},
+            )
 
     # -- reads: proposed works ------------------------------------------------
 

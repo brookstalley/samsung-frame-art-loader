@@ -138,7 +138,14 @@
   to the value written, not to the surface** — which is why it crossed no boundary
   even though it altered every key. Changing it again against a catalogue holding
   `CandidateWork` rows *would* cross one, because stored keys would have to be
-  recomputed: see `data-model.md` **Q3**.
+  recomputed: see `data-model.md` **Q3**. **That crossing happened on 2026-08-05,
+  and what answers it is a mechanism rather than a one-off.** The citation rules
+  gained the bare form, which changed the value written for seven rows already on
+  disk; `DiscoveryService.reconcile` now re-cleans every stored title at startup
+  and rewrites the key of any it changed, so the recompute is paid automatically
+  by each later change instead of being owed by it. A future change to the
+  derivation still crosses the boundary — it is the repair that is no longer
+  each change's to write.
 - **Producer:** the persistence layer. **Currently stdlib `sqlite3` behind a
   Protocol**, not 3tears collections — see the build plan's deferral note. The
   Protocol is what keeps that swap a one-module change.
