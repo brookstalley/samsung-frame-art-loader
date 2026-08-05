@@ -118,6 +118,80 @@ def test_opening_the_alternates_shows_what_a_curator_chooses_between(grid):
     assert "on offer" in shown
 
 
+def test_turning_a_scan_down_leaves_the_alternates_open(grid):
+    """Choosing between scans is a sequence, not one act.
+
+    Rejecting a scan repaints the card — the picture and the verdict both change
+    — and rebuilding it closed would collapse the list the curator is working in
+    on every click, costing a re-open and a second fetch to get back to where
+    they were.
+
+    **The repaint has to be waited for, and that is the whole difficulty.** The
+    obvious version of this test clicks and then waits for an open disclosure,
+    which matches instantly against the card that has not been replaced yet — so
+    it passes whatever the repaint does with the state. The mutation sweep caught
+    exactly that. The verdict badge is the signal that the new card has landed,
+    so it is waited for first and the disclosure is asserted after.
+    """
+    wanting = a_candidate(verdict=Verdict.AWAITING_BETTER_IMAGE.value)
+    grid.serve("**/api/candidate-images/image-1/reject", wanting.model_dump(mode="json"))
+    grid.serve("**/api/candidates/work-1", a_card(work=wanting).model_dump(mode="json"))
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.click("summary")
+    grid.page.wait_for_selector("li.alternate")
+
+    grid.page.click("button:has-text('Turn it down')")
+    grid.page.wait_for_selector(".badge:has-text('wants a better scan')")
+
+    # The card that is on the page now is the new one, so this reads the state
+    # that was carried over rather than the one being replaced. The rows are
+    # asserted as well as the open attribute: a disclosure carried open whose
+    # listener never fires again shows "Loading the other scans…" for ever, which
+    # is open and empty and looks exactly like a request that never came back.
+    assert grid.page.locator("details[open]").count() == 1
+    grid.page.wait_for_selector("details[open] li.alternate")
+
+
+def test_the_alternates_of_an_untouched_card_start_closed(grid):
+    """The paired negative: carrying the state over must not mean always open.
+
+    A grid of thirty cards with every disclosure expanded is a page of stacked
+    scan lists, and it would fetch every one of them on paint — the cost the lazy
+    fetch above exists to avoid.
+    """
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+
+    assert grid.page.locator("details[open]").count() == 0
+
+
+def test_an_alternate_s_buttons_name_the_work_rather_than_its_id(grid):
+    """A screen reader announcing "Use this scan for 8f2a-41c3…" names nothing.
+
+    The row's whole purpose is choosing between scans of a painting, and the id
+    is the one thing on the card that identifies it to nobody.
+
+    **Two instances, and the second one is load-bearing.** "Use this one" is drawn
+    only for a scan that is neither selected nor refused, so a listing holding
+    just the selected instance renders one button and this test would cover half
+    of what it claims — which is how the first version of it survived a mutation
+    aimed squarely at that button's label.
+    """
+    grid.serve(
+        "**/api/candidates/work-1/images",
+        an_instance_listing([an_instance(image_id="image-1"), an_instance(image_id="image-2", is_selected=False)]),
+    )
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.click("summary")
+    grid.page.wait_for_selector("li.alternate")
+
+    labels = grid.page.locator("li.alternate button").evaluate_all("nodes => nodes.map(n => n.getAttribute('aria-label'))")
+    assert len(labels) == 3, f"expected both actions on the choosable scan and one on the selected one: {labels}"
+    for label in labels:
+        assert "The Persistence of Memory" in label, label
+        assert "work-1" not in label, label
+
+
 # -- a verdict repaints one card, not the grid --------------------------------
 
 

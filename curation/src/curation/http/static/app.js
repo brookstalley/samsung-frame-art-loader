@@ -1180,7 +1180,7 @@ function instanceStateBadges(instance) {
 /* One alternate scan, with what a curator needs to choose between it and the
  * others: the picture, the size it would hang at, where it came from, and the
  * two things they can do about it. */
-function instanceRow(instance, after) {
+function instanceRow(instance, title, after) {
   const act = (path, body) =>
     guard(async () => {
       await api(path, { method: "POST", body: JSON.stringify(body || {}) });
@@ -1209,7 +1209,11 @@ function instanceRow(instance, after) {
               class: "action quiet",
               type: "button",
               text: "Use this one",
-              "aria-label": `Use this scan for ${instance.work_id}`,
+              // Named by the work, never by its id. A screen reader announcing
+              // "Use this scan for 8f2a-41c3…" names the one thing on the card
+              // that identifies nothing, on a row whose whole purpose is
+              // choosing between scans of a painting the curator can see.
+              "aria-label": `Use this scan for ${title}`,
               onclick: () => act(`/api/candidate-images/${encodeURIComponent(instance.image_id)}/select`),
             }),
         instance.rejected
@@ -1218,7 +1222,7 @@ function instanceRow(instance, after) {
               class: "action quiet",
               type: "button",
               text: "Turn it down",
-              "aria-label": `Turn down this scan for ${instance.work_id}`,
+              "aria-label": `Turn down this scan for ${title}`,
               onclick: () => act(`/api/candidate-images/${encodeURIComponent(instance.image_id)}/reject`),
             }),
       ]),
@@ -1251,7 +1255,7 @@ async function alternatesPanel(workId, after) {
   }
   return el("div", { class: "stack" }, [
     instancesNote(listing),
-    el("ul", { class: "alternates" }, listing.instances.map((instance) => instanceRow(instance, after))),
+    el("ul", { class: "alternates" }, listing.instances.map((instance) => instanceRow(instance, listing.work.title, after))),
   ]);
 }
 
@@ -1261,13 +1265,18 @@ async function alternatesPanel(workId, after) {
  * because it describes what the verdict just *did* — minting an artist who may
  * duplicate one already held — and that is not a property of the work anybody
  * could read back off it afterwards. */
-function candidateCard(card, notice) {
+function candidateCard(card, notice, alternatesOpen = false) {
   const work = card.work;
   const node = el("li", { class: "card", "data-work": work.work_id });
 
   const repaint = async (message) => {
     const fresh = await api(`/api/candidates/${encodeURIComponent(work.work_id)}`);
-    node.replaceWith(candidateCard(fresh, message));
+    // The disclosure's state is carried over, because choosing between scans is
+    // a sequence rather than one act: a curator turning one down is usually
+    // about to turn down or choose another. Rebuilding the card closed would
+    // collapse the list they are working in, on every click, and cost a second
+    // fetch to get back to where they were.
+    node.replaceWith(candidateCard(fresh, message, disclosure.open));
   };
 
   const reason = el("input", { type: "text", id: `reason-${work.work_id}` });
@@ -1291,6 +1300,16 @@ function candidateCard(card, notice) {
   disclosure.addEventListener("toggle", () => {
     if (disclosure.open) guard(async () => alternates.replaceChildren(await alternatesPanel(work.work_id, () => repaint(null))));
   });
+  // Opening it here fires `toggle`, which is what fetches the list — so a
+  // carried-over disclosure loads rather than restoring the placeholder.
+  //
+  // The order relative to the listener above does not matter, and the comment
+  // here used to claim it did. `toggle` is dispatched asynchronously, so a
+  // listener attached after the property is set still receives it; the mutation
+  // sweep proved the claim false by swapping the two lines and watching every
+  // test pass. Left in this order because it reads better, not because anything
+  // depends on it.
+  if (alternatesOpen) disclosure.open = true;
 
   node.append(
     card.shown ? instanceImage(card.shown, work.artist ? `${work.title}, by ${work.artist}` : work.title) : el("div", { class: "card-image" }, [absentImage("No scan was found for this work.")]),
