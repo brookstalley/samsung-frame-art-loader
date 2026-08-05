@@ -16,10 +16,16 @@ acquisition, not from the preview that helped someone decide.
 **A preview that will not download is not a failure.** The instance is still
 real, still selectable, and still carries a source-side URL to fall back on.
 Losing a work over a missing thumbnail would be the tail wagging the dog, so
-every failure path here reports absence rather than raising. `inline_preview`
-below holds the same posture for the same reason, one step further along: a file
+every failure path here reports absence rather than raising. The two re-encoders
+below hold the same posture for the same reason, one step further along: a file
 that will not decode costs its instance a picture, never its place in the
 listing.
+
+**Two re-encoders, because there are two readers with unrelated budgets.** A model
+pays for a picture in context tokens and a curator pays for it in pixels on a
+screen. They share the decode and the media type and nothing else — see the two
+box constants, which say why sharing one would be a slow leak from the visual
+side into the model's context.
 """
 
 import base64
@@ -34,7 +40,7 @@ from typing import Final
 from PIL import Image, UnidentifiedImageError
 
 from curation.services.errors import ServiceError
-from curation.services.imaging import encode_downscaled
+from curation.services.imaging import EncodedFrame, encode_downscaled
 
 log = logging.getLogger(__name__)
 
@@ -78,12 +84,42 @@ INLINE_MAX_EDGE_PX: Final[int] = 400
 #: the judgement this image is for.
 INLINE_JPEG_QUALITY: Final[int] = 75
 
-#: What an inlined preview is declared as on the wire. Everything is re-encoded
-#: to JPEG on the way out — museums serve JPEG, PNG and the occasional TIFF, and
-#: a content block whose media type varied per instance would make the caller's
-#: cost per image vary with the museum's choice of format rather than with the
-#: picture.
-INLINE_MEDIA_TYPE: Final[str] = "image/jpeg"
+#: The box a preview is fitted into on its way to a browser, in pixels.
+#:
+#: **Its own constant, not `INLINE_MAX_EDGE_PX` reused, and that separation is the
+#: point rather than an accident.** That one is bounded by arithmetic — an image
+#: costs a model roughly `width * height / 750` tokens — and this one is bounded
+#: by a review card on a screen. One constant serving both would be moved by
+#: whichever pressure spoke last, and the visual pressure only ever pushes up,
+#: which would silently spend a curator's model context on pixels it cannot use.
+#:
+#: The value matches the catalogue thumbnail's for the reason both were sized:
+#: cards of about this width on a retina display. It is deliberately not *shared*
+#: with it either — that one downscales a 47-megapixel master a work already
+#: holds, this one re-encodes a preview a museum served — so the two move for
+#: unrelated reasons and neither should drag the other.
+#:
+#: Sufficient for the judgement the review gate exists to make: is this the right
+#: painting, and is it appropriate for a living room. It is emphatically *not*
+#: how a curator judges resolution — a 900 px scan and a 6000 px scan look
+#: identical at any card size, which is why every instance travels with the size
+#: it would render at on the wall, in inches, beside the picture.
+BROWSER_MAX_EDGE_PX: Final[int] = 480
+
+#: Quality for the browser's copy. Higher than the inline one's, because these
+#: bytes land on a screen a curator is looking at rather than in a context window.
+BROWSER_JPEG_QUALITY: Final[int] = 82
+
+#: What a re-encoded preview is declared as on the wire, whichever reader asked.
+#: Everything becomes JPEG on the way out — museums serve JPEG, PNG and the
+#: occasional TIFF — and one media type for both is not merely tidy. For a model,
+#: a content block whose type varied per instance would make the cost per image
+#: depend on the museum's choice of format rather than on the picture. For a
+#: browser it is stronger than that: a cached preview's *suffix* is taken from a
+#: URL and falls back to `.jpg` for anything unrecognised, so the name on disk is
+#: not evidence of what the bytes are — and a TIFF served under a type a browser
+#: cannot paint is a blank card with nothing saying why.
+PREVIEW_MEDIA_TYPE: Final[str] = "image/jpeg"
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,6 +270,23 @@ class InlinePreview:
     height: int
 
 
+@dataclass(frozen=True, slots=True)
+class RenderedPreview:
+    """One cached preview, re-encoded for a browser to paint directly.
+
+    Raw bytes rather than base64: these travel as an HTTP response body, and
+    encoding them for a transport that does not need it would cost a third more
+    bytes on every card of a thirty-work grid.
+
+    No dimensions. The MCP twin reports them because a model cannot see the
+    picture and prices it by area; a browser lays the image out from the bytes
+    themselves, so a size in the payload would be a number nothing reads.
+    """
+
+    data: bytes
+    media_type: str
+
+
 def inline_preview(path: Path) -> InlinePreview | None:
     """Downscale a cached preview into something a tool result can carry.
 
@@ -243,19 +296,51 @@ def inline_preview(path: Path) -> InlinePreview | None:
     too. The instance is still real, still listed, and still carries its
     source-side URL. Raising instead would lose a curator the other thirty-nine
     works over one museum's malformed JPEG.
+    """
+    frame = _rendered(path, max_edge=INLINE_MAX_EDGE_PX, quality=INLINE_JPEG_QUALITY)
+    if frame is None:
+        return None
+    return InlinePreview(
+        data=base64.b64encode(frame.data).decode("ascii"),
+        media_type=PREVIEW_MEDIA_TYPE,
+        width=frame.width,
+        height=frame.height,
+    )
 
-    Nothing is cached on the way out. The input is already a preview — ARTIC's
-    default is 843 px on the long edge — and `draft` decodes it at a reduced
-    scale, so a full forty-work batch measured **under 300 ms** on the build
-    machine (2026-08-03), and a 3000 px input cost no more than an 843 px one
-    because the reduced-scale decode absorbs the difference. What a cache would
-    cost is a second disposable class: files derived from files that are
-    themselves deleted when a work is decided, needing their own place in that
-    sweep and their own answer to "is this one stale". The preview lifecycle is
-    deliberately the only one of its kind.
+
+def browser_preview(path: Path) -> RenderedPreview | None:
+    """Downscale a cached preview into bytes a browser renders.
+
+    Absence is reported the same way and for the same reason as above: a review
+    card whose picture will not decode still shows the work, its size on the
+    wall, and its source URL, and is still selectable. The card knows before it
+    asks — the listing carries `preview_available` — so a `None` here is the
+    narrow race where the file went away between the listing and the request.
+    """
+    frame = _rendered(path, max_edge=BROWSER_MAX_EDGE_PX, quality=BROWSER_JPEG_QUALITY)
+    return None if frame is None else RenderedPreview(data=frame.data, media_type=PREVIEW_MEDIA_TYPE)
+
+
+def _rendered(path: Path, *, max_edge: int, quality: int) -> EncodedFrame | None:
+    """Re-encode a cached preview, reporting absence rather than raising.
+
+    One decode for both callers. They differ in the box, the quality and what
+    they wrap the bytes in, and in nothing else — and this module's own sibling
+    is the standing argument for not keeping two copies of a decode: the two that
+    predate `imaging.py` had already drifted on which exceptions they named.
+
+    **Nothing is cached on the way out, for either caller.** The input is already
+    a preview — ARTIC's default is 843 px on the long edge — and `draft` decodes
+    it at a reduced scale, so a full forty-work batch measured **under 300 ms**
+    on the build machine (2026-08-03), and a 3000 px input cost no more than an
+    843 px one because the reduced-scale decode absorbs the difference. What a
+    cache would cost is a second disposable class: files derived from files that
+    are themselves deleted when a work is decided, needing their own place in
+    that sweep and their own answer to "is this one stale". The preview lifecycle
+    is deliberately the only one of its kind.
     """
     try:
-        frame = encode_downscaled(path, max_edge=INLINE_MAX_EDGE_PX, quality=INLINE_JPEG_QUALITY)
+        return encode_downscaled(path, max_edge=max_edge, quality=quality)
     except Image.DecompressionBombError as exc:
         # Pillow's own guard against a decompression bomb. Caught by name rather
         # than swept up with the rest, because a file engineered to exhaust
@@ -275,23 +360,17 @@ def inline_preview(path: Path) -> InlinePreview | None:
         # unusual file costing a curator the other thirty-nine works in the
         # listing, which is the outcome this whole module exists to prevent.
         return _no_inline(path, f"it could not be read: {exc}")
-    return InlinePreview(
-        data=base64.b64encode(frame.data).decode("ascii"),
-        media_type=INLINE_MEDIA_TYPE,
-        width=frame.width,
-        height=frame.height,
-    )
 
 
 def _no_inline(path: Path, why: str) -> None:
     """Report that no picture travels with this instance, with the reason.
 
-    One exit for every way an inline preview can fail to be produced, so the log
-    line cannot drift between them — the same shape `_absent` holds for the
-    download it mirrors.
+    One exit for every way a preview can fail to be re-encoded, so the log line
+    cannot drift between them — the same shape `_absent` holds for the download
+    it mirrors.
     """
     log.info(
-        "a cached preview could not be inlined; the instance is listed without a picture",
+        "a cached preview could not be rendered; the instance is listed without a picture",
         extra={"event": "preview.not_inlined", "path": str(path), "reason": why},
     )
     return None

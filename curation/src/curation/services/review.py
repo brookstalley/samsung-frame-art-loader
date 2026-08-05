@@ -33,7 +33,7 @@ from curation.services import selection
 from curation.services.discovery import DiscoveryService
 from curation.services.display_fit import ArtworkBox, FitAssessment, assess_display_fit
 from curation.services.errors import ServiceError
-from curation.services.previews import InlinePreview, inline_preview
+from curation.services.previews import InlinePreview, RenderedPreview, browser_preview, inline_preview
 
 #: The most one review listing will return, and **the bound is the pictures, not
 #: the rows.** Every entry carries an image content block, which costs a client
@@ -172,6 +172,21 @@ class InstanceView:
     preview_note: str | None
 
     @property
+    def preview_available(self) -> bool:
+        """Whether a picture exists for this instance, however it travels.
+
+        **Not `preview is not None`, because that is only true of a caller who
+        asked for the bytes.** A surface that fetches pictures by URL asks with
+        `pictures=False` and gets none inlined, and reading availability off the
+        inline field would report every instance on a review grid as pictureless.
+
+        Read instead off the invariant this module holds in both modes: a note is
+        present exactly when there is no picture to show. So a picture is
+        available when we are holding it, or when we have no complaint about it.
+        """
+        return self.preview is not None or self.preview_note is None
+
+    @property
     def rejected(self) -> bool:
         """Whether the curator has turned this scan down.
 
@@ -296,7 +311,7 @@ class ReviewService:
         #: Where preview files live. Every catalogue path is relative to it.
         self._art_root = art_root
 
-    def list_works(self, run_id: str, *, limit: int | None = None, offset: int = 0) -> CandidatePage:
+    def list_works(self, run_id: str, *, limit: int | None = None, offset: int = 0, pictures: bool = True) -> CandidatePage:
         """A page of the works a run is responsible for, each with a picture.
 
         Not "the image on offer": a work whose scans are all below the floor or
@@ -337,13 +352,13 @@ class ReviewService:
         page = works[offset : offset + resolved_limit]
         return CandidatePage(
             run=results.run,
-            entries=[self._view(work) for work in page],
+            entries=[self._view(work, pictures=pictures) for work in page],
             total=len(works),
             limit=resolved_limit,
             offset=offset,
         )
 
-    def get_work(self, candidate_work_id: str) -> CandidateView:
+    def get_work(self, candidate_work_id: str, *, pictures: bool = True) -> CandidateView:
         """One proposed work with the instance standing for it.
 
         The alternates are `list_images`' answer, not this one's. Returning every
@@ -356,9 +371,9 @@ class ReviewService:
         value the work already carries as `discovery_run_id` — one fact under two
         names in one payload, and a `get_run` per call to produce the duplicate.
         """
-        return self._view(self._discovery.get_candidate_work(candidate_work_id))
+        return self._view(self._discovery.get_candidate_work(candidate_work_id), pictures=pictures)
 
-    def list_images(self, candidate_work_id: str) -> InstanceListing:
+    def list_images(self, candidate_work_id: str, *, pictures: bool = True) -> InstanceListing:
         """A work's instances in the order the review card offers them, capped.
 
         Not *every* instance: the card carries at most `MAX_INSTANCES_LISTED`, and
@@ -393,12 +408,37 @@ class ReviewService:
         held = self._discovery.list_candidate_images(work.id)
         return InstanceListing(
             work=work,
-            instances=[self._instance(image, work) for image in _fill(held)],
+            instances=[self._instance(image, work, pictures=pictures) for image in _fill(held)],
             held=len(held),
             surviving_held=sum(1 for image in held if image.rejected_at is None),
         )
 
-    def _view(self, work: CandidateWork) -> CandidateView:
+    def preview_image(self, candidate_image_id: str) -> RenderedPreview:
+        """The picture for one instance, as bytes a browser paints.
+
+        **The one place this layer raises where its neighbours report absence.**
+        Everywhere else a missing picture is a field on a card beside the work,
+        its size and its URL, which is what keeps a museum's malformed JPEG from
+        costing a curator the work. Here the picture *is* the whole response:
+        there is no card to degrade, and a 200 carrying nothing would paint a
+        blank box — the silent failure this product exists to refuse. The refusal
+        carries the same sentence the listing would have shown, so whichever way
+        a curator arrives at the absence they are told the same thing.
+
+        A card knows before it asks: `list_works` and `list_images` both report
+        whether a picture travels with each instance. Reaching this refusal means
+        the file went away between the listing and the request — the sweep
+        reclaiming a decided work's previews is the ordinary way that happens.
+        """
+        image = self._discovery.get_candidate_image(candidate_image_id)
+        work = self._discovery.get_candidate_work(image.candidate_work_id)
+        if image.preview_path is not None:
+            rendered = browser_preview(self._art_root / image.preview_path)
+            if rendered is not None:
+                return rendered
+        raise ServiceError(self._absent_preview_note(image, work))
+
+    def _view(self, work: CandidateWork, *, pictures: bool) -> CandidateView:
         images = self._discovery.list_candidate_images(work.id)
         # Asked of `is_selected` rather than taken from position zero: the store
         # sorts the selected instance first, but a work with no selection would
@@ -419,15 +459,33 @@ class ReviewService:
             chosen = next(iter(selection.surviving(images)), None)
         return CandidateView(
             work=work,
-            shown=None if chosen is None else self._instance(chosen, work),
+            shown=None if chosen is None else self._instance(chosen, work, pictures=pictures),
             instances_held=len(images),
             instances_surviving=sum(1 for image in images if image.rejected_at is None),
         )
 
-    def _instance(self, image: CandidateImage, work: CandidateWork) -> InstanceView:
+    def _instance(self, image: CandidateImage, work: CandidateWork, *, pictures: bool) -> InstanceView:
+        preview, preview_note = self._preview(image, work) if pictures else (None, self._unasked_preview_note(image, work))
         fit, fit_note = self._fit(image)
-        preview, preview_note = self._preview(image, work)
         return InstanceView(image=image, fit=fit, fit_note=fit_note, preview=preview, preview_note=preview_note)
+
+    def _unasked_preview_note(self, image: CandidateImage, work: CandidateWork) -> str | None:
+        """Whether a picture is missing, for a caller that is not taking the bytes.
+
+        A browser fetches each picture by URL, so decoding one here to discover it
+        exists costs a re-encode whose output is discarded — roughly doubling what
+        a page of a review grid costs on the machine this runs on. What the card
+        needs is whether to ask at all, and a `stat` answers that.
+
+        The cost is that a file which is present but will not *decode* is reported
+        here as available. That is not a lost diagnosis: the card asks, the picture
+        route decodes, and the refusal carries the same sentence this would have.
+        It is the honest answer besides — nothing has read the bytes yet, and
+        claiming otherwise would be a verdict reached without looking.
+        """
+        if image.preview_path is not None and (self._art_root / image.preview_path).exists():
+            return None
+        return self._absent_preview_note(image, work)
 
     def _fit(self, image: CandidateImage) -> tuple[FitAssessment | None, str | None]:
         """How large this instance would render, or why that is not knowable."""
@@ -440,6 +498,30 @@ class ReviewService:
 
     def _preview(self, image: CandidateImage, work: CandidateWork) -> tuple[InlinePreview | None, str | None]:
         """The picture this instance travels with, or why it travels without one."""
+        if image.preview_path is not None:
+            rendered = inline_preview(self._art_root / image.preview_path)
+            if rendered is not None:
+                return rendered, None
+        return None, self._absent_preview_note(image, work)
+
+    def _absent_preview_note(self, image: CandidateImage, work: CandidateWork) -> str:
+        """Which of the four reasons this instance has no picture to show.
+
+        **Asked only after a read has already failed**, which is what makes it
+        honest rather than merely usually-right, and it is why this is a separate
+        method rather than a check the callers make first. A `preview_path` that
+        exists is not a promise the bytes decode, and a file-existence check made
+        *before* the read is not atomic with it — a file swept in between would
+        still be reported as unreadable. Asked afterwards, "the file is not
+        there" is true at the moment it is stated however it came to be true, and
+        the `stat` is spent only on the failing path, on a plane whose disk is an
+        SD card.
+
+        Shared by both re-encoders, so a curator who reaches the absence through
+        a card and one who reaches it through a refused picture request are told
+        the same thing. Two hand-written versions of these four sentences would
+        be four chances for the pair to disagree about the same file.
+        """
         if image.preview_path is None:
             # A decided work's previews are reclaimed on a timer, so the common
             # reason a picture is absent here is not that one was never cached —
@@ -448,17 +530,11 @@ class ReviewService:
             # phase 2's caching, which is the wrong place and the one they would
             # look first.
             if work.verdict.is_terminal:
-                return None, (
+                return (
                     f"This work was {work.verdict}, so its cached copy was reclaimed — previews are kept only "
                     "while a work is under review. Its source URL is reported beside it."
                 )
-            return None, (
-                "No local copy of this image was cached, so it cannot be shown here. Its source URL is reported beside it."
-            )
-        cached = self._art_root / image.preview_path
-        rendered = inline_preview(cached)
-        if rendered is not None:
-            return rendered, None
+            return "No local copy of this image was cached, so it cannot be shown here. Its source URL is reported beside it."
         # **Absent and unreadable are different answers, and a row can name a
         # file that is simply gone.** The reclaiming sweep clears the column it
         # deletes, so the ordinary swept case never reaches here — but the sweep
@@ -467,20 +543,12 @@ class ReviewService:
         # earlier. Reporting that as unreadable would be the corruption message
         # for a file this plane deleted on purpose, which sends whoever asks
         # looking for a bad download.
-        #
-        # Asked *after* the read fails rather than before it, which is what makes
-        # this honest rather than merely usually-right. A check beforehand is not
-        # atomic with the read that follows it, so a file swept in between would
-        # still be reported as unreadable; asked afterwards, "the file is not
-        # there" is true at the moment it is stated however it came to be true.
-        # It also costs a `stat` only on the failing path, on a plane whose disk
-        # is an SD card.
-        if not cached.exists():
-            return None, (
+        if not (self._art_root / image.preview_path).exists():
+            return (
                 "No local copy of this image is on disk, so it cannot be shown here — it was either never "
                 "cached or has since been reclaimed. Its source URL is reported beside it."
             )
-        return None, (
+        return (
             "The cached copy of this image could not be read, so it cannot be shown here. Its source "
             "URL is reported beside it."
         )

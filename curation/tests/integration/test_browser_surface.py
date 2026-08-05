@@ -13,9 +13,13 @@ that criterion end to end; the rest pin the pieces it would be easy to break
 without failing it.
 """
 
+import json
+from datetime import UTC, datetime, timedelta
+
 import httpx
 import pytest
 
+from curation.persistence.backup import BACKUP_RECEIPT_FILENAME
 from curation.persistence.records import (
     AcquisitionMethod,
     FetchStatus,
@@ -222,20 +226,119 @@ class TestWorkDetail:
         assert "not-a-work" in response.json()["error"]
 
 
+def _every_key(payload) -> set[str]:
+    """Every field name anywhere in a response, however deeply nested.
+
+    Scanning the raw text instead is what the first version of the budget check
+    did, and it matched the temporary directory pytest names after the test
+    itself — so a check about the payload was reading the filesystem.
+    """
+    if isinstance(payload, dict):
+        return set(payload) | {key for value in payload.values() for key in _every_key(value)}
+    if isinstance(payload, list):
+        return {key for item in payload for key in _every_key(item)}
+    return set()
+
+
 class TestHealth:
+    #: Every observation the panel makes carries these five and nothing that
+    #: resembles a judgement — no status, no ok/degraded, no colour. Asserted as a
+    #: whole set rather than by naming the fields that must be absent, because the
+    #: failure to catch is a *new* field nobody thought to forbid.
+    OBSERVATION_FIELDS = {"path", "age_seconds", "absent", "problem", "description", "reported"}
+
     def test_the_panel_states_an_observation_and_never_a_verdict(self, http):
         health = http.get("/api/health").json()
         assert health["heartbeat"]["absent"] is True
         assert "has not reported yet" in health["heartbeat"]["description"]
-        # Nothing resembling a judgement: no status, no ok/degraded, no colour.
-        assert set(health["heartbeat"]) == {
-            "path",
-            "reported_at",
-            "age_seconds",
-            "absent",
-            "problem",
-            "description",
-        }
+        assert set(health["heartbeat"]) == self.OBSERVATION_FIELDS | {"reported_at"}
+
+    def test_the_panel_reports_what_the_display_plane_said_about_itself(self, http, settings):
+        """The failure table maps TV, panel and last-error state onto this document.
+
+        Until it reached the payload those rows named a signal nothing displayed —
+        a monitoring plan whose evidence lived only in a file no surface opened.
+        Handed through untouched rather than unpacked into named fields, because
+        `reported_at` is the only key the strategy makes contract and inventing
+        more here would be a second contract the writer never agreed to.
+        """
+        settings.heartbeat_path.write_text(
+            json.dumps(
+                {
+                    "reported_at": datetime.now(UTC).isoformat(),
+                    "tv_connected": False,
+                    "last_error": "the television refused the pairing token",
+                }
+            ),
+            encoding="utf-8",
+        )
+        heartbeat = http.get("/api/health").json()["heartbeat"]
+        assert heartbeat["absent"] is False
+        assert heartbeat["reported"]["tv_connected"] is False
+        assert heartbeat["reported"]["last_error"] == "the television refused the pairing token"
+
+    def test_an_age_is_stated_in_the_unit_a_person_reads_it_in(self, http, settings):
+        """ "345600 seconds ago" is a conversion the reader has to do themselves.
+
+        On the one surface built so they would not have to, and for the failure it
+        exists to catch — a plane that has been down since Tuesday.
+        """
+        settings.heartbeat_path.write_text(
+            json.dumps({"reported_at": (datetime.now(UTC) - timedelta(days=4)).isoformat()}),
+            encoding="utf-8",
+        )
+        assert "4 days ago" in http.get("/api/health").json()["heartbeat"]["description"]
+
+    def test_the_panel_says_plainly_that_no_backup_has_ever_been_recorded(self, http):
+        """A true observation before the backup job exists, which is why it ships first.
+
+        The alternative — building this alongside the job — is what left the two
+        entries waiting on each other, and an absent reading is exactly what this
+        panel's contract is for: it states what was found, and nothing is a
+        finding.
+        """
+        backup = http.get("/api/health").json()["backup"]
+        assert backup["absent"] is True
+        assert backup["age_seconds"] is None
+        assert "nothing has written one yet" in backup["description"]
+        assert set(backup) == self.OBSERVATION_FIELDS | {"completed_at"}
+
+    def test_a_recorded_backup_is_reported_with_its_age(self, http, settings):
+        """The moment a writer lands, this reports real ages with nothing to wire.
+
+        Written against the contract Chunk 20's job will meet — the receipt's
+        filename and its `completed_at` key — so a job that spelled either
+        differently fails here rather than reporting a fresh backup for ever.
+        """
+        receipt = settings.art_root / BACKUP_RECEIPT_FILENAME
+        receipt.write_text(
+            json.dumps(
+                {
+                    "completed_at": (datetime.now(UTC) - timedelta(days=6)).isoformat(),
+                    "destination": "nas.lan:/volume1/backups/catalogue-2026-08-05.sqlite",
+                }
+            ),
+            encoding="utf-8",
+        )
+        backup = http.get("/api/health").json()["backup"]
+        assert backup["absent"] is False
+        assert "6 days ago" in backup["description"]
+        assert backup["reported"]["destination"].endswith("catalogue-2026-08-05.sqlite")
+
+    def test_no_budget_balance_appears_anywhere_on_the_panel(self, http):
+        """Settled 2026-08-04, and asserted because the temptation recurs.
+
+        `limit_remaining` reads non-zero while calls are already being refused, so
+        it fails by inversion rather than by staleness — and stating its age, this
+        panel's whole remedy for a stale figure, would not warn about the case
+        that bites. A future edit that adds it back has to delete this test, which
+        is the point at which the decision gets reopened rather than forgotten.
+        """
+        named = _every_key(http.get("/api/health").json())
+        assert not [key for key in named if any(word in key for word in ("limit", "credit", "balance", "budget"))]
+        # And the panel is three observations, not four. The check above would
+        # pass for a balance carried under a name that dodges those four words.
+        assert set(http.get("/api/health").json()) == {"heartbeat", "backup", "artwork_box"}
 
     def test_the_panel_shows_the_geometry_every_size_in_the_grid_is_judged_against(self, http):
         box = http.get("/api/health").json()["artwork_box"]

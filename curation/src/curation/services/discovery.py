@@ -463,6 +463,20 @@ class DiscoveryService:
             raise ServiceError(f"No candidate work with id {candidate_work_id!r} exists.")
         return work
 
+    def get_candidate_image(self, candidate_image_id: str) -> CandidateImage:
+        """Return one image instance, or refuse if there is no such id.
+
+        Public for the same reason `get_candidate_work` is: a surface handed an
+        instance id — the one on a review card's own controls — has to be able to
+        read it back. It was private while the only callers were the writes below
+        it, and a caller that could not reach it would have had to enumerate a
+        work's instances and search for the id it was already holding.
+        """
+        image = self._store.get_candidate_image(candidate_image_id)
+        if image is None:
+            raise ServiceError(f"No candidate image with id {candidate_image_id!r} exists.")
+        return image
+
     def list_candidate_works(self, run_id: str) -> Sequence[CandidateWork]:
         """The works a run proposed."""
         self.get_run(run_id)
@@ -745,7 +759,7 @@ class DiscoveryService:
         the rejection to survive the next re-search.
         """
         with self._store.transaction():
-            image = self._require_image(candidate_image_id)
+            image = self.get_candidate_image(candidate_image_id)
             if image.rejected_at is not None:
                 raise ServiceError(f"Image {candidate_image_id!r} was rejected for this work, so it cannot be selected again.")
             chosen = self._select(image, rationale=rationale)
@@ -772,7 +786,7 @@ class DiscoveryService:
         must find the second half done rather than a refusal.
         """
         with self._store.transaction():
-            image = self._require_image(candidate_image_id)
+            image = self.get_candidate_image(candidate_image_id)
             work = self.get_candidate_work(image.candidate_work_id)
             if not work.verdict.is_terminal:
                 raise ServiceError(
@@ -800,7 +814,7 @@ class DiscoveryService:
         work holds no selection and re-enters phase 2 rather than sitting there.
         """
         with self._store.transaction():
-            image = self._require_image(candidate_image_id)
+            image = self.get_candidate_image(candidate_image_id)
             if image.rejected_at is not None:
                 raise ServiceError(f"Image {candidate_image_id!r} was already rejected for this work.")
             work = self.get_candidate_work(image.candidate_work_id)
@@ -1173,12 +1187,6 @@ class DiscoveryService:
 
     def _spend_total(self, run_id: str) -> Decimal:
         return sum((record.cost_usd for record in self._store.list_spend_records(run_id=run_id)), Decimal(0))
-
-    def _require_image(self, candidate_image_id: str) -> CandidateImage:
-        image = self._store.get_candidate_image(candidate_image_id)
-        if image is None:
-            raise ServiceError(f"No candidate image with id {candidate_image_id!r} exists.")
-        return image
 
     def _require_status(self, run_id: str, expected: RunStatus, *, doing: str) -> DiscoveryRun:
         """Refuse a transition the run is not standing on the edge of."""

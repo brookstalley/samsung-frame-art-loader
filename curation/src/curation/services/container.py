@@ -54,6 +54,7 @@ from curation.discovery.browse import CollectionBrowse
 from curation.discovery.engine import DiscoveryEngine
 from curation.discovery.images import ImageSearch
 from curation.discovery.phase_two import PhaseTwoEngine
+from curation.persistence.backup import BACKUP_RECEIPT_FILENAME
 from curation.persistence.catalogue import CatalogueStore
 from curation.persistence.discovery import DiscoveryStore
 from curation.services.catalogue import CatalogueService
@@ -61,6 +62,7 @@ from curation.services.discovery import DiscoveryService
 from curation.services.display import DisplayService, WallSettings
 from curation.services.display_fit import ArtworkBox
 from curation.services.errors import ServiceError
+from curation.services.health import HealthService
 from curation.services.previews import PreviewCache, PreviewSettings
 from curation.services.review import ReviewService
 from curation.services.runner import DiscoveryRunner, DiscoverySettings
@@ -89,6 +91,12 @@ class Services:
     #: single service spanning both would hold the catalogue and discovery stores
     #: at once for no shared logic.
     review: ReviewService
+    #: Everything the health panel states, gathered in one call. Its own concern
+    #: rather than a composite the handler assembles, because the panel is the
+    #: product's only alerting surface and "which signals does it make" is a
+    #: product rule — one that belongs where it can be tested without HTTP, and
+    #: where the next signal is added in one place rather than two.
+    health: HealthService
     #: Running a discovery run, as distinct from recording one. It sits above
     #: `discovery` rather than inside it because the record layer is deliberately
     #: synchronous and knows nothing of processes, and everything about starting
@@ -183,6 +191,15 @@ class Services:
             # validated there. A third copy would be a third chance for the
             # copies to disagree, and nothing would notice which was right.
             review=ReviewService(discovery_service, box=artwork_box, art_root=thumbnails.art_root),
+            # The receipt is located the same way, and for the same reason. It is
+            # not a `WallSettings` field beside the heartbeat's path: that
+            # settings object carries what the *wall's* operations need, and the
+            # backup is this plane's own business rather than the display plane's.
+            health=HealthService(
+                display_service,
+                backup_receipt_path=thumbnails.art_root / BACKUP_RECEIPT_FILENAME,
+                box=artwork_box,
+            ),
             runner=DiscoveryRunner(
                 discovery_service,
                 engine,

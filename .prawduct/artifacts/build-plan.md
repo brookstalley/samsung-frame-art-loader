@@ -2484,11 +2484,25 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
 - **Deliverables:** review-grid and health handlers in
   `curation/src/curation/http/` (thin bindings); the grid with its alternates;
   the completed health panel; the grid's component extraction, which closes the
-  last open box on issue #2
+  last open box on issue #2.
+  **Plus a binding for the re-search, added at build (operator, 2026-08-05).**
+  Turning a scan down is one of the grid's own actions and it leaves the work
+  `awaiting_better_image`, where nothing looks again — `resolve_images` is what
+  looks, and it had no HTTP binding. Shipping the rejection without it would make
+  this chunk's own screen a dead end escapable only from an MCP client. It is one
+  thin handler over `runner.resolve_images`, which 16B built.
+  **The carried finding above this chunk's neighbours is closed here too:** the
+  panel had no reader for the document the display plane reports, so the failure
+  table's TV, panel and last-error rows mapped onto nothing. It renders what the
+  heartbeat carries rather than a schema invented here, because
+  `observability-strategy.md` makes `reported_at` the only key that is contract
+  and leaves the rest to the writer.
 - **Tests:** integration — every handler is dispatch + formatting over an
   existing service method; the flows exercised through the HTTP surface; the
   non-colour state indicator holds for the grid's accept/reject, asserted rather
-  than asserted-of
+  than asserted-of. **Browser tests for the grid's client logic**, which is what
+  Chunk 23 built its harness for and moved up the order to precede this — with
+  the mutation sweep as the bar for covered, not the existence of a test
 - **Acceptance criteria:** the full curator loop — intent → estimate → review
   with images → accept → theme → wall — runs in the browser without touching the
   filesystem, JSON, or SSH; the health panel states observations with ages, never

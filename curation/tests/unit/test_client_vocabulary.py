@@ -24,6 +24,7 @@ from curation.persistence.discovery_records import (
     ResolutionStatus,
     RunStatus,
     UnresolvedReason,
+    Verdict,
     WorkProvenance,
 )
 
@@ -125,6 +126,23 @@ def test_every_run_status_is_named_in_the_client():
 def test_every_resolution_status_has_a_glyph():
     """Colour is never the sole carrier of state, so the glyph is not optional."""
     assert _object_keys("RESOLUTION_GLYPHS") == {str(status) for status in ResolutionStatus}
+
+
+@pytest.mark.parametrize("name", ["VERDICT_WORDS", "VERDICT_GLYPHS"])
+def test_every_decided_verdict_has_words_and_a_glyph(name):
+    """Accept and reject must be distinguishable without colour, by decision.
+
+    `design_decisions.accessibility_approach` names the candidate grid outright,
+    and the glyph is the half a stylesheet cannot supply. A fifth verdict added
+    to the enum would otherwise reach a card as `awaiting_third_opinion` — the
+    raw token, on the one screen where the whole point is that the curator knows
+    what they are looking at.
+
+    `pending` is excluded because an undecided work draws no badge at all, which
+    is how the ordinary case is shown: a badge on every card makes the two
+    decided states harder to pick out rather than easier.
+    """
+    assert _object_keys(name) == {str(verdict) for verdict in Verdict if verdict is not Verdict.PENDING}
 
 
 def test_provenance_is_still_the_two_values_the_client_renders_as_a_pair():

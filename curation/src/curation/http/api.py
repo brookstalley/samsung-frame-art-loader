@@ -38,6 +38,9 @@ from curation.http.models import (
     AddWork,
     ArtistOut,
     ArtworkBoxOut,
+    BackupOut,
+    CandidateCardOut,
+    CandidatePageOut,
     CandidateWorkOut,
     CreateTheme,
     EstimateOut,
@@ -46,6 +49,8 @@ from curation.http.models import (
     HealthOut,
     HeartbeatOut,
     ImageOut,
+    InstanceListingOut,
+    InstanceOut,
     ManifestEntryOut,
     ManifestOut,
     MatColorOut,
@@ -57,23 +62,32 @@ from curation.http.models import (
     RunTallyOut,
     RunViewOut,
     SearchUsageOut,
+    SelectedImageOut,
+    SelectImage,
+    SetVerdict,
     SourceOut,
     SpendOut,
+    StartResolve,
     StartRun,
     ThemeDetailOut,
     ThemeListOut,
     ThemeOut,
+    VerdictOut,
     WorkDetailOut,
     WorkOut,
     WorkPageOut,
 )
 from curation.manifest.builder import ManifestBuild
 from curation.manifest.heartbeat import HeartbeatReading
-from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy
+from curation.persistence.backup import BackupReading
+from curation.persistence.discovery_records import CandidateImage, CandidateWork, DiscoveryRun, InitiatedBy
 from curation.persistence.records import Artist, MatColor, Original, Source, Theme
 from curation.services.catalogue import RenditionView
 from curation.services.container import Services
+from curation.services.discovery import VerdictOutcome
 from curation.services.display_fit import ArtworkBox
+from curation.services.health import HealthReading
+from curation.services.review import CandidatePage, CandidateView, InstanceListing, InstanceView
 from curation.services.runner import Estimate, RunView, SpendReport
 from curation.services.survey import WorkDossier, WorkSurvey
 
@@ -87,6 +101,21 @@ router = APIRouter(prefix="/api")
 #: refuses everywhere else. The cost of that correctness is one conditional
 #: request per card, answered below with a 304 rather than the bytes.
 THUMBNAIL_CACHE_CONTROL: str = "private, no-cache"
+
+#: A candidate preview, by contrast, is held rather than revalidated — and the
+#: difference between the two lines is a property of the data rather than a
+#: preference. A thumbnail is named for its *work*, and a re-acquired master
+#: regenerates it under the same name, so a cached copy can become a superseded
+#: acquisition on screen. A candidate preview is named for its *instance*: the
+#: cache never re-fetches a file it already has, and nothing rewrites one, so the
+#: bytes behind an image id are written once and only ever deleted. An id whose
+#: content cannot change is the case `immutable` exists for, and it is what keeps
+#: a repaint of a thirty-card grid from re-encoding thirty images on a Pi.
+#:
+#: Reclamation is not a hole in that. A decided work's previews are deleted, and a
+#: card for such a work is told by the listing that no picture travels — so it
+#: never asks, and a copy still in a browser cache is never shown.
+PREVIEW_CACHE_CONTROL: str = "private, max-age=86400, immutable"
 
 
 def _services(request: Request) -> Services:
@@ -202,12 +231,15 @@ def get_manifest(request: Request, theme_id: Annotated[str | None, Query()] = No
 
 @router.get("/health")
 def get_health(request: Request) -> HealthOut:
-    """Observations about the display plane and this deployment's own geometry."""
-    services = _services(request)
-    return HealthOut(
-        heartbeat=_heartbeat(services.display.wall_status()),
-        artwork_box=_artwork_box(services.survey.artwork_box),
-    )
+    """Every observation the panel states, read at one instant.
+
+    One service call, not three. This handler used to assemble the panel from a
+    heartbeat here and a geometry there, which made "what signals does the panel
+    make" a decision taken in the binding — and the next signal would have had to
+    be added in two places with nothing to notice if it reached only one. The
+    assembly is `HealthService.observe`'s now, and this is a dispatch again.
+    """
+    return _health(_services(request).health.observe())
 
 
 # -- discovery runs -----------------------------------------------------------
@@ -310,6 +342,115 @@ def cancel_run(request: Request, run_id: str) -> RunViewOut:
 def get_run_spend(request: Request, run_id: str) -> SpendOut:
     """What a run has actually cost, including every re-search descended from it."""
     return _spend(_services(request).runner.spend_report(run_id=run_id))
+
+
+@router.post("/runs/resolve")
+def start_resolve_run(request: Request, body: StartResolve) -> RunOut:
+    """Look again for images of works whose scans the curator turned down.
+
+    A re-search is a run, which is what lets the run view follow it with nothing
+    special to know — `status`, `cancel` and `spend` all take its id. The handle
+    comes back at once and the search proceeds behind it, exactly as `start` does
+    and for the same reason: this takes minutes.
+
+    **Listed above `/runs/{run_id}` on purpose is not what makes this safe** — the
+    paths do not overlap, since nothing serves `POST /api/runs/{id}`. It sits here
+    because it is the third way a run begins and belongs beside the other two.
+    """
+    return _run(
+        _services(request).runner.resolve_images(
+            candidate_work_ids=body.work_ids,
+            initiated_by=InitiatedBy.WEB_UI,
+        )
+    )
+
+
+# -- review -------------------------------------------------------------------
+
+
+@router.get("/runs/{run_id}/candidates")
+def list_candidates(
+    request: Request,
+    run_id: str,
+    limit: Annotated[int | None, Query()] = None,
+    offset: Annotated[int, Query()] = 0,
+) -> CandidatePageOut:
+    """A page of the works a run is responsible for, each with a picture.
+
+    Paged where the run view's own work list is not, and the difference is the
+    payload rather than an inconsistency: that list is text, and this one carries
+    a card per work. A curator scrolls a grid; they do not scroll two hundred
+    pictures fetched at once on a Pi.
+    """
+    # `pictures=False`: this surface fetches each picture by URL, so inlining
+    # them here would re-encode thirty images per page and discard the output.
+    return _candidate_page(_services(request).review.list_works(run_id, limit=limit, offset=offset, pictures=False))
+
+
+@router.get("/candidates/{work_id}")
+def get_candidate(request: Request, work_id: str) -> CandidateCardOut:
+    """One proposed work with the instance standing for it.
+
+    What a card repaints from after a verdict or an image choice: the response to
+    those calls says what changed, and this says what the card now looks like.
+    """
+    return _candidate_card(_services(request).review.get_work(work_id, pictures=False))
+
+
+@router.get("/candidates/{work_id}/images")
+def list_candidate_images(request: Request, work_id: str) -> InstanceListingOut:
+    """Every scan found for this work, in the order the card offers them, capped.
+
+    The alternates behind a card. Fetched on demand rather than with the grid: a
+    thirty-work page would otherwise carry up to twelve instances each, and a
+    curator opens the alternates for the few works whose first answer they doubt.
+    """
+    return _instance_listing(_services(request).review.list_images(work_id, pictures=False))
+
+
+@router.post("/candidates/{work_id}/verdict")
+def set_verdict(request: Request, work_id: str, body: SetVerdict) -> VerdictOut:
+    """Accept or reject a proposed work. Acceptance promotes it into the catalogue."""
+    return _verdict(_services(request).discovery.set_verdict(work_id, body.verdict, reason=body.reason))
+
+
+@router.post("/candidate-images/{image_id}/select")
+def select_candidate_image(request: Request, image_id: str, body: SelectImage) -> SelectedImageOut:
+    """Make this the scan the work stands on, over the one the pipeline chose."""
+    return _selected(_services(request).discovery.select_image(image_id, rationale=body.rationale))
+
+
+@router.post("/candidate-images/{image_id}/reject")
+def reject_candidate_image(request: Request, image_id: str) -> CandidateWorkOut:
+    """Turn down a scan and keep the work. Nothing looks again until asked.
+
+    Returns the work rather than the instance, because the interesting change is
+    the work's: it moves to `awaiting_better_image`, which is the verdict an
+    accept/reject binary cannot express — "I want this painting; this scan is not
+    good enough". The card repaints from that.
+    """
+    return _candidate_work(_services(request).discovery.reject_image(image_id))
+
+
+@router.get("/candidate-images/{image_id}/preview", response_class=Response)
+def get_candidate_preview(request: Request, image_id: str) -> Response:
+    """The picture for one instance, re-encoded for a browser.
+
+    Not a `FileResponse` over the cached file, and not for want of trying to keep
+    this thin. A cached preview's *name* is derived from its URL and falls back to
+    `.jpg` for anything unrecognised, so the suffix on disk is not evidence of
+    what the bytes are — serving a TIFF as `image/jpeg`, or as `image/tiff`, is a
+    blank card either way. The re-encode is what makes one media type true.
+
+    No conditional handling, unlike the catalogue's thumbnail. That one is a
+    cached file whose ETag Starlette computes from a `stat`; this is generated per
+    request from a file with no stable identity for a client to revalidate
+    against, so a 304 would have nothing to compare. What bounds the cost instead
+    is the grid: a card asks once, and only for the works whose alternates a
+    curator opens.
+    """
+    rendered = _services(request).review.preview_image(image_id)
+    return Response(content=rendered.data, media_type=rendered.media_type, headers={"Cache-Control": PREVIEW_CACHE_CONTROL})
 
 
 # -- images -------------------------------------------------------------------
@@ -593,6 +734,125 @@ def _candidate_work(work: CandidateWork) -> CandidateWorkOut:
     )
 
 
+def _candidate_page(page: CandidatePage) -> CandidatePageOut:
+    return CandidatePageOut(
+        run=_run(page.run),
+        works=[_candidate_card(entry) for entry in page.entries],
+        total=page.total,
+        limit=page.limit,
+        offset=page.offset,
+        # The page's own property, not `offset + len(works) < total` recomputed
+        # here. Two derivations of one fact is how a grid comes to promise a next
+        # page that does not exist, and the second derivation is the wrong one.
+        truncated=page.truncated,
+    )
+
+
+def _candidate_card(view: CandidateView) -> CandidateCardOut:
+    return CandidateCardOut(
+        work=_candidate_work(view.work),
+        shown=None if view.shown is None else _instance(view.shown),
+        shown_is_on_offer=view.shown_is_on_offer,
+        instances_held=view.instances_held,
+        instances_surviving=view.instances_surviving,
+    )
+
+
+def _instance_listing(listing: InstanceListing) -> InstanceListingOut:
+    return InstanceListingOut(
+        work=_candidate_work(listing.work),
+        instances=[_instance(instance) for instance in listing.instances],
+        held=listing.held,
+        surviving_held=listing.surviving_held,
+        truncated=listing.truncated,
+        shows_every_choosable_instance=listing.shows_every_choosable_instance,
+    )
+
+
+def _instance(view: InstanceView) -> InstanceOut:
+    image = view.image
+    return InstanceOut(
+        image_id=image.id,
+        work_id=image.candidate_work_id,
+        url=image.url,
+        provider=image.provider,
+        confidence=image.confidence,
+        is_selected=image.is_selected,
+        rejected=view.rejected,
+        rights_status=None if image.rights_status is None else str(image.rights_status),
+        selection_rationale=image.selection_rationale,
+        fit=(
+            None
+            if view.fit is None
+            else FitOut(
+                verdict=str(view.fit.fit),
+                rendered_width=view.fit.rendered_width,
+                rendered_height=view.fit.rendered_height,
+                rendered_long_edge_inches=view.fit.rendered_long_edge_inches,
+            )
+        ),
+        fit_note=view.fit_note,
+        # The view's own property. It is not `preview is not None` here, because
+        # this surface asks for its pictures by URL and takes none inline — see
+        # `InstanceView.preview_available`, which is why that property exists.
+        preview_available=view.preview_available,
+        preview_note=view.preview_note,
+    )
+
+
+def _verdict(outcome: VerdictOutcome) -> VerdictOut:
+    work = outcome.work
+    return VerdictOut(
+        work=_candidate_work(work),
+        artwork_id=work.artwork_id,
+        decided_at=None if work.decided_at is None else work.decided_at.isoformat(),
+        minted_artist=None if outcome.minted_artist is None else _artist(outcome.minted_artist),
+        possible_duplicate_artists=[_artist(artist) for artist in outcome.duplicate_candidates],
+        notice=_verdict_notice(outcome),
+    )
+
+
+def _verdict_notice(outcome: VerdictOutcome) -> str | None:
+    """Say what acceptance did that the work's own fields do not show.
+
+    Only the artist. Minting one is the single part of a promotion a curator can
+    neither see in the accepted work nor undo from it — a duplicate row looks
+    exactly like a painter newly encountered — so it is said in words at the
+    moment it happens, where a field on a payload nobody re-reads would not
+    reach them.
+
+    Composed here rather than shared with the MCP surface's, which is the same
+    call the run view's sentence made and for the same reason: that one is written
+    for a model and names tool calls in backticks. This one is read by a person
+    looking at the card they just accepted. The *facts* are not written twice —
+    both read the names off the same outcome.
+    """
+    minted = outcome.minted_artist
+    # Both conditions rather than the one that carries the message. Near-misses
+    # are reported only alongside a mint, so `minted is None` here is currently
+    # unreachable — but the sentence names the minted row, and deriving that it
+    # exists from a *different* field being non-empty is how a payload comes to
+    # say `None` where a name belongs the day the service reports near-misses for
+    # anything else.
+    if minted is None or not outcome.duplicate_candidates:
+        return None
+    names = ", ".join(repr(artist.name) for artist in outcome.duplicate_candidates)
+    return (
+        f"A new artist {minted.name!r} was recorded, and the catalogue already holds {names}. They may be "
+        "the same painter under different spellings; matching is exact, because a wrong merge puts another "
+        "painter's name on a label and leaves no trace. Both rows stand until someone decides."
+    )
+
+
+def _selected(image: CandidateImage) -> SelectedImageOut:
+    return SelectedImageOut(
+        image_id=image.id,
+        work_id=image.candidate_work_id,
+        url=image.url,
+        selection_rationale=image.selection_rationale,
+    )
+
+
 def _estimate(estimate: Estimate) -> EstimateOut:
     return EstimateOut(
         phase=estimate.phase,
@@ -616,6 +876,14 @@ def _spend(report: SpendReport) -> SpendOut:
     )
 
 
+def _health(reading: HealthReading) -> HealthOut:
+    return HealthOut(
+        heartbeat=_heartbeat(reading.heartbeat),
+        backup=_backup(reading.backup),
+        artwork_box=_artwork_box(reading.artwork_box),
+    )
+
+
 def _heartbeat(reading: HeartbeatReading) -> HeartbeatOut:
     return HeartbeatOut(
         path=str(reading.path),
@@ -624,6 +892,19 @@ def _heartbeat(reading: HeartbeatReading) -> HeartbeatOut:
         absent=reading.absent,
         problem=reading.problem,
         description=reading.describe(),
+        reported=reading.contents,
+    )
+
+
+def _backup(reading: BackupReading) -> BackupOut:
+    return BackupOut(
+        path=str(reading.path),
+        completed_at=None if reading.completed_at is None else reading.completed_at.isoformat(),
+        age_seconds=reading.age_seconds,
+        absent=reading.absent,
+        problem=reading.problem,
+        description=reading.describe(),
+        reported=reading.contents,
     )
 
 
