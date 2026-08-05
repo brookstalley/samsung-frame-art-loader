@@ -1465,6 +1465,29 @@ two missing deliverables.)*
   **the binding table starts empty, and the television's pre-existing uploads are
   orphans to be removed rather than assets to adopt.**
 
+  **Two things this plane owes that its manifest alone does not give it**, both
+  raised by Critic review on 2026-08-05 and deliberately carried here rather than
+  filed, because this is the work that will meet them:
+
+  1. **`tests/preferences/test_plane_isolation.py`, landing WITH the first
+     display module and not after.** An AST/import check that no module here
+     imports a curation module or constructs an HTTP client, the television
+     websocket exempted. Imports checked transitively — a direct-only check is
+     evaded by one shared helper. Both halves must be proven able to fail: plant
+     a curation import, plant an HTTP client. It cannot be written earlier, since
+     a check over an empty package passes vacuously; and it must not be written
+     later, because the window where display code exists unguarded is the window
+     in which "just fetch the label text live" gets written and passes every test
+     — curation is up in development and in every test, so a green suite is
+     exactly what a violation looks like. `project-preferences.md` § Enforcement
+     moves the manifest-channel norm from Critic back to Test when it lands.
+  2. **A committed lockfile.** This is the only plane without one, against three
+     dependencies with no upper bound and one pinned to a git commit. The
+     product's standing acceptance criterion is that both planes' environments
+     resolve from their locks; a third plane that resolves from the network on
+     every install does not meet it, and the television client is precisely where
+     an unpinned resolve has already broken an import once.
+
   > **This replaces a one-shot TvBinding adoption path, descoped 2026-08-05 on
   > evidence rather than on preference.** The deliverable was to seed bindings
   > from the 41 legacy `tv_content_id` values in `all.json`, so that a fresh empty
