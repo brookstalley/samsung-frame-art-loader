@@ -965,3 +965,53 @@ vocabulary as the artifacts phrased it — "no test runner", "not covered",
 that invited the trade to be reopened. An entry that says "this is worth
 reopening if X" has to be revisited the moment X happens, and it is the entry
 least likely to be looking back at you.
+
+## Two verification passes that agree can both be vacuous — when a result is one you cannot derive, run the smallest thing that reproduces it by hand before believing either, because agreement between two runs of the same broken instrument is not corroboration
+
+Chunk 19B. `tools/mutation_sweep.py` is this repo's stated bar for the browser
+suite — `CLAUDE.md` names it as what separates "a test exists" from "the behaviour
+is covered". Twenty-one mutations of the review grid came back twenty-one caught.
+Suspecting neighbour-masking (the previous chunk's finding), I then ran the
+pairwise check that reflection recommends — every mutation against only the test
+meant to catch it — and got twenty-one caught again.
+
+Both passes were vacuous. The browser suite is deselected by a marker expression
+in `addopts`; naming a test on the command line does not select it; pytest exits
+**5**; and the tool read any non-zero exit as a caught mutation. Nothing had
+executed a line of the file under test in either pass.
+
+**The second pass did not raise the odds of catching this, because it shared the
+first one's defect.** More of the same instrument is not independence. What broke
+it was one unexplainable result: mutation #13 removed a branch I could see no test
+reaching, so "caught" had no derivation. Running that single test by hand printed
+`1 deselected in 0.02s`.
+
+Re-run correctly, two of the twenty-one survived and both were real gaps. Chunk
+23's acceptance had been reached the same way and was re-swept rather than
+assumed — fourteen of fourteen genuinely caught, so that suite was sound and only
+its evidence was not.
+
+**The check:** when a green result is one you cannot trace an execution path to,
+stop and reproduce it in the smallest possible form — one mutation, one test, run
+by hand, output read. A verdict you cannot derive is the cheapest thing in the
+world to falsify and the easiest to accept.
+
+## A pytest exit code that is neither 0 nor 1 is not a verdict — any tool reading `returncode != 0` as "the test caught it" reports success for a run that collected nothing, and every opt-in marker in this repo makes that the DEFAULT outcome of naming such a test on the command line
+
+Chunk 19B, the mechanical half of the entry above. pytest's exit codes are 0
+passed, 1 failed, 2 interrupted, 3 internal error, 4 usage error, **5 no tests
+collected**. A harness that treats "not zero" as failure therefore reads a typo'd
+node id, a usage error and an empty collection as tests doing their job.
+
+That matters disproportionately here because five suites — `browser`,
+`live_museum`, `live_binary`, `live_api`, `llm_eval` — are deselected by
+`addopts`, so exit 5 is what you get by *default* when pointing any tool at them.
+The failure is silent and it inverts: the more thoroughly a suite is protected
+from accidental runs, the more completely a tool like this reports on nothing.
+
+**The fix that generalises is a baseline, not a special case for exit 5.** Run the
+chosen tests once, unmutated, and refuse to proceed unless they run *and pass*.
+That covers the deselection, the typo, and the already-red target set — where every
+mutation would otherwise be "caught" by a failure that was already there. Then
+treat any later exit outside {0, 1} as "this run did not answer the question"
+rather than as an answer.

@@ -938,3 +938,7 @@ something you can do from memory while looking at the wrong thing.
 ## A generated block's stale-looking state is evidence about the generator, not a defect to tidy — when a checkbox, index or table looks wrong, find what writes it before editing it, because hand-fixing derived output desynchronises it from its source and destroys the signal that something upstream is unset
 
 ## Closing a gap means sweeping the artifacts that assert the gap is open — grep for the absence you just removed, not only for the thing you just added, because a document saying "there is no X" reads as current guidance and sends the next builder to rebuild the debt you just paid
+
+## Two verification passes that agree can both be vacuous — when a result is one you cannot derive, run the smallest thing that reproduces it by hand before believing either, because agreement between two runs of the same broken instrument is not corroboration
+
+## A pytest exit code that is neither 0 nor 1 is not a verdict — any tool reading `returncode != 0` as "the test caught it" reports success for a run that collected nothing, and every opt-in marker in this repo makes that the DEFAULT outcome of naming such a test on the command line
