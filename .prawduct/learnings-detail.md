@@ -930,3 +930,36 @@ Neighbouring rule, quoted by its heading rather than linked: "a guard's effectiv
 scope is invisible in its result — when a check computes its own scope, assert
 the scope as well as the finding". Both are cases where a result's meaning
 depends on machinery the reader did not look at.
+
+## Closing a gap means sweeping the artifacts that assert the gap is open — grep for the absence you just removed, not only for the thing you just added, because a document saying "there is no X" reads as current guidance and sends the next builder to rebuild the debt you just paid
+
+Chunk 23, 2026-08-05, found by the Critic. The chunk gave the browser client its
+first executed coverage, and four artifacts were updated to describe the new
+harness — `CLAUDE.md`, `boundary-patterns.md`, `project-preferences.md` and the
+recorded technology decision. A fifth was missed, and it was the one that
+mattered most: `operator-verification.md` still read "The client has no test
+runner — 10B decided against a Node toolchain on a Pi ... and that decision
+stands — so the Python suite verifies every byte the server sends and nothing the
+browser does with it", and named the three behaviours as reasoned-but-untested
+that the same commit had just put under test.
+
+**Two wrong actions followed from it, and the second is the expensive one.** The
+operator would perform a manual check believing it was the only control. And a
+builder starting the next chunk would read "that decision stands" as live
+guidance and add the review grid's client logic with no browser coverage —
+re-incurring, in the very next chunk, the debt this one was created to pay.
+
+**The asymmetry is why it is easy to miss.** Updating the artifacts that describe
+what you built is prompted by the building: you have just written the thing, so
+you go and write it down. Nothing prompts you to find the documents that describe
+its *previous absence*, because those documents do not mention your new work by
+name — they cannot, and that is exactly what makes them unsearchable by the
+obvious search. Grepping for `playwright` or `browser` found the four artifacts
+that already knew; it could never have found the fifth.
+
+**The check:** when a chunk closes a known gap, search for the gap's own
+vocabulary as the artifacts phrased it — "no test runner", "not covered",
+"decided against", "today it is", "if this keeps growing" — and for any artifact
+that invited the trade to be reopened. An entry that says "this is worth
+reopening if X" has to be revisited the moment X happens, and it is the entry
+least likely to be looking back at you.

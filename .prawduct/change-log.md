@@ -48,6 +48,59 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-05: The Critic's findings on the harness, closed in one pass
+
+<!-- prawduct: chunks=23 | scope=v1-build -->
+
+**Why:** the cumulative round returned 0 blocking, 6 warnings and 10 notes across
+three reviewers. Ten fixed, four accepted, two filed (#83, #84).
+
+**The one that was a real defect, and two reviewers found it independently.**
+`viewRun` swallowed a failed family-spend fetch into a null, and `facts()` drops
+null pairs — so the "Spent including every re-search" row vanished with no
+message, leaving a costs panel whose largest figure is what the run *alone* spent.
+That is precisely the misreading the family total was added to prevent, on a
+surface whose own header states that a silent omission is what this product exists
+to refuse. Twenty lines above, the same function argues at length for the opposite
+treatment of the gate estimate. It now says so too. **The `state.painted`
+asymmetry is deliberate and is commented as such**: the rollup is fetched only for
+a run that has stopped, and a stopped run schedules no further poll, so
+withholding the paint signature would enable a retry that cannot happen — the
+sentence in the panel is the whole remedy. Two browser tests cover it, both proved
+by mutation, which is the harness earning its keep in the same session it landed.
+
+**The guard that had no guard.** `assert_tests_ran.py` is the only thing
+distinguishing green-because-passing from green-because-skipped across five CI
+jobs, and nothing tested it — the failure shape it exists to refuse, one level up.
+Nine tests now cover it, including both JUnit root shapes it handles by hand and a
+check, derived from the workflow files rather than a written list, that every
+workflow running pytest also calls it. Mutation found a weak one: asserting only
+the exit code could not tell "no tests collected" from "nothing ran", two branches
+that send an operator to opposite places, so it asserts the message.
+
+**The artifact that described the absence.** `operator-verification.md` still read
+"the client has no test runner ... none of them is executed by a test", and
+invited reopening that trade if the surface kept growing logic of this kind. It
+had, and the trade was settled the previous commit. The dangerous half was "that
+decision stands": a builder starting 19B would have read it as live guidance and
+skipped browser coverage, re-incurring the debt this chunk paid, in the very next
+chunk. **Four artifacts describing what was built had been updated and the fifth,
+describing its previous absence, was missed** — that asymmetry is now a learning,
+because a document asserting "there is no X" cannot be found by grepping for X.
+
+**Two coherence defects in the record.** `boundary-patterns.md` § Test Levels had
+no row for `live_binary` at all and quoted an `addopts` value two markers out of
+date; the quote is replaced by a pointer to `pyproject.toml`, since a copied
+config value is only ever a second place to be wrong. And three documents said the
+browser workflow runs "on every push" when it scopes push to `main` and relies on
+`pull_request` — the workflow is right and the prose was wrong.
+
+**The `[[slug]]` link syntax came back, and this repo had already closed that
+exact defect once**, one file over, recorded in the 2026-08-04 verify round.
+Neither link resolved and one pointed at a rule that has never been written. Both
+now quote the referenced heading, which is this file family's own idiom. The
+detail file was also still carrying the retired form of a rule as a live heading.
+
 ## 2026-08-05: The browser client gets executed, and the tests get proved
 
 <!-- prawduct: chunks=23 | scope=v1-build -->
