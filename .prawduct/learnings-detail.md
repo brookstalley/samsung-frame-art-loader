@@ -1253,3 +1253,48 @@ failure mode, not the subject.
 **The mechanical form:** after fixing any defect, re-read the diff asking only
 "where else does this shape appear here?" — not across the codebase, which is a
 backlog item, but across the commit, which is free.
+
+## A backlog item's body is evidence about the day it was written — re-verify each item against the current tree before acting on it, because closed work goes on looking open, and a thorough body makes re-verification cheap rather than unnecessary
+
+Measured on one pass of seventeen open `effort:S stage:ready` items, all re-checked
+against the working tree rather than read. Two (#37, #43) had been fixed three days
+earlier by a commit that never closed them, so a triage that trusted the bodies
+would have rebuilt shipped work — and would have rebuilt it *badly*, because the
+shipped fix was better than the issue's proposal. One (#39) was half-done, its code
+half solved with a `finally` where the issue asked for `except BaseException:`. One
+(#32) named a function, a wrapper and four line numbers that no longer exist while
+its defect sat exactly where it always had.
+
+The trap is that thoroughness reads as freshness. These bodies carry file:line
+evidence, repro steps and scope-outs, which is what made each re-check take
+seconds — and is also what makes them most convincing to skim. **The cost of
+re-verification is low precisely in the backlogs where skipping it is most
+tempting.**
+
+Applies to `pick` as much as to triage: an item's `stage:` and `effort:` labels are
+the filer's judgement on the day of filing, and neither is re-derived when the tree
+moves underneath them.
+
+## A guard that lives only in code scheduled for deletion leaves with it — when fixing a defect in a retiring module, fix the surviving replacement too even where it is currently unreachable, because the reachability argument is about today and the deletion is about the code that stays
+
+An argument-injection fix landed in `image_utils.get_dezoomify_file` — a scheme
+refusal plus a `--` end-of-options fence — with a test and a comment explaining why
+the fence was not dead code. All of it sits in the 2024 root modules, which Chunk 20
+deletes.
+
+The surviving `curation/acquisition/dezoomify.py` had no fence. It was not
+vulnerable: `check_fetchable` refuses any scheme but http/https a caller earlier,
+and a `-` string parses to no scheme at all. That is a correct reachability
+argument and it is the wrong question. At retirement the fix, its test and its
+comment all leave together, and what remains is a plane whose only defence is a
+guarantee held one module away, with nothing asserting it — so a later widening of
+`ALLOWED_SCHEMES`, or a second caller reaching `tile_fetch` unguarded, reopens the
+hole silently.
+
+The comment there made it worse than absence: it called the URL "the last
+option-free argument", which is false twice over — `staged` follows it, and nothing
+makes it option-free. It credited the argv list, which defeats *shell*
+metacharacters, for a property only the upstream scheme check provides. **A comment
+crediting the wrong mechanism is how the next call site inherits the gap**, because
+the reader carries away the lesson it teaches rather than the guarantee it has.
+

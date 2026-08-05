@@ -479,23 +479,9 @@ they test the outcome rather than the transformation.
 
 ## An idempotence test that holds the inputs still tests the wrong half
 
-## A backlog item's body is evidence about the day it was written — re-verify before acting
+## A backlog item's body is evidence about the day it was written — re-verify each item against the current tree before acting on it, because closed work goes on looking open, and a thorough body makes re-verification cheap rather than unnecessary
 
-**When triaging or picking backlog work, check each item against the current tree
-before believing it, because closed work goes on looking open.** In one pass of
-seventeen items: two were fixed three days earlier and never closed, one was
-half-fixed *better* than it asked for, and one named functions that no longer
-exist while its defect stayed exactly where it was. Reading bodies and stopping
-would have rebuilt shipped code. Thorough bodies make re-verification cheap; they
-never make it unnecessary.
-
-## A guard that lives only in code scheduled for deletion leaves with it
-
-**When fixing a defect in a module with a scheduled retirement, check whether the
-surviving replacement has the same defect — and fix it there too, even when it is
-currently unreachable.** The fix, its comment and its test all go at retirement,
-so a later change that reopens the hole finds nothing asserting the defence. The
-reachability argument is about today; the deletion is about the code that stays.
+## A guard that lives only in code scheduled for deletion leaves with it — when fixing a defect in a retiring module, fix the surviving replacement too even where it is currently unreachable, because the reachability argument is about today and the deletion is about the code that stays
 
 ## Adding code to a repo means asking which guards were scoped to the old shape
 

@@ -192,6 +192,7 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
         approval_threshold=7,
         phase1_search_allowance=3,
         phase2_searches_per_work=4,
+        offered_works_per_run=9,
         search_cost_usd=Decimal("0.002"),
         input_cost_usd_per_mtok=Decimal("3.00"),
         output_cost_usd_per_mtok=Decimal("5.00"),
@@ -237,9 +238,9 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
     assert "phase2_searches_per_work=4" in logged
     # The supplement's bound, and the one field here whose "off" is otherwise
     # invisible: a run offering nothing because this is zero looks exactly like one
-    # whose collection held nothing. Named rather than printed as 0 for that reason,
-    # so the zero case is asserted separately below.
-    assert "offered_works_per_run=" in logged
+    # whose collection held nothing. The zero case renders as a word instead, and is
+    # asserted by `test_a_supplement_switched_off_says_disabled_rather_than_zero`.
+    assert "offered_works_per_run=9" in logged
     # 200,000 input at $3/M is $0.60 and 20,000 output at $5/M is $0.10; three
     # searches at $0.002 add $0.006. Computed here rather than copied, so the
     # assertion fails if the composition changes rather than tracking it.
@@ -251,6 +252,27 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
     assert "model=probe/model-under-test" in logged
     assert "max_output_tokens=1234" in logged
     assert "search_results=6" in logged
+
+
+def test_a_supplement_switched_off_says_disabled_rather_than_zero(tmp_path, monkeypatch, caplog):
+    """The other arm of the field above, which is the whole reason it is a word.
+
+    `offered_works_per_run=0` is a number an operator reads past. The setting's
+    entire problem is that switching it off is invisible downstream — a run offers
+    nothing and the journal cannot distinguish that from an empty collection or
+    from every candidate being declined — so the startup line is the one place the
+    deployment states it, and it has to state it in a form that stops the eye.
+    """
+    art_root = tmp_path / "art"
+    art_root.mkdir()
+    _stub_settings(monkeypatch, art_root, offered_works_per_run=0)
+    monkeypatch.setattr(entry_point.uvicorn, "run", lambda app, **kwargs: None)
+
+    with caplog.at_level("INFO"):
+        entry_point.main()
+
+    assert "offered_works_per_run=disabled" in caplog.text
+    assert "offered_works_per_run=0" not in caplog.text, "the number is what nobody reads"
 
 
 def test_startup_never_writes_the_api_key_to_the_journal(tmp_path, monkeypatch, caplog):

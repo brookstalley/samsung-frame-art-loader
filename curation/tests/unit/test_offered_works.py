@@ -339,8 +339,6 @@ def test_a_bound_of_zero_switches_the_supplement_off_without_unwiring_it(
     and this one — so without a line naming the third, the operator asking "why
     did nothing get offered" reads the same journal for all of them.
     """
-    from dataclasses import replace
-
     caplog.set_level(logging.INFO)
 
     runner = DiscoveryRunner(
