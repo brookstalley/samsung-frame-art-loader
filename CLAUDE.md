@@ -116,6 +116,14 @@ cd curation && uv run pytest -m live_binary -n0     # free, needs dezoomify-rs
 cd curation && uv run pytest -m live_api -n0        # SPENDS REAL MONEY
 ```
 
+**Locally the marker alone is enough; in CI it is not.** These commands collect
+the whole tree and the opt-in modules `importorskip`, which is a skip you can
+ignore at a terminal. In a workflow that same skip fails the job through
+`assert_tests_ran.py` while every probe passed, so **a CI invocation scopes the
+path as well** — `uv run pytest tests/live -m live_museum …`. That is asserted by
+`tests/test_assert_tests_ran.py`, which reads the workflow files, so a new job
+written from the line above fails at home rather than on a schedule.
+
 Run one when your work touches that client. Otherwise leave the **three
 `live_*` markers** to `.github/workflows/api-drift.yml`, which runs the two free
 tiers weekly and the paid one monthly — drift is on the provider's schedule, not

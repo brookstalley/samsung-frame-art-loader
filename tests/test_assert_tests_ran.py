@@ -168,10 +168,22 @@ def test_every_ci_pytest_invocation_scopes_a_path():
     reviewer should not have to catch a third time.
 
     Matched textually rather than through a YAML parse, for the reason the test
-    above gives: pyyaml is not a dependency of this plane. What that costs is
-    precision about *which* line, not coverage — every invocation is on one line
-    by convention here, and a multi-line one would simply not match the prefix
-    and would be reported.
+    above gives: pyyaml is not a dependency of this plane.
+
+    **Every line carrying the command counts, whatever precedes it**, and that
+    breadth is the correction rather than the original design. The first version
+    matched two prefixes — `run: uv run pytest` and `- uv run pytest` — and its
+    docstring claimed an invocation it did not match "would simply not match the
+    prefix and would be reported". It would not: an unmatched line never enters
+    the list, so it is skipped in silence. That is a coverage hole, not a loss of
+    precision, and it sat exactly where `CLAUDE.md` points — every command it
+    documents is written `cd curation && uv run pytest …`, which the prefixes
+    missed, as would any invocation inside a `run: |` block. A guard against a
+    thrice-recurring defect, blind to the form the documentation teaches.
+
+    Comment lines are skipped, because a workflow may legitimately document the
+    unscoped *local* command in prose — `api-drift.yml` does — and nothing runs a
+    comment.
     """
     directory = GUARD.parents[2] / ".github" / "workflows"
     workflows = sorted(set(directory.glob("*.yml")) | set(directory.glob("*.yaml")))
@@ -181,8 +193,9 @@ def test_every_ci_pytest_invocation_scopes_a_path():
     for workflow in workflows:
         for line in workflow.read_text(encoding="utf-8").splitlines():
             stripped = line.strip()
-            if stripped.startswith("run: uv run pytest") or stripped.startswith("- uv run pytest"):
-                invocations.append((workflow.name, stripped))
+            if stripped.startswith("#") or "uv run pytest" not in stripped:
+                continue
+            invocations.append((workflow.name, stripped))
     assert invocations, "no pytest invocations found in any workflow — this test is asserting nothing"
 
     for name, line in invocations:
