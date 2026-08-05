@@ -1285,11 +1285,29 @@ async function alternatesPanel(workId, after) {
  * image deliberately does not rewrite `resolution_status`. Three parts of one
  * card disagreeing, and the MCP surface said the opposite for the same work.
  *
- * The second sentence names the way back, because this state is one the curator
- * created and can undo from the panel directly below it. */
+ * **It names no way back, because there is none, and an earlier version of this
+ * fix invented one.** It read "Restore one from the scans below to judge it
+ * again", which was false three times over: every row in that panel renders its
+ * controls as null once rejected, no restore endpoint exists, and
+ * `discovery.select_image` refuses a rejected instance *on purpose* — its
+ * docstring makes the refusal a requirement, so that a rejection survives the
+ * next re-search. Inventing an instruction the product forbids is the same
+ * defect this function exists to fix, so it is recorded rather than quietly
+ * deleted.
+ *
+ * The sentence is `REASON_SENTENCES.all_rejected` rather than a second string
+ * saying the same thing, so this state reads identically wherever a curator
+ * meets it.
+ *
+ * **What is deliberately NOT changed here**: the badge beside this still reads
+ * "has an image", because `resolution_status` records what the *run* found and
+ * rejecting an image deliberately does not rewrite it. That is a true statement
+ * about the run and a confusing one beside this sentence, and reconciling them
+ * means deciding whether the badge describes the run or the card — a product
+ * question, not a rendering one. Left as it is, knowingly. */
 function absentScanReason(card) {
   if (card.instances_held > 0 && card.instances_surviving === 0) {
-    return "Every scan found for this work was turned down. Restore one from the scans below to judge it again.";
+    return REASON_SENTENCES.all_rejected;
   }
   return "No scan was found for this work.";
 }

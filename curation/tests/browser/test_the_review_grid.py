@@ -628,11 +628,15 @@ def test_a_work_whose_every_scan_was_turned_down_is_not_told_nothing_was_found(u
     ui.open(f"#review/{RUN_ID}")
     ui.page.wait_for_selector("li.card")
 
-    assert "Every scan found for this work was turned down." in ui.text()
+    assert "You have turned down everything that was found for it." in ui.text()
     assert "No scan was found for this work." not in ui.text()
-    # The way back is named, because this is a state the curator made and can undo
-    # from the panel immediately below the sentence.
-    assert "Restore one from the scans below" in ui.text()
+    # **No way back is offered, because there is none.** An earlier version of
+    # this fix told the curator to "restore one from the scans below"; every row
+    # there renders its controls as null once rejected, no restore endpoint
+    # exists, and `select_image` refuses a rejected instance on purpose so that a
+    # rejection survives the next re-search. Asserted as an absence because a
+    # sentence promising an impossible action is the defect this test guards.
+    assert "estore" not in ui.text(), "the card offers a way back that the product does not have"
 
 
 # -- getting there and back ---------------------------------------------------
