@@ -875,7 +875,7 @@ differently depending on whether the request carries the type filter), so an
 implementation that scopes it wrongly fails by offering a work rather than by
 looking wrong.
 
-## A computed value with no production reader is an unimplemented requirement — before calling a "report X separately" requirement done, name the surface that displays it and the caller that reads it, because a property with tests and no consumer looks finished from inside and changes nothing a user sees
+## A computed value with no production reader is an unimplemented requirement — before calling a "report X separately" requirement done, grep the symbol and check that a caller outside `tests/` exists, because a property with tests and no consumer looks finished from inside and changes nothing a user sees
 
 Chunk 22, 2026-08-04, and **all three Critic reviewers found it independently** —
 correctness, design and sustainability — which is the strongest signal this review
@@ -897,6 +897,36 @@ Tests over a value prove the value is right; they say nothing about whether
 anything asks for it. Four separate records asserted the reporting existed,
 including the comment directly above the two unused properties.
 
-The check that would have caught it costs one question: **name the surface that
-displays this and the caller that reads it.** If the only answer is a test, the
-requirement is not built.
+**"Name the surface that displays it" was the first form of this check, and it
+failed twice** — naming a surface is something you can do from memory while
+looking at the wrong thing. The form that holds is mechanical and takes seconds:
+**grep the symbol; if every hit is in `tests/`, it is not implemented.**
+
+## A generated block's stale-looking state is evidence about the generator, not a defect to tidy — when a checkbox, index or table looks wrong, find what writes it before editing it, because hand-fixing derived output desynchronises it from its source and destroys the signal that something upstream is unset
+
+Chunk 23, 2026-08-05. Three chunks had landed with their `## Status` boxes
+unticked in `build-plan.md`, which read exactly like bookkeeping nobody got round
+to, and a commit ticked them. It was not: `views_enabled` is true, so that block
+is regenerated from the `status=` tag on each change-log entry, and an entry
+carrying no `status=` is release-pending **by design**. The boxes were right and
+the tidy-up was wrong — a commit that edited generated output to match an
+assumption, on a file whose own header says not to.
+
+The tell was available before the edit and cost one read: **the file said so.**
+`change-log.md`'s header documents the tag format and ends "Don't hand-edit them
+— add/update a tagged entry here and run `prawduct-hook regen-views`." The edit
+was made without reading the header of the file that generates the thing being
+edited.
+
+**The rule generalises past this one mechanism.** Anything that looks like drift
+in a derived artifact — a checkbox, a rollup, a release-notes section, an index —
+is a question about its generator: is the source tag missing, or is the state
+genuinely release-pending? Both answers are useful and neither is "edit the
+output". Run the generator and read what it says: `regen-views` reported
+`4 chunk(s) flipped — unshipped [19A, 21, 22, 23]`, which is the mechanism
+stating its own reasoning in one line.
+
+Neighbouring rule, quoted by its heading rather than linked: "a guard's effective
+scope is invisible in its result — when a check computes its own scope, assert
+the scope as well as the finding". Both are cases where a result's meaning
+depends on machinery the reader did not look at.

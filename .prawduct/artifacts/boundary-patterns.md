@@ -263,6 +263,7 @@ are in a uv-only dependency group — and `CLAUDE.md` is the authority.)*
 | Evaluation | **yes** (curation), opt-in | Any tool-surface change, before shipping it — **not** on every run | `curation/tests/eval/`, marker `llm_eval` |
 | Live API — paid | **yes** (curation), opt-in | Any change to the OpenRouter client, and when a recorded price or response shape is in doubt | `curation/tests/live/`, marker `live_api` |
 | Live API — free | **yes** (curation), opt-in | Any change to a museum client, and when a recorded response shape is in doubt | `curation/tests/live/`, marker **`live_museum`** |
+| Live binary — free | **yes** (curation), opt-in | Any change to the dezoomify-rs wrapper, and when a recorded CLI behaviour is in doubt | `curation/tests/live/`, marker **`live_binary`** |
 | Browser | **yes** (curation), opt-in | Any change to `app.js` | `curation/tests/browser/`, marker **`browser`** |
 | End-to-end | no | Before release | — |
 
@@ -293,18 +294,29 @@ description reads "Costs money". **A marker is what records the distinction; the
 paragraph explaining it is not.** Anything added that talks to a free API goes on
 `live_museum`.
 
-All three are off by default: `addopts = -m 'not llm_eval and not live_api and
-not live_museum'`.
+Every opt-in level is off by default, and **the marker expression that does it
+lives in `curation/pyproject.toml`'s `addopts` — read it there.** A copy used to
+sit here reading `-m 'not llm_eval and not live_api and not live_museum'`, and it
+was already wrong twice over: `live_binary` and `browser` had both been added to
+the real one. A quoted config value is a second place for that config to be
+wrong, and it drifts silently because nothing reads it.
+
+**The evaluation level's dependency** is an opt-in group (`uv sync --group eval`)
+rather than `dev`, because it is the heaviest install in the repo and no
+first-party module imports it. Both eval modules therefore `importorskip` at
+import time, not inside a fixture: a marker deselection still *collects* the
+module, so a missing group has to skip rather than fail — otherwise the default
+run breaks for everyone who took the default.
 
 **The browser level, added 2026-08-05, is deselected for a fourth reason and
 none of the first three.** It spends nothing, reaches no foreign API, and is
 entirely deterministic. What it needs is a ~200MB browser on the machine, which
 is too much to put on the default `uv sync` — so its deselection is a packaging
 decision, not a statement about the tests, and `.github/workflows/browser.yml`
-runs it on every push and pull request so that being off the default run does not
-become never running. Its dependency is its own group for the same reason
-`eval`'s is, and both modules `importorskip` so a default install skips rather
-than fails.
+runs it on pull requests and on pushes to `main`, so that being off the default
+run does not become never running. Its dependency is its own group for the same
+reason the evaluation level's is, and its modules `importorskip` for the same
+reason too.
 
 **What it covers is the client, with `/api` as its boundary.** The other suites
 assert what the API answers and take on trust that the page does something
@@ -324,13 +336,6 @@ the one test here whose fixture could not have failed: a run at the approval gat
 re-checks its paint generation after fetching the estimate, so the check under
 test was masked by the one after it, and only a run in a state with no second
 fetch could falsify the claim.
-
-Its dependency is an opt-in group (`uv sync --group eval`) rather than `dev`,
-because it is the heaviest install in the repo and no first-party module imports
-it. Both eval modules therefore `importorskip` at import time, not inside a
-fixture: a marker deselection still *collects* the module, so a missing group
-has to skip rather than fail — otherwise the default run breaks for everyone who
-took the default.
 
 **Within `tests/contract/`, two things now live side by side.** The surface
 tests assert shape — names, schemas, descriptions, annotations, tips. The

@@ -72,9 +72,9 @@ cd curation && uv run pytest -m browser -n0
 
 **Deselected by default for the browser download, not for anything about the
 tests** — they are deterministic, free, and reach no foreign API. Run them when
-you touch `app.js`; `.github/workflows/browser.yml` runs them on every push and
-pull request. Without the group the two modules skip with the command that fixes
-it, so a default `uv sync` is unaffected.
+you touch `app.js`; `.github/workflows/browser.yml` runs them on pull requests
+and on pushes to `main`. Without the group the two modules skip with the command
+that fixes it, so a default `uv sync` is unaffected.
 
 **`-n0` matters here.** These tests time real two-second poll intervals, and
 `-n auto` — which a command-line `-m` leaves in place — turns those windows into

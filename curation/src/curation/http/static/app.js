@@ -872,14 +872,18 @@ async function viewRun(runId) {
    * that climbs under a heading saying what something cost invites reading a
    * partial as a final. */
   let familySpend = null;
+  let familySpendProblem = null;
   if (run.is_terminal) {
     try {
       familySpend = await api(`/api/runs/${encodeURIComponent(runId)}/spend`);
-    } catch {
-      // Left null. The panel below simply omits the row, because the two figures
-      // beside it are read off the run record and are still true — losing the
-      // rollup must not cost the curator the costs panel.
-      familySpend = null;
+    } catch (failure) {
+      // Said, not swallowed — the same call the gate estimate makes above, for
+      // the same reason. Losing the rollup must not cost the curator the costs
+      // panel, and it must not do so in silence either: this is the only place
+      // the family total appears, so a panel that quietly drops the row leaves
+      // "Spent by this run alone" reading as what asking cost, which is the
+      // exact misreading that row was added to prevent.
+      familySpendProblem = `The total including every re-search could not be read: ${failure.message}`;
     }
     if (state.poll !== generation) return;
   }
@@ -967,6 +971,11 @@ async function viewRun(runId) {
         // allowance is the deployment's setting as it stands now.
         ["Searches used", `${view.searches.used} of an allowance of ${view.searches.allowance}`],
       ]),
+      // The row's absence, said out loud. `facts` drops a null pair entirely, so
+      // without this the total simply is not there — and a panel showing only
+      // what this run spent, with nothing to say a figure is missing, is read as
+      // the whole cost of having asked.
+      familySpendProblem ? el("p", { class: "note", text: familySpendProblem }) : null,
     ]),
   ];
 
@@ -1003,6 +1012,12 @@ async function viewRun(runId) {
   // would match the signature and the failure sentence would sit there until
   // something else about the run moved. Not recording it is what makes the next
   // poll try the price again.
+  //
+  // The family total's failure is deliberately NOT held out the same way, and
+  // the asymmetry is the point rather than an oversight: it is fetched only for
+  // a run that has stopped, and a stopped run schedules no further poll, so
+  // there is no next attempt for withholding the signature to enable. The
+  // sentence in the panel is the whole of that remedy.
   if (gateEstimateProblem === null) state.painted = { runId, body };
 
   // Poll only while there is something still to wait for. `is_terminal` comes

@@ -933,6 +933,6 @@ author had written this line.
 The check is mechanical and takes seconds: **grep the symbol; if every hit is in
 `tests/`, it is not implemented.** "Name the surface that displays it" was the
 first form of this rule and it failed twice, because naming a surface is
-something you can do from memory while looking at the wrong thing. See
-[[a-fix-commit-earns-the-same-scrutiny]] for the neighbouring case — the same
-blindness to one's own just-written code.
+something you can do from memory while looking at the wrong thing.
+
+## A generated block's stale-looking state is evidence about the generator, not a defect to tidy — when a checkbox, index or table looks wrong, find what writes it before editing it, because hand-fixing derived output desynchronises it from its source and destroys the signal that something upstream is unset

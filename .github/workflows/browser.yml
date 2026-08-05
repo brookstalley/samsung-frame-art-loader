@@ -55,7 +55,13 @@ jobs:
         run: uv run playwright install --with-deps chromium
       - name: Run the browser suite
         working-directory: curation
-        run: uv run pytest -m browser -n0 -v --junitxml=results.xml
+        # The path is scoped as well as the marker, and that is load-bearing
+        # rather than tidy. `-m browser` alone still *collects* the whole tests
+        # tree, so the eval module — whose group is deliberately not installed
+        # here — lands an import skip in the report, and the guard below reads any
+        # skip as a provisioning failure and fails the job. Verified: unscoped,
+        # this step reported "18 passed, 1 skipped" and the guard exited 1.
+        run: uv run pytest tests/browser -m browser -n0 -v --junitxml=results.xml
       - name: Fail if nothing actually ran
         if: always()
         # A suite that skipped itself reports green, and green-because-absent is

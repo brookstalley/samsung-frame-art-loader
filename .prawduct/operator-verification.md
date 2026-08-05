@@ -70,24 +70,33 @@ deployment does.
    it feel like it is doing nothing? Two seconds was chosen against a Pi's
    modesty, not measured against a curator's patience.
 
-   **One check here is worth doing deliberately, because no test can make it and
-   it is the kind of fault that is invisible until it is infuriating.** On a run
-   sitting at the approval gate, press Tab until "Approve the list" has the focus
-   ring, then take your hands off the keyboard for ten seconds and press Enter.
-   It must approve. A repaint on each poll would have thrown the focus away
-   silently, so what you are checking is that the page leaves the DOM alone when
-   nothing about the run changed. Do the same on a run that *is* changing —
-   focus will legitimately move there, and that is the cost of the view being
-   live.
+   **A test makes this check now, and it is still worth making by hand once.**
+   On a run sitting at the approval gate, press Tab until "Approve the list" has
+   the focus ring, then take your hands off the keyboard for ten seconds and
+   press Enter. It must approve. A repaint on each poll would have thrown the
+   focus away silently, so what you are checking is that the page leaves the DOM
+   alone when nothing about the run changed. Do the same on a run that *is*
+   changing — focus will legitimately move there, and that is the cost of the
+   view being live.
 
-   **This is the honest limit of what is covered.** The client has no test
-   runner — 10B decided against a Node toolchain on a Pi for a single-operator
-   tool, and that decision stands — so the Python suite verifies every byte the
-   server sends and nothing the browser does with it. The polling, the
-   supersession of an in-flight repaint, and the repaint-suppression above are
-   all reasoned and none of them is executed by a test. If the surface keeps
-   growing logic of this kind, that trade is worth reopening; today it is one
-   view's worth.
+   **What covers this, corrected 2026-08-05.** This paragraph used to read "the
+   client has no test runner … none of them is executed by a test", and invited
+   reopening that trade if the surface kept growing logic of this kind. It did,
+   and the trade was reopened and settled: the client is executed by a real
+   browser against a real server in `curation/tests/browser/` (marker `browser`).
+   The focus check above, the supersession of an in-flight repaint, and the
+   polling are each executed — by `test_a_poll_that_changes_nothing_leaves_the_focus_alone`,
+   `test_a_paint_superseded_in_flight_never_reaches_the_page`,
+   `test_two_concurrent_paints_leave_only_one_poll_chain` and
+   `test_leaving_the_run_view_stops_its_polling`. **The no-build-step decision
+   this entry named is untouched** — it governs the *shipped* client, which is
+   still one hand-written file served as-is; what landed is a dev and CI harness.
+
+   **So the honest limit has moved rather than gone.** No browser test judges
+   whether the screen is legible, whether the layout holds at the window size you
+   actually use, whether two badges in one cell read as dense or as clutter, or
+   whether the decision this page asks for is an easy one to make. Those are what
+   this entry exists to collect, and they are why it is still Pending.
 6. **The searches table prints raw ISO timestamps** — `2026-08-05T13:14:25.812…`
    — because that is what the rest of this surface does (the health panel shows
    `reported_at` the same way) and inventing a date format for one table would

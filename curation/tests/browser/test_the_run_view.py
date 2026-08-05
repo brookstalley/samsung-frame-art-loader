@@ -58,10 +58,15 @@ def test_a_poll_that_changes_nothing_leaves_the_focus_alone(at_the_gate):
     ui.page.wait_for_selector("button:has-text('Approve the list')")
 
     ui.page.focus("button:has-text('Approve the list')")
-    ui.page.wait_for_timeout(POLL_MS * 2 + 500)
+    # Half a poll of slack on top of the two being waited for: the second tick
+    # lands at the very edge of a tighter window, and on a loaded CI runner an
+    # edge is a flake.
+    ui.page.wait_for_timeout(POLL_MS * 2 + POLL_MS // 2)
 
     # Two polls have been and gone. The button is still under the keyboard.
     assert ui.focused() == "Approve the list"
+    # Not decoration: if no poll actually happened, focus surviving says nothing
+    # at all, and this test would pass against a client that stopped polling.
     assert len(ui.requests_matching(f"/api/runs/{RUN_ID}")) >= 3
 
 
@@ -171,6 +176,62 @@ def test_leaving_the_run_view_stops_its_polling(at_the_gate):
     ui.page.wait_for_timeout(POLL_MS * 2 + 500)
 
     assert len(ui.requests_matching(f"/api/runs/{RUN_ID}")) == settled
+
+
+# -- the costs panel --------------------------------------------------------
+
+
+@pytest.fixture
+def a_finished_run(ui):
+    """A run that has stopped, which is the only state that fetches the rollup."""
+    ui.serve("**/api/estimate?*", an_estimate())
+    ui.serve(
+        f"**/api/runs/{RUN_ID}",
+        a_run_view(
+            run=a_run(
+                status=RunStatus.COMPLETED.value,
+                is_terminal=True,
+                completed_at="2026-08-05T10:05:00+00:00",
+                actual_cost_usd="0.0134",
+            ),
+            works=[a_candidate()],
+        ),
+    )
+    return ui
+
+
+def test_a_family_total_that_cannot_be_read_says_so(a_finished_run):
+    """The one figure with no second home must not go missing quietly.
+
+    `facts` drops a null pair outright, so a failed rollup fetch used to remove
+    the row with nothing in its place — leaving a panel whose largest number is
+    what this run alone spent, which is exactly the reading the family total was
+    added to prevent.
+    """
+    ui = a_finished_run
+    ui.page.route(f"**/api/runs/{RUN_ID}/spend", lambda route: route.fulfill(status=503, body="{}"))
+
+    ui.open(f"#run/{RUN_ID}")
+    ui.page.wait_for_selector("#view dl.facts")
+
+    shown = ui.text()
+    assert "The total including every re-search could not be read" in shown
+    # The panel survives the failure: the two figures beside it are read off the
+    # run record and are still true, so losing the rollup must not cost them.
+    assert "Spent by this run alone" in shown
+
+
+def test_a_family_total_that_reads_fine_says_nothing(a_finished_run):
+    """The paired negative — the notice appears on failure and not otherwise."""
+    ui = a_finished_run
+    ui.serve(f"**/api/runs/{RUN_ID}/spend", a_spend())
+
+    ui.open(f"#run/{RUN_ID}")
+    ui.page.wait_for_selector("#view dl.facts")
+
+    shown = ui.text()
+    assert "could not be read" not in shown
+    assert "Spent including every re-search" in shown
 
 
 # -- which kind of nothing --------------------------------------------------

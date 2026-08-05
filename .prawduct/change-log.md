@@ -48,6 +48,84 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-05: The browser client gets executed, and the tests get proved
+
+<!-- prawduct: chunks=23 | scope=v1-build -->
+
+**Why:** `app.js` is the only human interface this product has, and neither
+Python suite ran a line of it. Three defects had already reached a running
+product through that gap — `replaceChildren` coercing a null and printing the
+string "null", every image tile silently taking the shape of its own picture,
+and a poll loop stealing the focus every two seconds from the one screen with a
+decision on it. The first two were found by using the product and the third by
+reading; none was visible to a test that reads JSON. Issue #30 said this stopped
+being tolerable at Chunk 19, and 19A shipped first, so this pays that debt before
+19B adds the review grid.
+
+**The binding is Python, and that is a change to what was recorded.** The
+operator's decision settled Playwright over the three cheaper options and named
+its costs, one of which was "a second language's package manifest inside
+`curation/`". Playwright publishes first-party Python bindings, so that cost is
+simply not paid — verified by installing `pytest-playwright` on this repo's 3.14
+before the choice was put rather than after. The harness is
+`curation/tests/browser/` behind a `browser` marker: one language, one suite, one
+command, and it reuses the suite's own server, catalogue and image fixtures
+instead of rebuilding every state through the HTTP API. The decision entry, the
+chunk's deliverables and `project-preferences.md` all record the amendment rather
+than quietly reading the old words the new way. The other two costs stand.
+
+**Deselected for a fourth reason, and it is none of the first three.** The live
+suites are off because they spend money or need the network, and the evaluation
+because it is non-deterministic. This one spends nothing, reaches nothing
+foreign, and is entirely deterministic; what it needs is a ~200MB browser, which
+is too much for a default `uv sync`. So its deselection is a packaging decision
+rather than a statement about the tests, its dependency is an opt-in group of the
+same shape as `eval`'s, and `.github/workflows/browser.yml` runs it on every push
+and pull request so that being off the default run does not become never running
+— with `assert_tests_ran.py` behind it, because a suite that skipped itself
+reports green and green-because-absent is indistinguishable from
+green-because-passing in a checks list. Verified by installing without the group
+and watching both modules skip with the command that fixes them, the default
+suite untouched at 1,752 passing.
+
+**What it covers is the client, with `/api` as its boundary.** Where a real
+server can produce the state it does — paging runs against a real catalogue of
+101 works and the real `truncated` flag, the image tests write a real file and
+take it away, the focus move runs against the real routes. Routes are stubbed
+only for states a server cannot be asked for deterministically: a poll that
+changes nothing, a page that keeps insisting there is more, each unresolved
+reason in turn. Stubbed payloads are built from the API's own response models
+rather than hand-written dicts, so a response that changes shape cannot leave
+these tests green against a page that has started to break.
+
+**The acceptance was the mutation sweep, not a count of tests** — `tools/mutation_sweep.py`
+drives `app.js` as readily as a Python file. All ten mutations are caught, and
+each of the six behaviours was then re-checked against its own named test alone,
+rather than against the suite, so no behaviour is covered only by a neighbour.
+
+**The sweep found a test that could not have failed, which is the finding worth
+carrying forward.** The check that a paint's generation still holds is made
+after *every* await, and a run at the approval gate has two of them — so at the
+gate the later check catches a stale paint even with the earlier one deleted, and
+the test standing there passed against a client whose guard was gone. Only a run
+in a state that fetches nothing else can falsify that claim. **And the mechanism
+was not what the test's own name assumed:** what holds the poll rate down is the
+check `scheduleRunPoll` makes when its timer *fires*, not the one the paint makes
+when its answer lands. A superseded paint does still schedule; its timer then
+finds the world moved on and does nothing. The paint-time check earns its place
+somewhere else entirely — stopping a stale answer painting over the page a
+curator has already moved on to — and that is now what its test asserts.
+
+**One piece of bookkeeping in this branch was wrong and is reversed here.** The
+Status checkboxes for 19A, 21 and 22 were sitting unchecked, and an earlier
+commit on this branch ticked them as an oversight being tidied up. They are a
+*derived view* — `views_enabled` is true, so `regen-views` writes that block from
+the `status=` tag on each change-log entry, and an entry with no `status=` is
+release-pending by design. Unchecked was correct, the tidy-up was hand-editing
+generated output, and `regen-views` has put all four back (23 included). The
+tagged entry above is how this chunk records that it landed; the box flips at
+release, and nothing should ever flip it by hand.
+
 ## 2026-08-05: The live probes get a schedule, and a guard against passing for free
 
 **Why:** the four `live_*` suites are the durable form of the
