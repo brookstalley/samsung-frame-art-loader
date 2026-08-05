@@ -54,6 +54,31 @@ def grid(ui):
     return ui
 
 
+# -- the disclosure says what is behind it -----------------------------------
+
+
+def test_the_scans_disclosure_does_not_promise_scans_the_curator_has_already_seen(grid):
+    """The summary counts every scan, so it must not call them *other* scans.
+
+    The panel behind this disclosure lists all of a work's scans, the one
+    pictured on the card included. Labelling that "Other scans (1)" told a
+    curator there was something new behind it and then showed them the picture
+    they were already looking at — broken on every single-scan work, which in the
+    corpus that surfaced it was nineteen of nineteen.
+
+    Asserted on the rendered summary rather than on the count alone, because the
+    count was never wrong: it matched the panel's contents exactly. The false
+    word was the whole defect, and a test over `instances_held` would have passed
+    throughout.
+    """
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+
+    summary = grid.page.locator("li.card summary").first.inner_text()
+    assert summary == "Scans (1)", summary
+    assert "other" not in summary.lower(), f"the summary promises scans beyond the one pictured: {summary!r}"
+
+
 # -- the alternates are fetched when opened, not with the grid ---------------
 
 

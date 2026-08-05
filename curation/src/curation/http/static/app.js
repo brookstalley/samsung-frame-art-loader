@@ -1304,9 +1304,18 @@ function candidateCard(card, notice, alternatesOpen = false) {
       await repaint(outcome.notice);
     });
 
-  const alternates = el("div", { class: "stack" }, [el("p", { class: "muted", text: "Loading the other scans…" })]);
+  const alternates = el("div", { class: "stack" }, [el("p", { class: "muted", text: "Loading this work's scans…" })]);
+  // **"Scans", not "other scans", and the count is deliberately every scan the
+  // work holds.** The panel below lists all of them — the one pictured on the
+  // card included, because seeing which is currently selected is half of
+  // choosing between them. Labelling that "Other scans (1)" promised a curator
+  // something new behind a disclosure whose single entry was the picture they
+  // were already looking at, which is a promise every single-scan work broke.
+  // The count matches the panel's contents; making the *word* true was the fix,
+  // because subtracting the shown scan from the number would have made the
+  // summary disagree with what opening it reveals.
   const disclosure = el("details", {}, [
-    el("summary", { text: `Other scans (${card.instances_held})` }),
+    el("summary", { text: `Scans (${card.instances_held})` }),
     alternates,
   ]);
   // Fetched when it is opened rather than with the grid: a thirty-work page
@@ -1347,7 +1356,7 @@ function candidateCard(card, notice, alternatesOpen = false) {
       card.shown && !card.shown_is_on_offer
         ? el("p", {
             class: "note",
-            text: "No scan is on offer for this work. The picture is what was found, shown so you can judge it — accepting is refused until you choose one from the other scans below.",
+            text: "No scan is on offer for this work. The picture is what was found, shown so you can judge it — accepting is refused until you choose one from the scans below.",
           })
         : null,
       notice ? el("p", { class: "note", text: notice }) : null,
