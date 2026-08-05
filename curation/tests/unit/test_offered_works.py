@@ -9,6 +9,7 @@ named.
 Phase 2 runs on the calling thread via the `spawn` seam, as its sibling does.
 """
 
+import logging
 from dataclasses import replace
 
 import pytest
@@ -329,10 +330,18 @@ def test_a_deployment_with_no_collection_wired_simply_offers_nothing(services, e
 
 
 def test_a_bound_of_zero_switches_the_supplement_off_without_unwiring_it(
-    services, engine, settings, museum, previews, collection
+    services, engine, settings, museum, previews, collection, caplog
 ):
-    """A cautious deployment can take only what the model named."""
+    """A cautious deployment can take only what the model named.
+
+    Also asserts the run *says* the supplement was off. Three different causes
+    produce `works_offered: 0` — an empty collection, every candidate declined,
+    and this one — so without a line naming the third, the operator asking "why
+    did nothing get offered" reads the same journal for all of them.
+    """
     from dataclasses import replace
+
+    caplog.set_level(logging.INFO)
 
     runner = DiscoveryRunner(
         services.discovery,
@@ -350,6 +359,11 @@ def test_a_bound_of_zero_switches_the_supplement_off_without_unwiring_it(
 
     assert offered(services, run_id) == []
     assert collection.asked == [], "a bound of zero should not even ask"
+    events = [r for r in caplog.records if getattr(r, "event", None) == "browse.supplement_off"]
+    assert len(events) == 1, "a run that offers nothing by configuration must say so"
+    # Which of the two conditions stopped it, because the remedies differ: this one
+    # is a setting to raise, the other is a collection to wire up.
+    assert events[0].reason == "offered_works_per_run_zero"
 
 
 def test_an_offered_work_can_be_accepted_like_any_other(services, engine, runner, collection):

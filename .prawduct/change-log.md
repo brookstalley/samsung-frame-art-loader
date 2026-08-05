@@ -103,7 +103,7 @@ warn against.
 making the documented commands runnable produces one. Three unbounded dependencies
 and a git-pinned fork are now actually pinned, which is what the lock was for.
 
-**Also:** the rendition-currency norm row said "both `pyproject.toml`s" with three
+**Also:** the black-formatting norm row said "both `pyproject.toml`s" with three
 in the tree, and `README.md` and the norm index both said the display plane runs
 3.12 on the Pi against a ratified 3.13 — in the two documents a newcomer
 provisioning the Pi and a Norm Health sweep read first. One JPEG-fixture helper had

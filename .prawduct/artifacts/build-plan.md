@@ -1481,12 +1481,19 @@ two missing deliverables.)*
      — curation is up in development and in every test, so a green suite is
      exactly what a violation looks like. `project-preferences.md` § Enforcement
      moves the manifest-channel norm from Critic back to Test when it lands.
-  2. **A committed lockfile.** This is the only plane without one, against three
-     dependencies with no upper bound and one pinned to a git commit. The
-     product's standing acceptance criterion is that both planes' environments
-     resolve from their locks; a third plane that resolves from the network on
-     every install does not meet it, and the television client is precisely where
-     an unpinned resolve has already broken an import once.
+  2. ~~**A committed lockfile.**~~ **Discharged early, 2026-08-05 (`395910a`) —
+     no longer owed by this chunk.** It was owed because this was the only plane
+     without one, against three dependencies with no upper bound and one pinned to
+     a git commit, and the television client is precisely where an unpinned resolve
+     has already broken an import once. It arrived ahead of the chunk because
+     making `CLAUDE.md`'s documented display-plane commands actually run produces a
+     lock — `uv run` cannot proceed without one — and those commands turned out
+     never to have been executed. `display/uv.lock` is tracked and pins the
+     `samsungtvws` fork to its exact rev.
+
+     **Deliverable 1 above is unaffected and still owed**, for the reason it
+     states: a plane-isolation check written over an empty package passes
+     vacuously, so it lands with the plane's first module.
 
   > **This replaces a one-shot TvBinding adoption path, descoped 2026-08-05 on
   > evidence rather than on preference.** The deliverable was to seed bindings

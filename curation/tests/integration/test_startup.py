@@ -235,6 +235,11 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
     assert "gate=7 works" in logged
     assert "phase1_searches=3" in logged
     assert "phase2_searches_per_work=4" in logged
+    # The supplement's bound, and the one field here whose "off" is otherwise
+    # invisible: a run offering nothing because this is zero looks exactly like one
+    # whose collection held nothing. Named rather than printed as 0 for that reason,
+    # so the zero case is asserted separately below.
+    assert "offered_works_per_run=" in logged
     # 200,000 input at $3/M is $0.60 and 20,000 output at $5/M is $0.10; three
     # searches at $0.002 add $0.006. Computed here rather than copied, so the
     # assertion fails if the composition changes rather than tracking it.
