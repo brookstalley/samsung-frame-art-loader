@@ -1106,3 +1106,150 @@ than the branch, a package manifest asserting a check that had never existed
 (twice, the second time by me). The class is *durable text asserting a capability
 nobody checked*, and user-facing copy is the instance that reaches an actual human
 rather than the next maintainer.
+
+## A docstring's safety argument is a claim about the code beside it — when a comment names a failure mode as unacceptable, the next thing written is the test proving it cannot happen, derived from the DOCSTRING rather than the diff, because stating a danger reads as defending against it and a mutation sweep only asks whether the lines you wrote are defended
+
+2026-08-05, and like its sibling above it arrived inside the fix for the defect it
+describes.
+
+`clean_name`'s citation rules were rewritten to strip a bare citation from a
+proposed title. The docstring argued the safety at length and correctly: a
+trailing hostname alone cannot be evidence of a citation, *because* `Composition
+No.5` is dot-joined word characters exactly as `tate.org.uk` is, and dropping the
+tail would leave `Composition` and merge every numbered canvas by that painter —
+the failure direction with no recovery, the one the whole module exists to refuse.
+
+The rule then shipped requiring only a **bracketed URL** beside the hostname. A
+title supplies one as readily as a citation does, so `Composition No.5
+(https://example.com/x)` cleaned to `Composition`. The exact merge the paragraph
+above it forbade, in the commit whose subject was forbidding it.
+
+**Three things failed at once, and only the last is surprising.** The test written
+alongside pinned the sibling case — a hostname-shaped word with *no* URL — so it
+passed. The mutation sweep passed too, and that is the instructive part: a sweep
+asks whether the branches you *wrote* are defended, and this was a branch reasoned
+about and never written. Nothing in a sweep can ask about the guard that is
+missing. And the reviewer who found it did so by reading the docstring's own claim
+and testing it against the regex, which is precisely the check the author skipped.
+
+**The mechanical form of the rule:** when a docstring says "X would be a
+disaster", write the test for X from that sentence, before looking at the code —
+because reading the code is what convinces you X is handled.
+
+Two further instances the same day, both the same shape:
+
+- The fix for the above introduced `urlsplit`, which raises `ValueError` on an
+  unbalanced `[`. One commit earlier, in the same session, `observations.observe`
+  had been fixed for raising where its docstring promised it never would. Inside
+  startup repair the new raise is a plane that will not boot, every start, for as
+  long as one bad title is stored.
+- Correcting the now-false hostname sentence in `clean_name` left the identical
+  sentence standing in the test docstring that `clean_name` had just been edited
+  to cite as its safety.
+
+## Two redundant defences look exactly like two undefended branches in a mutation sweep — when a survivor surprises you on a line you believe is load-bearing, check whether a SIBLING guard rescues the same input before writing anything, because the fix is a case per guard that the other cannot rescue, not a broader test
+
+2026-08-05. After the merge above was fixed, the rule carried two guards: a
+hostname pattern requiring an alphabetic top-level domain (so `No.5` is not
+host-shaped) and a `_drop_citation` callback comparing the word against the URL's
+own host.
+
+A five-mutation sweep reported two survivors — one per guard. Both looked like
+real coverage gaps and neither was: the single test case was rescued by *either*
+guard alone, so removing one left the suite green. Redundancy and absence produce
+the same SURVIVED line, and the tool's own documentation warns that a survivor and
+a mutation-that-was-never-a-defect are indistinguishable from outside.
+
+The resolution is not a broader test but a **narrower** one per guard: an input the
+other cannot save. Here that meant `The Miracle of St.Mark
+(https://example.com/x)` — host-shaped *with* an alphabetic TLD, so only the host
+comparison can rescue it — and a stored `Composition No.5 (` — damaged, so no URL
+survives to compare against and only the shape rule can rescue it. Both mutations
+then died.
+
+The same session produced the opposite case, and telling them apart is the skill:
+a mutation reordering two passes survived, was investigated, and turned out to
+change no outcome at all — a genuine non-defect, correctly dropped rather than
+pinned. A later change made the order load-bearing for real, and the same mutation
+started being caught. **Confirm a survivor is a defect before writing a test for
+it, and confirm it is not merely shadowed before believing it is one.**
+
+## A bug report's stated CAUSE is a hypothesis, held to the same standard of proof as its symptom — run the cheapest experiment that could refute it before building on it, because the symptom was observed while the cause was reasoned, and both get recorded in artifacts as though they were observed
+
+2026-08-05. Seven `proposed_title` rows were stored corrupted, ending on a dangling
+open parenthesis. The walkthrough recorded the finding carefully — it was checked
+against the catalogue, and the entry says so — and concluded: *"Nothing in this
+codebase truncates a title, so phase 1's model emitted them this way."* The issue
+filed from it repeated the conclusion and cited three source locations as evidence.
+
+The symptom was observed. The cause was **reasoned from reading the code**, and
+was wrong. One command refuted it:
+
+```python
+clean_name('The Persistence of Memory (1931) - cited from blog.artsper.com (https://blog.artsper.com/...)')
+# -> 'The Persistence of Memory (1931) - cited from blog.artsper.com ('
+```
+
+Character for character the stored value. `_BARE_URL` was `https?://\S+`, greedy
+to the next space, so it ate the bracket that *closed* the citation and left the
+one that opened it.
+
+**What the wrong cause would have cost:** the issue's own "Expected" section
+proposed rejecting at ingestion, repairing, or constraining phase 1's response
+schema — three fixes aimed at the provider, none of which touch the regex that did
+it, and one of which spends a paid call to test. The cited evidence was accurate;
+only the inference from it was not.
+
+**The second half of the defect was invisible from the same reasoning.**
+`work_dedup_key` derives from the same cleaned title, so each row keyed as a
+different painting from the same work proposed cleanly — a rejection would not
+have suppressed the work it was about, silently. Reading the code found the
+symptom's location; executing it found the blast radius.
+
+## A grep that retires a claim must be scoped by the repository, never by the file type you found it in — run it with no `--include` and filter by eye, or state the scope you searched beside the claim you retired, because a scoped search is indistinguishable from an exhaustive one in its output
+
+2026-08-05. A third project plane's manifest landed while four artifacts still
+enumerated two. The fix was made and the commit message said the claim had been
+"retired by grep rather than locally" — invoking this repo's own standing rule.
+
+The grep ran with `--include="*.md"`. It returned clean. Two more copies sat in
+`.prawduct/project-state.yaml`: the `test_commands` preamble ("Two independent
+projects, two interpreters, two suites") and the v1-scope line ("one suite per
+plane"). The reviewer found both.
+
+**Why it fails silently:** the claim was *found* in Markdown, so Markdown is where
+the search goes — and the clean result of an under-scoped search is byte-identical
+to the clean result of an exhaustive one. This is the same shape as the recorded
+rule that a guard's effective scope is invisible in its result, applied to an
+ad-hoc search rather than a committed check.
+
+**The cheap discipline:** grep the whole tree with no `--include`, exclude `.git`,
+and read the hit list. If the volume is genuinely unmanageable, write the scope you
+searched next to the claim you retired, so the next reader knows what was not
+looked at.
+
+## A defect class found in one module is a question to ask of every module the same commit touches — grep the diff for the shape you just fixed before committing, because the fix is the cheapest moment to notice the sibling and having just fixed "this must never raise" does not prompt "can what I just wrote raise?"
+
+2026-08-05. One commit fixed `observations.observe`, whose docstring promised
+"nothing raises" while its catch was `(OSError, JSONDecodeError)` against a
+`read_text(encoding="utf-8")` — so non-UTF-8 bytes raised `UnicodeDecodeError`, a
+`ValueError`, escaping to the browser as a 500 and taking down the product's only
+alerting surface.
+
+**The same commit introduced the identical failure one file over.** Its other half
+added `_drop_citation` to `dedup.py`, calling `urlsplit` on model-authored URL
+text. `urlsplit` raises `ValueError` on an unbalanced `[` in the authority — it
+reads one as an IPv6 opener — and nothing caught it. At the engine seam that fails
+a run already paid for; inside `DiscoveryService.reconcile` it fails the *start*,
+every start, for as long as the row is stored: a plane that will not boot because
+of one bad stored title.
+
+Having spent the same commit reasoning about a function that must never raise did
+not produce the question "can the function I just wrote raise?" The two halves were
+reviewed as separate concerns because they *were* separate concerns — one an
+observability parser, one an identity derivation — and the shared property was the
+failure mode, not the subject.
+
+**The mechanical form:** after fixing any defect, re-read the diff asking only
+"where else does this shape appear here?" — not across the codebase, which is a
+backlog item, but across the commit, which is free.
