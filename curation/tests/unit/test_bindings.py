@@ -306,21 +306,27 @@ def test_every_acquisition_outcome_is_accounted_for():
 #
 # Three conditions refuse acquisition before it starts, and none of them is the
 # caller's doing: a full disk, a missing binary, an unset user agent. Each breaks
-# EVERY acquisition in the deployment, so each is translated into advice a caller
-# can read and journalled for the operator who can act on it. Nothing covered
-# these clauses until 2026-08-04 — the translation and the log line alike.
+# EVERY acquisition in the deployment. What this binding owes them is the
+# **remedy** — the sentence naming what an operator changes — and nothing else.
+#
+# The journal line is owed by `AcquisitionService`, and is asserted there
+# (`test_acquisition_service.py`) by driving `acquire()` with no binding in the
+# picture. It was emitted here until 2026-08-05, which meant the signal followed
+# the route in rather than the condition: the first browser acquisition route
+# would have inherited the refusal and not the line. A test at this layer cannot
+# fail for a non-MCP caller, so this one no longer tries to cover it.
 
 
 @pytest.mark.parametrize(
-    ("raised", "condition", "remedy"),
+    ("raised", "remedy"),
     [
-        (NotEnoughSpace("Only 1 byte free."), "NotEnoughSpace", "MIN_FREE_BYTES"),
-        (DezoomifyUnavailable("dezoomify-rs is not on PATH."), "DezoomifyUnavailable", "DEZOOMIFY_PATH"),
-        (TileTargetUnavailable("no resolver for provider 'artic'."), "TileTargetUnavailable", "ARTIC_USER_AGENT"),
+        (NotEnoughSpace("Only 1 byte free."), "MIN_FREE_BYTES"),
+        (DezoomifyUnavailable("dezoomify-rs is not on PATH."), "DEZOOMIFY_PATH"),
+        (TileTargetUnavailable("no resolver for provider 'artic'."), "ARTIC_USER_AGENT"),
     ],
 )
-def test_a_deployment_fault_is_translated_and_journalled(raised, condition, remedy, caplog):
-    """The caller gets a remedy; the operator gets a line they can find.
+def test_a_deployment_fault_is_translated_into_a_remedy(raised, remedy, caplog):
+    """The caller gets something it can act on rather than "failed unexpectedly".
 
     Parametrised over the three rather than written once, because the clauses are
     three separate `except` branches and a test over one of them says nothing
@@ -338,6 +344,4 @@ def test_a_deployment_fault_is_translated_and_journalled(raised, condition, reme
 
     assert remedy in str(failure.value), "the caller is told nothing it can act on"
     events = [record for record in caplog.records if getattr(record, "event", None) == "acquisition.deployment_fault"]
-    assert len(events) == 1, "a fault that breaks every acquisition left no journal line"
-    assert events[0].condition == condition
-    assert events[0].artwork_id == "art-1"
+    assert events == [], "the binding journalled a fault the service already journals; an MCP refusal would be logged twice"

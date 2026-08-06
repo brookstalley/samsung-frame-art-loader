@@ -30,13 +30,14 @@ from pathlib import Path
 from typing import Final
 
 from curation.acquisition.dezoomify import (
+    DezoomifyUnavailable,
     TileOutcome,
     reclaim_tile_cache,
     tile_fetch,
 )
 from curation.acquisition.direct import StreamOpener, direct_fetch
 from curation.acquisition.space import NotEnoughSpace, require_free_space
-from curation.acquisition.tiles import TileTargetResolver, resolve_tile_target
+from curation.acquisition.tiles import TileTargetResolver, TileTargetUnavailable, resolve_tile_target
 from curation.acquisition.urls import Resolver, UrlRefused, check_fetchable, system_resolver
 from curation.discovery.images import ImageSearchFailure
 from curation.persistence.records import AcquisitionMethod, FetchStatus, Source
@@ -50,6 +51,53 @@ log = logging.getLogger(__name__)
 #: title is not unique, not stable, and not a filename — the 2024 tree keyed files
 #: by title and could not hold two works with the same name.
 _FILENAME: Final[str] = "{artwork_id}.jpg"
+
+#: The conditions acquisition **raises for rather than records**, gathered so the
+#: journal line below follows the condition instead of the caller. Every one of
+#: them breaks acquisition for the whole deployment rather than for one source: a
+#: full disk, a missing binary, a provider whose image service cannot be asked.
+#:
+#: Membership here is the same judgement `_record_failure` is the other side of.
+#: A new raise-rather-record condition belongs in this tuple, and a condition
+#: that turns out to be one source's fault belongs in neither.
+_DEPLOYMENT_FAULTS: Final[tuple[type[Exception], ...]] = (
+    NotEnoughSpace,
+    DezoomifyUnavailable,
+    TileTargetUnavailable,
+)
+
+
+def _journal_deployment_fault(exc: Exception, *, artwork_id: str) -> None:
+    """Journal a fault that is the deployment's rather than the caller's.
+
+    These refusals reach the caller as an exception, and a tool boundary answers
+    it with a failure envelope and **no log line** — correct for the ordinary
+    case, where a bad id is the caller's problem and the caller is told. It is
+    wrong here: a missing binary, a full disk or an unset user agent breaks
+    *every* acquisition in the deployment, and the only person who can fix it is
+    the operator, who is not holding the result.
+
+    **Emitted here rather than at a surface, so the signal follows the condition
+    and not the route in.** It lived in the MCP binding until 2026-08-05, which
+    was harmless only for as long as MCP was the sole caller: the first browser
+    acquisition route would have inherited the refusal without the journal line
+    and left an operator debugging "nothing acquires" on a full disk against
+    silence — the exact failure this event exists to break. A surface still owns
+    the operator-facing *remedy*, which is a different thing and belongs where
+    the words are written.
+
+    `condition` is the exception's own type name, so the journal cannot drift
+    from what was actually raised.
+    """
+    log.error(
+        "acquisition refused before it started: %s",
+        exc,
+        extra={
+            "event": "acquisition.deployment_fault",
+            "condition": type(exc).__name__,
+            "artwork_id": artwork_id,
+        },
+    )
 
 
 class AcquisitionOutcome(Enum):
@@ -163,6 +211,13 @@ class AcquisitionService:
         guess — "which of these is the right one" is exactly the judgement
         acceptance already made, and re-making it here could silently disagree.
         """
+        try:
+            return self._acquire(artwork_id, source_id=source_id)
+        except _DEPLOYMENT_FAULTS as exc:
+            _journal_deployment_fault(exc, artwork_id=artwork_id)
+            raise
+
+    def _acquire(self, artwork_id: str, *, source_id: str | None = None) -> AcquisitionResult:
         source = self._select_source(artwork_id, source_id=source_id)
 
         # Before anything is fetched, and before the URL is even looked at: a disk

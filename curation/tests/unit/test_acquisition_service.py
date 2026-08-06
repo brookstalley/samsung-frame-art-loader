@@ -5,6 +5,7 @@ that sits above them — which source is used, when a refusal is data about a so
 rather than a fault, and what the catalogue holds afterwards.
 """
 
+import logging
 import stat
 from contextlib import contextmanager
 from pathlib import Path
@@ -12,12 +13,14 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from curation.acquisition.dezoomify import DezoomifyUnavailable
 from curation.acquisition.service import (
     AcquisitionOutcome,
     AcquisitionService,
     AcquisitionSettings,
 )
 from curation.acquisition.space import NotEnoughSpace
+from curation.acquisition.tiles import TileTargetUnavailable
 from curation.persistence.records import (
     AcquisitionMethod,
     FetchStatus,
@@ -268,6 +271,91 @@ class TestTheFreeSpaceGuard:
         result = _acquisition(service, acq_settings, _serves(_jpeg_bytes())).acquire(work.id)
 
         assert result.outcome is AcquisitionOutcome.ACQUIRED
+
+
+class TestTheDeploymentFaultsReachTheJournal:
+    """The three conditions acquisition raises for, journalled at the raise.
+
+    Each one breaks *every* acquisition in the deployment — a full disk, a
+    missing binary, a provider whose image service cannot be asked — and the
+    person who can fix it is the operator, not whoever is holding the result.
+
+    **Driven through `acquire()` with no binding anywhere in the picture**,
+    because that is the whole point of where the line lives. It was emitted by
+    the MCP binding until 2026-08-05, so the signal followed the route in rather
+    than the condition, and a test at that layer could not fail for any other
+    caller. The first browser acquisition route would have inherited the refusal
+    and not the line, leaving an operator debugging "nothing acquires" on a full
+    disk against silence.
+    """
+
+    @staticmethod
+    def _faults(caplog):
+        return [record for record in caplog.records if getattr(record, "event", None) == "acquisition.deployment_fault"]
+
+    def test_a_full_disk_is_journalled_with_its_condition_and_work(self, service, acq_settings, caplog):
+        from dataclasses import replace
+
+        work, _ = _work_with_source(service)
+        greedy = replace(acq_settings, min_free_bytes=2**62)
+
+        with caplog.at_level(logging.ERROR), pytest.raises(NotEnoughSpace):
+            _acquisition(service, greedy, _serves(_jpeg_bytes())).acquire(work.id)
+
+        assert [record.condition for record in self._faults(caplog)] == ["NotEnoughSpace"]
+        assert self._faults(caplog)[0].artwork_id == work.id
+
+    def test_a_missing_tile_binary_is_journalled(self, service, acq_settings, caplog):
+        from dataclasses import replace
+
+        work, _ = _work_with_source(service, method=AcquisitionMethod.DEZOOMIFY)
+        absent = replace(acq_settings, tile_binary=str(acq_settings.art_root / "no-such-dezoomify"))
+
+        with caplog.at_level(logging.ERROR), pytest.raises(DezoomifyUnavailable):
+            _acquisition(service, absent, _serves(b"")).acquire(work.id)
+
+        assert [record.condition for record in self._faults(caplog)] == ["DezoomifyUnavailable"]
+        assert self._faults(caplog)[0].artwork_id == work.id
+
+    def test_an_unresolvable_tile_target_is_journalled(self, service, acq_settings, caplog):
+        """A provider with no resolver wired: the museum is fine, the wiring is not."""
+        work, _ = _work_with_source(
+            service,
+            method=AcquisitionMethod.DEZOOMIFY,
+            url="https://api.artic.edu/api/v1/artworks/91194",
+        )
+
+        def _no_resolver(_source):
+            raise TileTargetUnavailable("no resolver is wired for provider 'gallery_site'.")
+
+        acquisition = _acquisition(
+            service,
+            acq_settings,
+            _serves(b""),
+            tile_targets={"gallery_site": _no_resolver},
+        )
+
+        with caplog.at_level(logging.ERROR), pytest.raises(TileTargetUnavailable):
+            acquisition.acquire(work.id)
+
+        assert [record.condition for record in self._faults(caplog)] == ["TileTargetUnavailable"]
+        assert self._faults(caplog)[0].artwork_id == work.id
+
+    def test_a_refusal_that_is_one_source_s_fault_is_not_journalled_as_a_deployment_fault(self, service, acq_settings, caplog):
+        """The other side of the same judgement, and the reason the tuple is narrow.
+
+        A source that simply will not fetch is recorded against that source and
+        read from the catalogue afterwards. Journalling it here would fill an
+        operator's log with the ordinary usage failures these three lines exist
+        to be findable among.
+        """
+        work, _ = _work_with_source(service, url="https://gallery.example.com/gone.jpg")
+
+        with caplog.at_level(logging.ERROR):
+            result = _acquisition(service, acq_settings, _refuses(OSError("connection reset"))).acquire(work.id)
+
+        assert result.outcome is AcquisitionOutcome.FAILED
+        assert self._faults(caplog) == []
 
 
 class TestChoosingTheSource:
