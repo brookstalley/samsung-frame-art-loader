@@ -946,3 +946,7 @@ filenames encode identity in at least three mutually inconsistent conventions
 ## A grep that retires a claim must be scoped by the repository, never by the file type you found it in — run it with no `--include` and filter by eye, or state the scope you searched beside the claim you retired, because a scoped search is indistinguishable from an exhaustive one in its output
 
 ## A defect class found in one module is a question to ask of every module the same commit touches — grep the diff for the shape you just fixed before committing, because the fix is the cheapest moment to notice the sibling and having just fixed "this must never raise" does not prompt "can what I just wrote raise?"
+
+## When a comment names a SYMBOL as the source of truth for a set, derive the test's inputs from that symbol — parametrise over the tuple/enum/registry the prose points at rather than retyping its members, because a hand-copied list makes the invariant true only for the members that existed when it was written, and the failure of the one added later is exactly the silent outcome the comment was warning about
+
+## A test rewritten to accommodate a change needs the mutation check MORE than a new test does — after adjusting an assertion that your own change turned red, re-break the thing the test originally caught and confirm it still fails, because the pressure is to make it pass and the cheapest way to do that is to drop the assertion that was doing the work
