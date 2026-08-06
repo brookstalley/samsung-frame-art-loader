@@ -2031,6 +2031,35 @@ design_decisions:
         On the wall asks what the display plane was actually asked to show, and
         the gap between those two is the product's most important disclosure.
       date: 2026-08-01
+    - decision: >
+        The discovery half arrived and the UI is five sections and three detail
+        views: Works, Discovery, Themes, On the wall, and Health, with Work, Run
+        and Review opening in place. Run and Review both keep Discovery lit
+        while they are open. Review is addressed by the RUN whose works are
+        being judged, not by a work.
+      rationale: >
+        Recorded 2026-08-05. This does not replace the entry above — that one
+        was correct on its date and said in as many words that the discovery
+        screens were absent because they bound services not yet built. Those
+        services arrived across chunks 14 to 19B, and each screen came with its
+        service exactly as planned. What went unrecorded is that the list itself
+        had moved on, so a reader taking "four sections" as current would design
+        against a UI that no longer exists.
+
+        Review is per-run rather than per-work because a curator judges a run's
+        output as a set, and a per-work address would make the grid unreachable
+        by URL — the client says so at `DETAIL_VIEWS` and this is that reason,
+        not a second one derived here.
+
+        Run and Review keep the Discovery tab lit for the same reason Work keeps
+        Works lit: a detail view is a place inside a section, and a highlight
+        that went dark on the way in would read as having left it.
+
+        Checkable against the code rather than taken on trust: the five names
+        are the keys of `VIEWS` and the three are the keys of `DETAIL_VIEWS` in
+        `curation/src/curation/http/static/app.js`, with `tab` holding which
+        section stays lit.
+      date: 2026-08-05
   interaction_patterns:
     - decision: >
         State is carried by a glyph and a word before it is carried by colour;
@@ -2052,6 +2081,58 @@ design_decisions:
         The third exists because a failure a curator learns about by noticing a
         colour is a failure that gets missed.
       date: 2026-08-01
+    - decision: >
+        The discovery screens' own patterns. A live run is polled every two
+        seconds and a poll repaints only when the payload changed. A run over
+        the proposal threshold stops and asks, and says that nothing further is
+        spent until the curator decides. Cost is disclosed as two figures — this
+        run, and the family including every re-search — beside searches used
+        against the allowance, and never as a verdict. A candidate card carries
+        its alternates behind a disclosure that fetches when opened. A card with
+        no picture says WHICH kind of pictureless it is, and names no way back
+        when there is none.
+      rationale: >
+        Recorded 2026-08-05. The three patterns above still hold; these are the
+        ones the discovery screens introduced and nobody wrote down.
+
+        The repaint rule is the load-bearing half of the poll, not an
+        optimisation. `render` replaces the whole subtree, so an unchanged
+        repaint destroys whatever the keyboard user was standing on — tabbing to
+        Approve and pausing to read loses the focus two seconds later, every
+        time, on the one screen whose whole job is to be decided on. Compared
+        against the payload rather than the status, because a work list filling
+        in underneath a settled status is exactly the change worth repainting
+        for. A poll generation is claimed at the top of the paint and rechecked
+        after every await, so a superseded paint cannot paint over a later one
+        or leave a second timer beside it.
+
+        The approval gate says what has NOT been spent, because a curator
+        deciding whether to continue is deciding about money, and a gate that
+        only reported the count would leave them guessing at the thing they are
+        actually being asked about.
+
+        Two cost figures rather than one: a run billed little whose re-searches
+        cost ten times more is the case they exist to keep apart. When the
+        family total cannot be computed the absence is said out loud, because a
+        panel showing only this run's spend with nothing to mark the gap is read
+        as the whole cost of having asked. Usage and allowance are shown as two
+        numbers and never as a judgement — the usage is this run's history, the
+        allowance is the deployment's setting as it stands now.
+
+        Alternates load on open rather than with the grid: a thirty-work page
+        would otherwise carry up to twelve instances each, and a curator opens
+        the alternates for the few works whose first answer they doubt.
+
+        The pictureless card is the pattern with the most expensive history.
+        Nothing found and every scan rejected are different states, and reading
+        only "is there a picture" flattened them — telling a curator no scan was
+        found directly above a disclosure listing the scans they had just turned
+        down. It also names no way back, deliberately: a first attempt at the
+        fix invented "Restore one from the scans below", which the product
+        forbids three ways over. The general rule that came out of it is worth
+        more than the case — a sentence in a UI is a claim about what the
+        software can do, and it needs the same verification as any other claim.
+      date: 2026-08-05
   accessibility_approach: >
     Two surfaces with completely different accessibility profiles, and the
     important one is physical.
