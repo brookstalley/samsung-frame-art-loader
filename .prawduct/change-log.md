@@ -48,6 +48,70 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-06: Two checks that reported on measurements they never took
+
+<!-- prawduct: scope=v1-build -->
+
+**Why:** The live `tv_api_check.py` run that cleared the 2026-08-06 dependency
+bump passed nine checks and failed none, and two of those nine had measured
+nothing. Neither said so. That is the fault worth naming above either bug: a
+check whose "cannot tell" and "all clear" print the same line is worse than no
+check, because it retires the question.
+
+**The panel-size check was comparing `None` on every run since it was written.**
+It read `modelName` from the art client's `get_device_info()`, which returns the
+*art channel's* payload — `current_rotation_status`, `support_brightness_sensor`,
+`resolution_type`, no `device` key at all. The `{"device": {"modelName": …}}`
+shape belongs to the REST endpoint at `/api/v2/`, a different endpoint over a
+different protocol. So the model was always `None`, `disagreement(None, …)`
+returned `None`, and the check took its "neither side stated one" branch and
+reported `ok`. It exists because a live deployment ran `TV_PANEL_DIAGONAL_INCHES=42`
+against a 50" panel and mis-sized every judgement about whether a work belonged on
+the wall — and `.env.example` ships that 42, so the misconfiguration it guards
+against is the one a fresh clone starts in. The guard worked; nothing reached it.
+
+The model now comes from `samsungtvws.rest.SamsungTVRest.rest_device_info()`, the
+public synchronous client for that endpoint, and the note reports `modelName`
+beside the `24_`-prefixed model year — the field the token handshake actually
+turns on, which the comment beside it had asked for and the code had never
+supplied.
+
+**The structural half is `panel_check.not_compared()`**, and it is what stops the
+next one. `disagreement()` is quiet in three unrelated states — the set named no
+size, the deployment configured none, the two agree — and any caller reading only
+that answer must either report a pass for all three or invent the distinction
+itself. Now one function says whether a comparison was possible and the other
+says how it came out; a caller that reports a pass without asking the first is
+claiming a measurement it did not take. The tool prints three outcomes where it
+printed two, and `not compared` names which side said nothing. An unset diagonal
+says the built-in default is in use and unchecked, rather than "not set", which
+reads as harmless and is not.
+
+**The callback check could not name the event it was registered for**, and its
+output looked as though it had. The library selects a callback by the *sub*-event
+inside the message (`self.callbacks[sub_event]`) and invokes it with the *outer*
+websocket message type, so all three art-channel callbacks are called with
+`event="d2d_service_message"`. The recorder appended that first argument, so
+every run reported the same constant whichever event fired — and the 2026-08-06
+operator note read it at face value and concluded that *nothing* fired, a claim
+its own "0 failed" line contradicted, since the check fails when none do. The
+recorder now captures its trigger in a closure at registration. That is exact
+precisely because selection is by sub-event.
+
+**Six mutations of the new branches, all caught**; three suites green (150 / 134
+/ 1925). The library's argument-order trap is written into
+`platform-and-dependency-findings.md` rather than only fixed, because the display
+plane registers no callback yet and is the next thing that will.
+
+**`tv_api_check.py` still has no unit tests and still cannot have them here** —
+it imports `samsungtvws`, which the root project deliberately does not install.
+The decision that could be moved was moved: `panel_check` is importable by the
+root suite and now carries both halves of the panel question. The two call-site
+fixes were driven against the payloads the live run captured — fed the art
+channel's, the panel line reads `not compared`; fed the REST payload against 42,
+it fails with the full 104.9-against-88.1 warning — and the next run on the set is
+what confirms them against a television.
+
 ## 2026-08-06: The display plane exists — and the guard that could not be written until it did
 
 <!-- prawduct: chunks=12 | scope=v1-build -->

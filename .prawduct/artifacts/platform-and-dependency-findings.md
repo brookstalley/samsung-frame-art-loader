@@ -347,6 +347,18 @@ slideshow. It means the old/new API split costs this product nothing — the eve
 it depends on is the one that is not part of that split — and that a display
 process needs to register exactly one callback, not three.
 
+**That finding came from instrumented probes, and it could not have come from a
+callback's own arguments** — which is a trap for anything that registers one.
+`process_event` selects the callback by the *sub*-event carried inside the
+message (`self.callbacks[sub_event]`) but invokes it with the *outer* websocket
+message type, so **every art-channel callback is called with
+`event="d2d_service_message"`**, whichever event actually fired. A recorder that
+logs its first argument reports that constant forever and looks like a finding
+about the television. Capture the trigger in a closure at registration instead;
+selection by sub-event is what makes that exact. This cost a live run its answer
+to the question the registration exists to ask, and the run's report gave no sign
+it had.
+
 ### Detecting that the set is actually in art mode
 
 **This is the signal a display process needs, and the obvious candidates do not

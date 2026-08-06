@@ -75,12 +75,46 @@ def size_from_model(model_name: str | None) -> int | None:
     return int(found.group(1)) if found else None
 
 
+def not_compared(model_name: str | None, configured_inches: float | None) -> str | None:
+    """Why no comparison happened, or None when one did.
+
+    `disagreement` is quiet in three unrelated states — the set named no size
+    this parse recognises, the deployment configured none, or the two agree —
+    and a caller that reports all three the same way says "checked" about a
+    check that measured nothing. That is the failure this pairing exists to
+    stop, and it is not hypothetical: a live run reported the panel size
+    satisfied while the model name it compared was `None` on every call,
+    because the caller was reading it from a payload that has never carried
+    one. Nothing in the report distinguished that from a set whose size agreed.
+
+    So the two questions are asked separately. This one says whether the
+    comparison was possible; `disagreement` says how it came out. A caller that
+    reports a pass without asking this one is claiming a measurement it did not
+    take.
+    """
+    reasons = []
+    if not model_name:
+        reasons.append("this television reported no model name")
+    elif size_from_model(model_name) is None:
+        reasons.append(f"{model_name} is not a model line this parse has been verified against")
+    if configured_inches is None:
+        reasons.append(
+            "TV_PANEL_DIAGONAL_INCHES is not set, so curation reasons at its built-in default "
+            "and nothing here has checked that against this set"
+        )
+    if not reasons:
+        return None
+    return "not compared — " + "; ".join(reasons)
+
+
 def disagreement(model_name: str | None, configured_inches: float | None) -> str | None:
     """What to tell the operator, or None when there is nothing worth saying.
 
     Three ways to be quiet, and each is a real state rather than a fallthrough:
     the set did not report a size this code recognises, the deployment has not
-    configured one, or the two agree.
+    configured one, or the two agree. `not_compared` above separates the first
+    two from the third, because a caller cannot tell them apart from here and
+    reporting a pass for either is a claim to have measured something.
     """
     reported = size_from_model(model_name)
     if reported is None or configured_inches is None:

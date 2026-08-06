@@ -17,34 +17,30 @@ itself, and the chunk is deliberately still unchecked because of it. Everything 
 that chunk is verified against a test double; **no line of it has spoken to a
 television.**
 
-**The television has to be awake first, and this is the whole trick.** With the
-set in standby or art mode, the remote-control channel accepts the websocket
-handshake and then sends nothing, and the art channel answers
-`ms.channel.timeOut` — which reads exactly like a library incompatibility and is
-not one. `PowerState: 'on'` is the entire fix. Check it before suspecting
-anything else:
+**The television has to be awake first, and this is the whole trick** — but
+"awake" does not mean "showing television". With the set in **standby** the
+remote-control channel accepts the websocket handshake and then sends nothing,
+and the art channel answers `ms.channel.timeOut`, which reads exactly like a
+library incompatibility and is not one. **Art mode is not that state**: a run on
+2026-08-06 with the set in art mode passed all nine checks, constructed in 4.53s,
+and reported `PowerState: "on"`. Art mode is the wall's normal condition and the
+daemon's normal operating environment, so a note reading it as an obstacle would
+have sent the next person hunting a fault that is not there. `PowerState` is
+still the thing to check before suspecting anything else:
 
 ```sh
 curl -s http://<TV_ADDRESS>:8001/api/v2/ | python3 -m json.tool | grep PowerState
 ```
 
-**Two things to run, in this order.**
-
-*First, the pin bump this repo already owed.* The 2026-08-06 security work moved
-`aiohttp` 3.9.5 → 3.14.3 under the television client, and what backs it today is a
-call-site check in a clean interpreter plus a sibling lockfile resolving the same
-fork commit — a resolver argument, not a measurement on the set. It was attempted
-on 2026-08-06 and got no further than the pairing handshake, the set having been
-in standby all session.
-
-```sh
-python tv_api_check.py --image "$ART_ROOT/ready/<any 4K composite>.jpg"
-```
-
-Expect a pairing prompt on the screen the first time a given machine asks, and
-accept it. Rollback for the pins is `deploy/pi-freeze-2024.txt`.
-
-*Then the daemon itself.*
+**What remains here is the daemon itself.** The pin bump this entry used to ask
+for first — the 2026-08-06 security work moving `aiohttp` 3.9.5 → 3.14.3 under
+the television client, backed until then only by a call-site check in a clean
+interpreter and a sibling lockfile resolving the same fork commit — **ran against
+the set on 2026-08-06 and passed 9 checks, 0 failed**, on `aiohttp` 3.14.3,
+`websockets` 16.1.1, `requests` 2.34.2 and the pinned fork. That is a measurement
+on the hardware rather than a resolver argument, and it is recorded with its
+numbers under the 2026-08-01 entry below. Rollback for the pins remains
+`deploy/pi-freeze-2024.txt`.
 
 ```sh
 cd display && uv run python -m display
@@ -499,6 +495,17 @@ the checkout's absolute paths are machine-specific and already flagged as such i
 
 ### The samsungtvws move, against the live television — added 2026-08-01
 
+**Status: the television half is answered; the Pi half is not.** The 2026-08-06
+run reached the set and passed, so what the library does against real hardware is
+no longer an open question. It ran from a **macOS client against a hand-built
+virtualenv holding only the television-path pins** — because nothing in this repo
+installs `requirements.txt` on a Mac: that file carries `omni_epd`, `pycairo` and
+`PyGObject`, none of which build there, and the root project declares only
+`python-dotenv`, so `uv run python tv_api_check.py` fails at `import samsungtvws`.
+**So `pip install -r requirements.txt` on the Pi remains unverified**, and that is
+the half of this entry still owing. The pins are proven against the television;
+they are not proven to install on the machine that will run them.
+
 **Not visual — this one needs the hardware, not your eyes.** The library pin and
 `websockets` both moved, and every claim behind the move comes from reading
 source. What a television does is a separate question, and this is the only thing
@@ -509,6 +516,17 @@ On the Pi, with the set awake:
 ```sh
 pip install -r requirements.txt          # the new pins
 python tv_api_check.py --image "$ART_ROOT/ready/<a 4K composite>.jpg"
+```
+
+To reproduce the client-only run anywhere else, build the television-path pins
+into a throwaway environment rather than reaching for `requirements.txt`:
+
+```sh
+uv venv --python 3.12 /tmp/tvcheck && VIRTUAL_ENV=/tmp/tvcheck uv pip install \
+  "aiohttp==3.14.3" "async_timeout==4.0.3" "websockets==16.1.1" \
+  "requests==2.34.2" "python-dotenv==1.2.2" \
+  "samsungtvws @ git+https://github.com/NickWaterton/samsung-tv-ws-api.git@fe95ef1d784cd32f49bf9a07ec479576574eea07"
+/tmp/tvcheck/bin/python tv_api_check.py --image "$ART_ROOT/ready/<any real JPEG>.jpg"
 ```
 
 > **`ready/` is empty on the rebuilt card and the 2024 composites are gone with
@@ -523,19 +541,86 @@ if any check fails. Paste its output onto issue #3; the last three acceptance
 boxes there are exactly what it measures.
 
 **Four numbers worth recording from the run**, because each is an input to the
-display daemon rather than a pass/fail:
+display daemon rather than a pass/fail. **Run 2026-08-06 from a macOS client
+against the set in art mode: 9 checks, 0 failed.** What it measured:
 
-1. **How long construction blocks.** It makes a REST call and, on 2024-or-later
-   panels, a token round trip, all inside `__init__`.
-2. **Which callback events this set emits.** Three are registered:
-   `slideshow_image_changed` and `auto_rotation_image_changed` are the same
-   notion under two spellings, and the wrong one fails silently, so both go on;
-   `image_selected` is the acknowledgement of the request the script itself
-   made. The run prints whichever fired — record all of them.
-3. **The reported model and API version**, which is what the old/new verb split
-   turns on.
-4. **Upload seconds against file size**, streamed by path. The comparison against
-   the old whole-file-in-memory route is the reason the pin moved.
+1. **How long construction blocks: 4.53s**, against the tool's own 15s ceiling.
+   It makes a REST call and, on 2024-or-later panels, a token round trip, all
+   inside `__init__` — and this set is a 2024 panel, so the token trip is on the
+   path. **The daemon cannot construct a client on its event loop**; 4.5 seconds
+   of blocking I/O in an async loop stalls every other thing that loop owes,
+   including the poll interval the `next`/`show_now` responsiveness depends on.
+   A thread or an executor is a design constraint here, not a tuning choice.
+2. **Which callback events this set emits: the run could not say, and its output
+   looked as though it had.** Three are registered: `slideshow_image_changed`
+   and `auto_rotation_image_changed` are the same notion under two spellings, and
+   the wrong one fails silently, so both go on; `image_selected` is the
+   acknowledgement of the request the script itself made. The report read
+   `fired: d2d_service_message`, which **is not one of the three** — it is the
+   outer websocket message type the library passes to every art-channel callback,
+   whichever sub-event selected it. So what the run establishes is only that **at
+   least one of the three fired** within 5s of `select_image`; the check fails
+   when none do, and this run had no failures. Which one was unrecoverable from
+   the output. *(Second defect fixed in the same pass as the model one below: the
+   recorder now captures the trigger it was registered under, so a run names the
+   event. This entry originally read the output at face value and concluded that
+   nothing fired — a claim its own "0 failed" line contradicted.)*
+
+   **Nothing here disturbs the earlier instrumented finding** that only
+   `image_selected` fires, at +2.15s, and that the two rotation spellings are
+   slideshow-advance events a host-driven wall never provokes
+   (`platform-and-dependency-findings.md`). The next run is what confirms it from
+   the tool rather than from a probe.
+3. **The reported model and API version: `QN50LS03DAFXZA` (`24_PONTUSM_FTV`),
+   API `5.0.1.0`** — the new half of the verb split, so `slideshow_*`. The model
+   came from `/api/v2/` by hand, **not from the tool, which reported "model: not
+   reported" against a set that names itself perfectly well** — see the defect
+   note below.
+4. **Upload seconds against file size: 2.2 MB in 3.0s**, first byte to
+   acknowledgement, streamed by path. The comparison against the old
+   whole-file-in-memory route is the reason the pin moved.
+
+**A defect this run exposed, which is why item 3 above needed a hand check.**
+`check_identity` reads the model from `get_device_info()`, but on the async art
+client that is the *art channel's* payload — `current_rotation_status`,
+`support_brightness_sensor`, `resolution_type` and so on, with **no model and no
+`device` key at all**. The `{"device": {"modelName": …}}` shape the code destructures
+is what the *REST* endpoint returns. So `model` is always `None`, and the cost is
+not the cosmetic note: `panel_check.disagreement(None, …)` returns `None`, so the
+**panel size check silently takes its "neither side stated one" branch and passes
+without measuring anything**. That check exists because a live deployment ran 42"
+against this 50" panel and mis-sized every judgement about whether a work belonged
+on the wall — and `.env.example` still ships `TV_PANEL_DIAGONAL_INCHES=42`, so
+the misconfiguration it guards against is the one a fresh clone starts in.
+Confirmed by hand that the public `SamsungTVAsyncRest.rest_device_info()` returns
+the expected shape, and that `disagreement("QN50LS03DAFXZA", 42.0)` produces the
+full warning — the guard works; nothing was reaching it.
+
+**Fixed, in two halves, and the second is the one that generalises.** The model
+now comes from `samsungtvws.rest.SamsungTVRest.rest_device_info()` — the public
+synchronous client for `http://<host>:8001/api/v2/`, which is where that shape
+lives — and the note reports `modelName` and the `24_`-prefixed model year
+together, since the year is what the token handshake turns on. The second half is
+that **`panel_check` now answers two questions instead of one**: `not_compared()`
+says whether a comparison was possible, and `disagreement()` says how it came
+out. A caller that reads only the second reports a pass for "they agree" and for
+"one side said nothing" alike, which is the conflation that let a check comparing
+`None` look satisfied. Driven against both captured payloads: fed the art
+channel's, the panel line now reads `[note] panel size: not compared — this
+television reported no model name`; fed the REST payload against
+`TV_PANEL_DIAGONAL_INCHES=42`, it fails with the full 104.9-against-88.1 warning.
+
+**What that leaves for the next run on the set**, and it is small: the REST read
+itself has only been exercised against a captured payload, so the live pass
+should confirm the `model` note names the set and the `panel size` line is an
+`ok` or a `FAIL` — **never a `not compared`**. A `not compared` from a television
+that answered everything else is the same defect wearing its new name, and now it
+says so on the line rather than needing a hand check.
+
+**The art channel's payload is worth having anyway**, because two fields bear on
+the daemon: `support_brightness_sensor: "TRUE"` (the set has its own sensor,
+which the ported sun-following curve is in addition to, not instead of) and
+`current_rotation_status: 1`.
 
 **If it fails, the rollback is `deploy/pi-freeze-2024.txt`** and nothing else has
 changed on the Pi — the new pins only take effect on an install.
