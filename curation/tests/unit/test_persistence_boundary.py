@@ -444,20 +444,35 @@ def test_a_packages_own_init_resolves_against_itself():
     `curation`, so `from .catalogue import X` there resolved to
     `curation.catalogue` and matched nothing.
 
-    Asserted on `_resolve` directly: the real tree's `__init__.py` is empty, so
-    only fabricated input can show the difference — which is why it survived the
-    commit that introduced the resolution.
+    Asserted on `_resolve` directly: the real `persistence/__init__.py` carries a
+    module docstring and **no imports**, so only fabricated input can show the
+    difference — which is why this survived the commit that introduced the
+    resolution. (That sentence read "is empty", which the file is not; the
+    load-bearing half is the absence of imports.)
     """
     assert _resolve("catalogue", 1, "curation.persistence") == "curation.persistence.catalogue"
     assert _resolve("catalogue", 1, "curation") == "curation.catalogue", "the wrong package resolves elsewhere, silently"
 
 
-def test_the_scan_treats_an_init_as_its_own_package():
-    """The call site's half of the same claim, driven through the real scan.
+def test_a_packages_init_and_its_sibling_derive_the_same_package():
+    """`_package_of` against the two real paths, by the two different routes.
 
-    A relative import planted in `persistence/__init__.py` must be reported. The
-    assertion above pins the arithmetic; this pins that the scan feeds it the
-    right package, which is where the defect actually was.
+    The assertion above pins the arithmetic; this pins the *derivation* — an
+    `__init__.py` whose module name already is the package, and a sibling module
+    whose is not, landing on the same answer. That is what the defect got wrong,
+    sending the `__init__` one level higher.
+
+    **What this does NOT do, corrected because the first version of this
+    docstring claimed it.** It said "driven through the real scan" and "pins that
+    the scan feeds it the right package". It does neither: it calls the shipped
+    `_package_of` and `_imports_any` directly. Mutating the call site back — to
+    `name.rsplit(".", 1)[0]`, or to `package=""` — leaves every test here green,
+    because no module in the tree uses a relative import. That is the joint
+    observability limit stated truthfully at the call site itself, and a docstring
+    three lines from it should not have read as closing it.
+
+    A test overstating its own reach, in the file about claims that outrun their
+    mechanism. Found by review rather than by the sweep, which cannot see prose.
     """
     init = _SOURCE_ROOT / "curation" / "persistence" / "__init__.py"
     sibling = _SOURCE_ROOT / "curation" / "persistence" / "durable.py"
