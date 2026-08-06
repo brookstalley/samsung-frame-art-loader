@@ -1,4 +1,9 @@
-"""The persistence contract over the catalogue's records, and its two errors.
+"""The persistence contract over the catalogue's records.
+
+`StorageError` and `StoreMisuseError` are importable from here and **declared in
+`errors.py`**, which neither domain owns — the distinction the note beside the
+re-export at the foot of this file exists to make. This sentence read "and its
+two errors" until 2026-08-06, which was the claim the move was correcting.
 
 The store is a `Protocol` rather than a base class so that the layers above it
 bind to what the catalogue can be asked, not to how one file answers. Persistence

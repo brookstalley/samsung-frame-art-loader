@@ -176,15 +176,32 @@ def test_no_test_reaches_past_the_container_to_arm_the_no_network_guard():
 # -- the generic tier reaches neither domain -----------------------------------
 
 
-#: The two domain adapters. `durable.py` is the tier beneath both and states that
-#: it "holds no artwork, artist or theme concept" — so importing either of these
-#: from it is the layering claim contradicting itself.
-_DOMAIN_ADAPTERS = {"curation.persistence.catalogue", "curation.persistence.sqlite_discovery"}
+#: The modules allowed to import a domain adapter, and why each one is.
+#:
+#: **An allowlist, not a list of guarded files, and the direction is the whole
+#: point** — the same reasoning the network guard below states. Naming what is
+#: *guarded* stops covering whatever is added next, silently, and its result looks
+#: identical either way: the first version of this guard named two modules as "the
+#: generic tier" and `adapter.py` was not one of them, so a
+#: `from curation.persistence.catalogue import …` there would have gone uncaught.
+#: Adding it fixed that instance and nothing else; a sweep then showed that
+#: removing any name from the set was itself uncaught, because nothing asserted
+#: what the set contained. Inverted, every module under `persistence/` is covered
+#: the day it is written and an exception has to be argued for here.
+_MAY_IMPORT_A_DOMAIN_ADAPTER = {
+    # The adapters themselves: a module cannot reach through itself.
+    "curation.persistence.catalogue",
+    "curation.persistence.sqlite_discovery",
+    # One open file serves both domains, and this is what opens it — so it holds
+    # the discovery schema marker as well as the catalogue's.
+    "curation.persistence.file",
+}
 
-#: What the generic tier is. Kept as a set rather than a single name because the
-#: seam is what is being guarded, not one file: a durable store split into two
-#: modules should inherit the rule rather than escape it.
-_GENERIC_TIER = {"curation.persistence.durable", "curation.persistence.errors"}
+#: The two domain adapters. Everything beneath them is generic by construction:
+#: `durable.py` states it "holds no artwork, artist or theme concept", and
+#: `adapter.py` opens "what a domain adapter over the durable store does the same
+#: way every time".
+_DOMAIN_ADAPTERS = {"curation.persistence.catalogue", "curation.persistence.sqlite_discovery"}
 
 
 def _imports_any(tree: ast.AST, modules: set[str]) -> set[str]:
@@ -199,8 +216,21 @@ def _imports_any(tree: ast.AST, modules: set[str]) -> set[str]:
     return found
 
 
-def test_the_generic_durable_tier_imports_neither_domain_adapter():
-    """`durable.py` says it holds no domain concept; its imports have to agree.
+def offending_importers(reached_by: dict[str, set[str]], allowed: set[str]) -> dict[str, list[str]]:
+    """Which modules import a domain adapter without being allowed to.
+
+    Extracted so the allowlist's *strictness* can be shown, which reading the
+    real tree cannot do: every module here is either allowed or importing
+    nothing, so the check can only ever be watched passing. A sweep replaced the
+    membership test with `if True` — skipping every module — and nothing went
+    red. That is the fourth guard in this tree to fail the same way, which is why
+    the fabricated cases below exist rather than a comment saying it looks right.
+    """
+    return {name: sorted(reached) for name, reached in reached_by.items() if reached and name not in allowed}
+
+
+def test_nothing_beneath_the_domain_adapters_imports_one():
+    """`durable.py` says it holds no domain concept; every module below has to agree.
 
     It reached *through* `catalogue.py` — the module declaring `CatalogueStore` —
     for `StorageError` and `StoreMisuseError`, so the tier beneath both adapters
@@ -210,35 +240,40 @@ def test_the_generic_durable_tier_imports_neither_domain_adapter():
     and every reading of the module that states it.
 
     The types now live in `persistence/errors.py`, which neither domain owns, and
-    this is what stops the import creeping back. Asserted over the whole generic
-    tier rather than over `durable.py` alone, because a second module added
-    beneath the adapters should inherit the rule instead of escaping it.
+    this is what stops the import creeping back — into that module or into any
+    other, including ones not yet written.
     """
-    # Both sets, before the loop. A guard driven by two name sets passes
-    # vacuously if either is emptied, and a sweep proved it: clearing
-    # `_GENERIC_TIER` skips the loop entirely, and clearing `_DOMAIN_ADAPTERS`
-    # makes every module import none of nothing. Neither turned anything red,
-    # which is the failure this whole module was written against — a guard that
-    # stops guarding and reports exactly what it reported before.
-    assert _GENERIC_TIER, "no generic-tier modules named — this guard would pass vacuously"
+    modules = sorted((_SOURCE_ROOT / "curation" / "persistence").glob("*.py"))
+    assert modules, "no persistence modules found — this guard would pass vacuously"
     assert _DOMAIN_ADAPTERS, "no domain adapters named — every module imports none of nothing"
     for adapter in sorted(_DOMAIN_ADAPTERS):
         assert (_SOURCE_ROOT / (adapter.replace(".", "/") + ".py")).is_file(), (
-            f"{adapter} is named as a domain adapter and does not exist — a rename would empty this "
-            "check without emptying the set, which reads identically to passing"
+            f"{adapter} is named as a domain adapter and does not exist — a rename would empty "
+            "this check without emptying the set, which reads identically to passing"
         )
 
-    for name in sorted(_GENERIC_TIER):
+    reached_by = {
+        _module_name(path): _imports_any(ast.parse(path.read_text(encoding="utf-8")), _DOMAIN_ADAPTERS) for path in modules
+    }
+    offenders = offending_importers(reached_by, _MAY_IMPORT_A_DOMAIN_ADAPTER)
+
+    assert not offenders, (
+        f"these modules sit beneath the domain adapters and import one: {offenders}. "
+        "Shared types belong in persistence/errors.py, which neither domain owns. If the import "
+        f"is genuinely right, add the module to _MAY_IMPORT_A_DOMAIN_ADAPTER with its reason."
+    )
+
+
+def test_every_allowed_importer_still_exists():
+    """An allowlist entry for a deleted module is an exemption nobody is using.
+
+    Left behind, it silently pre-approves whatever takes that name next — which
+    is the failure an allowlist trades for the one it fixes, and the only one it
+    has.
+    """
+    for name in sorted(_MAY_IMPORT_A_DOMAIN_ADAPTER):
         path = _SOURCE_ROOT / (name.replace(".", "/") + ".py")
-        assert path.is_file(), f"{name} is named as the generic tier and does not exist — this guard is asserting nothing"
-
-        reached = _imports_any(ast.parse(path.read_text(encoding="utf-8")), _DOMAIN_ADAPTERS)
-
-        assert not reached, (
-            f"{name} imports {', '.join(sorted(reached))}, so the tier beneath both adapters depends on "
-            "one of the two domains it serves. Shared types belong in persistence/errors.py, which "
-            "neither domain owns."
-        )
+        assert path.is_file(), f"{name} is allowed to import a domain adapter and does not exist"
 
 
 def test_the_catalogue_still_re_exports_the_shared_error_types():
@@ -253,3 +288,27 @@ def test_the_catalogue_still_re_exports_the_shared_error_types():
 
     assert catalogue.StorageError is errors.StorageError
     assert catalogue.StoreMisuseError is errors.StoreMisuseError
+
+
+def test_a_module_reaching_a_domain_adapter_is_reported():
+    """The case the real tree cannot produce, because the real tree is correct."""
+    offenders = offending_importers(
+        {"curation.persistence.durable": {"curation.persistence.catalogue"}},
+        allowed=set(),
+    )
+
+    assert offenders == {"curation.persistence.durable": ["curation.persistence.catalogue"]}
+
+
+def test_an_allowed_module_reaching_a_domain_adapter_is_not_reported():
+    """The allowlist has to actually excuse something, or it is decoration."""
+    assert not offending_importers(
+        {"curation.persistence.file": {"curation.persistence.sqlite_discovery"}},
+        allowed={"curation.persistence.file"},
+    )
+
+
+def test_a_module_importing_nothing_is_not_reported():
+    """An empty reach is not an offence — the common case, and the one a `not reached`
+    check inverted would flag on every module in the package."""
+    assert not offending_importers({"curation.persistence.records": set()}, allowed=set())
