@@ -104,8 +104,9 @@ def _body(*records):
     }
 
 
-def _client(handler) -> ArticImageSearch:
-    return ArticImageSearch(user_agent=USER_AGENT, client=httpx.Client(transport=httpx.MockTransport(handler)))
+def _client(handler, *, preview_max_bytes: int | None = None) -> ArticImageSearch:
+    ceiling = {} if preview_max_bytes is None else {"preview_max_bytes": preview_max_bytes}
+    return ArticImageSearch(user_agent=USER_AGENT, client=httpx.Client(transport=httpx.MockTransport(handler)), **ceiling)
 
 
 def _serving(*records, capture: list | None = None):
@@ -319,6 +320,66 @@ def test_a_preview_that_downloads_comes_back_as_bytes():
     assert (
         _client(handler).fetch_preview("https://www.artic.edu/iiif/2/x/full/843,/0/default.jpg") == b"\xff\xd8\xff\xe0 jpeg bytes"
     )
+
+
+def test_a_preview_over_the_ceiling_is_refused_rather_than_returned():
+    """An oversized body is not a smaller preview; it is a refusal.
+
+    The URL comes out of the museum's own JSON with redirects followed, so its
+    size is the provider's choice and the bytes land in memory before any
+    caller can look. Refusing costs a review card its thumbnail; reading
+    costs whatever the far end decided to send.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"x" * 5_000)
+
+    client = _client(handler, preview_max_bytes=1_000)
+
+    assert client.fetch_preview("https://www.artic.edu/iiif/2/x/full/843,/0/default.jpg") is None
+
+
+def test_a_preview_exactly_at_the_ceiling_is_still_served():
+    """The ceiling is the largest body allowed through, not the first refused.
+
+    Off by one here refuses a legitimate preview and the only symptom is a card
+    that quietly lost its picture.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"x" * 1_000)
+
+    client = _client(handler, preview_max_bytes=1_000)
+
+    assert client.fetch_preview("https://www.artic.edu/iiif/2/x/full/843,/0/default.jpg") == b"x" * 1_000
+
+
+def test_an_oversized_preview_stops_reading_instead_of_draining_the_body():
+    """The point of the ceiling: an endless body costs the ceiling, not the box.
+
+    Asserted by counting what the transport was actually asked for. A guard
+    that returned `None` *after* materialising the whole body would satisfy the
+    refusal test above while doing nothing about the allocation it exists to
+    prevent — so the read has to be shown to stop.
+    """
+    served = 0
+    chunk = b"y" * 1_024
+
+    def streamer():
+        nonlocal served
+        # Far more than the ceiling admits, and more than any real preview:
+        # if the guard drains its source, the count below says so.
+        for _ in range(4_096):
+            served += 1
+            yield chunk
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=streamer())
+
+    client = _client(handler, preview_max_bytes=8 * 1_024)
+
+    assert client.fetch_preview("https://www.artic.edu/iiif/2/x/full/843,/0/default.jpg") is None
+    assert served < 64, f"the guard read {served} chunks of a body it had already refused"
 
 
 def test_the_response_the_findings_recorded_parses_field_for_field():

@@ -127,6 +127,16 @@ class ImageSearch(Protocol):
         instance is still real, still selectable, and still carries a source-side
         URL. Losing the whole work over a missing thumbnail would be the tail
         wagging the dog.
+
+        **An implementation must bound what it reads.** `url` came out of a
+        provider's own response and the fetch follows redirects, so its size and
+        its final host are both the provider's choice, and the bytes are held
+        whole in memory before any caller sees them — an unbounded read here is
+        an unbounded allocation driven by a foreign service. Enforce the ceiling
+        while streaming rather than trusting `Content-Length`, which is that
+        same service's claim about itself, and report an over-ceiling body as
+        the `None` this signature already has: it is one more preview that did
+        not arrive, and no curator could act on the distinction.
         """
 
     def tile_url(self, url: str) -> str:

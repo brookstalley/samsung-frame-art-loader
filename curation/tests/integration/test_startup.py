@@ -28,6 +28,7 @@ from curation.config import (
     DEFAULT_PHASE1_OUTPUT_TOKENS,
     DEFAULT_PHASE1_SEARCH_ALLOWANCE,
     DEFAULT_PHASE2_SEARCHES_PER_WORK,
+    DEFAULT_PREVIEW_MAX_BYTES,
     DEFAULT_PREVIEW_SWEEP_INTERVAL_SECONDS,
     DEFAULT_RESOLUTION_FLOOR_INCHES,
     DEFAULT_ROTATION_INTERVAL_SECONDS,
@@ -59,9 +60,12 @@ def _defaults(art_root, **overrides) -> Settings:
     """The shipped defaults over a scratch tree, with anything a test cares about
     overridden by name.
 
-    Constructed rather than resolved: `from_env` loads `.env` with override, so a
-    test that went through it would run against the developer's own machine —
-    and would then pass or fail depending on whether *they* happen to hold a key.
+    Constructed rather than resolved: `from_env` loads a real `.env`, found from
+    the config module's own directory upward, so a test that went through it
+    would run against the developer's own machine — and would then pass or fail
+    depending on whether *they* happen to hold a key. The 2026-08-05 precedence
+    fix does not close that: a key nobody exported is exactly the case the file
+    still fills.
     """
     return replace(
         Settings(
@@ -77,6 +81,7 @@ def _defaults(art_root, **overrides) -> Settings:
             tile_timeout_seconds=DEFAULT_TILE_TIMEOUT_SECONDS,
             max_image_bytes=DEFAULT_MAX_IMAGE_BYTES,
             min_free_bytes=DEFAULT_MIN_FREE_BYTES,
+            preview_max_bytes=DEFAULT_PREVIEW_MAX_BYTES,
             rotation_interval_seconds=DEFAULT_ROTATION_INTERVAL_SECONDS,
             rotation_shuffle=DEFAULT_ROTATION_SHUFFLE,
             preview_sweep_interval_seconds=DEFAULT_PREVIEW_SWEEP_INTERVAL_SECONDS,

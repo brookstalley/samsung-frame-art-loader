@@ -746,6 +746,17 @@ is a recorded decision, not an oversight: the targets in
    that and is the one input that could exhaust the box. Signal: peak RSS of the
    curation unit. Mitigation if it bites: a cap on stored source resolution, which
    is an open acquisition-pipeline decision anyway.
+
+   **The other memory path is a preview, and unlike an acquisition it is driven
+   by a stranger.** A preview URL comes out of a museum's JSON response and the
+   fetch follows redirects, so both its size and its final host are the
+   provider's choice, and the bytes are held whole in RAM before anything
+   reaches disk. That read is bounded at `PREVIEW_MAX_BYTES` and enforced while
+   streaming, so the ceiling — not the box — is what an endless body costs. The
+   unit's `MemoryMax` sits behind it and would contain the blast to "curation
+   dies" rather than "the wall goes dark", which is worth stating because it
+   made the unbounded read look survivable: a run lost to a thumbnail is still
+   the tail wagging the dog.
 3. **Nothing else.** SQLite at low thousands of rows, one concurrent user, and one
    discovery run at a time are not going to be problems and should not be designed
    for.

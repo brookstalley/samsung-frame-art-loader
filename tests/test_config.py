@@ -7,6 +7,7 @@ under a controlled environment rather than mutating already-bound values.
 import ast
 import importlib
 import logging
+import os
 import pathlib
 import sys
 
@@ -51,8 +52,11 @@ def load_config(monkeypatch, **overrides):
             monkeypatch.delenv(key, raising=False)
         else:
             monkeypatch.setenv(key, value)
-    # `load_dotenv(override=True)` would let a developer's real .env leak in and
-    # make these assertions depend on an untracked file.
+    # dotenv resolves its file from `config.py`'s own directory upward, so a
+    # developer's real .env is always on the search path. Since the 2026-08-05
+    # precedence fix it can no longer beat a name set above, but it still
+    # supplies the ones deleted above — which is exactly what the fail-fast
+    # tests assert are missing.
     monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **k: False)
     sys.modules.pop("config", None)
     return importlib.import_module("config")
@@ -90,6 +94,70 @@ def test_paths_are_anchored_under_art_root_not_the_cwd(monkeypatch):
     assert not config.tv_token_file.startswith("./")
     for path in (config.art_folder_raw, config.art_folder_ready, config.cache_folder, config.dezoomify_tile_cache):
         assert path.startswith(root)
+
+
+def _dotenv_supplying(monkeypatch, **values):
+    """Stand in for `python-dotenv`, honouring its real precedence flag.
+
+    Measured against the installed python-dotenv on 2026-08-05: with no
+    `override` a name already in `os.environ` is left alone and only absent
+    ones are filled; `override=True` replaces both. The fake reproduces that,
+    so a return to `override=True` at the import in `config.py` — which is
+    driven for real here — turns the caller below red rather than passing
+    unnoticed.
+    """
+
+    def loader(*_args, override=False, **_kwargs):
+        for name, value in values.items():
+            if override or name not in os.environ:
+                monkeypatch.setenv(name, value)
+        return True
+
+    return loader
+
+
+def _load_config_over_dotenv(monkeypatch, dotenv_values, **overrides):
+    """`load_config`, but with a real-behaving dotenv instead of a dead one."""
+    for key in list(MINIMAL_ENV) + list(OPTIONAL_ENV):
+        monkeypatch.delenv(key, raising=False)
+    for key, value in {**MINIMAL_ENV, **overrides}.items():
+        if value is None:
+            monkeypatch.delenv(key, raising=False)
+        else:
+            monkeypatch.setenv(key, value)
+    monkeypatch.setattr("dotenv.load_dotenv", _dotenv_supplying(monkeypatch, **dotenv_values))
+    sys.modules.pop("config", None)
+    return importlib.import_module("config")
+
+
+def test_an_exported_value_beats_the_dotenv_file(monkeypatch):
+    """`.env` supplies defaults; whatever is already exported wins.
+
+    The inverse shipped here until 2026-08-05, justified by a comment about
+    cached values "that pipenv loaded" — nothing in this tree has used pipenv
+    since the move to uv, so the reason had outlived its cause while the
+    inverted precedence went on silently discarding exports.
+    """
+    config = _load_config_over_dotenv(
+        monkeypatch,
+        {"ART_ROOT": "/from-the-dotenv-file"},
+        ART_ROOT="/from-the-environment",
+    )
+
+    assert config.ART_ROOT == "/from-the-environment"
+
+
+def test_the_dotenv_file_still_supplies_what_the_environment_does_not(monkeypatch):
+    """The other half: deleting the `load_dotenv()` call would pass the test
+    above and break every machine set up by the documented `cp .env.example
+    .env` step. This is the case that test cannot rescue."""
+    config = _load_config_over_dotenv(
+        monkeypatch,
+        {"LOCATION_REGION": "US/Mountain"},
+        LOCATION_REGION=None,
+    )
+
+    assert config.location_region == "US/Mountain"
 
 
 def test_token_file_path_is_overridable(monkeypatch):

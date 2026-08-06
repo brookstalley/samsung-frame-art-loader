@@ -47,6 +47,7 @@ from urllib.parse import quote
 
 import httpx
 
+from curation.config import DEFAULT_PREVIEW_MAX_BYTES
 from curation.discovery.browse import BrowseQuery, CollectionBrowse, CollectionBrowseFailure, OfferedGroup
 from curation.discovery.images import FoundImage, ImageQuery, ImageSearch, ImageSearchFailure
 from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
@@ -204,13 +205,24 @@ def _museum_client(user_agent: str, client: httpx.Client | None) -> tuple[httpx.
 class ArticImageSearch:
     """Search the Art Institute's collection and fetch previews from it."""
 
-    def __init__(self, *, user_agent: str, client: httpx.Client | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        user_agent: str,
+        client: httpx.Client | None = None,
+        preview_max_bytes: int = DEFAULT_PREVIEW_MAX_BYTES,
+    ) -> None:
         # Injectable so the suite can drive a recorded transport instead of the
         # network. The default is a real session; nothing else in the package
         # constructs one. No `base_url`: every request builds its full URL, and a
         # base half the code ignored would be a second answer to where the API
         # lives.
         self._http, self._headers = _museum_client(user_agent, client)
+        # Defaulted rather than required, so a caller that has no Settings in
+        # hand — the live probes, a scratch script — still fetches under a
+        # ceiling. An unbounded read must not be reachable by forgetting an
+        # argument.
+        self._preview_max_bytes = preview_max_bytes
 
     @property
     def provider(self) -> str:
@@ -299,18 +311,50 @@ class ArticImageSearch:
 
         A missing preview degrades a review card rather than invalidating an
         instance, so this reports absence instead of raising: the instance is
-        still real and still carries a source-side URL to fall back on.
+        still real and still carries a source-side URL to fall back on. An
+        over-ceiling body takes that same route — it is one more preview that
+        did not arrive, and there is nothing a curator could do differently.
+
+        **Streamed against a ceiling rather than read whole.** The URL comes out
+        of the museum's own JSON and redirects are followed, so the body is
+        foreign in both size and origin, and `response.content` on a
+        non-streaming request materialises all of it before any caller can look.
+        Reading in chunks and stopping at the ceiling means an endless body
+        costs `preview_max_bytes` instead of the box — the failure this guards
+        is an unbounded allocation on a Pi whose memory is the one input that
+        could exhaust it.
         """
         try:
-            response = self._http.get(url, headers=self._headers, follow_redirects=True)
-            response.raise_for_status()
+            with self._http.stream("GET", url, headers=self._headers, follow_redirects=True) as response:
+                response.raise_for_status()
+                chunks: list[bytes] = []
+                received = 0
+                for chunk in response.iter_bytes():
+                    received += len(chunk)
+                    if received > self._preview_max_bytes:
+                        # Refused, not truncated. Half a JPEG is not a smaller
+                        # preview; it is a corrupt one that nothing downstream
+                        # can tell from a whole one, and the card degrades far
+                        # better on no image than on a broken one.
+                        log.warning(
+                            "a preview exceeded the size ceiling and was refused; "
+                            "the review card will fall back to the source URL",
+                            extra={
+                                "event": "phase_two.preview_too_large",
+                                "provider": PROVIDER,
+                                "preview_url": url,
+                                "ceiling_bytes": self._preview_max_bytes,
+                            },
+                        )
+                        return None
+                    chunks.append(chunk)
         except httpx.HTTPError as exc:
             log.warning(
                 "could not cache a preview; the review card will fall back to the source URL",
                 extra={"event": "phase_two.preview_failed", "provider": PROVIDER, "error": str(exc)},
             )
             return None
-        return response.content
+        return b"".join(chunks)
 
     def _get(self, url: str, *, what: str) -> Mapping[str, Any]:
         """One GET, with every transport and shape failure named as one kind."""
@@ -736,9 +780,14 @@ def _size(raw: object) -> int | None:
     return raw if raw > 0 else None
 
 
-def build_image_search(*, user_agent: str, client: httpx.Client | None = None) -> ImageSearch:
+def build_image_search(
+    *,
+    user_agent: str,
+    client: httpx.Client | None = None,
+    preview_max_bytes: int = DEFAULT_PREVIEW_MAX_BYTES,
+) -> ImageSearch:
     """The image provider a deployment gets. One museum today, by name."""
-    return ArticImageSearch(user_agent=user_agent, client=client)
+    return ArticImageSearch(user_agent=user_agent, client=client, preview_max_bytes=preview_max_bytes)
 
 
 def build_collection_browse(*, user_agent: str, client: httpx.Client | None = None) -> CollectionBrowse:

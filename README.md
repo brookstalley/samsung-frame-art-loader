@@ -35,6 +35,10 @@ cp .env.example .env          # then set ART_ROOT
 cd curation && uv run python -m curation
 ```
 
+`.env` supplies defaults and an exported variable beats it, so a run against a
+scratch tree needs no edit to the file: `ART_ROOT=/tmp/scratch uv run python -m
+curation`.
+
 Then open `http://127.0.0.1:$CURATION_PORT/` — the browser interface serves the
 catalogue, discovery runs, themes, the wall manifest and a health view. MCP
 clients connect to `/mcp` on the same port, and the UI's own JSON API answers

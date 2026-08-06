@@ -167,6 +167,7 @@ between planes.
 > | `phase_two.size_unknown` | a result was discarded because the provider reported no dimensions |
 > | `phase_two.unreachable` | a provider could not be asked about a work, which leaves it pending rather than unresolved |
 > | `phase_two.verdict_stands` | a resolution finished against a work the curator had already decided; the result is reported, not applied |
+> | `phase_two.preview_too_large` | a provider's preview body passed the size ceiling and the read was abandoned, naming the URL and the ceiling. Distinct from `preview_failed`, which is a preview that could not be fetched at all — this one *was* being served, and the far end was sending more than a thumbnail. Both leave the card falling back to the source URL, so the log line is the only place the difference is visible |
 > | `preview.cached` / `preview.absent` | whether a review card will have local bytes to show |
 > | `run.completed` | the run's works split into resolved, unresolved and unreachable |
 >

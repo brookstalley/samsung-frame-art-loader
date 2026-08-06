@@ -88,7 +88,10 @@ def _image_search(settings: Settings) -> ImageSearch | None:
     """
     if not settings.artic_user_agent:
         return None
-    return build_image_search(user_agent=settings.artic_user_agent)
+    return build_image_search(
+        user_agent=settings.artic_user_agent,
+        preview_max_bytes=settings.preview_max_bytes,
+    )
 
 
 def _collection(settings: Settings) -> CollectionBrowse | None:

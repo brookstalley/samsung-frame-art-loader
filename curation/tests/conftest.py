@@ -41,6 +41,7 @@ from curation.config import (
     DEFAULT_PHASE1_SEARCH_ALLOWANCE,
     DEFAULT_PHASE2_SEARCHES_PER_WORK,
     DEFAULT_PORT,
+    DEFAULT_PREVIEW_MAX_BYTES,
     DEFAULT_PREVIEW_SWEEP_INTERVAL_SECONDS,
     DEFAULT_RESOLUTION_FLOOR_INCHES,
     DEFAULT_ROTATION_INTERVAL_SECONDS,
@@ -107,11 +108,14 @@ def discovery_store(catalogue_file: SqliteDurableStore) -> SqliteDiscovery:
 def settings(tmp_path) -> Settings:
     """The deployment values a test runs against, over a scratch art tree.
 
-    Constructed rather than read from the environment: `Settings.from_env` loads
-    `.env` with override, so a test that went through it would run against
-    whatever the developer's machine happens to hold — and would pass or fail
-    depending on it. Every value is the shipped default, so a test's geometry is
-    the geometry a fresh deployment gets.
+    Constructed rather than read from the environment: `Settings.from_env`
+    resolves a real `.env` from the config module's own directory upward, so a
+    test that went through it would run against whatever the developer's machine
+    happens to hold — and would pass or fail depending on it. (That is true of
+    every name the environment does not already carry, and stayed true when the
+    2026-08-05 precedence fix stopped the file beating names it does.) Every
+    value here is the shipped default, so a test's geometry is the geometry a
+    fresh deployment gets.
     """
     return Settings(
         art_root=tmp_path,
@@ -126,6 +130,7 @@ def settings(tmp_path) -> Settings:
         tile_timeout_seconds=DEFAULT_TILE_TIMEOUT_SECONDS,
         max_image_bytes=DEFAULT_MAX_IMAGE_BYTES,
         min_free_bytes=DEFAULT_MIN_FREE_BYTES,
+        preview_max_bytes=DEFAULT_PREVIEW_MAX_BYTES,
         rotation_interval_seconds=DEFAULT_ROTATION_INTERVAL_SECONDS,
         rotation_shuffle=DEFAULT_ROTATION_SHUFFLE,
         preview_sweep_interval_seconds=DEFAULT_PREVIEW_SWEEP_INTERVAL_SECONDS,

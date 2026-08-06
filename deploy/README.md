@@ -9,7 +9,11 @@ Raspberry Pi driving the Frame TV.
 missing deployment value stops the process instead of quietly running against a
 plausible-looking default. The unit names that file in `EnvironmentFile=`, and
 `load_dotenv` independently resolves it next to `config.py`; both point at the
-repository root, which is also the unit's `WorkingDirectory`.
+repository root, which is also the unit's `WorkingDirectory`. The two agree
+today because they read the same file, and if they are ever pointed at
+different ones **the unit's `EnvironmentFile=` wins**: it is already in the
+process environment by the time the code runs, and `load_dotenv` fills only
+what the environment does not carry.
 
 > **This unit will not start on the current Pi, and the block below is not enough
 > to make it.** The card was rebuilt on 2026-08-04 and **there is no `tvpi` user
