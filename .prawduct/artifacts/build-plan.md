@@ -450,12 +450,13 @@ that one was the first.
 display plane exists — manifest polling and version refusal, host-driven
 rotation, `TvBinding` in `display-state.sqlite`, directive semantics, orphan
 removal, the sun-position brightness port, and the television behind an abstract
-interface — with 94 tests, all three planes green, and lint clean. **What is
-missing is the half no double can supply**: the acceptance criteria call for a
-live pass on the Pi, and the television was in standby for the whole session, so
-not one line of this has spoken to a set. The chunk stays open until it has;
-`operator-verification.md` carries what to run and the standby trap that will
-otherwise be misread as a library fault.
+interface — with a suite of its own, all three planes green, and lint clean.
+**What is missing is the half no double can supply**: the acceptance criteria
+call for a live pass on the Pi, and the television was in standby for the whole
+session, so not one line of this has spoken to a set. The chunk stays open until
+it has; `operator-verification.md` carries what to run and the trap that will
+otherwise be misread as a library fault — **standby, not art mode**: a run on
+2026-08-06 with the set in art mode passed every check.
 
 `tests/preferences/test_plane_isolation.py` landed with the plane's first modules,
 which closes the two-session-old finding that the norm index named an enforcement

@@ -598,8 +598,10 @@ full warning — the guard works; nothing was reaching it.
 
 **Fixed, in two halves, and the second is the one that generalises.** The model
 now comes from `samsungtvws.rest.SamsungTVRest.rest_device_info()` — the public
-synchronous client for `http://<host>:8001/api/v2/`, which is where that shape
-lives — and the note reports `modelName` and the `24_`-prefixed model year
+synchronous client for the `/api/v2/` route, which is where that shape lives, at
+the configured `TV_PORT` rather than a literal (the library reads the scheme off
+the port: `https` on 8002, `http` on 8001, and both serve the route) — and the
+note reports `modelName` and the `24_`-prefixed model year
 together, since the year is what the token handshake turns on. The second half is
 that **`panel_check` now answers two questions instead of one**: `not_compared()`
 says whether a comparison was possible, and `disagreement()` says how it came

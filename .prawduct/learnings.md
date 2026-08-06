@@ -989,3 +989,5 @@ filenames encode identity in at least three mutually inconsistent conventions
 ## A dependency bump's evidence is the call sites, never the suite — before believing a version move, exercise the upstream API the code actually reaches in a clean interpreter, because a manifest no suite installs (`requirements.txt` here, which the root project does not declare) makes a green `pytest` a statement about versions that did not move
 
 ## Before calling a shared pinned upstream risky to bump, read the SIBLING lockfiles — when two projects in a repo pin the same git dependency, one plane's resolved lock is evidence about the other's, and the version you are afraid to move to may already be resolved and running next door
+
+## A diagnostic whose "all clear" and "cannot tell" print the same line has retired the question it asks — when a check can be quiet for more than one reason, give each quiet state its own outcome naming which side said nothing, because a reader treats a pass as a measurement and the false one propagates into artifacts as evidence

@@ -92,9 +92,11 @@ def not_compared(model_name: str | None, configured_inches: float | None) -> str
     reports a pass without asking this one is claiming a measurement it did not
     take.
     """
-    reasons = []
+    reasons: list[str] = []
     if not model_name:
-        reasons.append("this television reported no model name")
+        # Not "the television reported none": the caller may never have got an
+        # answer to ask about. What is certain from here is that no name arrived.
+        reasons.append("no model name was read from this television")
     elif size_from_model(model_name) is None:
         reasons.append(f"{model_name} is not a model line this parse has been verified against")
     if configured_inches is None:

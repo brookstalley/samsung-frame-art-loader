@@ -127,8 +127,8 @@ def test_a_comparison_that_can_be_made_reports_no_reason_it_could_not():
 @pytest.mark.parametrize(
     "model, configured, expected_in_reason",
     [
-        (None, 42.0, "reported no model name"),
-        ("", 42.0, "reported no model name"),
+        (None, 42.0, "no model name was read"),
+        ("", 42.0, "no model name was read"),
         ("not a samsung model string", 42.0, "not a samsung model string"),
         (REAL_MODEL, None, "TV_PANEL_DIAGONAL_INCHES is not set"),
     ],
@@ -154,7 +154,7 @@ def test_both_sides_missing_names_both_rather_than_the_first_it_meets():
     """An operator who fixes only the half they were told about runs the check again for nothing."""
     reason = not_compared(None, None)
 
-    assert "reported no model name" in reason
+    assert "no model name was read" in reason
     assert "TV_PANEL_DIAGONAL_INCHES is not set" in reason
 
 

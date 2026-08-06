@@ -1298,3 +1298,31 @@ metacharacters, for a property only the upstream scheme check provides. **A comm
 crediting the wrong mechanism is how the next call site inherits the gap**, because
 the reader carries away the lesson it teaches rather than the guarantee it has.
 
+
+## A diagnostic whose "all clear" and "cannot tell" print the same line has retired the question it asks — when a check can be quiet for more than one reason, give each quiet state its own outcome naming which side said nothing, because a reader treats a pass as a measurement and the false one propagates into artifacts as evidence
+
+Worked instance, 2026-08-06. `tv_api_check.py`'s panel-size check called
+`panel_check.disagreement(model, configured)` and reported `ok` on `None`, with
+the detail "the configured diagonal agrees with the set, or neither side stated
+one" — the `or` being the whole defect written out in the message. `model` was in
+fact `None` on every run since the check was written, because it was read from the
+art channel's payload rather than the REST one, so the check had never compared
+anything. A live run reported nine checks and zero failures with two of them
+having measured nothing.
+
+**The propagation is the part that raises this above a cosmetic fault.** The same
+run's callback check reported `fired: d2d_service_message` — the library's outer
+message type, constant across all three registered events — and the operator note
+written from that output concluded that *nothing* fired, contradicting an earlier
+instrumented finding for no reason, while the run's own "0 failed" line said
+otherwise (the check fails when none fire). A diagnostic's output is read as
+evidence about the hardware, so a state the tool cannot distinguish becomes a
+false fact in a durable artifact rather than a gap someone notices.
+
+**The fix that generalises is splitting the question, not correcting the message.**
+`panel_check.not_compared()` answers "was a comparison possible" and
+`disagreement()` answers "how did it come out"; a caller that reports a pass
+without asking the first is claiming a measurement it did not take, and that is
+now visible at the call site instead of buried in one function's tri-state return.
+Sibling shape already in this log: the mutation sweep reading pytest's exit 5
+("collected nothing") as a caught mutation.

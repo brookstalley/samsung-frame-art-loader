@@ -43,9 +43,10 @@ logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 #: television actually sends.
 IMAGE_CHANGED_EVENTS = ("slideshow_image_changed", "auto_rotation_image_changed", "image_selected")
 
-#: Ceiling for the calls the client's own `timeout=` reaches: the REST request
-#: for the model year, and opening the websocket. Named because both default to
-#: no limit, so a set that drops packets rather than refusing them would hang
+#: Ceiling for the REST and websocket calls: the model-year request the client
+#: makes inside its own constructor, the `/api/v2/` read this module makes for the
+#: model name, and opening the websocket. Named because all of them default to no
+#: limit, so a set that drops packets rather than refusing them would hang
 #: construction forever and report no elapsed figure at all.
 #:
 #: It does NOT govern art requests once the connection is up — those carry their
@@ -169,13 +170,19 @@ def _reported_model(report: Report) -> str | None:
     **Not from the art client's `get_device_info()`**, which returns the *art
     channel's* payload — `current_rotation_status`, `support_brightness_sensor`,
     `resolution_type` and no `device` key at all. The
-    `{"device": {"modelName": ...}}` shape belongs to
-    `http://<host>:8001/api/v2/`, a different endpoint over a different
-    protocol, and asking the art channel for it yields a `None` that no
-    exception marks. A live run against a set that names itself perfectly well
-    reported "model: not reported" and, worse, a satisfied panel-size check that
-    had compared nothing — which is why the caller now asks whether a comparison
-    was possible before reporting one.
+    `{"device": {"modelName": ...}}` shape belongs to the `/api/v2/` REST route,
+    a different endpoint over a different protocol, and asking the art channel
+    for it yields a `None` that no exception marks. A live run against a set that
+    names itself perfectly well reported "model: not reported" and, worse, a
+    satisfied panel-size check that had compared nothing — which is why the
+    caller now asks whether a comparison was possible before reporting one.
+
+    **The port is the configured one, not a literal**, and that matters because
+    the library derives the scheme from it: `_is_ssl_connection()` is
+    `port == 8002`, so the same route is `https` there and `http` on 8001. Both
+    serve it. Passing `config.tv_port` is what keeps this read on the endpoint
+    the art client's own constructor already reached for the model year — a
+    hardcoded 8001 here would silently be a second television address.
 
     Synchronous inside an async run on purpose: this is the same blocking
     `requests` call the art client already makes in its own constructor, the
@@ -186,9 +193,10 @@ def _reported_model(report: Report) -> str | None:
     try:
         info = rest.rest_device_info()
     except (OSError, HttpApiError, ResponseError) as err:
-        # Failed rather than noted: the set answered the art websocket a moment
-        # ago, so a REST endpoint that will not answer is a finding about this
-        # television and not about the tool.
+        # Failed rather than noted, and the constructor is why: it reached this
+        # same endpoint for the model year before returning, so by the time this
+        # runs the set has already answered here once. A second read that does
+        # not is a finding about this television, not about the tool.
         report.fail("model", f"the REST endpoint carrying the model name did not answer ({type(err).__name__}: {err})")
         return None
 
@@ -229,9 +237,11 @@ async def check_identity(tv_art: SamsungTVAsyncArt, report: Report) -> None:
     # said nothing" alike is what let a check that compared nothing look
     # satisfied for as long as it did.
     #
-    # Warned, not failed, when the two disagree: this tool reports what it finds,
-    # and a diagonal disagreeing with the panel is a `.env` fix rather than a
-    # broken television — but the exit status carries it, so a deploy can gate.
+    # A disagreement IS a failure here, and that is a different call from the one
+    # `panel_check` records: a running deployment only warns, because refusing to
+    # start would couple startup to a reachable television. This tool is run by
+    # hand against a set that is awake, so the ambiguity is gone and the exit
+    # status is the point — a `.env` naming the wrong panel should gate a deploy.
     uncomparable = panel_check.not_compared(model, configured)
     if uncomparable is not None:
         report.note("panel size", uncomparable)
