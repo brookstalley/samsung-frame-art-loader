@@ -204,19 +204,52 @@ _MAY_IMPORT_A_DOMAIN_ADAPTER = {
 _DOMAIN_ADAPTERS = {"curation.persistence.catalogue", "curation.persistence.sqlite_discovery"}
 
 
-def _imports_any(tree: ast.AST, modules: set[str]) -> set[str]:
-    """Which of `modules` this module binds, plain or `from`-style."""
+def _resolve(module: str | None, level: int, package: str) -> str | None:
+    """The absolute name a `from … import` targets, relative form included.
+
+    `from .catalogue import StorageError` inside `curation/persistence/` reaches
+    the same module as the absolute spelling and arrives at the AST as
+    `module="catalogue", level=1`. Matching `node.module` alone therefore saw
+    nothing — the guard read as covering every module in the package while one
+    spelling walked straight past it.
+
+    No module in this tree uses a relative import today and ruff's `select` list
+    carries no `TID`, so nothing forbids the first one. A guard whose stated
+    reach exceeds its real one cannot warn you, which is the failure this file
+    keeps being written against.
+    """
+    if not level:
+        return module
+    parts = package.split(".") if package else []
+    base = parts[: len(parts) - level + 1]
+    if not base:
+        # Climbed past the top of the tree, which names no module at all.
+        #
+        # **Unobservable through this guard, and recorded rather than defended.**
+        # Without it the join yields a bare name like `"catalogue"`, which is not
+        # in `_DOMAIN_ADAPTERS` — every entry there is dotted — so removing this
+        # branch changes no verdict, and a mutation proved exactly that. It stays
+        # because returning a name that resolves to nothing is wrong on its own
+        # terms, and it would start mattering the day a bare top-level module
+        # joined the set. What it must not do is read as covered.
+        return None
+    return ".".join([*base, module]) if module else ".".join(base)
+
+
+def _imports_any(tree: ast.AST, modules: set[str], *, package: str = "") -> set[str]:
+    """Which of `modules` this module binds — plain, `from`-style, or relative."""
     found = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             found |= {alias.name for alias in node.names if alias.name in modules}
         elif isinstance(node, ast.ImportFrom):
-            if node.module in modules:
-                found.add(node.module)
+            target = _resolve(node.module, node.level, package)
+            if target in modules:
+                found.add(target)
     return found
 
 
-def offending_importers(reached_by: dict[str, set[str]], allowed: set[str]) -> dict[str, list[str]]:
+def _offending_importers(reached_by: dict[str, set[str]], allowed: set[str]) -> dict[str, list[str]]:
     """Which modules import a domain adapter without being allowed to.
 
     Extracted so the allowlist's *strictness* can be shown, which reading the
@@ -252,10 +285,27 @@ def test_nothing_beneath_the_domain_adapters_imports_one():
             "this check without emptying the set, which reads identically to passing"
         )
 
-    reached_by = {
-        _module_name(path): _imports_any(ast.parse(path.read_text(encoding="utf-8")), _DOMAIN_ADAPTERS) for path in modules
-    }
-    offenders = offending_importers(reached_by, _MAY_IMPORT_A_DOMAIN_ADAPTER)
+    reached_by = {}
+    for path in modules:
+        name = _module_name(path)
+        # The package is what makes a relative import resolvable. Omitted, every
+        # `from .catalogue import …` in this package resolves to a bare
+        # `catalogue`, matches nothing, and the guard reports clean — which a
+        # sweep demonstrated by planting exactly that import in `durable.py`.
+        #
+        # **What no test here can see, stated rather than left to be found:**
+        # blanking this argument is invisible on its own, because no module in
+        # the tree uses a relative import — so the two mutations are only
+        # *jointly* observable. Planting the import is caught; weakening the
+        # scan in advance of one being written is not. The limit is recorded
+        # because a guard whose stated reach exceeds its real one cannot warn
+        # you, which is the whole subject of this file.
+        reached_by[name] = _imports_any(
+            ast.parse(path.read_text(encoding="utf-8")),
+            _DOMAIN_ADAPTERS,
+            package=name.rsplit(".", 1)[0],
+        )
+    offenders = _offending_importers(reached_by, _MAY_IMPORT_A_DOMAIN_ADAPTER)
 
     assert not offenders, (
         f"these modules sit beneath the domain adapters and import one: {offenders}. "
@@ -292,7 +342,7 @@ def test_the_catalogue_still_re_exports_the_shared_error_types():
 
 def test_a_module_reaching_a_domain_adapter_is_reported():
     """The case the real tree cannot produce, because the real tree is correct."""
-    offenders = offending_importers(
+    offenders = _offending_importers(
         {"curation.persistence.durable": {"curation.persistence.catalogue"}},
         allowed=set(),
     )
@@ -302,7 +352,7 @@ def test_a_module_reaching_a_domain_adapter_is_reported():
 
 def test_an_allowed_module_reaching_a_domain_adapter_is_not_reported():
     """The allowlist has to actually excuse something, or it is decoration."""
-    assert not offending_importers(
+    assert not _offending_importers(
         {"curation.persistence.file": {"curation.persistence.sqlite_discovery"}},
         allowed={"curation.persistence.file"},
     )
@@ -311,4 +361,46 @@ def test_an_allowed_module_reaching_a_domain_adapter_is_not_reported():
 def test_a_module_importing_nothing_is_not_reported():
     """An empty reach is not an offence — the common case, and the one a `not reached`
     check inverted would flag on every module in the package."""
-    assert not offending_importers({"curation.persistence.records": set()}, allowed=set())
+    assert not _offending_importers({"curation.persistence.records": set()}, allowed=set())
+
+
+def test_a_relative_import_of_a_domain_adapter_is_caught():
+    """The spelling that walked past the guard while its docstring claimed otherwise.
+
+    `from .catalogue import StorageError` reaches exactly the module the absolute
+    form does, and arrives as `module="catalogue", level=1`. Fabricated because
+    nothing in this tree is written that way — which is precisely why the hole
+    could sit under a guard that reads as covering the whole package.
+    """
+    tree = ast.parse("from .catalogue import StorageError")
+
+    reached = _imports_any(tree, _DOMAIN_ADAPTERS, package="curation.persistence")
+
+    assert reached == {"curation.persistence.catalogue"}
+
+
+def test_a_relative_import_of_something_else_is_not_caught():
+    """The paired negative: resolution must not turn every relative import into a hit."""
+    assert not _imports_any(ast.parse("from .records import Artwork"), _DOMAIN_ADAPTERS, package="curation.persistence")
+
+
+def test_a_relative_import_reaching_above_the_package_is_not_a_module_here():
+    """`from ...x import y` climbs past the tree's top; it names nothing to compare."""
+    assert not _imports_any(ast.parse("from ...x import y"), _DOMAIN_ADAPTERS, package="curation")
+
+
+def test_a_relative_import_that_climbs_one_level_reaches_a_different_package():
+    """The arithmetic, not merely the fact that something is resolved.
+
+    From `curation.persistence.durable`, `from ..catalogue import X` means
+    `curation.catalogue` — a module that does not exist — and **not** the
+    persistence adapter. Getting the level wrong by one turns that into a hit,
+    which would fail a correct module for importing something it never touched.
+
+    Pinned because the level-1 and level-3 cases above cannot see it: at those
+    two depths the off-by-one arithmetic happens to agree with the correct
+    arithmetic, so a sweep dropping the level term survived both.
+    """
+    reached = _imports_any(ast.parse("from ..catalogue import StorageError"), _DOMAIN_ADAPTERS, package="curation.persistence")
+
+    assert not reached, "one level up from persistence is curation.catalogue, which is not an adapter"
