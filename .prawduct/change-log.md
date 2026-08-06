@@ -48,6 +48,82 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-05: The seven fixes the fix-or-file pass identified and did not do
+
+<!-- prawduct: scope=v1-build -->
+
+**Why:** the pass below classified seventeen `effort:S stage:ready` items and
+closed five. Twelve met neither filing test, so seven remained — a fix waiting to
+be done is not a backlog item, which is what the ratified preference says. No
+`chunks=` tag: this closes backlog items, not a build-plan chunk.
+
+Reconstructing which seven, since the pass recorded the counts and not the list:
+of the items still open at that label, #46 and #42 are prawduct's own bugs (here
+only because no bug inbox is configured) and #84, #83 and #82 each say in their
+own body that the *decision* is the item — which is filing test (1) exactly. The
+rest were the fixes: #44, #55, #45, #86, #25, #32, #85. The reconstruction is
+checkable rather than asserted, because those five are precisely what stayed open
+when these closed.
+
+**Two defects were live, not latent.** `delete_all_uploaded` cleared every
+`tv_content_id` while `DeleteResult.surviving` sat there naming which removals
+the television had not honoured — and `sync_artsets_to_tv` picks upload
+candidates by exactly "has no `tv_content_id`", so a survivor was uploaded again
+as a duplicate onto a set with finite storage. And the rendition-currency rule
+was written twice, with the manifest builder reaching past `CatalogueService`
+into the store to feed its own copy; the review grid would badge a work current
+while the wall silently dropped it. The tie-break beside it was a second live
+disagreement: the builder took the newest television render, the thumbnail
+service took the first current one the store returned, and the unique index on
+`(artwork_id, kind, target_width, target_height)` makes two renders reachable.
+
+**Three were guards that were not there.** A museum preview body was read whole
+into memory with no bound, from a URL out of the museum's own JSON with redirects
+followed — an unbounded allocation driven by a stranger, contained only by the
+unit's `MemoryMax` to "curation dies". `acquisition.deployment_fault` was emitted
+by the MCP binding, so the signal followed the caller: the first browser
+acquisition route would have inherited the refusal and not the journal line.
+And `dispatch`'s waived broad-except — the one thing standing between an
+unexpected fault and a success envelope — was asserted by nothing.
+
+**Two were the environment lying quietly.** `load_dotenv(override=True)` in both
+planes meant an exported `ART_ROOT` was discarded rather than refused, so a
+scratch run booted against the real catalogue and the wrong data looked exactly
+like the right data. The stated reason — cached values "that pipenv loaded" —
+was checked rather than inherited: there is no Pipfile and no other mention of
+pipenv in the tree.
+
+**What the round is worth recording for is a vacuous test caught by mutation
+rather than by reading.** The tie-break test recorded its two renders widest
+first, which makes the store's `(kind, target_width, …)` order and newest-first
+coincide — so the *pre-fix* code passed it. Reading the test could not show that;
+running the old code against it did. The fixture now records them the other way
+round and asserts the two orders disagree, so a change to the store's `ORDER BY`
+fails it loudly instead of quietly returning it to proving nothing. Every fix in
+this batch was mutation-checked for the same reason, nineteen mutations in all,
+and each was caught by a test that names the defect rather than by the suite at
+large.
+
+**A ceiling was measured rather than guessed.** `PREVIEW_MAX_BYTES` is 16 MiB
+against five real Art Institute previews sampled at 89–193 KiB — not a prediction
+of the largest legitimate preview, but the point past which a body has stopped
+being one.
+
+**Two decisions taken rather than asked.** #55's duplicate #51 is closed by the
+same commit rather than merged, because the work is done and a redirect would
+leave two open records of one fixed defect. And an unconfirmed television removal
+now forgets nothing: it can cost a work its place on the set until the next
+confirmed pass, where the opposite error costs storage on every run and is
+invisible.
+
+Artifacts followed the code in the same commits: `architecture.md`'s "inherits
+the staleness rule" is now true and says since when, its Scaling Model gained the
+preview as the second memory path, `observability-strategy.md` lost the limit
+paragraph naming #86 as its own fix and gained `phase_two.preview_too_large`, and
+`project-state.yaml` records the IA and interaction patterns the discovery half
+brought — checked against `app.js`'s own `VIEWS` and `DETAIL_VIEWS` maps rather
+than asserted.
+
 ## 2026-08-05: A fix-or-file pass, and the fence that shipped in the plane being deleted
 
 <!-- prawduct: chunks=19B | scope=v1-build -->
