@@ -939,6 +939,24 @@ neither surface constrains the other. *Trade-off accepted:* the two bindings
 each format their own results, which is intended — tool results are shaped for
 a model, HTTP responses for a UI.
 
+*Scoped 2026-08-06, because this entry read as covering every projection and it
+does not.* The rationale describes surfaces whose shapes genuinely **differ**, and
+only the artwork pair actually does: `WorkOut` adds `fit` and `image` and drops
+`accepted_at`/`created_at`, where `_artwork_fields` keeps the timestamps and has
+neither — two shapes for two readers, exactly as argued. Theme, Artist and the
+candidate-work summary are not that. They are one shape written twice, key for
+key, from the same record. `http/models.py` already forbids the consequence —
+*"they are not allowed to differ in what a thing is called, because that is how an
+agent and a click come to disagree about the same catalogue in a way no test would
+catch"* — and until this date nothing enforced it.
+
+They stay independently formatted rather than merged: the MCP side returns plain
+dicts and the HTTP side pydantic models whose field docstrings are documentation,
+so a shared formatter would cost one of those. What changed is that divergence is
+now a test failure at the moment of the edit —
+`curation/tests/unit/test_surface_parity.py`, which also asserts the artwork pair
+still differs, since that divergence is this entry's only evidence.
+
 **2026-07-20 — Readiness is manifest membership, not a stored flag.** Resolves the
 open question by separating catalogue readiness (curation's, evaluated at
 manifest-build time) from device readiness (display's, in its own store). Rejected:

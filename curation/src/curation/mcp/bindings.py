@@ -909,11 +909,33 @@ def _work_summary(work: CandidateWork) -> dict[str, Any]:
     would be a second review card that drifts from the real one. This exists so
     a caller can obtain a work id at all: every count-only listing left the
     actions that take one with no reachable source for it.
+
+    **This is the one place the MCP surface writes these seven keys.** They were
+    emitted with identical expressions at three sites in this module, so adding
+    `provenance` took three coordinated edits and the next field added to
+    `CandidateWork` would have reached some of them — one shape silently missing
+    it, which is exactly the "an agent and a click disagree about the same
+    catalogue" failure `http/models.py`'s docstring forbids. The richer shapes
+    spread this and add their own keys.
+
+    The HTTP surface's `CandidateWorkOut` is these seven plus `rationale`, and
+    that pairing is pinned by `tests/unit/test_surface_parity.py` rather than
+    shared: the two surfaces format independently on purpose (`architecture.md`,
+    Decision Log 2026-07-27), and a test makes divergence a failure at the moment
+    of the edit without collapsing that independence.
     """
     return {
         "work_id": work.id,
         "title": work.proposed_title,
+        # As phase 1 wrote it, unparsed. Matching it to a catalogue artist is
+        # acceptance's job and does not happen until a work is promoted. On an
+        # offered work this is the collection's own attribution instead, which is
+        # the point: it is recorded verbatim and never reconciled with whatever
+        # the model named.
         "artist": work.proposed_artist,
+        # Whether the model named this work or the collection volunteered it.
+        # On every row rather than only where it differs, because a label that
+        # appears only sometimes is one a reader learns to stop looking for.
         "provenance": str(work.provenance),
         "verdict": str(work.verdict),
         "resolution_status": str(work.resolution_status),
@@ -1104,21 +1126,7 @@ def _candidate_summary(view: CandidateView, pictures: _Pictures) -> dict[str, An
     `get` returns the record — is what keeps a full page inside the budget.
     """
     return {
-        "work_id": view.work.id,
-        "title": view.work.proposed_title,
-        # As phase 1 wrote it, unparsed. Matching it to a catalogue artist is
-        # acceptance's job and does not happen until a work is promoted. On an
-        # offered work this is the collection's own attribution instead, which is
-        # the point: it is recorded verbatim and never reconciled with whatever
-        # the model named.
-        "artist": view.work.proposed_artist,
-        # Whether the model named this work or the collection volunteered it.
-        # On every row rather than only where it differs, because a label that
-        # appears only sometimes is one a reader learns to stop looking for.
-        "provenance": str(view.work.provenance),
-        "verdict": str(view.work.verdict),
-        "resolution_status": str(view.work.resolution_status),
-        "unresolved_reason": _reason(view.work),
+        **_work_summary(view.work),
         "instances_held": view.instances_held,
         "shown_image": None if view.shown is None else _shown_fields(view.shown, pictures),
     }
@@ -1127,19 +1135,18 @@ def _candidate_summary(view: CandidateView, pictures: _Pictures) -> dict[str, An
 def _candidate_detail(view: CandidateView, pictures: _Pictures) -> dict[str, Any]:
     """One proposed work in full: why it was proposed, and its picture in full detail.
 
-    Built field by field rather than by widening the listing shape, because
-    `_shown_fields` *appends a block* as a side effect of assigning an index.
-    Composing the two would picture this work twice — one instance, two identical
-    blocks, and a caller charged for both.
+    **Does not compose `_candidate_summary`**, because `_shown_fields` *appends a
+    block* as a side effect of assigning an index. Calling the listing shape here
+    would picture this work twice — one instance, two identical blocks, and a
+    caller charged for both.
+
+    It does compose `_work_summary`, and the difference is the whole point: that
+    one is side-effect-free, and it is precisely the seven text keys this shape
+    used to repeat. The argument above is about the *image* half and never
+    reached them.
     """
     return {
-        "work_id": view.work.id,
-        "title": view.work.proposed_title,
-        "artist": view.work.proposed_artist,
-        "provenance": str(view.work.provenance),
-        "verdict": str(view.work.verdict),
-        "resolution_status": str(view.work.resolution_status),
-        "unresolved_reason": _reason(view.work),
+        **_work_summary(view.work),
         "instances_held": view.instances_held,
         "instances_surviving": view.instances_surviving,
         "shown_image": None if view.shown is None else _instance_fields(view.shown, pictures),

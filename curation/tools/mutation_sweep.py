@@ -119,7 +119,20 @@ def run_tests(targets: list[str]) -> subprocess.CompletedProcess[str]:
     from the mutated runs would vouch for a suite the sweep never executes.
     """
     return subprocess.run(
-        ["uv", "run", "pytest", *targets, "-q", "-x", "--no-header", "-p", "no:cacheprovider"],
+        # `-n0` FIRST, so a caller's own `-n` in the passthrough still wins.
+        #
+        # It is not an optimisation, it is what makes the verdict readable. With
+        # `-x` under xdist a failing test ends the session as INTERRUPTED and
+        # pytest exits **2**, not 1 — so every *caught* mutation looked like the
+        # unclassifiable exit this tool refuses to guess at, and a sweep aborted
+        # on its first real catch saying it was misconfigured. `-n auto` is in
+        # this project's `addopts`, so that was the default path.
+        #
+        # Serial costs nothing worth having here: a sweep runs the same narrow
+        # slice `(mutations + 1)` times, where per-run worker startup is most of
+        # the bill — measured at 67s serial against 65s parallel for ten
+        # mutations over two files.
+        ["uv", "run", "pytest", "-n0", *targets, "-q", "-x", "--no-header", "-p", "no:cacheprovider"],
         cwd=ROOT,
         capture_output=True,
         text=True,
