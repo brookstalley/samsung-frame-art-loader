@@ -44,9 +44,10 @@ class TestTheStoreRefusesTheOldDefect:
         """The migration path, exercised rather than assumed.
 
         A store written by the version before `render_fingerprint` existed must
-        open, keep its rows, and gain the column — and the widening has to be
-        idempotent, because a half-run migration on a device whose whole storage
-        story is one SD card is the failure with no floor under it.
+        open, keep its rows, and gain the column. It must also survive being
+        reopened — but see the comment below for what that second open does and
+        does not prove, since the two are easy to conflate and only one of them is
+        what this test buys.
         """
         path = settings.state_path
         old = sqlite3.connect(path)

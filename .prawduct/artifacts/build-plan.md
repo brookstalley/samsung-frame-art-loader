@@ -1531,7 +1531,8 @@ two missing deliverables.)*
   > from the 41 legacy `tv_content_id` values in `all.json`, so that a fresh empty
   > table would not re-upload 41 images and orphan the set already on the
   > television. **Its premise no longer holds.** The 2024 renders those uploads
-  > were made from are gone from the art tree — `ready/` holds exactly one file —
+  > were made from are gone from the art tree — the ready directory under the art
+  > root held exactly one file when this was written —
   > and seeding only ever recorded a 2024 render as a work's television rendition
   > when that file was present, so 39 of 40 accepted works have no television
   > rendition at all and the one that does was composed by the current pipeline
@@ -1539,7 +1540,8 @@ two missing deliverables.)*
   > that is **not** the render its manifest entry names: the wall would show the
   > 2024 composition while the catalogue recorded the current one as displayed.
   > No join survives either — the legacy index addresses works by source URL and
-  > by `ready/{stem}_r{resize}.jpg`, and neither reaches a manifest whose entries
+  > by the 2024 render naming, which suffixed each source stem with its resize
+  > width, and neither reaches a manifest whose entries
   > carry an artwork id and a UUID-named render path.
   >
   > So the mass upload the deliverable existed to avoid is the correct behaviour:

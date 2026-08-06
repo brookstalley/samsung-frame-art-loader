@@ -205,6 +205,10 @@ async def test_a_removal_the_set_refuses_settles_instead_of_being_asked_for_ever
     await daemon.tick()
     assert "MY-STUBBORN" in tv.holding, "the fake removed an image it was told to keep"
     asked = len(tv.removed)
+    # Pinned rather than merely captured: a counter compared only against itself
+    # stays green if a change stops attempting removal altogether, which is the
+    # opposite defect and would read here as a pass.
+    assert asked == 1, "the orphan was never asked about, so the assertion below would pass vacuously"
 
     clock.advance(settings.tv_retry_max_seconds + 1)
     for _ in range(3):
