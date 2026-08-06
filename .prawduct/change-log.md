@@ -129,6 +129,36 @@ cap was asserted against a helper that rebuilt `runs[:MAX_RUNS_LISTED]` — the
 production expression, copied — so deleting the slice from the service left both
 suites green. That slice is the whole of #54.
 
+**Three rulings and two wordings, in the same sweep.** #40 asked the owner
+whether four mechanical guards are norms this product states. One is: the TV
+pairing token is never tracked, which has a real incident behind it and is a
+secret in a public repo. The other three are recorded as deliberately uncovered,
+in a section beside the index, because the alternative is that every Norm Health
+sweep rediscovers them and asks again — and that section says plainly that a
+guard listed there is still a guard. `test_persistence_boundary.py` is
+deliberately *not* named as enforcement of the adjacent service-layer row:
+naming an import check there would read as though a judgement-required norm were
+mechanically enforced, when the violations it exists to catch are exactly what an
+import check cannot see.
+
+#93 removed the run table's provenance column rather than renaming it — "Where it
+came from" meant how a row entered the run and reads as which museum holds the
+work, and this table was the distinction's fourth statement. #99 answered what
+the resolution badge describes: the run, and the words now say so ("the run found
+an image"), which is what makes it consistent with "You have turned down
+everything that was found for it" instead of contradicting it. Deriving the badge
+from surviving instances was the other option and the one the issue leaned
+toward; it would have made one badge mean two things on two screens, since the
+run table's rows carry no instance data — which #99's own acceptance forbids.
+
+#27 was not labelled and so was not in the seventeen. It is a small,
+fully-specified refactor of the same family: `durable.py` states it holds no
+domain concept and reached through the catalogue adapter for its error types. The
+types moved to `persistence/errors.py`, `catalogue.py` re-exports them
+permanently, and a guard now holds the seam — because a layering statement the
+code contradicts in one line is precisely the kind that survives every
+behavioural test.
+
 **Two verify rounds, and each found the same shape one level up.** The first
 review's blocking finding was that the run-listing cap was asserted against a
 helper rebuilding the production expression. The second found the art-root guard

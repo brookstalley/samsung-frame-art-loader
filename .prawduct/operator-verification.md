@@ -116,16 +116,24 @@ current design, by #C below. #2 and #3 went unremarked.
   black and one-press off-white — the two neutrals a curator reaches for without
   wanting a judgement made about them.
 
-- **F. The run table should show a thumbnail where it says "has an image".** On
+- **F. The run table should show a thumbnail where it says "has an image".** *(Open — issue #92, re-scoped S -> M on 2026-08-06; the run view's rows carry no instance reference, so the thumbnail needs a payload decision. The words it quotes now read "the run found an image", per issue #99.)* On
   the run detail view the Image column renders the words `has an image`; the
   review grid beside it shows the picture. A curator scanning a run is asking
   *which* image, and the answer is already on disk.
 
-- **G. "Where it came from" is not understood.** It heads the run table's
-  provenance column and means *how this row entered the run* — asked for by the
-  model, or offered by the collection on top. In an art catalogue that phrase
-  reads as the work's own provenance, which museum holds it. The column is doing
-  necessary work under a name that collides with the domain.
+- **G. "Where it came from" is not understood.** *(Resolved 2026-08-06, issue
+  #93.)* It headed the run table's provenance column and meant *how this row
+  entered the run* — asked for by the model, or offered by the collection on top.
+  In an art catalogue that phrase reads as the work's own provenance, which
+  museum holds it.
+
+  **The column is gone rather than renamed**, which is a correction to the
+  sentence above: it was *not* "doing necessary work" on that screen. The
+  offered/asked-for distinction is necessary, and this table was its fourth
+  statement — after the tally's separate counts, the run sentence, and the line
+  directly above the rows. What the per-row badge added was which *particular*
+  work was offered, on a screen where nothing is decided per work. The badge
+  stays on the review card, where the deciding happens.
 
 - **H. A per-work preview of the e-paper card** would be welcome once that card
   exists. Depends on Chunk 13; recorded here so it is not rediscovered.

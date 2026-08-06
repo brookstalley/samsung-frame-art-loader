@@ -279,6 +279,22 @@ def test_an_unresolved_work_says_which_kind_of_nothing(ui, reason):
     assert sentence, f"{reason.value} reached the page with no sentence behind it"
     assert sentence.endswith("."), f"the sentence for {reason.value} is not one: {sentence!r}"
 
+    # The *resolution* badge beside it, which is a different element and was the
+    # untested third of the reword. `RESOLUTION_WORDS` was changed from
+    # present-tense claims about the work to statements about what the run found,
+    # and only the `resolved` entry got a guard — the assertions above all
+    # concern `unresolved_reason`, and they locate `span.badge[title]`, which
+    # `resolutionBadge` does not set. So `"no image"` survived every suite.
+    #
+    # Both halves, because only the pair says the reword happened: the new
+    # wording present proves it renders, and the old wording absent proves it is
+    # gone rather than sitting beside it.
+    assert "the run found none" in shown
+    assert "no image" not in shown, (
+        "a present-tense claim about the work is what the reword removed — `resolution_status` "
+        "records what the run found, and only a resolution attempt recomputes it"
+    )
+
 
 # -- a watch that cannot recover --------------------------------------------
 

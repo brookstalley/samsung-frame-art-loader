@@ -16,8 +16,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, Final
 
-from curation.persistence.catalogue import StorageError
 from curation.persistence.durable import OrderBy, SqliteDurableStore
+from curation.persistence.errors import StorageError
 
 log = logging.getLogger(__name__)
 

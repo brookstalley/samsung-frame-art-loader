@@ -28,8 +28,8 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Final
 
 from curation.persistence.adapter import BY_ID, TableAdapter, from_iso, require_datetime, to_iso
-from curation.persistence.catalogue import StorageError
 from curation.persistence.durable import OrderBy
+from curation.persistence.errors import StorageError
 from curation.persistence.records import (
     AcquisitionMethod,
     Artist,

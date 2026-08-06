@@ -171,3 +171,85 @@ def test_no_test_reaches_past_the_container_to_arm_the_no_network_guard():
     # reason.
     assert scanned, "the test tree moved; this guard was scanning nothing"
     assert offenders == [], f"arm the no-network guard with Services.bind(resolve=...), not by assignment: {offenders}"
+
+
+# -- the generic tier reaches neither domain -----------------------------------
+
+
+#: The two domain adapters. `durable.py` is the tier beneath both and states that
+#: it "holds no artwork, artist or theme concept" — so importing either of these
+#: from it is the layering claim contradicting itself.
+_DOMAIN_ADAPTERS = {"curation.persistence.catalogue", "curation.persistence.sqlite_discovery"}
+
+#: What the generic tier is. Kept as a set rather than a single name because the
+#: seam is what is being guarded, not one file: a durable store split into two
+#: modules should inherit the rule rather than escape it.
+_GENERIC_TIER = {"curation.persistence.durable", "curation.persistence.errors"}
+
+
+def _imports_any(tree: ast.AST, modules: set[str]) -> set[str]:
+    """Which of `modules` this module binds, plain or `from`-style."""
+    found = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found |= {alias.name for alias in node.names if alias.name in modules}
+        elif isinstance(node, ast.ImportFrom):
+            if node.module in modules:
+                found.add(node.module)
+    return found
+
+
+def test_the_generic_durable_tier_imports_neither_domain_adapter():
+    """`durable.py` says it holds no domain concept; its imports have to agree.
+
+    It reached *through* `catalogue.py` — the module declaring `CatalogueStore` —
+    for `StorageError` and `StoreMisuseError`, so the tier beneath both adapters
+    depended on one of the two domains it serves. Nothing was broken and nothing
+    was mis-ordered at import: it was a layering statement the code contradicted
+    in one line, which is exactly the kind that survives every behavioural test
+    and every reading of the module that states it.
+
+    The types now live in `persistence/errors.py`, which neither domain owns, and
+    this is what stops the import creeping back. Asserted over the whole generic
+    tier rather than over `durable.py` alone, because a second module added
+    beneath the adapters should inherit the rule instead of escaping it.
+    """
+    # Both sets, before the loop. A guard driven by two name sets passes
+    # vacuously if either is emptied, and a sweep proved it: clearing
+    # `_GENERIC_TIER` skips the loop entirely, and clearing `_DOMAIN_ADAPTERS`
+    # makes every module import none of nothing. Neither turned anything red,
+    # which is the failure this whole module was written against — a guard that
+    # stops guarding and reports exactly what it reported before.
+    assert _GENERIC_TIER, "no generic-tier modules named — this guard would pass vacuously"
+    assert _DOMAIN_ADAPTERS, "no domain adapters named — every module imports none of nothing"
+    for adapter in sorted(_DOMAIN_ADAPTERS):
+        assert (_SOURCE_ROOT / (adapter.replace(".", "/") + ".py")).is_file(), (
+            f"{adapter} is named as a domain adapter and does not exist — a rename would empty this "
+            "check without emptying the set, which reads identically to passing"
+        )
+
+    for name in sorted(_GENERIC_TIER):
+        path = _SOURCE_ROOT / (name.replace(".", "/") + ".py")
+        assert path.is_file(), f"{name} is named as the generic tier and does not exist — this guard is asserting nothing"
+
+        reached = _imports_any(ast.parse(path.read_text(encoding="utf-8")), _DOMAIN_ADAPTERS)
+
+        assert not reached, (
+            f"{name} imports {', '.join(sorted(reached))}, so the tier beneath both adapters depends on "
+            "one of the two domains it serves. Shared types belong in persistence/errors.py, which "
+            "neither domain owns."
+        )
+
+
+def test_the_catalogue_still_re_exports_the_shared_error_types():
+    """Moving them must not break `except StorageError` on a catalogue import.
+
+    `CatalogueStore`'s own methods raise these, so a caller holding a catalogue
+    store should not have to know which module declared the class to catch it.
+    The re-export is deliberate and permanent rather than a transitional shim, so
+    it is asserted rather than left to be tidied away by someone reading it as one.
+    """
+    from curation.persistence import catalogue, errors  # noqa: PLC0415
+
+    assert catalogue.StorageError is errors.StorageError
+    assert catalogue.StoreMisuseError is errors.StoreMisuseError

@@ -86,6 +86,30 @@ def _object_keys(name: str) -> set[str]:
     raise AssertionError(f"`{name}` is never closed")
 
 
+def _object_values(name: str) -> dict[str, str]:
+    """The `key: "string"` pairs of a top-level `const <name> = { ... }` literal.
+
+    The sibling above deliberately strips string values before reading keys, so
+    it cannot answer "does this key have words behind it" — which is a separate
+    failure and, until this existed, an unchecked one: a map with the right key
+    set and an empty value renders a badge with nothing in it, and every keys
+    test stays green.
+    """
+    opening = re.search(rf"^const {re.escape(name)} = (?={{)", CLIENT, re.MULTILINE)
+    assert opening, f"the client has no top-level `const {name} = {{`"
+    start = opening.end()
+    depth = 0
+    for index in range(start, len(CLIENT)):
+        if CLIENT[index] == "{":
+            depth += 1
+        elif CLIENT[index] == "}":
+            depth -= 1
+            if depth == 0:
+                body = CLIENT[start + 1 : index]
+                return dict(re.findall(r'([A-Za-z_][A-Za-z0-9_]*)\s*:\s*"((?:[^"\\]|\\.)*)"', body))
+    raise AssertionError(f"`{name}` is never closed")
+
+
 @pytest.mark.parametrize("name", ["REASON_SENTENCES", "REASON_WORDS"])
 def test_every_unresolved_reason_has_words_for_a_curator(name):
     """A run that resolved nothing has to say which kind of nothing, in English.
@@ -100,6 +124,26 @@ def test_every_unresolved_reason_has_words_for_a_curator(name):
 
 def test_every_resolution_status_has_words_for_a_curator():
     assert _object_keys("RESOLUTION_WORDS") == {str(status) for status in ResolutionStatus}
+
+
+@pytest.mark.parametrize("name", ["RESOLUTION_WORDS", "REASON_WORDS", "REASON_SENTENCES"])
+def test_every_phrase_a_curator_reads_actually_has_words_in_it(name):
+    """Right keys, empty value: a badge that renders nothing and passes every keys test.
+
+    The keys checks above strip string values before reading keys, so none of
+    them can see this. A mutation sweep emptying `RESOLUTION_WORDS.pending`
+    survived all three suites — the browser tests assert the two entries that
+    were reworded, and nothing looked at the third.
+
+    Asserted over every map rather than the one the sweep found, because the
+    hole is in the *shape* of the keys checks and applies to all of them
+    equally.
+    """
+    values = _object_values(name)
+    assert values, f"`{name}` parsed to no string values at all — this guard would pass vacuously"
+
+    empty = sorted(key for key, phrase in values.items() if not phrase.strip())
+    assert not empty, f"{name} carries {empty} with no words behind them; each renders as an empty badge"
 
 
 def test_every_run_status_is_named_in_the_client():

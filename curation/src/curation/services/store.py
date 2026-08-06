@@ -9,7 +9,7 @@ it here rather than as a private method on one of them.
 
 from collections.abc import Callable
 
-from curation.persistence.catalogue import StorageError
+from curation.persistence.errors import StorageError
 from curation.services.errors import ServiceError
 
 

@@ -231,3 +231,80 @@ def test_every_named_enforcement_artifact_resolves(reference):
         f"the norm index names {reference}, but {path_text} defines no {test_name}. "
         f"It defines: {sorted(name for name in defined if name.startswith('test_'))}"
     )
+
+
+# -- the guards the index deliberately does NOT name ----------------------------
+
+
+#: The header of the "Deliberately uncovered" table, which records guards ruled
+#: *not* to be norm enforcement. Anchored on its own header for the same reason
+#: the norm index is: a table this guard cannot find is a table it scans nothing
+#: of, and that reads identically to passing.
+UNCOVERED_HEADER = "| Guard | Ruling (owner, 2026-08-06) | Reasoning |"
+
+
+def _deliberately_uncovered_artifacts() -> list[str]:
+    """Every test reference named in the deliberately-uncovered table's Guard column.
+
+    A separate parser rather than a widened one, because the two tables answer
+    opposite questions and must not be able to absorb each other's rows: the norm
+    index says "this guard enforces a stated norm", and this table says "this
+    guard exists and is deliberately not that".
+    """
+    lines = [line.rstrip() for line in NORM_INDEX.read_text(encoding="utf-8").splitlines()]
+    assert UNCOVERED_HEADER in lines, (
+        f"{NORM_INDEX.name} has no deliberately-uncovered table matching:\n  {UNCOVERED_HEADER}\n"
+        "It moved or its columns were renamed. Fix the anchor deliberately rather than letting "
+        "this guard scan nothing."
+    )
+    found: list[str] = []
+    for line in lines[lines.index(UNCOVERED_HEADER) + 1 :]:
+        if not line.startswith("|"):
+            break
+        body = line.strip().strip("|")
+        if set(body) <= set("-:| "):
+            continue
+        found.extend(TEST_REFERENCE.findall(body.split("|")[0]))
+    return found
+
+
+@pytest.mark.parametrize("reference", _deliberately_uncovered_artifacts())
+def test_every_deliberately_uncovered_guard_still_exists(reference):
+    """A ruling about a guard is worth nothing once the guard is gone.
+
+    The "Deliberately uncovered" table records the owner's decision that four
+    mechanical guards are *not* stated norms. That section says plainly that a
+    guard listed there is still a guard — so a rename or a deletion leaves a
+    ruling about nothing, and the next Norm Health sweep re-asks a question whose
+    subject no longer exists.
+
+    The sibling check above walks the norm index only: its parser stops at the
+    blank line ending that table, so it never saw these three. That is the same
+    rename-with-nothing-noticing exposure this file exists to close, reappearing
+    one heading further down the same document.
+    """
+    path_text, _, test_name = reference.partition("::")
+    path = REPOSITORY_ROOT / path_text
+
+    assert path.is_file(), (
+        f"the deliberately-uncovered table names {reference} and no such file exists. "
+        "Either the guard moved and the ruling did not, or the guard was deleted — and a "
+        "recorded decision not to cover something that no longer exists is worse than silence."
+    )
+    if not test_name:
+        return
+
+    defined = {
+        node.name
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    assert test_name in defined, f"the deliberately-uncovered table names {reference}, but {path_text} defines no {test_name}."
+
+
+def test_the_deliberately_uncovered_table_is_not_empty():
+    """A parametrised guard over an empty list passes by running nothing at all."""
+    assert _deliberately_uncovered_artifacts(), (
+        "no test references found in the deliberately-uncovered table — either its Guard column "
+        "stopped naming files, or the parser above no longer finds the table it names"
+    )
