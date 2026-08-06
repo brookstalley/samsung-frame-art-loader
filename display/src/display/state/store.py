@@ -37,7 +37,10 @@ log = logging.getLogger(__name__)
 
 #: Bumped when a migration lands. Read from `PRAGMA user_version`, which SQLite
 #: carries in the file header for exactly this purpose and costs no table.
-SCHEMA_VERSION: Final[int] = 1
+#:
+#: 2 (2026-08-06) added `render_fingerprint`, without which a re-rendered work
+#: kept showing its old image on the television for ever.
+SCHEMA_VERSION: Final[int] = 2
 
 
 class UploadStatus(StrEnum):
@@ -73,6 +76,9 @@ class Binding:
     tv_content_id: str | None
     upload_status: UploadStatus
     uploaded_at: datetime
+    #: What the render file looked like when it was sent. Null on a row written
+    #: before this column existed, and on one that never got as far as a file.
+    render_fingerprint: str | None = None
     tv_thumb_md5: str | None = None
 
     @property
@@ -87,6 +93,12 @@ CREATE TABLE IF NOT EXISTS tv_binding (
     artwork_id     TEXT NOT NULL UNIQUE,
     tv_content_id  TEXT,
     tv_thumb_md5   TEXT,
+    -- What the file looked like when it was uploaded. The television is handed a
+    -- path, and `ready/{artwork_id}.jpg` is stable across re-renders — so
+    -- changing a mat colour rewrites the bytes under an unchanged name, and
+    -- without this the binding still reads `uploaded` and the wall shows the old
+    -- composition until somebody notices by eye.
+    render_fingerprint TEXT,
     uploaded_at    TEXT NOT NULL,
     upload_status  TEXT NOT NULL
         CHECK (upload_status IN ('uploaded', 'failed', 'orphaned')),
@@ -100,6 +112,13 @@ CREATE TABLE IF NOT EXISTS daemon_state (
     value TEXT
 );
 """
+
+#: Every column `_binding` reads, spelled once. Two SELECTs want the same list,
+#: and a list that drifts between them is a `KeyError` at the row factory rather
+#: than anything a reader would spot.
+_BINDING_COLUMNS: Final[str] = (
+    "SELECT artwork_id, tv_content_id, tv_thumb_md5, render_fingerprint, uploaded_at, upload_status FROM tv_binding"
+)
 
 #: Keys in `daemon_state`. Named rather than spelled at each call site, because a
 #: typo in a key string is a silent read of nothing — which for the sequence key
@@ -137,14 +156,33 @@ class DisplayState:
                 f"{SCHEMA_VERSION}. Roll the deployment forward rather than letting an older reader write to it."
             )
         self._connection.executescript(_SCHEMA)
+        self._widen(version)
         if version < SCHEMA_VERSION:
-            # No widening step exists yet, and the assignment is deliberate
-            # rather than vestigial: it stamps a store created by this version so
-            # that the *first* migration has a floor to migrate from. A file with
-            # user_version 0 and a full schema is indistinguishable from an empty
-            # one that a future migration would try to build again.
             self._connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         self._connection.commit()
+
+    def _widen(self, version: int) -> None:
+        """Bring a store written by an older version up to this one.
+
+        **Additive only, and each step idempotent**, because the alternative on a
+        device whose whole storage story is one SD card is a migration that can
+        half-run. `CREATE TABLE IF NOT EXISTS` above already covers a store that
+        predates a whole table; this covers one that predates a column.
+
+        A store at 0 that already has the column is the ordinary case for a file
+        this version created, so the column list is read rather than assumed —
+        `ALTER TABLE ADD COLUMN` is not idempotent and raises on the second run.
+        """
+        if version >= SCHEMA_VERSION:
+            return
+        columns = {row["name"] for row in self._connection.execute("PRAGMA table_info(tv_binding)")}
+        if "render_fingerprint" not in columns:
+            # Null on every existing row, which reads as "unknown" and forces one
+            # re-upload per bound work on the first pass after the upgrade. That is
+            # the right cost: the alternative is assuming the file has not changed
+            # since a version that never looked, which is the defect this column
+            # exists to close.
+            self._connection.execute("ALTER TABLE tv_binding ADD COLUMN render_fingerprint TEXT")
 
     def close(self) -> None:
         self._connection.close()
@@ -165,30 +203,28 @@ class DisplayState:
     def binding_for(self, artwork_id: str) -> Binding | None:
         """What this device knows about one work's image, if anything."""
         row = self._connection.execute(
-            "SELECT artwork_id, tv_content_id, tv_thumb_md5, uploaded_at, upload_status FROM tv_binding WHERE artwork_id = ?",
+            f"{_BINDING_COLUMNS} WHERE artwork_id = ?",
             (artwork_id,),
         ).fetchone()
         return _binding(row) if row is not None else None
 
     def bindings(self) -> tuple[Binding, ...]:
         """Every work this device has a record for, in no meaningful order."""
-        rows = self._connection.execute(
-            "SELECT artwork_id, tv_content_id, tv_thumb_md5, uploaded_at, upload_status FROM tv_binding"
-        ).fetchall()
+        rows = self._connection.execute(_BINDING_COLUMNS).fetchall()
         return tuple(_binding(row) for row in rows)
 
     def accounted_content_ids(self) -> frozenset[str]:
         """Every content id this device believes it put on the television.
 
         **Includes orphaned rows deliberately.** An orphan is a row whose id the
-        set stopped listing; if the set later lists it again — the case
-        `tv_thumb_md5` exists to help with — treating it as unaccounted-for would
-        delete an image this device uploaded and is about to re-upload.
+        set stopped listing; if the set later lists it again, treating it as
+        unaccounted-for would delete an image this device uploaded and is about to
+        re-upload.
         """
         rows = self._connection.execute("SELECT tv_content_id FROM tv_binding WHERE tv_content_id IS NOT NULL").fetchall()
         return frozenset(row["tv_content_id"] for row in rows)
 
-    def record_upload(self, artwork_id: str, tv_content_id: str) -> Binding:
+    def record_upload(self, artwork_id: str, tv_content_id: str, *, render_fingerprint: str | None = None) -> Binding:
         """Record that the television is holding this work's image, under this id.
 
         **`tv_thumb_md5` is modelled and nothing writes it**, which is stated here
@@ -202,7 +238,7 @@ class DisplayState:
         no caller ever passed is gone, because a parameter nothing supplies reads
         as a capability rather than as a gap.
         """
-        return self._write_binding(artwork_id, tv_content_id, UploadStatus.UPLOADED, None)
+        return self._write_binding(artwork_id, tv_content_id, UploadStatus.UPLOADED, render_fingerprint)
 
     def record_upload_failure(self, artwork_id: str) -> Binding:
         """Record that an upload was attempted and did not land.
@@ -222,20 +258,20 @@ class DisplayState:
         artwork_id: str,
         tv_content_id: str | None,
         status: UploadStatus,
-        tv_thumb_md5: str | None,
+        render_fingerprint: str | None,
     ) -> Binding:
         uploaded_at = self._now()
         self._connection.execute(
             """
-            INSERT INTO tv_binding (id, artwork_id, tv_content_id, tv_thumb_md5, uploaded_at, upload_status)
+            INSERT INTO tv_binding (id, artwork_id, tv_content_id, render_fingerprint, uploaded_at, upload_status)
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(artwork_id) DO UPDATE SET
-                tv_content_id = excluded.tv_content_id,
-                tv_thumb_md5  = excluded.tv_thumb_md5,
-                uploaded_at   = excluded.uploaded_at,
-                upload_status = excluded.upload_status
+                tv_content_id      = excluded.tv_content_id,
+                render_fingerprint = excluded.render_fingerprint,
+                uploaded_at        = excluded.uploaded_at,
+                upload_status      = excluded.upload_status
             """,
-            (str(uuid.uuid4()), artwork_id, tv_content_id, tv_thumb_md5, uploaded_at.isoformat(), str(status)),
+            (str(uuid.uuid4()), artwork_id, tv_content_id, render_fingerprint, uploaded_at.isoformat(), str(status)),
         )
         self._connection.commit()
         return Binding(
@@ -243,7 +279,7 @@ class DisplayState:
             tv_content_id=tv_content_id,
             upload_status=status,
             uploaded_at=uploaded_at,
-            tv_thumb_md5=tv_thumb_md5,
+            render_fingerprint=render_fingerprint,
         )
 
     # -- where the wall got to --------------------------------------------
@@ -303,5 +339,6 @@ def _binding(row: sqlite3.Row) -> Binding:
         tv_content_id=row["tv_content_id"],
         upload_status=UploadStatus(row["upload_status"]),
         uploaded_at=datetime.fromisoformat(row["uploaded_at"]),
+        render_fingerprint=row["render_fingerprint"],
         tv_thumb_md5=row["tv_thumb_md5"],
     )

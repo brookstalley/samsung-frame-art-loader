@@ -116,6 +116,12 @@ class Daemon:
         #: tick aborts, and tying the work to that one flag drops orphan removal
         #: entirely rather than deferring it.
         self._reconciliation_owed = False
+        #: When reconciliation may next be attempted. It stays *owed* through a
+        #: television that cannot say what it removed, and without this it would
+        #: then be retried at the poll rate — one listing, one removal request and
+        #: one INFO line a second, which is the same unbounded cadence as the two
+        #: this loop already guards against.
+        self._reconcile_not_before: float | None = None
         self._brightness_at: float | None = None
         self._brightness_value: int | None = None
         self._retry_seconds: float = settings.tv_retry_min_seconds
@@ -149,6 +155,11 @@ class Daemon:
         if adopted is not None:
             self._adopt(adopted)
             self._reconciliation_owed = True
+            # A new manifest clears any wait: it is new information, and it is
+            # usually what arrives after somebody has fixed whatever the set was
+            # unhappy about. The wait exists to stop a *retry* loop, not to make
+            # the plane ignore news.
+            self._reconcile_not_before = None
 
         manifest = self._watcher.current
         if manifest is None:
@@ -156,12 +167,15 @@ class Daemon:
 
         try:
             await self._connected()
-            if self._reconciliation_owed:
+            if self._reconciliation_owed and self._reconcile_is_due():
                 # Cleared only when the work actually settled: a set that goes
                 # away halfway through raises, and one that cannot say what it
                 # removed reports so — both leave the work owed for a later pass
                 # rather than recorded as done.
                 self._reconciliation_owed = not await self._reconcile_with_the_set(manifest)
+                self._reconcile_not_before = (
+                    None if not self._reconciliation_owed else self._clock.monotonic() + self._settings.tv_retry_max_seconds
+                )
             await self._apply_brightness()
             acted = await self._act_on_directive(manifest)
             if not acted:
@@ -221,6 +235,14 @@ class Daemon:
         # at the current work there would hand it a second full interval on every
         # catalogue edit, which on a busy afternoon is a wall that stops moving.
         self._cursor = found_at if not self._has_shown else (found_at + 1) % len(self._order)
+
+    def _reconcile_is_due(self) -> bool:
+        """Whether enough time has passed to bother the set about this again.
+
+        Only ever false after an attempt that left the work owed — the first one
+        happens immediately, which is what a fresh install needs.
+        """
+        return self._reconcile_not_before is None or self._clock.monotonic() >= self._reconcile_not_before
 
     # -- directives --------------------------------------------------------
 
@@ -395,7 +417,7 @@ class Daemon:
     async def _content_id_for(self, entry: Entry, render: Path) -> str | None:
         """This work's id on the television, uploading it now if it has none."""
         binding = self._state.binding_for(entry.work_id)
-        if binding is not None and binding.is_on_the_television:
+        if binding is not None and binding.is_on_the_television and not _render_changed(binding, render):
             return binding.tv_content_id
         if self._too_soon_to_retry(binding):
             return None
@@ -458,6 +480,7 @@ class Daemon:
         device's own state rather than only in a journal that does not survive a
         reboot.
         """
+        fingerprint = _fingerprint(render)
         try:
             content_id = await self._tv.upload(render)
         except TvUploadFailed as exc:
@@ -470,7 +493,7 @@ class Daemon:
             )
             return None
 
-        self._state.record_upload(entry.work_id, content_id)
+        self._state.record_upload(entry.work_id, content_id, render_fingerprint=fingerprint)
         log.info(
             "uploaded %s to the television as %s",
             entry.work_id,
@@ -487,12 +510,12 @@ class Daemon:
         as long as the theme is long.
         """
         for entry in manifest.entries:
+            render = self._settings.art_root / entry.render_path
             binding = self._state.binding_for(entry.work_id)
-            if binding is not None and binding.is_on_the_television:
+            if binding is not None and binding.is_on_the_television and not _render_changed(binding, render):
                 continue
             if self._too_soon_to_retry(binding):
                 continue
-            render = self._settings.art_root / entry.render_path
             if not render.is_file():
                 # Not a failure to record: nothing was attempted, and writing a
                 # `failed` row for a file curation has not produced yet would make
@@ -574,7 +597,12 @@ class Daemon:
                 "surviving": list(outcome.surviving),
             },
         )
-        return outcome.complete
+        # **Settled even when some survived.** An incomplete removal is a *known*
+        # outcome — the set was asked, answered, and is keeping them — and it is
+        # already reported at WARNING by the client. Asking again immediately
+        # learns nothing; the next manifest re-arms the work. Only an outcome
+        # nobody could establish stays owed.
+        return True
 
     # -- the television ----------------------------------------------------
 
@@ -654,3 +682,40 @@ class Daemon:
             await asyncio.wait_for(stop.wait(), timeout=seconds)
         except TimeoutError:
             return
+
+
+def _fingerprint(render: Path) -> str | None:
+    """What this render file looks like right now, cheaply.
+
+    **Modification time and size rather than a hash.** The rotation reads this on
+    every pass over every entry; hashing forty 2 MB composites a second would be
+    real I/O on an SD card, to answer a question a `stat` answers. The pipeline
+    that writes these files always rewrites them wholesale, so a change that keeps
+    both the size and the nanosecond timestamp is not a case this deployment can
+    produce.
+
+    None when the file cannot be read, which is treated as "unknown" and never as
+    "unchanged" — see `_render_changed`.
+    """
+    try:
+        stat = render.stat()
+    except OSError:
+        return None
+    return f"{stat.st_mtime_ns}:{stat.st_size}"
+
+
+def _render_changed(binding: Binding, render: Path) -> bool:
+    """Whether the file on disk is no longer the one the television was given.
+
+    **The defect this closes is invisible from the wall.** `render_path` is
+    `ready/{artwork_id}.jpg` and stable across re-renders, so a curator changing a
+    mat colour rewrites the bytes under an unchanged name; the binding still reads
+    `uploaded`, and the television goes on showing the old composition for ever.
+    Both `set_mat_color` and `regenerate` are live actions, so this is reachable
+    by ordinary use rather than by mishap.
+
+    A binding with no recorded fingerprint — every row written before the column
+    existed — counts as changed. That costs one re-upload per work on the first
+    pass after an upgrade, which is the honest price of never having looked.
+    """
+    return binding.render_fingerprint != _fingerprint(render)

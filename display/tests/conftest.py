@@ -143,7 +143,14 @@ def publish(art_root: Path) -> Callable[..., dict]:
         }
         if renders:
             for work_id in work_ids:
-                (art_root / "ready" / f"{work_id}.jpg").write_bytes(b"not really a jpeg")
+                # **Written once, not on every publish.** Curation rewrites the
+                # manifest on every catalogue edit and does not touch the renders,
+                # so a fixture that rewrote them would move every file's mtime and
+                # make each `sync` look like forty re-renders — which the daemon
+                # now correctly treats as forty re-uploads.
+                render = art_root / "ready" / f"{work_id}.jpg"
+                if not render.exists():
+                    render.write_bytes(b"not really a jpeg")
         write_manifest(art_root, document)
         return document
 

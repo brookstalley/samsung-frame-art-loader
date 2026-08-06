@@ -40,6 +40,34 @@ class TestTheStoreRefusesTheOldDefect:
         assert failed.is_on_the_television is False
         assert state.binding_for("w1") is not None, "a failed upload left no trace to distinguish it from an untried one"
 
+    def test_a_store_from_before_the_fingerprint_column_is_widened_not_rebuilt(self, settings, clock):
+        """The migration path, exercised rather than assumed.
+
+        A store written by the version before `render_fingerprint` existed must
+        open, keep its rows, and gain the column — and the widening has to be
+        idempotent, because a half-run migration on a device whose whole storage
+        story is one SD card is the failure with no floor under it.
+        """
+        path = settings.state_path
+        old = sqlite3.connect(path)
+        old.executescript("""
+            CREATE TABLE tv_binding (
+                id TEXT PRIMARY KEY, artwork_id TEXT NOT NULL UNIQUE, tv_content_id TEXT,
+                tv_thumb_md5 TEXT, uploaded_at TEXT NOT NULL, upload_status TEXT NOT NULL
+            );
+            CREATE TABLE daemon_state (key TEXT PRIMARY KEY, value TEXT);
+            INSERT INTO tv_binding VALUES ('1', 'w1', 'MY-OLD', NULL, '2026-01-01T00:00:00+00:00', 'uploaded');
+            PRAGMA user_version = 1;
+            """)
+        old.commit()
+        old.close()
+
+        for _ in range(2):  # opened twice: the widening must not raise the second time
+            with DisplayState(path, now=lambda: clock.as_clock().now()) as store:
+                binding = store.binding_for("w1")
+                assert binding.tv_content_id == "MY-OLD", "an existing row was lost by the widening"
+                assert binding.render_fingerprint is None, "a row from before the column claimed a fingerprint"
+
     def test_an_upload_replaces_the_failure_before_it(self, state: DisplayState):
         state.record_upload_failure("w1")
 
@@ -130,6 +158,46 @@ class TestUploading:
         await daemon.tick()
 
         assert state.binding_for("w1").is_on_the_television
+
+    async def test_a_re_rendered_work_is_sent_again(
+        self, daemon: Daemon, tv: FakeTv, publish, art_root, state: DisplayState, clock
+    ):
+        """**The wall showing a composition the catalogue no longer holds.**
+
+        `render_path` is `ready/{artwork_id}.jpg` and stable across re-renders, so
+        a curator changing a mat colour rewrites the bytes under an unchanged name.
+        Without a fingerprint the binding still reads `uploaded` and the television
+        goes on showing the old picture indefinitely — and nothing in the product
+        would ever say so, because every record agrees. `set_mat_color` and
+        `regenerate` are live actions, so this is ordinary use.
+        """
+        publish(["w1"], interval_seconds=10)
+        await daemon.tick()
+        first = state.binding_for("w1").tv_content_id
+
+        (art_root / "ready" / "w1.jpg").write_bytes(b"a different composition entirely")
+        clock.advance(10)
+        await daemon.tick()
+
+        rebound = state.binding_for("w1")
+        assert rebound.tv_content_id != first, "the television was never told the render changed"
+        assert tv.holding[rebound.tv_content_id].read_bytes() == b"a different composition entirely"
+
+    async def test_a_work_whose_render_is_untouched_is_not_sent_again(
+        self, daemon: Daemon, tv: FakeTv, publish, state: DisplayState, clock
+    ):
+        """The other half, and the one that costs money if wrong: a fingerprint
+        that changed spuriously would re-upload the whole theme every pass."""
+        publish(["w1"], interval_seconds=10)
+        await daemon.tick()
+        first = state.binding_for("w1").tv_content_id
+
+        for _ in range(5):
+            clock.advance(10)
+            await daemon.tick()
+
+        assert state.binding_for("w1").tv_content_id == first
+        assert len(tv.holding) == 1
 
     async def test_a_work_already_on_the_television_is_not_uploaded_again(self, daemon: Daemon, tv: FakeTv, publish, clock):
         publish(["w1", "w2"], interval_seconds=10)

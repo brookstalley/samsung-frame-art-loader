@@ -174,6 +174,33 @@ since it was hardwired to the curation root, and `-n0` made conditional on the
 project actually having xdist, which display does not and which made pytest exit 4
 and read as a broken suite.
 
+**The verify round returned one blocking finding, and it was the right one to
+catch: a security control with no test.** The clamp that stops the fork's DEBUG
+line putting the television's pairing token in the journal had one caller and no
+test, so `max`→`min` or a renamed constant would have passed the suite silently —
+against a public repository whose very first chunk existed to undo that token
+being committed. `display/tests/test_logs.py` now asserts the level *and* that the
+token does not reach the stream.
+
+**A question the operator asked about the library turned up a live defect nothing
+was looking for.** Talking through what a device-driver interface would need
+surfaced that `render_path` is `ready/{artwork_id}.jpg` and **stable across
+re-renders**: a curator changing a mat colour rewrites the bytes under an
+unchanged name, the binding still reads `uploaded`, and the television goes on
+showing the old composition indefinitely with every record in the product
+agreeing. `set_mat_color` and `regenerate` both shipped in 18B, so it is reachable
+by ordinary use. The binding now carries a `render_fingerprint` — modification
+time and size, not a hash, because the rotation reads it per entry per pass and
+hashing forty 2 MB composites a second is real I/O on an SD card to answer a
+question `stat` answers. That is `display-state.sqlite` schema 2, and it exercised
+the widening step the store was built with rather than leaving it theoretical.
+
+The direction that conversation was actually about — abstracting the display
+device so the Samsung client becomes one driver among several — is filed as
+**#102** rather than built. The seam is already most of the way there; what does
+not generalise is the *shape* of the interface, whose upload-then-select-by-id
+contract is a Frame artifact that no other device wants.
+
 ## 2026-08-06: The small-issue sweep — eleven closed, and the two guards that were guarding a copy
 
 <!-- prawduct: scope=v1-build -->

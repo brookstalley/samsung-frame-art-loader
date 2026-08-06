@@ -1125,7 +1125,8 @@ the entity that enforces the second Direction norm.
 | `id` | UUID | PK | |
 | `artwork_id` | UUID | required, unique | Reference to the catalogue's Artwork id. One television holds at most one image per work. |
 | `tv_content_id` | string | **required when `upload_status = 'uploaded'`, null otherwise** | The TV's own identifier for the uploaded image. |
-| `tv_thumb_md5` | string | nullable | Used to re-match after the TV loses or renames content. |
+| `tv_thumb_md5` | string | nullable | **Modelled, and nothing writes it** (recorded 2026-08-06). It was to re-match after the TV loses or renames content; the display plane instead marks such a binding orphaned and uploads again, which costs one transfer and is correct even when nothing was renamed — fetching a thumbnail per work to compare hashes costs more than the re-upload it saves. The column stays because a future device driver may need it; the value is null on every row. |
+| `render_fingerprint` | string | nullable | The render file's modification time and size when it was sent, so a re-rendered work is sent again. `ready/{artwork_id}.jpg` is stable across re-renders, so without this a changed mat colour leaves the television showing the old composition indefinitely with every record agreeing. Null on rows written before this column existed, which counts as changed. |
 | `uploaded_at` | datetime | auto | |
 | `upload_status` | enum | required | `uploaded` \| `failed` \| `orphaned`. |
 

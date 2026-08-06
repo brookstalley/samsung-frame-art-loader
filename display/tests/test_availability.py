@@ -150,9 +150,14 @@ async def test_orphan_removal_owed_during_an_outage_happens_when_the_set_returns
     assert "MY-LEGACY-1" not in tv.holding, "orphan removal was dropped rather than deferred"
 
 
-async def test_a_reconciliation_interrupted_halfway_is_still_owed(daemon: Daemon, tv: FakeTv, publish):
+async def test_a_reconciliation_interrupted_halfway_is_still_owed(daemon: Daemon, tv: FakeTv, publish, clock, settings):
     """Cleared on the far side of the call, so a set that goes away during it does
-    not leave the work recorded as done."""
+    not leave the work recorded as done — and retried on a wait, not on every poll.
+
+    The wait matters as much as the owing: an unconfirmable removal left owed and
+    ungated would ask the set again every second, which is the unbounded cadence
+    this loop guards against twice elsewhere.
+    """
     from pathlib import Path
 
     tv.holding["MY-LEGACY-1"] = Path("/gone/legacy-1.jpg")
@@ -165,6 +170,12 @@ async def test_a_reconciliation_interrupted_halfway_is_still_owed(daemon: Daemon
     await daemon.tick()
     tv.unavailable = False
     tv.removal_unconfirmable = False
+
+    removals_before = len(tv.removed)
+    await daemon.tick()
+    assert len(tv.removed) == removals_before, "an unconfirmable removal was retried on the very next poll"
+
+    clock.advance(settings.tv_retry_max_seconds)
     await daemon.tick()
 
     assert "MY-LEGACY-1" not in tv.holding

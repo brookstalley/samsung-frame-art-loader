@@ -120,8 +120,12 @@
   never by foreign key* (`data-model.md` → Relationships).
 - **This boundary is governed by a ratified norm.** The manifest is the *only*
   channel from curation to display (`architecture.md` § Direction). A change that
-  adds a second one is a norm departure requiring a recorded decision, and issue #7
-  files the plane-isolation test that enforces it.
+  adds a second one is a norm departure requiring a recorded decision. Since
+  2026-08-06 the norm is enforced mechanically rather than by judgement:
+  `tests/preferences/test_plane_isolation.py` (issue #7) parses every display
+  module, follows imports transitively through this repository's own files, and
+  fails on a curation import or an HTTP client — the television websocket
+  exempted, because talking to the set is that plane's job.
 - **The reverse direction exists and is narrow:** display writes a heartbeat/status
   file that curation reads. Sole writer is display; it never checks whether anyone
   read it, so it creates no dependency in the protected direction.
