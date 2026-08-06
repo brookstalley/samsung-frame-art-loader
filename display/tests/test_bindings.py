@@ -1,0 +1,179 @@
+"""What this television holds, what this device believes, and the gap between them.
+
+Two defects shape everything here. The 2024 loader recorded a successful upload
+with no content id, so a failure read as a success; and the television's single
+user-upload category means anything this device cannot account for is an image
+nobody will ever remove if this process does not.
+"""
+
+import logging
+import sqlite3
+from pathlib import Path
+
+import pytest
+from fakes import FakeTv
+
+from display.daemon import Daemon
+from display.state import DisplayState, UploadStatus
+
+
+class TestTheStoreRefusesTheOldDefect:
+    def test_a_row_cannot_claim_an_upload_without_naming_its_id(self, state: DisplayState):
+        """The 2024 defect made unwritable rather than merely avoided.
+
+        That version caught every exception, logged, and still reported success —
+        recording no content id while its retry loop set `success = True`. Here
+        the write itself is refused.
+        """
+        with pytest.raises(sqlite3.IntegrityError):
+            state._connection.execute(
+                "INSERT INTO tv_binding (id, artwork_id, tv_content_id, uploaded_at, upload_status) "
+                "VALUES ('1', 'w1', NULL, '2026-01-01T00:00:00+00:00', 'uploaded')"
+            )
+
+    def test_a_failed_upload_is_a_different_state_from_never_having_tried(self, state: DisplayState):
+        assert state.binding_for("w1") is None
+
+        failed = state.record_upload_failure("w1")
+
+        assert failed.upload_status is UploadStatus.FAILED
+        assert failed.is_on_the_television is False
+        assert state.binding_for("w1") is not None, "a failed upload left no trace to distinguish it from an untried one"
+
+    def test_an_upload_replaces_the_failure_before_it(self, state: DisplayState):
+        state.record_upload_failure("w1")
+
+        state.record_upload("w1", "MY-F0001")
+
+        binding = state.binding_for("w1")
+        assert binding.upload_status is UploadStatus.UPLOADED
+        assert binding.tv_content_id == "MY-F0001"
+        assert len(state.bindings()) == 1, "the retry left a second row for the same work"
+
+
+class TestUploading:
+    async def test_a_work_is_uploaded_before_it_is_shown(self, daemon: Daemon, tv: FakeTv, publish, state: DisplayState):
+        publish(["w1"])
+
+        await daemon.tick()
+
+        binding = state.binding_for("w1")
+        assert binding.is_on_the_television
+        assert tv.holding[binding.tv_content_id].name == "w1.jpg"
+
+    async def test_an_upload_that_fails_is_recorded_and_the_work_skipped(
+        self, daemon: Daemon, tv: FakeTv, publish, state: DisplayState, caplog
+    ):
+        publish(["w1", "w2"])
+        tv.refuse_uploads = True
+
+        with caplog.at_level(logging.WARNING):
+            await daemon.tick()
+
+        assert tv.selected == [], "a work was shown that is not on the television"
+        assert state.binding_for("w1").upload_status is UploadStatus.FAILED
+        assert "binding.upload_failed" in {r.__dict__.get("event") for r in caplog.records}
+
+    async def test_the_theme_fills_in_behind_the_first_picture(self, daemon: Daemon, tv: FakeTv, publish, state):
+        """Uploads are carried one per pass rather than done in a batch.
+
+        A fresh install with forty works and ten seconds an upload would leave the
+        wall on yesterday's picture — and a curator pressing "next" with nothing
+        happening — for five minutes, against a poll interval that is one second
+        precisely because that wait is the one the product may not have.
+        """
+        publish(["w1", "w2", "w3", "w4"], interval_seconds=3600)
+
+        await daemon.tick()
+        assert len(tv.holding) == 2, "the first pass should show one work and carry one more"
+
+        for _ in range(5):
+            await daemon.tick()
+
+        assert len(tv.holding) == 4
+        assert len(tv.selected) == 1, "filling the theme in moved the wall"
+
+    async def test_a_work_already_on_the_television_is_not_uploaded_again(self, daemon: Daemon, tv: FakeTv, publish, clock):
+        publish(["w1", "w2"], interval_seconds=10)
+        await daemon.tick()
+        clock.advance(10)
+        await daemon.tick()
+        uploads = len(tv.holding)
+
+        for _ in range(3):
+            clock.advance(10)
+            await daemon.tick()
+
+        assert len(tv.holding) == uploads
+
+
+class TestOrphans:
+    async def test_an_upload_the_binding_table_cannot_account_for_is_removed(self, daemon: Daemon, tv: FakeTv, publish, caplog):
+        """A fresh install clears the set, and that is the correct behaviour.
+
+        Images uploaded by a previous generation are not assets to adopt: nothing
+        joins them to a work, so adopting one would bind a work to a picture that
+        is not the render its manifest entry names.
+        """
+        tv.holding["MY-LEGACY-1"] = Path("/gone/legacy-1.jpg")
+        tv.holding["MY-LEGACY-2"] = Path("/gone/legacy-2.jpg")
+        publish(["w1"])
+
+        with caplog.at_level(logging.INFO):
+            await daemon.tick()
+
+        assert "MY-LEGACY-1" not in tv.holding
+        assert "MY-LEGACY-2" not in tv.holding
+        assert tv.removed == [("MY-LEGACY-1", "MY-LEGACY-2")]
+
+    async def test_a_work_the_manifest_still_names_is_never_removed(self, daemon: Daemon, tv: FakeTv, publish, clock):
+        publish(["w1", "w2"], interval_seconds=10)
+        for _ in range(4):
+            await daemon.tick()
+            clock.advance(10)
+        held_before = set(tv.holding)
+
+        publish(["w1", "w2"], sequence=1, interval_seconds=10)  # a `sync` rewrite
+        await daemon.tick()
+
+        assert set(tv.holding) == held_before
+        assert tv.removed == []
+
+    async def test_a_binding_the_set_no_longer_lists_is_re_uploaded(
+        self, daemon: Daemon, tv: FakeTv, publish, state: DisplayState, caplog
+    ):
+        """Somebody removed it from the phone app. Selecting the stale id would
+        fail against the set, so the row is marked orphaned and re-uploaded."""
+        publish(["w1"])
+        await daemon.tick()
+        vanished = state.binding_for("w1").tv_content_id
+        del tv.holding[vanished]
+
+        publish(["w1"], sequence=1)
+        with caplog.at_level(logging.WARNING):
+            await daemon.tick()
+            await daemon.tick()
+
+        assert "binding.orphaned" in {r.__dict__.get("event") for r in caplog.records}
+        rebound = state.binding_for("w1")
+        assert rebound.is_on_the_television
+        assert rebound.tv_content_id != vanished
+        assert rebound.tv_content_id in tv.holding
+
+    async def test_an_unconfirmable_removal_is_reported_as_unknown_and_retried(self, daemon: Daemon, tv: FakeTv, publish, caplog):
+        """The library discards the reply to a removal, so claiming either outcome
+        would be a guess. Unknown is reported as unknown."""
+        tv.holding["MY-LEGACY-1"] = Path("/gone/legacy-1.jpg")
+        tv.removal_unconfirmable = True
+        publish(["w1"])
+
+        with caplog.at_level(logging.WARNING):
+            await daemon.tick()
+
+        assert "MY-LEGACY-1" in tv.holding
+        assert "tv.orphan_removal_unconfirmed" in {r.__dict__.get("event") for r in caplog.records}
+
+        tv.removal_unconfirmable = False
+        publish(["w1"], sequence=1)
+        await daemon.tick()
+        assert "MY-LEGACY-1" not in tv.holding, "the next adoption did not try again"

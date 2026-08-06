@@ -27,21 +27,24 @@ stays version-free.
 
 ## Dev commands
 
-Three independent projects, three interpreters. **Two suites — and the third
-column is why that is not a typo.**
+Three independent projects, three interpreters, three suites.
 
 | | 2024 modules (repo root) | curation plane | display plane |
 |---|---|---|---|
-| Test | `uv run pytest tests` | `cd curation && uv run pytest` | *(no suite yet — see below)* |
+| Test | `uv run pytest tests` | `cd curation && uv run pytest` | `cd display && uv run pytest` |
 | Lint | `uv run ruff check .` | `cd curation && uv run ruff check .` | `cd display && uv run ruff check .` |
 | Format | `uv run black .` | `cd curation && uv run black .` | `cd display && uv run black .` |
 
-**The two suites that exist must both pass.** `display/` currently holds a project
-manifest and no module, so its lint and format commands run against an empty tree
-and its `pytest` would collect nothing and exit 5 — which is not a pass and not a
-failure. It gets its suite, and its `test_commands` entry, from the commit that
-writes its first module; that same commit owes the plane-isolation test, because
-both are the same claim about when a guard starts guarding.
+**All three must pass.** The display plane got its suite, its `test_commands`
+entry and its CI leg on 2026-08-06, with its first modules — until then its
+`pytest` collected nothing and exited 5, which is neither a pass nor a failure.
+That same commit carried the plane-isolation test, because both are the same
+claim about when a guard starts guarding.
+
+**Nothing in any of the three reaches a television, a panel, or a museum.** The
+display suite drives a double behind the TV interface, which is why it runs on a
+GitHub runner; the hardware is exercised by `tv_api_check.py` and by the `live_*`
+markers below, all of them run by hand.
 
 **`uv run` in every column, including the root.** pytest, ruff and black live in a
 `[dependency-groups] dev` group that only uv installs — `pip install -e .` does

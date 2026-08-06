@@ -84,19 +84,31 @@ dev = [
     "black>=24",
 ]
 
-[tool.uv]
-# **This plane is an application, not a distributable, and saying so is what makes
-# `uv run` work here at all.** Without it uv builds the project before running
-# anything, and the build fails twice over: hatchling refuses the git-sourced
-# `samsungtvws` above as a direct reference, and there is no package directory for
-# it to put in a wheel. Both failures land before ruff or black sees a file — so
-# the lint and format commands documented for this plane did not run against an
-# empty tree, they did not run at all.
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/display"]
+
+[tool.hatch.metadata]
+# **The line that lets this plane be a package at all.** Its television client is
+# a git dependency, and hatchling refuses a direct reference unless told that one
+# is intended — which is the whole of what used to make the build fail.
+allow-direct-references = true
+
+# **`[tool.uv] package = false` was here until this plane had a module, and both
+# of its reasons were artefacts of the empty tree rather than facts about the
+# design.** It recorded that hatchling refused the git-sourced `samsungtvws` as a
+# direct reference (one line above fixes that, and always would have) and that
+# there was no package directory to put in a wheel (there is one now). What it got
+# right is that nothing installs this plane from anywhere else: it is started by a
+# systemd unit against this directory, and being a package changes only that its
+# own venv can import it.
 #
-# Nothing here is ever installed by another project: the display plane is started
-# by a systemd unit against this directory. Neither sibling needs this line —
-# both really are packages.
-package = false
+# It has to change, because `src/` layout and "never installed" cannot both hold —
+# `python -m display` finds nothing on the path, and the alternative is a
+# `PYTHONPATH=src` that every invocation, unit file and test run has to remember.
 
 [tool.black]
 # The floor rather than the target: formatting that only parses on 3.13 would

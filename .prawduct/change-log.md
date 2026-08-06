@@ -48,6 +48,92 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-06: The display plane exists — and the guard that could not be written until it did
+
+<!-- prawduct: chunks=12 | scope=v1-build -->
+
+**Why:** Chunk 12. The wall is still driven by `tvart.py`; this is the plane that
+replaces it — poll the manifest, keep the television holding what the manifest
+lists, rotate over it, and execute the directives a curator's `next` and
+`show_now` ride in on. **The chunk is not closed**: its acceptance calls for a
+live pass on the Pi, and the television has been in standby all session.
+Everything below is verified against a double.
+
+**`tests/preferences/test_plane_isolation.py` finally exists**, and its
+sequencing was the point rather than an accident of scheduling. The norm index
+named that path as a live `Test` mechanism for three sessions while no such file
+had ever existed; the correction that caught it also said why it could not be
+written yet — a check over an empty package passes vacuously — and why it must
+not wait, since the window in which display code exists unguarded is exactly the
+window in which "just fetch the label text live" gets written and passes every
+test. So it landed in the same commit as the plane's first modules. It follows
+imports **transitively through this repository's own files**, which is the
+difference between a guard and a formality: a direct-only check is evaded by one
+shared helper, and the helper is where the import would actually land.
+Third-party packages are deliberately not followed, and that is what makes the
+television exemption structural — `samsungtvws` drags `aiohttp` in behind it, and
+neither is display's import to answer for. Both halves were driven red on purpose
+against the real tree before being trusted.
+
+**Four things were settled at build that the artifacts had left open.**
+
+*A restart re-shows the picture that is already up, rather than advancing.* The
+acceptance criterion says a restart must neither re-execute the last directive
+nor lose its place, and the first implementation read that as "resume after the
+last work" — which advances the wall every time the unit bounces. Under
+`Restart=always` that turns a crash loop into a strobing wall, which is much
+worse than the alternative it was avoiding. Re-selecting what is showing is
+idempotent and invisible; the place is kept because the *next* step is the work
+after it. A `sync` mid-interval takes the opposite branch, because a running
+process holding its place in memory would otherwise be handed a second full
+interval on every catalogue edit.
+
+*A directive is consumed after the attempt, never before.* Every path that acts
+on one can find the television asleep, and a sequence marked acted-on during an
+outage is a `show_now` the curator never gets — the manifest does not change, so
+nothing would ever present it again. An attempt that *completes* and shows
+nothing, such as a pin whose render is missing, is still an attempt and is
+consumed; retrying that one every second fills the journal with a failure that
+will not change until a file appears. Both halves are now in `api-contract.md`
+§ How `art_display` reaches the display plane, which is where the question was
+parked.
+
+*Uploads are carried one per pass rather than done in a batch on adoption.* A
+fresh install has an empty binding table and a theme of forty works at the better
+part of ten seconds each. Uploading them all before the first `select_image`
+leaves the wall on yesterday's picture for five minutes — and leaves a curator
+pressing "next" with nothing happening for five minutes, against a poll interval
+that is one second precisely because that wait is the one the product may not
+have.
+
+*The e-paper panel's geometry became configuration*, `EPD_PANEL_WIDTH_PX` and
+`EPD_PANEL_HEIGHT_PX`, defaulting to the reference 1448×1072. It was a number in
+prose, which is the standing the television's geometry had before it was hoisted,
+and `operational-spec.md`'s own rule that nothing may hardcode either panel's
+size reaches this one too.
+
+**The television's two known lies are corrected at the seam and nowhere else.**
+`upload()` reports failure on uploads that succeeded, and `delete_list()` never
+reads its reply — so an upload is attributed by reading the set's own listing
+back (the `image_date` this request stamped, plus a before-snapshot, because
+either signal alone can be wrong), and a removal reports what the set holds
+afterwards. Everything above the seam is written against an abstract `TvClient`
+and never imports the fork, which is what keeps an unowned, four-months-static
+upstream a swap rather than a rewrite.
+
+**`display/` is a package now, and `[tool.uv] package = false` is gone.** Both of
+that setting's recorded reasons were artefacts of the empty tree: hatchling
+refuses a git-sourced direct reference unless told one is intended (one line), and
+there was no package directory to build (there is one now). It had to change,
+because `src/` layout and "never installed" cannot both hold — `python -m display`
+finds nothing on the path.
+
+The plane also brought the third `test_commands` entry, the third CI leg in
+`suites.yml`, and a guard that the new leg needs no `--ignore` set — the
+symmetric claim to the one the root leg already carried, written separately
+because the plane that will grow an opt-in group first is this one, the moment
+the e-paper panel arrives behind an optional install.
+
 ## 2026-08-06: The small-issue sweep — eleven closed, and the two guards that were guarding a copy
 
 <!-- prawduct: scope=v1-build -->

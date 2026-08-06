@@ -15,15 +15,17 @@
 # the same reason, and the two legs should agree — a contributor reasoning about
 # what gates their branch should not have to hold two policies in their head.
 #
-# TWO SUITES, TWO JOBS. They are independent projects with independent
-# interpreters and no shared state, so one job would only serialise them and
-# report a single conclusion for two unrelated things. Separately, each names
-# which plane broke.
+# ONE JOB PER SUITE. They are independent projects with independent interpreters
+# and no shared state, so one job would only serialise them and report a single
+# conclusion for three unrelated things. Separately, each names which plane broke.
+# The display leg joined them on 2026-08-06 with that plane's first module — it
+# had lint and nothing to test until then.
 #
-# LINT IS ITS OWN JOB, and that is not just tidiness: lint covers *three* planes
-# where tests cover two. `display/` currently holds a project manifest and no
-# module, so it has lint but nothing to test. Folding lint into the test jobs
-# would leave the display plane's lint with no job to live in.
+# LINT IS STILL ITS OWN JOB. That was originally because lint covered three
+# planes where tests covered two, and it now holds for a different reason: a
+# lint failure and a test failure want different fixes from different people, and
+# folding them together means a formatting nit reports as "the display plane is
+# broken" on a pull request.
 
 name: Default suites
 
@@ -93,6 +95,31 @@ jobs:
         if: always()
         run: python3 .github/scripts/assert_tests_ran.py curation/results.xml
 
+  display:
+    name: "The display plane"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Run the display suite
+        working-directory: display
+        # No `--ignore` set here, unlike the curation leg: this plane declares no
+        # opt-in dependency groups, so nothing in its tree `importorskip`s and
+        # nothing contributes the skip that the guard below reads as a
+        # provisioning failure. If that ever changes, this line grows the same
+        # treatment and `tests/test_default_suite_ci_scope.py` is what will say so.
+        #
+        # Nothing here reaches a television. The set is behind an abstract base
+        # and the suite drives a double, which is why this leg can run on a
+        # GitHub runner at all.
+        run: uv run pytest tests -v --junitxml=results.xml
+      - name: Fail if nothing actually ran
+        if: always()
+        run: python3 .github/scripts/assert_tests_ran.py display/results.xml
+
   lint:
     name: "Lint and format, all three planes"
     runs-on: ubuntu-latest
@@ -113,10 +140,6 @@ jobs:
           uv run black --check .
       - name: The display plane
         working-directory: display
-        # This plane holds a project manifest and no module yet, so both commands
-        # run against an empty tree and pass trivially. That is the point of
-        # wiring it now rather than later: the leg is in place the day the first
-        # module lands, instead of being remembered afterwards.
         run: |
           uv run ruff check .
           uv run black --check .

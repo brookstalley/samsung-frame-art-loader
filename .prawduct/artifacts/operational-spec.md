@@ -266,6 +266,15 @@ Panel geometry was briefly listed as a second shared value; it is not, because
   forty rows.)*
 - **E-paper panel geometry** (1448×1072) — **display only**, for label typesetting.
 
+  *(**Became configuration on 2026-08-06**, with the display plane's first
+  modules: `EPD_PANEL_WIDTH_PX` and `EPD_PANEL_HEIGHT_PX`, defaulting to the
+  reference panel's figures. Until then it was a number in prose, which is the
+  same standing the TV's geometry had before it was hoisted — and the rule below
+  that nothing may hardcode either panel's size applies to this one too. The
+  plane logs the resolved pair at startup beside its `ART_ROOT`. Nothing reads it
+  yet: the label renders with the chunk that drives the panel, and the value is
+  hoisted here because the plane that will read it is the plane that now exists.)*
+
 Because neither is shared, neither can drift between planes. A wrong TV size is
 still a real defect — the mat comes out the wrong width and the review grid's
 warnings are computed against a TV that isn't there — but it is a single-plane

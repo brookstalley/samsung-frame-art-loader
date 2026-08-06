@@ -155,3 +155,20 @@ def test_the_root_leg_needs_no_ignores():
         "a module under the root tests/ now uses importorskip, so the root CI leg needs the same "
         "--ignore treatment the curation leg has"
     )
+
+
+def test_the_display_leg_needs_no_ignores():
+    """The same claim about the third suite, which joined CI on 2026-08-06.
+
+    That plane declares no opt-in dependency group, so nothing in its tree
+    `importorskip`s and its invocation is the plain one. Written as its own test
+    rather than folded into the root's, because the two are independent facts
+    about independent projects and one of them changing must not be masked by the
+    other still holding — and because the plane that will grow such a group first
+    is this one, the moment the e-paper panel arrives behind an optional install.
+    """
+    assert _directories_that_import_or_skip(REPO / "display" / "tests") == set(), (
+        "a module under display/tests now uses importorskip, so the display CI leg needs the same "
+        "--ignore treatment the curation leg has — otherwise assert_tests_ran.py reads the import "
+        "skip as a provisioning failure and fails a job whose suite is fine"
+    )

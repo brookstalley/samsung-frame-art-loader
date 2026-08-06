@@ -2922,22 +2922,23 @@ coverage_required: false
 #   Whitespace-separated test trees for the coverage verifier (default:
 #   `tests`). One verifier run unions discovery across all of them.
 
-# Three independent projects, three interpreters, two suites — both of the two
-# must pass, and the hook must run the real invocations rather than its
-# `sys.executable -m pytest` default, which resolves neither. The curation plane
-# is uv-managed on its own pinned interpreter, so it is reached with `--directory`
-# (shell operators are unsupported here, and `cd` is a shell operator).
+# Three independent projects, three interpreters, three suites — all three must
+# pass, and the hook must run the real invocations rather than its
+# `sys.executable -m pytest` default, which resolves none of them. Each plane is
+# uv-managed on its own pinned interpreter, so the two under a subdirectory are
+# reached with `--directory` (shell operators are unsupported here, and `cd` is a
+# shell operator).
 #
-# The display plane is deliberately absent rather than forgotten: it holds a
-# project manifest and no module, so its pytest would collect nothing and exit 5
-# — neither a pass nor a failure. A declared command that cannot fail is worse
-# than an absent one, so its entry lands with the commit that writes its first
-# module. Same commit, same reason, as the plane-isolation test.
+# The display plane's entry landed 2026-08-06 with its first module, which is
+# when it stopped being a command that could not fail: until then its pytest
+# collected nothing and exited 5 — neither a pass nor a failure. Same commit,
+# same reason, as the plane-isolation test.
 test_commands:
   - uv run pytest tests --junit-xml={junit_xml} -q
   - uv run --directory curation pytest --junit-xml={junit_xml} -q
+  - uv run --directory display pytest --junit-xml={junit_xml} -q
 
-tests_dirs: tests curation/tests
+tests_dirs: tests curation/tests display/tests
 
 # =============================================================================
 # OPERATOR VERIFICATION (opt-in, v1.4+)

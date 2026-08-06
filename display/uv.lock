@@ -280,7 +280,7 @@ wheels = [
 [[package]]
 name = "display"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "astral" },
     { name = "python-dotenv" },
