@@ -91,6 +91,42 @@ STATUS_HOLD_SECONDS: Final[float] = 45.0
 #: by something outside this process could go unnoticed.
 _RECHECK_SECONDS: Final[float] = 5.0
 
+#: How many runs one listing may carry. **Nothing else bounds this list**, and it
+#: is the only listing in the product that grows with what people *typed*: a run
+#: row carries the operator's verbatim intent, so the payload grows with both the
+#: number of runs and the length of each request. A household box discovering art
+#: for a year would otherwise make one `list_runs` call the largest thing either
+#: surface can emit — into a model's context window on one of them.
+#:
+#: 50 because a row here is about eleven short fields plus the intent, near 120
+#: tokens in practice, so a full listing is ~6,000 — under the 10,000 at which a
+#: client warns, and sized the same way `MAX_WORKS_LISTED` was.
+#:
+#: **The newest survive**, which is what makes a cap usable rather than merely
+#: safe: the store returns runs newest-first, and the run somebody is looking for
+#: is nearly always recent. A cap that kept the oldest would bound the payload and
+#: answer nobody's question.
+MAX_RUNS_LISTED: Final[int] = 50
+
+
+@dataclass(frozen=True, slots=True)
+class RunListing:
+    """A page of runs, and how many there were before the cap.
+
+    `total` is carried rather than left to be inferred from `len(runs)`, because
+    a silently short list is indistinguishable from a complete one — which is how
+    a caller concludes there have been fifty runs when there have been four
+    hundred. `api-contract.md § Conditional Patterns` requires the count as well
+    as the fact: *"a truncated result says so explicitly and gives the total"*.
+    """
+
+    runs: Sequence[DiscoveryRun]
+    total: int
+
+    @property
+    def truncated(self) -> bool:
+        return self.total > len(self.runs)
+
 
 class WorkOutcome(StrEnum):
     """What phase 2 managed for one work. Four things, none of which absorbs another.
@@ -519,9 +555,21 @@ class DiscoveryRunner:
             month=month,
         )
 
-    def list_runs(self, *, status: RunStatus | None = None, kind: RunKind | None = None) -> Sequence[DiscoveryRun]:
-        """Every run, newest first, optionally narrowed."""
-        return self._discovery.list_runs(status=status, kind=kind)
+    def list_runs(self, *, status: RunStatus | None = None, kind: RunKind | None = None) -> RunListing:
+        """The newest runs, optionally narrowed, capped at `MAX_RUNS_LISTED`.
+
+        **`status` and `kind` are filters, not bounds.** Omitting both is the
+        documented default — "omit to list every run" — and until this cap
+        existed that returned the store's entire history in one payload, on both
+        surfaces. Filtering narrows *which* runs; only the cap bounds how many.
+
+        The cap is applied here rather than in either binding so the two surfaces
+        cannot come to disagree about how much history there is. `http/api.py`'s
+        own note said as much before this existed: fixing one alone is how they
+        drift apart.
+        """
+        runs = self._discovery.list_runs(status=status, kind=kind)
+        return RunListing(runs=runs[:MAX_RUNS_LISTED], total=len(runs))
 
     def run_status(self, run_id: str, *, wait: bool = True) -> RunView:
         """Where a run is, holding until that changes if work is actually under way.

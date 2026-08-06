@@ -277,3 +277,151 @@ def test_an_unresolved_work_says_which_kind_of_nothing(ui, reason):
     sentence = badge.get_attribute("title")
     assert sentence, f"{reason.value} reached the page with no sentence behind it"
     assert sentence.endswith("."), f"the sentence for {reason.value} is not one: {sentence!r}"
+
+
+# -- a watch that cannot recover --------------------------------------------
+
+
+#: The client gives up after this many consecutive failures. Read from the module
+#: under test would be better; it is a `const` in a script, so it is restated
+#: here and `test_the_client_and_this_test_agree_on_the_limit` holds the pair
+#: together rather than leaving two numbers to drift.
+MAX_FAILURES = 5
+
+#: What the service answers for a run id it does not know — the case that made
+#: this necessary. A bookmarked `#run/<id>` outlives its run.
+GONE = (400, {"error": "There is no run with that id."})
+
+
+def test_the_client_and_this_test_agree_on_the_limit(ui):
+    """Two numbers, one meaning. Asserted rather than assumed.
+
+    If the client's limit rises and this one does not, the terminate test below
+    waits too short a window and reports a stopped poll that is merely slow —
+    green for the wrong reason, which is worse than red.
+    """
+    ui.open("")
+
+    assert ui.page.evaluate("() => RUN_POLL_MAX_FAILURES") == MAX_FAILURES
+
+
+def test_a_run_that_will_never_answer_stops_being_watched(ui):
+    """The loop proved to terminate, rather than read to.
+
+    Opening a stale bookmarked `#run/<id>` after the run is gone had the service
+    answer 400, the catch re-arm, and the tab request that run every two seconds
+    for as long as it stayed open — bounded only by navigation, with nothing on
+    screen saying the watch was still retrying.
+
+    Asserted on the request count across a window several polls longer than the
+    limit, because that is the only thing that distinguishes a loop that stopped
+    from one that is between ticks.
+    """
+    ui.serve(f"**/api/runs/{RUN_ID}", GONE)
+
+    ui.page.goto(f"{ui.base_url}/#run/{RUN_ID}")
+    ui.page.wait_for_selector("#error:not([hidden])")
+
+    # Long enough for several more polls than the limit allows, so a loop that
+    # merely slowed down would still be caught.
+    ui.page.wait_for_timeout(POLL_MS * (MAX_FAILURES + 3))
+    attempts = len(ui.requests_matching(f"/api/runs/{RUN_ID}"))
+
+    assert attempts == MAX_FAILURES, f"{attempts} requests for a run that will never exist — the watch did not stop"
+
+
+def test_a_watch_that_gave_up_says_so_rather_than_only_what_failed(ui):
+    """ "The server answered 400" leaves a live page indistinguishable from a dead one.
+
+    The curator needs two facts and the message used to carry one: what went
+    wrong, and whether anything is still trying. Only the second tells them
+    whether to keep looking at the screen.
+    """
+    ui.serve(f"**/api/runs/{RUN_ID}", GONE)
+
+    ui.page.goto(f"{ui.base_url}/#run/{RUN_ID}")
+    ui.page.wait_for_selector("#error:not([hidden])")
+    ui.page.wait_for_timeout(POLL_MS * (MAX_FAILURES + 1))
+
+    message = ui.page.inner_text("#error")
+    assert "Gave up watching this run" in message
+    assert "reload" in message, "saying it stopped without saying how to resume leaves the curator stuck"
+    assert "There is no run with that id." in message, "the original fault must survive; it is the diagnosis"
+
+
+def test_one_blip_does_not_end_the_watch(ui):
+    """The behaviour the unconditional re-arm was right about, kept.
+
+    A curator watching a live run through a single 502 must not be left on a
+    stale page. The failure count exists to end a watch that *cannot* recover,
+    and a fix that ended this one too would trade a rare annoyance for a common
+    one.
+    """
+    ui.serve("**/api/estimate?*", an_estimate())
+    ui.serve(
+        f"**/api/runs/{RUN_ID}",
+        [
+            (502, {"error": "The server answered 502."}),
+            a_run_view(run=a_run(status=RunStatus.RESOLVING_WORKS.value)),
+        ],
+    )
+
+    ui.page.goto(f"{ui.base_url}/#run/{RUN_ID}")
+
+    # The run's own content arriving is the recovery: it can only be painted by
+    # a poll that the blip did not stop.
+    ui.page.wait_for_selector("#view p.note")
+    assert "Something by Dalí" in ui.text()
+    assert ui.page.is_hidden("#error"), "a recovered watch must clear the message, not leave it accusing"
+
+
+def test_a_success_clears_the_failure_count(ui):
+    """Consecutive, not cumulative — asserted on the count itself.
+
+    The behavioural version below is the one that matters, but it takes a window
+    of several polls to become decisive and a shorter one leaves this exact
+    mutation alive: a sweep that deleted the reset survived, because failures
+    separated by successes had not yet added up to the limit inside the window
+    being watched. This reads the count directly, so nothing rests on how long
+    the test waited.
+    """
+    ui.serve("**/api/estimate?*", an_estimate())
+    good = a_run_view(run=a_run(status=RunStatus.RESOLVING_WORKS.value))
+    bad = (502, {"error": "The server answered 502."})
+    ui.serve(f"**/api/runs/{RUN_ID}", [bad, bad, good])
+
+    ui.page.goto(f"{ui.base_url}/#run/{RUN_ID}")
+    ui.page.wait_for_selector("#view p.note")
+
+    assert ui.page.evaluate("() => state.watch.failures") == 0, (
+        "two failures then a success left the count standing — counted that way, a flaky "
+        "connection exhausts the budget over a long session and stops a watch that is working"
+    )
+
+
+def test_failures_with_a_success_between_them_never_end_the_watch(ui):
+    """The same rule as behaviour: a watch that keeps recovering is never ended.
+
+    A flaky connection that fails four times, recovers, and fails four more must
+    not be stopped — counted cumulatively it would be, on the sixth request.
+
+    **The window is sized so that the two rules disagree inside it**, which is the
+    part a shorter version got wrong: four-failure bursts separated by a success
+    exhaust a cumulative budget at request six, so anything past six proves the
+    count is consecutive rather than proving only that the test was impatient.
+    """
+    ui.serve("**/api/estimate?*", an_estimate())
+    good = a_run_view(run=a_run(status=RunStatus.RESOLVING_WORKS.value))
+    bad = (502, {"error": "The server answered 502."})
+    ui.serve(f"**/api/runs/{RUN_ID}", [bad, bad, bad, bad, good, bad, bad, bad, bad, good])
+
+    ui.page.goto(f"{ui.base_url}/#run/{RUN_ID}")
+    ui.page.wait_for_selector("#view p.note")
+    ui.page.wait_for_timeout(POLL_MS * 4 + 500)
+
+    attempts = len(ui.requests_matching(f"/api/runs/{RUN_ID}"))
+
+    assert attempts > 6, (
+        f"only {attempts} requests — a cumulative count gives up on the sixth, so the watch "
+        "was ended by failures that had a success between them"
+    )

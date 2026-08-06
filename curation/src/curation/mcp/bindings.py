@@ -42,7 +42,7 @@ from curation.services.display_fit import DisplayFit
 from curation.services.errors import ServiceError
 from curation.services.previews import InlinePreview
 from curation.services.review import MAX_REVIEW_LIMIT, CandidatePage, CandidateView, InstanceListing, InstanceView
-from curation.services.runner import RunView
+from curation.services.runner import RunListing, RunView
 
 #: A bound action: validated arguments in, a result payload out. Every binding
 #: takes the whole container rather than the one service it happens to need, so
@@ -423,8 +423,14 @@ def _resolve_images(services: Services, arguments: Mapping[str, Any]) -> dict[st
 
 
 def _list_runs(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    runs = services.runner.list_runs(status=arguments.get("status"), kind=arguments.get("kind"))
-    return ok(runs=[_run_fields(run) for run in runs], count=len(runs))
+    listing = services.runner.list_runs(status=arguments.get("status"), kind=arguments.get("kind"))
+    return ok(
+        runs=[_run_summary(run) for run in listing.runs],
+        count=len(listing.runs),
+        total=listing.total,
+        truncated=listing.truncated,
+        notice=_runs_truncation_notice(listing),
+    )
 
 
 def _spend(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -883,6 +889,58 @@ def _run_fields(run: DiscoveryRun) -> dict[str, Any]:
         "started_at": _moment(run.started_at),
         "completed_at": _moment(run.completed_at),
     }
+
+
+#: What a run's *listing* row drops, and why each one is detail rather than
+#: summary. `api-contract.md § Summary then detail`: a listing carries the fields
+#: needed to decide, and `get` returns the record.
+#:
+#: `strategy` is the engine's reading of the intent in its own words — unbounded
+#: prose, on every row, and the second of the two fields that made this listing
+#: grow with what people typed rather than with how many runs there were. It is
+#: not lost: `action='status'` returns one run in full, which is where a caller
+#: goes once the listing has told them which run they want.
+#:
+#: The verbatim `intent` stays, deliberately, though it is unbounded too. It is
+#: the only human-readable way to tell one run from another in a list — two runs
+#: sharing a prefix are indistinguishable once it is truncated — so trimming it
+#: would save bytes by making the listing stop answering the question it exists
+#: for.
+_RUN_DETAIL_ONLY: Final[frozenset[str]] = frozenset({"strategy"})
+
+
+def _run_summary(run: DiscoveryRun) -> dict[str, Any]:
+    """One run as a *listing* row shows it.
+
+    Derived from `_run_fields` by subtraction rather than written out, so a field
+    added to a run reaches the listing automatically and only a deliberate entry
+    in `_RUN_DETAIL_ONLY` keeps it out. Written the other way round — two literal
+    shapes — a new field would land in one and not the other, which is the drift
+    the candidate-work projections took four coordinated edits to maintain before
+    they were collapsed into one.
+    """
+    return {key: value for key, value in _run_fields(run).items() if key not in _RUN_DETAIL_ONLY}
+
+
+def _runs_truncation_notice(listing: RunListing) -> str | None:
+    """Say how much history was left out, or say nothing.
+
+    **Names the filters rather than an offset, because there is no offset here.**
+    `list_runs` takes `status` and `kind` and no paging parameter, so advice to
+    page would send a caller to an argument the action does not accept — the
+    failure the withheld action was withheld to avoid, one surface over. What a
+    caller *can* do is narrow, and both filters are on this same action.
+
+    Says the rows are the newest, because that is what makes the remainder
+    ignorable: a caller who wanted a run from last March now knows the filter is
+    the way to reach it, rather than assuming it has been forgotten.
+    """
+    if not listing.truncated:
+        return None
+    return (
+        f"showing the {len(listing.runs)} most recent of {listing.total} runs. "
+        "There is no paging on this action; narrow with status= or kind= to reach older ones."
+    )
 
 
 #: How many of a run's works one result may carry. **The list this caps is not

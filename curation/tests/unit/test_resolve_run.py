@@ -452,8 +452,8 @@ def test_a_re_search_appears_in_a_listing_narrowed_to_re_searches(services, runn
 
     resolve = re_search(runner, works["The Elephants"])
 
-    assert [run.id for run in runner.list_runs(kind=RunKind.RESOLVE)] == [resolve.id]
-    assert parent.id in [run.id for run in runner.list_runs(kind=RunKind.DISCOVERY)]
+    assert [run.id for run in runner.list_runs(kind=RunKind.RESOLVE).runs] == [resolve.id]
+    assert parent.id in [run.id for run in runner.list_runs(kind=RunKind.DISCOVERY).runs]
 
 
 # -- being watched while it works ------------------------------------------------

@@ -282,27 +282,32 @@ def list_runs(
     status: Annotated[str | None, Query()] = None,
     kind: Annotated[str | None, Query()] = None,
 ) -> RunListOut:
-    """Every run, newest first, optionally narrowed.
+    """The newest runs, optionally narrowed, capped in the service layer.
 
-    **Nothing bounds this, and the bound is written down rather than assumed.**
-    `status` and `kind` are filters, not limits: omit both and the whole
-    `discovery_runs` table comes back, one row per search plus one per
-    re-search, for ever, with nothing pruning them. That is the only collection
-    on this surface with no page — `/api/works` caps at `MAX_LIST_LIMIT` and the
-    client pages it.
+    **`status` and `kind` are filters, not limits.** Omit both and this asked for
+    the whole `discovery_runs` table — one row per search plus one per re-search,
+    for ever, with nothing pruning them. What made it tolerable was a fact about
+    the deployment rather than a mechanism: one household, one operator, so a
+    year of use is hundreds of rows. A real bound, but an editorial one, and it
+    stopped holding the moment this surface served anything else.
 
-    What makes it tolerable today is a fact about the deployment rather than a
-    mechanism: one household, one operator, searching in leisure-time sessions,
-    so a year of use is hundreds of rows and not millions. That is a real bound
-    but it is an editorial one, and the moment this surface serves anything else
-    it stops holding. Recorded here so the next reader inherits the reasoning
-    rather than the silence — and tracked as **issue #54**, which owns the cap
-    for both surfaces at once, because the MCP twin reads the same unbounded
-    method into a model's context window and fixing one alone is how the two
-    come to disagree.
+    The cap is `RunnerService.list_runs`', not this handler's, so this surface
+    and the MCP twin cannot come to disagree about how much history exists —
+    which is what the note here used to warn would happen if either were fixed
+    alone. Both now read the same bound and report the same total.
+
+    **There is still no paging parameter**, and that is a smaller gap than the
+    one just closed: `total` says what was left out, and the two filters are how
+    a caller reaches it. A `limit`/`offset` pair would change the contract of a
+    shipped surface and earns its own review rather than riding along here.
     """
-    runs = _services(request).runner.list_runs(status=status, kind=kind)
-    return RunListOut(runs=[_run(run) for run in runs], count=len(runs))
+    listing = _services(request).runner.list_runs(status=status, kind=kind)
+    return RunListOut(
+        runs=[_run(run) for run in listing.runs],
+        count=len(listing.runs),
+        total=listing.total,
+        truncated=listing.truncated,
+    )
 
 
 @router.get("/runs/{run_id}")

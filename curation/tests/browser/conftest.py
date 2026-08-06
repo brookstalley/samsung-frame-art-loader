@@ -126,17 +126,25 @@ class Ui:
         what happens *across* successive answers — a poll that changes nothing
         and then one that does — which a route with a single answer could not
         express.
+
+        An entry may be a plain dict, answered 200, or a `(status, body)` pair.
+        The pair is what lets a sequence express a *failing* answer, which the
+        client's own failure model needs: "one blip then fine" and "broken from
+        the first request and staying broken" are different behaviours, and
+        neither can be written with successes alone.
         """
-        bodies = [payloads] if isinstance(payloads, dict) else list(payloads)
+        entries = [payloads] if isinstance(payloads, (dict, tuple)) else list(payloads)
         served = {"count": 0}
 
         def handler(route):
-            index = min(served["count"], len(bodies) - 1)
+            index = min(served["count"], len(entries) - 1)
             served["count"] += 1
+            entry = entries[index]
+            status, body = entry if isinstance(entry, tuple) else (200, entry)
             route.fulfill(
-                status=200,
+                status=status,
                 content_type="application/json",
-                body=json.dumps(bodies[index]),
+                body=json.dumps(body),
             )
 
         self.page.route(pattern, handler)

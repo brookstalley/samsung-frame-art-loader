@@ -445,10 +445,18 @@ class RunViewOut(BaseModel):
 
 
 class RunListOut(BaseModel):
-    """Every run, newest first."""
+    """The newest runs, and how many there were before the cap.
+
+    `total` and `truncated` are carried rather than left for the client to
+    infer from `len(runs)`: a silently short list is indistinguishable from a
+    complete one, which is how a curator concludes there have been fifty runs
+    when there have been four hundred.
+    """
 
     runs: list[RunOut]
     count: int
+    total: int
+    truncated: bool
 
 
 class EstimateOut(BaseModel):

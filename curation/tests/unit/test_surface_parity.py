@@ -34,7 +34,7 @@ import pytest
 
 from curation.http import models as http_models
 from curation.mcp import bindings
-from curation.persistence.discovery_records import CandidateWork
+from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, RunKind, RunStatus
 from curation.persistence.records import Artist, Artwork, Theme
 
 WHEN = datetime(2026, 8, 6, 12, 0, tzinfo=UTC)
@@ -132,6 +132,36 @@ def test_the_candidate_work_projections_agree_but_for_one_named_field():
         _fields(http_models.CandidateWorkOut),
         HTTP_ONLY_ON_CANDIDATE_WORK,
     )
+
+
+#: The one field `RunOut` carries that the tool result does not.
+#:
+#: `is_terminal` is carried for the browser rather than left for it to derive
+#: from a list of status names, because that list is the thing that goes stale: a
+#: tenth status added to the enum would leave a browser polling a finished run
+#: for ever with nothing failing to say so. A model reads `status` itself and has
+#: the enum's meaning in the tool description, so it needs no such crutch.
+HTTP_ONLY_ON_RUN = frozenset({"is_terminal"})
+
+
+def test_the_run_projections_agree_but_for_one_named_field():
+    """Pinned while both surfaces were being changed at once, which is when it matters.
+
+    `http/api.py`'s run listing carried a note saying the cap had to reach both
+    surfaces together, "because fixing one alone is how the two come to
+    disagree". The same is true of the row's field names, and nothing was
+    checking them.
+    """
+    run = DiscoveryRun(
+        id="r1",
+        kind=RunKind.DISCOVERY,
+        initiated_by=InitiatedBy.MCP_CLIENT,
+        status=RunStatus.COMPLETED,
+        approval_required=False,
+        started_at=WHEN,
+    )
+
+    check_parity("DiscoveryRun", set(bindings._run_fields(run)), _fields(http_models.RunOut), HTTP_ONLY_ON_RUN)
 
 
 def test_a_field_only_the_http_model_has_is_rejected():

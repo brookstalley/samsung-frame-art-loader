@@ -16,7 +16,7 @@
  * nothing changed can leave the DOM — and the focus in it — alone. Cleared on
  * every navigation, because leaving a view and coming back must repaint even
  * when the data is identical: the DOM it describes is gone by then. */
-const state = { view: "works", detailId: null, nav: 0, poll: 0, painted: null };
+const state = { view: "works", detailId: null, nav: 0, poll: 0, painted: null, watch: null };
 
 /* -- plumbing -------------------------------------------------------------- */
 
@@ -907,6 +907,43 @@ async function viewDiscovery(generation) {
  * than holding the request open, so this interval is the whole of the latency. */
 const RUN_POLL_MS = 2000;
 
+/* How many consecutive failures end the watch, and why a count rather than a
+ * backoff curve.
+ *
+ * Two things actually happen here, and neither is the case backoff is for. A
+ * blip — one 502, a request caught by a service restart — recovers within a tick
+ * or two. A permanent condition — a bookmarked `#run/<id>` for a run that no
+ * longer exists, which the service answers 400 — never recovers, and every retry
+ * is identical. Backoff optimises the case in between, a long outage that comes
+ * good, and there is no such case here: this server is on the same box in the
+ * same house as the browser, so if it is unreachable for minutes the whole page
+ * is dead and reloading is the natural move, not waiting out a curve.
+ *
+ * Five, because the realistic multi-second interruption is the operator
+ * restarting the curation service while watching a run, and five attempts at
+ * two-second spacing rides out about ten seconds of that. A stale bookmark fails
+ * all five inside those ten seconds and then stops, instead of asking for a run
+ * that will never exist every two seconds for as long as the tab stays open. */
+const RUN_POLL_MAX_FAILURES = 5;
+
+/* Consecutive failures for the run currently being watched.
+ *
+ * Keyed by run id rather than by poll generation, though the issue that produced
+ * it said generation: `state.poll` increments on *every* poll, so a
+ * generation-keyed count would reset itself each tick and never reach any
+ * threshold. What has to survive a tick is the watch, and what identifies a
+ * watch is which run it is on — so opening a different run starts fresh, and a
+ * success anywhere clears it. */
+function noteWatchFailure(runId) {
+  if (state.watch === null || state.watch.runId !== runId) state.watch = { runId, failures: 0 };
+  state.watch.failures += 1;
+  return state.watch.failures;
+}
+
+function noteWatchSuccess(runId) {
+  state.watch = { runId, failures: 0 };
+}
+
 async function viewRun(runId, generation) {
   // Claimed at the top and checked after every await. This paint supersedes any
   // earlier one, and an earlier one still in flight must not paint over it or
@@ -919,16 +956,37 @@ async function viewRun(runId, generation) {
   try {
     view = await api(`/api/runs/${encodeURIComponent(runId)}`);
   } catch (failure) {
-    // One blip must not end the watch. Without this the throw leaves the last
-    // paint on screen looking current, `guard` writes a message naming a URL,
-    // and no further poll is ever scheduled — so a curator watching a live run
-    // through a single 502 is left with a stale page that never recovers and
-    // never says it stopped. Re-arm first, then re-throw so the message is
-    // still shown: the next tick repaints and clears it if the blip has passed.
+    // One blip must not end the watch. Without re-arming, the throw leaves the
+    // last paint on screen looking current, `guard` writes a message naming a
+    // URL, and no further poll is ever scheduled — so a curator watching a live
+    // run through a single 502 is left with a stale page that never recovers
+    // and never says it stopped.
+    //
+    // But re-arming unconditionally has no notion of *consecutive* failures, so
+    // it did the same thing for a permanent one. Opening a stale bookmarked
+    // `#run/<id>` after the run is gone had the service answer 400, the catch
+    // re-arm, and the tab request that run every two seconds for as long as it
+    // stayed open — bounded only by navigation, with nothing on screen saying
+    // the watch was still retrying.
+    if (noteWatchFailure(runId) >= RUN_POLL_MAX_FAILURES) {
+      // Say the watch stopped, not only what failed. The two are different
+      // facts and only one of them tells the curator what to do next: a message
+      // naming a 400 leaves a live page indistinguishable from a dead one.
+      throw new Error(
+        `${failure.message} Gave up watching this run after ${RUN_POLL_MAX_FAILURES} attempts — ` +
+          "reload the page to start watching again."
+      );
+    }
+    // Re-arm first, then re-throw so the message is still shown: the next tick
+    // repaints and clears it if the blip has passed.
     scheduleRunPoll(runId, pollGeneration);
     throw failure;
   }
   if (state.poll !== pollGeneration) return;
+  // A reachable run resets the count, so a watch is only ever ended by failures
+  // with nothing between them. Recorded here rather than after the paint: what
+  // the count is about is whether the server answered, and it just did.
+  noteWatchSuccess(runId);
   const run = view.run;
   const tally = view.tally;
 
