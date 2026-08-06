@@ -139,6 +139,32 @@ async def remove_from_tv(tv_art, content_ids, category: str = UPLOADED_CATEGORY)
         return None
 
 
+def forgettable_ids(result: DeleteResult | None) -> frozenset[str]:
+    """The content ids local state may now forget — and only those.
+
+    A caller that has just asked the television to remove images has to decide
+    which of its own "this is uploaded" markers to clear. The answer is the ids
+    the set confirmed gone, and nothing else.
+
+    **Clearing them all was a real defect, not a tidiness question.** The
+    television keeps images it was asked to drop — that is the outcome
+    `DeleteResult.surviving` exists to name — and `tvart.sync_artsets_to_tv`
+    picks its upload candidates by exactly the test "has no `tv_content_id`". So
+    a wholesale clear told the sync path that images the set was still holding
+    had never been uploaded, and it uploaded them again: duplicates in
+    `MY-C0002`, on a set with finite storage. The warning naming the survivors
+    was already being logged, and nothing read it.
+
+    An unconfirmed removal (`None`) forgets nothing. That is the deliberate
+    direction rather than the cautious-looking one: we do not know what the set
+    holds, and clearing on no evidence is the same mistake made more quietly. It
+    errs towards leaving an image marked uploaded, which costs a work its place
+    on the set until the next confirmed pass — where the other error costs
+    storage on every run and is invisible.
+    """
+    return frozenset() if result is None else frozenset(result.deleted)
+
+
 def describe_removal(result: DeleteResult | None, requested_count: int) -> str:
     """One sentence about a removal that never claims more than is known.
 
