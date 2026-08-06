@@ -14,6 +14,33 @@ inline, which the record linter flags; moving them is tracked as issue #26.
 label which is which** — a measurement earns confidence, and the mechanism written
 beside it inherits that confidence without earning any.
 
+## A test double that fails EARLIER than the real thing makes every test past it vacuous
+
+**When** a fake stands in for a client with connection state, **make it fail where
+the real one fails**, not at the first opportunity — and check what it *lets
+through*, not just what it returns. **Because** a double that raises at the top of
+a call sequence prevents every later line from executing, and the tests asserting
+those lines pass with no assertion looking wrong.
+
+Worked instance, 2026-08-06: `FakeTv.connect()` re-checked reachability on every
+call, while the real `SamsungTv.connect()` returns immediately once it holds a
+client — so in production a set that goes away is discovered by the next *real*
+call, and in the fake it was discovered at the top of the tick. Two tests
+asserting "a directive is not consumed while the television is asleep" passed
+because the directive code never ran. Making the fake faithful turned both red,
+and one was a genuine behaviour with no coverage at all.
+
+**The tell is a test that passes on the first try for a rule you have not
+implemented yet.** The general check: for each test, name the line that would
+have to execute for the assertion to mean anything, and confirm the fixture
+reaches it. A mutation sweep answers this mechanically and found this one.
+
+**Its sibling: the module with no tests is the one the doubles replaced.**
+`display/src/display/tv/samsung.py` exists entirely to correct a library that
+misreports in both directions, and nothing reached it — the suite runs against
+the double by design. A green suite, a passing review, and a symbol-reference
+coverage floor all agreed it was covered.
+
 ## Do not trust a foreign client's return value in either direction — confirm against the system itself
 
 **When a boundary library reports success or failure, verify the claim against the
