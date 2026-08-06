@@ -75,9 +75,14 @@ def test_the_grid_pages_through_a_catalogue_larger_than_one_page(ui, a_catalogue
     assert offsets == sorted(
         set(offsets)
     ), "offsets repeated or went backwards, so a page was re-fetched or the loop made no progress"
-    # No gap between pages: the works already in hand are what the next offset is
-    # derived from, so a jump would mean the boundary row was never asked for —
-    # the exact off-by-one this fixture's 101st work exists to expose.
+    # The loop stopped inside the catalogue rather than running on past the end.
+    #
+    # It is NOT the no-gap check — that property is pinned by the card count
+    # above, which is 101 only if every offset asked for the rows between it and
+    # the last one. Said here because the two are easy to confuse and this
+    # comment used to claim the gap check as its own: an assertion described as
+    # covering more than it does is the reason a later reader stops looking for
+    # the test that really covers it.
     assert offsets[-1] < a_catalogue_past_one_page, "the loop asked past the end of the catalogue"
 
 
