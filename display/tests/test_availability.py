@@ -181,6 +181,38 @@ async def test_a_reconciliation_interrupted_halfway_is_still_owed(daemon: Daemon
     assert "MY-LEGACY-1" not in tv.holding
 
 
+async def test_a_removal_the_set_refuses_settles_instead_of_being_asked_for_ever(
+    daemon: Daemon, tv: FakeTv, publish, clock, settings
+):
+    """A *known* refusal is an answer, and asking again learns nothing.
+
+    The distinction this pins is between two outcomes that both fail to remove
+    anything. When the set answers and keeps the image, the state of the world is
+    established — it is already reported at WARNING by the client — so
+    reconciliation is done and the next manifest re-arms it. When nobody could
+    establish what the set holds, the work stays owed and is retried on a wait.
+
+    Written because the previous commit changed this line from `outcome.complete`
+    to `True` with nothing exercising it: the whole suite passed with the old value
+    restored, because no test had ever produced a removal the set survived.
+    """
+    from pathlib import Path
+
+    tv.holding["MY-STUBBORN"] = Path("/gone/stubborn.jpg")
+    tv.unremovable = {"MY-STUBBORN"}
+    publish(["w1"])
+
+    await daemon.tick()
+    assert "MY-STUBBORN" in tv.holding, "the fake removed an image it was told to keep"
+    asked = len(tv.removed)
+
+    clock.advance(settings.tv_retry_max_seconds + 1)
+    for _ in range(3):
+        await daemon.tick()
+
+    assert len(tv.removed) == asked, "an answered refusal was re-asked; that outcome was already established"
+
+
 async def test_a_manifest_published_while_the_set_is_asleep_is_still_adopted(
     daemon: Daemon, tv: FakeTv, publish, state: DisplayState
 ):

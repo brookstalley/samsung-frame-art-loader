@@ -62,7 +62,11 @@ class TestTheStoreRefusesTheOldDefect:
         old.commit()
         old.close()
 
-        for _ in range(2):  # opened twice: the widening must not raise the second time
+        # Opened twice because a store must survive being reopened, not because the
+        # second pass reaches the `ALTER`: the first stamps `user_version`, so the
+        # second returns at the version guard. What covers the ALTER's idempotency
+        # is the column-list check, which every fresh store in this suite exercises.
+        for _ in range(2):
             with DisplayState(path, now=lambda: clock.as_clock().now()) as store:
                 binding = store.binding_for("w1")
                 assert binding.tv_content_id == "MY-OLD", "an existing row was lost by the widening"

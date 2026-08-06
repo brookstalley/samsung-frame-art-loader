@@ -195,6 +195,14 @@ hashing forty 2 MB composites a second is real I/O on an SD card to answer a
 question `stat` answers. That is `display-state.sqlite` schema 2, and it exercised
 the widening step the store was built with rather than leaving it theoretical.
 
+**Orphan removal also learned the difference between two failures that look
+alike.** A set that answers and *keeps* an image has established the state of the
+world — the outcome is already reported at WARNING — so reconciliation settles and
+the next manifest re-arms it. A set nobody could get an answer out of leaves the
+work owed, retried on a wait rather than every second. That distinction shipped
+one commit before its test, which the round caught: restoring the old value passed
+the whole suite, because nothing had ever produced a removal the set survived.
+
 The direction that conversation was actually about — abstracting the display
 device so the Samsung client becomes one driver among several — is filed as
 **#102** rather than built. The seam is already most of the way there; what does

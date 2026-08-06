@@ -216,10 +216,13 @@ class DisplayState:
     def accounted_content_ids(self) -> frozenset[str]:
         """Every content id this device believes it put on the television.
 
-        **Includes orphaned rows deliberately.** An orphan is a row whose id the
-        set stopped listing; if the set later lists it again, treating it as
-        unaccounted-for would delete an image this device uploaded and is about to
-        re-upload.
+        **Orphaned rows are not in this set, and that is not an oversight.**
+        `mark_orphaned` clears the content id along with the status — the row says
+        "this work has no image on this television" — so there is nothing left to
+        account for. If the set later lists that id again it is removed as an
+        orphan and the work is uploaded afresh, which converges on the right wall
+        at the cost of one transfer, and is correct even when the set renamed
+        rather than lost it.
         """
         rows = self._connection.execute("SELECT tv_content_id FROM tv_binding WHERE tv_content_id IS NOT NULL").fetchall()
         return frozenset(row["tv_content_id"] for row in rows)
