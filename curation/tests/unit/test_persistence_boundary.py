@@ -204,6 +204,26 @@ _MAY_IMPORT_A_DOMAIN_ADAPTER = {
 _DOMAIN_ADAPTERS = {"curation.persistence.catalogue", "curation.persistence.sqlite_discovery"}
 
 
+def _package_of(path: pathlib.Path) -> str:
+    """The dotted package a relative import inside `path` resolves against.
+
+    **A package's `__init__.py` is the package**, not a module inside it.
+    `_module_name` strips the `__init__` component, so `persistence/__init__.py`
+    arrives as `curation.persistence` — and taking the parent of *that* gives
+    `curation`, one level too high. A relative import there then resolved to
+    `curation.catalogue`, matched nothing, and the one spelling this resolution
+    exists to catch walked past in the one file that names the package.
+
+    A function rather than a line at the call site, and that is the second half
+    of the same lesson: written inline, the only test that could reach it
+    re-derived the package in its own body and passed against a mutated call
+    site — a test defending a copy of the thing it names, which is the defect
+    this branch has now produced at three different altitudes.
+    """
+    name = _module_name(path)
+    return name if path.name == "__init__.py" else name.rsplit(".", 1)[0]
+
+
 def _resolve(module: str | None, level: int, package: str) -> str | None:
     """The absolute name a `from … import` targets, relative form included.
 
@@ -221,8 +241,16 @@ def _resolve(module: str | None, level: int, package: str) -> str | None:
     if not level:
         return module
     parts = package.split(".") if package else []
-    base = parts[: len(parts) - level + 1]
-    if not base:
+    # How many leading components survive the climb. Computed and tested for
+    # sign rather than sliced directly: `parts[: len(parts) - level + 1]` goes
+    # NEGATIVE once the level passes `len(parts) + 1`, and a negative slice
+    # counts from the end — so `from ....catalogue import x` inside
+    # `curation.persistence` returned `curation.catalogue` where Python raises
+    # `ImportError`. Unreachable in a valid tree, and a false hit is the one
+    # direction this guard must not produce: it would fail a correct module for
+    # an import nobody wrote.
+    keep = len(parts) - level + 1
+    if keep <= 0:
         # Climbed past the top of the tree, which names no module at all.
         #
         # **Unobservable through this guard, and recorded rather than defended.**
@@ -233,6 +261,7 @@ def _resolve(module: str | None, level: int, package: str) -> str | None:
         # terms, and it would start mattering the day a bare top-level module
         # joined the set. What it must not do is read as covered.
         return None
+    base = parts[:keep]
     return ".".join([*base, module]) if module else ".".join(base)
 
 
@@ -303,7 +332,7 @@ def test_nothing_beneath_the_domain_adapters_imports_one():
         reached_by[name] = _imports_any(
             ast.parse(path.read_text(encoding="utf-8")),
             _DOMAIN_ADAPTERS,
-            package=name.rsplit(".", 1)[0],
+            package=_package_of(path),
         )
     offenders = _offending_importers(reached_by, _MAY_IMPORT_A_DOMAIN_ADAPTER)
 
@@ -404,3 +433,51 @@ def test_a_relative_import_that_climbs_one_level_reaches_a_different_package():
     reached = _imports_any(ast.parse("from ..catalogue import StorageError"), _DOMAIN_ADAPTERS, package="curation.persistence")
 
     assert not reached, "one level up from persistence is curation.catalogue, which is not an adapter"
+
+
+def test_a_packages_own_init_resolves_against_itself():
+    """`__init__.py` names the package; its parent is one level too high.
+
+    The call site derives a package by dropping the last component of the module
+    name — right for `persistence/durable.py`, wrong for `persistence/__init__.py`,
+    whose module name already *is* `curation.persistence`. Taking its parent gave
+    `curation`, so `from .catalogue import X` there resolved to
+    `curation.catalogue` and matched nothing.
+
+    Asserted on `_resolve` directly: the real tree's `__init__.py` is empty, so
+    only fabricated input can show the difference — which is why it survived the
+    commit that introduced the resolution.
+    """
+    assert _resolve("catalogue", 1, "curation.persistence") == "curation.persistence.catalogue"
+    assert _resolve("catalogue", 1, "curation") == "curation.catalogue", "the wrong package resolves elsewhere, silently"
+
+
+def test_the_scan_treats_an_init_as_its_own_package():
+    """The call site's half of the same claim, driven through the real scan.
+
+    A relative import planted in `persistence/__init__.py` must be reported. The
+    assertion above pins the arithmetic; this pins that the scan feeds it the
+    right package, which is where the defect actually was.
+    """
+    init = _SOURCE_ROOT / "curation" / "persistence" / "__init__.py"
+    sibling = _SOURCE_ROOT / "curation" / "persistence" / "durable.py"
+
+    # Both resolve against the same package, by different routes — and that is
+    # exactly what the defect got wrong, sending the `__init__` one level higher.
+    assert _package_of(init) == "curation.persistence"
+    assert _package_of(sibling) == "curation.persistence"
+
+    reached = _imports_any(ast.parse("from .catalogue import StorageError"), _DOMAIN_ADAPTERS, package=_package_of(init))
+    assert reached == {"curation.persistence.catalogue"}
+
+
+def test_a_relative_import_climbing_past_the_root_names_nothing():
+    """Past the top, Python raises ImportError; this must not invent a name.
+
+    `parts[: len(parts) - level + 1]` goes negative here and a negative slice
+    counts from the end, so the old form answered `curation.catalogue` — a false
+    hit, which is the one direction this guard must never produce.
+    """
+    assert _resolve("catalogue", 4, "curation.persistence") is None
+    assert _resolve("catalogue", 3, "curation.persistence") is None
+    assert _resolve("catalogue", 2, "curation.persistence") == "curation.catalogue"
