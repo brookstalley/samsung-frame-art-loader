@@ -1,17 +1,39 @@
-aiohttp==3.9.5
+# aiohttp, lxml, pillow, python-dotenv and requests were moved off their 2024
+# pins on 2026-08-06 to clear published security advisories against them. The
+# other pins here are unaffected and were left where they were.
+#
+# **No suite in this repo installs this file**, so a green `uv run pytest` says
+# nothing about these versions — the root project declares only python-dotenv.
+# What was checked instead was every upstream call site these modules actually
+# reach, against the bumped set in a clean interpreter: the Pillow surface in
+# `image_utils.py`, `metadata.py` and `art.py` (including the `frombuffer`
+# BGRA/raw form and the `_getexif` private call), the `BeautifulSoup(html,
+# "lxml")` parse and `find_all(id=callable)` in `source_utils.py`, and the
+# `samsungtvws` submodule imports. Repeat that, not the suite, when these move
+# again.
+#
+# `beautifulsoup4` stayed at 4.12.3 deliberately: it was the companion bump lxml
+# 6 looked likely to force, and it does not — the parse above was verified on
+# 4.12.3 against lxml 6.1.1.
+#
+# **`aiohttp` is imported by nothing in this repo.** It is the `samsungtvws`
+# fork's transport, which is why it is pinned here at all, and the reason the
+# jump from 3.9.5 was safe to make is that `display/uv.lock` already resolves
+# the *same* fork commit against 3.14.3.
+aiohttp==3.14.3
 async_timeout==4.0.3
 beautifulsoup4==4.12.3
 bs4==0.0.2
 colour==0.1.5
 ExifRead==3.0.0
-lxml==5.2.2
+lxml==6.1.1
 numpy==2.0.0
 openai==1.37.1
 opencv-python==4.10.0.84
-pillow==10.4.0
-python-dotenv==1.0.1
+pillow==12.3.0
+python-dotenv==1.2.2
 pytz==2024.1
-requests==2.32.3
+requests==2.34.2
 # NOT the PyPI package of the same name, and not interchangeable with it: PyPI
 # `samsungtvws` ships a synchronous art client only, with no `async_art` module
 # and no event callbacks at all. This fork is the one that has them, and the TV

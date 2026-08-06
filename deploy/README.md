@@ -106,6 +106,27 @@ it is deployed again:
 
 ## Before you install the current `requirements.txt` on the Pi
 
+Two pin moves are described here. This one is the more recent, and it is the one
+still owing a hardware run.
+
+`aiohttp` (3.9.5 → 3.14.3), `lxml` (5.2.2 → 6.1.1), `pillow` (10.4.0 → 12.3.0),
+`python-dotenv` (1.0.1 → 1.2.2) and `requests` (2.32.3 → 2.34.2) moved together on
+2026-08-06 to clear published security advisories against the 2024 pins. What was
+verified is that the set resolves in a clean 3.12 interpreter and that every
+upstream call site these modules reach still behaves — the Pillow surface, the
+`lxml`-backed BeautifulSoup parse, and the `samsungtvws` imports. `beautifulsoup4`
+was left at 4.12.3: it was the companion bump lxml 6 looked likely to force, and
+the parse was verified against 6.1.1 without it.
+
+**It has not been run against the television, and that check is owed.** `aiohttp`
+is not imported anywhere in this repo — it is the `samsungtvws` fork's transport,
+which puts this move on the same footing as the one below, and the `tv_api_check.py`
+invocation described there is what discharges it. The reason the jump was safe to
+make without hardware in hand is that `display/uv.lock` already resolves the *same*
+fork commit against aiohttp 3.14.3; that is an argument from a sibling plane's
+resolver, not a measurement on the set. `pi-freeze-2024.txt` records the pre-move
+version of all five and is the rollback.
+
 `samsungtvws` and `websockets` moved together on 2026-08-01 — a two-year-old fork
 SHA to fork master, and websockets 12.0 to 16.1.1, which the new library requires.
 ~~That pair has been verified to resolve and import, and has not yet been run

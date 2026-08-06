@@ -950,3 +950,7 @@ filenames encode identity in at least three mutually inconsistent conventions
 ## When a comment names a SYMBOL as the source of truth for a set, derive the test's inputs from that symbol — parametrise over the tuple/enum/registry the prose points at rather than retyping its members, because a hand-copied list makes the invariant true only for the members that existed when it was written, and the failure of the one added later is exactly the silent outcome the comment was warning about
 
 ## A test rewritten to accommodate a change needs the mutation check MORE than a new test does — after adjusting an assertion that your own change turned red, re-break the thing the test originally caught and confirm it still fails, because the pressure is to make it pass and the cheapest way to do that is to drop the assertion that was doing the work
+
+## A dependency bump's evidence is the call sites, never the suite — before believing a version move, exercise the upstream API the code actually reaches in a clean interpreter, because a manifest no suite installs (`requirements.txt` here, which the root project does not declare) makes a green `pytest` a statement about versions that did not move
+
+## Before calling a shared pinned upstream risky to bump, read the SIBLING lockfiles — when two projects in a repo pin the same git dependency, one plane's resolved lock is evidence about the other's, and the version you are afraid to move to may already be resolved and running next door
