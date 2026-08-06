@@ -29,10 +29,18 @@ StartLimitIntervalSec=0
 # now that difference reaches the process. A mis-parsed value is live rather than
 # overwritten.
 #
-# What catches the worst case is no longer this comment. `curation.art_root`
-# refuses to start against a directory that is neither marked nor holding a
-# catalogue, so an ART_ROOT that systemd parsed into something else reports an
-# error instead of quietly becoming an empty second collection.
+# NOTHING HERE CATCHES THAT YET, and a first version of this comment claimed
+# otherwise. It pointed at `curation.art_root`, which does refuse to start
+# against a directory that is neither marked nor holding a catalogue — but this
+# unit's ExecStart is `tvart.py`, the 2024 plane, which reads ART_ROOT through
+# the root `config.py` and calls `os.makedirs` on what it finds. There is no
+# curation unit in this directory. The guard is real and governs a process this
+# file does not start.
+#
+# So the exposure stands for the plane this unit runs: the four other required
+# values raise at import when a mis-parse leaves them empty, which covers the
+# common case, and ART_ROOT is the one that silently creates instead. It goes
+# away when the 2024 plane is retired and the curation unit lands here.
 EnvironmentFile=/home/tvpi/source/samsung-frame-art-loader/.env
 ExecStart=/home/tvpi/source/samsung-frame-art-loader/.venv/bin/python /home/tvpi/source/samsung-frame-art-loader/tvart.py --setfile=all.json --stay
 WorkingDirectory=/home/tvpi/source/samsung-frame-art-loader

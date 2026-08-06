@@ -748,7 +748,36 @@ function provenanceBadge(work) {
 }
 
 const RESOLUTION_GLYPHS = { resolved: "●", unresolved: "▲", pending: "◌" };
-const RESOLUTION_WORDS = { resolved: "has an image", unresolved: "no image", pending: "not looked up" };
+
+/* What `resolution_status` says, in the tense it actually holds.
+ *
+ * **The column describes the RUN's outcome, not the card's current state**, and
+ * these words now say so. That is the answer to "does this badge describe the run
+ * or the card", and it is written here rather than only in a decision record
+ * because the words are the whole of the fix.
+ *
+ * They used to read "has an image" — present tense, a claim about the work right
+ * now — beside a card that could also read "You have turned down everything that
+ * was found for it." Each true, together contradictory: only a resolution
+ * *attempt* recomputes this column, so turning down the last surviving instance
+ * leaves it reading `resolved` until the next re-search.
+ *
+ * The rejection model is deliberate and settled — `discovery.reject_image` does
+ * not rewrite `resolution_status`, and `_accept` asks the images rather than this
+ * column for exactly that reason. So the column was right and the wording was
+ * wrong, and rewording is what makes the two parts of that card consistent.
+ *
+ * **Chosen over deriving the badge from surviving instances**, which was the
+ * other real option. That would have made the badge mean *the card's* state on
+ * the review grid while the run table — whose rows carry no instance data — went
+ * on meaning the run's, so one badge would have said two things on two screens.
+ * These words mean the same on the grid, in the run table, and beside the raw
+ * `resolution_status` an agent reads over MCP. */
+const RESOLUTION_WORDS = {
+  resolved: "the run found an image",
+  unresolved: "the run found none",
+  pending: "not looked up",
+};
 
 function resolutionBadge(work) {
   const status = work.resolution_status;
@@ -1179,12 +1208,27 @@ async function viewRun(runId, generation) {
       }),
       view.works.length
         ? table(
-            "Every work this run holds. Works the collection offered are labelled: they are by an artist the run named, not the works it asked for.",
-            ["Title", "Artist", "Where it came from", "Image", "Why the run named it"],
+            "Every work this run holds, asked-for and offered together. The counts above say how many of each.",
+            // NO PROVENANCE COLUMN, and its removal is the fix rather than a
+            // simplification. It was headed "Where it came from" and meant *how
+            // this row entered the run* — named by the model, or volunteered by
+            // a wired collection. In an art catalogue that phrase reads as the
+            // work's own provenance: which museum holds it. On the one screen
+            // where a curator is scanning titles and artists, the heading
+            // pointed at the wrong fact entirely.
+            //
+            // Renaming it was the obvious repair and the wrong one. The
+            // distinction is real and load-bearing — a curator authorised a list
+            // of a stated size and the supplement adds to it — but this table is
+            // the fourth place it is stated, after the tally's separate counts,
+            // the run sentence, and the line directly above these rows. What it
+            // adds per row is which *particular* work was offered, and nothing
+            // on this screen is decided per work: the deciding happens on the
+            // review card, where the badge stays.
+            ["Title", "Artist", "Image", "Why the run named it"],
             view.works.map((work) => [
               work.title,
               work.artist || "—",
-              provenanceBadge(work),
               el("div", { class: "stack-tight" }, [resolutionBadge(work), reasonBadge(work)]),
               work.rationale,
             ]),
@@ -1372,6 +1416,10 @@ async function alternatesPanel(workId, after) {
  * image deliberately does not rewrite `resolution_status`. Three parts of one
  * card disagreeing, and the MCP surface said the opposite for the same work.
  *
+ * The badge half of that is settled: `RESOLUTION_WORDS` now says "the run found
+ * an image", which is what the column always meant and is consistent with the
+ * sentence below rather than contradicting it.
+ *
  * **It names no way back, because there is none, and an earlier version of this
  * fix invented one.** It read "Restore one from the scans below to judge it
  * again", which was false three times over: every row in that panel renders its
@@ -1386,12 +1434,13 @@ async function alternatesPanel(workId, after) {
  * saying the same thing, so this state reads identically wherever a curator
  * meets it.
  *
- * **What is deliberately NOT changed here**: the badge beside this still reads
- * "has an image", because `resolution_status` records what the *run* found and
- * rejecting an image deliberately does not rewrite it. That is a true statement
- * about the run and a confusing one beside this sentence, and reconciling them
- * means deciding whether the badge describes the run or the card — a product
- * question, not a rendering one. Left as it is, knowingly. */
+ * **The badge beside this used to contradict it, and no longer does.** It read
+ * "has an image" — a present-tense claim — while `resolution_status` records what
+ * the *run* found, and rejecting an image deliberately does not rewrite it. The
+ * product question that paragraph deferred is answered: the column describes the
+ * run, and `RESOLUTION_WORDS` says so. Rewording it rather than deriving the
+ * badge from surviving instances keeps one badge meaning one thing on the review
+ * grid, in the run table and over MCP — see the comment on `RESOLUTION_WORDS`. */
 function absentScanReason(card) {
   if (card.instances_held > 0 && card.instances_surviving === 0) {
     return REASON_SENTENCES.all_rejected;

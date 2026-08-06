@@ -31,13 +31,23 @@ the manifest curation already writes has, for now, nothing on the other end of i
 ## Quick start
 
 ```sh
-cp .env.example .env          # then set ART_ROOT
-cd curation && uv run python -m curation
+cp .env.example .env                       # then set ART_ROOT
+cd curation && uv run python -m curation --init   # once, to make ART_ROOT an art root
+cd curation && uv run python -m curation          # every run after that
 ```
 
+**`--init` is needed once per art root, and leaving it out is the point.** The
+plane refuses to start against a directory that is neither marked as an art root
+nor already holding a catalogue, because the alternative is what it used to do: a
+typo in `ART_ROOT` created the directory, created an empty catalogue, and started
+cleanly, leaving the operator with a working plane and an empty collection. An
+existing art root needs nothing — a directory holding a catalogue is one by
+better evidence than a marker.
+
 `.env` supplies defaults and an exported variable beats it, so a run against a
-scratch tree needs no edit to the file: `ART_ROOT=/tmp/scratch uv run python -m
-curation`.
+scratch tree needs no edit to the file — with the same one-time flag the first
+time, since a scratch tree is a new art root:
+`ART_ROOT=/tmp/scratch uv run python -m curation --init`.
 
 Then open `http://127.0.0.1:$CURATION_PORT/` — the browser interface serves the
 catalogue, discovery runs, themes, the wall manifest and a health view. MCP

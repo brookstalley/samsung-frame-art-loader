@@ -10,8 +10,10 @@ showed it. So the call is asserted here, through `main()` itself.
 from dataclasses import replace
 from decimal import Decimal
 
+import pytest
+
 import curation.__main__ as entry_point
-from curation.art_root import MARKER_NAME
+from curation.art_root import MARKER_NAME, ArtRootError
 from curation.config import (
     DEFAULT_ACQUISITION_USER_AGENT,
     DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
@@ -453,3 +455,61 @@ def test_uvicorns_own_default_is_what_makes_that_argument_necessary():
     assert all(
         "json" not in str(spec).lower() for spec in formatters.values()
     ), "uvicorn's default formatters are now JSON, which would make this plane's override unnecessary"
+
+
+# -- the art-root guard, as the process actually reaches it ----------------------
+
+
+def _unmarked_settings(monkeypatch, art_root) -> None:
+    """`from_env` yielding an art root that is NOT marked, unlike `_stub_settings`.
+
+    The distinction is the whole point of the two tests below. `_stub_settings`
+    marks the root, because every test using it is about what startup logs and
+    wires and each one wants the plane to get past the guard. That made the guard
+    a no-op wherever it was exercised: `prepare` returned at its first branch in
+    all seven, so deleting the call from `main` broke nothing any suite could see.
+    """
+    monkeypatch.setattr(Settings, "from_env", classmethod(lambda cls: _defaults(art_root)))
+    monkeypatch.setattr(entry_point.uvicorn, "run", lambda app, **kwargs: None)
+
+
+def test_startup_refuses_an_art_root_that_is_neither_marked_nor_holds_a_catalogue(tmp_path, monkeypatch):
+    """The guard, driven through the process rather than through its own function.
+
+    `test_art_root.py` is thorough about `prepare` and imports it directly, so it
+    says nothing about whether the product calls it — which is the half that
+    actually stops a mistyped `ART_ROOT` becoming a second empty collection.
+    Deleting the call from `main` restores the defect exactly, and until this test
+    nothing turned red.
+    """
+    art_root = tmp_path / "mistyped"
+    _unmarked_settings(monkeypatch, art_root)
+
+    with pytest.raises(ArtRootError):
+        entry_point.main()
+
+
+def test_startup_creates_nothing_when_it_refuses(tmp_path, monkeypatch):
+    """A refusal that still made the directory would leave a decoy at the typo'd path."""
+    art_root = tmp_path / "mistyped"
+    _unmarked_settings(monkeypatch, art_root)
+
+    with pytest.raises(ArtRootError):
+        entry_point.main()
+
+    assert not art_root.exists()
+
+
+def test_startup_with_init_creates_the_root_and_serves(tmp_path, monkeypatch):
+    """The other half of the wiring: the flag has to reach `prepare` as well.
+
+    Hardcoding `initialise=True` at the call site is the second mutation that
+    survived both suites — the refusal would never fire for anyone, and every
+    test above would still pass because none of them takes that path.
+    """
+    art_root = tmp_path / "fresh"
+    _unmarked_settings(monkeypatch, art_root)
+
+    entry_point.main(["--init"])
+
+    assert (art_root / MARKER_NAME).is_file()

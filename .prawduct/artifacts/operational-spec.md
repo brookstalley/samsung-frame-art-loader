@@ -201,12 +201,20 @@ The two parsers **can** now disagree about what the process sees — they differ
 quoting and inline comments — and a mis-parsed value is live rather than
 overwritten.
 
-What covers the worst case is a mechanism rather than a promise: `curation.art_root`
-refuses to start against a directory that is neither marked nor holding a
-catalogue, so an `ART_ROOT` systemd parsed into something else reports an error
-instead of quietly creating an empty second collection. The other four required
-variables still raise at import when absent, which is the case a mis-parse most
-often produces.
+**Which plane is exposed, stated precisely, because a first version of this
+correction was not.** `curation.art_root` refuses to start against a directory
+that is neither marked nor holding a catalogue, so a mis-parsed `ART_ROOT`
+reports an error rather than quietly creating an empty second collection — for
+the *curation* plane. The unit in `deploy/` starts `tvart.py`, the 2024 plane,
+which reads `ART_ROOT` through the root `config.py` and calls `os.makedirs` on
+what it finds. There is no curation unit there yet, so pointing at that guard
+from the unit's own comment claimed a protection the process it starts does not
+have.
+
+For the 2024 plane the exposure stands. The other four required values raise at
+import when a mis-parse leaves them empty, which covers the common case;
+`ART_ROOT` is the one that silently creates instead. It closes when that plane is
+retired and the curation unit lands beside it.
 
 *(Settled 2026-08-01: this said "a `.env` file per plane", and what exists is one
 shared root file — `.env.example` carries both planes' values, and

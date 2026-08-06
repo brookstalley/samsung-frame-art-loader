@@ -129,6 +129,20 @@ cap was asserted against a helper that rebuilt `runs[:MAX_RUNS_LISTED]` — the
 production expression, copied — so deleting the slice from the service left both
 suites green. That slice is the whole of #54.
 
+**Two verify rounds, and each found the same shape one level up.** The first
+review's blocking finding was that the run-listing cap was asserted against a
+helper rebuilding the production expression. The second found the art-root guard
+wired into startup with nothing testing the wiring — the fixture that lets the
+other startup tests past the guard *marks* the root, so `prepare` returned at its
+first branch in all seven and deleting the call from `main` broke nothing. A
+function tested thoroughly and a call site tested not at all, twice.
+
+The second round also caught a claim this session had written into the service
+unit: that `curation.art_root` now covers a systemd-mis-parsed `ART_ROOT`. That
+unit's `ExecStart` is `tvart.py`. The guard is real and governs a process that
+file does not start, so the correction to R-15 had over-reached in exactly the
+direction R-15 was about.
+
 **Also corrected: the dotenv precedence flip had reached two of four sites.** The
 service unit and the operational spec both still promised that `EnvironmentFile=`
 was a presence guard rather than the value source, which inverted when

@@ -630,6 +630,15 @@ def test_a_work_whose_every_scan_was_turned_down_is_not_told_nothing_was_found(u
 
     assert "You have turned down everything that was found for it." in ui.text()
     assert "No scan was found for this work." not in ui.text()
+    # The third disagreeing part, now settled. `resolution_status` describes what
+    # the RUN found and rejecting an image deliberately does not rewrite it — so
+    # the column was right and "has an image" was the wrong tense for it. The
+    # badge and the sentence now say compatible things about the same card.
+    assert "the run found an image" in ui.text()
+    assert "has an image" not in ui.text(), (
+        "a present-tense badge beside 'you have turned down everything that was found for it' "
+        "is the contradiction this card had three of"
+    )
     # **No way back is offered, because there is none.** An earlier version of
     # this fix told the curator to "restore one from the scans below"; every row
     # there renders its controls as null once rejected, no restore endpoint

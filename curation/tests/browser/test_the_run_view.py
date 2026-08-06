@@ -8,7 +8,7 @@ all.
 """
 
 import pytest
-from payloads import a_candidate, a_run, a_run_view, a_spend, an_estimate
+from payloads import a_candidate, a_candidate_page, a_card, a_run, a_run_view, a_spend, an_estimate
 
 from curation.http.models import RunListOut
 from curation.persistence.discovery_records import ResolutionStatus, RunStatus, UnresolvedReason
@@ -471,3 +471,50 @@ def test_a_complete_search_list_says_nothing_about_truncation(ui):
     assert "Searches (4)" in text
     assert "of 4" not in text, "a complete list must not be dressed as a partial one"
     assert "does not page" not in text
+
+
+def test_the_run_table_does_not_head_a_column_with_the_works_own_provenance(ui):
+    """ "Where it came from" meant how a row entered the run; it reads as which museum holds it.
+
+    Removed rather than renamed. The offered/asked-for distinction is real, and
+    this table was its fourth statement — after the tally's separate counts, the
+    run sentence, and the line directly above these rows. What a per-row badge
+    added was which *particular* work was offered, on a screen where nothing is
+    decided per work.
+
+    Asserted on both halves: the misleading heading is gone, and the counts that
+    carry the distinction are still there. Dropping the column and the counts
+    together would have removed the fact rather than the fourth copy of it.
+    """
+    ui.serve("**/api/estimate?*", an_estimate())
+    ui.serve(f"**/api/runs/{RUN_ID}", a_run_view(works=[a_candidate()]))
+
+    ui.open(f"#run/{RUN_ID}")
+    ui.page.wait_for_selector("table")
+
+    text = ui.text()
+    assert "Where it came from" not in text
+    assert "asked for" in text and "offered by the collection" in text, (
+        "the offered/asked-for distinction must survive its per-row copy being removed — "
+        "it is what tells a curator the list is longer than the one they authorised"
+    )
+
+
+def test_the_review_card_still_says_which_works_were_offered(ui):
+    """The distinction stays where the deciding happens.
+
+    A curator judging a card may reasonably hold an offered work to a different
+    standard: they did not ask for it. That is a per-work fact on the one surface
+    where per-work decisions are made, which is exactly what the run table is not.
+    """
+    ui.serve("**/api/estimate?*", an_estimate())
+    ui.serve(f"**/api/runs/{RUN_ID}", a_run_view(works=[a_candidate()]))
+    ui.serve(
+        f"**/api/runs/{RUN_ID}/candidates*",
+        a_candidate_page([a_card(work=a_candidate(provenance="offered"))]),
+    )
+
+    ui.open(f"#review/{RUN_ID}")
+    ui.page.wait_for_selector(".card")
+
+    assert "offered" in ui.text()
