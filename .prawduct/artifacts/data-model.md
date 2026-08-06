@@ -129,7 +129,7 @@ to serve, elicited from the Product Brief's core flows:
 | Q9 | Who is the artist — name, nationality, dates — for the physical label? | 4 |
 | Q10 | Which image instances were found for this work, which one was selected, and on what basis? | 2, 3 |
 | Q11 | Has this **image** been rejected for a work the curator still wants, so the re-search does not return it? | 3 |
-| Q12 | Which proposed works could not be resolved to any credible image, and are therefore suspect? | 2 |
+| Q12 | Which proposed works could not be resolved to any credible image, and which kind of nothing was it? | 2 |
 
 **Q3 is the one most easily missed.** Without persisted rejections, every
 discovery run re-proposes the same works the curator has already declined, and
@@ -147,6 +147,13 @@ famous works will occasionally invent a plausible title. A work for which no
 credible instance can be found is evidence of exactly that, so the run must be able
 to say "these N could not be resolved" rather than quietly returning a shorter
 list — or, worse, attaching a confident near-match.
+
+**Q12 was widened on 2026-08-04, not amended.** It always asked *which* works could
+not be resolved, and it still does; what it now also answers is *which kind of
+nothing* each one was. The original phrasing called an unresolved work "therefore
+suspect", and that turns out to hold for only one of the four routes to
+`unresolved` — see `CandidateWork.unresolved_reason`. The question is unchanged;
+its answer got a second column, and a claim it carried was too broad.
 
 ## Entities
 
@@ -205,10 +212,10 @@ may exist at several institutions, and a broken source does not break the work.
 |---|---|---|---|
 | `id` | UUID | PK | |
 | `artwork_id` | UUID | FK → Artwork, required | |
-| `url` | string | required | The source URL. An attribute here, never an identity. |
+| `url` | string | required | Where this work can be *found* — the provider's own page or object record, which is what a curator follows to check provenance and what both surfaces publish. An attribute of the source, never the identity of this row. **It is not necessarily fetchable, and nothing may treat it as a fetch target.** For a provider serving tiles the pixels live at an image service the object's address does not name; getting from one to the other is a question only the provider can answer, so it is asked at fetch time rather than stored — see `acquisition_method`. |
 | `provider` | string | required | e.g. `artic`, `google_arts`, `gallery_site`, `prize_site`, `artist_portfolio`, `http`. Open vocabulary — the contemporary web has no fixed provider list. |
 | `source_class` | enum | required | `institutional` \| `contemporary_web`. The load-bearing distinction; see below. |
-| `acquisition_method` | enum | required | `dezoomify` \| `direct_http` \| `api`. Determines the fetch path. **`api` has no producer and no fetch path as of 2026-08-03**: the one museum client in the product resolves to tiled URLs, so nothing records it, and acquisition refuses it by name rather than guessing at a shape no response has ever exercised. The value is kept because a provider serving images through an API rather than a tile grid is a real thing this model should be able to say — building the path belongs with the provider that first needs it. |
+| `acquisition_method` | enum | required | `dezoomify` \| `direct_http` \| `api`. Determines the fetch path. **Amended 2026-08-04: it selects the path, and for `dezoomify` a resolution step runs first.** The earlier wording read as "the recorded URL is the fetch target, and this says how" — which is what the fetch path implemented, and it meant no Art Institute source could ever be acquired: those record the object's API link, and the tile fetcher declines it along with every other dezoomer. The step is not stored because it is derived from a base the museum advertises in its own responses, so a copy would go stale the day the institution moves its image service. A provider whose recorded URLs the fetcher already reads (Google Arts & Culture) needs no resolver and gets none. **`api` has no producer and no fetch path as of 2026-08-03**: the one museum client in the product resolves to tiled URLs, so nothing records it, and acquisition refuses it by name rather than guessing at a shape no response has ever exercised. The value is kept because a provider serving images through an API rather than a tile grid is a real thing this model should be able to say — building the path belongs with the provider that first needs it. |
 | `rights_status` | enum | required | `public_domain` \| `in_copyright` \| `unknown`. |
 | `is_primary` | boolean | default false | Which source was actually used for the held original. |
 | `confidence` | float | nullable | Carried from `CandidateImage.confidence` at acceptance. |
@@ -538,10 +545,38 @@ artworks.
 | `proposed_artist` | string | nullable | |
 | `rationale` | text | required | Why the model matched this work to the intent. **Q5.** |
 | `work_dedup_key` | string | required, indexed | Normalised work identity for cross-run suppression. **Q3.** |
+| `provenance` | enum | required, defaults `proposed` | `proposed` \| `offered`. Who put this work in front of the curator: the model named it, or a wired collection volunteered it. Nullable *on disk* only so the column can be added to files written before collections were browsable — a null reads as `proposed`, that being the only thing which could have written a row then. |
 | `resolution_status` | enum | required | `pending` \| `resolved` \| `unresolved`. Reflects the **latest** resolution attempt, whether that was the original phase 2 or a later re-search. `unresolved` ⇒ that attempt found no credible instance the curator has not already rejected. **Q12.** |
+| `unresolved_reason` | enum | nullable | Which kind of nothing: `not_held` \| `identity_refused` \| `size_unknown` \| `below_floor` \| `all_rejected`. Set whenever `resolution_status = unresolved`, null otherwise — **with one honest exception: a row whose attempt predates the column reads null beside `unresolved`.** The column was added nullable and existing files are widened without backfill, so the two runs that motivated it are themselves in that state. A null beside `unresolved` therefore means "this attempt happened before the reason was recorded", never "no reason applies". **Q12.** |
 | `verdict` | enum | required | `pending` \| `accepted` \| `rejected` \| `awaiting_better_image`. See State Machines. |
 | `rejected_reason` | text | nullable | Optional curator note. |
 | `decided_at` | datetime | nullable | |
+
+> **`confidence` has a fourth derivation, and it is not a comparison result.**
+> The three tiers below this table grade *how much of an identity was
+> confirmable* when a provider's record was checked against a work someone else
+> named. An `offered` instance was never checked against anything: the collection
+> produced the work and the picture of it from one row of its own catalogue, so
+> there is no near-match question to answer. It is recorded at the same value as a
+> confirmed title-and-artist match and means something different — **anything
+> ranking, thresholding or auto-accepting on `confidence` is reading two kinds of
+> number**, and must consult `provenance` to tell them apart. Not raised to 1.0
+> for the same reason the confirmed tier is not: nothing has inspected the image.
+
+> **An `offered` work is a candidate in every respect but its origin.** It takes a
+> verdict, it can be accepted into the catalogue, and its instance is recorded and
+> selected like any other — the label is not a lesser class of row. What the label
+> forbids is the merge: an offered work's image may never be attached to a
+> `proposed` work, and an offered work is never presented under a title the model
+> named. Those are the same rule from two directions, and together they are what
+> keeps this from becoming the confident near-match constraint 9 forbids. The two
+> counts are also reported apart wherever a surface shows a number, because the
+> curator approved a work list of a stated size and the supplement adds to it.
+>
+> **The approval gate cannot see offered works, structurally rather than by rule.**
+> It is computed when the work list settles, which is before phase 2 has run and
+> therefore before anything could have been offered — an offer exists only to
+> supplement what phase 2 failed to confirm.
 
 > **`awaiting_better_image` is the verdict an accept/reject binary cannot express**
 > — "I want this work; this instance is not good enough; find another." It is not
@@ -551,9 +586,73 @@ artworks.
 > keep (**Q11**).
 >
 > **`resolution_status = unresolved` is a first-class outcome, not an absent row.**
-> Phase 2 failing to find any credible instance is the signal that phase 1 may have
-> invented the work. Dropping it from the batch discards that signal; attaching a
-> low-confidence near-match actively launders it.
+> Phase 2 failing to find any credible instance is one of the signals that phase 1
+> may have invented the work. Dropping it from the batch discards that signal;
+> attaching a low-confidence near-match actively launders it.
+>
+> **`unresolved` must say which kind of nothing, and the sentence above is why.**
+> A work reaches `unresolved` by five routes that are not interchangeable: nothing
+> came back whose title matched (`not_held`); a record matched the title and
+> disagreed on the artist (`identity_refused`); a matching record reported no
+> dimensions, so it could not be judged against the floor (`size_unknown`); every
+> matching record renders below the floor (`below_floor`); or the work holds
+> instances and the curator has turned down every one of them, with this attempt
+> finding nothing to add (`all_rejected`). The first is a fact about the
+> collection, the second about two spellings of a name, the next two about the
+> record, and the last about the curator. **Only the first carries the
+> invented-work signal** — the rest are the collection saying "I have this, but not
+> like that", or the curator saying "not that scan", which are nearly the opposite.
+> So the claim that `unresolved` means phase 1 may have invented the work is
+> narrowed here to `not_held`, and the docstrings asserting the broader reading are
+> amended with it.
+>
+> > **`all_rejected` was added on 2026-08-04 after the list had been written at
+> > four, and the correction is kept rather than smoothed over** because the reason
+> > it was missed is reusable. It was ruled unreachable on the grounds that
+> > rejecting every instance sets the *verdict* to `awaiting_better_image` rather
+> > than the resolution status — true at the rejection, and irrelevant, because the
+> > write that matters happens later: the re-search that finds nothing then lands
+> > the same work at `unresolved`, which this document already said in as many
+> > words a few paragraphs above. **Reachability was argued from the write site
+> > that sets the value and not from the one that sets the status**, and a test
+> > asserting the whole path existed the entire time. An enum value is reachable if
+> > *any* path reaches it, so the search has to be over paths, not over the site
+> > that looks most relevant.
+>
+> A curator reading a bare `unresolved` cannot tell those apart, and neither can
+> anyone diagnosing a run afterwards — which is how two runs that resolved nothing
+> on 2026-08-04 sat unexplained while both suites were green. The reason is
+> therefore **derived on the same write as the status, from the same instances**,
+> and reported on the wire beside it. It records decisions phase 2 already makes
+> and currently throws away; it is not a new judgement, and it is not asserted by
+> the caller.
+>
+> **Precedence is by how far the work got: the deepest gate any of its records
+> reached is what it reports.** A work is `not_held` only when *no* record matched
+> its title; a single title match takes that reading off the table however many
+> other records missed. Past that, deeper beats shallower — `size_unknown` over
+> `identity_refused` — because the deepest gate is the most informative thing that
+> is true: "the collection holds this, too small for your wall" is actionable, and
+> "some record somewhere did not match" is not. Stated here rather than left to the
+> write site, because choosing one label where several apply is a judgement, and an
+> underived rule is how it silently becomes whichever result the provider happened
+> to return first.
+>
+> **The two deepest reasons need no precedence against anything, and that is a
+> property of the data rather than a convention.** `below_floor` and `all_rejected`
+> are read from the rows the work already holds, and they are mutually exclusive by
+> construction: rejected instances are filtered out before the floor is applied, so
+> a work whose surviving instances are all below the floor is `below_floor`, and a
+> work with no surviving instances at all is `all_rejected`. A work cannot be both,
+> and either one outranks every reason derived from what the search discarded —
+> because a row on the card is further than a result that never became one.
+>
+> **One value was considered and deliberately left out.** A `no_rights_clear_image`
+> is unreachable: rights are a quality weight and never a filter (constraint 13),
+> so nothing is ever refused for them. Adding it would be a value nothing can
+> produce, which reads to the next person as a route that exists — and the way to
+> be sure of that is to look for a path that reaches it, not for a site that would
+> set it.
 >
 > **Redefined 2026-07-20, deliberately and with the hazard named.** It previously
 > meant "phase 2 found no credible instance" — an outcome of the original run only.
@@ -682,11 +781,16 @@ artworks.
 > the exposure is non-English titles in that one narrow form, and it is recorded
 > here rather than left to be rediscovered from the code.
 >
-> **No re-key shipped, because no rows exist to re-key.** The obligation above
-> stands for any deployment holding `CandidateWork` rows; the catalogue this was
-> developed against holds none, and the curation plane has not cut over (Chunk 13).
-> Anything replacing this derivation against a populated catalogue still owes the
-> migration.
+> **The re-key shipped on 2026-08-05, as a mechanism rather than a one-off.**
+> When it was written this said "no re-key shipped, because no rows exist to
+> re-key" — true then, and false by the time the citation rules gained the bare
+> form, by which point the catalogue held rows and seven of them were keyed under
+> a citation the rules now strip. `DiscoveryService.reconcile` re-cleans
+> every stored title at startup and rewrites the key of any it changed, so the
+> obligation is discharged by each start rather than owed by each change. It is
+> idempotent and normally a no-op. A title the cleaning empties is left exactly as
+> stored — `require_text` refuses an empty one on the way in, so writing one would
+> make the row unreadable and destroy the evidence of a rule that reached too far.
 
 ### CandidateImage
 
@@ -831,6 +935,15 @@ selected. Produced by phase 2.
 > belongs here because it is knowable only here: the search reached this instance
 > *through* a provider that offers tiles, a file, or an API, and nothing
 > downstream can recover which.
+
+> **A fourth derivation exists and is not a comparison result.** An `offered`
+> candidate — one a wired collection volunteered rather than the model naming it
+> — was never checked against anything: the collection produced the work and the
+> picture of it from one row of its own catalogue. Its instance is recorded at the
+> same value as a confirmed title-and-artist match and means something different,
+> so **anything ranking, thresholding or auto-accepting on `confidence` is reading
+> two kinds of number** and must consult `provenance` to tell them apart. The
+> reasoning is restated at § CandidateWork, where `provenance` is defined.
 
 ### Where a candidate's fields land on acceptance
 

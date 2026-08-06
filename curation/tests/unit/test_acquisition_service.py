@@ -5,6 +5,7 @@ that sits above them — which source is used, when a refusal is data about a so
 rather than a fault, and what the catalogue holds afterwards.
 """
 
+import logging
 import stat
 from contextlib import contextmanager
 from pathlib import Path
@@ -12,12 +13,14 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from curation.acquisition.dezoomify import DezoomifyUnavailable
 from curation.acquisition.service import (
     AcquisitionOutcome,
     AcquisitionService,
     AcquisitionSettings,
 )
 from curation.acquisition.space import NotEnoughSpace
+from curation.acquisition.tiles import TileTargetUnavailable
 from curation.persistence.records import (
     AcquisitionMethod,
     FetchStatus,
@@ -77,8 +80,11 @@ def _resolves_publicly(_host: str):
     return ["93.184.216.34"]
 
 
-def _acquisition(service, acq_settings, open_stream, *, resolve=_resolves_publicly) -> AcquisitionService:
-    return AcquisitionService(service, acq_settings, open_stream=open_stream, resolve=resolve)
+def _acquisition(service, acq_settings, open_stream, *, resolve=_resolves_publicly, tile_targets=None) -> AcquisitionService:
+    # Empty by default: every provider these tests use records a URL the fetcher
+    # can read as it stands, so no resolution is wanted. The seam itself is
+    # covered in `TestResolvingTheTileTargetBeforeFetching`.
+    return AcquisitionService(service, acq_settings, open_stream=open_stream, resolve=resolve, tile_targets=tile_targets or {})
 
 
 #: The stand-in binary's output path is its last argument, which is awkward to
@@ -265,6 +271,91 @@ class TestTheFreeSpaceGuard:
         result = _acquisition(service, acq_settings, _serves(_jpeg_bytes())).acquire(work.id)
 
         assert result.outcome is AcquisitionOutcome.ACQUIRED
+
+
+class TestTheDeploymentFaultsReachTheJournal:
+    """The three conditions acquisition raises for, journalled at the raise.
+
+    Each one breaks *every* acquisition in the deployment — a full disk, a
+    missing binary, a provider whose image service cannot be asked — and the
+    person who can fix it is the operator, not whoever is holding the result.
+
+    **Driven through `acquire()` with no binding anywhere in the picture**,
+    because that is the whole point of where the line lives. It was emitted by
+    the MCP binding until 2026-08-05, so the signal followed the route in rather
+    than the condition, and a test at that layer could not fail for any other
+    caller. The first browser acquisition route would have inherited the refusal
+    and not the line, leaving an operator debugging "nothing acquires" on a full
+    disk against silence.
+    """
+
+    @staticmethod
+    def _faults(caplog):
+        return [record for record in caplog.records if getattr(record, "event", None) == "acquisition.deployment_fault"]
+
+    def test_a_full_disk_is_journalled_with_its_condition_and_work(self, service, acq_settings, caplog):
+        from dataclasses import replace
+
+        work, _ = _work_with_source(service)
+        greedy = replace(acq_settings, min_free_bytes=2**62)
+
+        with caplog.at_level(logging.ERROR), pytest.raises(NotEnoughSpace):
+            _acquisition(service, greedy, _serves(_jpeg_bytes())).acquire(work.id)
+
+        assert [record.condition for record in self._faults(caplog)] == ["NotEnoughSpace"]
+        assert self._faults(caplog)[0].artwork_id == work.id
+
+    def test_a_missing_tile_binary_is_journalled(self, service, acq_settings, caplog):
+        from dataclasses import replace
+
+        work, _ = _work_with_source(service, method=AcquisitionMethod.DEZOOMIFY)
+        absent = replace(acq_settings, tile_binary=str(acq_settings.art_root / "no-such-dezoomify"))
+
+        with caplog.at_level(logging.ERROR), pytest.raises(DezoomifyUnavailable):
+            _acquisition(service, absent, _serves(b"")).acquire(work.id)
+
+        assert [record.condition for record in self._faults(caplog)] == ["DezoomifyUnavailable"]
+        assert self._faults(caplog)[0].artwork_id == work.id
+
+    def test_an_unresolvable_tile_target_is_journalled(self, service, acq_settings, caplog):
+        """A provider with no resolver wired: the museum is fine, the wiring is not."""
+        work, _ = _work_with_source(
+            service,
+            method=AcquisitionMethod.DEZOOMIFY,
+            url="https://api.artic.edu/api/v1/artworks/91194",
+        )
+
+        def _no_resolver(_source):
+            raise TileTargetUnavailable("no resolver is wired for provider 'gallery_site'.")
+
+        acquisition = _acquisition(
+            service,
+            acq_settings,
+            _serves(b""),
+            tile_targets={"gallery_site": _no_resolver},
+        )
+
+        with caplog.at_level(logging.ERROR), pytest.raises(TileTargetUnavailable):
+            acquisition.acquire(work.id)
+
+        assert [record.condition for record in self._faults(caplog)] == ["TileTargetUnavailable"]
+        assert self._faults(caplog)[0].artwork_id == work.id
+
+    def test_a_refusal_that_is_one_source_s_fault_is_not_journalled_as_a_deployment_fault(self, service, acq_settings, caplog):
+        """The other side of the same judgement, and the reason the tuple is narrow.
+
+        A source that simply will not fetch is recorded against that source and
+        read from the catalogue afterwards. Journalling it here would fill an
+        operator's log with the ordinary usage failures these three lines exist
+        to be findable among.
+        """
+        work, _ = _work_with_source(service, url="https://gallery.example.com/gone.jpg")
+
+        with caplog.at_level(logging.ERROR):
+            result = _acquisition(service, acq_settings, _refuses(OSError("connection reset"))).acquire(work.id)
+
+        assert result.outcome is AcquisitionOutcome.FAILED
+        assert self._faults(caplog) == []
 
 
 class TestChoosingTheSource:
@@ -850,3 +941,182 @@ class TestARetryNeverLowersTheQualityOfWhatIsHeld:
 
         assert result.outcome is AcquisitionOutcome.ACQUIRED
         assert service.get_original(work.id).fetch_status is FetchStatus.OK
+
+
+class TestResolvingTheTileTargetBeforeFetching:
+    """The seam that shipped broken: what a source records vs. what gets fetched.
+
+    A source from a museum records the object's page — that is what a curator
+    follows to check provenance — and the tile fetcher cannot read it. Nothing
+    crossed this boundary in a test, so each side stayed self-consistent against a
+    URL shape the other never produced, and no artic work could be acquired.
+    """
+
+    @staticmethod
+    def _binary_recording_argv(tmp_path: Path, seed: Path) -> tuple[str, Path]:
+        """A stand-in fetcher that writes a real image and logs what it was given."""
+        argv_log = tmp_path / "argv.txt"
+        script = tmp_path / "recording-dezoomify"
+        script.write_text(
+            '#!/bin/sh\nprintf "%s\\n" "$@" >> "' + str(argv_log) + '"\n'
+            'cp "' + str(seed) + '" "$(eval echo \\${$#})"\nexit 0\n'
+        )
+        script.chmod(script.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+        return str(script), argv_log
+
+    def _artic_work(self, service):
+        """A source exactly as acceptance records one from the museum client."""
+        work = service.add_artwork(title="Golden Bird")
+        source = service.add_source(
+            artwork_id=work.id,
+            url="https://api.artic.edu/api/v1/artworks/91194",
+            provider="artic",
+            source_class=SourceClass.INSTITUTIONAL,
+            acquisition_method=AcquisitionMethod.DEZOOMIFY,
+            rights_status=RightsStatus.PUBLIC_DOMAIN,
+            is_primary=True,
+        )
+        return work, source
+
+    def test_the_fetcher_is_given_the_resolved_url_not_the_recorded_one(self, service, acq_settings, tmp_path):
+        """The regression test for the defect itself."""
+        from dataclasses import replace
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, argv_log = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, _ = self._artic_work(service)
+
+        result = _acquisition(
+            service,
+            replace(acq_settings, tile_binary=binary),
+            _serves(b""),
+            tile_targets={"artic": lambda _: "https://www.artic.edu/iiif/2/c8024369"},
+        ).acquire(work.id)
+
+        assert result.outcome is AcquisitionOutcome.ACQUIRED
+        given = argv_log.read_text().splitlines()
+        assert "https://www.artic.edu/iiif/2/c8024369" in given
+        assert "https://api.artic.edu/api/v1/artworks/91194" not in given
+
+    def test_the_resolution_is_journalled_with_both_urls(self, service, acq_settings, tmp_path, caplog):
+        """A failed tile fetch is otherwise unattributable.
+
+        The recorded failure names the URL the source carries, which is never the
+        one fetched — so without this record there is no way to tell a bad
+        resolution from a museum that went away.
+        """
+        import logging
+        from dataclasses import replace
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, _ = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, _ = self._artic_work(service)
+
+        with caplog.at_level(logging.INFO):
+            _acquisition(
+                service,
+                replace(acq_settings, tile_binary=binary),
+                _serves(b""),
+                tile_targets={"artic": lambda _: "https://www.artic.edu/iiif/2/c8024369"},
+            ).acquire(work.id)
+
+        resolved = [r for r in caplog.records if r.__dict__.get("event") == "acquisition.tile_target_resolved"]
+        assert len(resolved) == 1
+        assert resolved[0].__dict__["recorded_url"] == "https://api.artic.edu/api/v1/artworks/91194"
+        assert resolved[0].__dict__["tile_url"] == "https://www.artic.edu/iiif/2/c8024369"
+
+    def test_a_provider_that_needed_no_resolution_is_not_journalled_as_resolved(self, service, acq_settings, tmp_path, caplog):
+        """Pass-through is not a resolution, and a record saying so would be noise."""
+        import logging
+        from dataclasses import replace
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, _ = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, _ = _work_with_source(service, method=AcquisitionMethod.DEZOOMIFY, url="https://www.artic.edu/iiif/2/abc/info.json")
+
+        with caplog.at_level(logging.INFO):
+            _acquisition(service, replace(acq_settings, tile_binary=binary), _serves(b""), tile_targets={}).acquire(work.id)
+
+        assert not [r for r in caplog.records if r.__dict__.get("event") == "acquisition.tile_target_resolved"]
+
+    def test_the_recorded_url_is_left_alone_for_provenance(self, service, acq_settings, tmp_path):
+        """Resolution is for this fetch; it must not rewrite what the source says."""
+        from dataclasses import replace
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, _ = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, source = self._artic_work(service)
+
+        _acquisition(
+            service,
+            replace(acq_settings, tile_binary=binary),
+            _serves(b""),
+            tile_targets={"artic": lambda _: "https://www.artic.edu/iiif/2/c8024369"},
+        ).acquire(work.id)
+
+        refreshed = next(s for s in service.list_sources(work.id) if s.id == source.id)
+        assert refreshed.url == "https://api.artic.edu/api/v1/artworks/91194"
+
+    def test_a_provider_needing_resolution_with_none_wired_never_reaches_the_fetcher(self, service, acq_settings, tmp_path):
+        """The old behaviour, now refused: an identity URL must not be fetched.
+
+        Raised rather than recorded, like a missing tile binary: no source is at
+        fault, so a `failed` row against this URL would send its reader to the
+        museum instead of to the wiring.
+        """
+        from dataclasses import replace
+
+        from curation.acquisition.tiles import TileTargetUnavailable
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, argv_log = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, source = self._artic_work(service)
+
+        with pytest.raises(TileTargetUnavailable):
+            _acquisition(service, replace(acq_settings, tile_binary=binary), _serves(b""), tile_targets={}).acquire(work.id)
+
+        assert not argv_log.exists(), "the fetcher was run against an unresolved identity URL"
+        refreshed = next(s for s in service.list_sources(work.id) if s.id == source.id)
+        assert refreshed.last_fetch_status is None, "a wiring fault must not be recorded against the source"
+
+    def test_a_provider_that_cannot_be_asked_records_a_failure_against_the_source(self, service, acq_settings, tmp_path):
+        from dataclasses import replace
+
+        from curation.discovery.images import ImageSearchFailure
+
+        def unreachable(_: str) -> str:
+            raise ImageSearchFailure("could not reach the collection")
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, _ = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, source = self._artic_work(service)
+
+        result = _acquisition(
+            service,
+            replace(acq_settings, tile_binary=binary),
+            _serves(b""),
+            tile_targets={"artic": unreachable},
+        ).acquire(work.id)
+
+        assert result.outcome is AcquisitionOutcome.FAILED
+        assert "could not reach the collection" in result.detail
+        refreshed = next(s for s in service.list_sources(work.id) if s.id == source.id)
+        assert refreshed.last_fetch_status is FetchStatus.FAILED
+
+    def test_a_resolved_url_is_checked_before_it_is_fetched(self, service, acq_settings, tmp_path):
+        """A URL this deployment did not record is exactly the kind to check."""
+        from dataclasses import replace
+
+        (tmp_path / "seed.jpg").write_bytes(_jpeg_bytes(200, 150))
+        binary, argv_log = self._binary_recording_argv(tmp_path, tmp_path / "seed.jpg")
+        work, _ = self._artic_work(service)
+
+        result = _acquisition(
+            service,
+            replace(acq_settings, tile_binary=binary),
+            _serves(b""),
+            tile_targets={"artic": lambda _: "file:///etc/passwd"},
+        ).acquire(work.id)
+
+        assert result.outcome is AcquisitionOutcome.FAILED
+        assert not argv_log.exists()

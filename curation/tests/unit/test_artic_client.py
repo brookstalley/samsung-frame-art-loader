@@ -17,7 +17,9 @@ import pytest
 
 from curation.discovery.artic import PROVIDER, ArticImageSearch
 from curation.discovery.images import ImageQuery, ImageSearchFailure
+from curation.discovery.phase_two import PhaseTwoEngine
 from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
+from curation.services.display_fit import ArtworkBox
 
 USER_AGENT = "samsung-frame-art-loader (test@example.org)"
 
@@ -102,8 +104,9 @@ def _body(*records):
     }
 
 
-def _client(handler) -> ArticImageSearch:
-    return ArticImageSearch(user_agent=USER_AGENT, client=httpx.Client(transport=httpx.MockTransport(handler)))
+def _client(handler, *, preview_max_bytes: int | None = None) -> ArticImageSearch:
+    ceiling = {} if preview_max_bytes is None else {"preview_max_bytes": preview_max_bytes}
+    return ArticImageSearch(user_agent=USER_AGENT, client=httpx.Client(transport=httpx.MockTransport(handler)), **ceiling)
 
 
 def _serving(*records, capture: list | None = None):
@@ -196,8 +199,14 @@ def test_the_public_domain_flag_becomes_a_rights_status_that_distinguishes_false
     assert unchecked[0].rights_status is RightsStatus.UNKNOWN
 
 
-def test_a_zero_scored_result_is_dropped_because_a_garbage_query_returns_the_collection():
-    """`pagination.total` is the collection size whatever was asked, so presence proves nothing."""
+def test_a_zero_scored_result_is_dropped_because_it_matched_no_term():
+    """The behaviour is unchanged; the reason it was worth having is not.
+
+    Named for a garbage query until 2026-08-04, when the live API stopped
+    returning zero scores for one — so this no longer guards that case and the
+    identity comparison is what does. It is kept because the claim still holds
+    on its own terms: a record matching no term cannot be the work.
+    """
     found = _client(_serving(ZERO_SCORED, AMERICAN_GOTHIC)).find_images(ImageQuery(title="American Gothic"))
 
     assert [instance.title for instance in found] == ["American Gothic"]
@@ -224,17 +233,41 @@ def test_a_thumbnail_without_dimensions_is_dropped_rather_than_sized_at_zero():
     assert _client(_serving(sizeless)).find_images(ImageQuery(title="American Gothic")) == []
 
 
-def test_the_artist_narrows_the_query_text_rather_than_filtering_on_a_field():
-    """A field filter returns nothing for a name the museum spells its own way."""
+def test_the_artist_is_kept_out_of_the_query_and_left_to_the_identity_gate():
+    """The artist's tokens compete with the title's for the ten places a result has.
+
+    This replaces a contract that said the artist "narrows" the query text, which
+    the live API refuted: over eight Ellsworth Kelly paintings the museum holds,
+    the title alone retrieved all eight and the title with the artist appended
+    retrieved six, never doing better on any title (measured 2026-08-04). A field
+    filter is not the alternative and never was — it returns nothing for a name
+    the museum spells its own way. The artist still decides the outcome, above
+    this seam, where a near miss is visible instead of silently unranked.
+    """
     sent: list[httpx.Request] = []
     _client(_serving(AMERICAN_GOTHIC, capture=sent)).find_images(ImageQuery(title="American Gothic", artist="Grant Wood"))
 
     assert len(sent) == 1
-    assert "American%20Gothic%20Grant%20Wood" in str(sent[0].url)
+    assert "q=American%20Gothic&" in str(sent[0].url)
+    assert "Grant" not in str(sent[0].url)
     # Explicit rather than the default projection, which omits both of the fields
     # an instance cannot be recorded without.
     assert "image_id" in str(sent[0].url)
     assert "thumbnail" in str(sent[0].url)
+
+
+def test_the_artist_still_reaches_the_judgement_that_refuses_a_near_match():
+    """The half that must not be lost with the query change.
+
+    Removing the artist from retrieval would be a quiet loosening if nothing
+    downstream still applied it — the same painting under another painter would
+    then be found *and* kept.
+    """
+    layton = {**AMERICAN_GOTHIC, "artist_title": "Elizabeth Layton"}
+    box = ArtworkBox(width=3400, height=1687, pixels_per_inch=88.12, floor_inches=12.0)
+    engine = PhaseTwoEngine(_client(_serving(layton)), box=box)
+
+    assert engine.resolve(ImageQuery(title="American Gothic", artist="Grant Wood")).instances == []
 
 
 def test_the_museum_is_told_who_is_calling():
@@ -289,6 +322,66 @@ def test_a_preview_that_downloads_comes_back_as_bytes():
     )
 
 
+def test_a_preview_over_the_ceiling_is_refused_rather_than_returned():
+    """An oversized body is not a smaller preview; it is a refusal.
+
+    The URL comes out of the museum's own JSON with redirects followed, so its
+    size is the provider's choice and the bytes land in memory before any
+    caller can look. Refusing costs a review card its thumbnail; reading
+    costs whatever the far end decided to send.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"x" * 5_000)
+
+    client = _client(handler, preview_max_bytes=1_000)
+
+    assert client.fetch_preview("https://www.artic.edu/iiif/2/x/full/843,/0/default.jpg") is None
+
+
+def test_a_preview_exactly_at_the_ceiling_is_still_served():
+    """The ceiling is the largest body allowed through, not the first refused.
+
+    Off by one here refuses a legitimate preview and the only symptom is a card
+    that quietly lost its picture.
+    """
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=b"x" * 1_000)
+
+    client = _client(handler, preview_max_bytes=1_000)
+
+    assert client.fetch_preview("https://www.artic.edu/iiif/2/x/full/843,/0/default.jpg") == b"x" * 1_000
+
+
+def test_an_oversized_preview_stops_reading_instead_of_draining_the_body():
+    """The point of the ceiling: an endless body costs the ceiling, not the box.
+
+    Asserted by counting what the transport was actually asked for. A guard
+    that returned `None` *after* materialising the whole body would satisfy the
+    refusal test above while doing nothing about the allocation it exists to
+    prevent — so the read has to be shown to stop.
+    """
+    served = 0
+    chunk = b"y" * 1_024
+
+    def streamer():
+        nonlocal served
+        # Far more than the ceiling admits, and more than any real preview:
+        # if the guard drains its source, the count below says so.
+        for _ in range(4_096):
+            served += 1
+            yield chunk
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, content=streamer())
+
+    client = _client(handler, preview_max_bytes=8 * 1_024)
+
+    assert client.fetch_preview("https://www.artic.edu/iiif/2/x/full/843,/0/default.jpg") is None
+    assert served < 64, f"the guard read {served} chunks of a body it had already refused"
+
+
 def test_the_response_the_findings_recorded_parses_field_for_field():
     """A whole recorded body, so the parser is exercised against the real envelope.
 
@@ -309,3 +402,115 @@ def test_the_response_the_findings_recorded_parses_field_for_field():
         "Ann-In Memory",
         "In Memory of My Father",
     ]
+
+
+#: The single-object response, as `GET /artworks/91194?fields=id,image_id` really
+#: returns it — `data` is one object rather than a list, and `config` carries the
+#: IIIF base the same way the search envelope does. Measured 2026-08-04 against
+#: the live API for Brancusi's *Golden Bird*.
+GOLDEN_BIRD_OBJECT = {
+    "data": {"id": 91194, "title": "Golden Bird", "image_id": "c8024369-fa0a-6438-0072-f9b9929a800b"},
+    "info": {"license_text": "…", "license_links": ["…"], "version": "1.14"},
+    "config": {"iiif_url": "https://www.artic.edu/iiif/2", "website_url": "http://www.artic.edu"},
+}
+
+
+class TestResolvingAnObjectsImageService:
+    """The step whose absence meant no artic work could ever be fetched.
+
+    A source records where a curator goes to check provenance; the tile fetcher
+    needs where the pixels are served. These are the tests that the client can
+    get from the first to the second.
+    """
+
+    def test_an_api_link_resolves_to_the_iiif_base_for_its_image(self):
+        """The shape discovery records on every instance it accepts."""
+        client = _client(lambda request: httpx.Response(200, json=GOLDEN_BIRD_OBJECT))
+
+        target = client.tile_url("https://api.artic.edu/api/v1/artworks/91194")
+
+        assert target == "https://www.artic.edu/iiif/2/c8024369-fa0a-6438-0072-f9b9929a800b"
+
+    def test_a_museum_page_url_resolves_to_the_same_place(self):
+        """The shape the 2024 index carries, which seeding wrote onto 32 sources."""
+        client = _client(lambda request: httpx.Response(200, json=GOLDEN_BIRD_OBJECT))
+
+        target = client.tile_url("https://www.artic.edu/artworks/91194/golden-bird")
+
+        assert target == "https://www.artic.edu/iiif/2/c8024369-fa0a-6438-0072-f9b9929a800b"
+
+    def test_the_object_is_asked_for_by_id_and_only_for_what_is_needed(self):
+        captured: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            return httpx.Response(200, json=GOLDEN_BIRD_OBJECT)
+
+        _client(handler).tile_url("https://www.artic.edu/artworks/91194/golden-bird")
+
+        assert captured[0].url.path == "/api/v1/artworks/91194"
+        assert captured[0].url.params["fields"] == "id,image_id"
+
+    def test_the_museum_identifies_the_caller_on_this_call_too(self):
+        """The API asks callers to say who they are; a new call must not forget."""
+        captured: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured.append(request)
+            return httpx.Response(200, json=GOLDEN_BIRD_OBJECT)
+
+        _client(handler).tile_url("https://api.artic.edu/api/v1/artworks/91194")
+
+        assert captured[0].headers["AIC-User-Agent"] == USER_AGENT
+
+    def test_an_advertised_iiif_base_is_used_when_the_museum_moves_its_path(self):
+        """Reading the base from the response is why a service move needs no release."""
+        moved = {**GOLDEN_BIRD_OBJECT, "config": {"iiif_url": "https://www.artic.edu/iiif/3"}}
+
+        target = _client(lambda request: httpx.Response(200, json=moved)).tile_url("https://api.artic.edu/api/v1/artworks/91194")
+
+        assert target == "https://www.artic.edu/iiif/3/c8024369-fa0a-6438-0072-f9b9929a800b"
+
+    def test_an_advertised_base_on_another_host_is_refused(self):
+        """The response builds a URL this process fetches and writes to disk."""
+        hijacked = {**GOLDEN_BIRD_OBJECT, "config": {"iiif_url": "https://evil.example.com/iiif/2"}}
+
+        target = _client(lambda request: httpx.Response(200, json=hijacked)).tile_url(
+            "https://api.artic.edu/api/v1/artworks/91194"
+        )
+
+        assert target.startswith("https://www.artic.edu/iiif/2/")
+
+    def test_a_url_that_names_no_object_is_refused_without_asking_the_museum(self):
+        asked: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            asked.append(request)
+            return httpx.Response(200, json=GOLDEN_BIRD_OBJECT)
+
+        with pytest.raises(ImageSearchFailure, match="does not name an Art Institute object"):
+            _client(handler).tile_url("https://artsandculture.google.com/asset/golden-bird/abc")
+
+        assert asked == []
+
+    def test_a_number_outside_the_object_path_is_not_read_as_an_id(self):
+        """`/artworks/<id>` is a path segment, not any digits in the URL."""
+        with pytest.raises(ImageSearchFailure):
+            _client(lambda request: httpx.Response(200, json=GOLDEN_BIRD_OBJECT)).tile_url(
+                "https://www.artic.edu/collection?page=91194"
+            )
+
+    def test_an_object_the_museum_publishes_no_image_of_is_named_as_that(self):
+        """Distinct from a failed lookup: the record is real and carries no picture."""
+        imageless = {**GOLDEN_BIRD_OBJECT, "data": {"id": 91194, "title": "Golden Bird", "image_id": None}}
+
+        with pytest.raises(ImageSearchFailure, match="publishes no image"):
+            _client(lambda request: httpx.Response(200, json=imageless)).tile_url("https://api.artic.edu/api/v1/artworks/91194")
+
+    def test_a_museum_that_cannot_be_reached_is_a_failure_not_a_guess(self):
+        with pytest.raises(ImageSearchFailure):
+            _client(lambda request: httpx.Response(503)).tile_url("https://api.artic.edu/api/v1/artworks/91194")
+
+    def test_the_client_reports_the_provider_its_instances_are_recorded_under(self):
+        """Wiring keys resolvers by this rather than repeating the name."""
+        assert _client(lambda request: httpx.Response(200, json=GOLDEN_BIRD_OBJECT)).provider == PROVIDER

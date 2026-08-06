@@ -48,12 +48,15 @@ unbounded bill.
 > authoritatively, and the two would drift.
 >
 > *(Unchanged, and deliberately: this says where the number comes from **if** it is
-> shown. Whether to show `limit_remaining` on the health panel is a separate,
-> open question as of 2026-08-02 — it lags the provider's own enforcement by
-> minutes and was observed reporting credit remaining while calls were already
-> being refused. See `project-state.yaml` → `open_questions`. Answering that
-> question "no" would not touch this corollary; answering it "yes" makes the lag
-> something the surface has to state.)*
+> shown. **Whether to show it was settled "no" by the operator on 2026-08-04:
+> `limit_remaining` is not surfaced in any form.** It lags the provider's own
+> enforcement by minutes and was observed reporting credit remaining while calls
+> were already being refused, so a panel carrying it would tell a curator they
+> had budget at the moment they did not. That answer leaves this corollary
+> exactly as it stands — it governs where the number is read from, not whether it
+> is displayed — which is why the corollary was not swept when the question was.
+> `services/health.py` carries the same decision at the site that would hold the
+> field, and says not to add it back without reopening the decision.)*
 >
 > **Scope note:** this norm governs *ceilings*, not *budgeting*. A per-run search
 > cap (below, under Cost) is application-enforced and does not depart from this —
@@ -483,6 +486,19 @@ than a silent truncation of results.
 > revisiting. The corollary is that **breadth is free**, which is why
 > `DISCOVERY_SEARCH_RESULTS` ships at 10.
 >
+> **A third bound joined these on 2026-08-04, and it is not a cost bound at all**
+> (`DISCOVERY_OFFERED_WORKS_PER_RUN`, shipped at 12). It limits how many works a
+> run may *offer* from a wired collection on top of the list it proposed. Browsing
+> a museum costs nothing, so what it protects is the curator's attention and the
+> proportion between a supplement and the list they approved. **It is also the
+> selection mechanism, which is why it cannot simply be set high**: the collection
+> holds far more than any run will show — one real run's four artists had 69
+> offerable works between them — and the museum's relevance score is unusable for
+> ordering them (`artic-api-findings.md`). So the works kept are taken one per
+> artist per pass, and this number is how many passes. Twelve is about half the
+> approval threshold, which keeps the supplement visibly secondary while still
+> giving a four-artist run three works each. Zero turns it off.
+>
 > **Overrunning the allowance fails the run rather than trimming its results.**
 > An engine that searched past its bound spent money the estimate did not cover,
 > so its work list was bought outside what anyone authorised; accepting it with a
@@ -575,6 +591,38 @@ both halves: that the chosen engine still resolves works to their museums, and
 that the price gap it was chosen for has not closed. Both can decay — an index
 can rot, a per-request price can move — and a decision nobody re-runs quietly
 stops describing the world.
+
+### The Supply Horizon
+
+**Measured 2026-08-04. This is a fact about supply, not a policy about rights.**
+Intents whose works predate the public-domain boundary resolve; intents past it do
+not, and wiring more providers does not move it. The eight works from two real runs
+were put to four open-access providers — the Art Institute, the Met, Cleveland, and
+Wikidata/Commons — and each returned nothing for all eight. A per-intent sweep over
+the recorded phase-1 corpus put pre-boundary intents around two thirds and
+post-boundary intents at or near zero, with one mid-century American intent
+measuring 0 of 10. The partition is not *which collection is wired*; it is
+copyright. The measured break sat around 1929, and the boundary itself moves
+forward a year at a time, so it is the boundary that is the constant here and not
+the date.
+
+**This sits against a recorded decision, and the collision is recorded rather than
+quietly resolved.** `project-state.yaml` § integrations commits discovery to museum
+collections *and* the contemporary web — gallery sites, prize announcements, artist
+portfolios — with "museum/public-domain only" listed as its **explicitly rejected**
+alternative, on the reasoning that "recent award-winning art" cannot be satisfied
+from institutions alone. Only the museum half is wired. So the product today ships
+the alternative that decision rejected, and a curator asking for contemporary work
+gets a run that spends money and returns nothing.
+
+**No rights gate follows from this, and that is a decision rather than an
+oversight** (operator, 2026-08-04: *record rights, do not gate, do not filter*).
+Constraint 13 already holds rights to a quality weight and never an exclusion, and
+nothing measured here amends it — none of this is about whether a work may be
+shown. What is open, and is deliberately left open, is whether the contemporary-web
+half of that integrations decision gets built or gets retracted. Until one of those
+happens this section exists so the horizon is read rather than rediscovered, which
+so far has cost two runs.
 
 ## Output Quality
 
@@ -716,6 +764,13 @@ hardcodes "Sans 18" for a panel geometry that is no longer the target, so type
 sizing must be re-derived for the 1448×1072 panel rather than carried forward.
 This is the product's most important accessibility surface and it is a physical
 one — see `design_decisions.accessibility_approach`.
+
+> **The 16 grey levels are not the default and must be claimed.** Measured on the
+> panel 2026-08-04: the driver comes up in 1-bit `bw`, and the obvious sanity
+> check cannot detect it because `max_colors` reports 16 either way. The display
+> plane therefore has to set the mode explicitly and assert on `mode` itself —
+> otherwise this requirement is unmet by a build that passes every test. Full
+> measurements in `platform-and-dependency-findings.md` § The e-paper panel.
 
 ## What This Artifact Hands Off
 

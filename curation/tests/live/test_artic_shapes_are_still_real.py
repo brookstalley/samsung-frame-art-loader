@@ -3,9 +3,15 @@
 `artic-api-findings.md` is a snapshot of a live probe, and three of its
 measurements are load-bearing in the client: that the search response carries the
 *master's* dimensions, that every IIIF response is 843 pixels wide, and that a
-query matching nothing still returns the whole collection at score zero. A
-document nobody re-runs quietly stops describing the API, so the durable form of
-those measurements is a test that fails when one stops holding.
+query matching nothing still returns the whole collection rather than an empty
+page. A document nobody re-runs quietly stops describing the API, so the durable
+form of those measurements is a test that fails when one stops holding.
+
+**The third one has already earned its keep.** It was recorded as "the whole
+collection, *at score zero*", and that is no longer true: the scores are ordinary
+relevance scores now, so the client's zero-score pre-filter no longer empties a
+garbage query and the identity comparison is the sole defence. This suite is
+where that arrived, in the form of a red test rather than of a wrong belief.
 
 **Deselected by default**, like its OpenRouter sibling — but for a different
 reason, and the difference is why it carries a **different marker**. That suite
@@ -127,18 +133,28 @@ def test_every_iiif_response_is_still_843_pixels_wide(museum):
     assert width == 843
 
 
-def test_a_query_matching_nothing_still_returns_the_collection_rather_than_nothing(museum):
-    """The zero-score pre-filter exists because emptiness is not how this API says no.
+def test_a_nonsense_query_returns_real_paintings_and_the_identity_gate_refuses_them_all(museum, engine):
+    """Emptiness is not how this API says no, and the score no longer says it either.
 
-    If the API started returning an empty `data` array for a nonsense query, the
-    filter would become redundant rather than wrong — but the client would be
-    relying on a behaviour that had changed, and that is worth knowing.
+    **This test previously asserted the opposite half and the API moved under it**
+    (measured 2026-08-04). A nonsense query used to come back at `_score` 0.0, so
+    the client's zero-score pre-filter emptied the result and the recorded
+    behaviour was "garbage in, nothing out". It now comes back with ten real works
+    scoring in the fifties and sixties — *Nighthawks* among them — while
+    `pagination.total` still reports the whole collection. The pre-filter fires on
+    none of them.
+
+    So the recorded measurement was rewritten to what the API does, and this test
+    was re-aimed at the defence that actually holds: the identity comparison. Both
+    halves are asserted because they fail for different reasons and both are worth
+    hearing about — the client returning nothing again would mean the API changed
+    back, and the engine keeping something would mean the only remaining guard
+    between a garbage query and a real painting had stopped discriminating.
     """
-    found = museum.find_images(ImageQuery(title="zzzqqx nonexistent painting", artist="nobody at all"))
+    query = ImageQuery(title="zzzqqx nonexistent painting", artist="nobody at all")
 
-    # The client drops every zero-scored record, so what reaches us here is empty
-    # even though the API returned a full page. That is the filter working.
-    assert found == []
+    assert museum.find_images(query), "the collection came back empty; the API's way of saying no has changed again"
+    assert engine.resolve(query).instances == []
 
 
 def test_a_work_the_collection_does_not_hold_still_resolves_to_nothing(engine):
@@ -149,16 +165,128 @@ def test_a_work_the_collection_does_not_hold_still_resolves_to_nothing(engine):
     comparison has stopped discriminating — and the two need telling apart by
     hand, which is why this fails loudly rather than being asserted away.
     """
-    judged = engine.resolve(ImageQuery(title=NOT_HELD[0], artist=NOT_HELD[1]))
+    judged = engine.resolve(ImageQuery(title=NOT_HELD[0], artist=NOT_HELD[1])).instances
 
     assert judged == [], f"expected no credible instance, got {[entry.found.title for entry in judged]}"
 
 
 def test_a_held_work_still_resolves_confidently_end_to_end(engine):
     """The other half: the judgement must not be so strict that nothing survives it."""
-    judged = engine.resolve(ImageQuery(title=HELD[0], artist=HELD[1]))
+    judged = engine.resolve(ImageQuery(title=HELD[0], artist=HELD[1])).instances
 
     assert judged, "a work the collection holds resolved to nothing — the comparison is too strict"
     assert judged[0].confidence == CONFIDENT
     assert judged[0].below_floor is False
     assert HELD[0] in judged[0].rationale
+
+
+#: The object endpoint the fetch path resolves through, and a work whose page URL
+#: shape matches what the 2024 index recorded on 32 seeded sources.
+GOLDEN_BIRD_PAGE = "https://www.artic.edu/artworks/91194/golden-bird"
+GOLDEN_BIRD_API = "https://api.artic.edu/api/v1/artworks/91194"
+
+
+def test_the_object_endpoint_still_answers_with_an_image_id(museum):
+    """Acquisition cannot fetch an artic work without this call succeeding.
+
+    It is a *different* endpoint from the search every other test here uses —
+    `/artworks/{id}` rather than `/artworks/search` — and the fetch path depends
+    on it entirely. Nothing else in the suite would notice it moving.
+    """
+    target = museum.tile_url(GOLDEN_BIRD_API)
+
+    assert target.startswith("https://www.artic.edu/iiif/2/")
+    # An image_id after the base, not a bare base with nothing on the end.
+    assert len(target.rsplit("/", 1)[1]) > 8
+
+
+def test_both_recorded_url_shapes_still_resolve_to_the_same_image_service(museum):
+    """The seeded corpus carries page URLs; discovery records api_links.
+
+    Both are real shapes held in this product's catalogue right now, and a change
+    to the museum's URL scheme that broke either would strand a third of the
+    works with no signal until someone tried to fetch one.
+    """
+    assert museum.tile_url(GOLDEN_BIRD_PAGE) == museum.tile_url(GOLDEN_BIRD_API)
+
+
+def test_the_resolved_image_service_is_really_a_iiif_endpoint(museum):
+    """Proves the resolution lands somewhere dezoomify can read, not merely
+    somewhere well-formed. `info.json` under the base is the contract the tile
+    fetcher relies on, and it is checked against the live service rather than
+    assumed from the URL's shape."""
+    import httpx
+
+    target = museum.tile_url(GOLDEN_BIRD_API)
+
+    response = httpx.get(f"{target}/info.json", timeout=20.0, follow_redirects=True)
+    response.raise_for_status()
+    payload = response.json()
+    assert int(payload["width"]) > 0 and int(payload["height"]) > 0
+
+
+# -- browsing the collection by artist ---------------------------------------
+#
+# The per-facet aggregation a browse depends on is a different API surface from
+# the per-work search above, and it is the one every offered work rests on. The
+# fixtures in `tests/unit/test_artic_browse.py` are shaped from these responses;
+# these tests are what notice when the shape stops being real.
+
+
+@pytest.fixture(scope="module")
+def collection():
+    """The real browse client, against the live collection. Free, like its sibling."""
+    from curation.discovery.artic import build_collection_browse
+
+    return build_collection_browse(user_agent=USER_AGENT)
+
+
+def test_a_browse_still_returns_per_facet_buckets_with_their_own_works(collection):
+    """One request, one group per artist, each carrying its own holdings.
+
+    If the named `filters` aggregation stopped being supported, every facet would
+    come back empty and a run would silently offer nothing — the failure mode
+    that looks exactly like a collection holding nothing for the intent.
+    """
+    from curation.discovery.browse import BrowseQuery
+
+    groups = collection.browse([BrowseQuery(artist="Ellsworth Kelly"), BrowseQuery(artist="Morris Louis")], per_query=3)
+
+    by_artist = {group.query.artist: group for group in groups}
+    assert by_artist["Ellsworth Kelly"].matched > 10, "the collection's Kelly holdings vanished, or the aggregation did"
+    assert by_artist["Morris Louis"].matched >= 1
+    assert by_artist["Ellsworth Kelly"].works, "a facet reported matches but brought back no work"
+    for work in by_artist["Ellsworth Kelly"].works:
+        assert work.estimated_width and work.estimated_height, "a browse hit must carry the master's dimensions"
+        assert work.preview_url and work.title
+
+
+def test_the_surname_retry_still_recovers_a_name_the_museum_spells_its_own_way(collection):
+    """ "Wassily Kandinsky" reaches the works filed under "Vasily Kandinsky".
+
+    This is the whole of what the retry buys. If the museum renamed the artist to
+    match the ordinary spelling, this test goes green for a new reason and the
+    retry becomes dead weight — worth knowing either way.
+    """
+    from curation.discovery.browse import BrowseQuery
+
+    (group,) = collection.browse([BrowseQuery(artist="Wassily Kandinsky")], per_query=3)
+
+    assert group.matched > 0, "the unambiguous-surname retry no longer recovers a differently-spelled name"
+    assert group.works
+    assert all("Kandinsky" in (work.artist or "") for work in group.works)
+
+
+def test_a_surname_two_artists_share_is_still_refused(collection):
+    """Antonio Martorell must never come back as Bernat Martorell.
+
+    The collection holds one of each, and only Bernat's is a wall type — so a
+    check scoped by the browse's own filters would see one artist and offer the
+    wrong one. A failure here means that guard stopped holding against the live
+    collection, whatever the unit fixtures say.
+    """
+    from curation.discovery.browse import BrowseQuery
+
+    (group,) = collection.browse([BrowseQuery(artist="Antonio Martorell")], per_query=3)
+
+    assert group.works == (), f"offered work under a shared surname: {[w.artist for w in group.works]}"

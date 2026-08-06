@@ -48,6 +48,1100 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-06: The small-issue sweep — eleven closed, and the two guards that were guarding a copy
+
+<!-- prawduct: scope=v1-build -->
+
+**Why:** the backlog held seventeen `effort:S` items across nine unrelated areas,
+and small items left grouped by nothing get worked one at a time forever. Grouped
+by what they actually share, most of them turned out to be four pieces of work
+rather than seventeen.
+
+**Four closed without code.** #19's dead `uploaded_files = {}` had already gone
+when `b49a4f5` rewrote `delete_all_uploaded` for a different fault — and the
+lifecycle question that kept it from being fixed in place got answered on the way
+past, `tv_content_id` being the bookkeeping. It closed without the Chunk 12
+supersession it expected, that adoption having been descoped on evidence. #10
+(the second-look shelf) was ruled won't-do: the operator is the only MCP caller.
+#46 and #42 went upstream as prawduct#606 and #607, both re-verified against
+v3.2.6 first — and #46 got *stronger* in the process. It was filed as facts that
+fail to reach the ledger; `plugin/lib/ledger.py` is fail-closed on its kind
+vocabulary, so there is no resolution kind for `ledger-append` to accept. A
+design gap, not a dropped write.
+
+**CI was showing two green checks and neither watched the suites** (#82, #84,
+#98). A workflow now runs both default suites and all three planes' lint on every
+PR; a failing scheduled probe opens one issue per contract in the backlog the
+operator already reads; and an *unfired* schedule is caught by measuring how long
+since each tier last succeeded, per tier, because a healthy monthly run would
+otherwise vouch for three missed Mondays.
+
+Two corrections came out of the Critic round on that. The paid tier no longer
+fails on never-run — the first version went red the moment it reached `main` with
+the only remedies being to wait a month or spend real credit, and a check whose
+green costs money is a check that gets ignored, taking the free tier's finding
+down with it. And nothing created the `api-drift` label, so `gh issue create
+--label` would have raised on the first real failure: the alerting path failing
+exactly when needed.
+
+**The guard was reading the wrong number, and only a CI leg could reveal it.**
+pytest reports an `xfail` as `<skipped>` and counts it in the suite's `skipped`
+attribute, so `assert_tests_ran.py` failed the new leg naming a dependency that
+was never missing. An `xfail` is the opposite of an unprovisioned test. Nothing
+had ever run a suite containing one in CI, so the defect had nowhere to show.
+
+**One record, one shape** (#36, #100). The candidate-work seven keys were written
+at four sites; three are now one function, and the fourth — the HTTP model — is
+held to it by a test with a *named* exemption, where a stale exemption is itself
+a failure. `architecture.md`'s per-surface-formatting entry is scoped rather than
+amended away: it describes the artwork pair, which genuinely differs, and that
+divergence is now asserted too, being the entry's only evidence.
+
+**Two listings and a watch that could not stop** (#54, #83). `list_runs` returned
+the whole history on both surfaces, growing with the number of runs *and* the
+length of what people typed. The cap is the service's, so the two surfaces cannot
+disagree about how much history exists. The run poll re-armed for ever on a
+permanent failure: a stale bookmark had the tab asking for a run that will never
+exist every two seconds, bounded only by navigation. Counted consecutively, not
+cumulatively, and keyed by run id — the issue said generation, and `state.poll`
+increments every poll, so a generation-keyed count would reset each tick and
+never reach any threshold.
+
+**Two silently-wrong deployment values** (#22, #75). A typo in `ART_ROOT` created
+a directory, created an empty catalogue, and started cleanly. A marker file now
+refuses that, and a directory already holding a catalogue counts as marked, so
+the check cannot take a live install down. `TV_PANEL_DIAGONAL_INCHES` is now
+checkable rather than merely documentable — a claim `.env.example` had carried
+for two days before anything delivered it.
+
+**Three rounds of the sweep, three findings, and one of them was the tool.**
+Assertions written straight against a tree that already agrees can only ever be
+seen to pass: `==` loosened to `<=` changed no test, and a single fabricated case
+breaking two directions at once passed on whichever assertion fired first. Then
+the sweep tool itself — with `-x` under xdist a failing test exits **2**, not 1,
+so every *caught* mutation looked like the unclassifiable exit it refuses to
+guess at, and a sweep aborted on its first real catch calling itself
+misconfigured. `-n auto` is in this plane's `addopts`, so the invocation
+`CLAUDE.md` documents could only complete when nothing was caught.
+
+**The Critic's blocking finding was the same shape one level up.** The run-listing
+cap was asserted against a helper that rebuilt `runs[:MAX_RUNS_LISTED]` — the
+production expression, copied — so deleting the slice from the service left both
+suites green. That slice is the whole of #54.
+
+**Three rulings and two wordings, in the same sweep.** #40 asked the owner
+whether four mechanical guards are norms this product states. One is: the TV
+pairing token is never tracked, which has a real incident behind it and is a
+secret in a public repo. The other three are recorded as deliberately uncovered,
+in a section beside the index, because the alternative is that every Norm Health
+sweep rediscovers them and asks again — and that section says plainly that a
+guard listed there is still a guard. `test_persistence_boundary.py` is
+deliberately *not* named as enforcement of the adjacent service-layer row:
+naming an import check there would read as though a judgement-required norm were
+mechanically enforced, when the violations it exists to catch are exactly what an
+import check cannot see.
+
+#93 removed the run table's provenance column rather than renaming it — "Where it
+came from" meant how a row entered the run and reads as which museum holds the
+work, and this table was the distinction's fourth statement. #99 answered what
+the resolution badge describes: the run, and the words now say so ("the run found
+an image"), which is what makes it consistent with "You have turned down
+everything that was found for it" instead of contradicting it. Deriving the badge
+from surviving instances was the other option and the one the issue leaned
+toward; it would have made one badge mean two things on two screens, since the
+run table's rows carry no instance data — which #99's own acceptance forbids.
+
+#27 was not labelled and so was not in the seventeen. It is a small,
+fully-specified refactor of the same family: `durable.py` states it holds no
+domain concept and reached through the catalogue adapter for its error types. The
+types moved to `persistence/errors.py`, `catalogue.py` re-exports them
+permanently, and a guard now holds the seam — because a layering statement the
+code contradicts in one line is precisely the kind that survives every
+behavioural test.
+
+**Two verify rounds, and each found the same shape one level up.** The first
+review's blocking finding was that the run-listing cap was asserted against a
+helper rebuilding the production expression. The second found the art-root guard
+wired into startup with nothing testing the wiring — the fixture that lets the
+other startup tests past the guard *marks* the root, so `prepare` returned at its
+first branch in all seven and deleting the call from `main` broke nothing. A
+function tested thoroughly and a call site tested not at all, twice.
+
+The second round also caught a claim this session had written into the service
+unit: that `curation.art_root` now covers a systemd-mis-parsed `ART_ROOT`. That
+unit's `ExecStart` is `tvart.py`. The guard is real and governs a process that
+file does not start, so the correction to R-15 had over-reached in exactly the
+direction R-15 was about.
+
+**Also corrected: the dotenv precedence flip had reached two of four sites.** The
+service unit and the operational spec both still promised that `EnvironmentFile=`
+was a presence guard rather than the value source, which inverted when
+`override=True` was retired. systemd's parser now decides, and the two parsers
+differ on quoting — so a mis-parsed `ART_ROOT` is live. What covers the worst
+case is now a mechanism rather than a promise: the marker check above.
+
+## 2026-08-05: The seven fixes the fix-or-file pass identified and did not do
+
+<!-- prawduct: scope=v1-build -->
+
+**Why:** the pass below classified seventeen `effort:S stage:ready` items and
+closed five. Twelve met neither filing test, so seven remained — a fix waiting to
+be done is not a backlog item, which is what the ratified preference says. No
+`chunks=` tag: this closes backlog items, not a build-plan chunk.
+
+Reconstructing which seven, since the pass recorded the counts and not the list:
+of the items still open at that label, #46 and #42 are prawduct's own bugs (here
+only because no bug inbox is configured) and #84, #83 and #82 each say in their
+own body that the *decision* is the item — which is filing test (1) exactly. The
+rest were the fixes: #44, #55, #45, #86, #25, #32, #85. The reconstruction is
+checkable rather than asserted, because those five are precisely what stayed open
+when these closed.
+
+**Two defects were live, not latent.** `delete_all_uploaded` cleared every
+`tv_content_id` while `DeleteResult.surviving` sat there naming which removals
+the television had not honoured — and `sync_artsets_to_tv` picks upload
+candidates by exactly "has no `tv_content_id`", so a survivor was uploaded again
+as a duplicate onto a set with finite storage. And the rendition-currency rule
+was written twice, with the manifest builder reaching past `CatalogueService`
+into the store to feed its own copy; the review grid would badge a work current
+while the wall silently dropped it. The tie-break beside it was a second live
+disagreement: the builder took the newest television render, the thumbnail
+service took the first current one the store returned, and the unique index on
+`(artwork_id, kind, target_width, target_height)` makes two renders reachable.
+
+**Three were guards that were not there.** A museum preview body was read whole
+into memory with no bound, from a URL out of the museum's own JSON with redirects
+followed — an unbounded allocation driven by a stranger, contained only by the
+unit's `MemoryMax` to "curation dies". `acquisition.deployment_fault` was emitted
+by the MCP binding, so the signal followed the caller: the first browser
+acquisition route would have inherited the refusal and not the journal line.
+And `dispatch`'s waived broad-except — the one thing standing between an
+unexpected fault and a success envelope — was asserted by nothing.
+
+**Two were the environment lying quietly.** `load_dotenv(override=True)` in both
+planes meant an exported `ART_ROOT` was discarded rather than refused, so a
+scratch run booted against the real catalogue and the wrong data looked exactly
+like the right data. The stated reason — cached values "that pipenv loaded" —
+was checked rather than inherited: there is no Pipfile and no other mention of
+pipenv in the tree.
+
+**What the round is worth recording for is a vacuous test caught by mutation
+rather than by reading.** The tie-break test recorded its two renders widest
+first, which makes the store's `(kind, target_width, …)` order and newest-first
+coincide — so the *pre-fix* code passed it. Reading the test could not show that;
+running the old code against it did. The fixture now records them the other way
+round and asserts the two orders disagree, so a change to the store's `ORDER BY`
+fails it loudly instead of quietly returning it to proving nothing. Every fix in
+this batch was mutation-checked for the same reason, nineteen mutations in all,
+and each was caught by a test that names the defect rather than by the suite at
+large.
+
+**A ceiling was measured rather than guessed.** `PREVIEW_MAX_BYTES` is 16 MiB
+against five real Art Institute previews sampled at 89–193 KiB — not a prediction
+of the largest legitimate preview, but the point past which a body has stopped
+being one.
+
+**Two decisions taken rather than asked.** #55's duplicate #51 is closed by the
+same commit rather than merged, because the work is done and a redirect would
+leave two open records of one fixed defect. And an unconfirmed television removal
+now forgets nothing: it can cost a work its place on the set until the next
+confirmed pass, where the opposite error costs storage on every run and is
+invisible.
+
+Artifacts followed the code in the same commits: `architecture.md`'s "inherits
+the staleness rule" is now true and says since when, its Scaling Model gained the
+preview as the second memory path, `observability-strategy.md` lost the limit
+paragraph naming #86 as its own fix and gained `phase_two.preview_too_large`, and
+`project-state.yaml` records the IA and interaction patterns the discovery half
+brought — checked against `app.js`'s own `VIEWS` and `DETAIL_VIEWS` maps rather
+than asserted.
+
+## 2026-08-05: A fix-or-file pass, and the fence that shipped in the plane being deleted
+
+<!-- prawduct: chunks=19B | scope=v1-build -->
+
+**Why:** the strong-bias-towards-fixing preference was ratified with a retroactive
+clause and nothing had exercised it. Seventeen open `effort:S stage:ready` items
+were read and re-verified against the tree; twelve met neither filing test, three
+carried a genuine undecided policy question, and two were prawduct's bugs sitting
+here only because no bug inbox is configured.
+
+**The pass found more by re-verifying than by fixing.** Two items (#37, #43) had
+been fixed three days earlier by `53ec2d9` and never closed, so a triage that read
+the bodies and stopped would have rebuilt shipped work. One (#39) was half-done,
+and its code half had been solved *better* than the issue proposed — a `finally`
+rather than the `except BaseException:` asked for. One (#32) named functions that
+no longer exist while its defect stayed exactly where it was. **An issue body is
+evidence about the day it was written, and this repo's own habit of writing
+thorough ones is what made re-verification cheap rather than what made it
+unnecessary.**
+
+**The argument-injection fix and what the Critic then found wrong with it.** A URL
+beginning with `-` reaches `dezoomify-rs` as a flag, and the argv list guarding
+this call defeats shell metacharacters only — a different bug class with a
+different guard. The ARTIC path composes its URL out of the museum's own
+`config.iiif_url`, so the vector is real. Two guards landed in `image_utils.py`: a
+scheme refusal, which closes the reachable case, and `--`, which does not depend on
+the scheme check staying strict.
+
+Both were proved by mutation, and `--` was checked against dezoomify-rs 2.18.1
+rather than assumed from clap's documented behaviour. **The Critic's finding was
+that all of it shipped in the plane Chunk 20 deletes** while
+`curation/acquisition/dezoomify.py` — the one that survives — had no fence and a
+comment calling its URL "the last option-free argument", which it is not: nothing
+makes it option-free, and `staged` follows it. The curation plane was never
+vulnerable (`check_fetchable` refuses a scheme-less string a caller earlier), and
+that is precisely why the comment was worth fixing: **it credited the wrong
+mechanism, so a reader learning the pattern here would have carried the wrong
+lesson to the next call site.** Both planes now carry the fence and a comment
+naming which guarantee is holding and where it lives.
+
+**A blocking finding on commands nobody ran.** The new display-plane column in
+`CLAUDE.md` taught `cd display && uv run ruff check .` and asserted it "runs
+against an empty tree". It did not run at all: the manifest declared a hatchling
+build backend, so `uv run` built the project first and hatchling refused the
+git-pinned `samsungtvws` as a direct reference. `[tool.uv] package = false` makes
+the plane what it actually is — an application a systemd unit starts, never a
+wheel anything installs — and all three documented commands were then run rather
+than predicted. **The prose had described the behaviour by reading the config**,
+which is the same move the mutation-sweep section two headings below exists to
+warn against.
+
+`display/uv.lock` arrives with it, earlier than planned: Chunk 12 owed it, and
+making the documented commands runnable produces one. Three unbounded dependencies
+and a git-pinned fork are now actually pinned, which is what the lock was for.
+
+**Also:** the black-formatting norm row said "both `pyproject.toml`s" with three
+in the tree, and `README.md` and the norm index both said the display plane runs
+3.12 on the Pi against a ratified 3.13 — in the two documents a newcomer
+provisioning the Pi and a Norm Health sweep read first. One JPEG-fixture helper had
+three byte-identical definitions and is now one. A supplement switched off in
+configuration logged nothing, so "nothing was offered" read identically whether the
+collection was empty, every candidate was declined, or the feature was off.
+
+## 2026-08-05: A test that defended a copy of the branch it named
+
+<!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
+
+**Why:** the guard fix above left two demoted observations, and both were the same
+shape as the defect they trailed — a claim stated more confidently than the code
+supports.
+
+The first was the scope check's docstring: "every line carrying the command
+counts, whatever precedes it" is true of what the scan *collects* and false of
+what it *checks*. The assertion reads the first token after the command on a
+single line, so `uv run pytest \` with its arguments on the next line collects and
+then passes on the backslash. No workflow here is written that way, and closing it
+would need a line-joining pass — so the limit is written down rather than rounded
+off, which is the whole lesson of the entry above.
+
+The second was that the comment-skip branch had nothing defending it. Deleting it
+turns no other test red, because the one comment in this repo carrying the command
+is itself path-scoped and satisfies the assertion anyway.
+
+**The fix for that second one was itself the defect it was closing.** The new test
+re-implemented the scan loop in its own body instead of calling it, so deleting
+the branch from the real scanner still turned nothing red while a fresh docstring
+claimed the branch was covered. The Critic caught it by simulating exactly that
+mutation, and rated it blocking. Both tests call `_ci_pytest_invocations` now —
+one over `.github/workflows`, one over a written fixture — so there is a single
+loop and mutating it is visible from both.
+
+**What that cost, recorded because the rule it produced is about when to stop.** A
+clean verify pass still carries demoted observations, and acting on them opens a
+new evidence edge needing another pass. The rule that held for two rounds was:
+take one only when the observation is a *false statement*, not a missing nicety.
+The third round broke it — a merely-missing test was batched in beside a docstring
+fix, got less care than a change taken on its own merits, and was the one that
+failed. Adjacency is not a reason.
+
+## 2026-08-05: The guard against a thrice-recurring defect could not see the documented form
+
+<!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
+
+**Why:** the second `verify-resolutions` came back clean, and its demoted
+observations named a real hole in the guard added one commit earlier — together
+with a docstring asserting the opposite of what the code did.
+
+It matched two prefixes and claimed an invocation it did not match "would simply
+not match the prefix and would be reported". It would not: an unmatched line
+never enters the list, so it is skipped in silence. A coverage hole rather than a
+loss of precision — and it sat exactly where `CLAUDE.md` points, since every
+command that file documents is written `cd curation && uv run pytest …`, which
+the prefixes missed, as would anything inside a `run: |` block.
+
+**The shape is worth naming because it is this session's recurring one.** A guard
+whose stated limitation is not its actual limitation cannot warn you: the
+docstring said the failure mode was noisy (reported) when it was silent
+(skipped), which is the difference between a check you can trust and one you only
+believe. Verified the fix by dropping a probe workflow written in the documented
+form and watching it fail, rather than by reading the matcher again.
+
+`CLAUDE.md` now says the rest: the marker alone is right at a terminal and wrong
+in a job, and the difference is which one has a guard reading the report.
+
+## 2026-08-05: The Critic's findings on the review half, closed in one pass
+
+<!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
+
+**Why:** the cumulative round over five chunks returned 1 blocking, 7 warnings
+and 9 notes across three reviewers. Nine fixed, six accepted, and five findings
+filed against four issues — #26 took two of them (#5, #26, #81, #86).
+
+**The blocking one was CI lying in the safe-looking direction.** All three
+api-drift jobs ran `pytest -m live_*` unscoped, so collection reached four modules
+whose opt-in groups are absent in CI, each landing an import skip — and the guard
+fails on any skip. Every scheduled run would have gone red while every probe
+passed, which is the alarm that cries wolf until nobody reads it. `browser.yml`
+found and fixed the identical defect in this same bundle. Reproduced before
+fixing, per this repo's own lesson about reasoning at a CI guard rather than
+running it.
+
+**A correction to something the previous session recorded as settled.** Its
+handoff said a change-log entry with no `status=` tag is "release-pending by
+design", and I repeated it in mine. Git says otherwise: all 23 prior chunks carry
+`status=shipped`, written pre-merge on the feature branch. Five built chunks were
+therefore showing as unstarted in the derived Status, and the tooling would have
+taken Chunk 21 — finished — as the current one. Tagged, regenerated, and the note
+that misled me corrected in place.
+
+**The navigation guard, and a fix that was wrong in an instructive way.** Four
+views paged through up to fifty round trips and painted unguarded, so clicking
+away mid-load repainted the old view over the new one with the tab highlight and
+the fragment both naming the new. My first attempt put the generation in a
+module-level variable — which the *later* navigation overwrites, so the abandoned
+paint reads the generation that superseded it and lands anyway. The guard passed
+and did nothing. The test caught it; the value has to travel with the paint, so
+`render` takes it as a required first argument and throws if a view omits it.
+
+**Two mutations survived the sweep of that fix and neither was a defect.** One
+reads `state.nav` a line later than the capture, which is the same value because
+the thunk is invoked synchronously. The other removes `go()`'s own bump, which
+`readHash` compensates on every path that changes the fragment — so the line is
+load-bearing only when navigating to the view already displayed. Recorded in the
+code rather than papered over with a white-box test, so the next reader does not
+take the survivor for proof the line does nothing.
+
+## 2026-08-05: The review half — the grid, its alternates, the verdict, the panel
+
+<!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
+
+**Why:** a curator could commission a run in the browser and not judge what it
+brought back. The loop now closes onto the wall with no MCP client in it: intent,
+estimate, review with images, accept, theme, wall.
+
+**A binding for the re-search, added at the operator's call.** Turning a scan down
+is one of the grid's own actions and it leaves the work `awaiting_better_image`,
+where nothing looks again — `resolve_images` is what looks and had no HTTP
+binding. Shipping the rejection without it would have made this chunk's own screen
+a dead end escapable only from an MCP client. The grid says in words that nothing
+is searching, because that is the fact a curator cannot see.
+
+**The listing stops inlining pictures the browser discards.** Both surfaces call
+the same review methods; the browser passes `pictures=False` and fetches each
+picture by URL, so a page of the grid costs a `stat` per instance instead of a
+re-encode — roughly half of what it cost on the machine this runs on. The two
+readers have unrelated budgets: a model pays for a picture in context tokens, a
+curator in pixels. The picture route re-encodes rather than serving the cached
+file, because a preview's name on disk is derived from a URL and falls back to
+`.jpg` for anything unrecognised — the suffix is not evidence of what the bytes
+are.
+
+**The health panel now has a reader for the document the display plane writes**,
+which closes a finding carried against Chunk 19 since the plan was written: the
+failure table maps TV, panel and last-error state onto that document and nothing
+displayed it. Passed through untouched rather than unpacked into named fields —
+`reported_at` is the only key that is contract, and inventing more would be a
+second contract the writer never agreed to. Backup age ships against a receipt
+nothing writes yet (`backup-status.json`, key `completed_at`, written only on
+success): "no backup recorded" is a true observation, and it reports real ages the
+moment Chunk 20's job lands. There is deliberately no budget balance.
+
+**`get_health` left the known-departures table by conforming**, the first entry
+there closed that way rather than by deletion. Assembling the panel's three
+observations in the handler made *which signals the panel makes* a decision taken
+in a binding, where the next one would have to be added in two places. The
+heartbeat and the backup receipt now share one parser and one age-in-words, and
+the panel states "4 days ago" rather than "345600 seconds ago" — which is the
+wording `observability-strategy.md` specified and the code had never produced.
+
+## 2026-08-05: The mutation sweep was reporting on runs that executed nothing
+
+<!-- prawduct: chunks=19B | status=shipped | scope=v1-build -->
+
+**Why:** found while trying to prove this chunk's browser tests could fail. The
+sweep read any non-zero pytest exit as a caught mutation, and pytest exits **5**
+when it collects no tests. Every opt-in suite here is deselected by a marker
+expression in `addopts`, and naming such a test on the command line does not
+select it — so a sweep over `tests/browser/` mutated the file, ran nothing, and
+reported every mutation caught.
+
+**Twenty-one mutations reported caught by runs that never executed a line of the
+file they were applied to.** Re-run with the marker, two of the twenty-one
+survived, and both were real: a card that asks for a picture the listing said is
+absent, and the empty-page stopping condition in the paging loop. Neither test I
+had written reached the branch it named.
+
+The tool now runs the chosen tests once, unmutated, before sweeping, and refuses
+to start unless they actually run and pass — which also catches an
+already-red target set, where every mutation would be "caught" by the failure that
+was already there. Anything other than a pass or a failure stops the sweep and
+says which exit code it got. Extra pytest arguments pass through after a `--`.
+
+**Chunk 23's recorded acceptance was reached the same way, and it was re-swept
+rather than assumed.** Fourteen mutations over its six behaviours and their
+over-fire pairs — `fetchAllWorks` termination, the shortfall note, the image
+fallback, the focus move, poll suppression, paint supersession, the stale timer,
+and the unresolved reason as words — **all fourteen caught** with the marker
+passed through. That suite is genuinely covered; the evidence for it simply was
+not evidence. Worth separating: a vacuous proof and a false claim are different
+faults, and this was the first.
+
+**One thing this cost, recorded because it nearly shipped.** A sweep rewrites the
+file in place, so committing while one runs can capture a deliberate defect. It
+did: a `git add -A` landed inside the window and put a mutated `app.js` and a
+stray `.sweepbak` into a commit, with `git diff` against HEAD showing *identical*
+because both sides were mutated. Caught by checking that every mutation's
+`find` string was still present in the committed file, which is the check that
+does not depend on a comparison. Do not run git and a sweep at the same time.
+
+## 2026-08-05: The Critic's findings on the harness, closed in one pass
+
+<!-- prawduct: chunks=23 | status=shipped | scope=v1-build -->
+
+**Why:** the cumulative round returned 0 blocking, 6 warnings and 10 notes across
+three reviewers. Ten fixed, four accepted, two filed (#83, #84).
+
+**The one that was a real defect, and two reviewers found it independently.**
+`viewRun` swallowed a failed family-spend fetch into a null, and `facts()` drops
+null pairs — so the "Spent including every re-search" row vanished with no
+message, leaving a costs panel whose largest figure is what the run *alone* spent.
+That is precisely the misreading the family total was added to prevent, on a
+surface whose own header states that a silent omission is what this product exists
+to refuse. Twenty lines above, the same function argues at length for the opposite
+treatment of the gate estimate. It now says so too. **The `state.painted`
+asymmetry is deliberate and is commented as such**: the rollup is fetched only for
+a run that has stopped, and a stopped run schedules no further poll, so
+withholding the paint signature would enable a retry that cannot happen — the
+sentence in the panel is the whole remedy. Two browser tests cover it, both proved
+by mutation, which is the harness earning its keep in the same session it landed.
+
+**The guard that had no guard.** `assert_tests_ran.py` is the only thing
+distinguishing green-because-passing from green-because-skipped in every CI job
+that runs a suite, and nothing tested it — the failure shape it exists to refuse,
+one level up.
+Nine tests now cover it, including both JUnit root shapes it handles by hand and a
+check, derived from the workflow files rather than a written list, that every
+workflow running pytest also calls it. Mutation found a weak one: asserting only
+the exit code could not tell "no tests collected" from "nothing ran", two branches
+that send an operator to opposite places, so it asserts the message.
+
+**The artifact that described the absence.** `operator-verification.md` still read
+"the client has no test runner ... none of them is executed by a test", and
+invited reopening that trade if the surface kept growing logic of this kind. It
+had, and the trade was settled the previous commit. The dangerous half was "that
+decision stands": a builder starting 19B would have read it as live guidance and
+skipped browser coverage, re-incurring the debt this chunk paid, in the very next
+chunk. **Four artifacts describing what was built had been updated and the fifth,
+describing its previous absence, was missed** — that asymmetry is now a learning,
+because a document asserting "there is no X" cannot be found by grepping for X.
+
+**Two coherence defects in the record.** `boundary-patterns.md` § Test Levels had
+no row for `live_binary` at all and quoted an `addopts` value two markers out of
+date; the quote is replaced by a pointer to `pyproject.toml`, since a copied
+config value is only ever a second place to be wrong. And three documents said the
+browser workflow runs "on every push" when it scopes push to `main` and relies on
+`pull_request` — the workflow is right and the prose was wrong.
+
+**The `[[slug]]` link syntax came back, and this repo had already closed that
+exact defect once**, one file over, recorded in the 2026-08-04 verify round.
+Neither link resolved and one pointed at a rule that has never been written. Both
+now quote the referenced heading, which is this file family's own idiom. The
+detail file was also still carrying the retired form of a rule as a live heading.
+
+## 2026-08-05: The browser client gets executed, and the tests get proved
+
+<!-- prawduct: chunks=23 | status=shipped | scope=v1-build -->
+
+**Why:** `app.js` is the only human interface this product has, and neither
+Python suite ran a line of it. Three defects had already reached a running
+product through that gap — `replaceChildren` coercing a null and printing the
+string "null", every image tile silently taking the shape of its own picture,
+and a poll loop stealing the focus every two seconds from the one screen with a
+decision on it. The first two were found by using the product and the third by
+reading; none was visible to a test that reads JSON. Issue #30 said this stopped
+being tolerable at Chunk 19, and 19A shipped first, so this pays that debt before
+19B adds the review grid.
+
+**The binding is Python, and that is a change to what was recorded.** The
+operator's decision settled Playwright over the three cheaper options and named
+its costs, one of which was "a second language's package manifest inside
+`curation/`". Playwright publishes first-party Python bindings, so that cost is
+simply not paid — verified by installing `pytest-playwright` on this repo's 3.14
+before the choice was put rather than after. The harness is
+`curation/tests/browser/` behind a `browser` marker: one language, one suite, one
+command, and it reuses the suite's own server, catalogue and image fixtures
+instead of rebuilding every state through the HTTP API. The decision entry, the
+chunk's deliverables and `project-preferences.md` all record the amendment rather
+than quietly reading the old words the new way. The other two costs stand.
+
+**Deselected for a fourth reason, and it is none of the first three.** The live
+suites are off because they spend money or need the network, and the evaluation
+because it is non-deterministic. This one spends nothing, reaches nothing
+foreign, and is entirely deterministic; what it needs is a ~200MB browser, which
+is too much for a default `uv sync`. So its deselection is a packaging decision
+rather than a statement about the tests, its dependency is an opt-in group of the
+same shape as `eval`'s, and `.github/workflows/browser.yml` runs it on every pull
+request and on pushes to `main` so that being off the default run does not become
+never running — with `assert_tests_ran.py` behind it, because a suite that skipped
+itself reports green and green-because-absent is indistinguishable from
+green-because-passing in a checks list. Verified by installing without the group
+and watching both modules skip with the command that fixes them, the default
+suite's own count untouched.
+
+**The CI leg was wrong when first written, and the guard is what said so.** `-m
+browser` still *collects* the whole tests tree, so the evaluation module's
+import-skip landed in the JUnit report, and `assert_tests_ran.py` reads any skip
+as a provisioning failure — the job would have failed on every run. Found by
+pointing the guard at a real report rather than by reasoning about it (it exited
+1, naming the eval module), and fixed by scoping the invocation to
+`tests/browser` as well as to the marker. Worth recording because the marker
+alone looks sufficient and is not.
+
+**What it covers is the client, with `/api` as its boundary.** Where a real
+server can produce the state it does — paging runs against a real catalogue of
+101 works and the real `truncated` flag, the image tests write a real file and
+take it away, the focus move runs against the real routes. Routes are stubbed
+only for states a server cannot be asked for deterministically: a poll that
+changes nothing, a page that keeps insisting there is more, each unresolved
+reason in turn. Stubbed payloads are built from the API's own response models
+rather than hand-written dicts, so a response that changes shape cannot leave
+these tests green against a page that has started to break.
+
+**The acceptance was the mutation sweep, not a count of tests** — `tools/mutation_sweep.py`
+drives `app.js` as readily as a Python file. All ten mutations are caught, and
+each of the six behaviours was then re-checked against its own named test alone,
+rather than against the suite, so no behaviour is covered only by a neighbour.
+
+**The sweep found a test that could not have failed, which is the finding worth
+carrying forward.** The check that a paint's generation still holds is made
+after *every* await, and a run at the approval gate has two of them — so at the
+gate the later check catches a stale paint even with the earlier one deleted, and
+the test standing there passed against a client whose guard was gone. Only a run
+in a state that fetches nothing else can falsify that claim. **And the mechanism
+was not what the test's own name assumed:** what holds the poll rate down is the
+check `scheduleRunPoll` makes when its timer *fires*, not the one the paint makes
+when its answer lands. A superseded paint does still schedule; its timer then
+finds the world moved on and does nothing. The paint-time check earns its place
+somewhere else entirely — stopping a stale answer painting over the page a
+curator has already moved on to — and that is now what its test asserts.
+
+**One piece of bookkeeping in this branch was wrong and is reversed here.** The
+Status checkboxes for 19A, 21 and 22 were sitting unchecked, and an earlier
+commit on this branch ticked them as an oversight being tidied up. They are a
+*derived view* — `views_enabled` is true, so `regen-views` writes that block from
+the `status=` tag on each change-log entry, and an entry with no `status=` is
+release-pending by design. Unchecked was correct, the tidy-up was hand-editing
+generated output, and `regen-views` has put all four back (23 included). The
+tagged entry above is how this chunk records that it landed; the box flips at
+release, and nothing should ever flip it by hand.
+
+## 2026-08-05: The live probes get a schedule, and a guard against passing for free
+
+**Why:** the four `live_*` suites are the durable form of the
+`*-api-findings.md` documents — each records a measurement the product is written
+against, and a document nobody re-runs quietly stops describing the world. They
+were correctly split by marker and deselected by default, and **nothing ever ran
+them.** There is no CI in this repository at all, so the split was the whole of
+the design and the trigger was missing.
+
+**On push would have been the wrong trigger, and that is worth stating rather
+than just not doing.** A museum API does not change because we committed: cost
+would scale with our commit rate while information scales with the provider's,
+so we would pay repeatedly to re-answer a question that moves monthly at most.
+The two right triggers are on demand *scoped* — run `-m live_museum` when your
+work touches that client, which already worked — and **scheduled**, which is what
+this adds.
+
+**Three jobs, not one stage, because the four markers do not cost the same.**
+`live_museum` and `live_binary` are free and run weekly. `live_api` spends real
+money and runs monthly, or on a dispatch that explicitly opts in — a manual run
+must not spend by surprise because someone wanted to check the museum probes.
+`llm_eval` is non-deterministic and gates nothing, so it stays on demand only.
+Each marker gets its own job so a museum outage cannot mask the binary result.
+
+**The load-bearing part is `.github/scripts/assert_tests_ran.py`, and the reason
+is a trap the design walks straight into.** Every one of these tests skips itself
+cleanly when its dependency is absent — `skipif(not OPENROUTER_API_KEY)`,
+`pytest.skip("dezoomify-rs is not installed")` — which is right on a developer's
+machine and is exactly wrong in CI. An expired secret or a failed install would
+produce a completely green run that made no request and verified nothing, and a
+scheduled job whose purpose is noticing change would report success for as long
+as it stayed broken. So a skip in CI is read as a provisioning failure: the job
+fails and names which dependency was missing.
+
+**A hazard introduced by the xdist change three commits earlier, fixed here.**
+`-n auto` is in `addopts`, and a `-m` on the command line replaces the marker
+expression while leaving the parallelism in place — so `-m live_museum` alone
+fires concurrent requests at a public museum API, which comes back as a rate
+limit and is indistinguishable from the contract change the probe exists to
+detect. Every live invocation now passes `-n0`, in the workflow and in the
+documented local commands.
+
+**`.github/scripts/*.py` waives `T20`**, a third kind of per-file carve-out in
+the root ruff config: GitHub Actions raises annotations by reading `::error::`
+lines off stdout, so `print()` there is the interface rather than a substitute
+for logging. Written above the two existing groups rather than appended, because
+that config's own comments make both lists load-bearing — one is dated debt, the
+other hand-run tools, and this is neither. Recorded in the linting norm too.
+
+**It will not fire until it reaches the default branch.** GitHub fires
+`schedule` only for workflows on the default branch, so the first scheduled run
+is the Monday after merge. Dispatch it once by hand after merging to prove the
+wiring rather than waiting a week to discover a typo.
+
+## 2026-08-05: The curation suite runs across cores
+
+**Why:** ~118s with no hotspot to attack — roughly 67ms mean across the suite and
+a slowest single test of 1.4s. The bulk is integration tests booting a real
+uvicorn per class and waiting on it, and that wait is one this repo deliberately
+will not remove: an in-process ASGI transport skips the mounted MCP lifespan and
+would pass against an application that fails every real request. Parallelism is
+the only lever that does not cost correctness.
+
+**118s → 21s**, stable across four runs, `-n auto` in the curation plane's
+`addopts`. The root suite is 52 tests in under two seconds and is left serial.
+
+**One race closed first, because parallelism is what would have exposed it.**
+`_free_port()` claimed a port from the OS, closed the socket, and handed uvicorn
+the *number* — a window in which anything else on the machine can take it. One
+suite alone almost never loses that race; eight workers booting servers
+continuously from the same ephemeral range lose it regularly, and it would have
+surfaced as an unexplained flake blamed on xdist rather than on the fixture.
+uvicorn is now given port 0 and the port is read back off the socket it bound.
+Nothing else needed isolating — `tmp_path` is per test and the catalogue is a
+fresh sqlite file per test.
+
+**A measurement recorded because it contradicts the obvious expectation.** The
+mutation sweep is what you would most want this to accelerate: CLAUDE.md makes it
+the acceptance evidence for every chunk and its cost is `(mutations + 1) × suite
+time`. It does not help. The same ten-mutation sweep over two test files took
+**67s serial against 65s parallel** — a narrow slice is dominated by per-run
+worker startup, which `-n auto` adds rather than removes. The win is real only
+when the slice is broad enough that each run pays something like the full-suite
+cost. Both figures are in `CLAUDE.md` and `pyproject.toml` so nobody re-derives
+them, and the first draft of that `pyproject.toml` comment claimed the sweep as
+the main beneficiary before the measurement contradicted it.
+
+## 2026-08-05: Chunk 19A — the run half of the browser surface
+
+<!-- prawduct: chunks=19A | status=shipped | scope=v1-build -->
+
+**Why:** discovery has been drivable only by an agent. Every operation a curator
+needs to commission a search and watch it existed in the service layer and on the
+MCP surface, and none of it was reachable from the browser — so the product's one
+human interface could show what had already been accepted and nothing about how
+it got there.
+
+**What landed.** Eight routes and two screens. Intent entry with the estimate
+above the button; the run view with its state in a sentence, its two tallies, its
+works, its search usage and its approval gate. `GET /api/estimate`, `POST/GET
+/api/runs`, `GET /api/runs/{id}`, approve/decline/cancel, and
+`GET /api/runs/{id}/spend`. The routes are thin bindings over
+`DiscoveryRunner` — every one is dispatch and formatting over a single service
+call, which is the norm this surface has held since 10B.
+
+**Two divergences from the MCP surface, both deliberate and both recorded in
+`api-contract.md`.** `GET /api/runs/{id}` answers immediately where MCP's
+`status` holds for up to 45 seconds: a model calls once and waits, a browser
+polls, and because these handlers are synchronous a held request would occupy one
+of Starlette's worker threads for the whole hold — starving the pool that serves
+thumbnails. And the two surfaces compose their own prose while sharing their
+arithmetic: the MCP notice names fields in backticks and says to call `status`
+again, neither of which suits a page with buttons, but every figure on both comes
+from a `RunView` property computed once. That split is aimed squarely at the
+defect the previous chunk's review found — a run-level figure computed as
+`len(works)` beside a view that counted provenance apart.
+
+**`is_terminal` is on the wire rather than derived in the client.** A list of
+finished status names written into the browser is the part that goes stale: a
+tenth status would leave the page either polling a finished run forever or
+abandoning a live one. **The mutation sweep found this branch undefended and it
+was the only survivor of ten** — the value could be replaced with a constant and
+nothing objected. Both directions are now asserted, because either constant
+passes half the test.
+
+**Two defects in this chunk's own client copy, found by reading the service back
+rather than by a test.** The costs panel labelled the run's stored figure
+"Estimated before starting"; it is written when phase 1 finishes and prices
+*resolving the work list*, so a phase-2 number sat under a phase-1 heading. And
+the approval gate — the actual point of decision for phase 2 — showed no estimate
+at all, which is half of "the estimate at the point of decision" simply missing.
+The gate now fetches it and shows the basis, which is the load-bearing half: the
+figure is $0 because phase 2 asks museum APIs, and a bare zero beside an approve
+button invites reading the gate as being about money when it is about the size of
+the work list.
+
+**Coverage:** 31 tests, and the acceptance criterion runs end to end against a
+booted uvicorn (`test_the_run_half_runs_over_http`). A `tests/unit/test_client_vocabulary.py`
+reads `app.js` and refuses a `UnresolvedReason` or `ResolutionStatus` member with
+no words for a curator, so a sixth reason arrives as a failure rather than as a
+raw diagnostic token on screen — the same bargain `test_design_tokens.py` strikes
+with the stylesheet, and the only kind of check available for a client with no
+build step. All ten mutations die.
+
+**Hygiene fixed rather than stepped over:** `mcp/bindings.py` and one live test
+carried black drift from before this chunk, and `api-contract.md` explained the
+absence of write routes with "those belong to acquisition, which is not built" —
+acquisition shipped 2026-08-03.
+
+**What this chunk does not do**, so the omission is not read as an oversight: the
+review grid, the verdict, image selection, and the health panel's completion are
+Chunk 19B. Issue #2's component box stays open, because it names the grid as well
+as intent entry and only 19B can close it.
+
+**Critic — `rev-20260805T131544Z-6c659477`, cumulative over `dd0529a…de961bd`
+(28 commits, three reviewers): 0 blocking, 7 warnings, 8 notes.** Ten fixed in
+one pass, two filed, four accepted.
+
+The one worth carrying forward is **this chunk failing a learning this same
+branch added five days earlier**. `GET /api/runs/{id}/spend` shipped with no
+production reader, and the figure only it carries — the family total including
+every re-search descended from a run — reached no human surface, because the
+costs panel read the run record's own direct spend. That is exactly "a computed
+value with no production reader is an unimplemented requirement wearing the
+costume of a finished one". **The learning was written, and the same shape
+recurred in the next chunk anyway** — which is the second time this branch has
+demonstrated that naming a failure in prose does not prevent its next instance.
+The panel now reads it and the two figures are labelled apart.
+
+Also fixed: the badge-block guard did not cover the run view's two new per-state
+class axes, so a sixth `ResolutionStatus` would have painted identically to
+`resolved` with the guard written to prevent that still green (R-1); `/discovery`
+answered 200 and then rendered the Works grid, because routing read only the
+fragment (R-3); `api.py` went from 12 handlers to 20 without adding a departure,
+so "half the handlers" and "six of twelve" both became 50% against a real 30%
+(R-4); a failed poll threw before it could reschedule, leaving a stale page that
+read as current and never recovered (R-12); plus the README's tab list, a
+presence check for `RunStatus`'s nine client sentences, a missing `date:`, and
+the run-list bound written down.
+
+**Filed rather than done, both moving code no chunk in flight is touching:**
+[#80](https://github.com/brookstalley/samsung-frame-art-loader/issues/80),
+extracting the collection supplement out of a 1,260-line runner that also owns
+the worker threads, the wake protocol, the gate and pricing; and
+[#81](https://github.com/brookstalley/samsung-frame-art-loader/issues/81),
+offered works' previews having no reclaim path — twelve per run at `PENDING`,
+reclaimable only on a terminal verdict, and 19A ships no verdict control, so
+previews of works nobody asked for accumulate on the Pi's SD card.
+
+**Issue #30 was settled mid-chunk and became its own chunk.** Its acceptance
+required the client-coverage decision *before* Chunk 19, and 19A shipped first.
+The operator chose Playwright against the real surface (recorded in
+`technical_decisions.technology` with its costs); **Chunk 23** now sits between
+19A and 19B to build it. The objection the issue records against a Node toolchain
+is about the wrong thing and the decision says so: the Pi runs the product, not
+the suite, and the shipped client stays one hand-written file with no build step.
+
+## 2026-08-04: Chunk 22 — the collection's own answer when the gate refuses
+
+<!-- prawduct: chunks=22 | status=shipped | scope=v1-build -->
+
+**Why:** two real runs proposed eight works, resolved none, and told the curator
+nothing about a collection that holds a great deal for their intent. A run may now
+**additionally** offer works drawn from a wired collection, after the gate has
+refused and never instead of it.
+
+**A second seam rather than a wider one.** `CollectionBrowse` sits beside
+`ImageSearch` because the two ask different questions: a search is given a work
+and must judge whether what came back is it; a browse is given a facet, and
+everything matching is by construction a work the collection holds under its own
+name. There is nothing to judge, and a browse is never told which work failed —
+so "no offered image is ever attached to a model-named work" holds structurally
+rather than by rule.
+
+**One POST covering every facet, and the shape is what makes fairness possible.** A named
+`filters` aggregation gives each artist its own bucket with its own `top_hits`, so
+the collection does the matching and labels it with the caller's own spelling.
+That matters because the supply is wildly uneven — one real run's artists held 51,
+12, 5 and 1 offerable works — and a single capped list ordered by a score this API
+makes unreadable would have filled the whole allowance with one painter. Works are
+taken round-robin across facets.
+
+**The surname retry, and the trap under it.** A name the museum spells its own way
+returns nothing, so an unambiguous surname may be retried — recovering the 24
+works filed under "Vasily Kandinsky" from a run that said "Wassily". The check
+that licenses it **must not inherit the browse's own filters**, and this was
+measured rather than reasoned: the collection's one Antonio Martorell is a
+`Graphic Design` the wall-type filter removes, so a filtered check sees only
+Bernat Martorell, calls the surname unambiguous, and offers his painting to a run
+that named Antonio. The unit test reproduces that asymmetry, so an implementation
+that scopes it wrongly fails by offering a work rather than by looking wrong.
+
+**The identity corpus found a defect on its first run.** Twenty real
+(model proposed, museum returned) pairs, labelled by reading: the comparison
+refuses "Yoshisuke Funasaka" against the museum's "Funasaka Yoshisuke" — the same
+artist, family-name-first — and loses a genuine resolution. Not fixed here and
+not silently dropped: the same function derives `work_dedup_key`, so sorting its
+tokens changes the stored suppression key for most multi-token names, and
+`attribution._near_misses` reads that key's last token as the surname. Filed as
+issue #79 with an `xfail(strict=True)` holding the repro.
+
+**Also:** the museum fake can now hold a work under a title other than the one
+asked for, which the query-keyed shape could not express; the page token budget
+was re-measured after `provenance` joined the row (10,842 full, 8,173 default,
+both thresholds holding); and two findings Chunk 21 routed here are closed —
+`architecture.md` named the wrong dependency as the cost of the fetch-path
+widening, and `_iiif_base` had three callers and a docstring about one.
+
+## 2026-08-04: Chunk 22 Step 0 — the artist facet, measured before it is built
+
+<!-- prawduct: chunks=22 | status=shipped | scope=v1-build -->
+
+**Why:** Chunk 22's whole mechanism rests on the model's artist field naming
+artists the collection actually holds, and the evidence for that was n=2 with one
+hit — both observed runs having named their artists in the intent text themselves.
+The plan therefore gated the chunk on a live experiment. It ran; the claim holds;
+the chunk keeps its shape and needs no facet-compile step. No code changed.
+
+**The recorded intents could not be re-run, and the substitute is stronger.**
+`phase_one_proposals.json` keeps slug labels, never the prompt texts, so
+reconstructing them would have measured intents written after the fact while
+reporting them as the originals. Instead: six thematic intents matching those
+labels, each naming no artist, which makes every artist returned model-originated
+by construction rather than by argument.
+
+**Two measurements.** Provenance, paid, $0.0084 over six live phase-1 runs: the
+model originated 12 distinct artists and the collection holds wall-appropriate,
+floor-clearing work for 10. Reach, free and deterministic: 26 of the 29 artists
+already in the corpus, 932 works, against a pipeline that resolves 5 of 51 named
+works. Supply is abundant per *artist* and binding per *named work*, which is the
+gap the chunk exists to fill.
+
+**What Step 0 changed is the failure mode, not the verdict.** It is name-form
+mismatch, not absent supply: "Wassily Kandinsky" returns nothing against the
+collection's 24 "Vasily Kandinsky". The obvious repair is unsafe and was measured
+rather than supposed — "Martorell" reaches two different artists, "Stella" four.
+That is a requirement, not a build detail, so it was written into
+`product-brief.md` and ratified before any design: a surname may be retried only
+where the collection reports it reaching exactly one artist. Titian is refused by
+that rule and the loss is taken deliberately, the alternative being a qualifier
+vocabulary that drifts silently.
+
+**Also settled:** the wall type set is Painting/Print/Drawing — measured to change
+nothing across all 29 corpus artists — and the honest expectation is now measured
+rather than predicted, both predictions having been too pessimistic (69 offerable
+works for one real run, 4 for the other). Sixty-nine turns the per-run bound into
+the primary selection mechanism, so it carries a stated round-robin rule rather
+than an implicit one.
+
+## 2026-08-04: #77 — a museum source's tile target, resolved rather than assumed
+
+**Why:** no artic work could be acquired at all. `Source.url` records the object's
+`api_link`, and the tile fetcher was handed that string — but `dezoomify-rs` needs
+an IIIF **image service** URL, and the `image_id` that builds one was used once at
+search time and never persisted. Recorded here late, and that is itself the
+finding: this shipped across four commits with the architectural decisions written
+into three artifacts and **no change-log entry**, in a bundle marked ready for
+merge. Reconstructed from the diff at the Critic's prompting.
+
+**The design decision, which was the open question in the issue.** Resolve at
+*fetch* time through a **provider seam** rather than persisting a derived URL.
+`ArticImageSearch.tile_url` asks `/artworks/{id}?fields=image_id` and joins
+`data.image_id` to the response's own `config.iiif_url`, host-prefix-checked.
+`Source.url` keeps the identity URL, which is what provenance means. Two
+consequences follow and both are why this shape was chosen: **no migration** —
+nothing persisted changes shape, so the 40 already-recorded artic sources are
+fixed by the same code that fixes the next one — and the seam is the place a
+second provider plugs in.
+
+**A new module (`acquisition/tiles.py`), two new `ImageSearch` members
+(`provider`, `tile_url`), and a required constructor argument.** `tile_targets` is
+required with no default *deliberately*: an empty map is indistinguishable from a
+correctly wired one right up to the moment a museum source fails, and by then the
+failure looks like the museum's.
+
+**A third raise-rather-record condition.** A provider in `RESOLUTION_REQUIRED`
+with no resolver wired raises `TileTargetUnavailable` rather than recording a
+`failed` row, because no source is at fault and a recorded failure would send
+whoever reads it to the museum to look for a problem that is in the wiring. The
+general rule is now stated in `architecture.md` rather than left as a list.
+
+**A new operator prerequisite, which is the part most likely to bite.**
+`ARTIC_USER_AGENT` now gates *acquiring* artic works that are already in the
+catalogue, not just discovering new ones — the museum's API is open but asks
+callers to identify themselves, and an object's image service can only be reached
+by asking. A deployment that never set it acquires nothing from artic and the tool
+result says so with the remedy.
+
+**The security bound narrowed, and `security-model.md` says what carries the
+weight instead.** The fetched URL is no longer one the deployment recorded, so
+"we only fetch what we wrote down" no longer holds; the trusted-host prefix pin
+plus re-running `check_fetchable` on the *resolved* address is what stands in its
+place.
+
+**Evidence:** verified against the live museum — the two masters that failed that
+morning landed. A mutation sweep over the new branches caught all ten.
+
+## 2026-08-04: Chunk 21 — which kind of nothing, and the artist out of the query
+
+<!-- prawduct: chunks=21 | status=shipped | scope=v1-build -->
+
+**Why:** two runs proposed works and resolved none of them with both suites green,
+and nothing in the product could say why. This makes the failure diagnosable. It
+does **not** meaningfully raise the resolution rate, and the measurement below says
+so plainly rather than letting anyone hope otherwise.
+
+**The RED live test first, because everything else widened what reaches the gate
+it lost.** Issue #78: a nonsense query no longer scores 0.0 at the Art Institute.
+Re-measured live — it returns ten real works at 54–70, *Nighthawks* at 57, with
+`pagination.total` still the whole collection. So the zero-score pre-filter is
+inert and **the identity comparison is the only thing between a garbage query and
+a real painting**. The filter is kept (what it asserts is still true when it
+fires) and demoted in prose from guard to correctness detail; the retraction is in
+`artic-api-findings.md`, and the live test is re-aimed at the defence that
+actually holds. The suite worked as designed: it went red on its own before
+anything leaned on the stale belief.
+
+**`unresolved_reason`, derived across two layers because neither can produce it
+alone.** The engine returns its refusals beside its instances — a result it
+discarded never becomes a row, so which gate turned it away is unrecoverable
+downstream — and the store derives the rest from the rows the work holds. The
+precedence rule is on the enum as a `depth` property rather than at the write
+site, so a sixth member without one fails at definition instead of tying silently.
+
+**`all_rejected` was missed on the first pass, and the reason generalises.** It was
+ruled unreachable because rejecting an instance sets the *verdict*, not the
+resolution status — true at the rejection, irrelevant, because the re-search that
+finds nothing lands the same work at `unresolved` later. A test asserting that
+whole path already existed. **Reachability was argued from the write site that sets
+the value rather than from the paths that arrive at it.**
+
+**The artist is out of the museum query, and the test that pinned it is replaced
+rather than weakened.** The old contract said the artist "narrows" the query text.
+Measured against the live API over eight Ellsworth Kelly paintings the museum
+holds: the title alone retrieved **8 of 8**, the title with the artist appended
+**6 of 8**, never better on any title. The replacement contract is stricter — the
+request carries the title and *not* the artist — and a second test pins the half
+that could have been lost quietly, that the artist still refuses a near match
+above the seam. **This one is flagged for the Critic on purpose**: tests are
+contracts here, and the argument that a test pinning a measured-false claim is a
+recorded measurement rather than a contract should not be the builder's to accept.
+
+**What it was worth, measured rather than claimed.** The resolution floor is now a
+live test over the 51 distinct works in the real phase-1 corpus. It reads **5 of
+51**, against the 4 recorded before the change. One work. That is the honest
+result: the fold was a real defect and fixing it was never what moves this number.
+What the five say is that supply is — four Japanese prints and one O'Keeffe, all
+safely inside the public-domain boundary.
+
+**Also:** the reason reaches the wire on all three shapes that carry
+`resolution_status`, with the page re-measured because the row grew — a full
+40-row page is **10,522 tokens** against its 25,000 cap, the default 30-row page
+**7,933** against the 10,000 warning, both asserted by existing budget tests on a
+live server. `observability-strategy.md`'s two-way split gains the third failure
+mode it was structurally blind to: a record the query never retrieved emits no
+event at all, so a run whose journal is all `not_the_work` should prompt a
+question about the query, not about the results. And the claim that `unresolved`
+means phase 1 invented the work is narrowed to `not_held` wherever it was asserted.
+
+> **The sweep that closed that claim was incomplete, and the reason generalises.**
+> It was a grep for three phrases — and those phrases came from the text this same
+> diff had just written, so it structurally could not match the paraphrase the diff
+> had *removed* from `phase_two.py`: "proposed something that does not exist".
+> Three sites survived in that wording, one of them the docstring of the very
+> function the chunk changed three lines lower. The Critic found them; the sweep
+> could not have. **A grep built from the text you just wrote searches for your own
+> vocabulary**, so the second pass has to use a pattern the earlier text would not
+> have produced — here `grep -rn 'does not exist' curation/src curation/tests`,
+> which is what found them. No corrected count replaces the old one on purpose: a
+> count is a claim about a search, and the search is the part that proved
+> unreliable.
+
+**Evidence:** both default suites green (52 + 1647). The **live museum suite is
+green at 10 passed**, having started this chunk at 1 failed. A ten-mutation sweep
+over the new branches — the two confusable labels swapped in each direction, both
+row-derived reasons swapped, precedence inverted, the reason dropped at the wire
+and at the store, the artist folded back in — **caught all ten**.
+
+## 2026-08-04: A run may offer works the curator did not name — three requirements and two chunks
+
+**Why:** two real discovery runs proposed eight works and resolved none of them,
+and no rule written anywhere said that was wrong. An eleven-agent investigation
+measured the cause and the options; the operator ratified the requirement it
+turned on. **No code changed — this is planning work.**
+
+**The finding that reframed it.** Zero resolution is an *unspecified requirement*,
+not a defect: `data-model.md` calls 34-of-40 "succeeded partially",
+`observability-strategy.md` rules "a work the collection genuinely does not hold"
+as the product working, and all eight works are in that class. But a real defect
+sits underneath — the artist is folded into the free-text museum query, where its
+tokens dominate scoring. Measured: three different Frank Stella titles return a
+byte-identical top ten, and Ellsworth Kelly resolves **0 of 12** held works against
+**10 of 12** title-only.
+
+**What the evidence killed, and it killed the cheap options first.** Naming the
+collection in the phase-1 prompt cannot work — a run whose intent already read
+"held by the Art Institute of Chicago" resolved 0 of 5, and the search plugin
+carries no domain restriction. Alias plumbing measured **zero lift** (4/51 → 4/51)
+against the real fixture. Adding providers is not the fix either: the eight works
+went to artic, the Met, Cleveland and Commons and every one returned nothing for
+all eight. The partition is not which collection is wired — it is **copyright**,
+and both runs asked for post-boundary work.
+
+**Ratified by the operator, and both answers are recorded where their rules live.**
+*A run may offer works the curator did not name* — adjacent, similar and derivative
+works are welcome, bounded and labelled, offered only after the gate refuses. That
+is `product-brief.md`'s own Vision ("works the curator has not seen and could not
+have named") finally reaching phase 2. Scoped to **artist adjacency** for the first
+build, because it is the only facet reproduced live; style, classification and
+period miss on ordinary spellings, and relevance-ranking returns *American Gothic*
+for a Dutch still-life query. And *rights: record, show, never gate or filter* —
+constraint 13 extended to works the system chooses, with its honest cost stated.
+
+**Three requirements written:**
+
+- **`unresolved` must say which kind of nothing** (`data-model.md` § CandidateWork).
+  One value per route to `unresolved`, none of them interchangeable, with a
+  precedence rule stated rather than left to the write site: the *deepest* gate any
+  record reached wins, because "the collection holds this, too small for your wall"
+  is actionable and "something somewhere did not match" is not. **This narrows a
+  claim the repo asserts in six places** — that `unresolved` means phase 1 may have
+  invented the work — to `not_held` alone.
+
+  **One route was missed on the first pass and is recorded rather than smoothed
+  over.** `all_rejected` — the work holds instances, the curator turned down every
+  one, and the re-search found nothing to add — was ruled unreachable because
+  rejecting an instance sets the *verdict*, not the resolution status. True at the
+  rejection and irrelevant: the re-search that finds nothing lands that same work
+  at `unresolved` later, `data-model.md` said so already, and a test asserting the
+  whole path existed throughout. **Reachability was argued from the write site that
+  sets the value instead of from the paths that reach it**, which is the reusable
+  half.
+- **The resolution rate is a measured number with a floor** (`product-brief.md`
+  § Success Criteria), over a fixed corpus, with the *test* as the authority for
+  the figure and this repo's habit of naming tests that do not exist called out:
+  the mechanism is recorded as **owed**, not described as live.
+- **A run may offer the collection's own answer** (`product-brief.md` flow 2), with
+  four conditions on every offered work and the seam that keeps "derivative" from
+  becoming a loophole: a study offered *as itself* is welcome, the same object
+  offered *as* the named work is the near-match the flow forbids.
+
+**Also recorded:** `nonfunctional-requirements.md` § The Supply Horizon — the
+measured post-boundary cliff, and the fact that the product today ships the
+"museum/public-domain only" alternative that `project-state.yaml`'s integrations
+decision **explicitly rejected**. Recorded rather than resolved, at the operator's
+call. `api-contract.md` gains the row's new field *and the arithmetic owed with
+it*: the 10,200-token page was measured without it and the ceiling already runs 2%
+over.
+
+**Two chunks planned, sequenced before the browser surface.** Chunk 21 makes the
+failure diagnosable (and explicitly does *not* raise the rate — 4/51 → 5/51);
+Chunk 22 is the substantive change. 21 first because without it nobody can tell
+whether 22 worked. Chunk 22 carries a **step 0** that may reshape it: the claim
+that the model's artist field is grounded rests on n=2 with 1 hit, since both
+observed intents named their artists themselves.
+
 ## 2026-08-04: Two Critic rounds, and a finding that had to be partly retracted
 
 <!-- prawduct: chunks=03,04,05 | status=shipped | scope=v1-build -->

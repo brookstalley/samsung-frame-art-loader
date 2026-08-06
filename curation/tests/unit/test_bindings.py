@@ -11,16 +11,33 @@ scattering its tests into a file that disclaims it is how that boundary stops
 being legible.
 """
 
+import logging
 from dataclasses import replace
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 
-from curation.acquisition.service import AcquisitionOutcome, AcquisitionResult
-from curation.mcp.bindings import MAX_WORKS_LISTED, _acquisition_notice, _run_notice, _run_view, _truncation_notice
+from curation.acquisition.dezoomify import DezoomifyUnavailable
+from curation.acquisition.service import _DEPLOYMENT_FAULTS, AcquisitionOutcome, AcquisitionResult
+from curation.acquisition.space import NotEnoughSpace
+from curation.acquisition.tiles import TileTargetUnavailable
+from curation.mcp.bindings import (
+    _RUN_DETAIL_ONLY,
+    MAX_WORKS_LISTED,
+    _acquisition_notice,
+    _retry_acquisition,
+    _run_fields,
+    _run_notice,
+    _run_summary,
+    _run_view,
+    _runs_truncation_notice,
+    _truncation_notice,
+)
 from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, ResolutionStatus, RunKind, RunStatus
 from curation.services.catalogue import MAX_LIST_LIMIT
-from curation.services.runner import RunView
+from curation.services.errors import ServiceError
+from curation.services.runner import MAX_RUNS_LISTED, RunListing, RunView
 
 
 def test_a_complete_page_gets_no_notice(seeded_service):
@@ -287,3 +304,182 @@ def test_every_acquisition_outcome_is_accounted_for():
     for outcome in AcquisitionOutcome:
         notice = _acquisition_notice(_acquisition(outcome))
         assert (notice is not None) == (outcome in explained), f"{outcome} lost or gained its notice"
+
+
+# -- the deployment faults, which the caller cannot fix ------------------------
+#
+# Three conditions refuse acquisition before it starts, and none of them is the
+# caller's doing: a full disk, a missing binary, an unset user agent. Each breaks
+# EVERY acquisition in the deployment. What this binding owes them is the
+# **remedy** — the sentence naming what an operator changes — and nothing else.
+#
+# The journal line is owed by `AcquisitionService`, and is asserted there
+# (`test_acquisition_service.py`) by driving `acquire()` with no binding in the
+# picture. It was emitted here until 2026-08-05, which meant the signal followed
+# the route in rather than the condition: the first browser acquisition route
+# would have inherited the refusal and not the line. A test at this layer cannot
+# fail for a non-MCP caller, so this one no longer tries to cover it.
+
+
+#: The environment variable each condition's remedy must name, keyed by the
+#: condition. A table rather than three literals in the parametrisation, so the
+#: test below can be driven from `_DEPLOYMENT_FAULTS` itself while still
+#: asserting the one thing that differs per condition — what an operator changes.
+_REMEDY_FOR = {
+    NotEnoughSpace: "MIN_FREE_BYTES",
+    DezoomifyUnavailable: "DEZOOMIFY_PATH",
+    TileTargetUnavailable: "ARTIC_USER_AGENT",
+}
+
+
+def test_every_raise_rather_than_record_condition_has_a_remedy_of_its_own():
+    """The invariant both modules state in prose, asserted instead of promised.
+
+    `service.py` says a new raise-rather-record condition belongs in
+    `_DEPLOYMENT_FAULTS`; `bindings.py` says every one of them needs an `except`
+    clause here, and that adding one to the service without one here is
+    **silent** — the generic handler drops the exception text, so the deliberate
+    refusal arrives as the very "failed unexpectedly" those clauses exist to
+    prevent. Nothing enforced either sentence, so a fourth member added to the
+    tuple shipped that outcome with a green suite.
+
+    This closes the gap at the table, and the parametrised test below closes it
+    at the clause: a condition with no entry fails here, and a condition with an
+    entry but no `except` clause fails there by raising something that is not a
+    `ServiceError`.
+    """
+    assert set(_DEPLOYMENT_FAULTS) == set(
+        _REMEDY_FOR
+    ), "a raise-rather-record condition was added or removed without its operator remedy"
+
+
+@pytest.mark.parametrize("condition", _DEPLOYMENT_FAULTS, ids=lambda c: c.__name__)
+def test_a_deployment_fault_is_translated_into_a_remedy(condition, caplog):
+    """The caller gets something it can act on rather than "failed unexpectedly".
+
+    Driven from `_DEPLOYMENT_FAULTS` rather than a hand-written list, so the
+    coverage cannot fall behind the set it is covering — the clauses are separate
+    `except` branches, a test over one says nothing about the others, and that is
+    how the third came to exist with no coverage in the first place.
+    """
+
+    class _Refusing:
+        def acquire(self, artwork_id, *, source_id=None):
+            raise condition("the deployment is not in a state that allows this.")
+
+    services = SimpleNamespace(acquisition=_Refusing())
+
+    with caplog.at_level(logging.ERROR), pytest.raises(ServiceError) as failure:
+        _retry_acquisition(services, {"artwork_id": "art-1"})
+
+    assert _REMEDY_FOR[condition] in str(failure.value), "the caller is told nothing it can act on"
+    events = [record for record in caplog.records if getattr(record, "event", None) == "acquisition.deployment_fault"]
+    assert events == [], "the binding journalled a fault the service already journals; an MCP refusal would be logged twice"
+
+
+# -- the run listing's cap -------------------------------------------------------
+
+
+def _runs(count: int, *, kind: RunKind = RunKind.DISCOVERY) -> tuple[DiscoveryRun, ...]:
+    """`count` runs, newest first, each carrying prose an operator typed.
+
+    The intent and the strategy are real strings rather than None because they
+    are the reason this listing needed a cap at all: every other field on a run
+    is short and bounded, and these two grow with what people wrote.
+    """
+    return tuple(
+        DiscoveryRun(
+            id=f"r{index}",
+            kind=kind,
+            initiated_by=InitiatedBy.MCP_CLIENT,
+            status=RunStatus.COMPLETED,
+            approval_required=False,
+            started_at=datetime(2026, 8, 2, 9, 0, tzinfo=UTC),
+            intent_text=f"Find me something restful for the hallway, request {index}",
+            strategy=f"I read that as early-twentieth-century landscape painting, attempt {index}",
+        )
+        for index in range(count)
+    )
+
+
+def _listing(count: int) -> RunListing:
+    """What the service would return for a store holding `count` runs."""
+    runs = _runs(count)
+    return RunListing(runs=runs[:MAX_RUNS_LISTED], total=len(runs))
+
+
+def test_the_run_listing_is_capped_and_says_how_much_history_it_left_out():
+    """The contract's rule on the one listing that had neither a limit nor a notice.
+
+    `api-contract.md § Conditional Patterns`: a truncated result says so
+    explicitly and gives the total, never a silent cut. `list_runs` had the
+    filters and neither, so a household box that had been discovering art for a
+    year returned its whole history in one payload — into a model's context
+    window on this surface.
+    """
+    listing = _listing(MAX_RUNS_LISTED + 12)
+
+    notice = _runs_truncation_notice(listing)
+
+    assert notice is not None
+    assert f"{MAX_RUNS_LISTED} most recent of {MAX_RUNS_LISTED + 12} runs" in notice
+
+
+def test_a_complete_run_listing_says_nothing_about_truncation():
+    """Saying nothing is the honest answer when nothing was left behind."""
+    assert _runs_truncation_notice(_listing(MAX_RUNS_LISTED - 1)) is None
+
+
+def test_the_notice_steers_to_the_filters_because_this_action_has_no_offset():
+    """Advice a caller cannot act on is the failure this whole family avoids.
+
+    `list_runs` takes `status` and `kind` and no paging parameter, so telling
+    someone to page would send them to an argument the action refuses. Both
+    filters are on this same action, which is what makes the advice actionable.
+    """
+    notice = _runs_truncation_notice(_listing(MAX_RUNS_LISTED + 1))
+
+    assert "status=" in notice and "kind=" in notice
+    assert "no paging" in notice
+    assert "offset" not in notice, "there is no offset on this action; naming one sends a caller to a refusal"
+
+
+def test_the_capped_rows_are_the_newest_ones():
+    """A cap that kept the oldest would bound the payload and answer nobody's question.
+
+    The store returns runs newest-first and the run somebody is looking for is
+    nearly always recent, which is the only thing that makes dropping the tail
+    acceptable rather than merely cheap.
+    """
+    listing = _listing(MAX_RUNS_LISTED + 5)
+
+    assert [run.id for run in listing.runs] == [f"r{index}" for index in range(MAX_RUNS_LISTED)]
+
+
+def test_a_listing_row_drops_the_engine_s_prose_and_keeps_the_operator_s():
+    """`api-contract.md § Summary then detail`, applied to the two unbounded fields.
+
+    `strategy` is the engine's reading of the intent in its own words, on every
+    row; `action='status'` returns one run in full, which is where a caller goes
+    once the listing has told them which run they want. The verbatim `intent`
+    stays even though it is unbounded too — it is the only human-readable way to
+    tell one run from another, so trimming it would save bytes by making the
+    listing stop answering the question it exists for.
+    """
+    row = _run_summary(_runs(1)[0])
+
+    assert "strategy" not in row
+    assert row["intent"] == "Find me something restful for the hallway, request 0"
+
+
+def test_a_field_added_to_a_run_reaches_the_listing_without_being_added_twice():
+    """The summary is the full shape minus a named set, not a second literal shape.
+
+    Written as two literal shapes, a new field would land in one and not the
+    other — the drift the candidate-work projections took four coordinated edits
+    to maintain before they were collapsed. Asserted by construction: every key
+    of the full shape is in the summary except the ones deliberately named.
+    """
+    run = _runs(1)[0]
+
+    assert set(_run_fields(run)) - set(_run_summary(run)) == _RUN_DETAIL_ONLY

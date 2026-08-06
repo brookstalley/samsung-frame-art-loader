@@ -1,4 +1,9 @@
-"""The persistence contract over the catalogue's records, and its two errors.
+"""The persistence contract over the catalogue's records.
+
+`StorageError` and `StoreMisuseError` are importable from here and **declared in
+`errors.py`**, which neither domain owns — the distinction the note beside the
+re-export at the foot of this file exists to make. This sentence read "and its
+two errors" until 2026-08-06, which was the claim the move was correcting.
 
 The store is a `Protocol` rather than a base class so that the layers above it
 bind to what the catalogue can be asked, not to how one file answers. Persistence
@@ -18,6 +23,7 @@ from collections.abc import Sequence
 from contextlib import AbstractContextManager
 from typing import Protocol
 
+from curation.persistence.errors import StorageError, StoreMisuseError
 from curation.persistence.records import (
     Artist,
     Artwork,
@@ -208,31 +214,10 @@ class CatalogueStore(Protocol):
         ...
 
 
-class StorageError(RuntimeError):
-    """The store could not do what was asked, in terms fit to show whoever asked.
-
-    Usually a refused write — a duplicate id, a missing artist — and also a read
-    of a row the catalogue cannot represent, such as one missing a timestamp its
-    record requires. Both are conditions the caller did nothing wrong to cause and
-    can be told about plainly, which is the line this type draws; a call that is
-    itself malformed is a `StoreMisuseError` instead.
-
-    `reason` is the refusal on its own — "it is already in the catalogue." — kept
-    separate from the message so a layer that knows what was being stored can say
-    so without re-deriving why the store said no.
-    """
-
-    def __init__(self, message: str, *, reason: str | None = None) -> None:
-        super().__init__(message)
-        self.reason = reason if reason is not None else message
-
-
-class StoreMisuseError(RuntimeError):
-    """A call the store could not make sense of — an unknown table, column or key.
-
-    Deliberately **not** a `StorageError`. That type means the store refused a
-    write a caller could reasonably have attempted, and its message is written to
-    be shown to whoever asked. This one means the calling code is wrong, and its
-    message names internal identifiers — so it must never be translated into
-    something a curator or a model reads as advice about their request.
-    """
+#: Re-exported, not declared here. Both live in `persistence/errors.py`, which
+#: neither domain owns — `durable.py` and `sqlite_discovery.py` need them and
+#: reaching through this module for them made the generic tier depend on one of
+#: the two domains it serves. They stay importable from here because
+#: `CatalogueStore`'s own methods raise them, and a caller holding a catalogue
+#: store should not have to know which module declared the class to catch it.
+__all__ = ["CatalogueStore", "StorageError", "StoreMisuseError"]

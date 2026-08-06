@@ -10,7 +10,10 @@ showed it. So the call is asserted here, through `main()` itself.
 from dataclasses import replace
 from decimal import Decimal
 
+import pytest
+
 import curation.__main__ as entry_point
+from curation.art_root import MARKER_NAME, ArtRootError
 from curation.config import (
     DEFAULT_ACQUISITION_USER_AGENT,
     DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
@@ -22,11 +25,13 @@ from curation.config import (
     DEFAULT_MAT_WIDTH_INCHES,
     DEFAULT_MAX_IMAGE_BYTES,
     DEFAULT_MIN_FREE_BYTES,
+    DEFAULT_OFFERED_WORKS_PER_RUN,
     DEFAULT_OUTPUT_COST_USD_PER_MTOK,
     DEFAULT_PHASE1_INPUT_TOKENS,
     DEFAULT_PHASE1_OUTPUT_TOKENS,
     DEFAULT_PHASE1_SEARCH_ALLOWANCE,
     DEFAULT_PHASE2_SEARCHES_PER_WORK,
+    DEFAULT_PREVIEW_MAX_BYTES,
     DEFAULT_PREVIEW_SWEEP_INTERVAL_SECONDS,
     DEFAULT_RESOLUTION_FLOOR_INCHES,
     DEFAULT_ROTATION_INTERVAL_SECONDS,
@@ -58,9 +63,12 @@ def _defaults(art_root, **overrides) -> Settings:
     """The shipped defaults over a scratch tree, with anything a test cares about
     overridden by name.
 
-    Constructed rather than resolved: `from_env` loads `.env` with override, so a
-    test that went through it would run against the developer's own machine —
-    and would then pass or fail depending on whether *they* happen to hold a key.
+    Constructed rather than resolved: `from_env` loads a real `.env`, found from
+    the config module's own directory upward, so a test that went through it
+    would run against the developer's own machine — and would then pass or fail
+    depending on whether *they* happen to hold a key. The 2026-08-05 precedence
+    fix does not close that: a key nobody exported is exactly the case the file
+    still fills.
     """
     return replace(
         Settings(
@@ -76,6 +84,7 @@ def _defaults(art_root, **overrides) -> Settings:
             tile_timeout_seconds=DEFAULT_TILE_TIMEOUT_SECONDS,
             max_image_bytes=DEFAULT_MAX_IMAGE_BYTES,
             min_free_bytes=DEFAULT_MIN_FREE_BYTES,
+            preview_max_bytes=DEFAULT_PREVIEW_MAX_BYTES,
             rotation_interval_seconds=DEFAULT_ROTATION_INTERVAL_SECONDS,
             rotation_shuffle=DEFAULT_ROTATION_SHUFFLE,
             preview_sweep_interval_seconds=DEFAULT_PREVIEW_SWEEP_INTERVAL_SECONDS,
@@ -88,6 +97,7 @@ def _defaults(art_root, **overrides) -> Settings:
             approval_threshold=DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
             phase1_search_allowance=DEFAULT_PHASE1_SEARCH_ALLOWANCE,
             phase2_searches_per_work=DEFAULT_PHASE2_SEARCHES_PER_WORK,
+            offered_works_per_run=DEFAULT_OFFERED_WORKS_PER_RUN,
             search_cost_usd=Decimal(DEFAULT_SEARCH_COST_USD),
             input_cost_usd_per_mtok=Decimal(DEFAULT_INPUT_COST_USD_PER_MTOK),
             output_cost_usd_per_mtok=Decimal(DEFAULT_OUTPUT_COST_USD_PER_MTOK),
@@ -102,7 +112,18 @@ def _defaults(art_root, **overrides) -> Settings:
 
 
 def _stub_settings(monkeypatch, art_root, **overrides) -> None:
-    """Make `from_env` yield those defaults, so `main()` runs against them."""
+    """Make `from_env` yield those defaults, so `main()` runs against them.
+
+    The art root is marked, which is what an operator's one-time
+    `python -m curation --init` does. Without it startup now refuses — a
+    directory that is neither marked nor holding a catalogue is a mistyped
+    `ART_ROOT`, and the plane will not turn one into a second empty collection.
+    Every test below is about what startup *logs* and *wires*, so each one wants
+    a root that already exists rather than the refusal, which
+    `tests/unit/test_art_root.py` covers on its own terms.
+    """
+    art_root.mkdir(parents=True, exist_ok=True)
+    (art_root / MARKER_NAME).write_text("marked for the tests", encoding="utf-8")
     monkeypatch.setattr(Settings, "from_env", classmethod(lambda cls: _defaults(art_root, **overrides)))
 
 
@@ -190,6 +211,7 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
         approval_threshold=7,
         phase1_search_allowance=3,
         phase2_searches_per_work=4,
+        offered_works_per_run=9,
         search_cost_usd=Decimal("0.002"),
         input_cost_usd_per_mtok=Decimal("3.00"),
         output_cost_usd_per_mtok=Decimal("5.00"),
@@ -233,6 +255,11 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
     assert "gate=7 works" in logged
     assert "phase1_searches=3" in logged
     assert "phase2_searches_per_work=4" in logged
+    # The supplement's bound, and the one field here whose "off" is otherwise
+    # invisible: a run offering nothing because this is zero looks exactly like one
+    # whose collection held nothing. The zero case renders as a word instead, and is
+    # asserted by `test_a_supplement_switched_off_says_disabled_rather_than_zero`.
+    assert "offered_works_per_run=9" in logged
     # 200,000 input at $3/M is $0.60 and 20,000 output at $5/M is $0.10; three
     # searches at $0.002 add $0.006. Computed here rather than copied, so the
     # assertion fails if the composition changes rather than tracking it.
@@ -244,6 +271,27 @@ def test_startup_logs_the_resolved_root_and_this_planes_own_panel(tmp_path, monk
     assert "model=probe/model-under-test" in logged
     assert "max_output_tokens=1234" in logged
     assert "search_results=6" in logged
+
+
+def test_a_supplement_switched_off_says_disabled_rather_than_zero(tmp_path, monkeypatch, caplog):
+    """The other arm of the field above, which is the whole reason it is a word.
+
+    `offered_works_per_run=0` is a number an operator reads past. The setting's
+    entire problem is that switching it off is invisible downstream — a run offers
+    nothing and the journal cannot distinguish that from an empty collection or
+    from every candidate being declined — so the startup line is the one place the
+    deployment states it, and it has to state it in a form that stops the eye.
+    """
+    art_root = tmp_path / "art"
+    art_root.mkdir()
+    _stub_settings(monkeypatch, art_root, offered_works_per_run=0)
+    monkeypatch.setattr(entry_point.uvicorn, "run", lambda app, **kwargs: None)
+
+    with caplog.at_level("INFO"):
+        entry_point.main()
+
+    assert "offered_works_per_run=disabled" in caplog.text
+    assert "offered_works_per_run=0" not in caplog.text, "the number is what nobody reads"
 
 
 def test_startup_never_writes_the_api_key_to_the_journal(tmp_path, monkeypatch, caplog):
@@ -407,3 +455,61 @@ def test_uvicorns_own_default_is_what_makes_that_argument_necessary():
     assert all(
         "json" not in str(spec).lower() for spec in formatters.values()
     ), "uvicorn's default formatters are now JSON, which would make this plane's override unnecessary"
+
+
+# -- the art-root guard, as the process actually reaches it ----------------------
+
+
+def _unmarked_settings(monkeypatch, art_root) -> None:
+    """`from_env` yielding an art root that is NOT marked, unlike `_stub_settings`.
+
+    The distinction is the whole point of the two tests below. `_stub_settings`
+    marks the root, because every test using it is about what startup logs and
+    wires and each one wants the plane to get past the guard. That made the guard
+    a no-op wherever it was exercised: `prepare` returned at its first branch in
+    all seven, so deleting the call from `main` broke nothing any suite could see.
+    """
+    monkeypatch.setattr(Settings, "from_env", classmethod(lambda cls: _defaults(art_root)))
+    monkeypatch.setattr(entry_point.uvicorn, "run", lambda app, **kwargs: None)
+
+
+def test_startup_refuses_an_art_root_that_is_neither_marked_nor_holds_a_catalogue(tmp_path, monkeypatch):
+    """The guard, driven through the process rather than through its own function.
+
+    `test_art_root.py` is thorough about `prepare` and imports it directly, so it
+    says nothing about whether the product calls it — which is the half that
+    actually stops a mistyped `ART_ROOT` becoming a second empty collection.
+    Deleting the call from `main` restores the defect exactly, and until this test
+    nothing turned red.
+    """
+    art_root = tmp_path / "mistyped"
+    _unmarked_settings(monkeypatch, art_root)
+
+    with pytest.raises(ArtRootError):
+        entry_point.main()
+
+
+def test_startup_creates_nothing_when_it_refuses(tmp_path, monkeypatch):
+    """A refusal that still made the directory would leave a decoy at the typo'd path."""
+    art_root = tmp_path / "mistyped"
+    _unmarked_settings(monkeypatch, art_root)
+
+    with pytest.raises(ArtRootError):
+        entry_point.main()
+
+    assert not art_root.exists()
+
+
+def test_startup_with_init_creates_the_root_and_serves(tmp_path, monkeypatch):
+    """The other half of the wiring: the flag has to reach `prepare` as well.
+
+    Hardcoding `initialise=True` at the call site is the second mutation that
+    survived both suites — the refusal would never fire for anyone, and every
+    test above would still pass because none of them takes that path.
+    """
+    art_root = tmp_path / "fresh"
+    _unmarked_settings(monkeypatch, art_root)
+
+    entry_point.main(["--init"])
+
+    assert (art_root / MARKER_NAME).is_file()

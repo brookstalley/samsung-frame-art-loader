@@ -22,10 +22,15 @@ from curation.services.catalogue import CatalogueService
 def _clean_env(monkeypatch, tmp_path):
     """Resolve from this process's environment and nothing else.
 
-    `Settings.from_env` calls `load_dotenv(override=True)`, which searches from
-    the config module's own directory upward and whose values beat anything set
-    here. The documented setup step creates exactly that file, so without this
-    stub the test would write a catalogue into the developer's real art tree.
+    `Settings.from_env` calls `load_dotenv()`, which searches from the config
+    module's own directory upward — so the developer's real `.env`, created by
+    the documented setup step, is always on the search path.
+
+    Since the 2026-08-05 precedence fix the `ART_ROOT` set here already wins,
+    and this stub is the second lock rather than the only one. It is kept
+    because of what it guards: this test *seeds a catalogue*, so a precedence
+    regression would write into the developer's real art tree, and it would do
+    it while passing.
     """
     monkeypatch.setattr("curation.config.load_dotenv", lambda **_: False)
     monkeypatch.setenv("ART_ROOT", str(tmp_path / "art"))

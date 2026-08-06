@@ -56,6 +56,7 @@ from typing import Final
 
 from curation.discovery.dedup import artist_key, title_key
 from curation.discovery.images import FoundImage, ImageQuery, ImageSearch
+from curation.persistence.discovery_records import UnresolvedReason
 from curation.persistence.records import RightsStatus
 from curation.services.display_fit import ArtworkBox, DisplayFit, FitAssessment, assess_display_fit
 
@@ -134,6 +135,26 @@ class JudgedImage:
         return self.fit.fit is DisplayFit.BELOW_FLOOR
 
 
+@dataclass(frozen=True, slots=True)
+class Resolution:
+    """What one work's search produced: what survived, and why the rest did not.
+
+    The refusals travel back because they cannot be recovered downstream. A
+    result discarded here never becomes a row, so a work that ends with nothing
+    looks identical from the store whether the collection holds no such title, or
+    holds it under another artist, or holds it in a scan too small to judge —
+    and those are the distinctions a curator needs to act on.
+
+    It is a set rather than a tally deliberately: what the reason derivation asks
+    is *whether* a gate refused anything, never how often, and a count nobody
+    reads is a number that can be wrong without anything noticing. The per-result
+    detail is already in the log, one line per discard, where diagnosis wants it.
+    """
+
+    instances: Sequence[JudgedImage]
+    refusals: frozenset[UnresolvedReason]
+
+
 class PhaseTwoEngine:
     """Turn one work into the instances that are credibly it, best first."""
 
@@ -141,16 +162,28 @@ class PhaseTwoEngine:
         self._search = search
         self._box = box
 
-    def resolve(self, query: ImageQuery) -> Sequence[JudgedImage]:
-        """Every credible instance for this work, most confident first.
+    def resolve(self, query: ImageQuery) -> Resolution:
+        """Every credible instance for this work, most confident first, and the refusals.
 
-        An empty result is a real answer and the caller must record it as one:
-        it means nothing this provider holds is the work that was asked for,
-        which is the signal that phase 1 may have proposed something that does
-        not exist. Raises `ImageSearchFailure` when the provider could not be
-        asked at all — a different fact, and one that says nothing about the work.
+        An empty result is a real answer and the caller must record it as one,
+        together with the reason it came back empty: whether nothing this
+        provider holds carries the title, or something did and disagreed on the
+        artist, or something matched and could not be sized. Raises
+        `ImageSearchFailure` when the provider could not be asked at all — a
+        different fact, and one that says nothing about the work.
+
+        A provider that returns nothing at all refuses nothing, and the empty
+        refusal set is read downstream as `NOT_HELD`: no record came back whose
+        title matched, which is exactly what happened, vacuously.
         """
-        judged = [judgement for found in self._search.find_images(query) if (judgement := self._judge(query, found))]
+        judged: list[JudgedImage] = []
+        refusals: set[UnresolvedReason] = set()
+        for found in self._search.find_images(query):
+            outcome = self._judge(query, found)
+            if isinstance(outcome, UnresolvedReason):
+                refusals.add(outcome)
+            else:
+                judged.append(outcome)
         judged.sort(key=lambda entry: (entry.below_floor, -entry.confidence, -entry.quality_score, entry.found.url))
         log.info(
             "judged a work's instances",
@@ -159,20 +192,26 @@ class PhaseTwoEngine:
                 "work_title": query.title,
                 "instances_credible": len(judged),
                 "instances_below_floor": sum(1 for entry in judged if entry.below_floor),
+                "refused_at": sorted(str(reason) for reason in refusals),
             },
         )
-        return judged
+        return Resolution(instances=judged, refusals=frozenset(refusals))
 
     def fetch_preview(self, url: str) -> bytes | None:
         """The preview bytes for an instance, or `None` when they could not be got."""
         return self._search.fetch_preview(url)
 
-    def _judge(self, query: ImageQuery, found: FoundImage) -> JudgedImage | None:
-        """Score one instance, or reject it as not being the work at all."""
-        confidence = _confidence(query, found)
-        if confidence is None:
+    def _judge(self, query: ImageQuery, found: FoundImage) -> JudgedImage | UnresolvedReason:
+        """Score one instance, or name the gate that refused it.
+
+        The gate is returned rather than a bare `None` because the three refusals
+        here are three different facts — about the collection, about two
+        spellings of a name, and about the record — and collapsing them is what
+        left a run that resolved nothing unable to say anything about why.
+        """
+        if title_key(query.title) != title_key(found.title):
             log.info(
-                "discarding a result that is not the work that was asked for",
+                "discarding a result whose title is a different work entirely",
                 extra={
                     "event": "phase_two.not_the_work",
                     "work_title": query.title,
@@ -180,7 +219,19 @@ class PhaseTwoEngine:
                     "found_artist": found.artist,
                 },
             )
-            return None
+            return UnresolvedReason.NOT_HELD
+        confidence = _confidence(query, found)
+        if confidence is None:
+            log.info(
+                "discarding a result whose title matches but whose artist does not",
+                extra={
+                    "event": "phase_two.not_the_work",
+                    "work_title": query.title,
+                    "found_title": found.title,
+                    "found_artist": found.artist,
+                },
+            )
+            return UnresolvedReason.IDENTITY_REFUSED
         if found.estimated_width is None or found.estimated_height is None:
             # An instance whose rendered size cannot be computed cannot be judged
             # against the floor, and one recorded anyway is indistinguishable
@@ -192,7 +243,7 @@ class PhaseTwoEngine:
                 "discarding an instance whose size the provider did not report",
                 extra={"event": "phase_two.size_unknown", "work_title": query.title, "found_title": found.title},
             )
-            return None
+            return UnresolvedReason.SIZE_UNKNOWN
         fit = assess_display_fit(width=found.estimated_width, height=found.estimated_height, box=self._box)
         quality = _quality(
             fit,
@@ -211,15 +262,18 @@ class PhaseTwoEngine:
 
 
 def _confidence(query: ImageQuery, found: FoundImage) -> float | None:
-    """How sure we are this is that work, or `None` when it is not that work.
+    """How sure we are this is that work, or `None` when the artist disagrees.
+
+    **Called only for a record whose title already matches** — the caller checks
+    that first so it can tell a title nobody holds apart from a title held under
+    another name, which are different facts about the collection. So the `None`
+    here means exactly one thing: the two names disagree.
 
     `None` is deliberately not a low score. A near-match kept at low confidence
     is still selected the moment nothing better exists, which is exactly the
     situation a work the museum does not hold produces — so the only safe
     representation of "this is a different painting" is absence.
     """
-    if title_key(query.title) != title_key(found.title):
-        return None
     asked = artist_key(query.artist) if query.artist else ""
     holds = artist_key(found.artist) if found.artist else ""
     if asked and holds:

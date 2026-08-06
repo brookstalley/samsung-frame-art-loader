@@ -25,6 +25,38 @@ works — are decided rather than discovered.
 | Processes | `curation` (Python 3.14, uv-managed standalone) and `display` (Python 3.13, system interpreter), both under systemd |
 | Shared state | `ART_ROOT` on local disk |
 
+## The Service Account — decided
+
+**Both units run as `tvpi`** (settled 2026-08-04). The name was the only part in
+question and it is kept: it is what the committed unit, `deploy/README.md` and
+this product's own history already say, and renaming would have bought nothing
+but a diff across every one of them.
+
+The account itself does not exist on the machine. The Pi was rebuilt onto a fresh
+card and `tvpi` did not survive it — see `platform-and-dependency-findings.md`
+§ That card is gone. What has to be created:
+
+| | |
+|---|---|
+| Login | None. `--system`, no password, shell `/usr/sbin/nologin` |
+| Privilege | No sudo. Nothing either plane does needs root |
+| Groups | `spi` and `gpio` — the e-paper HAT is reached through both |
+| Owns | `ART_ROOT`, and the checkout the units execute from |
+
+**Create it as part of the systemd-unit cutover, not before.** The account, its
+group memberships, moving `ART_ROOT` under it, and both unit files are one
+change: any of them landing alone leaves a machine that is neither the old
+arrangement nor the new one. That cutover is the work that installs the new
+systemd units, and this account is created as part of it.
+
+**`ART_ROOT` is not settled by this section.** The committed unit puts the art
+tree at `/home/tvpi/art`, inside a home directory that a service account with no
+login has no other use for. A neutral path — `/srv/art` or `/var/lib/samsung-art`
+— matches what the account actually is, and is the shape to prefer at cutover.
+Deciding it costs nothing today because every reader of that path is already
+configuration: `ART_ROOT` in the root `.env`, which is where the existing norm
+against deployment values in source put it.
+
 ## The Curation Interpreter — decided
 
 **Raspberry Pi OS Trixie ships Python 3.13. The curation plane gets its 3.14 from
@@ -157,12 +189,32 @@ the silent failure this is meant to remove: the process starts, raises at import
 against five missing variables, and dies for a reason nobody connects to a file
 that was never placed.
 
-**The directive is a presence guard, not the value source.** `load_dotenv(override=True)`
-re-parses the same file inside the process and wins, so systemd's parser and
-python-dotenv's cannot disagree about what the process ends up seeing — only
-about whether the unit starts at all. Anything relying on the two parsers
-agreeing on quoting or inline comments would be relying on something this
-arrangement does not promise.
+**The directive is the value source — corrected 2026-08-06.** It was a presence
+guard while `config.py` called `load_dotenv(override=True)`, which re-parsed the
+same file inside the process and won. That `override=True` was retired, because
+discarding an exported value in silence is this product's worst failure shape, so
+python-dotenv now supplies *defaults* and whatever is already in the environment
+wins. systemd has put this file's contents there before the process starts.
+
+So the guarantee inverted, and the paragraph this replaces asserted the old one.
+The two parsers **can** now disagree about what the process sees — they differ on
+quoting and inline comments — and a mis-parsed value is live rather than
+overwritten.
+
+**Which plane is exposed, stated precisely, because a first version of this
+correction was not.** `curation.art_root` refuses to start against a directory
+that is neither marked nor holding a catalogue, so a mis-parsed `ART_ROOT`
+reports an error rather than quietly creating an empty second collection — for
+the *curation* plane. The unit in `deploy/` starts `tvart.py`, the 2024 plane,
+which reads `ART_ROOT` through the root `config.py` and calls `os.makedirs` on
+what it finds. There is no curation unit there yet, so pointing at that guard
+from the unit's own comment claimed a protection the process it starts does not
+have.
+
+For the 2024 plane the exposure stands. The other four required values raise at
+import when a mis-parse leaves them empty, which covers the common case;
+`ART_ROOT` is the one that silently creates instead. It closes when that plane is
+retired and the curation unit lands beside it.
 
 *(Settled 2026-08-01: this said "a `.env` file per plane", and what exists is one
 shared root file — `.env.example` carries both planes' values, and
@@ -316,6 +368,7 @@ Mostly automatic; the table below is what a human would do when it is not.
 | Acquisition fails on every work | Free disk space | The pre-acquisition guard should have caught it; if it did not, that is a bug in the guard. It refuses **before** a fetch begins and names the shortfall in GiB, so the refusal itself says whether disk is the cause. `MIN_FREE_BYTES` (default 2 GiB) is the floor, and it protects `catalogue.sqlite` on the same device rather than the fetch |
 | Acquisition fails on one work with a refused URL | `art_catalogue(action='sources')` for that work | The fetch policy refused the URL and the reason is recorded on the source. Schemes other than `http`/`https`, and hosts that resolve to this network rather than the open internet, are refused by design (`security-model.md` § The fetch trigger fired) — a source that needs one of those is a source this product will not fetch |
 | Every tiled acquisition fails at once | `dezoomify-rs` on the unit's `PATH` | Acquisition raises rather than recording a failed fetch when the binary is absent, precisely so this is not mistaken for museums going away. Install it, or set `DEZOOMIFY_PATH` to where it lives |
+| Every **Art Institute** acquisition raises, while other providers fetch fine | `ARTIC_USER_AGENT` in `.env` | An artic source records the museum's page for the object, and the tile fetcher needs the image service — which only the collection can be asked for. Unset, there is no way to reach those tiles, so acquisition raises by name rather than handing the fetcher a URL it cannot read. Set it and the same works fetch unchanged. Raises rather than records for the same reason the row above does: no source is at fault, and a `failed` row here would send its reader to the museum |
 | Neither plane starts after a reboot | Both planes' resolved `ART_ROOT` in the journal | Mismatched or missing `ART_ROOT` is the likely cause |
 
 ## Risks
@@ -348,7 +401,7 @@ was thought to have exactly two — the journal and the display heartbeat.
 > The journal still gets an explicit bound, for the different reason given below,
 > and **that bound is in force as of 2026-08-04** — evidenced by journald's own
 > startup line moving from `max 156.1M` to `max 256M` across the restart, which is
-> the check Chunk 03's criterion asked for. An earlier version of this paragraph
+> the check that proves the bound took. An earlier version of this paragraph
 > cited `systemd-analyze cat-config` instead; that proves only that the drop-in
 > parses, and it would have reported success just as happily while the directive
 > bound nothing — which is exactly what was happening, because the file set only

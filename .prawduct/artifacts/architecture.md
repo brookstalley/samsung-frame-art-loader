@@ -205,15 +205,34 @@ is no network between planes.
         │  │                                  │          any more: MatEngine is the second, below
         │  ├─ ImageSearch (Protocol)          │          phase 2 — the museum seam. Free, but
         │  │    ArticImageSearch ships        │          behind a seam for the same reason
+        │  ├─ CollectionBrowse (Protocol)     │          what the collection HOLDS by an artist, as
+        │  │                                  │          opposed to what it can find: the offer
+        │  │                                  │          supplementing works phase 2 could not confirm
         │  └─ PreviewCache                    │          writes the disposable local copy an
         │                                     │          instance is reviewed from
+        │                                HealthService    every signal the health panel states, in one
+        │                                     │          call. A service and not a handler concern
+        │                                  observations   because WHICH signals the panel makes is a
+        │                                     │          product rule — so the next one is added in
+        │                                     │          one place, testable without HTTP, rather
+        │                                     │          than in a handler and a client separately.
+        │                                     │          `observations.observe` is the single parse
+        │                                     │          under both observed documents (the display
+        │                                     │          heartbeat, the backup receipt): one parser,
+        │                                     │          because two would drift. Absent, unreadable
+        │                                     │          and aged are three answers, never an
+        │                                     │          exception — a panel that raised where an age
+        │                                     │          belongs would be an outage of its own
   Discovery ── ReviewService                  │          the pre-acceptance twin of SurveyService
   Service ──── PreviewSweep                   │          reclaims the previews of decided works;
         │       │              │              │          the plane's second background thread
         │       │   AcquisitionService        │          fetches the master a work was accepted for.
-        │       │    ├─ StreamOpener (seam)   │          the only service that runs a subprocess; its
-        │       │    └─ Resolver   (seam)     │          transport and its resolver are both injected,
-        │       │              │              │          so the policy above them runs offline
+        │       │    ├─ StreamOpener (seam)   │          the only service that runs a subprocess; all
+        │       │    ├─ Resolver   (seam)     │          three edges are injected, so the policy above
+        │       │    └─ TileTarget  (seam)    │          them runs offline. TileTarget is the odd one:
+        │       │              │              │          it reaches a MUSEUM, not a network primitive,
+        │       │              │              │          because only the provider knows where an
+        │       │              │              │          object's tiles are actually served
         │       │   PreparationService        │          turns a held original into a mat and a 4K
         │       │    └─ MatEngine  (seam)     │          canvas. Its seam is the SECOND paid edge —
         │       │              │              │          a vision model, keyless deployments fall
@@ -226,8 +245,15 @@ is no network between planes.
   ```
 
   **`AcquisitionService` is the one service that leaves the machine to do its
-  job**, and its two foreign edges are injected rather than reached for: an HTTP
-  stream opener and a name resolver. That is the same arrangement `DiscoveryEngine`
+  job**, and its three foreign edges are injected rather than reached for: an HTTP
+  stream opener, a name resolver, and — added 2026-08-04 — a per-provider tile-target
+  resolver, which is the one that reaches a *museum* rather than a network
+  primitive. It exists because the URL a `Source` records identifies the object
+  and is not always where the pixels are served; only the provider can close that
+  gap, and storing its answer would put a derived URL in a durable row. It is a
+  required constructor argument with no default, because an empty map is
+  indistinguishable from correct wiring until a museum source fails. That is the same
+  arrangement `DiscoveryEngine`
   and `ImageSearch` have one row up, for the same reason — the rules worth testing
   exhaustively (which source is used, what a refusal is recorded as, whether a
   host may be fetched at all) then run with no network. The subprocess is not
@@ -319,6 +345,33 @@ is no network between planes.
   test that guards the paid seam covers this one, as an allowlist over the whole
   package rather than a list of named files.
 
+  **It grew a fetch-path member on 2026-08-04, and that is a real widening worth
+  naming.** `tile_url` answers "where are this object's tiles actually served",
+  which acquisition asks and phase 2 never does — so the protocol now spans two
+  callers with different concerns. It went here anyway because the alternative is
+  worse: a second protocol over the same museum client, implemented by the same
+  class, wired from the same configuration, would be two names for one seam. The
+  cost is narrower than this entry first claimed, and the correction is worth
+  keeping because it changes what the coupling actually costs: **`AcquisitionService`
+  does not depend on the protocol at all.** It imports one *exception*
+  (`ImageSearchFailure`) and is handed `tile_url` by the container as a plain
+  callable keyed by provider. So the dependency is on a discovery-package error
+  vocabulary, not on a discovery-package interface, and the seam is looser than
+  "two callers share a protocol" suggests.
+
+  **The third concern arrived on 2026-08-04, and it was split rather than
+  added.** Browsing a collection by artist is a different question from searching
+  it for a work: a search is given a work and must judge whether what came back
+  is it, while a browse is given a facet and everything matching is by
+  construction a work the collection holds. `CollectionBrowse` is therefore its
+  own protocol beside `ImageSearch`, not a member on it. The rule this follows is
+  the one stated above — split when a third concern arrives — and the test that
+  decided it is whether a caller would ever want one without the other: a
+  deployment can sensibly resolve images without offering adjacent works, and the
+  reverse is incoherent, so they are genuinely separable. They are implemented by
+  two classes over the same museum, wired independently from the same
+  identifier.
+
   **What is deliberately *not* behind it: the judgement.** A provider reports
   what its collection holds; whether any of it is the work that was asked for is
   decided above the seam, in `discovery/phase_two.py`, so two providers cannot
@@ -362,7 +415,23 @@ is no network between planes.
   `ThumbnailService` produces the downscaled copies that make a forty-card grid a
   page, recording each as a `RenditionKind.THUMBNAIL` so the cache is catalogued
   rather than loose on disk and inherits the staleness rule already governing the
-  television render. `SurveyService` composes a work with the two derived facts a
+  television render.
+
+  **That "inherits" became true on 2026-08-05 and was not before.** The rule was
+  written twice — once in `CatalogueService.list_renditions`, once inline in the
+  manifest builder, which reached past the service into the store to feed itself
+  — so a change to what "current" means would have landed in one and left the
+  other deciding wall membership by the old one: a work badged current on the
+  review grid and silently dropped from the wall as `stale_rendition`. Both the
+  predicate (`is_current`) and the preference between several television renders
+  (`tv_renditions_newest_first`) now live with the records, and the grid, the
+  thumbnail service and the manifest all read them. The second of those closed a
+  live disagreement rather than a hypothetical one: the builder took the most
+  recently generated render while the thumbnail service took the first current
+  one the store returned, and the unique index on `(artwork_id, kind,
+  target_width, target_height)` makes two television renders reachable.
+
+  `SurveyService` composes a work with the two derived facts a
   human-facing surface needs beside it — how large it would render on this
   deployment's wall, and which held image it would be shown — because
   `api-contract.md` requires that same pairing of `art_review`, and a composition
@@ -631,7 +700,7 @@ catalogue does not apply. What remains:
 | E-paper write fails | label stale | Log and continue; never let a panel failure stop the TV rotation |
 | Budget exhausted mid-run (the provider refuses — a 403; see `openrouter-api-findings.md`) | discovery halts partially | `halted_by_budget`, a modelled outcome. Already-acquired works stay acquired |
 | Preview sweep stops running | **curation only, and silently** | The characteristic failure of the plane's one periodic job: no error, no refusal, and no symptom until the SD card fills. It is upstream of the row below, and the only signal is positive — `preview.swept` at INFO on **every** pass, including the ones that reclaim nothing, so absence over an interval is the fault. A pass that hangs instead of stopping is the neighbouring case and reads differently: `preview.sweep_started` with no `preview.swept`, and at shutdown a `preview.sweep_wedged` warning, because that pass holds the store lock the next generation of services will want |
-| SD card full | **both planes** | The one genuinely shared failure. **Built 2026-08-03**: `acquisition/space.py` refuses before a fetch begins, sized by `MIN_FREE_BYTES` (2 GiB) and protecting `catalogue.sqlite` on the same device rather than the fetch. It raises rather than recording, unlike every other acquisition failure, because a full disk is a fact about the machine that every work behind this one would hit |
+| SD card full | **both planes** | The one genuinely shared failure. **Built 2026-08-03**: `acquisition/space.py` refuses before a fetch begins, sized by `MIN_FREE_BYTES` (2 GiB) and protecting `catalogue.sqlite` on the same device rather than the fetch. It raises rather than recording, because a full disk is a fact about the machine that every work behind this one would hit. **It is not the only one, and this row said it was until 2026-08-04.** The rule is general: a condition no source is at fault for raises, because a `failed` row against a source sends whoever reads it to the museum to look for a problem that is in the deployment. Three qualify today — a full disk, `dezoomify-rs` missing, and a provider with no tile resolver wired — and the next acquisition failure is judged against that rule rather than against this list, which is why the rule is stated here and the count is not |
 | SD card corruption | catastrophic | The catalogue is the irreplaceable asset and it lives here. Mitigation is off-device backup — see `operational-spec.md` |
 
 **Restart order does not exist**, and that is a property worth naming: neither
@@ -693,6 +762,17 @@ is a recorded decision, not an oversight: the targets in
    that and is the one input that could exhaust the box. Signal: peak RSS of the
    curation unit. Mitigation if it bites: a cap on stored source resolution, which
    is an open acquisition-pipeline decision anyway.
+
+   **The other memory path is a preview, and unlike an acquisition it is driven
+   by a stranger.** A preview URL comes out of a museum's JSON response and the
+   fetch follows redirects, so both its size and its final host are the
+   provider's choice, and the bytes are held whole in RAM before anything
+   reaches disk. That read is bounded at `PREVIEW_MAX_BYTES` and enforced while
+   streaming, so the ceiling — not the box — is what an endless body costs. The
+   unit's `MemoryMax` sits behind it and would contain the blast to "curation
+   dies" rather than "the wall goes dark", which is worth stating because it
+   made the unbounded read look survivable: a run lost to a thumbnail is still
+   the tail wagging the dog.
 3. **Nothing else.** SQLite at low thousands of rows, one concurrent user, and one
    discovery run at a time are not going to be problems and should not be designed
    for.
@@ -858,6 +938,24 @@ service layer delivers the same single implementation one rung lower, where
 neither surface constrains the other. *Trade-off accepted:* the two bindings
 each format their own results, which is intended — tool results are shaped for
 a model, HTTP responses for a UI.
+
+*Scoped 2026-08-06, because this entry read as covering every projection and it
+does not.* The rationale describes surfaces whose shapes genuinely **differ**, and
+only the artwork pair actually does: `WorkOut` adds `fit` and `image` and drops
+`accepted_at`/`created_at`, where `_artwork_fields` keeps the timestamps and has
+neither — two shapes for two readers, exactly as argued. Theme, Artist and the
+candidate-work summary are not that. They are one shape written twice, key for
+key, from the same record. `http/models.py` already forbids the consequence —
+*"they are not allowed to differ in what a thing is called, because that is how an
+agent and a click come to disagree about the same catalogue in a way no test would
+catch"* — and until this date nothing enforced it.
+
+They stay independently formatted rather than merged: the MCP side returns plain
+dicts and the HTTP side pydantic models whose field docstrings are documentation,
+so a shared formatter would cost one of those. What changed is that divergence is
+now a test failure at the moment of the edit —
+`curation/tests/unit/test_surface_parity.py`, which also asserts the artwork pair
+still differs, since that divergence is this entry's only evidence.
 
 **2026-07-20 — Readiness is manifest membership, not a stored flag.** Resolves the
 open question by separating catalogue readiness (curation's, evaluated at

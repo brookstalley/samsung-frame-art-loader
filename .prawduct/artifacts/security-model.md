@@ -203,6 +203,28 @@ properties, and each is weaker than "the tool cannot do this":
    `Source` already holds, and a `Source` exists only because a verdict promoted a
    reviewed candidate. This is real but **not** a human URL audit — a curator
    approves a picture, not a hostname.
+
+   > **Narrowed 2026-08-04, and it no longer holds as first written.** A tiled
+   > fetch is now made against a URL **no record holds**: the provider is asked
+   > where the object's image service is, and its answer is what gets fetched. So
+   > the accepted `Source.url` bounds which *object* is fetched, not which
+   > *address*, and a compromised or malicious provider response is a live path to
+   > choosing one.
+   >
+   > What carries the weight instead is two checks, both in code and both tested:
+   > the advertised IIIF base must start with the museum's own `https` host before
+   > it is used (`discovery/artic.py`, and the mutation sweep kills a version that
+   > trusts whatever is advertised), and **bound 2 below runs on the resolved URL
+   > rather than on the recorded one** — so scheme and routability are checked on
+   > the address actually fetched. *(It read "re-runs … rather than only on the
+   > recorded one" until 2026-08-04, which described a period when the recorded URL
+   > was checked too. It no longer is on this path: gating a tiled fetch on a
+   > provenance link nothing fetches recorded failures against innocent sources.
+   > The property asserted here is unchanged — the fetched address is checked —
+   > and it is now checked once rather than twice.)* A resolver that returned
+   > `file:///etc/passwd` is refused before the binary is invoked, which is asserted
+   > directly. Bound 1 is therefore weakened, and bound 2 is what now does the work
+   > it used to share.
 2. **Scheme and host are checked before invocation, not after.** `https`/`http`
    only, and the resolved address must be publicly routable — loopback,
    link-local, RFC1918 and `.local` are refused. This is what keeps a poisoned
@@ -214,10 +236,12 @@ properties, and each is weaker than "the tool cannot do this":
    path can reach an interactive prompt.
 
 **Redirects are the door a host check normally leaves open, and it is closed.**
-The check runs against the URL the catalogue recorded; a client left to follow
-redirects itself would let a source answer a checked public URL with a `Location:`
-naming `127.0.0.1`, reaching the operator's network through the one hop nobody
-validated. The transport therefore follows one hop at a time and puts every
+The check runs against whichever URL this path is about to fetch — the recorded
+one on the direct-HTTP path this paragraph describes, and the *resolved* one on
+the tiled path, per the amendment above. Either way it is one check, of one
+address, before one fetch. A client left to follow redirects itself would let a
+source answer a checked public URL with a `Location:` naming `127.0.0.1`,
+reaching the operator's network through the one hop nobody validated. The transport therefore follows one hop at a time and puts every
 `Location` through the same check, resolving relative ones first so the string
 checked is the string requested.
 

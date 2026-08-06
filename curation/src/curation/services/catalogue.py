@@ -45,6 +45,7 @@ from curation.persistence.records import (
     RightsStatus,
     Source,
     SourceClass,
+    is_current,
 )
 from curation.services.display_fit import ArtworkBox, FitAssessment, assess_display_fit
 from curation.services.errors import ServiceError
@@ -175,14 +176,14 @@ class CatalogueService:
         A stale rendition is one whose source image is no longer the image the
         work holds. It is regenerated rather than served, so saying which are
         stale is the whole reason the parent's hash is carried on the row.
+
+        The verdict comes from `is_current`, which every surface that needs it
+        shares — see its docstring for why one home rather than three.
         """
         self._require_artwork(artwork_id)
         original = self._store.get_original(artwork_id)
-        # No original at all means nothing can vouch for any rendition, so none
-        # of them may be served on the strength of having once been generated.
-        held_hash = None if original is None else original.content_hash
         return [
-            RenditionView(rendition=rendition, stale=rendition.source_content_hash != held_hash)
+            RenditionView(rendition=rendition, stale=not is_current(rendition, original))
             for rendition in self._store.list_renditions(artwork_id)
         ]
 

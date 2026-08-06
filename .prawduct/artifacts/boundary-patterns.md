@@ -56,8 +56,15 @@
   with typed responses in `http/models.py`.
 - **Consumer:** the curation UI, and nothing else — `http/static/app.js`, which
   binds concrete field names (`work.status`, `s.rights_status`,
-  `s.last_fetch_status`, the heartbeat fields). **It is a real consumer**: a
-  renamed field breaks the page with no test failing unless one is written for it.
+  `s.last_fetch_status`, the heartbeat and backup fields, and on the review grid
+  `shown_is_on_offer`, `preview_available`, `instances_held` and the verdict).
+  **It is a real consumer**: a renamed field breaks the page with no test failing
+  unless one is written for it.
+- **What now fails when it breaks:** the browser suite executes the client
+  against the real routes, so a rename that reaches a bound field is caught rather
+  than merely likely to be. That is coverage of *executed* behaviour, not of every
+  field — `tests/browser/`, marker `browser`, and `tools/mutation_sweep.py` is
+  what says which behaviours are actually defended.
 - **Contract:** response models. **No stability obligation** — shipped and deployed
   with its only consumer. That exemption is about *versioning*, not about
   changing fields blindly: producer and consumer ship together, so a rename is
@@ -131,7 +138,14 @@
   to the value written, not to the surface** — which is why it crossed no boundary
   even though it altered every key. Changing it again against a catalogue holding
   `CandidateWork` rows *would* cross one, because stored keys would have to be
-  recomputed: see `data-model.md` **Q3**.
+  recomputed: see `data-model.md` **Q3**. **That crossing happened on 2026-08-05,
+  and what answers it is a mechanism rather than a one-off.** The citation rules
+  gained the bare form, which changed the value written for seven rows already on
+  disk; `DiscoveryService.reconcile` now re-cleans every stored title at startup
+  and rewrites the key of any it changed, so the recompute is paid automatically
+  by each later change instead of being owed by it. A future change to the
+  derivation still crosses the boundary — it is the repair that is no longer
+  each change's to write.
 - **Producer:** the persistence layer. **Currently stdlib `sqlite3` behind a
   Protocol**, not 3tears collections — see the build plan's deferral note. The
   Protocol is what keeps that swap a one-module change.
@@ -216,6 +230,26 @@
   `[DECISION: curation's thumbnail cache is thumbs/, not tv-thumbs/ | tv-thumbs/
   holds per-device TV state and reusing it would re-import the identity defect
   the catalogue was rebuilt to remove | user can veto/override]`
+- **Who removes a thumbnail: nobody. Settled 2026-08-05.** *Invalidation* was
+  handled from the start and *eviction* was simply never stated, which left the
+  answer readable only by inference from code. A thumbnail rendition carries its
+  master's content hash, so a changed master makes it stale and the next request
+  rewrites it at the same path with an upserted row; a missing file does the
+  same. Nothing else ever deletes one, and archiving a work therefore leaves its
+  file and its `RenditionKind.THUMBNAIL` row where they are.
+  `[DECISION: thumbnails are never evicted — regenerated when stale or absent,
+  retained otherwise, including for archived works | archiving is reversible and
+  a thumbnail rebuilds from a master still on disk for one bounded decode, so a
+  sweep would spend a mechanism and its own failure mode on the cheapest thing
+  in the tree | user can veto/override]`
+- **The contrast with candidate previews above is the reasoning, not an
+  inconsistency**, and it is worth stating because the two sit in one section
+  and reach opposite answers. A preview belongs to a work that may never be
+  accepted, and nothing re-fetches one — so a leaked preview is permanent growth
+  in files nothing will ever want, which is what earns a sweep. A thumbnail
+  belongs to a work already held and is one decode from returning. The two
+  directories differ in whether the cached thing is *recoverable*, and that is
+  the whole of why one is swept and the other is not.
 - Each derived directory is device-specific in a different way, which is worth
   stating because the row above reads as if they were alike: `ready/` and
   `tv-thumbs/` are specific to the *television*, while `thumbs/` is specific to
@@ -247,7 +281,9 @@
 
 ## Test Levels
 
-Three of the four levels exist on the curation plane as of 2026-07-27. Two
+Every level below exists on the curation plane except end-to-end; the `Exists`
+column is the authority, and it is per-row so that adding a level does not strand
+a count in this sentence. Two
 suites run: `uv run pytest tests` at the repo root for the 2024 modules, and
 `cd curation && uv run pytest` for the plane. *(Corrected 2026-08-03: the root
 command was written without `uv run`. Both planes need the prefix — the dev tools
@@ -261,6 +297,8 @@ are in a uv-only dependency group — and `CLAUDE.md` is the authority.)*
 | Evaluation | **yes** (curation), opt-in | Any tool-surface change, before shipping it — **not** on every run | `curation/tests/eval/`, marker `llm_eval` |
 | Live API — paid | **yes** (curation), opt-in | Any change to the OpenRouter client, and when a recorded price or response shape is in doubt | `curation/tests/live/`, marker `live_api` |
 | Live API — free | **yes** (curation), opt-in | Any change to a museum client, and when a recorded response shape is in doubt | `curation/tests/live/`, marker **`live_museum`** |
+| Live binary — free | **yes** (curation), opt-in | Any change to the dezoomify-rs wrapper, and when a recorded CLI behaviour is in doubt | `curation/tests/live/`, marker **`live_binary`** |
+| Browser | **yes** (curation), opt-in | Any change to `app.js` | `curation/tests/browser/`, marker **`browser`** |
 | End-to-end | no | Before release | — |
 
 **The evaluation level is the only one that does not gate, and that is the
@@ -290,15 +328,48 @@ description reads "Costs money". **A marker is what records the distinction; the
 paragraph explaining it is not.** Anything added that talks to a free API goes on
 `live_museum`.
 
-All three are off by default: `addopts = -m 'not llm_eval and not live_api and
-not live_museum'`.
+Every opt-in level is off by default, and **the marker expression that does it
+lives in `curation/pyproject.toml`'s `addopts` — read it there.** A copy used to
+sit here reading `-m 'not llm_eval and not live_api and not live_museum'`, and it
+was already wrong twice over: `live_binary` and `browser` had both been added to
+the real one. A quoted config value is a second place for that config to be
+wrong, and it drifts silently because nothing reads it.
 
-Its dependency is an opt-in group (`uv sync --group eval`) rather than `dev`,
-because it is the heaviest install in the repo and no first-party module imports
-it. Both eval modules therefore `importorskip` at import time, not inside a
-fixture: a marker deselection still *collects* the module, so a missing group
-has to skip rather than fail — otherwise the default run breaks for everyone who
-took the default.
+**The evaluation level's dependency** is an opt-in group (`uv sync --group eval`)
+rather than `dev`, because it is the heaviest install in the repo and no
+first-party module imports it. Both eval modules therefore `importorskip` at
+import time, not inside a fixture: a marker deselection still *collects* the
+module, so a missing group has to skip rather than fail — otherwise the default
+run breaks for everyone who took the default.
+
+**The browser level, added 2026-08-05, is deselected for a fourth reason and
+none of the first three.** It spends nothing, reaches no foreign API, and is
+entirely deterministic. What it needs is a ~200MB browser on the machine, which
+is too much to put on the default `uv sync` — so its deselection is a packaging
+decision, not a statement about the tests, and `.github/workflows/browser.yml`
+runs it on pull requests and on pushes to `main`, so that being off the default
+run does not become never running. Its dependency is its own group for the same
+reason the evaluation level's is, and its modules `importorskip` for the same
+reason too.
+
+**What it covers is the client, with `/api` as its boundary.** The other suites
+assert what the API answers and take on trust that the page does something
+sensible with it; that trust had been wrong three times, and none of the three
+was visible to a test reading JSON. Where a real server can produce the state it
+does — paging runs against a real catalogue and the real `truncated` flag — and
+routes are stubbed only for states a server cannot be asked for deterministically,
+such as a poll that changes nothing or each unresolved reason in turn. Stubbed
+payloads are built from the API's own response models rather than hand-written
+dicts, so a response that changes shape cannot leave these tests green against a
+page that has started to break.
+
+**Its acceptance was a mutation sweep, not a count of tests.** `tools/mutation_sweep.py`
+drives `app.js` as readily as a Python file, and every behaviour this level claims
+was demonstrated by deleting it and watching a test go red. That is what caught
+the one test here whose fixture could not have failed: a run at the approval gate
+re-checks its paint generation after fetching the estimate, so the check under
+test was masked by the one after it, and only a run in a state with no second
+fetch could falsify the claim.
 
 **Within `tests/contract/`, two things now live side by side.** The surface
 tests assert shape — names, schemas, descriptions, annotations, tips. The

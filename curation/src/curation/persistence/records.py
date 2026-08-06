@@ -236,6 +236,58 @@ class Rendition:
     generated_at: datetime
 
 
+def is_current(rendition: Rendition, original: Original | None) -> bool:
+    """Whether a derived output still stands for the image the work holds.
+
+    **The one place this question is answered.** It decides what a review card
+    badges, what a thumbnail is made from, and whether a work reaches the wall
+    or is excluded as `STALE_RENDITION` — three surfaces that must not be able
+    to disagree. They did: the rule was written twice, once here in substance
+    and once inline in the manifest builder, so a change to what "current" means
+    would have landed in one and left the other deciding manifest membership by
+    the old rule. The grid would badge a work green while the wall silently
+    dropped it, which is exactly the shortfall the exclusion report exists to
+    make visible, arriving by the one path that did not consult the shared rule.
+
+    A work holding no original at all has nothing that could vouch for any
+    rendition, so none of them may be served on the strength of having once been
+    generated. That is not the same as a mismatch and it is deliberately not
+    reported differently — in both cases the render cannot be trusted to be a
+    picture of what the work now holds.
+
+    Derived on every read rather than stored, so it cannot drift from the
+    original it is a statement about.
+    """
+    if original is None:
+        return False
+    return rendition.source_content_hash == original.content_hash
+
+
+def tv_renditions_newest_first(renditions: Sequence[Rendition]) -> list[Rendition]:
+    """Every television render for a work, in the order any consumer prefers them.
+
+    **The one place that preference is expressed**, for the same reason
+    `is_current` is: the manifest builder took the most recently generated row
+    while the thumbnail service took the first current one the store happened to
+    return, and the unique index is on `(artwork_id, kind, target_width,
+    target_height)` — so two television renders at different geometries are
+    reachable, and on that work the wall and the card would have shown different
+    pictures with nothing saying which was right.
+
+    Newest first, tie broken by id so the order is total and a rebuild cannot
+    reshuffle two renders generated in the same instant. Currency is *not*
+    filtered here: the manifest has to be able to tell a work rendered from an
+    older acquisition (`STALE_RENDITION`, "needs regenerating") from one never
+    rendered at all (`NO_RENDITION`), and a filter would collapse the two into
+    the second and tell a curator the opposite of what happened.
+    """
+    return sorted(
+        (rendition for rendition in renditions if rendition.kind is RenditionKind.TV_DISPLAY),
+        key=lambda rendition: (rendition.generated_at, rendition.id),
+        reverse=True,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class MatColor:
     """A mat colour chosen for a work, and how it was chosen.

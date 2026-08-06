@@ -14,7 +14,8 @@ from decimal import Decimal
 
 import pytest
 
-from curation.persistence.discovery_records import InitiatedBy, RunKind, RunStatus
+from curation.discovery.dedup import work_dedup_key
+from curation.persistence.discovery_records import InitiatedBy, RunKind, RunStatus, Verdict
 from curation.services.errors import ServiceError
 
 
@@ -331,6 +332,168 @@ def test_a_catalogue_with_nothing_to_repair_is_repaired_silently(discovery, capl
         discovery.reconcile()
 
     assert [record for record in caplog.records if record.levelno == logging.WARNING] == []
+
+
+# -- startup reconciliation: stored titles ------------------------------------
+#
+# A title is stored as the engine seam cleaned it, so improving that cleaning
+# leaves earlier rows carrying markup the product now knows how to strip. These
+# enter through `reconcile` rather than through the repair itself: the repair
+# only matters because startup calls it, and a test on the callee passes just as
+# well with the call deleted.
+
+#: A row exactly as the catalogue held it: a citation whose closing bracket a
+#: greedy URL pattern ate, leaving the opening one and the words introducing it.
+DAMAGED_TITLE = "Lobster Telephone (1938) - cited from tate.org.uk ("
+
+
+def test_a_stored_title_carrying_citation_markup_is_recleaned_at_startup(discovery, run, propose):
+    """The defect a curator saw: seven review cards titled with a broken citation."""
+    work = propose(DAMAGED_TITLE, dedup_key="dali::lobster telephone 1938 cited from tate org uk")
+
+    discovery.reconcile()
+
+    assert discovery.get_candidate_work(work.id).proposed_title == "Lobster Telephone (1938)"
+
+
+def test_recleaning_a_stored_title_recomputes_the_identity_derived_from_it(discovery, run, propose):
+    """The half of the defect nobody could see.
+
+    The key is derived from the title, so a row storing markup keys as a
+    different painting from the same work proposed cleanly — and the column is
+    what suppression reads. Repairing the title without the key would leave the
+    visible defect fixed and the silent one intact.
+    """
+    work = propose(DAMAGED_TITLE, dedup_key="dali::lobster telephone 1938 cited from tate org uk")
+
+    discovery.reconcile()
+
+    assert discovery.get_candidate_work(work.id).work_dedup_key == work_dedup_key(title="Lobster Telephone")
+
+
+def test_a_rejection_recorded_after_the_repair_suppresses_the_clean_proposal(discovery, run, propose):
+    """What the re-key is *for*, one hop past the repair itself.
+
+    Rejecting a work whose stored key carried markup would have suppressed only
+    the markup — the next run proposing the painting cleanly derives a different
+    key, finds no rejection under it, and shows the curator a work they turned
+    down. Asserting the column alone would not catch that; this asks the question
+    suppression actually asks.
+    """
+    work = propose(DAMAGED_TITLE, dedup_key="dali::lobster telephone 1938 cited from tate org uk")
+    discovery.reconcile()
+
+    discovery.set_verdict(work.id, Verdict.REJECTED, reason="A studio copy.")
+
+    assert discovery.is_work_suppressed(work_dedup_key(title="Lobster Telephone")) is True
+
+
+def test_a_stored_title_the_rules_do_not_reach_is_left_exactly_as_it_is(discovery, run, propose):
+    """The no-op case, which is what makes running this at every start safe.
+
+    `The Source` ends in a word that introduces a citation, and `Composition
+    No.5` ends in something any loose hostname pattern matches. Both are titles,
+    neither carries a citation, and a repair that touched them would merge them
+    with `The` and `Composition`.
+    """
+    kept = [propose(title, dedup_key=title.lower()) for title in ("The Source", "Composition No.5")]
+
+    discovery.reconcile()
+
+    assert [discovery.get_candidate_work(work.id).proposed_title for work in kept] == [
+        "The Source",
+        "Composition No.5",
+    ]
+    assert [discovery.get_candidate_work(work.id).work_dedup_key for work in kept] == [
+        "the source",
+        "composition no.5",
+    ]
+
+
+def test_a_stored_title_that_was_nothing_but_a_citation_is_left_to_be_read(discovery, run, propose):
+    """Cleaning can empty a value, and an empty title is not an improvement.
+
+    `require_text` refuses one on the way in, so writing one here would make the
+    row unreadable by the rules that guard every other write — and it would
+    destroy the evidence of a cleaning rule that reached too far, which is the
+    one thing anybody diagnosing it would need.
+    """
+    work = propose("tate.org.uk (", dedup_key="tate.org.uk (")
+
+    discovery.reconcile()
+
+    assert discovery.get_candidate_work(work.id).proposed_title == "tate.org.uk ("
+
+
+def test_a_repaired_row_and_a_clean_one_become_the_same_work(discovery, run, propose):
+    """The split the corruption caused, closed — and closed without deleting a row.
+
+    A curator who saw the painting twice, once titled with a citation and once
+    without, was looking at one work under two identities. After the repair they
+    share one, so a verdict on either answers for both. Both rows stay: the key
+    is an index rather than a unique constraint, and suppression asks whether
+    *any* row sharing a key was rejected, so merging rows would only risk losing a
+    decision that this keeps.
+    """
+    damaged = propose(DAMAGED_TITLE, dedup_key="dali::lobster telephone 1938 cited from tate org uk")
+    clean = propose("Lobster Telephone", dedup_key=work_dedup_key(title="Lobster Telephone"))
+
+    discovery.reconcile()
+
+    repaired = discovery.get_candidate_work(damaged.id)
+    assert repaired.work_dedup_key == discovery.get_candidate_work(clean.id).work_dedup_key
+    discovery.set_verdict(clean.id, Verdict.REJECTED, reason="A studio copy.")
+    assert discovery.is_work_suppressed(repaired.work_dedup_key) is True
+
+
+def test_an_artist_the_cleaning_removes_entirely_becomes_unattributed_not_empty(discovery, run, propose):
+    """The write path spells "no artist" `None`, and so must the repair.
+
+    Storing `""` would put a value in the column that no proposal could produce —
+    `_read_works` writes `artist or None` — leaving one path in the product able
+    to mint a third state out of a two-state field.
+    """
+    work = propose(
+        DAMAGED_TITLE,
+        dedup_key="dali::lobster telephone 1938 cited from tate org uk",
+        proposed_artist="tate.org.uk (",
+    )
+
+    discovery.reconcile()
+
+    assert discovery.get_candidate_work(work.id).proposed_artist is None
+
+
+def test_recleaning_stored_titles_says_how_many_a_curator_was_shown(discovery, run, propose, caplog):
+    """A repair firing long after the rule changed means rows sat in front of
+    someone carrying markup, and the count is the size of what they were shown."""
+    propose(DAMAGED_TITLE, dedup_key="dali::lobster telephone 1938 cited from tate org uk")
+
+    with caplog.at_level(logging.WARNING):
+        discovery.reconcile()
+
+    recleaned = [record for record in caplog.records if getattr(record, "event", None) == "works.recleaned"]
+    assert len(recleaned) == 1
+    assert recleaned[0].works_recleaned == 1
+
+
+def test_recleaning_a_stored_title_is_done_after_the_first_start(discovery, run, propose, caplog):
+    """Idempotent, because it runs at every start rather than once.
+
+    A repair that kept finding work to do would rewrite the same rows forever and
+    report a fresh repair on a catalogue that had none.
+    """
+    propose(DAMAGED_TITLE, dedup_key="dali::lobster telephone 1938 cited from tate org uk")
+    discovery.reconcile()
+    # Cleared because `caplog` accumulates across the whole test: without this the
+    # first start's own repair line would satisfy the assertion below and the test
+    # would pass whatever the second start did.
+    caplog.clear()
+
+    with caplog.at_level(logging.WARNING):
+        discovery.reconcile()
+
+    assert [record for record in caplog.records if getattr(record, "event", None) == "works.recleaned"] == []
 
 
 @pytest.mark.parametrize("ending", ["fail_run", "halt_run_for_budget"])

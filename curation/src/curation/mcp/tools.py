@@ -421,13 +421,13 @@ ART_REVIEW: Final = ToolRecord(
     actions=(
         Action(
             name="list_works",
-            description="Page through a run's proposed works, each with the image standing for it.",
+            description="Page through a run's works, each with the image standing for it.",
             example="art_review(action='list_works', run_id='<a run_id from art_discovery(action=list_runs)>')",
             params=(
                 Param(
                     name="run_id",
                     type="string",
-                    description="Which run's proposed works to review, as returned by art_discovery(action='list_runs').",
+                    description="Which run's works to review, as returned by art_discovery(action='list_runs').",
                     required=True,
                 ),
                 Param(
@@ -447,7 +447,13 @@ ART_REVIEW: Final = ToolRecord(
             tips=(
                 _BLOCK_ORDER_TIP,
                 "Works with an image found for them come first, then ones nothing was found for. A work "
-                "reported unresolved is not a defect: it is the signal that a proposed work may not exist.",
+                "reported unresolved is not a defect; read `unresolved_reason` for which kind of nothing. "
+                "Only `not_held` suggests the work may not exist.",
+                "Read `provenance` on every row. `proposed` is a work the model named for this intent; "
+                "`offered` is one the collection volunteered by an artist the run named but could not "
+                "confirm a work for. An offered row carries the collection's own title and attribution "
+                "verbatim and is never the work that was asked for — its `rationale` says which artist "
+                "produced it and how many works that artist has there.",
                 f"The page is capped at {MAX_REVIEW_LIMIT} works because each one carries a picture, and pictures "
                 "dominate the result's size. A truncated page says so and how many remain; page with offset.",
                 "Every image is shown at 400px on its long edge, which is enough to judge whether this is the "
@@ -703,7 +709,7 @@ ART_THEME: Final = ToolRecord(
                 "within about a second. No separate sync is needed.",
                 "The result names every member that will NOT be on the wall and why, exactly as "
                 "art_display(action='sync') does — a theme can be half-displayable.",
-                "Switching costs no television writes: the whole library stays on the TV and " "rotation is driven from here.",
+                "Switching costs no television writes: the whole library stays on the TV and rotation is driven from here.",
             ),
         ),
     ),

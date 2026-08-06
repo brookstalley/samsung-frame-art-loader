@@ -19,6 +19,7 @@ from tv_delete import (
     DeleteNotConfirmed,
     delete_list_confirmed,
     describe_removal,
+    forgettable_ids,
     remove_from_tv,
 )
 
@@ -294,3 +295,72 @@ def test_a_defect_in_this_repo_is_not_dressed_up_as_a_television_fault(caplog):
 
     logged = "\n".join(r.getMessage() for r in caplog.records if r.levelno == logging.ERROR)
     assert "TypeError" in logged
+
+
+# -- what local state may forget after a removal --------------------------------
+#
+# The other half of the same defect. `delete_all_uploaded` cleared every
+# `tv_content_id` regardless of what the set confirmed, and `sync_artsets_to_tv`
+# selects upload candidates with exactly the test "has no tv_content_id" — so a
+# survivor was marked never-uploaded and uploaded again, as a duplicate, onto a
+# set with finite storage. The survivors were already being computed and warned
+# about; nothing consumed them.
+
+
+def test_only_the_ids_the_television_confirmed_gone_may_be_forgotten():
+    """The regression test for the defect itself."""
+    tv = FakeTv(listed=["MY-C0002-1", "MY-C0002-2", "MY-C0002-3"], honours=["MY-C0002-1", "MY-C0002-3"])
+
+    result = asyncio.run(remove_from_tv(tv, ["MY-C0002-1", "MY-C0002-2", "MY-C0002-3"]))
+
+    assert forgettable_ids(result) == frozenset({"MY-C0002-1", "MY-C0002-3"})
+    assert "MY-C0002-2" not in forgettable_ids(result), "an image the TV still holds was marked not-uploaded"
+
+
+def test_a_removal_nobody_could_confirm_forgets_nothing():
+    """Clearing on no evidence is the same mistake made more quietly.
+
+    It errs towards leaving an image marked uploaded, which costs a work its
+    place on the set until the next confirmed pass — where the other error costs
+    storage on every run and is invisible.
+    """
+    assert forgettable_ids(None) == frozenset()
+
+
+def test_a_removal_the_television_honoured_in_full_forgets_all_of_it():
+    """The ordinary case still has to work, or the fix trades one bug for another.
+
+    Without this, refusing to forget anything at all would pass the two above.
+    """
+    tv = FakeTv(listed=["MY-C0002-1", "MY-C0002-2"])
+
+    result = asyncio.run(remove_from_tv(tv, ["MY-C0002-1", "MY-C0002-2"]))
+
+    assert forgettable_ids(result) == frozenset({"MY-C0002-1", "MY-C0002-2"})
+
+
+def test_the_clearing_loop_keeps_a_survivor_marked_uploaded():
+    """The rule applied the way `delete_all_uploaded` applies it.
+
+    A copy of that loop, and deliberately so: the root suite cannot import
+    `tvart` — it pulls in PIL and `samsungtvws`, which are legacy runtime
+    dependencies this project does not install (see `pyproject.toml`). So what
+    is asserted here is the *rule*, which is why the rule was moved into
+    `forgettable_ids` rather than left inline where nothing could reach it.
+    Mutating the loop in `tvart.py` will not turn this red; mutating the rule it
+    calls will.
+    """
+
+    class _ArtFile:
+        def __init__(self, tv_content_id):
+            self.tv_content_id = tv_content_id
+
+    tv = FakeTv(listed=["MY-C0002-1", "MY-C0002-2"], honours=["MY-C0002-1"])
+    art_files = [_ArtFile("MY-C0002-1"), _ArtFile("MY-C0002-2"), _ArtFile(None)]
+
+    forgettable = forgettable_ids(asyncio.run(remove_from_tv(tv, ["MY-C0002-1", "MY-C0002-2"])))
+    for art_file in art_files:
+        if art_file.tv_content_id in forgettable:
+            art_file.tv_content_id = None
+
+    assert [art_file.tv_content_id for art_file in art_files] == [None, "MY-C0002-2", None]

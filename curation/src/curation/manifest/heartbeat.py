@@ -14,20 +14,29 @@ starts lying: the reader is told the age and decides.
 The writer is the display plane's, and does not exist yet. Until it does, this
 reports honestly that no heartbeat has ever been written — which is a true and
 useful answer, and a better one than a zero that reads like a reading.
+
+The parse is `observations.observe`'s, shared with the backup receipt — the same
+document-with-an-instant, read for the same panel. Three things are this module's
+own: the filename, the key, and the sentence.
 """
 
-import json
-import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Final
 
-log = logging.getLogger(__name__)
+from curation import observations
 
 #: Written into `ART_ROOT` by the display plane. Not configurable, for the same
 #: reason the manifest's name is not: both planes must agree where it is.
 HEARTBEAT_FILENAME: Final[str] = "display-heartbeat.json"
+
+#: The key carrying the instant, and a contract rather than a preference. A writer
+#: that spells it `timestamp` produces a plane that looks *down* to curation while
+#: running perfectly — this product's defining failure mode manufactured by the
+#: mechanism built to detect it. `observability-strategy.md` names it for the same
+#: reason. Everything else in the document is the writer's to shape.
+REPORTED_AT_KEY: Final[str] = "reported_at"
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,60 +64,27 @@ class HeartbeatReading:
         return self.contents is None and self.problem is None
 
     def describe(self) -> str:
-        """One sentence stating what was observed, never a verdict about it."""
+        """One sentence stating what was observed, never a verdict about it.
+
+        The age is in the unit a person reads it in rather than in seconds. A
+        display plane down since Tuesday reported "345600 seconds ago", which is
+        a conversion the reader has to do on the one surface built so they would
+        not have to — and `observability-strategy.md` states the target wording.
+        """
         if self.absent:
             return f"No heartbeat file exists at {self.path}; the display plane has not reported yet."
         if self.problem is not None:
             return f"The heartbeat file at {self.path} could not be read: {self.problem}"
-        return f"The display plane last reported {self.age_seconds:.0f} seconds ago."
+        return f"The display plane last reported {observations.ago(self.age_seconds)}."
 
 
 def read(path: Path, *, now: datetime | None = None) -> HeartbeatReading:
     """Observe the heartbeat file. Absent is an answer, not a failure."""
-    moment = now or datetime.now(UTC)
-    if not path.exists():
-        return HeartbeatReading(path=path, reported_at=None, age_seconds=None, contents=None, problem=None)
-
-    try:
-        contents = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        log.warning("The heartbeat file at %s exists but could not be read: %s", path, exc)
-        return HeartbeatReading(path=path, reported_at=None, age_seconds=None, contents=None, problem=str(exc))
-
-    if not isinstance(contents, dict):
-        return HeartbeatReading(
-            path=path,
-            reported_at=None,
-            age_seconds=None,
-            contents=None,
-            problem="it does not hold a JSON object.",
-        )
-
-    reported_at = _instant(contents.get("reported_at"))
-    if reported_at is None:
-        return HeartbeatReading(
-            path=path,
-            reported_at=None,
-            age_seconds=None,
-            contents=contents,
-            problem="it carries no readable 'reported_at' timestamp, so its age is unknown.",
-        )
+    seen = observations.observe(path, key=REPORTED_AT_KEY, now=now)
     return HeartbeatReading(
-        path=path,
-        reported_at=reported_at,
-        age_seconds=(moment - reported_at).total_seconds(),
-        contents=contents,
-        problem=None,
+        path=seen.path,
+        reported_at=seen.at,
+        age_seconds=seen.age_seconds,
+        contents=seen.contents,
+        problem=seen.problem,
     )
-
-
-def _instant(value: object) -> datetime | None:
-    if not isinstance(value, str):
-        return None
-    try:
-        parsed = datetime.fromisoformat(value)
-    except ValueError:
-        return None
-    # A naive timestamp is read as UTC rather than as local time: the alternative
-    # makes the reported age wrong by the machine's offset, and wrong quietly.
-    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)

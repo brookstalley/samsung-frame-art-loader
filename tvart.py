@@ -14,7 +14,7 @@ import config
 from art import ArtFile, ArtSet
 from display import DisplayLabel
 from local import SunInfo, perceived_brightness
-from tv_delete import UPLOADED_CATEGORY, describe_removal, remove_from_tv
+from tv_delete import UPLOADED_CATEGORY, DeleteResult, describe_removal, forgettable_ids, remove_from_tv
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.DEBUG)
 # logging.getLogger().setLevel(logging.DEBUG)
@@ -116,14 +116,40 @@ async def show_available(tv, category=None):
         logging.info(art)
 
 
-async def delete_all_uploaded(tv_art):
+async def delete_all_uploaded(tv_art) -> DeleteResult | None:
+    """Remove every uploaded image, and forget only the ones the set confirmed gone.
+
+    Returns what the television confirmed, or `None` when it could not say, so a
+    caller can act on the shortfall rather than read about it in a log line.
+
+    **Local state is cleared per surviving id, not wholesale.** The removal is
+    confirmed against what the set still lists, and a television that keeps an
+    image is a real outcome `delete_list_confirmed` exists to report. Clearing
+    every `tv_content_id` regardless said "not uploaded" about images the set
+    was still holding, and `sync_artsets_to_tv` picks its upload candidates with
+    exactly that test — so the survivors were uploaded a second time, as
+    duplicates, onto a set with finite storage. The warning naming the survivors
+    was already being logged; nothing consumed it.
+
+    An unconfirmable removal clears nothing, which is the honest direction: we
+    do not know what the set holds, and clearing on no evidence is the same
+    mistake in a quieter form.
+    """
     available_art = await get_available(tv_art, UPLOADED_CATEGORY)
     result = await remove_from_tv(tv_art, [art["content_id"] for art in available_art])
-    # clear the tv_content_id from any artfiles that were uploaded
+    forgettable = forgettable_ids(result)
     for art_set in artsets:
         for art_file in art_set.art:
-            art_file.tv_content_id = None
+            if art_file.tv_content_id in forgettable:
+                art_file.tv_content_id = None
     logging.info(describe_removal(result, len(available_art)))
+    if result is not None and result.surviving:
+        logging.warning(
+            "%d image(s) are still on the TV and stay marked as uploaded, so they will not be uploaded again: %s",
+            len(result.surviving),
+            ", ".join(result.surviving),
+        )
+    return result
 
 
 async def upload_file(local_file: str, tv_art: SamsungTVAsyncArt) -> str:

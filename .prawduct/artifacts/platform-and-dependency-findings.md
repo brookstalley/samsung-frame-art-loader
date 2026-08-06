@@ -156,6 +156,67 @@ Two consequences:
    vendor the package outright — it is roughly 1,500 lines of frozen code that
    the project already depends on completely.
 
+## The e-paper panel, verified against the panel itself
+
+Measured 2026-08-04 on the wall's own Waveshare 6 inch HD, driven through
+`omni-epd`'s `waveshare_epd.it8951` driver on the rebuilt Trixie card. Read off
+the running panel, not from either project's source. **Re-measure after an
+omni-epd or IT8951 bump** — both are dormant repositories, so a version move is
+the only thing that changes these.
+
+**The panel loads clean and reports 1448x1072**, matching § Target hardware.
+Full-frame draw takes **1.5–1.9 s** against the 15 s label budget in
+`nonfunctional-requirements.md` — roughly 10× headroom, so that
+`[ASSUMPTION: 15 s | LOW impact]` is safe by a wide margin. `gray16` (1.49 s)
+measured *faster* than `bw` (1.86 s), which is counterintuitive; that is one
+sample and nothing should be designed around it.
+
+### The greyscale default is a silent trap
+
+**`modes_available` is `('bw', 'gray16')` and the driver's default is `bw`.**
+Every legibility claim this product makes — the 16-level greyscale panel in
+`nonfunctional-requirements.md`, the whole of `design_decisions.accessibility_approach`
+— assumes 16 grey levels. A driver that does not explicitly set `mode = "gray16"`
+gets 1 bit.
+
+**`max_colors` reports 16 in both modes**, so the obvious sanity check cannot
+tell them apart. Reading `mode` is the only honest test. Taken together these two
+are worse than a plain defect: they would ship 1-bit type past every check a
+reasonable person would think to run, and the failure is visible only to someone
+standing in front of the panel comparing it to a memory of what it should look
+like.
+
+The consequence for the display plane is a requirement, not a note: **set the
+mode explicitly and assert it was taken**, and assert on `mode` rather than on
+`max_colors`.
+
+The 2024 code shows what the trap catches. `display.py:41` passes
+`greyscale_bits=1` to `ArtLabel`, which never stores or uses it
+(`art.py:246-251`) — so 2024 rendered 1-bit type into a panel left in its 1-bit
+default, and nothing anywhere reported it.
+
+### Failure is unreadable from the return, and every change is a full frame
+
+**`display()` returns `None`** in both modes. Success and failure are
+indistinguishable from the return value; raised exceptions are the only signal
+there is. This is the same shape as the television's `upload()` defect below, and
+it wants the same treatment — the caller must not read a return value as
+confirmation.
+
+**No partial refresh exists** on omni-epd's surface for this driver. The whole
+surface is `clear`, `close`, `display`, `prepare`, `sleep`. Every label change —
+even one changed character — is a full-frame redraw at the cost measured above.
+
+### Type sizing is NOT settled, and the probe's numbers must not be lifted
+
+The type ladder put in front of the operator was rendered with **PIL/DejaVu**.
+The product renders labels with **Pango**. Different rasterizer, different face,
+different metrics — a pixel size that looked right in one does not transfer.
+
+What the operator's look did establish is a **range**: mid-20s through low-40s px
+is live, and the 2024 `"Sans 18"` is dead. Real numbers wait for the Pango
+renderer and a second look at the panel.
+
 ## The television, verified against the set itself
 
 Everything below was measured on the wall's own television on 2026-08-04, running
@@ -394,3 +455,38 @@ and were deliberately abandoned in 2024. Nothing was lost.
 The systemd unit that actually ran the project existed **only** on the card and
 was never in version control. It is now committed at
 `deploy/samsung-frame-art-loader.service`.
+
+## That card is gone — the Pi runs a rebuild
+
+**Everything in the two sections above describes the 2024 SD card, which is no
+longer what boots.** The Pi was rebuilt onto a fresh Trixie card, and three of
+the findings recovered from the old one are now false *about the machine* while
+remaining true about the card they were read from. Recorded 2026-08-04, measured
+over SSH:
+
+- **Access is `brooks@pi4-tv.local`.** There is no `tvpi` user on the rebuilt
+  card at all — only `brooks` (uid 1000, sudo, already in `spi` and `gpio`). The
+  committed unit and `deploy/README.md` specify `User=tvpi` and paths under
+  `/home/tvpi/`, none of which exist. Creating that account is part of the
+  systemd-unit cutover; see `operational-spec.md` § The Service Account.
+- **The art tree is effectively empty.** `~/art` has the right shape, but `raw/`
+  holds nothing and `ready/` holds only a bench file from the same day. The 41
+  masters and every finished television rendition the 2024 pipeline produced were
+  on the old card.
+- **The checkout is behind.** It sits at `6003edc`, three merges back from
+  `main`.
+
+**The masters survived; the renditions did not.** The masters are on the
+operator's Mac at `~/art/raw` — 46 files, 40 distinct works, 574 MB, the six
+extras being byte-identical re-downloads of two works under `_0001`-style names.
+That directory is already the one `operator-verification.md` symlinks a scratch
+art root at, so nothing new is needed to use it. `ready/` was **not** copied and
+exists nowhere off the old card, so the finished 4K television renditions are
+lost as files. The television still holds its uploaded copies, which is what the
+adoption path in the build plan's Chunk 12 is for; everything else re-renders
+from the masters.
+
+**The lesson generalises past this card and is in `learnings.md`:** a claim about
+a live machine's current state decays silently. `deploy/README.md`, the unit file
+and the recovery findings above all still *read* correctly — the machine moved
+out from under them without touching a line of the text that describes it.

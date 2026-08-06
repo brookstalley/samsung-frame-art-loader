@@ -98,6 +98,23 @@ dependencies = [
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
+    # The suite has no hotspot — ~1,750 tests at roughly 67ms mean, the slowest
+    # single one 1.4s — and most of the total is integration tests booting a real
+    # uvicorn per class and waiting on it. That wait is exactly what
+    # parallelises, and it is a wait this repo will not remove the other way: an
+    # in-process ASGI transport would skip the mounted MCP lifespan and pass
+    # against an app that fails every real request.
+    #
+    # Measured 2026-08-05: **118s serial, 21s under `-n auto`.**
+    #
+    # It does NOT speed up a narrow `tools/mutation_sweep.py` run, and that was
+    # worth measuring rather than assuming, because the sweep is the obvious
+    # thing to expect a win on. The same ten-mutation sweep over two test files
+    # took 67s serial and 65s parallel: a small slice is dominated by per-run
+    # worker startup, which parallelism adds rather than removes. The win arrives
+    # when a sweep targets a broad slice, where each run pays the full-suite cost
+    # the `(mutations + 1) x suite time` budget is written against.
+    "pytest-xdist>=3.6",
     "ruff>=0.6",
     "black>=24",
     "httpx",
@@ -130,6 +147,19 @@ dev = [
 # was verified against 0.22.5 rather than read from the checkout on this
 # machine, which was three minors behind and would not have been what installed.
 eval = ["3tears-models>=0.22.5,<0.23"]
+# Its own group for the same reason `eval` has one: it is a heavy install — the
+# wheel is ~40MB and `playwright install chromium` fetches a browser of roughly
+# 200MB on top — and no first-party module imports a line of it. Keeping it out
+# of `dev` is what lets `uv sync` stay the cheap default it is for someone who
+# only wants to run the suite.
+#
+# The bindings are Python rather than Node deliberately. The recorded decision
+# accepted "a second language's package manifest inside curation/" as a cost of
+# covering the client at all; Playwright publishes first-party Python bindings,
+# so that cost is simply not paid — and the harness reuses the suite's own
+# server, catalogue and image fixtures instead of rebuilding each state through
+# the HTTP API, which a Node harness would have had to do.
+browser = ["pytest-playwright>=0.5"]
 
 [build-system]
 requires = ["hatchling"]
@@ -160,6 +190,7 @@ markers = [
     "live_api: re-verifies OpenRouter's recorded response shapes and prices against the live API. Costs money, needs OPENROUTER_API_KEY — deselected by default, run with `-m live_api`.",
     "live_museum: re-verifies a museum API's recorded response shapes against the live API. Costs nothing and needs no key — the museum APIs are open — but needs the network, so it is deselected by default. Run with `-m live_museum`.",
     "live_binary: drives the real dezoomify-rs against a live museum, checking the CLI behaviours the wrapper is written against. Costs nothing and needs no key, but needs the binary installed and the network. Deselected by default; run with `-m live_binary`.",
+    "browser: drives the shipped browser client in a real Chromium against a real booted server. Costs nothing and reaches no foreign API, but needs the `browser` dependency group and a downloaded browser — deselected by default, run with `-m browser`.",
 ]
 # All three live suites are off unless asked for, but for two different reasons
 # and they are kept on separate markers because of it. `llm_eval` and `live_api`
@@ -167,10 +198,33 @@ markers = [
 # deselected only because it needs the network, which a suite whose job is to be
 # green cannot depend on.
 #
+# `browser` is off for a fourth reason, and it is neither of those: it spends
+# nothing, reaches nothing foreign, and is entirely deterministic. What it needs
+# is a ~200MB browser binary on the machine running it, which is too much to
+# impose on a default `uv sync`. That makes its deselection a packaging decision
+# rather than a statement about the tests — they gate exactly as hard as the rest
+# of the suite wherever the browser is installed, and CI installs it.
+#
 # **Separate markers so that opting into the free one does not opt into the paid
 # ones.** They shared `live_api` briefly, which meant the museum suite's own
 # instruction to run `-m live_api` would also spend real credit whenever a key
 # was in the environment — an invitation to spend money written in a file
 # arguing the suite was free. A command-line `-m` overrides this line, which is
 # how any of them is opted into.
-addopts = "-m 'not llm_eval and not live_api and not live_museum and not live_binary'"
+#
+# `-n auto` runs the suite across cores. It is safe here because the fixtures
+# already isolate everything a worker could collide on — `tmp_path` per test, a
+# fresh sqlite file per test, and a server that now lets uvicorn bind port 0 and
+# reads the port back, which closed the one real race (claiming a port, closing
+# it, and handing uvicorn the number leaves a window another worker can take).
+# **Use `-n0` to debug a failure**: parallel workers interleave output and a
+# `pdb` breakpoint has no terminal to stop in.
+#
+# **And `-n0` is REQUIRED for the live suites, not merely tidier.** A `-m` on the
+# command line replaces the marker expression below and leaves `-n auto` in
+# place, so `-m live_museum` alone fires concurrent requests at a public museum
+# API — which reads back as a rate limit and is indistinguishable from the
+# contract change the probe exists to detect. Run them as
+# `uv run pytest -m live_museum -n0`. `.github/workflows/api-drift.yml` does the
+# same and says so at each call site.
+addopts = "-n auto -m 'not llm_eval and not live_api and not live_museum and not live_binary and not browser'"

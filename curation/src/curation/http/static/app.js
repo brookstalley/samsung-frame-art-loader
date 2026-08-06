@@ -12,7 +12,11 @@
  * trusting one field is a UI someone extends to the next one.
  */
 
-const state = { view: "works", workId: null };
+/* `painted` is what the run view last put on the page, so a poll that finds
+ * nothing changed can leave the DOM — and the focus in it — alone. Cleared on
+ * every navigation, because leaving a view and coming back must repaint even
+ * when the data is identical: the DOM it describes is gone by then. */
+const state = { view: "works", detailId: null, nav: 0, poll: 0, painted: null, watch: null };
 
 /* -- plumbing -------------------------------------------------------------- */
 
@@ -34,17 +38,29 @@ async function api(path, options) {
   return body;
 }
 
-/* The catalogue caps a page at 100 (MAX_LIST_LIMIT), and the design target is
- * hundreds of works — so both the grid and the theme picker page through to the
- * end rather than showing the first hundred. The picker is the one that made
- * this necessary: a truncated grid is a visible short list, but a truncated
- * picker means a curator simply cannot put work 101 in a theme, and is told
- * nothing about why.
+/* The design target is hundreds of works, so both the grid and the theme picker
+ * page through to the end rather than showing the first page. The picker is the
+ * one that made this necessary: a truncated grid is a visible short list, but a
+ * truncated picker means a curator simply cannot put work 101 in a theme, and is
+ * told nothing about why.
+ *
+ * **No `limit` is sent**, which is the same rule `fetchAllCandidates` states
+ * below and for the same reason. This asked for `limit=100` — a copy of the
+ * service's `MAX_LIST_LIMIT` — until 2026-08-05, and that copy was a live break
+ * waiting on an unrelated edit: `list_artworks` *refuses* a limit above its cap,
+ * the refusal arrives as a 400, and `api()` throws. So the day anyone lowered
+ * the catalogue's cap, the Works grid — the default landing view — and the theme
+ * picker would have failed outright while the review grid, which asks for
+ * nothing, kept paging.
+ *
+ * The cost is paid knowingly: the server's default page is smaller than its cap,
+ * so this makes more round trips than asking for the maximum would. They are
+ * against a loopback server on the same box, and `PAGE_CEILING` still admits far
+ * more works than the design target.
  *
  * `PAGE_CEILING` is a runaway guard, not a policy. If it is ever hit the caller
  * reports how many were left out, because a cap nobody mentions is the silent
  * omission this product exists to refuse. */
-const PAGE_SIZE = 100;
 const PAGE_CEILING = 50;
 
 async function fetchAllWorks() {
@@ -52,11 +68,14 @@ async function fetchAllWorks() {
   let total = 0;
   let truncated = false;
   for (let page = 0; page < PAGE_CEILING; page += 1) {
-    const body = await api(`/api/works?limit=${PAGE_SIZE}&offset=${works.length}`);
+    const body = await api(`/api/works?offset=${works.length}`);
     total = body.total;
     works.push(...body.works);
-    // `truncated` alone would loop forever against an empty page, so the
-    // stopping condition is what actually arrived.
+    // The stopping condition is what actually arrived, not what the server says
+    // is left. A page that reports more while carrying nothing makes no
+    // progress — the offset is derived from what came back, so asking again
+    // sends the identical request. `PAGE_CEILING` would stop it either way, so
+    // what this saves is forty-nine pointless round trips rather than a hang.
     if (!body.truncated || body.works.length === 0) return { works, total, truncated };
     truncated = true;
   }
@@ -90,7 +109,30 @@ function el(tag, attrs = {}, children = []) {
   return node;
 }
 
-function render(...nodes) {
+/* Write a view's nodes to the page, unless the curator has moved on.
+ *
+ * `generation` is `state.nav` as it stood when this paint began, and passing it
+ * is not ceremony: every view here awaits at least one request and three page
+ * through up to fifty, so a paint routinely completes after the view it belongs
+ * to is gone — and `replaceChildren` would put it over whatever replaced it,
+ * with the tab highlight and the fragment both naming the other view. A stale
+ * screen that looks live is the class of defect this client has shipped three
+ * times.
+ *
+ * Taken as an argument rather than read from a shared variable, which is what
+ * this was first written as. A module-level "currently painting" is overwritten
+ * by the LATER navigation, so the abandoned paint reads the generation that
+ * superseded it and lands anyway — the guard passes and does nothing. A test
+ * caught that; the value has to travel with the paint that captured it.
+ *
+ * It is also why the argument comes first and is required: a view that forgets
+ * it passes a DOM node where a number belongs, and the check below throws
+ * instead of silently painting whatever it was handed. */
+function render(generation, ...nodes) {
+  if (typeof generation !== "number") {
+    throw new TypeError("render() takes the navigation generation first; a view that omits it cannot be superseded.");
+  }
+  if (generation !== state.nav) return;
   const view = document.getElementById("view");
   // Filtered, not passed straight through: `replaceChildren` coerces a null to
   // the *string* "null" and puts it on the page, so an omitted optional panel
@@ -112,17 +154,27 @@ const FIT_WORDS = {
   below_floor: "below floor",
 };
 
-/* A badge always carries a glyph and a word beside its colour, so the state
- * survives greyscale, colour blindness, and a dimmed room. */
-function fitBadge(work) {
-  if (!work.fit) {
-    return el("span", { class: "badge badge-unknown", title: work.fit_note || "" }, [
+/* How large this would hang, or why that cannot be said.
+ *
+ * A badge always carries a glyph and a word beside its colour, so the state
+ * survives greyscale, colour blindness, and a dimmed room.
+ *
+ * One function for a held work and for a candidate scan. Both carry the same
+ * `fit`/`fit_note` pair and the same rule — a thing whose dimensions nobody
+ * recorded must not read like a thing known to be small — so the only real
+ * difference is what to call the absence, and that is the argument. Two copies
+ * were written first, and their comment claimed "same rule, different shape"
+ * when the shapes were identical; the size wording then lived in two places on
+ * the one surface whose whole justification is stating it. */
+function fitBadge(sized, absentWord = "no size known") {
+  if (!sized.fit) {
+    return el("span", { class: "badge badge-unknown", title: sized.fit_note || "" }, [
       el("span", { class: "glyph", text: "—", "aria-hidden": true }),
-      el("span", { text: "no size known" }),
+      el("span", { text: absentWord }),
     ]);
   }
-  const verdict = work.fit.verdict;
-  const inches = work.fit.rendered_long_edge_inches.toFixed(1);
+  const verdict = sized.fit.verdict;
+  const inches = sized.fit.rendered_long_edge_inches.toFixed(1);
   return el("span", { class: `badge badge-${verdict}` }, [
     el("span", { class: "glyph", text: FIT_GLYPHS[verdict] || "●", "aria-hidden": true }),
     // The number is the point: a thumbnail cannot convey resolution, so the size
@@ -226,13 +278,13 @@ function table(caption, headers, rows) {
 
 /* -- views ----------------------------------------------------------------- */
 
-async function viewWorks() {
+async function viewWorks(generation) {
   const page = await fetchAllWorks();
   const heading = el("h2", {
     text: page.works.length === page.total ? `${page.total} works` : `${page.works.length} of ${page.total} works`,
   });
   const note = shortfallNote(page);
-  render(heading, note, el("ul", { class: "grid" }, page.works.map(workCard)));
+  render(generation, heading, note, el("ul", { class: "grid" }, page.works.map(workCard)));
 }
 
 /* Only ever shown when the runaway guard actually bit. Named rather than
@@ -246,7 +298,7 @@ function shortfallNote(page) {
   });
 }
 
-async function viewWork(artworkId) {
+async function viewWork(artworkId, generation) {
   const detail = await api(`/api/works/${encodeURIComponent(artworkId)}`);
   const work = detail.work;
   const image = work.image.available
@@ -350,10 +402,10 @@ async function viewWork(artworkId) {
     ]),
   );
 
-  render(...panels);
+  render(generation, ...panels);
 }
 
-async function viewThemes() {
+async function viewThemes(generation) {
   const [themes, works] = await Promise.all([api("/api/themes"), fetchAllWorks()]);
 
   const name = el("input", { type: "text", id: "new-theme-name", required: true });
@@ -386,7 +438,7 @@ async function viewThemes() {
   for (const theme of themes.themes) {
     panels.push(themePanel(theme, works.works));
   }
-  render(...panels);
+  render(generation, ...panels);
 }
 
 function themePanel(theme, allWorks) {
@@ -512,7 +564,7 @@ function memberList(themeId, works, after) {
   );
 }
 
-async function viewManifest() {
+async function viewManifest(generation) {
   const manifest = await api("/api/manifest");
   const panels = [
     el("h2", { text: `On the wall: ${manifest.theme.name}` }),
@@ -549,13 +601,37 @@ async function viewManifest() {
       ]),
     ]),
   ];
-  render(...panels);
+  render(generation, ...panels);
 }
 
-async function viewHealth() {
+/* The display plane's own report, whatever it chose to put in it.
+ *
+ * Rendered generically rather than as named rows, and that is the design rather
+ * than laziness: `reported_at` is the only key the observability strategy makes
+ * contract, and everything else is explicitly the writer's to shape. Naming TV
+ * connectivity and panel state here would invent a second contract that plane
+ * never agreed to — and a writer that spelled one differently would drop off the
+ * panel in silence, which is the failure the one named key exists to prevent.
+ *
+ * So whatever arrives is shown. That is what gives the failure table's TV, panel
+ * and last-error rows a reader at all. */
+function reportedFacts(reported) {
+  if (!reported) return null;
+  const pairs = Object.entries(reported).map(([key, value]) => [
+    key,
+    // Objects and arrays would reach `facts` as "[object Object]", which is a
+    // field displayed and unreadable — worse than one omitted, because it looks
+    // like the panel is working.
+    value !== null && typeof value === "object" ? JSON.stringify(value) : value,
+  ]);
+  return pairs.length ? facts(pairs) : null;
+}
+
+async function viewHealth(generation) {
   const health = await api("/api/health");
   const box = health.artwork_box;
   render(
+    generation,
     el("h2", { text: "Health" }),
     el("div", { class: "panel" }, [
       el("h3", { text: "The display plane" }),
@@ -565,6 +641,9 @@ async function viewHealth() {
       facts([
         ["Heartbeat file", health.heartbeat.path],
         ["Last reported", health.heartbeat.reported_at],
+        // The exact figure beside the sentence's plain-language one. Not the
+        // same fact twice in worse units: the sentence is what a curator reads,
+        // and this is what an operator compares against the 60-second interval.
         ["Age", health.heartbeat.age_seconds === null ? null : `${health.heartbeat.age_seconds.toFixed(0)} seconds`],
         ["Problem", health.heartbeat.problem],
       ]),
@@ -579,6 +658,31 @@ async function viewHealth() {
             text: "Nothing has ever written a heartbeat here. Where the display plane is not running, that is the correct reading rather than a fault.",
           })
         : null,
+      health.heartbeat.reported ? el("h4", { text: "What it reported" }) : null,
+      reportedFacts(health.heartbeat.reported),
+    ]),
+    el("div", { class: "panel" }, [
+      el("h3", { text: "The backup" }),
+      el("p", { text: health.backup.description }),
+      facts([
+        ["Backup record", health.backup.path],
+        ["Last completed", health.backup.completed_at],
+        ["Age", health.backup.age_seconds === null ? null : `${health.backup.age_seconds.toFixed(0)} seconds`],
+        ["Problem", health.backup.problem],
+      ]),
+      health.backup.absent
+        ? el("p", {
+            class: "muted",
+            // Says what the catalogue is worth and what an absent record means,
+            // and deliberately stops there. "The backup job has not been built
+            // yet" would be a claim about the project rather than about the file
+            // in front of it, and would be wrong the day that job ships with
+            // nothing to catch it — the same trap the heartbeat's note avoids.
+            text: "No backup has recorded itself here. The catalogue is the irreplaceable asset — the images can all be fetched again — so this is the reading to watch.",
+          })
+        : null,
+      health.backup.reported ? el("h4", { text: "What it recorded" }) : null,
+      reportedFacts(health.backup.reported),
     ]),
     el("div", { class: "panel" }, [
       el("h3", { text: "This deployment's geometry" }),
@@ -596,9 +700,957 @@ async function viewHealth() {
   );
 }
 
+/* -- discovery ------------------------------------------------------------- */
+
+/* Which kind of nothing an unresolved work came back with, in words a curator
+ * acts on. The enum values are diagnostic labels; only one of them ("not held")
+ * suggests the work may not exist, and a screen showing the raw value leaves
+ * that distinction to be guessed.
+ *
+ * Every member of UnresolvedReason must appear here — a test reads this map and
+ * the enum and fails when they disagree, so a sixth reason arrives as a failure
+ * rather than as a raw token on a card. */
+const REASON_SENTENCES = {
+  not_held: "No wired collection holds it — this is the one reason that suggests the work may not exist.",
+  identity_refused: "Something was found under this title, but its artist did not match, so it was refused.",
+  size_unknown: "A scan was found, but nothing said how large it is, so it could not be judged.",
+  below_floor: "Every scan found is too small to show on this wall at a size worth looking at.",
+  all_rejected: "You have turned down everything that was found for it.",
+};
+
+const REASON_WORDS = {
+  not_held: "not held",
+  identity_refused: "wrong artist",
+  size_unknown: "size unknown",
+  below_floor: "too small",
+  all_rejected: "all turned down",
+};
+
+function reasonBadge(work) {
+  if (!work.unresolved_reason) return null;
+  const value = work.unresolved_reason;
+  return el("span", { class: "badge badge-unknown", title: REASON_SENTENCES[value] || "" }, [
+    el("span", { class: "glyph", text: "▲", "aria-hidden": true }),
+    el("span", { text: REASON_WORDS[value] || value }),
+  ]);
+}
+
+/* The curator authorised a work list of a stated size, and a wired collection may
+ * add to it. Labelled on every row rather than counted only in the summary: an
+ * offered work is not what was asked for, and a grid that renders the two alike
+ * invites accepting one as though it were. */
+function provenanceBadge(work) {
+  const offered = work.provenance === "offered";
+  return el("span", { class: offered ? "badge badge-offered" : "badge" }, [
+    el("span", { class: "glyph", text: offered ? "◈" : "◆", "aria-hidden": true }),
+    el("span", { text: offered ? "offered" : "asked for" }),
+  ]);
+}
+
+const RESOLUTION_GLYPHS = { resolved: "●", unresolved: "▲", pending: "◌" };
+
+/* What `resolution_status` says, in the tense it actually holds.
+ *
+ * **The column describes the RUN's outcome, not the card's current state**, and
+ * these words now say so. That is the answer to "does this badge describe the run
+ * or the card", and it is written here rather than only in a decision record
+ * because the words are the whole of the fix.
+ *
+ * They used to read "has an image" — present tense, a claim about the work right
+ * now — beside a card that could also read "You have turned down everything that
+ * was found for it." Each true, together contradictory: only a resolution
+ * *attempt* recomputes this column, so turning down the last surviving instance
+ * leaves it reading `resolved` until the next re-search.
+ *
+ * The rejection model is deliberate and settled — `discovery.reject_image` does
+ * not rewrite `resolution_status`, and `_accept` asks the images rather than this
+ * column for exactly that reason. So the column was right and the wording was
+ * wrong, and rewording is what makes the two parts of that card consistent.
+ *
+ * **Chosen over deriving the badge from surviving instances**, which was the
+ * other real option. That would have made the badge mean *the card's* state on
+ * the review grid while the run table — whose rows carry no instance data — went
+ * on meaning the run's, so one badge would have said two things on two screens.
+ * These words mean the same on the grid, in the run table, and beside the raw
+ * `resolution_status` an agent reads over MCP. */
+const RESOLUTION_WORDS = {
+  resolved: "the run found an image",
+  unresolved: "the run found none",
+  pending: "not looked up",
+};
+
+function resolutionBadge(work) {
+  const status = work.resolution_status;
+  return el("span", { class: `badge badge-${status}` }, [
+    el("span", { class: "glyph", text: RESOLUTION_GLYPHS[status] || "●", "aria-hidden": true }),
+    el("span", { text: RESOLUTION_WORDS[status] || status }),
+  ]);
+}
+
+/* What this run's state means, in a sentence.
+ *
+ * Composed here rather than taken from the MCP surface's notice, which is
+ * written for a model — it names fields in backticks and tells the caller to
+ * call status again, neither of which is true of a page with buttons on it. The
+ * numbers are the part that must not be written twice, and they are not: every
+ * figure below is read from the tally the server computed.
+ *
+ * THE RATE IS STATED OVER WHAT THE MODEL PROPOSED, NEVER OVER THE TOTAL. Works a
+ * collection offered arrived carrying their own images, so counting them in the
+ * numerator reports a retrieval rate the run never achieved — with twelve
+ * offered works behind one unresolved proposal, "12 of 13" describes a run that
+ * in fact resolved nothing it was asked for. */
+/* An if-chain rather than an object literal like the badge maps above, and the
+ * asymmetry is a decision rather than an oversight: several of these branches
+ * read the tally, the run kind and whether image resolution is wired, so a map
+ * of bare strings could not hold them. The cost is that the checker which reads
+ * those maps cannot parse this, so `test_every_run_status_is_named_in_the_client`
+ * takes the weaker form of asserting each status value appears here at all —
+ * enough to fail when a tenth state is added, which is the property wanted. */
+function runSentence(view) {
+  const run = view.run;
+  const tally = view.tally;
+  if (run.status === "resolving_works") {
+    return "Working out which works match the intent.";
+  }
+  if (run.status === "awaiting_approval") {
+    return `This run proposed ${tally.proposed} works, which is more than the threshold, so it stopped to ask. Nothing further is spent until you decide.`;
+  }
+  if (run.status === "resolving_images") {
+    if (!view.image_resolution_available) {
+      return `There are ${tally.proposed} works to find images for, but no image provider is configured in this deployment, so the run will stay here. Cancel it when you are done reading it.`;
+    }
+    if (run.kind === "resolve") {
+      return `Looking again for images of the ${tally.total} works this re-search covers.`;
+    }
+    return `The work list of ${tally.proposed} works is settled, and the run is looking for an image of each.`;
+  }
+  if (run.status === "completed") {
+    let sentence =
+      run.kind === "resolve"
+        ? `This re-search finished: ${tally.resolved} of the ${tally.total} works it covers have an image.`
+        : `This run finished: ${tally.resolved_proposals} of ${tally.proposed} works it was asked for have an image.`;
+    if (run.kind !== "resolve" && tally.offered) {
+      sentence += ` Separately, the collection offered ${tally.offered} more works by artists this run named but could not confirm. They are labelled below and are not what was asked for.`;
+    }
+    if (tally.unresolved) {
+      sentence += ` ${tally.unresolved} could not be matched to any image and are reported rather than dropped — each says which kind of nothing below.`;
+    }
+    if (tally.pending) {
+      // Held apart from unresolved deliberately. "We looked and it is not
+      // there" and "we could not look" lead to opposite actions, and merging
+      // them tells a curator their painting does not exist because a museum was
+      // briefly unreachable.
+      sentence += ` ${tally.pending} could not be looked up at all — the image provider was unreachable for them, which says nothing about whether they exist.`;
+    }
+    return sentence;
+  }
+  if (run.status === "halted_by_budget") {
+    return "The provider refused further spend, so this run stopped where it was. Retrying will fail the same way until the credit limit resets or is raised.";
+  }
+  if (run.status === "interrupted") {
+    return "The process working on this run stopped underneath it — a restart or a crash, not a fault in the run. Start it again with the same intent.";
+  }
+  if (run.status === "failed") {
+    return "This run hit an error and stopped. The server log has the details.";
+  }
+  if (run.status === "declined") {
+    return "The work list was declined, so no images were looked for and nothing further was spent.";
+  }
+  if (run.status === "cancelled") {
+    return "This run was cancelled. Anything already spent is still recorded.";
+  }
+  return `This run is ${run.status}.`;
+}
+
+async function viewDiscovery(generation) {
+  // Both in one round trip: the estimate exists to inform the decision being
+  // made in the field beside it, so a screen that fetched it afterwards would
+  // be showing a receipt.
+  const [estimate, runs] = await Promise.all([api("/api/estimate"), api("/api/runs")]);
+
+  const intent = el("textarea", { id: "intent", rows: 3, required: true });
+  const start = el("button", {
+    class: "action",
+    type: "button",
+    text: "Start the search",
+    onclick: () =>
+      guard(async () => {
+        const run = await api("/api/runs", {
+          method: "POST",
+          body: JSON.stringify({ intent: intent.value }),
+        });
+        go("run", run.run_id);
+      }),
+  });
+
+  const entry = el("div", { class: "panel" }, [
+    el("h3", { text: "Ask for something" }),
+    el("div", { class: "field" }, [
+      el("label", { for: "intent", text: "What are you looking for?" }),
+      intent,
+    ]),
+    el("p", {
+      class: "note",
+      // The price before the decision, and what it buys. Stated as a bound
+      // rather than a typical figure, because a run may freely use the whole
+      // allowance and an estimate it can exceed is not an estimate.
+      text: `Asking costs at most $${estimate.estimated_cost_usd}. ${estimate.basis}`,
+    }),
+    el("div", { class: "row" }, [start]),
+  ]);
+
+  const panels = [el("h2", { text: "Discovery" }), entry];
+
+  if (!runs.runs.length) {
+    panels.push(el("p", { class: "muted", text: "No searches yet. Ask for something above." }));
+  } else {
+    panels.push(
+      el("div", { class: "panel" }, [
+        // Both figures whenever they differ. The server caps this listing, and a
+        // heading reading "Searches (50)" over a history of four hundred is a
+        // silently short list — indistinguishable from a complete one, which is
+        // how a curator concludes their older searches are gone. The count alone
+        // was what this rendered for one commit, immediately after the cap was
+        // added on the server and before anything here read `total`.
+        el("h3", { text: runs.truncated ? `Searches (${runs.count} of ${runs.total})` : `Searches (${runs.count})` }),
+        runs.truncated
+          ? el("p", {
+              class: "note",
+              // No paging on this listing, so the note must not imply one. What
+              // reaches an older run is opening it directly: the run view takes
+              // an id in the fragment and is reachable from anywhere.
+              text:
+                `Showing the ${runs.count} most recent of ${runs.total} searches. ` +
+                "Older ones are still here and still open at their own address; this list does not page.",
+            })
+          : null,
+        table(
+          "Every search, newest first. A re-search is a run too, and is listed here with its parent.",
+          ["Asked for", "Kind", "State", "Started", "Open"],
+          runs.runs.map((run) => [
+            run.intent || "—",
+            run.kind === "resolve" ? "re-search" : "search",
+            run.status,
+            run.started_at,
+            el("button", {
+              class: "action quiet",
+              type: "button",
+              text: "Open",
+              "aria-label": `Open the search for ${run.intent || run.run_id}`,
+              onclick: () => go("run", run.run_id),
+            }),
+          ]),
+        ),
+      ]),
+    );
+  }
+  render(generation, ...panels);
+}
+
+/* Slow enough not to hammer a Pi, fast enough that a curator watching a run does
+ * not wonder whether the page is live. The server answers immediately rather
+ * than holding the request open, so this interval is the whole of the latency. */
+const RUN_POLL_MS = 2000;
+
+/* How many consecutive failures end the watch, and why a count rather than a
+ * backoff curve.
+ *
+ * Two things actually happen here, and neither is the case backoff is for. A
+ * blip — one 502, a request caught by a service restart — recovers within a tick
+ * or two. A permanent condition — a bookmarked `#run/<id>` for a run that no
+ * longer exists, which the service answers 400 — never recovers, and every retry
+ * is identical. Backoff optimises the case in between, a long outage that comes
+ * good, and there is no such case here: this server is on the same box in the
+ * same house as the browser, so if it is unreachable for minutes the whole page
+ * is dead and reloading is the natural move, not waiting out a curve.
+ *
+ * Five, because the realistic multi-second interruption is the operator
+ * restarting the curation service while watching a run, and five attempts at
+ * two-second spacing rides out about ten seconds of that. A stale bookmark fails
+ * all five inside those ten seconds and then stops, instead of asking for a run
+ * that will never exist every two seconds for as long as the tab stays open. */
+const RUN_POLL_MAX_FAILURES = 5;
+
+/* Consecutive failures for the run currently being watched.
+ *
+ * Keyed by run id rather than by poll generation, though the issue that produced
+ * it said generation: `state.poll` increments on *every* poll, so a
+ * generation-keyed count would reset itself each tick and never reach any
+ * threshold. What has to survive a tick is the watch, and what identifies a
+ * watch is which run it is on — so opening a different run starts fresh, and a
+ * success anywhere clears it. */
+function noteWatchFailure(runId) {
+  if (state.watch === null || state.watch.runId !== runId) state.watch = { runId, failures: 0 };
+  state.watch.failures += 1;
+  return state.watch.failures;
+}
+
+function noteWatchSuccess(runId) {
+  state.watch = { runId, failures: 0 };
+}
+
+async function viewRun(runId, generation) {
+  // Claimed at the top and checked after every await. This paint supersedes any
+  // earlier one, and an earlier one still in flight must not paint over it or
+  // schedule a second timer beside its own — pressing Approve while a poll is
+  // mid-request is enough to have two running, and two chains double the request
+  // rate on every tick thereafter.
+  state.poll += 1;
+  const pollGeneration = state.poll;
+  let view;
+  try {
+    view = await api(`/api/runs/${encodeURIComponent(runId)}`);
+  } catch (failure) {
+    // One blip must not end the watch. Without re-arming, the throw leaves the
+    // last paint on screen looking current, `guard` writes a message naming a
+    // URL, and no further poll is ever scheduled — so a curator watching a live
+    // run through a single 502 is left with a stale page that never recovers
+    // and never says it stopped.
+    //
+    // But re-arming unconditionally has no notion of *consecutive* failures, so
+    // it did the same thing for a permanent one. Opening a stale bookmarked
+    // `#run/<id>` after the run is gone had the service answer 400, the catch
+    // re-arm, and the tab request that run every two seconds for as long as it
+    // stayed open — bounded only by navigation, with nothing on screen saying
+    // the watch was still retrying.
+    if (noteWatchFailure(runId) >= RUN_POLL_MAX_FAILURES) {
+      // Say the watch stopped, not only what failed. The two are different
+      // facts and only one of them tells the curator what to do next: a message
+      // naming a 400 leaves a live page indistinguishable from a dead one.
+      throw new Error(
+        `${failure.message} Gave up watching this run after ${RUN_POLL_MAX_FAILURES} attempts — ` +
+          "reload the page to start watching again."
+      );
+    }
+    // Re-arm first, then re-throw so the message is still shown: the next tick
+    // repaints and clears it if the blip has passed.
+    scheduleRunPoll(runId, pollGeneration);
+    throw failure;
+  }
+  if (state.poll !== pollGeneration) return;
+  // A reachable run resets the count, so a watch is only ever ended by failures
+  // with nothing between them. Recorded here rather than after the paint: what
+  // the count is about is whether the server answered, and it just did.
+  noteWatchSuccess(runId);
+  const run = view.run;
+  const tally = view.tally;
+
+  /* A poll that repaints an unchanged view is not free: `render` replaces the
+   * whole subtree, which destroys whatever the keyboard user was standing on —
+   * so tabbing to "Approve" and pausing to read loses the focus two seconds
+   * later, every time, on the one screen whose whole job is to be decided on.
+   * Nothing changed means nothing to touch. Compared against the payload rather
+   * than against the status alone, because a work list filling in underneath a
+   * settled status is exactly the change worth repainting for. */
+  const body = JSON.stringify(view);
+  if (state.painted !== null && state.painted.runId === runId && state.painted.body === body) {
+    if (!run.is_terminal) scheduleRunPoll(runId, pollGeneration);
+    return;
+  }
+
+  // The gate is the point of decision for phase 2, so its price and what that
+  // price is made of belong beside the buttons rather than on a costs panel
+  // further down. Asked for only at the gate: every other state either has no
+  // decision pending or has already spent whatever it was going to.
+  let gateEstimate = null;
+  let gateEstimateProblem = null;
+  if (run.status === "awaiting_approval") {
+    // A failure to price must not cost the curator their approve button — the
+    // estimate explains a decision, it is not the decision. But it is said
+    // rather than swallowed: a gate that silently stops showing a price looks
+    // exactly like a gate whose price is nothing.
+    try {
+      gateEstimate = await api(`/api/estimate?run_id=${encodeURIComponent(runId)}`);
+    } catch (failure) {
+      gateEstimateProblem = `The cost of approving could not be read: ${failure.message}`;
+    }
+    if (state.poll !== pollGeneration) return;
+  }
+
+  /* What asking for this actually cost, all in. The run record carries only its
+   * OWN spend, so a run billed little whose re-searches cost ten times more
+   * reads as cheap from the run alone — and "what did asking for Dalí cost" is
+   * the family total, which lives nowhere else. Fetched once the run has
+   * stopped: while it is still working the figure is mid-flight, and a total
+   * that climbs under a heading saying what something cost invites reading a
+   * partial as a final. */
+  let familySpend = null;
+  let familySpendProblem = null;
+  if (run.is_terminal) {
+    try {
+      familySpend = await api(`/api/runs/${encodeURIComponent(runId)}/spend`);
+    } catch (failure) {
+      // Said, not swallowed — the same call the gate estimate makes above, for
+      // the same reason. Losing the rollup must not cost the curator the costs
+      // panel, and it must not do so in silence either: this is the only place
+      // the family total appears, so a panel that quietly drops the row leaves
+      // "Spent by this run alone" reading as what asking cost, which is the
+      // exact misreading that row was added to prevent.
+      familySpendProblem = `The total including every re-search could not be read: ${failure.message}`;
+    }
+    if (state.poll !== pollGeneration) return;
+  }
+
+  const decisions = el("div", { class: "row" }, [
+    run.status === "awaiting_approval"
+      ? el("button", {
+          class: "action",
+          type: "button",
+          text: "Approve the list",
+          onclick: () => guard(async () => {
+            await api(`/api/runs/${encodeURIComponent(runId)}/approve`, { method: "POST" });
+            await refresh();
+          }),
+        })
+      : null,
+    run.status === "awaiting_approval"
+      ? el("button", {
+          class: "action quiet",
+          type: "button",
+          text: "Decline it",
+          onclick: () => guard(async () => {
+            await api(`/api/runs/${encodeURIComponent(runId)}/decline`, { method: "POST" });
+            await refresh();
+          }),
+        })
+      : null,
+    run.is_terminal
+      ? null
+      : el("button", {
+          class: "action quiet",
+          type: "button",
+          text: "Cancel this run",
+          onclick: () => guard(async () => {
+            await api(`/api/runs/${encodeURIComponent(runId)}/cancel`, { method: "POST" });
+            await refresh();
+          }),
+        }),
+  ]);
+
+  const panels = [
+    el("p", {}, [
+      el("button", { class: "action quiet", type: "button", text: "← All searches", onclick: () => go("discovery") }),
+    ]),
+    el("h2", { text: run.intent || "Re-search" }),
+    el("div", { class: "panel" }, [
+      el("p", { class: "note", text: runSentence(view) }),
+      // The engine's own reading of the request, beside the request. A work list
+      // is judged against how the intent was read rather than against its
+      // wording, which is what makes a surprising list explicable.
+      run.strategy ? el("p", { class: "muted", text: `How it read the request: ${run.strategy}` }) : null,
+      // What approving commits to, in the place the commitment is made. The
+      // basis is the load-bearing half: the figure is currently zero because
+      // phase 2 asks museum APIs, and a bare "$0" beside an approve button
+      // invites the reading that the gate is about money. It is about the size
+      // of the work list, and the basis says so.
+      gateEstimate
+        ? el("p", { class: "muted", text: `Approving costs $${gateEstimate.estimated_cost_usd}. ${gateEstimate.basis}` })
+        : null,
+      gateEstimateProblem ? el("p", { class: "note", text: gateEstimateProblem }) : null,
+      decisions,
+    ]),
+    el("div", { class: "panel" }, [
+      el("h3", { text: "What it cost" }),
+      facts([
+        // Named for what it actually is. This figure is written when phase 1
+        // finishes and the work count is known, so it prices *resolving the work
+        // list* — labelling it as the estimate made before starting would put
+        // the phase-1 price under a heading describing phase 2.
+        ["Estimated to find the images", run.estimated_cost_usd === null ? null : `$${run.estimated_cost_usd}`],
+        // Labelled as this run's own, because that is what it is: the record
+        // carries `run_cost(run_id).direct`. Left unqualified it reads as the
+        // whole cost of having asked, which it is not the moment a re-search
+        // descends from it.
+        ["Spent by this run alone", run.actual_cost_usd === null ? null : `$${run.actual_cost_usd}`],
+        // The family total — what asking for this cost altogether, re-searches
+        // included. A run billed little whose re-searches cost ten times more is
+        // exactly the case the two figures exist to keep apart, and it is the
+        // only place this number appears.
+        [
+          "Spent including every re-search",
+          familySpend === null ? null : `$${familySpend.cost_usd}`,
+        ],
+        // Two numbers, never a verdict: the usage is this run's history and the
+        // allowance is the deployment's setting as it stands now.
+        ["Searches used", `${view.searches.used} of an allowance of ${view.searches.allowance}`],
+      ]),
+      // The row's absence, said out loud. `facts` drops a null pair entirely, so
+      // without this the total simply is not there — and a panel showing only
+      // what this run spent, with nothing to say a figure is missing, is read as
+      // the whole cost of having asked.
+      familySpendProblem ? el("p", { class: "note", text: familySpendProblem }) : null,
+    ]),
+  ];
+
+  panels.push(
+    el("div", { class: "panel" }, [
+      el("h3", { text: `Works (${tally.total})` }),
+      // The way from watching a run to judging what it brought back. Offered
+      // only once the run holds works: a button onto an empty grid is a promise
+      // the next screen cannot keep.
+      view.works.length
+        ? el("p", {}, [
+            el("button", {
+              class: "action",
+              type: "button",
+              text: "Review these works",
+              onclick: () => go("review", runId),
+            }),
+          ])
+        : null,
+      el("p", {
+        class: "muted",
+        // Both counts, always, including when the collection offered nothing —
+        // a line that appeared only when there was a supplement would train a
+        // reader to read its absence as "these are all what I asked for".
+        text: `${tally.proposed} asked for, ${tally.offered} offered by the collection on top of them.`,
+      }),
+      view.works.length
+        ? table(
+            "Every work this run holds, asked-for and offered together. The counts above say how many of each.",
+            // NO PROVENANCE COLUMN, and its removal is the fix rather than a
+            // simplification. It was headed "Where it came from" and meant *how
+            // this row entered the run* — named by the model, or volunteered by
+            // a wired collection. In an art catalogue that phrase reads as the
+            // work's own provenance: which museum holds it. On the one screen
+            // where a curator is scanning titles and artists, the heading
+            // pointed at the wrong fact entirely.
+            //
+            // Renaming it was the obvious repair and the wrong one. The
+            // distinction is real and load-bearing — a curator authorised a list
+            // of a stated size and the supplement adds to it — but this table is
+            // the fourth place it is stated, after the tally's separate counts,
+            // the run sentence, and the line directly above these rows. What it
+            // adds per row is which *particular* work was offered, and nothing
+            // on this screen is decided per work: the deciding happens on the
+            // review card, where the badge stays.
+            ["Title", "Artist", "Image", "Why the run named it"],
+            view.works.map((work) => [
+              work.title,
+              work.artist || "—",
+              el("div", { class: "stack-tight" }, [resolutionBadge(work), reasonBadge(work)]),
+              work.rationale,
+            ]),
+          )
+        : el("p", { class: "muted", text: "This run has not settled on any works yet." }),
+    ]),
+  );
+
+  render(generation, ...panels);
+
+  // Recorded only when the paint is one worth leaving alone. A gate whose price
+  // could not be read is not: the run itself is unchanged, so every later poll
+  // would match the signature and the failure sentence would sit there until
+  // something else about the run moved. Not recording it is what makes the next
+  // poll try the price again.
+  //
+  // The family total's failure is deliberately NOT held out the same way, and
+  // the asymmetry is the point rather than an oversight: it is fetched only for
+  // a run that has stopped, and a stopped run schedules no further poll, so
+  // there is no next attempt for withholding the signature to enable. The
+  // sentence in the panel is the whole of that remedy.
+  if (gateEstimateProblem === null) state.painted = { runId, body };
+
+  // Poll only while there is something still to wait for. `is_terminal` comes
+  // from the server rather than from a list of finished states written here,
+  // which would go stale the day a tenth state is added and leave this polling
+  // a finished run forever.
+  if (!run.is_terminal) scheduleRunPoll(runId, pollGeneration);
+}
+
+/* -- review ---------------------------------------------------------------- */
+
+/* What the curator has decided about a work, in words.
+ *
+ * `pending` is absent on purpose: an undecided work is the ordinary case and
+ * shows no badge, the same way an accepted catalogue work shows no status badge.
+ * A badge on every card would make the two decided states harder to pick out,
+ * not easier. The vocabulary test knows about the omission. */
+const VERDICT_GLYPHS = { accepted: "✓", rejected: "✗", awaiting_better_image: "◑" };
+
+const VERDICT_WORDS = {
+  accepted: "accepted",
+  rejected: "rejected",
+  awaiting_better_image: "wants a better scan",
+};
+
+function verdictBadge(work) {
+  const glyph = VERDICT_GLYPHS[work.verdict];
+  if (!glyph) return null;
+  return el("span", { class: `badge badge-${work.verdict}` }, [
+    el("span", { class: "glyph", text: glyph, "aria-hidden": true }),
+    el("span", { text: VERDICT_WORDS[work.verdict] || work.verdict }),
+  ]);
+}
+
+/* The picture for one instance, or what stands in for it.
+ *
+ * The card knows before it asks — the listing carries `preview_available` — so a
+ * work whose picture was reclaimed never requests bytes that are not there. The
+ * error handler is for the narrow race where the file goes away in between, and
+ * for a museum's file that will not decode: the listing reports that one as
+ * available, because nothing has read the bytes yet. */
+function instanceImage(instance, alt) {
+  if (!instance.preview_available) {
+    return el("div", { class: "card-image" }, [absentImage(instance.preview_note)]);
+  }
+  const image = el("img", {
+    src: `/api/candidate-images/${encodeURIComponent(instance.image_id)}/preview`,
+    alt: alt || "",
+    loading: "lazy",
+  });
+  image.addEventListener("error", () => {
+    image.replaceWith(absentImage("Its picture could not be loaded just now."));
+  });
+  return el("div", { class: "card-image" }, [image]);
+}
+
+function instanceStateBadges(instance) {
+  return [
+    instance.rejected
+      ? el("span", { class: "badge badge-refused" }, [
+          el("span", { class: "glyph", text: "⊘", "aria-hidden": true }),
+          el("span", { text: "turned down" }),
+        ])
+      : null,
+    instance.is_selected
+      ? el("span", { class: "badge badge-on_offer" }, [
+          el("span", { class: "glyph", text: "★", "aria-hidden": true }),
+          el("span", { text: "on offer" }),
+        ])
+      : null,
+  ];
+}
+
+/* One alternate scan, with what a curator needs to choose between it and the
+ * others: the picture, the size it would hang at, where it came from, and the
+ * two things they can do about it. */
+function instanceRow(instance, title, after) {
+  const act = (path, body) =>
+    guard(async () => {
+      await api(path, { method: "POST", body: JSON.stringify(body || {}) });
+      await after();
+    });
+  return el("li", { class: "alternate" }, [
+    instanceImage(instance, ""),
+    el("div", { class: "alternate-body" }, [
+      el("div", { class: "card-footer" }, [fitBadge(instance, "size unrecorded"), ...instanceStateBadges(instance)]),
+      facts([
+        ["Provider", instance.provider],
+        ["Confidence", instance.confidence.toFixed(2)],
+        ["Rights", instance.rights_status],
+        ["Why this one", instance.selection_rationale],
+        // Shown as text rather than as a link. The URL comes from a museum this
+        // product does not control, and a rendered anchor is one click from
+        // navigating a curator's browser to an attacker-chosen address on a page
+        // that otherwise touches nothing outside the LAN.
+        ["Where it lives", instance.url],
+      ]),
+      instance.preview_note ? el("p", { class: "muted", text: instance.preview_note }) : null,
+      el("div", { class: "row" }, [
+        instance.rejected || instance.is_selected
+          ? null
+          : el("button", {
+              class: "action quiet",
+              type: "button",
+              text: "Use this one",
+              // Named by the work, never by its id. A screen reader announcing
+              // "Use this scan for 8f2a-41c3…" names the one thing on the card
+              // that identifies nothing, on a row whose whole purpose is
+              // choosing between scans of a painting the curator can see.
+              "aria-label": `Use this scan for ${title}`,
+              onclick: () => act(`/api/candidate-images/${encodeURIComponent(instance.image_id)}/select`),
+            }),
+        instance.rejected
+          ? null
+          : el("button", {
+              class: "action quiet",
+              type: "button",
+              text: "Turn it down",
+              "aria-label": `Turn down this scan for ${title}`,
+              onclick: () => act(`/api/candidate-images/${encodeURIComponent(instance.image_id)}/reject`),
+            }),
+      ]),
+    ]),
+  ]);
+}
+
+/* What a capped card is not showing, said out loud.
+ *
+ * Composed here rather than taken from the MCP surface's notice, which is the
+ * same call `runSentence` made and for the same reason: that one names tool
+ * calls in backticks and offers a caller an action. The figures are the part
+ * that must not be written twice, and they are not — `held` and
+ * `shows_every_choosable_instance` are the server's. */
+function instancesNote(listing) {
+  if (!listing.truncated) return null;
+  const omitted = listing.held - listing.instances.length;
+  return el("p", {
+    class: "note",
+    text: listing.shows_every_choosable_instance
+      ? `This work holds ${listing.held} scans; ${omitted} already turned down are not shown. Every scan you can still choose is here.`
+      : `This work holds ${listing.held} scans and ${omitted} are not shown, including some you could still choose. Turning down what is here is what brings the rest within reach.`,
+  });
+}
+
+async function alternatesPanel(workId, after) {
+  const listing = await api(`/api/candidates/${encodeURIComponent(workId)}/images`);
+  if (!listing.instances.length) {
+    return el("p", { class: "muted", text: "No scans were found for this work, so there is nothing to choose between." });
+  }
+  return el("div", { class: "stack" }, [
+    instancesNote(listing),
+    el("ul", { class: "alternates" }, listing.instances.map((instance) => instanceRow(instance, listing.work.title, after))),
+  ]);
+}
+
+/* Why a card carries no picture — two states the producer distinguishes and this
+ * client used to flatten into one sentence.
+ *
+ * `CandidateCardOut.shown` is null both when nothing was ever found and when the
+ * curator turned every scan down, and its own docstring points at the pair that
+ * tells them apart. Reading only `shown` told a curator "No scan was found for
+ * this work" directly above a disclosure listing the scans they had just
+ * rejected, beside a badge still reading "has an image" — because rejecting an
+ * image deliberately does not rewrite `resolution_status`. Three parts of one
+ * card disagreeing, and the MCP surface said the opposite for the same work.
+ *
+ * The badge half of that is settled: `RESOLUTION_WORDS` now says "the run found
+ * an image", which is what the column always meant and is consistent with the
+ * sentence below rather than contradicting it.
+ *
+ * **It names no way back, because there is none, and an earlier version of this
+ * fix invented one.** It read "Restore one from the scans below to judge it
+ * again", which was false three times over: every row in that panel renders its
+ * controls as null once rejected, no restore endpoint exists, and
+ * `discovery.select_image` refuses a rejected instance *on purpose* — its
+ * docstring makes the refusal a requirement, so that a rejection survives the
+ * next re-search. Inventing an instruction the product forbids is the same
+ * defect this function exists to fix, so it is recorded rather than quietly
+ * deleted.
+ *
+ * The sentence is `REASON_SENTENCES.all_rejected` rather than a second string
+ * saying the same thing, so this state reads identically wherever a curator
+ * meets it.
+ *
+ * **The badge beside this used to contradict it, and no longer does.** It read
+ * "has an image" — a present-tense claim — while `resolution_status` records what
+ * the *run* found, and rejecting an image deliberately does not rewrite it. The
+ * product question that paragraph deferred is answered: the column describes the
+ * run, and `RESOLUTION_WORDS` says so. Rewording it rather than deriving the
+ * badge from surviving instances keeps one badge meaning one thing on the review
+ * grid, in the run table and over MCP — see the comment on `RESOLUTION_WORDS`. */
+function absentScanReason(card) {
+  if (card.instances_held > 0 && card.instances_surviving === 0) {
+    return REASON_SENTENCES.all_rejected;
+  }
+  return "No scan was found for this work.";
+}
+
+/* One proposed work, as the thing a curator decides about.
+ *
+ * `notice` is carried across a repaint rather than shown from a fresh fetch,
+ * because it describes what the verdict just *did* — minting an artist who may
+ * duplicate one already held — and that is not a property of the work anybody
+ * could read back off it afterwards. */
+function candidateCard(card, notice, alternatesOpen = false) {
+  const work = card.work;
+  const node = el("li", { class: "card", "data-work": work.work_id });
+
+  const repaint = async (message) => {
+    const fresh = await api(`/api/candidates/${encodeURIComponent(work.work_id)}`);
+    // The disclosure's state is carried over, because choosing between scans is
+    // a sequence rather than one act: a curator turning one down is usually
+    // about to turn down or choose another. Rebuilding the card closed would
+    // collapse the list they are working in, on every click, and cost a second
+    // fetch to get back to where they were.
+    node.replaceWith(candidateCard(fresh, message, disclosure.open));
+  };
+
+  const reason = el("input", { type: "text", id: `reason-${work.work_id}` });
+  const decide = (verdict) =>
+    guard(async () => {
+      const outcome = await api(`/api/candidates/${encodeURIComponent(work.work_id)}/verdict`, {
+        method: "POST",
+        body: JSON.stringify({ verdict, reason: reason.value || null }),
+      });
+      await repaint(outcome.notice);
+    });
+
+  const alternates = el("div", { class: "stack" }, [el("p", { class: "muted", text: "Loading this work's scans…" })]);
+  // **"Scans", not "other scans", and the count is deliberately every scan the
+  // work holds.** The panel below lists all of them — the one pictured on the
+  // card included, because seeing which is currently selected is half of
+  // choosing between them. Labelling that "Other scans (1)" promised a curator
+  // something new behind a disclosure whose single entry was the picture they
+  // were already looking at, which is a promise every single-scan work broke.
+  // The count matches the panel's contents; making the *word* true was the fix,
+  // because subtracting the shown scan from the number would have made the
+  // summary disagree with what opening it reveals.
+  const disclosure = el("details", {}, [
+    el("summary", { text: `Scans (${card.instances_held})` }),
+    alternates,
+  ]);
+  // Fetched when it is opened rather than with the grid: a thirty-work page
+  // would otherwise carry up to twelve instances each, and a curator opens the
+  // alternates for the few works whose first answer they doubt.
+  disclosure.addEventListener("toggle", () => {
+    if (disclosure.open) guard(async () => alternates.replaceChildren(await alternatesPanel(work.work_id, () => repaint(null))));
+  });
+  // Opening it here fires `toggle`, which is what fetches the list — so a
+  // carried-over disclosure loads rather than restoring the placeholder.
+  //
+  // The order relative to the listener above does not matter, and the comment
+  // here used to claim it did. `toggle` is dispatched asynchronously, so a
+  // listener attached after the property is set still receives it; the mutation
+  // sweep proved the claim false by swapping the two lines and watching every
+  // test pass. Left in this order because it reads better, not because anything
+  // depends on it.
+  if (alternatesOpen) disclosure.open = true;
+
+  node.append(
+    card.shown ? instanceImage(card.shown, work.artist ? `${work.title}, by ${work.artist}` : work.title) : el("div", { class: "card-image" }, [absentImage(absentScanReason(card))]),
+    el("div", { class: "card-body" }, [
+      el("h3", { class: "card-title", text: work.title }),
+      el("p", { class: "card-artist", text: work.artist || "Artist unrecorded" }),
+      el("div", { class: "card-footer" }, [
+        verdictBadge(work),
+        provenanceBadge(work),
+        resolutionBadge(work),
+        reasonBadge(work),
+        card.shown ? fitBadge(card.shown, "size unrecorded") : null,
+      ]),
+      el("p", { class: "card-meta", text: work.rationale }),
+      // The picture is not the one a verdict would accept on, and saying so is
+      // the difference between a curator understanding the refusal and being
+      // surprised by it. Accepting really is refused in this state — the service
+      // will not record a work with no primary source — so the card says which
+      // action reaches the way out.
+      card.shown && !card.shown_is_on_offer
+        ? el("p", {
+            class: "note",
+            text: "No scan is on offer for this work. The picture is what was found, shown so you can judge it — accepting is refused until you choose one from the scans below.",
+          })
+        : null,
+      notice ? el("p", { class: "note", text: notice }) : null,
+      el("div", { class: "row" }, [
+        el("div", { class: "field" }, [
+          el("label", { for: `reason-${work.work_id}`, text: "Why (optional)" }),
+          reason,
+        ]),
+        el("button", { class: "action", type: "button", text: "Accept", "aria-label": `Accept ${work.title}`, onclick: () => decide("accepted") }),
+        el("button", { class: "action quiet", type: "button", text: "Reject", "aria-label": `Reject ${work.title}`, onclick: () => decide("rejected") }),
+      ]),
+      disclosure,
+    ]),
+  );
+  return node;
+}
+
+/* Every work a run holds, paged through to the end.
+ *
+ * No `limit` is sent, so the server's own default and cap govern and the client
+ * holds no copy of either. Asking for the cap explicitly would put the number in
+ * two places, and the day the service lowered it the grid would ask for more
+ * than it allows and be refused outright. */
+async function fetchAllCandidates(runId) {
+  const works = [];
+  let run = null;
+  let total = 0;
+  for (let page = 0; page < PAGE_CEILING; page += 1) {
+    const body = await api(`/api/runs/${encodeURIComponent(runId)}/candidates?offset=${works.length}`);
+    run = body.run;
+    total = body.total;
+    works.push(...body.works);
+    // Same stopping condition as `fetchAllWorks`, and the same reason: a page
+    // reporting more while carrying nothing makes no progress, so asking again
+    // sends the identical request. The ceiling bounds it regardless; this is
+    // what keeps a misbehaving page from costing fifty round trips.
+    if (!body.truncated || body.works.length === 0) break;
+  }
+  return { run, works, total };
+}
+
+async function viewReview(runId, generation) {
+  const page = await fetchAllCandidates(runId);
+  const wanting = page.works.filter((card) => card.work.verdict === "awaiting_better_image");
+
+  const grid = el("ul", { class: "grid" }, page.works.map((card) => candidateCard(card, null)));
+
+  const panels = [
+    el("p", {}, [
+      el("button", { class: "action quiet", type: "button", text: "← The search", onclick: () => go("run", runId) }),
+    ]),
+    el("h2", { text: page.run.intent || "Re-search" }),
+    // The catalogue grid's own helper: `fetchAllCandidates` returns the
+    // `{works, total}` shape it takes, and a second copy of the sentence is how
+    // one grid comes to word truncation differently from the other.
+    shortfallNote(page),
+    // Offered only when there is something to re-search. A button that spends
+    // and would do nothing is worse than no button: it invites a curator to pay
+    // for a run over an empty list.
+    wanting.length
+      ? el("div", { class: "panel" }, [
+          el("h3", { text: "Scans you turned down" }),
+          el("p", {
+            class: "muted",
+            // Says that nothing is looking, which is the fact a curator cannot
+            // see. Rejecting a scan records a judgement; it does not start a
+            // search, and a page that stayed silent would leave them waiting for
+            // one that is never coming.
+            text: `${wanting.length} ${wanting.length === 1 ? "work is" : "works are"} waiting for a better scan. Nothing is looking for one — a re-search is what looks, and it spends.`,
+          }),
+          el("div", { class: "row" }, [
+            el("button", {
+              class: "action",
+              type: "button",
+              text: "Look again for these",
+              onclick: () =>
+                guard(async () => {
+                  const run = await api("/api/runs/resolve", {
+                    method: "POST",
+                    body: JSON.stringify({ work_ids: wanting.map((card) => card.work.work_id) }),
+                  });
+                  go("run", run.run_id);
+                }),
+            }),
+          ]),
+        ])
+      : null,
+    page.works.length ? grid : el("p", { class: "muted", text: "This run settled on no works, so there is nothing to review." }),
+  ];
+  render(generation, ...panels);
+}
+
+/* The next look at a run, if this view is still the one on screen when it comes
+ * round. Both conditions are checked at fire time rather than cancelled on
+ * navigation: a stale timer that finds the world moved on simply does nothing,
+ * which is one mechanism instead of a handle to remember to clear on every path
+ * out of the view. */
+function scheduleRunPoll(runId, generation) {
+  window.setTimeout(() => {
+    if (state.poll === generation && state.view === "run" && state.detailId === runId) refresh();
+  }, RUN_POLL_MS);
+}
+
 /* -- routing --------------------------------------------------------------- */
 
-const VIEWS = { works: viewWorks, themes: viewThemes, manifest: viewManifest, health: viewHealth };
+const VIEWS = { works: viewWorks, discovery: viewDiscovery, themes: viewThemes, manifest: viewManifest, health: viewHealth };
+
+/* The views that address one thing and carry its id in the fragment. Held as a
+ * map rather than as a chain of comparisons about which view is which: the
+ * dispatch, the fragment and the tab highlight all read it, and three
+ * hand-written conditions are three chances for them to disagree about the same
+ * view. `tab` is which section stays lit while a detail view is open. */
+const DETAIL_VIEWS = {
+  work: { render: viewWork, tab: "works" },
+  run: { render: viewRun, tab: "discovery" },
+  // Keyed by the run whose works are being judged, not by a work: a curator
+  // reviews a run's output as a set, and a per-work address would make the grid
+  // unreachable by URL.
+  review: { render: viewReview, tab: "discovery" },
+};
 
 async function guard(work) {
   try {
@@ -609,10 +1661,24 @@ async function guard(work) {
   }
 }
 
-function go(view, workId = null) {
+function go(view, detailId = null) {
   state.view = view;
-  state.workId = workId;
-  const hash = view === "work" ? `#work/${workId}` : `#${view}`;
+  state.detailId = detailId;
+  // Leaving a view invalidates any refresh it had scheduled, so a run page left
+  // open does not keep repainting behind whatever replaced it — and discards
+  // what was painted, since the DOM that record describes is about to go.
+  //
+  // The `nav` bump here is load-bearing only on the path that does NOT change
+  // the hash — navigating to the view already displayed, which is what clicking
+  // the current tab does. Every other path writes the fragment and re-enters
+  // through `readHash`, which bumps it again. Written down because a mutation
+  // sweep survives its removal: the cross-view case is covered, and this is the
+  // narrow one that is not, so the next reader should not take the survivor for
+  // proof that the line does nothing.
+  state.nav += 1;
+  state.poll += 1;
+  state.painted = null;
+  const hash = DETAIL_VIEWS[view] ? `#${view}/${detailId}` : `#${view}`;
   if (window.location.hash !== hash) {
     window.location.hash = hash;
     return; // hashchange re-enters here
@@ -621,12 +1687,16 @@ function go(view, workId = null) {
 }
 
 function refresh(moveFocus = false) {
+  const detail = DETAIL_VIEWS[state.view];
+  const lit = detail ? detail.tab : state.view;
   for (const tab of document.querySelectorAll("nav.tabs button")) {
-    const selected = tab.dataset.view === state.view || (state.view === "work" && tab.dataset.view === "works");
-    if (selected) tab.setAttribute("aria-current", "page");
+    if (tab.dataset.view === lit) tab.setAttribute("aria-current", "page");
     else tab.removeAttribute("aria-current");
   }
-  const done = guard(state.view === "work" ? () => viewWork(state.workId) : VIEWS[state.view]);
+  // Captured here, before the view starts, so it is the navigation that
+  // commissioned this paint rather than whatever is current when it finishes.
+  const generation = state.nav;
+  const done = guard(detail ? () => detail.render(state.detailId, generation) : () => VIEWS[state.view](generation));
   if (moveFocus) {
     // Navigating replaces the whole view, which destroys the control that was
     // focused — leaving focus on <body>, so the next Tab starts from the top of
@@ -640,13 +1710,26 @@ function refresh(moveFocus = false) {
 
 function readHash() {
   const hash = window.location.hash.replace(/^#/, "");
-  if (hash.startsWith("work/")) {
-    state.view = "work";
-    state.workId = decodeURIComponent(hash.slice("work/".length));
+  const slash = hash.indexOf("/");
+  const head = slash === -1 ? hash : hash.slice(0, slash);
+  if (slash !== -1 && DETAIL_VIEWS[head]) {
+    state.view = head;
+    state.detailId = decodeURIComponent(hash.slice(slash + 1));
   } else {
-    state.view = VIEWS[hash] ? hash : "works";
-    state.workId = null;
+    // The path is consulted when there is no fragment, so the typed and
+    // bookmarked URLs `pages.py` serves actually open the view they name.
+    // Without this every one of them fell through to the Works grid: the server
+    // answered 200 for /discovery and the client then rendered something else,
+    // which is a worse failure than a 404 because it looks like it worked.
+    const typed = window.location.pathname.replace(/^\//, "");
+    state.view = VIEWS[hash] ? hash : VIEWS[typed] ? typed : "works";
+    state.detailId = null;
   }
+  // A fragment change is a navigation like any other, and the view being left
+  // may have had a refresh scheduled over a page it is about to lose.
+  state.nav += 1;
+  state.poll += 1;
+  state.painted = null;
 }
 
 for (const tab of document.querySelectorAll("nav.tabs button")) {

@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
+from typing import Final
 
 from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
 
@@ -115,15 +116,92 @@ class ResolutionStatus(StrEnum):
     later re-search — which is what gives a failed re-search a terminal
     representation without adding a verdict value for it.
 
-    `UNRESOLVED` is a first-class outcome, not an absent row: phase 2 finding no
-    credible instance is the signal that phase 1 may have invented the work.
-    Dropping it from the batch discards that signal, and attaching a
-    low-confidence near-match actively launders it.
+    `UNRESOLVED` is a first-class outcome, not an absent row. Dropping such a work
+    from the batch discards a real signal, and attaching a low-confidence
+    near-match actively launders it. **What the signal says depends on which route
+    reached it** — see `UnresolvedReason`, which is set on the same write. Only
+    `NOT_HELD` is evidence that phase 1 may have invented the work; the others mean
+    the collection has it and cannot offer it in a usable form, or that the curator
+    has already turned down what it offered.
     """
 
     PENDING = "pending"
     RESOLVED = "resolved"
     UNRESOLVED = "unresolved"
+
+
+class WorkProvenance(StrEnum):
+    """Who put this work in front of the curator — the model, or the collection.
+
+    **The distinction is a promise, not a label.** A `PROPOSED` work is one phase
+    1 named and phase 2 tried to confirm; an `OFFERED` work is one a wired
+    collection holds, drawn by filtering that collection and carrying its own
+    title and attribution verbatim. Presenting the second as the first is exactly
+    the confident near-match this product forbids — the curator would be shown a
+    work the model never named, under a name it did — so the two are held apart
+    at the record rather than at each surface that renders them.
+
+    `PROPOSED` is the default everywhere it is absent, which is what lets rows
+    written before the column existed read correctly: every one of them came from
+    phase 1, because nothing else could write a candidate work then.
+    """
+
+    PROPOSED = "proposed"
+    OFFERED = "offered"
+
+
+class UnresolvedReason(StrEnum):
+    """Which kind of nothing an unresolved work came back with.
+
+    A bare `UNRESOLVED` cannot distinguish a title nobody holds from a scan too
+    small for the wall, and neither a curator nor anyone diagnosing a run
+    afterwards can act without knowing which. The routes are not interchangeable:
+    `NOT_HELD` is a fact about the collection, `IDENTITY_REFUSED` about two
+    spellings of a name, `SIZE_UNKNOWN` and `BELOW_FLOOR` about the record, and
+    `ALL_REJECTED` about the curator.
+
+    **The value is derived, never asserted by a caller.** It records decisions the
+    judgement already makes and would otherwise throw away, so it cannot disagree
+    with what is actually stored — the same reason the status beside it is read
+    from a work's instances rather than passed in.
+
+    `depth` is how far a work got before it was refused, and it is what settles a
+    work whose results were refused at several different gates: the deepest gate
+    any of them reached is the most informative thing that is true. It is a
+    property here rather than an ordering written at the derivation site because a
+    sixth member added without a depth is then a failure at definition rather than
+    a silent tie broken by whichever result the provider happened to return first.
+    """
+
+    NOT_HELD = "not_held"
+    IDENTITY_REFUSED = "identity_refused"
+    SIZE_UNKNOWN = "size_unknown"
+    BELOW_FLOOR = "below_floor"
+    ALL_REJECTED = "all_rejected"
+
+    @property
+    def depth(self) -> int:
+        """How far the work got before this gate refused it. Higher is further."""
+        return _REFUSAL_DEPTH[self]
+
+
+#: Ordered shallowest to deepest, which is the precedence when several apply.
+#:
+#: **Only the first three are ever ranked**, and they are the three a search can
+#: refuse a result at. `BELOW_FLOOR` and `ALL_REJECTED` are read from rows the work
+#: already holds, which the derivation consults *before* it looks at any refusal at
+#: all — so their entries here are never compared against anything. They are listed
+#: for totality, so that `depth` is defined for every member and a sixth one cannot
+#: be added without deciding where it sits; their equal value records that ranking
+#: them against each other would be meaningless, since rejected instances are
+#: filtered out before the floor applies and a work can only ever be one of them.
+_REFUSAL_DEPTH: Final[dict[UnresolvedReason, int]] = {
+    UnresolvedReason.NOT_HELD: 0,
+    UnresolvedReason.IDENTITY_REFUSED: 1,
+    UnresolvedReason.SIZE_UNKNOWN: 2,
+    UnresolvedReason.BELOW_FLOOR: 3,
+    UnresolvedReason.ALL_REJECTED: 3,
+}
 
 
 class Verdict(StrEnum):
@@ -227,10 +305,21 @@ class CandidateWork:
     proposed_title: str
     rationale: str
     work_dedup_key: str
+    #: Whether the model named this work or a wired collection offered it. Not
+    #: optional and not nullable in the record, because every work has one: a row
+    #: whose provenance nobody set is a row phase 1 proposed, that being the only
+    #: thing that could write one before collections were browsable. The *column*
+    #: is nullable so the widening step can add it to files already on disk, and
+    #: a null read back means `PROPOSED` for the same reason.
+    provenance: WorkProvenance = WorkProvenance.PROPOSED
     resolution_status: ResolutionStatus = ResolutionStatus.PENDING
     verdict: Verdict = Verdict.PENDING
     artwork_id: str | None = None
     proposed_artist: str | None = None
+    #: Which kind of nothing, when `resolution_status` is `UNRESOLVED`; `None`
+    #: otherwise. The two travel together on every write, so a work can never
+    #: report that it found nothing without saying what kind of nothing it was.
+    unresolved_reason: UnresolvedReason | None = None
     rejected_reason: str | None = None
     decided_at: datetime | None = None
 

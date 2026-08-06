@@ -16,6 +16,7 @@ facts about the product rather than conveniences of one call site, which is why
 they are settled in one place instead of per constructor.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,7 +24,9 @@ from curation.acquisition.direct import StreamOpener
 from curation.acquisition.mat import MatEngine
 from curation.acquisition.preparation import PreparationService, PreparationSettings
 from curation.acquisition.service import AcquisitionService, AcquisitionSettings
+from curation.acquisition.tiles import TileTargetResolver
 from curation.acquisition.transport import no_transport
+from curation.acquisition.urls import Resolver
 
 # Module scope, and the three `_default_*` helpers below used to import this at
 # function scope instead, explained as breaking a cycle: "config reads this
@@ -47,9 +50,11 @@ from curation.config import (
     READY_DIRNAME,
     TILE_CACHE_DIRNAME,
 )
+from curation.discovery.browse import CollectionBrowse
 from curation.discovery.engine import DiscoveryEngine
 from curation.discovery.images import ImageSearch
 from curation.discovery.phase_two import PhaseTwoEngine
+from curation.persistence.backup import BACKUP_RECEIPT_FILENAME
 from curation.persistence.catalogue import CatalogueStore
 from curation.persistence.discovery import DiscoveryStore
 from curation.services.catalogue import CatalogueService
@@ -57,6 +62,7 @@ from curation.services.discovery import DiscoveryService
 from curation.services.display import DisplayService, WallSettings
 from curation.services.display_fit import ArtworkBox
 from curation.services.errors import ServiceError
+from curation.services.health import HealthService
 from curation.services.previews import PreviewCache, PreviewSettings
 from curation.services.review import ReviewService
 from curation.services.runner import DiscoveryRunner, DiscoverySettings
@@ -85,6 +91,12 @@ class Services:
     #: single service spanning both would hold the catalogue and discovery stores
     #: at once for no shared logic.
     review: ReviewService
+    #: Everything the health panel states, gathered in one call. Its own concern
+    #: rather than a composite the handler assembles, because the panel is the
+    #: product's only alerting surface and "which signals does it make" is a
+    #: product rule — one that belongs where it can be tested without HTTP, and
+    #: where the next signal is added in one place rather than two.
+    health: HealthService
     #: Running a discovery run, as distinct from recording one. It sits above
     #: `discovery` rather than inside it because the record layer is deliberately
     #: synchronous and knows nothing of processes, and everything about starting
@@ -121,9 +133,18 @@ class Services:
         engine: DiscoveryEngine,
         discovery_settings: DiscoverySettings,
         image_search: ImageSearch | None = None,
+        collection: CollectionBrowse | None = None,
         previews: PreviewSettings | None = None,
         acquisition: AcquisitionSettings | None = None,
         open_stream: StreamOpener | None = None,
+        tile_targets: Mapping[str, TileTargetResolver] | None = None,
+        #: How a hostname becomes addresses for the fetch policy. Defaults to the
+        #: system resolver, which is what a deployment wants and what a test suite
+        #: must not have — a suite whose job is to be green cannot depend on DNS.
+        #: Exposed here rather than left to whoever knows the attribute name: a
+        #: caller reaching past this to write `acquisition._resolve` gets no error
+        #: when the attribute is renamed, it just silently resolves for real again.
+        resolve: Resolver | None = None,
         preparation: PreparationSettings | None = None,
         mat_engine: MatEngine | None = None,
     ) -> Services:
@@ -170,12 +191,25 @@ class Services:
             # validated there. A third copy would be a third chance for the
             # copies to disagree, and nothing would notice which was right.
             review=ReviewService(discovery_service, box=artwork_box, art_root=thumbnails.art_root),
+            # The receipt is located the same way, and for the same reason. It is
+            # not a `WallSettings` field beside the heartbeat's path: that
+            # settings object carries what the *wall's* operations need, and the
+            # backup is this plane's own business rather than the display plane's.
+            health=HealthService(
+                display_service,
+                backup_receipt_path=thumbnails.art_root / BACKUP_RECEIPT_FILENAME,
+                box=artwork_box,
+            ),
             runner=DiscoveryRunner(
                 discovery_service,
                 engine,
                 discovery_settings,
                 images=None if image_search is None else PhaseTwoEngine(image_search, box=artwork_box),
                 previews=None if image_search is None or previews is None else PreviewCache(previews, image_search.fetch_preview),
+                # Independent of the phase-2 pair: a deployment may resolve
+                # images without supplementing, and a run with no collection
+                # simply offers nothing.
+                collection=collection,
             ),
             # `art_root` off the thumbnail settings for the same reason `review`
             # takes it from there: it is one deployment value, already validated,
@@ -189,6 +223,23 @@ class Services:
                 # a real client here would let that mistake reach a museum from a
                 # test suite instead of failing where it was made.
                 open_stream=open_stream or no_transport,
+                # Only a provider whose recorded URL is an identity needs one, and
+                # the museum client is the thing that can answer — so by default
+                # this is exactly the configured image provider. A deployment with
+                # none configured therefore has no resolver either, and an artic
+                # fetch refuses by name rather than handing the tile fetcher a URL
+                # it cannot read: without credentials to ask the collection for an
+                # object's image service, there is genuinely no way to reach it.
+                #
+                # Overridable because resolving one object and searching a whole
+                # collection are separate capabilities that today's one provider
+                # happens to serve both of.
+                tile_targets=(
+                    tile_targets
+                    if tile_targets is not None
+                    else ({} if image_search is None else {image_search.provider: image_search.tile_url})
+                ),
+                **({} if resolve is None else {"resolve": resolve}),
             ),
             preparation=PreparationService(
                 catalogue_service,

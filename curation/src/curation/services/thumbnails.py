@@ -31,7 +31,7 @@ from typing import Final
 
 from PIL import Image, UnidentifiedImageError
 
-from curation.persistence.records import RenditionKind
+from curation.persistence.records import RenditionKind, tv_renditions_newest_first
 from curation.services.catalogue import CatalogueService
 from curation.services.errors import ServiceError
 from curation.services.imaging import encode_downscaled
@@ -108,10 +108,20 @@ class ThumbnailService:
         if original is None:
             raise ThumbnailUnavailable("No master image has been acquired for this work yet.")
 
-        for view in self._catalogue.list_renditions(artwork_id):
-            if view.rendition.kind is not RenditionKind.TV_DISPLAY or view.stale:
+        # Newest first, which is the order the wall prefers them in — expressed
+        # once, beside the records, so a card and the wall cannot show different
+        # pictures of the same work. This walked the store's own order and took
+        # the first current row it met; two television renders at different
+        # geometries are reachable under the unique index, and on such a work the
+        # two would have disagreed with nothing saying which was right.
+        views = {view.rendition.id: view for view in self._catalogue.list_renditions(artwork_id)}
+        for rendition in tv_renditions_newest_first([view.rendition for view in views.values()]):
+            if views[rendition.id].stale:
                 continue
-            rendered = self._settings.art_root / view.rendition.relative_path
+            rendered = self._settings.art_root / rendition.relative_path
+            # Kept walking rather than falling straight to the master: a recorded
+            # render whose file has gone is not a reason to ignore an older one
+            # that is still there and still current.
             if rendered.is_file():
                 return ThumbnailSource(kind=RenditionKind.TV_DISPLAY.value, path=rendered)
 

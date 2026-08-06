@@ -32,6 +32,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from curation.discovery.dedup import clean_name, work_dedup_key
 from curation.persistence.discovery import DiscoveryStore
 from curation.persistence.discovery_records import (
     CandidateImage,
@@ -44,12 +45,14 @@ from curation.persistence.discovery_records import (
     RunStatus,
     SpendCategory,
     SpendRecord,
+    UnresolvedReason,
     Verdict,
+    WorkProvenance,
 )
 from curation.persistence.records import AcquisitionMethod, Artist, RightsStatus, SourceClass
 from curation.services import attribution, selection
 from curation.services.catalogue import CatalogueService
-from curation.services.display_fit import ArtworkBox
+from curation.services.display_fit import ArtworkBox, DisplayFit, assess_display_fit
 from curation.services.errors import ServiceError
 from curation.services.fields import relative_path, require_member, require_text
 from curation.services.store import store_write
@@ -79,11 +82,19 @@ class VerdictOutcome:
 
 @dataclass(frozen=True, slots=True)
 class RunResults:
-    """A run's proposed works, split by whether an image was found for them.
+    """A run's works, split by whether an image was found for them.
 
-    `unresolved` is a bucket rather than an omission. A work phase 2 could not
-    resolve is evidence that phase 1 may have invented it, so a run that quietly
-    returned a shorter list would be discarding its own most useful signal.
+    **Not "proposed works" any more**: a run may also carry works a wired
+    collection offered, and they sit in these same buckets. Anything reporting a
+    number to a person has to split them by `provenance` first — the curator
+    approved a list of a stated size and the supplement adds to it.
+
+    `unresolved` is a bucket rather than an omission: a run that quietly returned
+    a shorter list would be discarding its own most useful signal. **What the
+    signal says depends on the work's `unresolved_reason`** — only `NOT_HELD` is
+    evidence phase 1 may have invented the work, and the rest report a collection
+    that has it and cannot offer it usably, or a curator who has already turned
+    down what it offered.
     """
 
     run: DiscoveryRun
@@ -443,6 +454,78 @@ class DiscoveryService:
                     # deleting its rows: the join records what the run's scope
                     # was, and that stays true after the run has ended.
                     store_write(self._store.update_run, self._ended(run, RunStatus.INTERRUPTED))
+            self._reclean_proposed_titles()
+
+    def _reclean_proposed_titles(self) -> None:
+        """Re-clean every stored title, and re-key any the cleaning changed.
+
+        **A stored title is a derived value, and this is what keeps it current.**
+        `clean_name` runs at the engine seam, so a row records whatever that rule
+        removed on the day it was written; improving the rule leaves every earlier
+        row carrying markup the product now knows how to strip. Seven real rows
+        reached a curator's review cards reading `Lobster Telephone (1938) - cited
+        from tate.org.uk (`, and each keyed as a different painting from the same
+        work proposed cleanly — so a rejection would not have carried between them.
+
+        Recomputing here rather than in a one-off script is what makes the
+        obligation self-discharging: the derivation's own account of itself says
+        that changing it against a populated catalogue owes a re-key, and a script
+        pays that debt once while this pays it every time. It is idempotent and
+        almost always a no-op, which is what makes it safe to run at every start.
+
+        The cost is one walk of a household's candidate rows, in the transaction
+        the run repair above already opened — so a start either applies both
+        repairs or neither, and a failure here is retried next start rather than
+        leaving the catalogue half-repaired with nothing recording which half.
+
+        Deliberately not a verdict-preserving merge. Two rows whose keys converge
+        stay two rows — suppression reads every row sharing a key and asks whether
+        *any* was rejected, so a converged pair suppresses correctly without
+        anything being deleted, and deleting is the direction that loses a
+        curator's decision.
+        """
+        repaired = 0
+        for run in self._store.list_runs():
+            for work in self._store.list_candidate_works(run.id):
+                title = clean_name(work.proposed_title)
+                # `or None` rather than the cleaned string, because an artist that
+                # cleans away is *unattributed* and the write path spells that
+                # `None` — a repair storing `""` would put a value in the column
+                # that no proposal could have written, and only this path could
+                # ever produce it.
+                artist = (clean_name(work.proposed_artist) or None) if work.proposed_artist else None
+                # An empty title is left exactly as it is. `require_text` refuses
+                # one on the way in, so a cleaning that emptied a title would be
+                # a rule reaching too far, and overwriting the row would destroy
+                # the evidence of it while making the row unreadable.
+                if not title or (title == work.proposed_title and artist == work.proposed_artist):
+                    continue
+                key = work_dedup_key(title=title, artist=artist)
+                log.info(
+                    "re-cleaned a stored title the citation rules now reach",
+                    extra={
+                        "event": "work.recleaned",
+                        "candidate_work_id": work.id,
+                        "run_id": run.id,
+                        "work_title": title,
+                        "rekeyed": key != work.work_dedup_key,
+                    },
+                )
+                store_write(
+                    self._store.update_candidate_work,
+                    replace(work, proposed_title=title, proposed_artist=artist, work_dedup_key=key),
+                )
+                repaired += 1
+        if repaired:
+            # At WARNING because a repair that fires long after the rule changed
+            # means rows sat in front of a curator carrying markup, and the count
+            # is the size of what they were shown.
+            log.warning(
+                "Re-cleaned %d stored title(s) whose citation markup the current rules remove; "
+                "their work identities were recomputed to match.",
+                repaired,
+                extra={"event": "works.recleaned", "works_recleaned": repaired},
+            )
 
     # -- reads: proposed works ------------------------------------------------
 
@@ -452,6 +535,20 @@ class DiscoveryService:
         if work is None:
             raise ServiceError(f"No candidate work with id {candidate_work_id!r} exists.")
         return work
+
+    def get_candidate_image(self, candidate_image_id: str) -> CandidateImage:
+        """Return one image instance, or refuse if there is no such id.
+
+        Public for the same reason `get_candidate_work` is: a surface handed an
+        instance id — the one on a review card's own controls — has to be able to
+        read it back. It was private while the only callers were the writes below
+        it, and a caller that could not reach it would have had to enumerate a
+        work's instances and search for the id it was already holding.
+        """
+        image = self._store.get_candidate_image(candidate_image_id)
+        if image is None:
+            raise ServiceError(f"No candidate image with id {candidate_image_id!r} exists.")
+        return image
 
     def list_candidate_works(self, run_id: str) -> Sequence[CandidateWork]:
         """The works a run proposed."""
@@ -514,6 +611,66 @@ class DiscoveryService:
                 rationale=require_text(rationale, field="rationale"),
                 work_dedup_key=key,
                 proposed_artist=proposed_artist,
+            )
+            store_write(self._store.add_candidate_work, work)
+        return work
+
+    def offer_work(
+        self,
+        *,
+        run_id: str,
+        title: str,
+        artist: str | None,
+        rationale: str,
+        work_dedup_key: str,
+    ) -> CandidateWork | None:
+        """Record a work the collection offered, or `None` if it should not be shown.
+
+        The counterpart to `propose_work`, and separate from it in three ways that
+        each matter. It writes `OFFERED`, so no surface has to infer provenance
+        from which code path made the row. It runs while the run is *resolving
+        images* rather than works, because an offer supplements what phase 2 could
+        not confirm and cannot be made before there is something to supplement.
+        And it declines rather than raising, because a supplement meeting a work
+        the curator already declined is an ordinary event on a path with nobody to
+        report to — phase 2 runs on a worker — while `propose_work` refuses loudly
+        because a caller naming a suppressed work has made a mistake.
+
+        Two reasons to decline, and both are silent by design. A **suppressed**
+        work is one the curator rejected in an earlier run, and constraint 7's
+        whole point is that it does not come back. A work **already in this run**
+        is one phase 1 named: offering it a second time would put the same
+        painting on two cards, one of them labelled as though the collection
+        volunteered it, which is precisely the merge `product-brief.md` forbids.
+        """
+        key = require_text(work_dedup_key, field="work_dedup_key")
+        with self._store.transaction():
+            if self.get_run(run_id).kind is not RunKind.DISCOVERY:
+                raise ServiceError(
+                    f"Run {run_id!r} is a resolve run, which re-searches works an earlier run proposed rather "
+                    "than offering new ones."
+                )
+            self._require_status(run_id, RunStatus.RESOLVING_IMAGES, doing="offer works")
+            if self.is_work_suppressed(key):
+                log.info(
+                    "not offering a work the curator has already rejected",
+                    extra={"event": "work.suppressed", "work_title": title},
+                )
+                return None
+            if any(held.work_dedup_key == key for held in self._store.list_candidate_works(run_id)):
+                log.info(
+                    "not offering a work this run already carries",
+                    extra={"event": "work.already_present", "work_title": title},
+                )
+                return None
+            work = CandidateWork(
+                id=str(uuid.uuid4()),
+                discovery_run_id=run_id,
+                proposed_title=require_text(title, field="title"),
+                rationale=require_text(rationale, field="rationale"),
+                work_dedup_key=key,
+                provenance=WorkProvenance.OFFERED,
+                proposed_artist=artist,
             )
             store_write(self._store.add_candidate_work, work)
         return work
@@ -675,7 +832,7 @@ class DiscoveryService:
         the rejection to survive the next re-search.
         """
         with self._store.transaction():
-            image = self._require_image(candidate_image_id)
+            image = self.get_candidate_image(candidate_image_id)
             if image.rejected_at is not None:
                 raise ServiceError(f"Image {candidate_image_id!r} was rejected for this work, so it cannot be selected again.")
             chosen = self._select(image, rationale=rationale)
@@ -702,7 +859,7 @@ class DiscoveryService:
         must find the second half done rather than a refusal.
         """
         with self._store.transaction():
-            image = self._require_image(candidate_image_id)
+            image = self.get_candidate_image(candidate_image_id)
             work = self.get_candidate_work(image.candidate_work_id)
             if not work.verdict.is_terminal:
                 raise ServiceError(
@@ -730,7 +887,7 @@ class DiscoveryService:
         work holds no selection and re-enters phase 2 rather than sitting there.
         """
         with self._store.transaction():
-            image = self._require_image(candidate_image_id)
+            image = self.get_candidate_image(candidate_image_id)
             if image.rejected_at is not None:
                 raise ServiceError(f"Image {candidate_image_id!r} was already rejected for this work.")
             work = self.get_candidate_work(image.candidate_work_id)
@@ -755,7 +912,9 @@ class DiscoveryService:
             store_write(self._store.update_candidate_work, awaiting)
         return awaiting
 
-    def record_resolution(self, candidate_work_id: str) -> ResolutionOutcome:
+    def record_resolution(
+        self, candidate_work_id: str, *, refusals: frozenset[UnresolvedReason] = frozenset()
+    ) -> ResolutionOutcome:
         """Close a resolution attempt for one work, from the instances it now holds.
 
         The outcome is read from the work's instances rather than asserted by the
@@ -764,14 +923,23 @@ class DiscoveryService:
         review; a work whose instances are all rejected — or which never had any
         — is `unresolved`, which is a reportable outcome and not an absent row.
 
+        `refusals` is the one thing the store cannot see for itself: a result the
+        search discarded never became a row, so which gate refused it is
+        unrecoverable here and travels in from the attempt that made the
+        judgement. It is evidence, not an assertion of the outcome — the status
+        and the reason are both still derived below, and a caller cannot declare
+        a work resolved or name a reason the rows contradict.
+
         A terminal verdict is never overwritten. The curator may have accepted or
         rejected the work while the attempt was running, and only their verdict
         is authoritative; the result is then reported and not applied.
         """
         with self._store.transaction():
             work = self.get_candidate_work(candidate_work_id)
-            chosen = selection.best(self._store.list_candidate_images(work.id), box=self._artwork_box)
+            held = self._store.list_candidate_images(work.id)
+            chosen = selection.best(held, box=self._artwork_box)
             status = ResolutionStatus.RESOLVED if chosen is not None else ResolutionStatus.UNRESOLVED
+            reason = None if chosen is not None else self._unresolved_reason(held, refusals)
             if work.verdict.is_terminal:
                 return ResolutionOutcome(work=work, resolution_status=status, selected=chosen, applied=False)
             if chosen is not None and not chosen.is_selected:
@@ -779,6 +947,7 @@ class DiscoveryService:
             settled = replace(
                 work,
                 resolution_status=status,
+                unresolved_reason=reason,
                 # A work the curator asked a better image for returns to review
                 # once one is on offer. It stays where it is when nothing was
                 # found, which is what makes a dead end visible rather than a
@@ -787,6 +956,28 @@ class DiscoveryService:
             )
             store_write(self._store.update_candidate_work, settled)
         return ResolutionOutcome(work=settled, resolution_status=status, selected=chosen, applied=True)
+
+    def _unresolved_reason(self, held: Sequence[CandidateImage], refusals: frozenset[UnresolvedReason]) -> UnresolvedReason:
+        """Which kind of nothing this work came back with.
+
+        The rows the work already holds answer first, because a row on the card
+        is further than a result that never became one. Those two cases are
+        mutually exclusive rather than ordered: rejected instances are filtered
+        out before the floor applies, so surviving-but-unselectable means every
+        survivor is below the floor, and no survivors at all means the curator
+        turned down everything there was.
+
+        Only when the work holds no rows does what the search discarded decide
+        it, and then the deepest gate any result reached wins — "the collection
+        has it, too small for your wall" is something a curator can act on, and
+        "some result did not match" is not. An attempt that refused nothing
+        because the provider returned nothing lands on `NOT_HELD`, which is what
+        happened: no record came back whose title matched.
+        """
+        if held:
+            surviving = selection.surviving(held)
+            return UnresolvedReason.BELOW_FLOOR if surviving else UnresolvedReason.ALL_REJECTED
+        return max(refusals, key=lambda reason: reason.depth, default=UnresolvedReason.NOT_HELD)
 
     # -- spend ----------------------------------------------------------------
 
@@ -979,6 +1170,29 @@ class DiscoveryService:
             duplicate_candidates=attributed.near_misses if minted is not None else (),
         )
 
+    def clears_display_floor(self, *, width: int | None, height: int | None) -> bool:
+        """Whether an image this size could be selected without a curator asking.
+
+        Public because the supplement has to answer it *before* writing anything.
+        A work phase 1 named is worth showing whatever size the collection holds
+        it at — it is the work that was asked for, and its below-floor instance is
+        recorded, labelled and offered. A work the collection merely *volunteered*
+        is not: there are hundreds more behind it, and one that cannot go on the
+        wall is padding a curator has to read past.
+
+        The box is the only thing that can answer this, and it lives here, so the
+        question is asked here rather than a caller being handed the geometry and
+        trusted to apply the same rule. `False` for dimensions that are absent:
+        an unsizeable record cannot be shown to clear anything.
+        """
+        if width is None or height is None:
+            return False
+        if self._artwork_box is None:
+            # No geometry configured is no floor stated — the same reading
+            # `selection.best` takes, rather than this inventing one.
+            return True
+        return assess_display_fit(width=width, height=height, box=self._artwork_box).fit is not DisplayFit.BELOW_FLOOR
+
     def _below_floor(self, image: CandidateImage) -> bool:
         """Whether this instance is too small to be selected without being asked for.
 
@@ -1046,12 +1260,6 @@ class DiscoveryService:
 
     def _spend_total(self, run_id: str) -> Decimal:
         return sum((record.cost_usd for record in self._store.list_spend_records(run_id=run_id)), Decimal(0))
-
-    def _require_image(self, candidate_image_id: str) -> CandidateImage:
-        image = self._store.get_candidate_image(candidate_image_id)
-        if image is None:
-            raise ServiceError(f"No candidate image with id {candidate_image_id!r} exists.")
-        return image
 
     def _require_status(self, run_id: str, expected: RunStatus, *, doing: str) -> DiscoveryRun:
         """Refuse a transition the run is not standing on the edge of."""

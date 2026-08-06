@@ -24,7 +24,7 @@ STATIC_DIR: Final[Path] = Path(__file__).parent / "static"
 
 #: Every path the client renders a view for. Adding a view means adding it here;
 #: a view reachable only by clicking is a view nobody can bookmark.
-UI_PATHS: Final[tuple[str, ...]] = ("/", "/works", "/themes", "/manifest", "/health")
+UI_PATHS: Final[tuple[str, ...]] = ("/", "/works", "/discovery", "/themes", "/manifest", "/health")
 
 
 def index() -> FileResponse:

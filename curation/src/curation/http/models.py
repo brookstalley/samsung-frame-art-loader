@@ -17,6 +17,7 @@ repository may bind to it.
 """
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -242,6 +243,21 @@ class HeartbeatOut(BaseModel):
     problem: str | None
     #: One sentence stating what was observed, never a judgement about it.
     description: str
+    #: The document as the display plane wrote it, handed through untouched.
+    #:
+    #: **This is what gives the failure table a reader.** TV connectivity, e-paper
+    #: state and the last error are all mapped onto this document by
+    #: `observability-strategy.md`, and until it reached the panel those rows named
+    #: a signal nothing displayed — a monitoring plan whose evidence existed only
+    #: in a file no surface opened.
+    #:
+    #: Passed through rather than unpacked into named fields, because
+    #: `reported_at` is the *only* key that artifact makes contract and the rest is
+    #: explicitly the writer's to shape. Naming them here would invent a second
+    #: contract the writer never agreed to, and a writer that spelled one
+    #: differently would go silently unreported — the exact failure the one named
+    #: key exists to prevent, reintroduced for every other field.
+    reported: dict[str, Any] | None
 
 
 class ArtworkBoxOut(BaseModel):
@@ -258,11 +274,386 @@ class ArtworkBoxOut(BaseModel):
     floor_inches: float
 
 
+class BackupOut(BaseModel):
+    """When the catalogue was last safely copied, or that nothing has copied it.
+
+    The catalogue is the irreplaceable asset — the image tree is deliberately not
+    backed up, because every file in it can be fetched again. A backup that
+    silently stopped succeeding a month ago is the failure this reading exists to
+    make visible, and it is the same silent-failure class as everything else here.
+    """
+
+    path: str
+    completed_at: str | None
+    age_seconds: float | None
+    #: True when no backup has ever recorded itself. Held apart from `problem`
+    #: for the reason the heartbeat holds them apart: never run is normal on a
+    #: deployment whose backup is not yet scheduled, and a receipt that will not
+    #: parse is a fault.
+    absent: bool
+    problem: str | None
+    #: One sentence stating what was observed, never a judgement about it. There
+    #: is no threshold here: six days is alarming for a nightly job and
+    #: unremarkable for a destination that is usually asleep, and this surface
+    #: does not know which deployment it is on.
+    description: str
+    #: The receipt as the backup job wrote it, past the one key this side reads.
+    #: Where the copy went and how large it was are the job's to record.
+    reported: dict[str, Any] | None
+
+
 class HealthOut(BaseModel):
-    """Observations about the wall and this deployment's own geometry."""
+    """Observations about the wall, the backup, and this deployment's geometry.
+
+    **There is no budget balance here, and its absence is a decision** (operator,
+    2026-08-04). The provider's `limit_remaining` was observed reporting credit
+    while live calls were already being refused, so it fails by inversion rather
+    than by staleness — and stating its age, which is this panel's whole remedy
+    for a stale figure, would not warn anyone about the case that bites. The
+    honest budget signals are recorded per-run spend and the `halted_by_budget`
+    outcome, and both are on the run view.
+    """
 
     heartbeat: HeartbeatOut
+    backup: BackupOut
     artwork_box: ArtworkBoxOut
+
+
+class RunOut(BaseModel):
+    """One discovery run as a list row shows it.
+
+    The terminal state is carried as itself and never collapsed into a
+    succeeded/failed flag, for the same reason the MCP surface refuses to: out of
+    money, broke, and the process restarted underneath it call for three
+    different responses from the person reading the row.
+    """
+
+    run_id: str
+    #: `discovery` or `resolve`. A re-search is a run, which is what lets one
+    #: screen follow either without knowing which it is looking at.
+    kind: str
+    status: str
+    #: Whether this run has ended. Carried rather than left for the client to
+    #: derive from a list of status names, because that list is the thing that
+    #: goes stale: a tenth status added to the enum would leave a browser polling
+    #: a finished run forever, with nothing failing to say so.
+    is_terminal: bool
+    initiated_by: str
+    intent: str | None
+    #: How the engine read the intent, in its own words. A work list is judged
+    #: against the reading of the request rather than its wording, so a
+    #: surprising list is explicable instead of merely wrong. Null while phase 1
+    #: is still working: nothing has read the intent yet.
+    strategy: str | None
+    approval_required: bool
+    #: Prices are strings, never floats. A tenth of a cent that cannot be
+    #: represented exactly is a rounding error in the figure a curator authorised
+    #: against, and then in a total nobody reconciles.
+    estimated_cost_usd: str | None
+    actual_cost_usd: str | None
+    unresolved_work_count: int | None
+    parent_run_id: str | None
+    started_at: str
+    completed_at: str | None
+
+
+class CandidateWorkOut(BaseModel):
+    """One work a run proposed or was offered, in words rather than pictures.
+
+    Shared by the run view and the review grid, which show the same work at two
+    altitudes — a row in a run's work list, and the text half of a card being
+    judged. One model rather than two because it is one work: a second shape
+    would let the two screens come to call the same fact by different names,
+    which is the failure `models.py` exists to prevent one surface further out.
+    """
+
+    work_id: str
+    title: str
+    artist: str | None
+    #: Why the engine named this work. Shown because a curator judging a work
+    #: list is judging the reasoning as much as the titles.
+    rationale: str
+    #: `proposed` — the model named it — or `offered`, meaning a wired collection
+    #: volunteered it on top of the list. Never merged into one count: the
+    #: curator authorised a list of a stated size and the supplement adds to it.
+    provenance: str
+    verdict: str
+    resolution_status: str
+    #: Which kind of nothing an unresolved work came back with, or null. A bare
+    #: `unresolved` cannot tell a title nobody holds from a scan too small for
+    #: the wall, and those lead to opposite actions.
+    unresolved_reason: str | None
+
+
+class RunTallyOut(BaseModel):
+    """How many works a run has, cut the ways a curator reads them.
+
+    Proposed and offered are counted apart wherever a number is shown. With
+    twelve offered works behind one unresolved proposal, a merged "12 of 13 have
+    an image" reports a resolution rate the run never achieved.
+    """
+
+    total: int
+    proposed: int
+    offered: int
+    resolved: int
+    #: How many of the model's own works ended up with an image — the numerator
+    #: any resolution rate is stated over. Counted directly rather than derived
+    #: by subtracting offered works from resolved, which goes negative as soon as
+    #: an offered work is re-searched to nothing.
+    resolved_proposals: int
+    unresolved: int
+    pending: int
+
+
+class SearchUsageOut(BaseModel):
+    """What a run has used of its search allowance.
+
+    Two numbers rather than one verdict: the usage is this run's own history and
+    the allowance is the deployment's current setting, so a run read after the
+    setting changed shows both instead of a boolean recomputed against a rule it
+    never ran under.
+    """
+
+    used: int
+    allowance: int
+    exhausted: bool
+
+
+class RunViewOut(BaseModel):
+    """A run in full — its state, its works, and what it has spent looking."""
+
+    run: RunOut
+    tally: RunTallyOut
+    #: Every work, uncapped, and **nothing bounds how many there are** — phase 1
+    #: is deliberately not capped at a work count, because the approval gate
+    #: exists to catch exactly the run that read an intent too broadly ("you
+    #: asked for Dalí and I found 200 works, really?"), and a cap would mean the
+    #: gate could never fire. So this list is as long as the run is wide.
+    #:
+    #: Sent whole anyway. The MCP surface stops at 100 because a model's context
+    #: is the scarce thing; here the reader is a curator deciding whether to
+    #: approve, and a truncated list is precisely the one they cannot answer the
+    #: gate's question from. The cost is real and bounded by that same
+    #: judgement: a 200-work run re-fetched while it is being deliberated over.
+    works: list[CandidateWorkOut]
+    searches: SearchUsageOut
+    #: Whether this deployment can resolve images at all. A run sitting in
+    #: `resolving_images` means work under way or work nothing will ever pick up,
+    #: and there is no other way to tell those apart.
+    image_resolution_available: bool
+
+
+class RunListOut(BaseModel):
+    """The newest runs, and how many there were before the cap.
+
+    `total` and `truncated` are carried rather than left for the client to
+    infer from `len(runs)`: a silently short list is indistinguishable from a
+    complete one, which is how a curator concludes there have been fifty runs
+    when there have been four hundred.
+    """
+
+    runs: list[RunOut]
+    count: int
+    total: int
+    truncated: bool
+
+
+class EstimateOut(BaseModel):
+    """What something is expected to cost, and which question was answered.
+
+    `phase` is carried rather than inferred from whether a run was named: "what
+    will asking cost" and "what will resolving what I found cost" are different
+    questions, and a number whose meaning depends on remembering what you sent
+    gets read wrong.
+    """
+
+    phase: str
+    estimated_cost_usd: str
+    basis: str
+    run_id: str | None
+
+
+class SpendOut(BaseModel):
+    """What was actually spent, over a run or over a calendar month.
+
+    **No `run_direct_cost_usd`, unlike the MCP twin, and the absence is a
+    decision.** This surface's costs panel reads "what this run alone spent" off
+    the run record's `actual_cost_usd`, which is the same figure — so carrying it
+    here as well would give one screen two sources for one number, and the unread
+    one is where they would silently diverge. What this payload is fetched for is
+    the family total, which lives nowhere else.
+
+    Stated here rather than as a `#:` comment where the field used to be: a
+    comment in that position documents the field *below* it, so an explanation of
+    something absent would be read as describing `year`.
+    """
+
+    scope: str
+    cost_usd: str
+    run_id: str | None
+
+    year: int | None
+    month: int | None
+
+
+class InstanceOut(BaseModel):
+    """One image instance as a curator judging it needs to see it.
+
+    **The size is not decoration and it is why this model is not just a URL.** A
+    900 px scan and a 6000 px scan are the same picture in a review card, so a
+    grid that showed only pictures would not protect against hanging a postage
+    stamp. Every instance therefore carries the size it would render at on *this*
+    deployment's wall, in inches — the number a curator can actually judge.
+    """
+
+    image_id: str
+    work_id: str
+    #: Where the scan lives at its provider. Shown because an instance with no
+    #: local copy is still real and still selectable, and this is all a curator
+    #: has to go on when the picture cannot travel.
+    url: str
+    provider: str
+    confidence: float
+    #: Whether this is the instance a verdict would accept on. Not the same
+    #: question as whether it is the one pictured on the card — a work whose scans
+    #: are all below the floor or all turned down has no selection and is still
+    #: shown, which is what `shown_is_on_offer` reports one level up.
+    is_selected: bool
+    #: Whether the curator has turned this scan down. A rejected instance stays on
+    #: the card, labelled: it is the evidence of a judgement already made, and
+    #: hiding it would leave a curator wondering why a re-search returned fewer
+    #: instances than before.
+    rejected: bool
+    rights_status: str | None
+    selection_rationale: str | None
+    fit: FitOut | None
+    #: Present exactly when `fit` is null. An instance whose dimensions nobody
+    #: recorded must not read like one known to be small: the first is a fact
+    #: about our record, the second a fact about the picture.
+    fit_note: str | None
+    #: Whether a picture travels with this instance. Carried so a card knows
+    #: before it asks, rather than requesting bytes that are not there and
+    #: painting a blank box while it finds out.
+    preview_available: bool
+    #: Present exactly when no picture travels, saying which of the four reasons
+    #: applies — never cached, reclaimed after a verdict, gone from disk, or
+    #: undecodable. They send whoever asks to different places.
+    preview_note: str | None
+
+
+class CandidateCardOut(BaseModel):
+    """One proposed work with the instance whose picture stands for it."""
+
+    work: CandidateWorkOut
+    #: The instance pictured on the card, or null when there is genuinely nothing
+    #: to show — no instances at all, or every one of them rejected.
+    #: `instances_held` and `instances_surviving` tell those two apart.
+    shown: InstanceOut | None
+    #: Whether the pictured instance is also the one a verdict would accept on. A
+    #: work with no selection still arrives pictured, because a below-floor scan
+    #: must be shown, labelled and selectable rather than hidden — and a card
+    #: carrying no image because nothing was auto-selected would hide it.
+    shown_is_on_offer: bool
+    instances_held: int
+    instances_surviving: int
+
+
+class CandidatePageOut(BaseModel):
+    """One page of a run's works, with enough context to describe itself."""
+
+    run: RunOut
+    works: list[CandidateCardOut]
+    total: int
+    limit: int
+    offset: int
+    truncated: bool
+
+
+class InstanceListingOut(BaseModel):
+    """A work's instances in the order the review card offers them, capped."""
+
+    work: CandidateWorkOut
+    instances: list[InstanceOut]
+    #: What the work actually holds, against `len(instances)` for what this card
+    #: shows. Reported separately so a truncated card cannot be read as a
+    #: complete one — the failure a count omitted alongside a list always makes.
+    held: int
+    #: The same distinction one level in: how many instances are still choosable,
+    #: against how many of *those* fit. A card that dropped only refused scans and
+    #: one that also dropped choosable ones are different things to tell a
+    #: curator, and `held` counts both kinds together.
+    surviving_held: int
+    truncated: bool
+    #: False only when the choosable instances alone outrun the cap, which is the
+    #: one case where a truncated card withholds something actionable.
+    shows_every_choosable_instance: bool
+
+
+class VerdictOut(BaseModel):
+    """A recorded verdict, and what recording it did beyond the verdict itself."""
+
+    work: CandidateWorkOut
+    #: Null on a rejection, and the id of the minted work on an acceptance — the
+    #: handle every catalogue action takes, so accepting hands back the thing the
+    #: next call needs rather than making the caller go looking.
+    artwork_id: str | None
+    decided_at: str | None
+    #: Both reported on every acceptance, empty included. A key present only when
+    #: an artist was minted would teach a reader to take its absence as "nothing
+    #: happened", which is the silence this pair exists to break: a duplicate
+    #: artist row looks exactly like a painter newly encountered.
+    minted_artist: ArtistOut | None
+    possible_duplicate_artists: list[ArtistOut]
+    notice: str | None
+
+
+class SelectedImageOut(BaseModel):
+    """Which instance a work now stands on.
+
+    No `is_on_offer` flag: `select_image` either makes this the instance on offer
+    or refuses, and a refusal returns no payload — so the field could only ever
+    read true, and would restate the fact that the call succeeded.
+    """
+
+    image_id: str
+    work_id: str
+    url: str
+    selection_rationale: str | None
+
+
+class StartRun(BaseModel):
+    """An intent to search for, in the curator's own words."""
+
+    intent: str
+
+
+class StartResolve(BaseModel):
+    """The works to look again for images of."""
+
+    work_ids: list[str]
+
+
+class SetVerdict(BaseModel):
+    """A curator's decision about a proposed work.
+
+    `awaiting_better_image` is deliberately not settable here: that verdict is
+    what rejecting an *image* means, and it is set by that call so the verdict and
+    the instance's suppression can never come apart. The service refuses it, and
+    the refusal says which call does set it.
+    """
+
+    verdict: str
+    #: Why, in the curator's words. Optional, and worth having: "rejected" and
+    #: "rejected because it is a studio copy" are the same row to the pipeline and
+    #: different evidence to whoever reads it later.
+    reason: str | None = None
+
+
+class SelectImage(BaseModel):
+    """Why this scan rather than the one the pipeline picked."""
+
+    rationale: str | None = None
 
 
 class CreateTheme(BaseModel):

@@ -48,6 +48,16 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+# CI scripts, where stdout IS the interface. GitHub Actions reads
+# `::error::...` lines off a step's standard output to raise annotations, so
+# `print()` here is the mechanism rather than a substitute for logging — a
+# logger writing to stderr would produce a job that fails with its reason
+# invisible in the summary. This is a third category, and it is written above
+# the two groups below rather than appended to either: the legacy group is dated
+# debt and the operator-tools group is hand-run commands, and this file's own
+# comments make both of those lists load-bearing.
+".github/scripts/*.py" = ["T20"]
+
 # The 2024 modules that still run the wall. They are deleted once both planes
 # exist, so their remaining findings are cosmetic debt with a scheduled end
 # date, and a mass restyle of doomed code would only make that diff unreadable.

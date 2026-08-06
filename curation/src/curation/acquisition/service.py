@@ -14,25 +14,32 @@ re-fetch later on evidence rather than on suspicion.
 **A refusal is data about a source, not a fault in the process.** A URL the fetch
 policy rejects, a body over the ceiling, a museum that has gone away: each records
 a failed fetch against the source and returns, so one bad source in a batch never
-ends the pass over the works behind it. The two things that *do* raise are the
-ones no source is responsible for — the binary being absent, and the disk being
-too full to start — because retrying the work cannot fix either.
+ends the pass over the works behind it. The things that *do* raise are the ones no
+source is responsible for — the binary being absent, the disk being too full to
+start, and a provider whose URLs need resolving having no resolver wired — because
+retrying the work cannot fix any of them. The dividing line is not severity but
+blame: a `failed` row against a URL that is perfectly good sends whoever reads it
+to a museum to look for a problem that is in this deployment.
 """
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Final
 
 from curation.acquisition.dezoomify import (
+    DezoomifyUnavailable,
     TileOutcome,
     reclaim_tile_cache,
     tile_fetch,
 )
 from curation.acquisition.direct import StreamOpener, direct_fetch
 from curation.acquisition.space import NotEnoughSpace, require_free_space
+from curation.acquisition.tiles import TileTargetResolver, TileTargetUnavailable, resolve_tile_target
 from curation.acquisition.urls import Resolver, UrlRefused, check_fetchable, system_resolver
+from curation.discovery.images import ImageSearchFailure
 from curation.persistence.records import AcquisitionMethod, FetchStatus, Source
 from curation.services.catalogue import CatalogueService
 from curation.services.errors import ServiceError
@@ -44,6 +51,53 @@ log = logging.getLogger(__name__)
 #: title is not unique, not stable, and not a filename — the 2024 tree keyed files
 #: by title and could not hold two works with the same name.
 _FILENAME: Final[str] = "{artwork_id}.jpg"
+
+#: The conditions acquisition **raises for rather than records**, gathered so the
+#: journal line below follows the condition instead of the caller. Every one of
+#: them breaks acquisition for the whole deployment rather than for one source: a
+#: full disk, a missing binary, a provider whose image service cannot be asked.
+#:
+#: Membership here is the same judgement `_record_failure` is the other side of.
+#: A new raise-rather-record condition belongs in this tuple, and a condition
+#: that turns out to be one source's fault belongs in neither.
+_DEPLOYMENT_FAULTS: Final[tuple[type[Exception], ...]] = (
+    NotEnoughSpace,
+    DezoomifyUnavailable,
+    TileTargetUnavailable,
+)
+
+
+def _journal_deployment_fault(exc: Exception, *, artwork_id: str) -> None:
+    """Journal a fault that is the deployment's rather than the caller's.
+
+    These refusals reach the caller as an exception, and a tool boundary answers
+    it with a failure envelope and **no log line** — correct for the ordinary
+    case, where a bad id is the caller's problem and the caller is told. It is
+    wrong here: a missing binary, a full disk or an unset user agent breaks
+    *every* acquisition in the deployment, and the only person who can fix it is
+    the operator, who is not holding the result.
+
+    **Emitted here rather than at a surface, so the signal follows the condition
+    and not the route in.** It lived in the MCP binding until 2026-08-05, which
+    was harmless only for as long as MCP was the sole caller: the first browser
+    acquisition route would have inherited the refusal without the journal line
+    and left an operator debugging "nothing acquires" on a full disk against
+    silence — the exact failure this event exists to break. A surface still owns
+    the operator-facing *remedy*, which is a different thing and belongs where
+    the words are written.
+
+    `condition` is the exception's own type name, so the journal cannot drift
+    from what was actually raised.
+    """
+    log.error(
+        "acquisition refused before it started: %s",
+        exc,
+        extra={
+            "event": "acquisition.deployment_fault",
+            "condition": type(exc).__name__,
+            "artwork_id": artwork_id,
+        },
+    )
 
 
 class AcquisitionOutcome(Enum):
@@ -127,10 +181,17 @@ class AcquisitionService:
         settings: AcquisitionSettings,
         *,
         open_stream: StreamOpener,
+        tile_targets: Mapping[str, TileTargetResolver],
         resolve: Resolver = system_resolver,
     ) -> None:
         self._catalogue = catalogue
         self._settings = settings
+        #: Per provider, how to get from a source's identity URL to something the
+        #: tile fetcher can read. **Required rather than defaulted to empty:** an
+        #: empty map is indistinguishable from a correctly wired one right up to
+        #: the moment a museum source fails, and a default that looks like working
+        #: wiring is precisely the trap this product has now been bitten by twice.
+        self._tile_targets = tile_targets
         #: Injected for the same reason `PreviewCache` injects its fetch: the
         #: transport belongs behind the image seam, and a service that also made
         #: HTTP requests could not be exercised without a network.
@@ -150,6 +211,13 @@ class AcquisitionService:
         guess — "which of these is the right one" is exactly the judgement
         acceptance already made, and re-making it here could silently disagree.
         """
+        try:
+            return self._acquire(artwork_id, source_id=source_id)
+        except _DEPLOYMENT_FAULTS as exc:
+            _journal_deployment_fault(exc, artwork_id=artwork_id)
+            raise
+
+    def _acquire(self, artwork_id: str, *, source_id: str | None = None) -> AcquisitionResult:
         source = self._select_source(artwork_id, source_id=source_id)
 
         # Before anything is fetched, and before the URL is even looked at: a disk
@@ -157,15 +225,63 @@ class AcquisitionService:
         # a 900 MB download would be checking it too late to prevent anything.
         require_free_space(self._settings.originals_path, required_bytes=self._settings.min_free_bytes)
 
-        try:
-            url = check_fetchable(source.url, resolve=self._resolve)
-        except UrlRefused as exc:
-            return self._record_failure(source, f"the source URL was refused: {exc}")
-
         destination = self._settings.originals_path / _FILENAME.format(artwork_id=artwork_id)
         if source.acquisition_method is AcquisitionMethod.DEZOOMIFY:
+            # The recorded URL identifies the object; the tile fetcher needs the
+            # image service. For most providers those are the same string, and for
+            # a museum serving IIIF they are not — so this is asked rather than
+            # assumed. `check_fetchable` runs on the answer and on nothing else
+            # here, because the answer is the only address this path fetches — and
+            # a URL this deployment did not record is exactly the kind that has to
+            # be checked before it is. The recorded URL is deliberately not
+            # checked: gating a tiled fetch on a provenance link nobody fetches
+            # recorded failures against sources that were never at fault.
+            #
+            # `TileTargetUnavailable` is deliberately *not* caught, for the same
+            # reason `DezoomifyUnavailable` is not: a provider with no resolver
+            # wired is a deployment fault, no source is at fault, and retrying the
+            # work cannot fix it. Recorded as a failed fetch it would send whoever
+            # reads it to the museum to look for a problem that is in the wiring.
+            try:
+                url = check_fetchable(resolve_tile_target(source, resolvers=self._tile_targets), resolve=self._resolve)
+                if url != source.url:
+                    # Logged because the fetch that follows is against an address
+                    # no record holds: without this line a failed tile fetch
+                    # cannot be attributed to a bad resolution versus a museum
+                    # that went away, and the recorded failure names only the URL
+                    # the source carries — which was never the one fetched.
+                    log.info(
+                        "resolved a source's image service before fetching",
+                        extra={
+                            "event": "acquisition.tile_target_resolved",
+                            "provider": source.provider,
+                            "source_id": source.id,
+                            "recorded_url": source.url,
+                            "tile_url": url,
+                        },
+                    )
+            except ImageSearchFailure as exc:
+                # The provider *was* asked and could not answer — unreachable, or
+                # holding no image of this object. That is about this source and
+                # this attempt, so it is recorded like any other failed fetch.
+                return self._record_failure(source, f"no image service could be reached for this source: {exc}")
+            except UrlRefused as exc:
+                return self._record_failure(source, f"the resolved image service URL was refused: {exc}")
             return self._acquire_tiled(source, url=url, destination=destination)
         if source.acquisition_method is AcquisitionMethod.DIRECT_HTTP:
+            # Checked here rather than before the dispatch, and the difference is
+            # not tidiness. `Source.url` identifies the object and is *not*
+            # necessarily fetchable — for a provider whose tiles are resolved,
+            # nothing ever fetches it. Gating every method on it charged a DNS
+            # lookup for an address no tiled fetch would use, and recorded "the
+            # source URL was refused" against a source whose provenance link
+            # being unreachable says nothing about whether its image can be got.
+            # That `failed` row is exactly the misattribution the resolution seam
+            # exists to prevent. This is the one path that really does fetch it.
+            try:
+                url = check_fetchable(source.url, resolve=self._resolve)
+            except UrlRefused as exc:
+                return self._record_failure(source, f"the source URL was refused: {exc}")
             return self._acquire_direct(source, url=url, destination=destination)
         # `api` is a declared method with no producer: nothing in this deployment
         # records a source that carries it, because the one museum client in the

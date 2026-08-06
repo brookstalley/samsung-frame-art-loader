@@ -162,20 +162,62 @@ between planes.
 > | Event | Says |
 > |---|---|
 > | `phase_two.searched` | which collection was asked about which work, how many results came back, and how many were usable at all |
-> | `phase_two.judged` | how many instances were credible, and how many of those are below the floor |
+> | `phase_two.judged` | how many instances were credible, how many of those are below the floor, and `refused_at` — the gates that turned the rest away, which is the per-work summary of the `not_the_work` and `size_unknown` lines below |
 > | `phase_two.not_the_work` | a result was discarded as a different painting, naming what the provider called it and who it says painted it |
 > | `phase_two.size_unknown` | a result was discarded because the provider reported no dimensions |
 > | `phase_two.unreachable` | a provider could not be asked about a work, which leaves it pending rather than unresolved |
 > | `phase_two.verdict_stands` | a resolution finished against a work the curator had already decided; the result is reported, not applied |
+> | `phase_two.preview_too_large` | a provider's preview body passed the size ceiling and the read was abandoned, naming the URL and the ceiling. Distinct from `preview_failed`, which is a preview that could not be fetched at all — this one *was* being served, and the far end was sending more than a thumbnail. Both leave the card falling back to the source URL, so the log line is the only place the difference is visible |
 > | `preview.cached` / `preview.absent` | whether a review card will have local bytes to show |
 > | `run.completed` | the run's works split into resolved, unresolved and unreachable |
 >
+> **The supplement's events, which are a separate subsystem.** A run may offer
+> works from a wired collection when phase 2 cannot confirm what phase 1 named,
+> and that path fails differently from a search: it is a *supplement*, so its
+> failures are swallowed rather than surfaced to the run — which means the
+> journal is the only place they appear at all.
+>
+> | Event | Says |
+> |---|---|
+> | `browse.searched` | how many artists the collection was asked about in one request, how many it holds anything for, and how many works came back |
+> | `browse.offered` | how many works the run actually offered, against how many the collection holds for those artists — the ratio a bound is judged by |
+> | `browse.unreachable` | the collection could not be browsed. **A supplement failing must not fail the run**, so this is the only signal that one was attempted and lost |
+> | `browse.surname_retried` | an artist was recovered under a different spelling, naming the surname and the artist the collection filed it under. **The one line to read when a wrong-hand offer reaches a curator**: this is the only path that returns work under a name nobody asked for, and it is licensed by a measurement the museum could change under us |
+> | `browse.surname_ambiguous` | a retry was refused because the surname reaches several artists — the guard working, and the counterpart to the line above |
+> | `browse.below_floor` | a work was not offered because it would render too small. **Systemic rather than per-work**: one wrong artwork-box setting makes every browse result fall below the floor, and without this line the supplement offers nothing for ever while reporting only `works_offered: 0` |
+> | `work.suppressed` / `work.already_present` | an offer was declined because the curator rejected that work earlier, or because the run already carries it |
+>
+> **Acquisition's events, which start here.** `acquisition.tile_target_resolved`
+> is the product's first, and it exists because the fetch that follows it is
+> against an address no record holds — without the line, a failed tile fetch
+> cannot be told apart from a museum that went away, and the recorded failure
+> names only the URL the source carries, which was never the one fetched.
+>
+> | Event | Says |
+> |---|---|
+> | `acquisition.tile_target_resolved` | a source's image service was resolved before fetching, naming both the recorded URL and the one actually used |
+> | `acquisition.deployment_fault` | acquisition refused before it started for a reason no source is at fault for — a full disk, a missing binary, an unwired provider. **At ERROR, and for these three conditions it is the only journal signal there is**: unlike a failed fetch, which is recorded against the source and readable afterwards, these reach the caller as a refusal the tool boundary answers without logging — and the person who can fix them is not the one holding the tool result. **Emitted by `AcquisitionService` at the raise, so the signal follows the condition and not the route in** — every caller gets it, and a surface added later inherits it rather than inheriting silence. A surface still owns the operator-facing *remedy*: `retry_acquisition`'s three `except` clauses each name what to change, which is a tool-boundary concern and stays there. (Until 2026-08-05 the line was emitted by that binding instead, so it existed only where acquisition was driven over MCP. Harmless while MCP was the only caller and a trap the moment it was not.) |
+>
 > **`phase_two.not_the_work` is the one to read first when a run comes back
 > emptier than expected.** It carries the museum's own title and artist beside the
-> requested ones, so the two failure modes it sits between are distinguishable
-> from the journal alone: a work the collection genuinely does not hold, and a
-> work it holds under a name the identity comparison did not match. The second is
-> a defect in the comparison; the first is the product working.
+> requested ones, so the failure modes it sits between are distinguishable from
+> the journal alone: a work the collection genuinely does not hold, and a work it
+> holds under a name the identity comparison did not match. The second is a defect
+> in the comparison; the first is the product working.
+>
+> **There is a third, and this split could not express it — which is how it went
+> unseen (2026-08-04).** A record the query *never retrieved* emits no event at
+> all, because nothing reached the comparison to be discarded. The measured case:
+> the artist was folded into the free-text museum query, its tokens competed with
+> the title's for the ten places a result has, and works the collection
+> demonstrably holds fell outside the window. Every one of them looked, from the
+> journal, exactly like a work the collection does not hold — the product
+> working. A two-way split over *what was discarded* is blind by construction to
+> what was never fetched, so the journal alone cannot close this, and the count
+> already on `phase_two.searched` is what distinguishes a thin result from an
+> absent one. **When a run comes back emptier than expected and
+> `not_the_work` explains all of it, the next question is what the query asked
+> for**, not what came back.
 
 > **The preview sweep's events, added 2026-08-03, and the failure they exist to
 > break the silence around.** The sweep is the plane's only periodic job, and its
@@ -269,6 +311,46 @@ direction. The heartbeat runs display → curation, and it creates no availabili
 dependency for the display plane: display writes it and never checks whether
 anyone read it.
 
+**Everything else in the document reaches the panel unread**, as of 2026-08-05.
+`GET /api/health` carries the heartbeat's whole object through as `reported`, and
+the panel renders whatever keys it finds. That is what gives the TV, panel and
+last-error rows of the failure table below a reader — they had none until then,
+which made them a monitoring plan whose evidence existed only in a file no
+surface opened.
+
+Passed through rather than unpacked into named fields, and that is the same
+decision as naming `reported_at` here: exactly one key is contract, so inventing
+more on the reading side would be a second contract the writer never agreed to,
+and a writer that spelled one of them differently would drop off the panel in
+silence — the failure the one named key exists to prevent, reintroduced for every
+other field.
+
+### The backup records that it succeeded, and the panel reads its age
+
+`operational-spec.md` promises backup age on this panel in absolute terms — "last
+successful backup: 6 days ago" — because a backup that silently stopped
+succeeding a month ago is the failure that matters for the one asset nothing else
+protects. The reading side shipped 2026-08-05, ahead of the job.
+
+**The receipt is `backup-status.json` under `ART_ROOT`, and the key is
+`completed_at`.** It is written **only on success**, which is what makes its age
+mean what the panel says it means: a job stamping every attempt would report a
+fresh age for a backup that has been failing since Tuesday. Everything else in it
+is the job's to shape and reaches the panel the same way the heartbeat's does.
+
+> `[DECISION: the backup records its success in a file beside the catalogue,
+> never as a row inside it | the backup copies the catalogue, so a receipt
+> recorded as a row could only ever be written after the copy was taken — every
+> restored catalogue would then carry the *previous* backup's receipt and report
+> an age older than the file it came from. A file beside it is stamped by the run
+> that succeeded and restores as whatever the destination actually holds |
+> user can veto/override]`
+
+Both ends of this one are ours, unlike the heartbeat's, so the key cannot drift
+across planes. It can still drift in time — the reader is built and the writing
+job is separate, later work — which is why the name is written here rather than
+left in the code that reads it.
+
 ### The panel shows staleness in absolute terms
 
 **Never a green dot.** The health panel displays "last heartbeat: 4 days ago", not
@@ -278,6 +360,18 @@ panel at all because it manufactures false confidence.
 
 The same rule applies to every derived status the panel shows: state the
 observation and its age, not a verdict.
+
+**"4 days ago" is the wording, not shorthand for it.** Both readings state their
+age in the unit a person reads it in, because the conversion is the whole service
+this panel performs: a display plane down since Tuesday reported "345600 seconds
+ago" until 2026-08-05, which is arithmetic handed back to the reader on the one
+surface built so they would not have to do any. A negative age — the planes'
+clocks disagreeing — is reported as itself rather than folded into zero.
+
+**Nothing here compares an age to a threshold**, and the backup is where that
+restraint earns its keep: six days is alarming for a nightly job and unremarkable
+for a destination that is usually asleep, and this panel does not know which
+deployment it is on.
 
 ### Accepted detection latency, stated as a number
 
@@ -303,6 +397,54 @@ similar) for the small set of conditions that would want a human now. Revisit
 trigger: if undetected staleness turns out to be annoying in practice, or if
 unattended/scheduled discovery is ever added — the latter removes the curator from
 the session, which is what makes self-announcing failures self-announcing.
+
+### The one surface the panel does not cover: CI
+
+**Scope correction, 2026-08-06.** The decision above says "the curation UI health
+panel as the only alerting surface", and it was written when every failure in
+this strategy happened on the operator's own hardware. There is now a class that
+does not: a foreign API moving under a measurement recorded in one of the
+`*-api-findings.md` documents. `.github/workflows/api-drift.yml` re-runs those
+measurements on a schedule, and the panel cannot show its result — the panel
+reads a running display plane, and this failure happens on GitHub's runners,
+possibly while nothing of ours is running at all.
+
+So the panel-only rule is amended rather than broken: **it governs the running
+product; CI has its own route, and this section is that route written down.** Two
+distinct faults, two mechanisms, because a run that failed and a run that never
+happened leave completely different traces:
+
+**A probe ran and failed.** The failing job opens an issue in this repo's
+backlog, one per contract, via `.github/scripts/report_drift_failure.py`. Repeat
+failures comment on the open issue rather than opening another, so the comment
+history is how long the contract has been moving. **It does not close itself when
+the probe goes green**, and that is deliberate: a green run proves the probe
+passed, not that anyone reconciled the findings document against what the API now
+returns. The operator closes it, having done that work.
+
+*Why an issue rather than email.* GitHub's default Actions email for a scheduled
+run goes to whoever last edited the cron file, is silently absent for anyone whose
+Actions notifications are off, and breaks the moment somebody else touches the
+file. It is also the exact mechanism the 2026-07-20 decision rules out. An issue
+survives an unread inbox, does not depend on edit history, and lands where the
+remedial work is already tracked. Scheduled runs only — a hand-dispatched run
+already has somebody watching it.
+
+**The schedule stopped firing.** Nothing above can fire, because no job runs.
+This is the same shape as the preview sweep's `preview.swept`: the positive
+signal is a successful run, and its *absence* over an interval is the fault.
+`suites.yml`'s `drift-freshness` job measures how long since each tier last
+succeeded — **free after 21 days, paid after 75** — reading the tiers apart,
+because a healthy monthly run would otherwise vouch for three missed Mondays.
+Both known routes land here: a workflow not on the default branch has never run,
+and a schedule GitHub disabled for repository inactivity stops refreshing.
+
+*Its limit, stated rather than implied.* That job runs only on a push to `main`,
+so absence is detected at the next push, not continuously. A pull request cannot
+fix either fault, so failing one would be a red check nobody on that branch can
+clear. The undetected window is therefore exactly the window in which nobody was
+working — which is the same window in which GitHub disables a schedule, and the
+same one in which a stale museum measurement costs nothing.
 
 ## Spend as an Observability Signal
 
@@ -356,8 +498,11 @@ signal exists:
 
 | Failure | Signal |
 |---|---|
+| The wired collection could not be browsed | `browse.unreachable` at WARNING, and nothing else — a supplement is swallowed so it cannot fail the run, which makes this line the only trace that one was attempted. **Distinguish it from a collection that answered and offered nothing**, which is `browse.offered` carrying `works_offered: 0` against a non-zero `collection_holds`: that is every candidate declined, and `browse.below_floor` / `work.suppressed` / `work.already_present` say which gate did it |
 | Display plane stalled or dead | Heartbeat stops advancing; panel shows its age |
-| TV unreachable | Heartbeat carries TV connectivity state; WARNING in the journal |
+| TV unreachable | Heartbeat carries TV connectivity state; WARNING in the journal. **The panel renders the heartbeat's whole reported document as of 2026-08-05**, so this row and the two below it have a reader rather than naming a field nothing displayed |
+| E-paper panel not updating | Heartbeat carries its state, and the panel shows it — same mechanism as the row above, and no second contract |
+| Backup silently stopped succeeding | **`backup-status.json` stops advancing; the panel shows its age.** The receipt is written only on success, so a failing job goes stale rather than reporting fresh. Nothing has ever written one is itself an observation the panel states plainly |
 | Manifest references a missing file | WARNING per work, and the work is skipped — the run continues |
 | Manifest major version unrecognised | ERROR, previous manifest retained |
 | Budget exhausted | `halted_by_budget` outcome on the run, and the refusal text names the cause. *(Corrected 2026-08-02: this also promised "`limit_remaining` at zero in the UI" — a figure no surface exposes, and one that lags badly enough to read non-zero while calls are already being refused. See the note under the signals table.)* |
@@ -366,3 +511,6 @@ signal exists:
 | A work silently absent from a theme | **The manifest build reports exclusions** with a per-work reason — see `architecture.md`. Not a log line: a first-class UI surface |
 | Mat colour degraded to the dominant-colour fallback | Recorded on the record itself (`MatColor.method`), not merely logged. The 2024 code degrades invisibly |
 | Curation killed mid-run (OOM, deploy restart, crash) | **Startup reconciliation logs one line per run it moves to `interrupted`**, at WARNING, with the run id and its prior status. This is the only signal that a run died — the dying process cannot report its own death, and the operator's next clue would otherwise be `resolve_images` refusing work ids. Silence here means reconciliation did not run, which is itself the bug (`data-model.md` → State Machines) |
+| A foreign API moved under a recorded measurement | **An issue in this repo's backlog, one per contract**, opened by the failing `api-drift.yml` job; repeat failures comment on it rather than opening another. Not the panel — this failure happens on GitHub's runners, possibly while nothing of ours is running. It stays open until a human reconciles the `*-api-findings.md` document, because a green re-run proves the probe passed and nothing about whether anyone did the work. See § The one surface the panel does not cover |
+| The API-drift schedule stopped firing | **The only signal is a positive one, exactly as with the preview sweep**: a successful run per tier, whose *absence* is the fault. `suites.yml`'s `drift-freshness` job fails past 21 days (free) or 75 days (paid), reading the tiers apart so a healthy monthly run cannot vouch for three missed Mondays. Covers both routes — never on the default branch, and disabled for repository inactivity. Detected at the next push to `main`, not continuously |
+| A default-suite regression reaches `main` | `suites.yml` runs both default suites on every pull request and every push to `main`. Until 2026-08-06 there was no such signal at all: the repo had two workflows, and neither ran the suites that gate correctness, so a reviewer reading two green checks was reading the browser suite and a schedule |

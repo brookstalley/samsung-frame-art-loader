@@ -28,6 +28,7 @@ from samsungtvws.exceptions import ConnectionFailure, HttpApiError, ResponseErro
 from websockets.exceptions import WebSocketException
 
 import config
+import panel_check
 from tv_delete import UPLOADED_CATEGORY, DeleteNotConfirmed, delete_list_confirmed
 
 logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
@@ -139,6 +140,28 @@ def check_construction(report: Report) -> SamsungTVAsyncArt | None:
     return tv_art
 
 
+def _configured_diagonal() -> float | None:
+    """What this deployment says the panel measures, or None if it has not said.
+
+    Read from the environment rather than from `config`, because the value
+    belongs to the curation plane and this module is the 2024 one — importing it
+    here would be the geometry crossing a plane boundary to be checked. `config`
+    has already called `load_dotenv()`, so the same `.env` both planes read is in
+    scope by the time this runs.
+
+    An unparseable value is None, not an error: this is a diagnostic tool, and
+    refusing to report on the television because a number is malformed would
+    withhold every other check over the one that already looks wrong.
+    """
+    raw = os.environ.get("TV_PANEL_DIAGONAL_INCHES")
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
 async def check_identity(tv_art: SamsungTVAsyncArt, report: Report) -> None:
     """What this television is, and which half of the API split it speaks."""
     if not await tv_art.supported():
@@ -155,6 +178,21 @@ async def check_identity(tv_art: SamsungTVAsyncArt, report: Report) -> None:
     # pairing token before the art channel will accept one. Which side of that
     # line this panel falls on is worth having written down.
     report.note("model", f"{model or 'not reported'} — record it; the token handshake changes for 2024-or-later panels")
+
+    # The set names its own size, so the configured diagonal is checkable rather
+    # than merely documentable — and until now it was only ever documented. A
+    # live deployment ran 42" against this 50" panel and every judgement about
+    # whether a work was big enough for the wall was silently mis-sized.
+    #
+    # Warned, not failed: this tool reports what it finds, and a diagonal
+    # disagreeing with the panel is a `.env` fix rather than a broken television.
+    # Silent when the model line is one this codebase has not verified a parse
+    # against, which is most of them.
+    mismatch = panel_check.disagreement(model, _configured_diagonal())
+    if mismatch is not None:
+        report.fail("panel size", mismatch)
+    else:
+        report.ok("panel size", "the configured diagonal agrees with the set, or neither side stated one")
 
 
 def _api_generation(version: str) -> str:

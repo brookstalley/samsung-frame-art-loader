@@ -122,7 +122,11 @@ re-created the same silence one line further down.
 - [x] Chunk 17B: The verdict, the artist, and the preview's death
 - [x] Chunk 18A: Acquisition — the fetch paths, the guards, and a work's sources
 - [x] Chunk 18B: Preparation — the mat engine, the 4K render, and the corpus look
-- [ ] Chunk 19: Curation web UI and HTTP API — the discovery half, onto 10B's surface
+- [x] Chunk 21: Say which kind of nothing — `unresolved_reason`, and the artist fold (issue #78)
+- [x] Chunk 22: Grounded alternatives — the collection's own answer when the gate refuses
+- [x] Chunk 19A: The run half — intent entry, the estimate, the run view and its gate
+- [x] Chunk 23: The browser client gets executed coverage — Playwright (issue #30)
+- [x] Chunk 19B: The review half — the grid, its alternates, the verdict, the panel
 - [x] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [x] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
@@ -411,6 +415,36 @@ CIEDE2000 distance 9.8, the engine's median lightness 20.8 against the corpus's
 20.7, one work over the darkness bar — and `tools/mat_corpus.py` regenerates the
 side-by-side sheet. It is in `operator-verification.md` with the three pairs worth
 looking at first.
+
+**Chunk 19B landed 2026-08-05 and the curator loop closes in a browser** — intent,
+estimate, review with images, accept, theme, wall, with no MCP client anywhere in
+it. The grid rides Chunk 17's review service; verdicts and image selection are
+thin bindings over methods that already enforce their rules; issue #2's last box
+is closed by the grid's components.
+
+*Three things settled at build.* **A binding for the re-search was added at the
+operator's call**, because turning a scan down is one of the grid's own actions
+and leaves the work `awaiting_better_image` where nothing looks again — shipping
+the rejection without it would have made this chunk's own screen a dead end
+escapable only from an MCP client. **The review listing stops inlining pictures
+the browser discards**: both surfaces call the same methods, the browser passes
+`pictures=False`, and a page costs a `stat` per instance instead of a re-encode.
+**The health panel gained a reader for the display plane's own report**, which
+closes the carried finding above Chunk 21 — the failure table mapped TV, panel and
+last-error state onto a document nothing displayed. Backup age is built against a
+receipt Chunk 20 will write (`backup-status.json`, key `completed_at`), and
+`get_health` left the known-departures table by conforming.
+
+**The mutation sweep was found reporting on runs that executed nothing**, and that
+is the finding worth carrying past this chunk. Every opt-in suite is deselected by
+`addopts`, naming such a test on the command line does not select it, pytest exits
+5, and the tool read any non-zero exit as a caught mutation. Twenty-one mutations
+of the review grid reported caught by runs that never executed a line of the file.
+Re-run with `-- -m browser`, two survived and both were real. The tool now runs the
+targets unmutated first and refuses to sweep unless they run and pass. **Chunk 23's
+recorded acceptance was reached the same way and was re-swept rather than assumed —
+all fourteen caught.** A vacuous proof and a false claim are different faults, and
+that one was the first.
 
 ## Scaffolding
 
@@ -1168,7 +1202,17 @@ surface was reviewed on its own.
   renders, in the deployed image tree under ART_ROOT — the raw and ready
   directories on the Pi, which are not part of this checkout — with
   `source_content_hash` computed at ingest so Chunk 18B's staleness rule governs
-  them from birth. Known defects in the legacy shape are corrected on the way
+  them from birth.
+
+  *(Corrected 2026-08-04: **there is no `ready/` left to point at.** The Pi was
+  rebuilt onto a fresh card and the 2024 renditions were on the old one; the
+  masters survive on the operator's Mac at `~/art/raw` but `ready/` was never
+  copied off. Nothing about the seeding path changes — it already treats a
+  missing rendition as a reported absence rather than an error, which is exactly
+  the case this turned out to be — but every work now seeds `no_rendition`, and
+  re-rendering the corpus for the wall is real work that was assumed already
+  done. The television still holds its uploaded copies; recovering identity from
+  them is Chunk 12's adoption path, not a file the tree can be pointed at.)* Known defects in the legacy shape are corrected on the way
   in, not carried: identity becomes a UUID (never the source URL),
   `artist_details` is parsed into Artist rows, and `tv_content_id` is **not**
   written to the catalogue — it is per-device state and belongs to the display
@@ -1417,20 +1461,67 @@ two missing deliverables.)*
   `display/src/display/tv/`, new `display/src/display/state/` with
   `display-state.sqlite` (TvBinding + last-acted-on sequence), structured logging
   with `work_id` correlation, resolved `ART_ROOT` and the **e-paper panel's**
-  geometry logged at startup (display never reads the TV's physical size); **a one-shot TvBinding adoption path** seeded from the 41 legacy
-  `tv_content_id` values in `all.json` — the works are already uploaded to this
-  TV, so a fresh empty binding table would re-upload 41 4K images and orphan the
-  existing set. Adoption is verified against the TV's own list, not trusted:
-  a `tv_content_id` the TV does not report is discarded and the work re-uploads
-  normally
+  geometry logged at startup (display never reads the TV's physical size);
+  **the binding table starts empty, and the television's pre-existing uploads are
+  orphans to be removed rather than assets to adopt.**
+
+  **Two things this plane owes that its manifest alone does not give it**, both
+  raised by Critic review on 2026-08-05 and deliberately carried here rather than
+  filed, because this is the work that will meet them:
+
+  1. **`tests/preferences/test_plane_isolation.py`, landing WITH the first
+     display module and not after.** An AST/import check that no module here
+     imports a curation module or constructs an HTTP client, the television
+     websocket exempted. Imports checked transitively — a direct-only check is
+     evaded by one shared helper. Both halves must be proven able to fail: plant
+     a curation import, plant an HTTP client. It cannot be written earlier, since
+     a check over an empty package passes vacuously; and it must not be written
+     later, because the window where display code exists unguarded is the window
+     in which "just fetch the label text live" gets written and passes every test
+     — curation is up in development and in every test, so a green suite is
+     exactly what a violation looks like. `project-preferences.md` § Enforcement
+     moves the manifest-channel norm from Critic back to Test when it lands.
+  2. ~~**A committed lockfile.**~~ **Discharged early, 2026-08-05 (`395910a`) —
+     no longer owed by this chunk.** It was owed because this was the only plane
+     without one, against three dependencies with no upper bound and one pinned to
+     a git commit, and the television client is precisely where an unpinned resolve
+     has already broken an import once. It arrived ahead of the chunk because
+     making `CLAUDE.md`'s documented display-plane commands actually run produces a
+     lock — `uv run` cannot proceed without one — and those commands turned out
+     never to have been executed. `display/uv.lock` is tracked and pins the
+     `samsungtvws` fork to its exact rev.
+
+     **Deliverable 1 above is unaffected and still owed**, for the reason it
+     states: a plane-isolation check written over an empty package passes
+     vacuously, so it lands with the plane's first module.
+
+  > **This replaces a one-shot TvBinding adoption path, descoped 2026-08-05 on
+  > evidence rather than on preference.** The deliverable was to seed bindings
+  > from the 41 legacy `tv_content_id` values in `all.json`, so that a fresh empty
+  > table would not re-upload 41 images and orphan the set already on the
+  > television. **Its premise no longer holds.** The 2024 renders those uploads
+  > were made from are gone from the art tree — `ready/` holds exactly one file —
+  > and seeding only ever recorded a 2024 render as a work's television rendition
+  > when that file was present, so 39 of 40 accepted works have no television
+  > rendition at all and the one that does was composed by the current pipeline
+  > and is named by artwork id. Adoption would therefore bind a work to an image
+  > that is **not** the render its manifest entry names: the wall would show the
+  > 2024 composition while the catalogue recorded the current one as displayed.
+  > No join survives either — the legacy index addresses works by source URL and
+  > by `ready/{stem}_r{resize}.jpg`, and neither reaches a manifest whose entries
+  > carry an artwork id and a UUID-named render path.
+  >
+  > So the mass upload the deliverable existed to avoid is the correct behaviour:
+  > those images have never been on the television. What is owed instead is that
+  > the legacy uploads are recognised as orphans and removed, so the single
+  > user-upload category does not accumulate two generations of the same corpus.
 - **Tests:** unit — manifest parsing, version refusal, directive
   persistence/coalescing/regression, binding state machine (TV faked at its
-  interface, built after Chunk 05's verified shapes); TvBinding adoption —
-  a content id the TV still reports is adopted, one it does not is discarded and
-  re-uploaded, and adoption is idempotent across restarts; hardware — a live pass
-  on the Pi: theme on the wall with no mass re-upload, `next`/`show_now` land
-  within the poll interval, a deleted render file skips with a WARNING and
-  rotation continues
+  interface, built after Chunk 05's verified shapes); orphan removal — an upload
+  the binding table does not account for is removed, and a work the manifest
+  still names is never removed; hardware — a live pass on the Pi: the theme
+  reaches the wall, `next`/`show_now` land within the poll interval, a deleted
+  render file skips with a WARNING and rotation continues
 - **Acceptance criteria:** the wall rotates the active theme from the new
   daemon; killing curation changes nothing about display's behaviour; a display
   restart neither re-executes the last directive nor loses its place
@@ -1467,27 +1558,35 @@ two missing deliverables.)*
   `operational-spec.md` § Process Management, `nonfunctional-requirements.md`
   § Output Quality (label legibility) and Performance (15 s label budget),
   `design_decisions.accessibility_approach`
-- **Foreign API:** IT8951 / omni-epd (build verified in Chunk 04)
-  <!-- Chunk 04 verified that the stack COMPILES, not how it displays. This
-       chunk writes a driver against omni-epd's runtime surface, so it owes its
-       own verify-api (step 0 below). -->
+- **Foreign API:** IT8951 / omni-epd — **runtime surface probed on the real panel
+  2026-08-04; step 0 below is discharged.** Findings in
+  `platform-and-dependency-findings.md` § The e-paper panel. Read them before
+  writing the driver: the default mode is 1-bit, `display()` returns nothing on
+  success or failure, and there is no partial refresh.
 - **Visual change:** yes — label legibility at standing distance on the real
-  panel needs the operator's eyes, not a test
+  panel needs the operator's eyes, not a test. The probe's type ladder narrowed
+  the range (mid-20s to low-40s px) but was rendered with PIL/DejaVu, so its
+  numbers do not transfer to Pango and the look has to be repeated.
 - **Deliverables:** new `display/src/display/panel/` (driver behind an
   interface + Pango label rendering), heartbeat writer, new
-  `deploy/curation.service` and new `deploy/display.service`, cutover performed
-  and recorded
+  `deploy/curation.service` and new `deploy/display.service`, the `tvpi` service
+  account created with its groups and `ART_ROOT` ownership
+  (`operational-spec.md` § The Service Account), cutover performed and recorded
 - **Tests:** unit — label layout against fixed metadata (golden-image or
-  measured-extent checks), heartbeat shape and atomicity; hardware — label
-  matches the artwork within the 15 s budget across several rotations; killing
-  the panel mid-run leaves rotation running
+  measured-extent checks), heartbeat shape and atomicity, **the panel is put in
+  `gray16` and the driver asserts on `mode` rather than `max_colors`** (which
+  reports 16 in both modes, so the obvious check passes against a 1-bit panel);
+  hardware — label matches the artwork within the 15 s budget across several
+  rotations; killing the panel mid-run leaves rotation running
 - **Acceptance criteria:** wall + label run unattended from the two new units
   through a TV power-cycle and a display restart with no human action; heartbeat
   advances and carries honest state
 - **Done when:**
-  0. verify-api — probe omni-epd/IT8951's runtime display surface on the real
+  0. ~~verify-api — probe omni-epd/IT8951's runtime display surface on the real
      panel (init, draw, partial vs full refresh, and what a failure returns)
-     before writing the driver; Chunk 04 verified the build, not this
+     before writing the driver; Chunk 04 verified the build, not this~~
+     **Done 2026-08-04** — findings recorded in
+     `platform-and-dependency-findings.md` § The e-paper panel
   1. Acceptance criteria met on the Pi, including the operator's legibility look
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
@@ -2072,46 +2171,432 @@ binds already exists and is contract-tested.
 > state that `observability-strategy.md`'s failure table maps failures onto.
 > Either the panel surfaces them or that table has no reader.
 
-### Chunk 19: Curation web UI and HTTP API — the discovery half
+### Chunk 21: Say which kind of nothing — `unresolved_reason`, and the artist fold
 
-- **Description:** The rest of the browser surface, built **onto Chunk 10B's**
-  rather than standing one up: same thin HTTP bindings over the same service layer
-  (typed, paginated, partial data — the recorded reason the UI does not ride MCP),
-  same design decisions, same accessibility baseline. What 10B could not build
-  because the services did not exist yet: intent entry with the estimate at the
-  point of decision; the run view (status, work list trimming, approval gate, costs
-  before and after); and the review grid (image-forward, one card per work,
-  **alternates behind it** — 10B's grid shows accepted works only, with no
-  alternates to stack). It also completes the health panel 10B started, adding
-  backup age (fed by Chunk 20) and **no budget balance at all** — the gate this
-  entry used to name is resolved. This line originally listed `limit_remaining` as
-  a deliverable outright; the operator settled on 2026-08-04 that the panel does
-  not surface it in any form, because the figure fails by reading *non-zero while
-  calls are already refused*, which stating its age would not warn anyone about.
-  Per-run spend and the `halted_by_budget` outcome are the budget signals, and both
-  already exist. Do not add the field back without reopening that decision.
-  **What 10B already delivered — the work grid, work detail, themes, the manifest
-  view with its exclusion reasons, and heartbeat age — is not rebuilt here.**
-  The pre-UI governance checkpoint disposed issues #2 (design system) and #10 (MCP
-  second-look shelf) before 10B; if #2 was settled as one-off CSS with a recorded
-  revisit, this is the chunk that revisits it, since it is where the surface stops
-  being small.
-- **Depends on:** Chunk 10B (the surface it extends), Chunks 14–18 (every
-  operation it newly binds), 13 (heartbeat to display)
-- **Artifacts consumed:** `product-brief.md` (§ Identity, flows 1/3/5),
-  `design_decisions.accessibility_approach`,
-  `observability-strategy.md` § The Health Surface, `api-contract.md` (the HTTP
-  surface carries no stability obligation)
-- **Visual change:** yes — a human-facing surface end to end
-- **Deliverables:** new `curation/src/curation/http/` handlers (thin bindings);
-  the UI pages above; health panel
+- **Description:** Two runs on 2026-08-04 proposed works and resolved none of
+  them, and nothing in the product could say why — a green suite over a pipeline
+  returning nothing, because no rule anywhere says a run must resolve anything.
+  This chunk does not meaningfully raise the resolution rate (measured 4/51 →
+  5/51 on the real distribution); it makes the failure **diagnosable**, which is
+  what makes the chunk after it falsifiable. Three parts. **First, and before
+  anything else, own the RED live test** (issue #78): a nonsense query no longer
+  scores 0.0 at the Art Institute, so the zero-score pre-filter is dead code and
+  the identity gate is the only thing between a garbage query and *Nighthawks* —
+  which must be settled *before* the query change below, since that change widens
+  what reaches a gate that just lost its outer layer. **Second, `unresolved_reason`
+  on `CandidateWork`** — one value per route to `unresolved`, derived on the same
+  write as the status from decisions phase 2 already makes and throws away, with
+  the precedence rule `data-model.md` now states. Two of the values are read from
+  the rows the work already holds and the rest from what the search discarded, so
+  the derivation spans the engine and the store and neither half can produce it
+  alone. **Third, the artist fold**: the artist is folded into
+  the free-text query, where its tokens dominate scoring, and the measured cost is
+  that three different Frank Stella titles return a byte-identical top ten and
+  Ellsworth Kelly resolves 0 of 12 held works against 10 of 12 title-only. Issue
+  the title-only query; keep the artist for the gate, not the retrieval.
+- **The test that pins the fold is a decision, not a formality.**
+  `curation/tests/unit/test_artic_client.py` asserts the current behaviour under a
+  name claiming the artist "narrows the query text" — which the live API refutes. Tests
+  are contracts here and the code gets fixed, never the test; this is the case that
+  rule exists to make hard. The reading to be ruled on is that a test pinning a
+  measured-false claim is a recorded measurement rather than a contract, so the
+  claim and the test move together. **Take that to `/prawduct:critic` rather than
+  deciding it inside the chunk.**
+- **Depends on:** Chunk 16A/16B (the phase-2 engine and its gates)
+- **Artifacts consumed:** `data-model.md` § CandidateWork (`unresolved_reason` and
+  its precedence rule), `product-brief.md` § Success Criteria (the resolution
+  floor), `api-contract.md` (the work row and its token budget),
+  `observability-strategy.md` (the two-way split that does not name a record which
+  was never retrieved), issue #78
+- **Foreign API:** museum APIs (ARTIC) — the artist fold changes what the phase-2
+  query *sends*, so it is a change to a foreign surface even though it adds no
+  new endpoint. Its `verify-api` step is the RED live test named first in the
+  description, which measured the artist facet against the live collection rather
+  than assuming it; `artic-api-findings.md` carries the result.
+- **Visual change:** no — the reason reaches the wire and the review surfaces
+  render it, but no new page
+- **Deliverables:** the `unresolved_reason` column (additive and nullable, so the
+  durable store's widening step applies it on open with no written migration) and
+  its derivation threaded from the phase-2 engine through the runner to the write
+  site; the title-only artic query; the resolution-floor test R2 calls for, naming
+  its own figure; a re-measured `list_works` page, since the row gains
+  a field and the ceiling already ran 2% over; `observability-strategy.md`'s split
+  widened to name a record that was never retrieved — today it names two failure
+  modes behind `phase_two.not_the_work`, and the Stella case is a third it cannot
+  express, a record the query never retrieved at all
+- **The narrowed claim is swept by grep, not by memory.** `data-model.md` now
+  confines "unresolved means phase 1 may have invented the work" to `not_held`, and
+  the broad form is asserted at more sites than the two an initial read found —
+  service and persistence docstrings, the phase-2 engine, and three test docstrings
+  and comments that state it as the thing being tested. The sweep is
+  `grep -rn --include='*.md' --include='*.py' -e 'invented the work' -e 'may have
+  invented' -e 'therefore suspect' -e 'may not exist' -e 'might not exist' .`, run
+  before the chunk is called done, with `change-log.md`, `reflections.md` and
+  `learnings*.md` excluded as the historical record they are. Written as a command
+  rather than a count because a count is wrong the moment anyone adds a seventh.
+
+  **The last two terms were added 2026-08-04, and their absence is the finding.**
+  The original three were built from the freshly-narrowed text, so they could not
+  match the paraphrase the surfaces actually shipped — "the signal a proposed work
+  may not exist", live on three MCP-facing strings — and the sweep came back clean
+  while the broad claim still reached callers. A sweep's blind spot is the
+  vocabulary of whoever just rewrote the text; the second pass has to be built from
+  what the OLD text would have said
+- **Tests:** unit over every reason route and the precedence rule, plus the
+  round trip to the store and the wire, since a reason derived and not reported
+  is not a reason a curator has.
+- **The fake reshape and the identity corpus moved to Chunk 22, explicitly rather
+  than by omission — and the premise for doing them here turned out to be false.**
+  This entry said the museum fake's exact-title dict lookup meant "every mutation
+  below survives for the wrong reason". It did not: the sweep aimed the retrieval
+  mutation at the client's own tests, which drive a mock transport and assert on
+  the request URL, and it was caught along with the other nine. The fake's real
+  incapacity is narrower than stated — an artist differing from the query is
+  already expressible, and what is not is a work the museum holds under a
+  *different title*, which no test in this chunk needs. Chunk 22 is where that
+  bites, since a browse returns the collection's own titles by definition, and
+  building the capability a chunk ahead of its first user means shipping test
+  infrastructure nothing exercises.
+- **Mutation sweep, and it is the acceptance evidence rather than a formality** —
+  a green suite is not evidence here, having been green throughout the two runs
+  that resolved nothing. At least: swap `identity_refused` for `not_held` in the
+  derivation (a survivor means nothing distinguishes "the museum does not have it"
+  from "it has it under another artist", which is the whole point of the column);
+  swap `all_rejected` for `below_floor` (a survivor means nothing tests the split
+  between the curator having turned everything down and the collection's scans
+  being too small — the pair the store derives, and the pair that was nearly
+  missed); neuter the `size_unknown` guard; neuter the `below_floor` route; flip
+  the precedence comparison; revert the artic query to the artist fold (a survivor
+  means nothing in the suite measures retrieval at all, which is true today)
+- **Acceptance criteria:** every `unresolved` work carries a reason and the wire
+  reports it beside the status; the live museum suite is green with the zero-score
+  measurement either removed or re-justified against what the API now does; the
+  floor test exists, names its figure, and that figure is stated against the 4/51
+  baseline whether or not it moved; every mutation above dies
+- **Done when:**
+  1. Acceptance criteria met and tests pass
+  2. `/prawduct:critic` run — including the ruling on the fold test — and blocking
+     findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+### Chunk 22: Grounded alternatives — the collection's own answer when the gate refuses
+
+- **Description:** The requirement ratified 2026-08-04 (`product-brief.md` flow 2):
+  a run may **additionally** offer works drawn from a wired collection when phase 2
+  cannot confirm what phase 1 named. Phase 1 and the gate run exactly as today —
+  the rate is unchanged, Q12 intact, `unresolved` fully reachable — and the browse
+  is a supplement *after* the gate refuses, never before phase 1 and never the
+  route by which a named work gets its image. That placement is what defangs the
+  failure that killed the inverted design: a query that compiles to nothing is a
+  supplement returning nothing, not an authoritative "the collection holds nothing
+  for this intent". **Scoped to artist adjacency (operator, 2026-08-04)**, which is
+  the one facet reproduced live; style, classification and period miss on ordinary
+  spellings and are explicitly out until measured. The seam is shaped so a facet
+  compiled by a model can be added later without changing it.
+- **Carried in from Chunk 21, which found it did not need them:** reshape the
+  museum fake so a holding can be keyed independently of the query title — today
+  it cannot express a work the collection holds under a *different* title, which
+  a browse returning the collection's own titles produces by definition — and add
+  a model-vs-museum identity corpus beside `phase_one_proposals.json`, which is
+  phase-1-vs-phase-1 only and so cannot measure the comparison this chunk leans on.
+- **Step 0 ran 2026-08-04. The artist facet is grounded, so this chunk keeps its
+  shape and needs no facet-compile step.** The claim under test was that the
+  model's artist field names artists the collection actually holds; the prior
+  evidence was n=2 with 1 hit, and both observed runs had named their artists in
+  the intent text themselves.
+  - **The recorded intents could not be re-run: their texts were never captured.**
+    `phase_one_proposals.json` keeps slug labels (`dutch_golden_age`, …), not
+    prompts. Reconstructing them would have measured intents written after the
+    fact while reporting them as the originals, so the substitute is a stronger
+    control rather than a weaker copy: **six thematic intents matching those
+    labels, each naming no artist at all**, which makes every artist that comes
+    back model-originated by construction.
+  - **Provenance (paid, $0.0084 over six live phase-1 runs):** the model
+    originated **12 distinct artists** from intents naming none, and the
+    collection holds wall-appropriate, floor-clearing work for **10 of the 12**.
+  - **Reach (free, deterministic, no model call):** over the **29 distinct
+    artists** already in the recorded corpus, **26** have such work — **932 works
+    in total**, against a pipeline that currently resolves 5 of 51 named works.
+    Supply at the *artist* level is therefore abundant where supply at the
+    *named-work* level is the binding constraint, which is exactly the gap this
+    chunk exists to fill.
+  - **The two clean misses are honest ones**: the collection holds no Vermeer
+    under any spelling, and its one Antonio Martorell is `Graphic Design`, which
+    the wall-type filter correctly excludes.
+  - **What Step 0 changed instead**: the facet's real failure mode is **name-form
+    mismatch, not absent supply** — `"Wassily Kandinsky"` returns nothing while
+    the museum's 24 "Vasily Kandinsky" works sit there, and `"Titian (Tiziano
+    Vecellio)"` returns nothing against 20. That is a new requirement rather than
+    a build detail, so it was written before design and ratified by the operator
+    the same day: `product-brief.md`, the paragraph beginning "An artist the
+    collection spells its own way is a miss". The measurements behind it are in
+    `artic-api-findings.md` § Browsing by artist.
+  - **Rights, now quantified rather than anticipated:** of the 932 works, **637
+    are public domain and 295 are in copyright** (~32%). The ratified policy is
+    record-and-show-never-gate, so this is the honest cost that policy carries,
+    stated in a number.
+- **Depends on:** Chunk 21 (`unresolved_reason` is what makes this falsifiable —
+  without it nobody can tell whether this chunk worked), Chunk 16A/16B
+- **Artifacts consumed:** `product-brief.md` flow 2 (the ratified requirement and
+  its four conditions on every offered work), `nonfunctional-requirements.md`
+  § The Supply Horizon, `data-model.md` § CandidateWork, `architecture.md` (adding
+  a provider is a pre-authorised bounded extension)
+- **Foreign API:** museum APIs (ARTIC) — and this is the bundle's largest new
+  query surface: a POST search with `filters`/`top_hits`/`terms` aggregations, a
+  wall-type keyword filter, and an ambiguity-bounded surname retry, none of which
+  any earlier chunk sends. Its `verify-api` step is the "Step 0 ran 2026-08-04"
+  section below, which measured the facet live before the design was fixed and
+  found the case-sensitivity asymmetry between `artwork_type_title.keyword` and
+  `artist_title.keyword`; `artic-api-findings.md` § Browsing by artist carries it.
+- **Visual change:** yes — a run's work list stops being a flat list of what phase
+  1 said, so the review grid, the API work list and the approval count each gain a
+  second kind of row to render, count and explain. That is why this is a chunk and
+  not a patch.
+- **Deliverables:** a `CollectionBrowse` Protocol beside the image-search seam,
+  with an Art Institute implementation issuing **one POST per run** (not per work)
+  — a `bool.filter` on image presence, the display floor and a
+  wall-appropriate type set, with a token-AND on the artist field. **The type set
+  is `Painting`, `Print`, `Drawing and Watercolor`** (operator, 2026-08-04):
+  measured across all 29 corpus artists, adding `Textile` or `Photograph` changes
+  nothing at all — 3,158 works either way — so the widening buys only artists the
+  collection holds *exclusively* as textile, and offering a flat-photographed
+  fabric sample as wall art would make "offered work" mean two different things.
+  **The ambiguity-bounded surname retry** the brief requires costs two further
+  POSTs on the miss path — the ambiguity check cannot ride along with either
+  browse, because it must NOT carry the wall-type filter (a filter that hides one
+  of two colliding artists manufactures the confidence the check exists to
+  withhold). So a run where every artist is held costs one request and the worst
+  case is three. All three are per *run*: none scales with the work list, which is
+  the property that matters. **The display floor is applied from `thumbnail.width`/`height` on the
+  browse response** — the same property the per-work search has, so no per-result
+  round trip — and it is the pipeline's own `assess_display_fit`, not a width
+  threshold restated in a query, because two thresholds that can disagree will. **Filters, not
+  relevance**: the score is boost-dominated and a constant score does not
+  neutralise it, so a text-relevance query for a Dutch still life returns
+  *American Gothic*. Facets derive from the run's own works — the artists it named,
+  the type set, the floor — so there is no new model call and no new prompt. A
+  nullable provenance field on `CandidateWork` distinguishing offered from
+  proposed; the per-run bound and its separate reporting; the approval-count
+  arithmetic; the review surfaces' labelling
+- **Rights: recorded, shown, never gating** (operator, 2026-08-04). No filter, no
+  public-domain preference, no exclusion — constraint 13 unchanged. The review card
+  shows an offered work's rights, and the honest cost is stated rather than
+  discovered: this raises how often in-copyright masters are acquired, and nothing
+  downstream refuses on rights.
+- **Tests:** unit over the query construction and the offered/proposed split;
+  integration over a run that ends with the gate refusing everything and offers
+  works anyway; the review surfaces asserting an offered work is never merged with
+  or presented as a work phase 1 named
+- **Acceptance criteria:** a run whose every proposed work is unresolved returns
+  offered works with the collection's own titles and attributions, each labelled,
+  bounded and counted separately; the resolution-floor figure from Chunk 21 is
+  restated against the 4/51 baseline; **no offered image is ever attached to a
+  model-named work**, asserted rather than asserted-about
+- **Honest expectation — now measured (2026-08-04) rather than predicted, and both
+  predictions were too pessimistic.** Against the two real runs that resolved
+  nothing, under the settled type set and the pipeline's own display floor:
+  - the run naming **Kelly, Noland, Louis and Stella** goes from nothing to **69
+    offerable works** (Kelly 51, Stella 12, Noland 5, Louis 1), against a
+    predicted "at least four";
+  - the run naming **the Delaunays and Banksy** goes from nothing to **4**, all
+    Robert Delaunay and all ordinary wall types — not the dress-fabric swatch
+    that was predicted. Sonia Delaunay contributes nothing because her thirteen
+    holdings are all `Textile`, and Banksy nothing because the collection holds
+    none.
+
+  **This remains not a general fix for the supply horizon and must not be sold as
+  one** — it lifts artist-named runs and does nothing for a work no collection
+  holds, which is still the binding constraint.
+
+  **One consequence is a design obligation, not a happy number.** Sixty-nine
+  candidates for a single run means the per-run bound is not a safety rail but
+  the *primary selection mechanism*, and `_score` cannot break the tie — it is
+  boost-dominated even inside a filter context (`artic-api-findings.md`). So the
+  bound needs a stated rule for *which* works it keeps. **Round-robin across the
+  run's own artists**, taking one per artist per pass: without it Kelly's 51
+  crowd out Noland's 5 and the offer silently becomes about one artist rather
+  than about the intent. Recorded here as the decision it is, so the review can
+  disagree with it rather than discover it.
+- **Done when:**
+  1. Step 0 run and its result recorded, then acceptance criteria met and tests pass
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+### Chunk 19 was split into 19A and 19B (2026-08-05)
+
+At the operator's call, for the same reason 08, 14, 16, 17 and 18 were split: one
+Critic round over the whole of it reads more than a round can hold well. 10B's
+entire surface is ~1,970 lines, and 19 binds `DiscoveryService`, the runner and
+the review service on top of it, so the undivided chunk more than doubles the
+surface under a single review.
+
+**The seam is the curator's own two motions — commissioning a run, then judging
+what it brought back** — which is the seam 17A/17B already used one layer down,
+at the MCP surface. Each half is independently demoable: 19A ends with a run that
+has finished and a curator who can see what it cost, 19B ends with the loop
+closed onto the wall.
+
+**What is shared, and holds for both halves:** the surface is built **onto Chunk
+10B's** rather than standing one up — same thin HTTP bindings over the same
+service layer (typed, paginated, partial data, which is the recorded reason the
+UI does not ride MCP), same design decisions, same accessibility baseline.
+**What 10B already delivered — the work grid, work detail, themes, the manifest
+view with its exclusion reasons, and heartbeat age — is not rebuilt in either.**
+
+**Issue #2 spans both halves and closes at the end of 19B.** Its still-open box
+names components for "the candidate review grid *and* intent entry"; its
+2026-08-01 disposition settled the sequencing as **tokens lead, components are
+extracted as screens land**. So 19A extracts the intent-entry and run-view
+components, 19B extracts the grid's, and only 19B can close the issue.
+
+**One dependency the undivided entry claimed is not real and is dropped:** it
+listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
+`/health` reads `services.display.wall_status()` today. Nothing here waits on 13.
+
+### Chunk 19A: The run half — intent entry, the estimate, the run view and its gate
+
+- **Description:** The curator commissions a run and watches it, in the browser.
+  **Intent entry with the estimate at the point of decision** — not on a later
+  screen, because the estimate exists to inform the choice being made. **The run
+  view**: status, work-list trimming, the approval gate, and costs before and
+  after. Both are what 10B could not build because the services did not exist.
+  **The run view is where Chunks 21 and 22 become visible to a human, and that is
+  a requirement rather than a nicety:** 21 exists so a run that resolves nothing
+  can say *which kind of nothing*, and a browser surface that renders a bare
+  `unresolved` throws away the whole chunk. So the view reports
+  `unresolved_reason` per work, and labels offered works apart from proposed ones
+  — the provenance 22 put on the wire — including the run-level counts that
+  Chunk 22's Critic round found computed and wired to nothing.
+- **Depends on:** Chunk 10B (the surface it extends), 14A/14B (the run, the
+  estimate, the ceiling), 16A/16B (a run that resolves, and the re-search),
+  21 (`unresolved_reason`), 22 (offered/proposed provenance and its counts)
+- **Artifacts consumed:** `product-brief.md` (§ Identity, flows 1/3),
+  `design_decisions.accessibility_approach`, `api-contract.md` (the HTTP surface
+  carries no stability obligation)
+- **Visual change:** yes — two human-facing screens
+- **Deliverables:** intent-entry and run-view handlers in
+  `curation/src/curation/http/` (thin bindings); the two pages; the intent-entry
+  and run-view component extraction against 10B's existing tokens
 - **Tests:** integration — every handler is dispatch + formatting over an
-  existing service method (the service-layer norm holds by construction);
-  the flows above exercised through the HTTP surface
+  existing service method (the service-layer norm holds by construction); the
+  flows exercised through the HTTP surface; the token/contrast test 10B built
+  extends to the new components rather than being bypassed
+- **Acceptance criteria:** a curator enters an intent, reads the estimate before
+  deciding, approves or declines, and watches the run to a terminal state without
+  touching the filesystem, JSON, or SSH; a run that resolves nothing says which
+  kind of nothing, per work; offered works are distinguishable from proposed ones
+  on the screen and in the run-level counts
+- **Done when:**
+  1. Acceptance criteria met and tests pass, plus the operator's look
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+### Chunk 23: The browser client gets executed coverage — Playwright (issue #30)
+
+- **Description:** The client is not rendering-only any more and no test runs a
+  line of it. Issue #30 said this stops being tolerable at Chunk 19 and asked for
+  the decision *before* it; 19A shipped first, so this chunk pays that debt
+  before 19B adds the most stateful screen in the product. **The option is
+  settled — Playwright against the real surface** (operator, 2026-08-05, recorded
+  in `technical_decisions.technology` with its costs and the reason the three
+  cheaper options lose). What is left is building it.
+  **The shipped client does not change.** `app.js` stays one hand-written file
+  served as-is with no build step; what lands is a dev/CI harness in its own
+  directory. The Pi runs the product, not the suite — the objection issue #30
+  records against a Node toolchain is about the wrong thing, and the decision
+  entry says so, so it is not re-litigated here.
+- **Depends on:** Chunk 19A (the screens with the most untested logic), 10B (the
+  three behaviours issue #30 names by hand)
+- **Artifacts consumed:** issue #30, `technical_decisions.technology`,
+  `boundary-patterns.md` § Test Levels, `project-preferences.md`
+- **Visual change:** no — this is coverage of a surface that already exists
+- **Deliverables:** a Playwright harness driving the booted server; its
+  dependency kept off the default install path; the CI/dev invocation
+  written down where `CLAUDE.md`'s command table can point at it.
+  **The binding is Python, settled at build (operator, 2026-08-05).** The entry
+  above said "its dependency manifest, kept out of the two Python planes",
+  which assumed Node — Playwright's own Python bindings mean the harness lives
+  in the curation suite behind a `browser` marker, and the "second language's
+  package manifest" the decision accepted as a cost is simply not paid. Kept off
+  the default install is the surviving intent, and it is met by an opt-in
+  `browser` dependency group of the same shape as `eval`'s.
+- **Tests:** the harness *is* the deliverable. **Issue #30's acceptance names
+  three from 10B that must each fail when their behaviour is removed** —
+  `fetchAllWorks` termination, the image-error fallback, and the post-navigation
+  focus move. Add 19A's, which are the reason this moved up the order: the run
+  view leaving the DOM alone when a poll changes nothing (assert focus survives),
+  two concurrent paints resolving to one, and an unresolved work reaching the
+  page as a sentence rather than a raw enum token.
+  Each behaviour is paired with the assertion that fails if it *over*-fires —
+  a loop that stops must also have collected everything, a focus move that always
+  fires steals focus from a freshly loaded page, and suppression that never lifts
+  freezes the page while the run moves on. The reason test is parametrised over
+  `UnresolvedReason` rather than a list written in the test, so a sixth reason
+  arrives as a failure instead of as a raw token on a curator's card.
+- **Acceptance criteria:** every behaviour above is covered by a test that
+  demonstrably fails when the behaviour is removed — demonstrated by the mutation
+  sweep, not asserted; `boundary-patterns.md` § Test Levels and this plan's test
+  strategy state what the harness covers and what it does not; issue #30 closes
+  with its option recorded
+- **Done when:**
+  1. Acceptance criteria met and tests pass
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+### Chunk 19B: The review half — the grid, its alternates, the verdict, the panel
+
+- **Description:** The curator judges what the run brought back, and the loop
+  closes. **The review grid** — image-forward, one card per work, **alternates
+  behind it**; 10B's grid shows accepted works only, with no alternates to stack,
+  so the stacking is new here. The verdict and image selection ride the review
+  service Chunk 17 built. It also **completes the health panel** 10B started,
+  adding backup age and **no budget balance at all** — the gate the undivided
+  entry used to name is resolved. That entry originally listed `limit_remaining`
+  as a deliverable outright; the operator settled on 2026-08-04 that the panel
+  does not surface it in any form, because the figure fails by reading *non-zero
+  while calls are already refused*, which stating its age would not warn anyone
+  about. Per-run spend and the `halted_by_budget` outcome are the budget signals,
+  and both already exist. Do not add the field back without reopening that
+  decision. **Backup age is built here against a source nothing populates yet**
+  (operator, 2026-08-05): the panel's contract is that it states observations
+  with ages and never verdicts, so "no backup recorded" is a true and useful
+  observation before the backup exists, and the field reports real ages the moment
+  the backup job lands with nothing further to wire. This is what breaks the
+  circular dependency the two entries used to carry between them.
+- **Depends on:** Chunk 19A (the run view a reviewed work is reached from),
+  17A/17B (the review surface and the verdict), 18A/18B (images on disk to show)
+- **Artifacts consumed:** `product-brief.md` (§ Identity, flows 1/5),
+  `design_decisions.accessibility_approach`, `observability-strategy.md` § The
+  Health Surface, `api-contract.md` (the HTTP surface carries no stability
+  obligation), issue #2
+- **Visual change:** yes — the surface a curator spends their time in
+- **Deliverables:** review-grid and health handlers in
+  `curation/src/curation/http/` (thin bindings); the grid with its alternates;
+  the completed health panel; the grid's component extraction, which closes the
+  last open box on issue #2.
+  **Plus a binding for the re-search, added at build (operator, 2026-08-05).**
+  Turning a scan down is one of the grid's own actions and it leaves the work
+  `awaiting_better_image`, where nothing looks again — `resolve_images` is what
+  looks, and it had no HTTP binding. Shipping the rejection without it would make
+  this chunk's own screen a dead end escapable only from an MCP client. It is one
+  thin handler over `runner.resolve_images`, which 16B built.
+  **The carried finding above this chunk's neighbours is closed here too:** the
+  panel had no reader for the document the display plane reports, so the failure
+  table's TV, panel and last-error rows mapped onto nothing. It renders what the
+  heartbeat carries rather than a schema invented here, because
+  `observability-strategy.md` makes `reported_at` the only key that is contract
+  and leaves the rest to the writer.
+- **Tests:** integration — every handler is dispatch + formatting over an
+  existing service method; the flows exercised through the HTTP surface; the
+  non-colour state indicator holds for the grid's accept/reject, asserted rather
+  than asserted-of. **Browser tests for the grid's client logic**, which is what
+  Chunk 23 built its harness for and moved up the order to precede this — with
+  the mutation sweep as the bar for covered, not the existence of a test
 - **Acceptance criteria:** the full curator loop — intent → estimate → review
-  with images → accept → theme → wall — runs in the browser without touching
-  the filesystem, JSON, or SSH; the health panel states observations with ages,
-  never verdicts
+  with images → accept → theme → wall — runs in the browser without touching the
+  filesystem, JSON, or SSH; the health panel states observations with ages, never
+  verdicts, and says so plainly when it has no observation to state; issue #2's
+  component box is closed
 - **Done when:**
   1. Acceptance criteria met and tests pass, plus the operator's look
   2. `/prawduct:critic` run and blocking findings resolved
@@ -2130,16 +2615,25 @@ binds already exists and is contract-tested.
   confirmed as documented, the legacy 2024 modules deleted now that nothing
   runs them, and the final cumulative review makes the branch release-ready.
 - **Depends on:** Chunks 13 (health panel target exists), 18 (re-acquisition
-  refills a restored catalogue), 19 (panel shows backup age)
+  refills a restored catalogue), 19B (the panel's backup-age field already exists
+  and reads empty — this chunk fills it, so the dependency runs one way only;
+  the two entries used to name each other)
 - **Artifacts consumed:** `operational-spec.md` (§ Backup and Restore, § Routine
   Operations), issue #14, `nonfunctional-requirements.md` § Durability
 - **Carried findings (hygiene, close-out):** `deploy/README.md` and the committed
   unit still describe the single-process 2024 loader with no pointer to the
   two-unit deployment; three artifact `depends_on` headers disagree with the
-  derivation their own prose shows. Both corrected here.
-- **Deliverables:** backup job + schedule in `deploy/`; backup age on the
-  health panel; the restore exercise performed and its outcome recorded; legacy
-  modules removed; README brought current
+  derivation their own prose shows. Both corrected here. **Amended 2026-08-04 —
+  that pair is staler than this row says:** the Pi was rebuilt onto a fresh card
+  and every `/home/tvpi/` path in both files now points at a directory that does
+  not exist, on behalf of a user that does not exist. Chunk 13 creates the
+  account and writes the new units, so what reaches this chunk is whatever
+  `deploy/` still carries afterwards.
+- **Deliverables:** backup job + schedule in `deploy/`; the health panel's
+  backup-age field going from "no backup recorded" to a real age — the field
+  itself ships with 19B, so what lands here is the source behind it; the restore
+  exercise performed and its outcome recorded; legacy modules removed; README
+  brought current
 - **Tests:** the restore exercise is the test, plus a unit test that the backup
   path refuses the file-copy shape
 - **Acceptance criteria:** issue #14's four boxes checked; a restored catalogue

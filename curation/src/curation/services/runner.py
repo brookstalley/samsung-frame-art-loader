@@ -1,12 +1,25 @@
-"""Running a discovery run: starting it, gating it, pricing it, and reporting it.
+"""Running a discovery run, end to end: starting it, gating it, driving both
+phases, supplementing what they could not confirm, pricing it, and reporting it.
 
 `DiscoveryService` owns the *records* — the two state machines, the verdicts, the
 spend rows — and is deliberately synchronous and free of any notion of a process.
 This is the concern above it: the thing that decides a run should begin, hands
-phase 1 to an engine, writes what came back, and answers "where is it now". The
-split is the same one the catalogue and discovery services already draw. A record
-layer that also knew about worker threads and long-polls would be untestable
-without both.
+phase 1 to an engine, orchestrates phase 2 over `PhaseTwoEngine`, asks a wired
+collection for grounded alternatives when the identity gate refuses, writes what
+came back, and answers "where is it now". The split is the same one the catalogue
+and discovery services already draw. A record layer that also knew about worker
+threads and long-polls would be untestable without both.
+
+**This module is doing more than one thing, and that is recorded rather than
+denied.** Phase 2's provider work sits behind its own collaborator; the
+collection supplement's policy — which artists to ask about, how far to spread
+the answers, what bounds them, how a decline is handled — does not, so it shares
+a class with the worker threads, the wake protocol, the approval gate, pricing
+and view assembly. The seam is meant to widen when a facet compiled by a model
+arrives, and it would widen here. Extracting the supplement into a collaborator
+of its own, taking `(discovery, collection, bound)` and exposing `offer(...)`,
+is tracked rather than done in passing, because it moves code no chunk in flight
+is changing and deserves its own review.
 
 **Discovery must not block.** `start` returns a run handle and the work happens
 behind it, because a call that ran for the length of a discovery run would be
@@ -25,7 +38,7 @@ that the figure a curator authorised is one the run cannot freely exceed.
 import logging
 import threading
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -33,6 +46,13 @@ from enum import StrEnum
 from time import monotonic
 from typing import Final
 
+from curation.discovery.browse import (
+    OFFERED_CONFIDENCE,
+    BrowseQuery,
+    CollectionBrowse,
+    CollectionBrowseFailure,
+    OfferedGroup,
+)
 from curation.discovery.dedup import work_dedup_key
 from curation.discovery.engine import (
     BudgetExhausted,
@@ -42,7 +62,7 @@ from curation.discovery.engine import (
     WorkList,
     WorkListRequest,
 )
-from curation.discovery.images import ImageQuery, ImageSearchFailure
+from curation.discovery.images import FoundImage, ImageQuery, ImageSearchFailure
 from curation.discovery.phase_two import JudgedImage, PhaseTwoEngine
 from curation.logs import run_context
 from curation.persistence.discovery_records import (
@@ -52,6 +72,7 @@ from curation.persistence.discovery_records import (
     ResolutionStatus,
     RunKind,
     RunStatus,
+    WorkProvenance,
 )
 from curation.services.discovery import DiscoveryService
 from curation.services.errors import ServiceError
@@ -69,6 +90,42 @@ STATUS_HOLD_SECONDS: Final[float] = 45.0
 #: normally woken by the change itself; this only bounds how long a change made
 #: by something outside this process could go unnoticed.
 _RECHECK_SECONDS: Final[float] = 5.0
+
+#: How many runs one listing may carry. **Nothing else bounds this list**, and it
+#: is the only listing in the product that grows with what people *typed*: a run
+#: row carries the operator's verbatim intent, so the payload grows with both the
+#: number of runs and the length of each request. A household box discovering art
+#: for a year would otherwise make one `list_runs` call the largest thing either
+#: surface can emit — into a model's context window on one of them.
+#:
+#: 50 because a row here is about eleven short fields plus the intent, near 120
+#: tokens in practice, so a full listing is ~6,000 — under the 10,000 at which a
+#: client warns, and sized the same way `MAX_WORKS_LISTED` was.
+#:
+#: **The newest survive**, which is what makes a cap usable rather than merely
+#: safe: the store returns runs newest-first, and the run somebody is looking for
+#: is nearly always recent. A cap that kept the oldest would bound the payload and
+#: answer nobody's question.
+MAX_RUNS_LISTED: Final[int] = 50
+
+
+@dataclass(frozen=True, slots=True)
+class RunListing:
+    """A page of runs, and how many there were before the cap.
+
+    `total` is carried rather than left to be inferred from `len(runs)`, because
+    a silently short list is indistinguishable from a complete one — which is how
+    a caller concludes there have been fifty runs when there have been four
+    hundred. `api-contract.md § Conditional Patterns` requires the count as well
+    as the fact: *"a truncated result says so explicitly and gives the total"*.
+    """
+
+    runs: Sequence[DiscoveryRun]
+    total: int
+
+    @property
+    def truncated(self) -> bool:
+        return self.total > len(self.runs)
 
 
 class WorkOutcome(StrEnum):
@@ -106,6 +163,11 @@ class DiscoverySettings:
     approval_threshold: int
     phase1_search_allowance: int
     phase2_searches_per_work: int
+    #: How many works a run may offer from a wired collection on top of what it
+    #: proposed. Not a cost bound — browsing a museum API is free — but a bound on
+    #: a curator's attention and on how far a supplement may outweigh the list
+    #: they approved. Zero switches the supplement off without unwiring it.
+    offered_works_per_run: int
     search_cost_usd: Decimal
     input_cost_usd_per_mtok: Decimal
     output_cost_usd_per_mtok: Decimal
@@ -223,6 +285,40 @@ class RunView:
     def work_count(self) -> int:
         return len(self.works)
 
+    # Offered and proposed works are counted apart wherever a number is shown,
+    # because the curator authorised a work list of a stated size and the
+    # supplement adds to it (`product-brief.md`). A single total would report a
+    # run as having found more than it did, and the difference is exactly what
+    # the offered/proposed distinction exists to keep visible.
+    @property
+    def proposed_count(self) -> int:
+        """How many works the model named — the list the approval gate sized."""
+        return sum(1 for work in self.works if work.provenance is WorkProvenance.PROPOSED)
+
+    @property
+    def offered_count(self) -> int:
+        """How many works a wired collection volunteered on top of that list."""
+        return sum(1 for work in self.works if work.provenance is WorkProvenance.OFFERED)
+
+    @property
+    def resolved_proposals(self) -> int:
+        """How many of the model's own works ended up with an image.
+
+        **Counted directly, never as `resolved` minus `offered_count`.** That
+        subtraction is right only while every offered work is still resolved, and
+        an offered work does not stay that way: a curator who turns down its
+        instance is told to re-search, and a re-search that finds nothing derives
+        `unresolved` on it. The run stays completed, the subtraction goes
+        negative, and the sentence a curator reads becomes "-1 of 1 proposed
+        works have an image". Every other tally on this view is a direct count
+        over the works for exactly this reason.
+        """
+        return sum(
+            1
+            for work in self.works
+            if work.provenance is WorkProvenance.PROPOSED and work.resolution_status is ResolutionStatus.RESOLVED
+        )
+
     # The three tallies are counted off the works rather than carried beside
     # them, because a view holding both could be built with a count that
     # disagrees with the list under it — and the notice quotes the counts while
@@ -246,6 +342,71 @@ class RunView:
     def searches_exhausted(self) -> bool:
         """Whether this run has used every search its allowance currently permits."""
         return self.searches_used >= self.search_allowance
+
+
+def _searchable(run: DiscoveryRun, works: Sequence[CandidateWork]) -> int:
+    """How many of a run's works phase 2 will actually search, for sizing its allowance.
+
+    The two run kinds count differently, and conflating them publishes a bound a
+    run cannot live under. A **discovery** run searches the works the model
+    proposed; one the collection offered arrived carrying its image and was never
+    searched, so counting it reports an allowance larger than anything the run
+    could have spent.
+
+    A **re-search** searches everything it covers, whatever provenance those works
+    carry. Its works belong to the *parent* run and carry the parent's
+    provenance — so filtering them by `PROPOSED` here would size a re-search of
+    offered works at zero and publish `exhausted: true` for a run about to spend.
+    """
+    if run.kind is RunKind.RESOLVE:
+        return len(works)
+    return sum(1 for work in works if work.provenance is WorkProvenance.PROPOSED)
+
+
+def _round_robin(groups: Sequence[OfferedGroup]) -> Iterator[tuple[FoundImage, OfferedGroup]]:
+    """Every offered work, one artist at a time round the facets, never twice.
+
+    **The spread is the point, not the order within a facet.** One real run's
+    four artists held 51, 12, 5 and 1 offerable works; taking them in any
+    collection-given order would fill the whole allowance with the first artist
+    and turn a supplement for the intent into a supplement for Ellsworth Kelly.
+    Taking one each per pass means a bound of twelve reaches all four.
+
+    Deduplicated by URL because facets overlap: a run naming both "Rembrandt" and
+    "Rembrandt van Rijn" gets two buckets over largely the same works, and the
+    same painting offered twice is two cards for one thing.
+
+    Yields everything rather than stopping at a bound: the caller declines works
+    for reasons only it knows — below the floor, already in the run, suppressed —
+    so a generator that counted its own yields would count the wrong thing.
+    """
+    queues = [list(group.works) for group in groups]
+    seen: set[str] = set()
+    while any(queues):
+        for queue, group in zip(queues, groups, strict=True):
+            while queue:
+                found = queue.pop(0)
+                if found.url in seen:
+                    continue
+                seen.add(found.url)
+                yield found, group
+                break
+
+
+def _offer_rationale(found: FoundImage, group: OfferedGroup) -> str:
+    """Why this work is on the card, in the terms `product-brief.md` requires.
+
+    Names the facet that produced it and how many works that facet matched,
+    because being offered one work out of four hundred reads differently from
+    being offered one out of one — and a curator cannot tell which from the work
+    alone. The artist named is the run's spelling, which is what they asked
+    about; the work carries the collection's own attribution separately.
+    """
+    held = "the only work" if group.matched == 1 else f"one of {group.matched} works"
+    return (
+        f"Offered by the collection, not proposed by the model: {held} it holds by "
+        f"{group.query.artist}, an artist this run named but could not confirm a work for."
+    )
 
 
 def _daemon_thread(work: Callable[[], None]) -> None:
@@ -272,11 +433,18 @@ class DiscoveryRunner:
         *,
         images: PhaseTwoEngine | None = None,
         previews: PreviewCache | None = None,
+        collection: CollectionBrowse | None = None,
         spawn: Callable[[Callable[[], None]], None] = _daemon_thread,
     ) -> None:
         self._discovery = discovery
         self._engine = engine
         self._settings = settings
+        #: The collection a run supplements from, if one is wired. Optional on its
+        #: own — unlike the phase-2 pair above — because a deployment can sensibly
+        #: resolve images without offering adjacent works, while the reverse is
+        #: incoherent: there is nothing to supplement until the gate has refused
+        #: something. A run with no collection simply offers nothing.
+        self._collection = collection
         #: Phase 2, and the cache its previews land in. Optional together: a
         #: deployment without an image provider runs phase 1 and stops, which is
         #: a coherent configuration and the one every phase-1 test uses. What is
@@ -344,12 +512,17 @@ class DiscoveryRunner:
         proposed nothing and that approving it spends no more — one false, the
         other describing a decision they will never be offered.
         """
-        works = len(self._discovery.run_results(run.id).works)
+        held = self._discovery.run_results(run.id).works
         free = "Phase 2 asks museum APIs, which are free, and identifies works locally"
         if run.kind is RunKind.RESOLVE:
-            return f"Re-searching the {works} works this run covers. {free}, so this re-search costs nothing."
+            return f"Re-searching the {len(held)} works this run covers. {free}, so this re-search costs nothing."
+        # Proposed only: this sentence says what phase 2 will resolve, and a work
+        # the collection offered was never phase 1's to propose nor phase 2's to
+        # resolve. Counting it here described twelve works as proposed that the
+        # model never named.
+        proposed = sum(1 for work in held if work.provenance is WorkProvenance.PROPOSED)
         return (
-            f"Resolving the {works} works this run proposed. {free} — so approving this run spends nothing "
+            f"Resolving the {proposed} works this run proposed. {free} — so approving this run spends nothing "
             "further. The gate is on the work count, not the price."
         )
 
@@ -382,9 +555,21 @@ class DiscoveryRunner:
             month=month,
         )
 
-    def list_runs(self, *, status: RunStatus | None = None, kind: RunKind | None = None) -> Sequence[DiscoveryRun]:
-        """Every run, newest first, optionally narrowed."""
-        return self._discovery.list_runs(status=status, kind=kind)
+    def list_runs(self, *, status: RunStatus | None = None, kind: RunKind | None = None) -> RunListing:
+        """The newest runs, optionally narrowed, capped at `MAX_RUNS_LISTED`.
+
+        **`status` and `kind` are filters, not bounds.** Omitting both is the
+        documented default — "omit to list every run" — and until this cap
+        existed that returned the store's entire history in one payload, on both
+        surfaces. Filtering narrows *which* runs; only the cap bounds how many.
+
+        The cap is applied here rather than in either binding so the two surfaces
+        cannot come to disagree about how much history there is. `http/api.py`'s
+        own note said as much before this existed: fixing one alone is how they
+        drift apart.
+        """
+        runs = self._discovery.list_runs(status=status, kind=kind)
+        return RunListing(runs=runs[:MAX_RUNS_LISTED], total=len(runs))
 
     def run_status(self, run_id: str, *, wait: bool = True) -> RunView:
         """Where a run is, holding until that changes if work is actually under way.
@@ -783,7 +968,155 @@ class DiscoveryRunner:
                 )
                 return
             tally[self._resolve_work(work, images, previews)] += 1
+        self._supplement(run_id, previews)
         self._close_phase_two(run_id, tally=tally, works=len(works))
+
+    def _supplement(self, run_id: str, previews: PreviewCache) -> None:
+        """Offer works the collection holds by the artists this run could not confirm.
+
+        **After the gate, never instead of it.** Every proposed work has already
+        been searched and judged by the time this runs, so nothing here can become
+        the route by which a named work gets its image — the browse is not told
+        which work failed and has nothing to attach an image to.
+
+        **The facets are the artists of the works that came back unresolved**, not
+        every artist the run named. A work that resolved needs no supplement, and
+        offering more of its artist would pad a successful run rather than answer
+        a failed one.
+
+        Failure is swallowed to a log on purpose. A supplement is an extra, and a
+        collection that could not be browsed must not take down a run that
+        resolved works perfectly well — the opposite of phase 2, where being
+        unable to reach the provider is the whole answer for that work.
+        """
+        if self._collection is None or self._settings.offered_works_per_run <= 0:
+            # Said out loud, because silence here is indistinguishable from the two
+            # outcomes that mean something entirely different: a collection that held
+            # nothing, and one whose every candidate was declined. All three read as
+            # `works_offered: 0`, and the operator asking "why did nothing get
+            # offered" is the one person the answer is cheap for.
+            log.info(
+                "the offered-works supplement is off for this run; nothing will be offered",
+                extra={
+                    "event": "browse.supplement_off",
+                    "reason": "no_collection" if self._collection is None else "offered_works_per_run_zero",
+                },
+            )
+            return
+        if self._discovery.get_run(run_id).kind is not RunKind.DISCOVERY:
+            # A re-search asks for better images for works a curator already
+            # named; it does not supplement them. Stated here rather than left to
+            # the record layer, which refuses an offer on a resolve run by
+            # *raising* — and this runs on a worker whose caller turns a
+            # ServiceError into a failed run, so a curator asking for a better
+            # image would be told the re-search broke. Today the refusal is never
+            # reached, because a resolve run owns no candidate works of its own
+            # and the facet list comes back empty first; that is an accident of
+            # where coverage is stored, not a guard, and it would stop holding
+            # the moment this read `covered_works` the way `_works_to_resolve`
+            # does.
+            return
+        try:
+            self._offer_from_collection(run_id, previews)
+        except CollectionBrowseFailure as exc:
+            log.warning(
+                "could not browse the collection for adjacent works; the run keeps what it resolved: %s",
+                exc,
+                extra={"event": "browse.unreachable"},
+            )
+
+    def _offer_from_collection(self, run_id: str, previews: PreviewCache) -> None:
+        """Browse for each unconfirmed artist, then record an even spread of what came back."""
+        assert self._collection is not None  # noqa: S101 - guarded by the caller, narrowing for the reader
+        bound = self._settings.offered_works_per_run
+        artists = self._artists_needing_a_supplement(run_id)
+        if not artists:
+            return
+        groups = self._collection.browse([BrowseQuery(artist=artist) for artist in artists], per_query=bound)
+        offered = 0
+        for found, group in _round_robin(groups):
+            if offered >= bound:
+                break
+            if self._offer_one(run_id, found, group, previews):
+                offered += 1
+        log.info(
+            "offered works the collection holds for artists this run could not confirm",
+            extra={
+                "event": "browse.offered",
+                "artists_asked": len(artists),
+                "works_offered": offered,
+                "collection_holds": sum(group.matched for group in groups),
+            },
+        )
+
+    def _artists_needing_a_supplement(self, run_id: str) -> Sequence[str]:
+        """Each distinct artist whose work this run failed to confirm, once.
+
+        Distinct because two unresolved works by one artist are one question to
+        the collection, and asking twice would spend a facet of the bound on a
+        duplicate. Ordered by first appearance rather than sorted, so the spread
+        below is stable and a run's offer does not reshuffle for a reason nobody
+        can see.
+        """
+        seen: dict[str, None] = {}
+        for work in self._discovery.list_candidate_works(run_id):
+            if work.resolution_status is ResolutionStatus.UNRESOLVED and work.proposed_artist:
+                seen.setdefault(work.proposed_artist, None)
+        return tuple(seen)
+
+    def _offer_one(self, run_id: str, found: FoundImage, group: OfferedGroup, previews: PreviewCache) -> bool:
+        """Record one offered work and the instance that is it. `False` if it was declined."""
+        if not self._discovery.clears_display_floor(width=found.estimated_width, height=found.estimated_height):
+            # Journalled like the other two declines, and for a stronger reason
+            # than symmetry: this is the systemic one. A single wrong artwork-box
+            # setting makes every browse result fall below the floor, and the
+            # supplement then offers nothing for ever while reporting only
+            # `works_offered: 0` — a silence indistinguishable from a collection
+            # that holds nothing.
+            log.info(
+                "not offering a work that would render below the display floor",
+                extra={
+                    "event": "browse.below_floor",
+                    "work_title": found.title,
+                    "artist": group.query.artist,
+                    "estimated_width": found.estimated_width,
+                    "estimated_height": found.estimated_height,
+                },
+            )
+            return False
+        work = self._discovery.offer_work(
+            run_id=run_id,
+            title=found.title,
+            artist=found.artist,
+            rationale=_offer_rationale(found, group),
+            work_dedup_key=work_dedup_key(title=found.title, artist=found.artist),
+        )
+        if work is None:
+            return False
+        self._discovery.record_image(
+            candidate_work_id=work.id,
+            url=found.url,
+            provider=found.provider,
+            source_class=found.source_class,
+            acquisition_method=found.acquisition_method,
+            # The collection identified this image as this work: the record and
+            # the picture are one row in its own catalogue. That is not the
+            # textual title/artist comparison phase 2 makes against a work someone
+            # else named, so it is not scored as one — there is no near-match
+            # question to answer when the answer is the question.
+            confidence=OFFERED_CONFIDENCE,
+            preview_url=found.preview_url,
+            preview_path=previews.store(found.preview_url) if found.preview_url else None,
+            estimated_width=found.estimated_width,
+            estimated_height=found.estimated_height,
+            rights_status=found.rights_status,
+            selection_rationale="The collection's own record for this work.",
+        )
+        # Derived, not asserted: the same call phase 2 closes a work with, so an
+        # offered work's status comes from the rows it holds rather than from
+        # this path's confidence that it wrote one.
+        self._discovery.record_resolution(work.id)
+        return True
 
     def _resolve_work(self, work: CandidateWork, images: PhaseTwoEngine, previews: PreviewCache) -> WorkOutcome:
         """Find and record one work's instances.
@@ -791,8 +1124,12 @@ class DiscoveryRunner:
         Four outcomes, and they are genuinely different — which is why this
         returns a named one rather than a boolean with a null for "don't know".
         `RESOLVED`: an instance was found and selected. `UNRESOLVED`: the
-        provider was asked and holds nothing credible, which is the signal that
-        phase 1 may have proposed something that does not exist. `UNREACHABLE`:
+        provider was asked and nothing usable came back — and the work's
+        `unresolved_reason` says which kind of nothing, because only one of the
+        routes there (`NOT_HELD`) is the signal that phase 1 may have proposed
+        something that does not exist. The others mean the collection has the
+        work and cannot offer it usably, or that the curator has already turned
+        down everything it offered. `UNREACHABLE`:
         the provider could not be asked at all, which says nothing about the work
         and so must not be recorded as a verdict on it. `VERDICT_STOOD`: the
         curator had already decided, so whatever was found is reported and not
@@ -819,7 +1156,7 @@ class DiscoveryRunner:
             )
             return WorkOutcome.VERDICT_STOOD
         try:
-            judged = images.resolve(ImageQuery(title=work.proposed_title, artist=work.proposed_artist))
+            resolution = images.resolve(ImageQuery(title=work.proposed_title, artist=work.proposed_artist))
         except ImageSearchFailure as exc:
             log.warning(
                 "could not search for a work's images; it stays pending rather than being called unresolved: %s",
@@ -827,9 +1164,12 @@ class DiscoveryRunner:
                 extra={"event": "phase_two.unreachable", "work_title": work.proposed_title},
             )
             return WorkOutcome.UNREACHABLE
-        for entry in judged:
+        for entry in resolution.instances:
             self._record_instance(work, entry, previews)
-        outcome = self._discovery.record_resolution(work.id)
+        # The refusals travel on because they cannot be recovered from the store:
+        # a result the search discarded never became a row, so which gate turned
+        # it away is knowable only here, at the attempt that made the judgement.
+        outcome = self._discovery.record_resolution(work.id, refusals=resolution.refusals)
         if not outcome.applied:
             log.info(
                 "a resolution finished against a work the curator had already decided; reporting, not applying",
@@ -911,7 +1251,7 @@ class DiscoveryRunner:
             run=results.run,
             works=results.works,
             searches_used=self._discovery.searches_in_run(run_id),
-            search_allowance=self._allowance_for(results.run, len(results.works)),
+            search_allowance=self._allowance_for(results.run, _searchable(results.run, results.works)),
             image_resolution_available=self._images is not None,
         )
 

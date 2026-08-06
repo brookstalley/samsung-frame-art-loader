@@ -21,7 +21,7 @@ import json
 from io import BytesIO
 
 import pytest
-from fakes import FakeImageSearch, a_work, an_image
+from fakes import FakeImageSearch, a_decodable_jpeg, a_work, an_image
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from PIL import Image
@@ -52,19 +52,6 @@ def image_tokens(width: int, height: int) -> float:
 #: used only to show the text is not what would blow the budget, and the margin
 #: below is wide enough that a factor-of-two error in it changes nothing.
 CHARS_PER_TOKEN = 4
-
-
-def a_jpeg(width: int = 1200, height: int = 900) -> bytes:
-    """Preview bytes a museum could really have served, and that Pillow can open.
-
-    The shipped fake returns a stub that is not decodable, which is right for
-    tests about *caching* bytes and wrong for every test here: a preview that
-    cannot be decoded produces no image block, so the whole surface would look
-    broken for a reason that is the fixture's.
-    """
-    buffer = BytesIO()
-    Image.new("RGB", (width, height), (84, 66, 132)).save(buffer, format="JPEG", quality=90)
-    return buffer.getvalue()
 
 
 async def call(server_url: str, tool: str, **arguments):
@@ -105,7 +92,7 @@ def preview_file(settings):
         relative = f"previews/{name}"
         target = settings.art_root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(a_jpeg(width, height))
+        target.write_bytes(a_decodable_jpeg(width, height))
         return relative
 
     return _write
@@ -120,7 +107,7 @@ def museum() -> FakeImageSearch:
         ),
     }
     found = FakeImageSearch(holdings=holdings)
-    found.preview_bytes = a_jpeg()
+    found.preview_bytes = a_decodable_jpeg()
     return found
 
 
@@ -239,7 +226,7 @@ async def test_each_row_points_at_its_own_picture_and_not_another_works(server_u
         relative = f"previews/{title.replace(' ', '-')}.jpg"
         target = settings.art_root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(a_jpeg(width, height))
+        target.write_bytes(a_decodable_jpeg(width, height))
         work = propose(title, run_id=run.id, dedup_key=title)
         add_image(work, preview_path=relative, estimated_width=4000, estimated_height=3000)
 
@@ -337,7 +324,7 @@ def a_run_of(services, propose, add_image, settings):
         run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
         source = settings.art_root / "previews/seed.jpg"
         source.parent.mkdir(parents=True, exist_ok=True)
-        source.write_bytes(a_jpeg())
+        source.write_bytes(a_decodable_jpeg())
         for index in range(count):
             work = propose(f"Work {index:02d}", run_id=run.id, dedup_key=f"seed-{index}")
             add_image(work, preview_path="previews/seed.jpg", estimated_width=4000, estimated_height=3000)
@@ -357,6 +344,41 @@ def cost_of(result) -> tuple[float, float]:
     pictures = sum(image_tokens(*Image.open(BytesIO(_decoded(block))).size) for block in images_of(result))
     text = len("".join(block.text for block in result.content if block.type == "text")) / CHARS_PER_TOKEN
     return pictures, text
+
+
+async def test_an_unresolved_work_reaches_a_curator_with_which_kind_of_nothing_it_was(server_url, services, propose, add_image):
+    """The acceptance criterion: derived is not enough, it has to arrive.
+
+    Two works that both read `unresolved` and mean opposite things — one the
+    collection does not hold, one whose only scan would render as a postage
+    stamp. A listing that carried the status alone would show a curator two
+    identical rows and offer no way to tell the invented title from the small
+    picture without opening each in turn.
+    """
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    missing = propose("A Work Nobody Holds", run_id=run.id, dedup_key="missing")
+    services.discovery.record_resolution(missing.id)
+    tiny = propose("A Work Held Too Small", run_id=run.id, dedup_key="tiny")
+    add_image(tiny, estimated_width=600, estimated_height=450)
+    services.discovery.record_resolution(tiny.id)
+
+    works = payload_of(await call(server_url, "art_review", action="list_works", run_id=run.id))["works"]
+
+    reasons = {work["title"]: work["unresolved_reason"] for work in works}
+    assert reasons == {"A Work Nobody Holds": "not_held", "A Work Held Too Small": "below_floor"}
+
+
+async def test_a_resolved_work_reaches_a_curator_with_no_reason_attached(server_url, services, propose, add_image):
+    """The other side, without which the assertion above passes on a constant."""
+    run = services.discovery.start_discovery_run(intent_text="Everything", initiated_by="mcp_client")
+    found = propose("A Work Held At Size", run_id=run.id, dedup_key="held")
+    add_image(found, estimated_width=6949, estimated_height=8400)
+    services.discovery.record_resolution(found.id)
+
+    works = payload_of(await call(server_url, "art_review", action="list_works", run_id=run.id))["works"]
+
+    assert [work["resolution_status"] for work in works] == ["resolved"]
+    assert [work["unresolved_reason"] for work in works] == [None]
 
 
 async def test_a_full_review_listing_stays_inside_the_token_budget(server_url, a_run_of):

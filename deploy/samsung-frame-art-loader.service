@@ -16,10 +16,31 @@ StartLimitIntervalSec=0
 # message naming this path, rather than starting a process that fails at import
 # for a reason nobody connects to a missing file.
 #
-# The values themselves are still read by `load_dotenv(override=True)` in
-# config.py, which re-parses this same file and wins. That is why a difference
-# between systemd's parser and python-dotenv's cannot change what the process
-# sees: this directive is a presence guard, not the value source.
+# THIS DIRECTIVE IS THE VALUE SOURCE, and it was not always. It used to be a
+# presence guard only: `config.py` called `load_dotenv(override=True)`, re-parsed
+# this same file inside the process, and won. That `override=True` was retired —
+# an exported value must not be discarded in silence — so python-dotenv now
+# supplies defaults and anything already in the environment wins. systemd has put
+# this file's contents there before the process starts, so systemd's parser is
+# what decides.
+#
+# The consequence, stated because it is the one this arrangement no longer
+# protects against: the two parsers differ on quoting and inline comments, and
+# now that difference reaches the process. A mis-parsed value is live rather than
+# overwritten.
+#
+# NOTHING HERE CATCHES THAT YET, and a first version of this comment claimed
+# otherwise. It pointed at `curation.art_root`, which does refuse to start
+# against a directory that is neither marked nor holding a catalogue — but this
+# unit's ExecStart is `tvart.py`, the 2024 plane, which reads ART_ROOT through
+# the root `config.py` and calls `os.makedirs` on what it finds. There is no
+# curation unit in this directory. The guard is real and governs a process this
+# file does not start.
+#
+# So the exposure stands for the plane this unit runs: the four other required
+# values raise at import when a mis-parse leaves them empty, which covers the
+# common case, and ART_ROOT is the one that silently creates instead. It goes
+# away when the 2024 plane is retired and the curation unit lands here.
 EnvironmentFile=/home/tvpi/source/samsung-frame-art-loader/.env
 ExecStart=/home/tvpi/source/samsung-frame-art-loader/.venv/bin/python /home/tvpi/source/samsung-frame-art-loader/tvart.py --setfile=all.json --stay
 WorkingDirectory=/home/tvpi/source/samsung-frame-art-loader

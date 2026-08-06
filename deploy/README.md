@@ -9,7 +9,21 @@ Raspberry Pi driving the Frame TV.
 missing deployment value stops the process instead of quietly running against a
 plausible-looking default. The unit names that file in `EnvironmentFile=`, and
 `load_dotenv` independently resolves it next to `config.py`; both point at the
-repository root, which is also the unit's `WorkingDirectory`.
+repository root, which is also the unit's `WorkingDirectory`. The two agree
+today because they read the same file, and if they are ever pointed at
+different ones **the unit's `EnvironmentFile=` wins**: it is already in the
+process environment by the time the code runs, and `load_dotenv` fills only
+what the environment does not carry.
+
+> **This unit will not start on the current Pi, and the block below is not enough
+> to make it.** The card was rebuilt on 2026-08-04 and **there is no `tvpi` user
+> on the machine at all**, while the committed unit runs as `User=tvpi` with
+> absolute `/home/tvpi/…` paths that name a home directory which does not exist.
+> Creating the account, deciding where the art tree actually lives, and moving
+> both unit files onto it is one coherent change and it belongs to the cutover —
+> it has deliberately not been done piecemeal. Until then, treat the recipe below
+> as the shape of the install rather than a working one. The Provenance section
+> at the foot of this file records what else was assumed from the original card.
 
     cp .env.example .env      # then fill it in
     sudo cp deploy/samsung-frame-art-loader.service /etc/systemd/system/

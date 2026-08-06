@@ -18,6 +18,7 @@ to read, HTTP responses for a UI to render, and forcing one shape on both is
 what the shared service layer exists to avoid.
 """
 
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any, Final
@@ -26,6 +27,7 @@ from curation.acquisition.dezoomify import DezoomifyUnavailable
 from curation.acquisition.preparation import PreparationResult
 from curation.acquisition.service import AcquisitionOutcome, AcquisitionResult
 from curation.acquisition.space import NotEnoughSpace
+from curation.acquisition.tiles import TileTargetUnavailable
 from curation.manifest.builder import ManifestBuild
 from curation.mcp.envelope import ImageBlock, ok, with_images
 from curation.mcp.registry import HELP_ACTION, RegistryError
@@ -40,12 +42,14 @@ from curation.services.display_fit import DisplayFit
 from curation.services.errors import ServiceError
 from curation.services.previews import InlinePreview
 from curation.services.review import MAX_REVIEW_LIMIT, CandidatePage, CandidateView, InstanceListing, InstanceView
-from curation.services.runner import RunView
+from curation.services.runner import RunListing, RunView
 
 #: A bound action: validated arguments in, a result payload out. Every binding
 #: takes the whole container rather than the one service it happens to need, so
 #: an action moving between concerns is not also a change to the dispatcher.
 Binding = Callable[[Services, Mapping[str, Any]], dict[str, Any]]
+
+log = logging.getLogger(__name__)
 
 
 def _list_artworks(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -104,12 +108,24 @@ def _retry_acquisition(services: Services, arguments: Mapping[str, Any]) -> dict
             arguments["artwork_id"],
             source_id=arguments.get("source_id"),
         )
+    # Translated rather than allowed to reach the generic handler. These are the
+    # conditions acquisition deliberately raises for instead of recording,
+    # because no source is at fault — and a caller told only that the call
+    # "failed unexpectedly" would go looking at the museum. What each clause adds
+    # is the **remedy**: the sentence naming what an operator changes to make the
+    # refusal stop. That is a tool-boundary concern and it belongs here.
+    #
+    # The journal line is *not* here, and that is the division. It follows the
+    # condition, so `AcquisitionService` emits it at the raise and every caller
+    # gets it — a browser route added later inherits the signal instead of
+    # inheriting silence. Adding a `_deployment_fault(...)` call back into these
+    # clauses would log every MCP refusal twice.
+    #
+    # **Every raise-rather-record condition needs a clause here.** Adding one to
+    # the service without one here is silent: the generic handler drops the
+    # exception text, so the deliberate refusal arrives as the very "failed
+    # unexpectedly" these clauses exist to prevent.
     except NotEnoughSpace as exc:
-        # Translated rather than allowed to reach the generic handler. These two
-        # are the conditions acquisition deliberately raises for instead of
-        # recording, because no source is at fault — and a caller told only that
-        # the call "failed unexpectedly" would go looking at the museum. Each
-        # carries the remedy that actually fixes it.
         raise ServiceError(
             f"Acquisition did not start: {exc} Free space on the art tree's disk, or lower MIN_FREE_BYTES "
             "if this deployment means to run closer to full."
@@ -119,6 +135,13 @@ def _retry_acquisition(services: Services, arguments: Mapping[str, Any]) -> dict
             f"Acquisition did not start: {exc} This is a deployment problem rather than a bad source — "
             "install dezoomify-rs, or set DEZOOMIFY_PATH to where it lives. Every source using "
             "acquisition_method='dezoomify' is affected, and no source is at fault."
+        ) from exc
+    except TileTargetUnavailable as exc:
+        raise ServiceError(
+            f"Acquisition did not start: {exc} Set ARTIC_USER_AGENT in .env to a string naming this "
+            "deployment and a contact address — the museum's API is open, but it asks callers to identify "
+            "themselves, and an object's image service can only be reached by asking. Every source from "
+            "that provider is affected, and no source is at fault."
         ) from exc
     return ok(
         artwork_id=result.artwork_id,
@@ -400,8 +423,14 @@ def _resolve_images(services: Services, arguments: Mapping[str, Any]) -> dict[st
 
 
 def _list_runs(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    runs = services.runner.list_runs(status=arguments.get("status"), kind=arguments.get("kind"))
-    return ok(runs=[_run_fields(run) for run in runs], count=len(runs))
+    listing = services.runner.list_runs(status=arguments.get("status"), kind=arguments.get("kind"))
+    return ok(
+        runs=[_run_summary(run) for run in listing.runs],
+        count=len(listing.runs),
+        total=listing.total,
+        truncated=listing.truncated,
+        notice=_runs_truncation_notice(listing),
+    )
 
 
 def _spend(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -862,6 +891,58 @@ def _run_fields(run: DiscoveryRun) -> dict[str, Any]:
     }
 
 
+#: What a run's *listing* row drops, and why each one is detail rather than
+#: summary. `api-contract.md § Summary then detail`: a listing carries the fields
+#: needed to decide, and `get` returns the record.
+#:
+#: `strategy` is the engine's reading of the intent in its own words — unbounded
+#: prose, on every row, and the second of the two fields that made this listing
+#: grow with what people typed rather than with how many runs there were. It is
+#: not lost: `action='status'` returns one run in full, which is where a caller
+#: goes once the listing has told them which run they want.
+#:
+#: The verbatim `intent` stays, deliberately, though it is unbounded too. It is
+#: the only human-readable way to tell one run from another in a list — two runs
+#: sharing a prefix are indistinguishable once it is truncated — so trimming it
+#: would save bytes by making the listing stop answering the question it exists
+#: for.
+_RUN_DETAIL_ONLY: Final[frozenset[str]] = frozenset({"strategy"})
+
+
+def _run_summary(run: DiscoveryRun) -> dict[str, Any]:
+    """One run as a *listing* row shows it.
+
+    Derived from `_run_fields` by subtraction rather than written out, so a field
+    added to a run reaches the listing automatically and only a deliberate entry
+    in `_RUN_DETAIL_ONLY` keeps it out. Written the other way round — two literal
+    shapes — a new field would land in one and not the other, which is the drift
+    the candidate-work projections took four coordinated edits to maintain before
+    they were collapsed into one.
+    """
+    return {key: value for key, value in _run_fields(run).items() if key not in _RUN_DETAIL_ONLY}
+
+
+def _runs_truncation_notice(listing: RunListing) -> str | None:
+    """Say how much history was left out, or say nothing.
+
+    **Names the filters rather than an offset, because there is no offset here.**
+    `list_runs` takes `status` and `kind` and no paging parameter, so advice to
+    page would send a caller to an argument the action does not accept — the
+    failure the withheld action was withheld to avoid, one surface over. What a
+    caller *can* do is narrow, and both filters are on this same action.
+
+    Says the rows are the newest, because that is what makes the remainder
+    ignorable: a caller who wanted a run from last March now knows the filter is
+    the way to reach it, rather than assuming it has been forgotten.
+    """
+    if not listing.truncated:
+        return None
+    return (
+        f"showing the {len(listing.runs)} most recent of {listing.total} runs. "
+        "There is no paging on this action; narrow with status= or kind= to reach older ones."
+    )
+
+
 #: How many of a run's works one result may carry. **The list this caps is not
 #: bounded by anything else**: phase 1 is deliberately uncapped — "you asked for
 #: Dalí and I found 200 works" is the case it is written for — and the approval
@@ -886,13 +967,37 @@ def _work_summary(work: CandidateWork) -> dict[str, Any]:
     would be a second review card that drifts from the real one. This exists so
     a caller can obtain a work id at all: every count-only listing left the
     actions that take one with no reachable source for it.
+
+    **This is the one place the MCP surface writes these seven keys.** They were
+    emitted with identical expressions at three sites in this module, so adding
+    `provenance` took three coordinated edits and the next field added to
+    `CandidateWork` would have reached some of them — one shape silently missing
+    it, which is exactly the "an agent and a click disagree about the same
+    catalogue" failure `http/models.py`'s docstring forbids. The richer shapes
+    spread this and add their own keys.
+
+    The HTTP surface's `CandidateWorkOut` is these seven plus `rationale`, and
+    that pairing is pinned by `tests/unit/test_surface_parity.py` rather than
+    shared: the two surfaces format independently on purpose (`architecture.md`,
+    Decision Log 2026-07-27), and a test makes divergence a failure at the moment
+    of the edit without collapsing that independence.
     """
     return {
         "work_id": work.id,
         "title": work.proposed_title,
+        # As phase 1 wrote it, unparsed. Matching it to a catalogue artist is
+        # acceptance's job and does not happen until a work is promoted. On an
+        # offered work this is the collection's own attribution instead, which is
+        # the point: it is recorded verbatim and never reconciled with whatever
+        # the model named.
         "artist": work.proposed_artist,
+        # Whether the model named this work or the collection volunteered it.
+        # On every row rather than only where it differs, because a label that
+        # appears only sometimes is one a reader learns to stop looking for.
+        "provenance": str(work.provenance),
         "verdict": str(work.verdict),
         "resolution_status": str(work.resolution_status),
+        "unresolved_reason": _reason(work),
     }
 
 
@@ -944,7 +1049,9 @@ def _no_instances_notice(instances: list[dict[str, Any]]) -> str | None:
         return None
     return (
         "No image instances have been found for this work. It is reported unresolved rather than "
-        "dropped, because that is the signal a proposed work may not exist; art_discovery("
+        "dropped; `unresolved_reason` says which kind of nothing, and only `not_held` suggests the "
+        "work may not exist — the others mean the collection has it and cannot offer it usably, or "
+        "that you have already turned down everything it offered. art_discovery("
         "action='resolve_images') looks again."
     )
 
@@ -1053,6 +1160,18 @@ def _review_truncation_notice(page: CandidatePage) -> str | None:
     return f"Showing {first}-{last} of {page.total} works at limit {page.limit}{ceiling}; {remedy} to see the rest."
 
 
+def _reason(work: CandidateWork) -> str | None:
+    """Which kind of nothing, beside the status that raises the question.
+
+    Carried on every shape that carries `resolution_status`, because the two are
+    one answer: a caller holding "unresolved" and nothing else cannot tell a
+    title the collection does not have from a scan too small for the wall, and
+    would have to fetch each work in turn to find out — which costs more than the
+    field it was saving.
+    """
+    return str(work.unresolved_reason) if work.unresolved_reason else None
+
+
 def _candidate_summary(view: CandidateView, pictures: _Pictures) -> dict[str, Any]:
     """One proposed work as a *listing* shows it: enough to choose, and one picture.
 
@@ -1065,13 +1184,7 @@ def _candidate_summary(view: CandidateView, pictures: _Pictures) -> dict[str, An
     `get` returns the record — is what keeps a full page inside the budget.
     """
     return {
-        "work_id": view.work.id,
-        "title": view.work.proposed_title,
-        # As phase 1 wrote it, unparsed. Matching it to a catalogue artist is
-        # acceptance's job and does not happen until a work is promoted.
-        "artist": view.work.proposed_artist,
-        "verdict": str(view.work.verdict),
-        "resolution_status": str(view.work.resolution_status),
+        **_work_summary(view.work),
         "instances_held": view.instances_held,
         "shown_image": None if view.shown is None else _shown_fields(view.shown, pictures),
     }
@@ -1080,17 +1193,18 @@ def _candidate_summary(view: CandidateView, pictures: _Pictures) -> dict[str, An
 def _candidate_detail(view: CandidateView, pictures: _Pictures) -> dict[str, Any]:
     """One proposed work in full: why it was proposed, and its picture in full detail.
 
-    Built field by field rather than by widening the listing shape, because
-    `_shown_fields` *appends a block* as a side effect of assigning an index.
-    Composing the two would picture this work twice — one instance, two identical
-    blocks, and a caller charged for both.
+    **Does not compose `_candidate_summary`**, because `_shown_fields` *appends a
+    block* as a side effect of assigning an index. Calling the listing shape here
+    would picture this work twice — one instance, two identical blocks, and a
+    caller charged for both.
+
+    It does compose `_work_summary`, and the difference is the whole point: that
+    one is side-effect-free, and it is precisely the seven text keys this shape
+    used to repeat. The argument above is about the *image* half and never
+    reached them.
     """
     return {
-        "work_id": view.work.id,
-        "title": view.work.proposed_title,
-        "artist": view.work.proposed_artist,
-        "verdict": str(view.work.verdict),
-        "resolution_status": str(view.work.resolution_status),
+        **_work_summary(view.work),
         "instances_held": view.instances_held,
         "instances_surviving": view.instances_surviving,
         "shown_image": None if view.shown is None else _instance_fields(view.shown, pictures),
@@ -1176,7 +1290,23 @@ def _run_view(view: RunView) -> dict[str, Any]:
         **_run_fields(view.run),
         works={
             "total": view.work_count,
+            # The curator approved a work list of a stated size, and a supplement
+            # adds to it. Reported apart because a single total describes a run
+            # as having found more of what was asked for than it did — with
+            # twelve offered works behind one unresolved proposal, a merged
+            # "12 of 13 have an image" is a resolution rate the run never
+            # achieved (`product-brief.md` flow 2).
+            "proposed": view.proposed_count,
+            "offered": view.offered_count,
             "resolved": view.resolved,
+            # The numerator any resolution rate is stated over, and it is here
+            # because the notice beside it already quotes this figure. Without
+            # it a caller can only compute `resolved / proposed` — `resolved`
+            # counts every provenance — which is the mixed rate `api-contract.md`
+            # and `data-model.md` both forbid: twelve offered works resolved
+            # behind one unresolved proposal reads as 12 of 1, contradicting the
+            # notice in the same response.
+            "resolved_proposals": view.resolved_proposals,
             "unresolved": view.unresolved,
             "pending": view.pending,
             # The works themselves, because the counts alone cannot be acted on —
@@ -1245,8 +1375,13 @@ def _run_notice(view: RunView) -> str:
         # from the wiring rather than from a sentence written here — a hardcoded
         # answer was true until phase 2 was built and false the moment it was.
         if not view.image_resolution_available:
+            # `proposed_count`, matching its sibling below rather than merely
+            # equalling it: a deployment with no image provider never reaches the
+            # supplement, so the two are the same number today — and two adjacent
+            # lines counting differently read as a disagreement whichever one a
+            # later change follows.
             return (
-                f"There are {view.work_count} works to find images for, but no image provider is configured "
+                f"There are {view.proposed_count} works to find images for, but no image provider is configured "
                 "in this deployment, so the run will stay here; cancel it when you are done reading it."
             )
         # A re-search never had a work list of its own to settle — the curator
@@ -1258,15 +1393,40 @@ def _run_notice(view: RunView) -> str:
                 "Call status again to keep watching."
             )
         return (
-            f"The work list of {view.work_count} works is settled and the run is looking for an image of each. "
+            # The proposed count, not the total: the supplement writes its works
+            # during this same window, so a total read mid-run climbs while the
+            # sentence claims a settled work list.
+            f"The work list of {view.proposed_count} works is settled and the run is looking for an image of each. "
             "Call status again to keep watching."
         )
     if status is RunStatus.COMPLETED:
-        settled = f"This run finished: {view.resolved} of {view.work_count} works have an image."
+        # Both kinds get their own sentence, for the same reason the
+        # `resolving_images` branch above splits: a re-search's works are the
+        # ones it *covers*, owned by the parent run and carrying the parent's
+        # provenance — so "proposed" describes a phase this run never performed,
+        # and counting a proposed rate over them answers about the wrong thing.
+        # The clauses below are provenance-neutral and are shared.
+        if view.run.kind is RunKind.RESOLVE:
+            settled = f"This re-search finished: {view.resolved} of the {view.work_count} works it covers have an image."
+        else:
+            # Rated against what the model proposed, never against the total: the
+            # works the collection offered arrived carrying their images, so
+            # counting them in the numerator reports a retrieval rate nothing
+            # achieved. Both figures are direct counts — a numerator derived by
+            # subtracting the offered works goes negative the moment one of them
+            # is re-searched to nothing, which is a flow this same file
+            # recommends.
+            settled = f"This run finished: {view.resolved_proposals} of {view.proposed_count} proposed works have an image."
+            if view.offered_count:
+                settled += (
+                    f" Separately, the collection offered {view.offered_count} more works by artists this run named "
+                    "but could not confirm. They are labelled `offered` and are not what was asked for."
+                )
         if view.unresolved:
             settled += (
                 f" {view.unresolved} could not be matched to any image and are reported as unresolved "
-                "rather than dropped, because that is the signal a proposed work may not exist."
+                "rather than dropped. Read `unresolved_reason` for which kind of nothing: only `not_held` "
+                "suggests the work may not exist."
             )
         if view.pending:
             # Held apart from unresolved on purpose. "We looked and it is not

@@ -1,0 +1,187 @@
+{
+ "_comment": "Real (model proposed, museum returned) pairs, captured 2026-08-04 by asking the live Art Institute API about works from `phase_one_proposals.json` and recording what actually came back. `same_work` is ground truth, assigned by READING each pair as a cataloguer would -- never by running `title_key`/`artist_key` over it, which would score the comparison against its own opinion and make the corpus incapable of catching a change in it. That fixture holds model output only, so it can measure phase 1 against phase 1 and cannot reach this comparison at all; this one is the other side of the seam.",
+ "captured": "2026-08-04",
+ "provider": "artic",
+ "pairs": [
+  {
+   "id": "p000",
+   "note": "Exact agreement on both fields. The shape every resolution takes.",
+   "asked_title": "Under the Wave off Kanagawa (Kanagawa oki nami ura), also known as The Great Wave, from the series Thirty-six Views of Mount Fuji (Fugaku sanjurokkei)",
+   "asked_artist": "Katsushika Hokusai",
+   "found_title": "Under the Wave off Kanagawa (Kanagawa oki nami ura), also known as The Great Wave, from the series Thirty-six Views of Mount Fuji (Fugaku sanjurokkei)",
+   "found_artist": "Katsushika Hokusai",
+   "same_work": true
+  },
+  {
+   "id": "p001",
+   "note": "Exact agreement, a second series print.",
+   "asked_title": "Yahagi Bridge at Okazaki on the Tokaido",
+   "asked_artist": "Katsushika Hokusai",
+   "found_title": "Yahagi Bridge at Okazaki on the Tokaido",
+   "found_artist": "Katsushika Hokusai",
+   "same_work": true
+  },
+  {
+   "id": "p002",
+   "note": "Exact agreement.",
+   "asked_title": "The Outskirts of Koshigaya in Musashi Province",
+   "asked_artist": "Utagawa Hiroshige",
+   "found_title": "The Outskirts of Koshigaya in Musashi Province",
+   "found_artist": "Utagawa Hiroshige",
+   "same_work": true
+  },
+  {
+   "id": "p003",
+   "note": "Exact agreement.",
+   "asked_title": "Shoji (Sliding Doors of Katsura Imperial Villa)",
+   "asked_artist": "Saito Kiyoshi",
+   "found_title": "Shoji (Sliding Doors of Katsura Imperial Villa)",
+   "found_artist": "Saito Kiyoshi",
+   "same_work": true
+  },
+  {
+   "id": "p004",
+   "note": "Exact agreement. The one O'Keeffe among the works that resolve.",
+   "asked_title": "The Shelton with Sunspots, N.Y.",
+   "asked_artist": "Georgia O'Keeffe",
+   "found_title": "The Shelton with Sunspots, N.Y.",
+   "found_artist": "Georgia O'Keeffe",
+   "same_work": true
+  },
+  {
+   "id": "p005",
+   "note": "THE SAME WORK UNDER A REVERSED NAME. The museum files the artist family-name-first; the model wrote it given-name-first. Same person, same print. A comparison that reads a name as an ordered string refuses this and loses a real resolution.",
+   "asked_title": "Black night-Ginza (One Hundred Views of Tokyo)",
+   "asked_artist": "Yoshisuke Funasaka",
+   "found_title": "Black night-Ginza (One Hundred Views of Tokyo)",
+   "found_artist": "Funasaka Yoshisuke",
+   "same_work": true
+  },
+  {
+   "id": "p006",
+   "note": "SAME TITLE, DIFFERENT ARTIST -- the case that forces disqualification rather than deduction. The museum really does hold a 'The Great Oak', by an etcher who is not Ruisdael. Rank by relevance and this is a confident wrong answer.",
+   "asked_title": "The Great Oak",
+   "asked_artist": "Jacob van Ruisdael",
+   "found_title": "The Great Oak",
+   "found_artist": "Donald Shaw MacLaughlan",
+   "same_work": false
+  },
+  {
+   "id": "p007",
+   "note": "Same artist, different work. Harder than a wrong-artist miss because the artist agrees, so only the title can refuse it.",
+   "asked_title": "Untitled (Concentric Squares)",
+   "asked_artist": "Frank Stella",
+   "found_title": "Double Concentric Squares",
+   "found_artist": "Frank Stella",
+   "same_work": false
+  },
+  {
+   "id": "p008",
+   "note": "Same artist, different painting, overlapping subject vocabulary.",
+   "asked_title": "Horsemen and Herdsmen with Cattle",
+   "asked_artist": "Aelbert Cuyp",
+   "found_title": "A View of Vianen with a Herdsman and Cattle by a River",
+   "found_artist": "Aelbert Cuyp",
+   "same_work": false
+  },
+  {
+   "id": "p009",
+   "note": "Same artist, same place, different painting. The museum holds 'Vetheuil'; the model asked for 'Printemps a Vetheuil'.",
+   "asked_title": "Printemps a Vetheuil",
+   "asked_artist": "Claude Monet",
+   "found_title": "Vetheuil",
+   "found_artist": "Claude Monet",
+   "same_work": false
+  },
+  {
+   "id": "p010",
+   "note": "Same artist, same flower, different painting. Coquelicots is not the Art Institute's.",
+   "asked_title": "Coquelicots (The Poppies)",
+   "asked_artist": "Claude Monet",
+   "found_title": "Poppy Field (Giverny)",
+   "found_artist": "Claude Monet",
+   "same_work": false
+  },
+  {
+   "id": "p011",
+   "note": "A DELIBERATE MISSPELLED HOMAGE BY ANOTHER ARTIST. Ray Johnson's title quotes Barnett Newman's and misspells it. Both fields are near, neither is right.",
+   "asked_title": "Vir Heroicus Sublimis",
+   "asked_artist": "Barnett Newman",
+   "found_title": "Untitled (Vir Hiroicas Sublimas)",
+   "found_artist": "Ray Johnson",
+   "same_work": false
+  },
+  {
+   "id": "p012",
+   "note": "A shared distinctive noun and nothing else. 'Poplars' retrieves a Kandinsky.",
+   "asked_title": "Poplars on the Epte",
+   "asked_artist": "Claude Monet",
+   "found_title": "Landscape with Two Poplars",
+   "found_artist": "Vasily Kandinsky",
+   "same_work": false
+  },
+  {
+   "id": "p013",
+   "note": "Same sitter, different work, different medium and century -- a photograph, not the van Dyck.",
+   "asked_title": "Queen Henrietta Maria with Sir Jeffrey Hudson",
+   "asked_artist": "Anthony van Dyck",
+   "found_title": "Queen Henrietta Maria",
+   "found_artist": "Julia Margaret Cameron",
+   "same_work": false
+  },
+  {
+   "id": "p014",
+   "note": "Same genre and near-identical name, different actor, different artist.",
+   "asked_title": "Kabuki Actor Ichikawa Ebizo",
+   "asked_artist": "Toshusai Sharaku",
+   "found_title": "The Kabuki Actor Ichikawa Danjuro V",
+   "found_artist": "Katsukawa Shunsho",
+   "same_work": false
+  },
+  {
+   "id": "p015",
+   "note": "The museum holds nothing like it and answers anyway, at a comfortable score. This is what a garbage result looks like now that the zero score is gone.",
+   "asked_title": "The Night Watch (Militia Company of District II under the Command of Captain Frans Banninck Cocq)",
+   "asked_artist": "Rembrandt van Rijn",
+   "found_title": "Still Life with Dead Game, Fruits, and Vegetables in a Market",
+   "found_artist": "Frans Snyders",
+   "same_work": false
+  },
+  {
+   "id": "p016",
+   "note": "A word match on a fragment of the artist's name rather than on the work at all -- 'saules' reaching 'Saul'.",
+   "asked_title": "Printemps, saules",
+   "asked_artist": "Claude Monet",
+   "found_title": "Untitled",
+   "found_artist": "Peter Saul",
+   "same_work": false
+  },
+  {
+   "id": "p017",
+   "note": "Shared adjective, unrelated works.",
+   "asked_title": "The Large Dort",
+   "asked_artist": "Aelbert Cuyp",
+   "found_title": "The Large Cat",
+   "found_artist": "Cornelis Visscher",
+   "same_work": false
+  },
+  {
+   "id": "p018",
+   "note": "Shared abstract noun, unrelated works, and the museum's is by a different modernist.",
+   "asked_title": "Abstraction Blue",
+   "asked_artist": "Georgia O'Keeffe",
+   "found_title": "Abstraction: Background with Blue Cloudy Sky",
+   "found_artist": "Pablo Picasso",
+   "same_work": false
+  },
+  {
+   "id": "p019",
+   "note": "A building name shared with a cocktail set.",
+   "asked_title": "Manhattan",
+   "asked_artist": "Georgia O'Keeffe",
+   "found_title": "Manhattan Cocktail Set",
+   "found_artist": "Norman Bel Geddes",
+   "same_work": false
+  }
+ ]
+}

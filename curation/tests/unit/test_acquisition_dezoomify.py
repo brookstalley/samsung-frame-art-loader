@@ -93,6 +93,29 @@ class TestSecurityOfTheInvocation:
         # that no *other* element carries it.
         assert [arg for arg in argv if url in arg] == [url]
 
+    def test_the_url_is_fenced_off_from_the_options(self, tmp_path):
+        """Argument injection, which the argv list above does nothing about.
+
+        A URL beginning with `-` is read by the binary's *own* parser as a flag, so
+        a museum composing one out of `config.iiif_url` could override `--max-width`
+        or `--tile-cache` on the loader host. `check_fetchable` refuses it a caller
+        earlier — a `-` string parses to no scheme — so there is no input reaching
+        here that makes this separator change the outcome, and this assertion is
+        structural for that reason. It is what stops the fence being deleted as
+        redundant by someone who does not know the guarantee lives in another
+        module. Dropping `"--"` from the argv fails this and nothing else.
+        """
+        url = "https://museum.example.com/info.json"
+        script = _fake_binary(tmp_path, SAVES_IMAGE)
+
+        _run(tmp_path, script, url=url)
+
+        argv = _passed_argv(tmp_path)
+        assert "--" in argv, "the end-of-options separator is gone"
+        # Everything after it is positional: the URL, then the staged destination.
+        assert argv[argv.index("--") + 1] == url
+        assert argv.index("--") == len(argv) - 3
+
     def test_the_child_is_given_no_stdin_to_prompt_on(self, tmp_path, monkeypatch):
         # White-box on purpose, and for the same reason the argv assertion above
         # is: the property that matters is what the child is handed. Under pytest

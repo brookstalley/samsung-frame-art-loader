@@ -17,9 +17,17 @@ from typing import Final
 
 from dotenv import load_dotenv
 
-# load environment from .env
-# override enabled so we don't use cached values that pipenv loaded
-load_dotenv(override=True)
+# `.env` supplies defaults; anything already exported wins. That is the
+# conventional dotenv contract and the only one under which
+# `ART_ROOT=/tmp/scratch python -m …` does what it reads as — with the
+# precedence inverted, an exported value is discarded in silence rather than
+# refused, which is this product's worst failure shape: the wrong data looking
+# exactly like the right data.
+#
+# (This read `override=True` "so we don't use cached values that pipenv loaded".
+# Nothing here has used pipenv since the move to uv — there is no Pipfile and no
+# other mention of it in the tree — so that reason had outlived its cause.)
+load_dotenv()
 
 
 class ConfigError(RuntimeError):

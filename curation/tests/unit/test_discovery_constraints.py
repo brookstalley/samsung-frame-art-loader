@@ -510,7 +510,7 @@ def test_spend_against_a_run_that_does_not_exist_is_refused(discovery):
 
 def test_an_unattempted_work_is_neither_resolved_nor_unresolved(discovery, run, propose):
     """Three buckets, because 'not yet tried' and 'tried and found nothing' are
-    different facts and only the second is evidence phase 1 invented the work."""
+    different facts, and only the second says anything at all about the work."""
     work = propose()
 
     results = discovery.run_results(run.id)

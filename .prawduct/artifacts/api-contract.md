@@ -498,6 +498,43 @@ warning. The remaining 2% overshoot at the ceiling is deliberate: closing it mea
 dropping `resolution_status` or `instances_held` from the row, and both carry the
 distinction between "nothing was found" and "we could not look".
 
+**The row gains `unresolved_reason` beside `resolution_status`** — which kind of
+nothing, null unless the work is unresolved, **with the one exception
+`data-model.md` § CandidateWork records: a row whose attempt predates the
+column reads null beside `unresolved`.** The column was added nullable and
+existing files are widened without backfill, so a null there means "this
+attempt happened before the reason was recorded", never "no reason applies". It
+is a short enum and it is the answer to the question `resolution_status` raises, so
+a caller that has one and not the other has to fetch each work to act.
+
+**Re-measured when it was added, 2026-08-04, because the figures above were taken
+without it.** A full 40-row page is now **10,522 tokens** — 6,400 of picture,
+unchanged, and **4,122 of text**, up from 3,800. The default 30-row page is
+**7,933**, against the 10,000 the client warns at. Both thresholds still hold and
+neither cap moved; the field cost about 8 tokens a row, which is roughly a third of
+the headroom the default page had. The two budget tests in
+`tests/integration/test_review_surface.py` assert each figure against its own
+threshold on a live server, so this is a measurement with a mechanism behind it
+rather than a number in prose — the next field added to this row fails there before
+it costs a curator their images.
+
+**The row also carries `provenance`** — whether the model named this work or a
+wired collection offered it (`data-model.md` § CandidateWork). It is on every row
+rather than only on offered ones, because a label that appears sometimes is one a
+reader learns to stop looking for, and the whole value of the distinction is that
+a curator can trust it without checking.
+
+**Re-measured again when that field was added, 2026-08-04.** A full 40-row page is
+**10,842 tokens** — 6,400 of picture, still unchanged, and **4,442 of text**, up
+from 4,122. The default 30-row page is **8,173** against the 10,000 warning. So
+this field cost about 8 tokens a row, the same as the last one, and both
+thresholds still hold with neither cap moved. **The pattern across two additions
+is the thing to carry forward**: the pictures are fixed and every field lands on
+the text, so the default page's headroom is what each one spends — it has gone
+from 2,067 tokens to 1,827 across these two, and roughly seven more fields of this
+size would exhaust it. The next addition should say what it displaces rather than
+assume there is room.
+
 **Image content blocks correlate by position and by nothing else.** The protocol
 gives a block no identity, and a result's blocks are only the instances that had a
 local copy — so block *n* is not row *n* the moment one preview is missing. Every
@@ -890,7 +927,7 @@ the client with them.
 
 | Route | What it is |
 |---|---|
-| `GET /`, `/works`, `/themes`, `/manifest`, `/health` | The client shell. Listed rather than globbed, so a mistyped `/api/...` 404s instead of returning HTML a client parses as JSON. |
+| `GET /`, `/works`, `/discovery`, `/themes`, `/manifest`, `/health` | The client shell. Listed rather than globbed, so a mistyped `/api/...` 404s instead of returning HTML a client parses as JSON. |
 | `GET /static/app.css`, `/static/app.js` | The client. One stylesheet, one script, no build step. |
 | `GET /api/works` | A page of works, each with its fit verdict and image state. |
 | `GET /api/works/{id}` | One work with sources, renditions and mat history. |
@@ -900,7 +937,68 @@ the client with them.
 | `POST`/`DELETE /api/themes/{id}/works[/{work_id}]`, `POST .../position` | Membership and order. Each returns the resulting order, so the surface repaints from the response. |
 | `POST /api/themes/{id}/activate` | Change the wall. Returns the manifest that was published, exclusions included. |
 | `GET /api/manifest` | What a theme *would* put on the wall, evaluated without writing. |
-| `GET /api/health` | The heartbeat reading, and this deployment's resolved artwork box. |
+| `GET /api/health` | Every observation the panel states: the heartbeat and the document the display plane reported, the backup's age, and this deployment's resolved artwork box. **Three observations and no fourth** — there is deliberately no budget balance, settled 2026-08-04. |
+
+Added 2026-08-05 with the run half of the browser surface, and exercised by
+`curation/tests/integration/test_browser_discovery.py`:
+
+| Route | What it is |
+|---|---|
+| `GET /api/estimate` | What asking would cost, before anything is committed. Optional `run_id` asks the phase-2 question instead. Spends nothing. |
+| `POST /api/runs` | Begin a run. Returns a handle at once; phase 1 proceeds on a worker behind it. Records `initiated_by: web_ui`. |
+| `GET /api/runs` | Every run, newest first. Optional `status` and `kind` narrow it — they are filters, not limits. **Uncapped, and the bound is editorial rather than mechanical:** one household searching in leisure sessions is hundreds of rows a year, not millions. It is the only collection route here with no page. Issue #54 owns the cap for this and its MCP twin together. |
+| `GET /api/runs/{id}` | The run, its works, its tallies and its search usage. |
+| `POST /api/runs/{id}/approve`, `/decline`, `/cancel` | The approval gate and the stop. Each returns the whole resulting view, as the MCP surface does, so the client repaints from the response. |
+| `GET /api/runs/{id}/spend` | What the run actually cost, including every re-search descended from it. Read by the run view's costs panel once the run is terminal — it is the only place the **family total** appears, since the run record carries only the run's own direct spend. |
+
+Added 2026-08-05 with the review half, and exercised by
+`curation/tests/integration/test_browser_review.py`:
+
+| Route | What it is |
+|---|---|
+| `GET /api/runs/{id}/candidates` | A page of the works a run is responsible for, each as a card: the instance whose picture stands for it, its size on this wall, and whether that instance is the one a verdict would accept on. **Paged where the run view's own work list is not**, and the difference is the payload rather than an inconsistency — that list is text, this one is a card per work. |
+| `GET /api/candidates/{work_id}` | One card, which is what the grid repaints a single tile from after a verdict. |
+| `GET /api/candidates/{work_id}/images` | Every scan found for the work, in the order the card offers them, capped — with `held` and `shows_every_choosable_instance` beside the rows so a truncated card cannot read as a complete one. |
+| `POST /api/candidates/{work_id}/verdict` | Accept or reject. Carries the minted artist and any held painter it may duplicate, which is the one part of a promotion a curator can neither see nor undo from the work. `awaiting_better_image` is refused here — rejecting an image is its only entry. |
+| `POST /api/candidate-images/{id}/select`, `/reject` | Choose a scan, or turn one down. Rejecting returns the *work*, because the interesting change is its move to `awaiting_better_image`. |
+| `GET /api/candidate-images/{id}/preview` | The picture, re-encoded to JPEG. **Not the cached file served directly:** a preview's name on disk is derived from a URL and falls back to `.jpg` for anything unrecognised, so the suffix is not evidence of what the bytes are. Held rather than revalidated — the bytes behind an image id are written once and only ever deleted. |
+| `POST /api/runs/resolve` | Look again for images of works whose scans were turned down. A re-search is a run, so `GET /api/runs/{id}` follows it with nothing special to know. Records `initiated_by: web_ui`. |
+
+**The review listing does not inline its pictures, and the MCP twin does.** Both
+call the same service method; the browser passes `pictures=False` and fetches each
+picture by URL. Inlining base64 for a caller that discards it costs a re-encode
+per instance — roughly half of what a page of the grid costs on a Pi — and the
+two readers have unrelated budgets: a model pays for a picture in context tokens
+and a curator pays in pixels on a screen. They share the decode and the media type
+and nothing else.
+
+**`GET /api/runs/{id}` answers immediately; the MCP `status` action holds for up
+to 45 seconds.** This is a deliberate divergence between the two surfaces rather
+than an oversight. A model calls `status` once and waits, so holding is what
+keeps it from spinning; a browser is already an event loop and polls on a timer.
+Because these handlers are synchronous, a held request occupies one of
+Starlette's worker threads for the whole hold — with a few tabs open that starves
+the same pool serving thumbnails. The client polls every two seconds and stops
+when the run reports `is_terminal`.
+
+**`is_terminal` is on the wire rather than derived by the client** from a list of
+finished status names. That list is the part that goes stale: a tenth status
+would leave a browser either polling a finished run forever or abandoning a live
+one, and neither failure announces itself.
+
+**The two surfaces compose their own prose and share their arithmetic.** The MCP
+notice is written for a model — it names fields in backticks and says to call
+`status` again — and neither sentence suits a page with buttons on it. What must
+not be written twice is the *figures*, and they are not: every count on both
+surfaces is a property of `RunView`, computed once. That is the defect this
+splits to avoid, and it is not hypothetical — a run-level figure computed as
+`len(works)` beside a view that counted provenance apart is what reached a
+review on the chunk before this one.
+
+**A resolution rate is stated over what the model proposed, never over the
+total,** on this surface as on the MCP one. Works a wired collection offered
+arrived carrying their own images, so counting them in the numerator reports a
+retrieval rate the run never achieved.
 
 **One error shape, one status.** Every refusal is `400` with `{"error": "..."}`.
 The service layer raises a single exception type by design, so a per-error status
@@ -911,8 +1009,13 @@ have — and the message is already written to be shown to whoever asked.
 update or delete route — the first surface covers create, add, remove, reorder
 and activate, and renaming a theme was not among the things a curator needed to
 do from a browser before they could build one and hang it. Nothing here writes an
-artwork, a source, an original or a mat either; those belong to acquisition,
-which is not built.
+artwork, a source, an original or a mat either. *(Corrected 2026-08-05: that
+absence used to be explained by "those belong to acquisition, which is not
+built". Acquisition **is** built — `art_catalogue` gained the fetch, retry and
+mat actions on 2026-08-03 — so the routes are absent because no browser screen
+has needed them yet, not because the capability is missing. The review half is
+where a curator first acts on an image, and it is the chunk that will decide
+which of these the browser needs.)*
 
 **Annotations are mandatory on every tool**, because their defaults are worst-case:
 omit them and MCP assumes `destructiveHint: true` and `openWorldHint: true`, which

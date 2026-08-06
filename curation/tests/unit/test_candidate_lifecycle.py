@@ -8,7 +8,7 @@ not, and what a work looks like on the far side of an acceptance.
 
 import pytest
 
-from curation.persistence.discovery_records import ResolutionStatus, Verdict
+from curation.persistence.discovery_records import ResolutionStatus, UnresolvedReason, Verdict
 from curation.persistence.records import ArtworkStatus, RightsStatus
 from curation.services.errors import ServiceError
 
@@ -277,7 +277,7 @@ def test_finding_an_instance_resolves_the_work_and_selects_it(discovery, propose
 
 
 def test_finding_nothing_is_an_outcome_rather_than_an_absent_row(discovery, propose):
-    """Phase 2 finding no credible instance is the signal phase 1 invented the work."""
+    """A work nothing was found for is reported, not dropped — with which kind of nothing it was."""
     work = propose("A Work That Does Not Exist")
 
     outcome = discovery.record_resolution(work.id)
@@ -307,6 +307,139 @@ def test_a_re_search_that_finds_nothing_leaves_the_work_where_the_curator_put_it
 
     assert outcome.work.verdict is Verdict.AWAITING_BETTER_IMAGE
     assert outcome.resolution_status is ResolutionStatus.UNRESOLVED
+
+
+# -- which kind of nothing -----------------------------------------------------
+#
+# `unresolved` is reached by routes that are not interchangeable, and a curator
+# reading a bare one cannot tell an invented title from a scan too small for the
+# wall. Two of the reasons are read from the rows the work already holds; the rest
+# travel in from the search, because a result it discarded never became a row.
+
+
+def test_a_resolved_work_carries_no_reason(resolved_work):
+    """The column answers a question a resolved work is not asking."""
+    work = resolved_work()
+
+    assert work.resolution_status is ResolutionStatus.RESOLVED
+    assert work.unresolved_reason is None
+
+
+def test_a_work_whose_surviving_scans_are_all_below_the_floor_says_so(discovery, propose, add_image):
+    """The collection has it. It would render as a postage stamp."""
+    work = propose()
+    add_image(work, estimated_width=600, estimated_height=450)
+
+    outcome = discovery.record_resolution(work.id)
+
+    assert outcome.resolution_status is ResolutionStatus.UNRESOLVED
+    assert outcome.work.unresolved_reason is UnresolvedReason.BELOW_FLOOR
+
+
+def test_a_work_whose_every_scan_the_curator_turned_down_says_so(discovery, resolved_work):
+    """The route that is reached from the re-search rather than from the rejection.
+
+    Rejecting an instance sets the *verdict*; it is the attempt afterwards that
+    finds nothing to add and writes `unresolved`. Judging this value unreachable
+    by reading the rejection path is exactly the mistake that nearly left it out
+    — reachability is a property of the paths that arrive, not of the site that
+    looks most likely to set it.
+    """
+    work = resolved_work()
+    discovery.reject_image(discovery.list_candidate_images(work.id)[0].id)
+
+    outcome = discovery.record_resolution(work.id)
+
+    assert outcome.resolution_status is ResolutionStatus.UNRESOLVED
+    assert outcome.work.unresolved_reason is UnresolvedReason.ALL_REJECTED
+
+
+def test_a_work_holding_no_rows_reports_the_deepest_gate_its_results_reached(discovery, propose):
+    """Deeper beats shallower: the museum having it under another name is the news.
+
+    A search that turned away a different painting *and* the right title under
+    the wrong painter has learned that the collection holds something. Reporting
+    the shallower refusal would say the opposite.
+    """
+    work = propose()
+
+    outcome = discovery.record_resolution(
+        work.id, refusals=frozenset({UnresolvedReason.NOT_HELD, UnresolvedReason.IDENTITY_REFUSED})
+    )
+
+    assert outcome.work.unresolved_reason is UnresolvedReason.IDENTITY_REFUSED
+
+
+def test_a_work_whose_search_refused_nothing_reports_not_held(discovery, propose):
+    """A provider that returned nothing refused nothing, and that is a fact about the collection."""
+    outcome = discovery.record_resolution(propose().id)
+
+    assert outcome.work.unresolved_reason is UnresolvedReason.NOT_HELD
+
+
+def test_a_reason_derived_from_rows_outranks_anything_the_search_refused(discovery, propose, add_image):
+    """A row on the card is further than a result that never became one.
+
+    Without this the below-floor scan a curator can see on the card would be
+    reported as a title the collection does not hold, because the same search
+    also turned away a different painting.
+    """
+    work = propose()
+    add_image(work, estimated_width=600, estimated_height=450)
+
+    outcome = discovery.record_resolution(work.id, refusals=frozenset({UnresolvedReason.NOT_HELD}))
+
+    assert outcome.work.unresolved_reason is UnresolvedReason.BELOW_FLOOR
+
+
+def test_every_unresolved_reason_is_ranked():
+    """Derived from the enum, so a sixth member fails here rather than tying silently.
+
+    A hardcoded list of today's members is correct and useless in the one
+    direction this exists to guard: the member added without a depth.
+    """
+    for reason in UnresolvedReason:
+        assert isinstance(reason.depth, int)
+
+
+def test_the_reasons_a_search_can_refuse_at_are_ranked_distinctly():
+    """The property the precedence actually relies on, which totality does not give it.
+
+    Picking the deepest gate is only well-defined if the rankable reasons have
+    *different* depths — two sharing one would be resolved by set iteration order,
+    which is to say by nothing. The pair read from stored rows is deliberately
+    excluded: they are consulted before any refusal is, and they are mutually
+    exclusive, so they share a depth on purpose and it is never compared.
+
+    Written as "every reason except the row-derived pair" rather than as a list of
+    the three, so a new refusal the engine can emit is covered on the day it is
+    added instead of on the day someone remembers this test.
+    """
+    from_rows = {UnresolvedReason.BELOW_FLOOR, UnresolvedReason.ALL_REJECTED}
+    rankable = [reason for reason in UnresolvedReason if reason not in from_rows]
+
+    depths = [reason.depth for reason in rankable]
+    assert len(set(depths)) == len(depths), f"two rankable reasons share a depth: {depths}"
+
+
+def test_the_reason_survives_the_round_trip_to_the_store(discovery, propose):
+    """Asserting on the returned record alone would pass with the column unmapped."""
+    work = propose()
+    discovery.record_resolution(work.id, refusals=frozenset({UnresolvedReason.SIZE_UNKNOWN}))
+
+    assert discovery.get_candidate_work(work.id).unresolved_reason is UnresolvedReason.SIZE_UNKNOWN
+
+
+def test_a_work_that_resolves_after_being_unresolved_drops_its_reason(discovery, propose, add_image):
+    """A stale reason beside a resolved work is worse than none: it reads as current."""
+    work = propose()
+    discovery.record_resolution(work.id)
+    add_image(work)
+
+    outcome = discovery.record_resolution(work.id)
+
+    assert outcome.resolution_status is ResolutionStatus.RESOLVED
+    assert discovery.get_candidate_work(work.id).unresolved_reason is None
 
 
 def test_a_re_search_finishing_after_an_acceptance_reports_but_does_not_apply(discovery, resolved_work, add_image):

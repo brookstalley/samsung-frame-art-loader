@@ -835,3 +835,466 @@ unowned and unmaintained.
 **Why the read-back generalises.** It is one extra read against a system you are
 already connected to, and it is the only thing that survives a library that is
 wrong in both directions — which this one is.
+
+## A claim about a live machine's current state decays silently — read the machine, never a comment that describes it
+
+Config comments, deploy docs and prior findings record what a box looked like when
+someone last looked. The box gets reimaged, users get renamed and trees get emptied
+without touching a single line of the text that describes them.
+
+The worked instance: the operator was told the 41 masters were on the Pi at
+`/home/tvpi/art`, taken from a **comment in `.env`** and stated as an observation.
+There was no `tvpi` user on that machine and the art tree was empty — the card had
+been rebuilt under the SD-card decision. Working SSH access was one command away.
+
+This is the same shape as the adjacent rule about inferences and observations
+entering a sentence in the same voice, with one difference worth keeping separate:
+a code comment's claim may stay true indefinitely, while an environment claim decays
+on its own and gives no signal when it does.
+
+## A guard evaluated inside the filters it guards can manufacture the confidence it exists to withhold — range a safety check over the population the HAZARD lives in, never the narrowed one the feature reads, because the filter that makes the feature correct is the one that can hide the colliding case
+
+Chunk 22, 2026-08-04. A browse offers works by artists a run named, and retries an
+unmatched name on its surname *only where the collection reports that surname
+naming one artist* — the rule exists because surnames collide and offering one
+artist's work under another's name is a misattribution nothing downstream catches.
+
+The natural implementation asks that question in the same request as the browse,
+inheriting its filters. Measured against the live API, that is exactly wrong: the
+Art Institute holds one Antonio Martorell (a `Graphic Design`, which the
+wall-appropriate type filter removes) and one Bernat Martorell painting. Filtered,
+the check sees a single artist and licenses the retry; unfiltered, it sees both and
+refuses. **The filter that makes the feature correct is the filter that makes its
+guard wrong**, because it hides one of the two colliding artists.
+
+Generalises past this case: a check that answers "is this unambiguous?" must range
+over the space the ambiguity lives in. Narrowing first does not make the check
+cheaper, it makes it answer a different question — and the wrong answer is the
+confident one. The unit test reproduces the asymmetry (the fake responds
+differently depending on whether the request carries the type filter), so an
+implementation that scopes it wrongly fails by offering a work rather than by
+looking wrong.
+
+## A computed value with no production reader is an unimplemented requirement — before calling a "report X separately" requirement done, grep the symbol and check that a caller outside `tests/` exists, because a property with tests and no consumer looks finished from inside and changes nothing a user sees
+
+Chunk 22, 2026-08-04, and **all three Critic reviewers found it independently** —
+correctness, design and sustainability — which is the strongest signal this review
+process has produced.
+
+`product-brief.md` required that works a collection offers "count against a per-run
+bound reported separately from the proposed count". `RunView.proposed_count` and
+`RunView.offered_count` were written, and unit-tested, and read by nothing. Every
+run-level figure still counted `len(works)`, so for the chunk's own acceptance
+scenario — one proposed work unresolved, twelve offered — the MCP surface reported
+`{"total": 13, "resolved": 12}` and the sentence a curator reads said "12 of 13
+works have an image": a resolution rate the run had not achieved, on the same
+surface the resolution floor had just been made load-bearing on.
+
+The failure mode is specific and worth naming apart from forgetting. The
+requirement's *mechanism* was implemented and its *consequence* was not — and
+because the properties carried tests, the work looked complete from the inside.
+Tests over a value prove the value is right; they say nothing about whether
+anything asks for it. Four separate records asserted the reporting existed,
+including the comment directly above the two unused properties.
+
+**It recurred one chunk after the rule was written, which is why the rule now
+names a command rather than an intention.** Chunk 22 shipped `proposed_count` and
+`offered_count` computed, tested and wired to nothing, and the rule was written
+from it. Chunk 19A then shipped `GET /api/runs/{id}/spend`, whose one distinctive
+figure — the family total including descended re-searches — reached no screen, and
+the Critic quoted this rule back at it. Both were caught by review and neither by
+the author, and on the second occasion the author had written this very line.
+
+**"Name the surface that displays it" was the first form of this check, and it
+failed twice** — naming a surface is something you can do from memory while
+looking at the wrong thing. The form that holds is mechanical and takes seconds:
+**grep the symbol; if every hit is in `tests/`, it is not implemented.**
+
+## A generated block's stale-looking state is evidence about the generator, not a defect to tidy — when a checkbox, index or table looks wrong, find what writes it before editing it, because hand-fixing derived output desynchronises it from its source and destroys the signal that something upstream is unset
+
+Chunk 23, 2026-08-05. Three chunks had landed with their `## Status` boxes
+unticked in `build-plan.md`, which read exactly like bookkeeping nobody got round
+to, and a commit ticked them. It was not: `views_enabled` is true, so that block
+is regenerated from the `status=` tag on each change-log entry, and an entry
+carrying no `status=` is release-pending. The boxes were right and the tidy-up
+was wrong — a commit that edited generated output to match an assumption, on a
+file whose own header says not to.
+
+> **Corrected 2026-08-05, the same day, by Critic review.** The words "by design"
+> were mine and were wrong, and they went on to mislead the next session, which is
+> exactly the harm a durable narrative can do. A statusless entry is release-*pending*
+> — a real state the generator understands — but it is not this repo's convention
+> for a chunk that has shipped: all 23 prior chunks carry `status=shipped`, written
+> on the feature branch pre-merge (`ab34a5a`, `16fd48c`). Five built chunks were
+> therefore showing unstarted, and the tooling takes the first unchecked box as the
+> current chunk. **The heading's rule is untouched and was never the problem** — do
+> not hand-edit derived output, ask the generator. What was wrong was the second
+> step: having asked, I read "no tag" as a deliberate state rather than as a missing
+> tag. Running the generator tells you *what* it will do, not whether its input is
+> right.
+
+The tell was available before the edit and cost one read: **the file said so.**
+`change-log.md`'s header documents the tag format and ends "Don't hand-edit them
+— add/update a tagged entry here and run `prawduct-hook regen-views`." The edit
+was made without reading the header of the file that generates the thing being
+edited.
+
+**The rule generalises past this one mechanism.** Anything that looks like drift
+in a derived artifact — a checkbox, a rollup, a release-notes section, an index —
+is a question about its generator: is the source tag missing, or is the state
+genuinely release-pending? Both answers are useful and neither is "edit the
+output". Run the generator and read what it says: `regen-views` reported
+`4 chunk(s) flipped — unshipped [19A, 21, 22, 23]`, which is the mechanism
+stating its own reasoning in one line.
+
+Neighbouring rule, quoted by its heading rather than linked: "A guard evaluated
+inside the filters it guards can manufacture the confidence it exists to withhold
+— range a safety check over the population the HAZARD lives in, never the narrowed
+one the feature reads, because the filter that makes the feature correct is the
+one that can hide the colliding case". Both are cases where a result's meaning
+depends on machinery the reader did not look at.
+
+## Closing a gap means sweeping the artifacts that assert the gap is open — grep for the absence you just removed, not only for the thing you just added, because a document saying "there is no X" reads as current guidance and sends the next builder to rebuild the debt you just paid
+
+Chunk 23, 2026-08-05, found by the Critic. The chunk gave the browser client its
+first executed coverage, and four artifacts were updated to describe the new
+harness — `CLAUDE.md`, `boundary-patterns.md`, `project-preferences.md` and the
+recorded technology decision. A fifth was missed, and it was the one that
+mattered most: `operator-verification.md` still read "The client has no test
+runner — 10B decided against a Node toolchain on a Pi ... and that decision
+stands — so the Python suite verifies every byte the server sends and nothing the
+browser does with it", and named the three behaviours as reasoned-but-untested
+that the same commit had just put under test.
+
+**Two wrong actions followed from it, and the second is the expensive one.** The
+operator would perform a manual check believing it was the only control. And a
+builder starting the next chunk would read "that decision stands" as live
+guidance and add the review grid's client logic with no browser coverage —
+re-incurring, in the very next chunk, the debt this one was created to pay.
+
+**The asymmetry is why it is easy to miss.** Updating the artifacts that describe
+what you built is prompted by the building: you have just written the thing, so
+you go and write it down. Nothing prompts you to find the documents that describe
+its *previous absence*, because those documents do not mention your new work by
+name — they cannot, and that is exactly what makes them unsearchable by the
+obvious search. Grepping for `playwright` or `browser` found the four artifacts
+that already knew; it could never have found the fifth.
+
+**The check:** when a chunk closes a known gap, search for the gap's own
+vocabulary as the artifacts phrased it — "no test runner", "not covered",
+"decided against", "today it is", "if this keeps growing" — and for any artifact
+that invited the trade to be reopened. An entry that says "this is worth
+reopening if X" has to be revisited the moment X happens, and it is the entry
+least likely to be looking back at you.
+
+## Two verification passes that agree can both be vacuous — when a result is one you cannot derive, run the smallest thing that reproduces it by hand before believing either, because agreement between two runs of the same broken instrument is not corroboration
+
+Chunk 19B. `tools/mutation_sweep.py` is this repo's stated bar for the browser
+suite — `CLAUDE.md` names it as what separates "a test exists" from "the behaviour
+is covered". Twenty-one mutations of the review grid came back twenty-one caught.
+Suspecting neighbour-masking (the previous chunk's finding), I then ran the
+pairwise check that reflection recommends — every mutation against only the test
+meant to catch it — and got twenty-one caught again.
+
+Both passes were vacuous. The browser suite is deselected by a marker expression
+in `addopts`; naming a test on the command line does not select it; pytest exits
+**5**; and the tool read any non-zero exit as a caught mutation. Nothing had
+executed a line of the file under test in either pass.
+
+**The second pass did not raise the odds of catching this, because it shared the
+first one's defect.** More of the same instrument is not independence. What broke
+it was one unexplainable result: mutation #13 removed a branch I could see no test
+reaching, so "caught" had no derivation. Running that single test by hand printed
+`1 deselected in 0.02s`.
+
+Re-run correctly, two of the twenty-one survived and both were real gaps. Chunk
+23's acceptance had been reached the same way and was re-swept rather than
+assumed — fourteen of fourteen genuinely caught, so that suite was sound and only
+its evidence was not.
+
+**The check:** when a green result is one you cannot trace an execution path to,
+stop and reproduce it in the smallest possible form — one mutation, one test, run
+by hand, output read. A verdict you cannot derive is the cheapest thing in the
+world to falsify and the easiest to accept.
+
+## A pytest exit code that is neither 0 nor 1 is not a verdict — any tool reading `returncode != 0` as "the test caught it" reports success for a run that collected nothing, and every opt-in marker in this repo makes that the DEFAULT outcome of naming such a test on the command line
+
+Chunk 19B, the mechanical half of the entry above. pytest's exit codes are 0
+passed, 1 failed, 2 interrupted, 3 internal error, 4 usage error, **5 no tests
+collected**. A harness that treats "not zero" as failure therefore reads a typo'd
+node id, a usage error and an empty collection as tests doing their job.
+
+That matters disproportionately here because five suites — `browser`,
+`live_museum`, `live_binary`, `live_api`, `llm_eval` — are deselected by
+`addopts`, so exit 5 is what you get by *default* when pointing any tool at them.
+The failure is silent and it inverts: the more thoroughly a suite is protected
+from accidental runs, the more completely a tool like this reports on nothing.
+
+**The fix that generalises is a baseline, not a special case for exit 5.** Run the
+chosen tests once, unmutated, and refuse to proceed unless they run *and pass*.
+That covers the deselection, the typo, and the already-red target set — where every
+mutation would otherwise be "caught" by a failure that was already there. Then
+treat any later exit outside {0, 1} as "this run did not answer the question"
+rather than as an answer.
+
+## Running a generator tells you what it will DO, not whether its input is right — when derived output looks wrong, ask the generator AND then check the source tag against how every prior instance was tagged, because "no tag" reads identically as a deliberate state and as a missing one
+
+Chunk 19B, 2026-08-05. The second half of the rule above it, and it cost two
+sessions to find.
+
+Chunk 23 established the first half correctly: derived output that looks stale is
+a question about its generator, not a defect to tidy. It then drew a conclusion
+the generator could not support — that an entry carrying no `status=` tag is
+release-pending *by design* — wrote it into this file, and the next session (me)
+read it in the handoff and repeated it. Five built chunks stayed unticked, and
+`build-plan.md`'s own Status prose says the tooling takes the first unchecked box
+as the current chunk, so the next session would have inherited a finished chunk's
+`Critic mode:` and `Type:`.
+
+**`regen-views` was run, and it answered honestly.** It said `4 chunk(s) flipped —
+unshipped [19A, 21, 22, 23]`, which is true and is not evidence the input was
+right. The generator's job is to apply the tags; it has no opinion about whether
+a tag is missing. Reading its output as a ruling is the mistake, and it is
+seductive precisely because consulting the mechanism is the correct first move —
+the error hides in the step *after* the one the rule already covers.
+
+**The check that settles it is one command against history, not another run of
+the generator:** `git log -S 'status=shipped' --oneline` — or simply grep the tags
+and compare. All 23 prior chunks carried `status=shipped`, every one written on a
+feature branch before its merge, which makes the convention unambiguous and makes
+the five untagged entries an omission rather than a state.
+
+The general form: a generator answers "what does this input produce". Whether the
+input is *right* is answered by comparing it to how every previous instance of the
+same thing was written. An absent field is the case where those two questions look
+identical and are not.
+
+## A sentence a UI shows is a claim about what the software can do, and needs the same verification as a docstring's claim about a guard — before writing "do X to fix this", grep for the endpoint and the control that would let a user do X, because the wording ships as a promise and a mutation check cannot tell a reachable assertion from a true one
+
+2026-08-05, and it arrived inside the fix for the defect it repeats.
+
+A review card said "No scan was found for this work" for a work whose every scan
+the curator had turned down — two states the producer distinguishes, flattened by
+a client that never read the field distinguishing them. The fix replaced the
+sentence with one that ended **"Restore one from the scans below to judge it
+again."** Nobody could. Every control in that panel renders as `null` once an
+instance is rejected; there is no restore endpoint; and `select_image` refuses a
+rejected instance *by design*, its docstring making the refusal a requirement so
+that a rejection survives the next re-search. The fix for a card that lied
+invented a new lie, on the same card, and shipped a test asserting the false
+string verbatim.
+
+**Two things make this worth a rule rather than a shrug.**
+
+*The true wording was already in the same file, sixty lines up.*
+`REASON_SENTENCES.all_rejected` reads "You have turned down everything that was
+found for it." Composing a new sentence rather than reaching for the existing one
+is what created the opportunity — retrieval over generation, arriving at the
+granularity of a single sentence, in a file whose reason-sentence table exists
+precisely so that this state reads identically everywhere a curator meets it.
+
+*The mutation check passed and proved nothing about it.* The test was broken on
+purpose and did go red, which confirmed the assertion was **reachable**. It was —
+and what it pinned was false. **Mutation testing asks whether a test can fail,
+never whether what it asserts is true.** That is a real limit on the technique
+this repo leans on hardest, and it is why a UI string needs the grep as well as
+the sweep.
+
+The whole session had been finding this exact shape in other forms — a guard whose
+stated limit was not its real one, a test that defended a copy of a branch rather
+than the branch, a package manifest asserting a check that had never existed
+(twice, the second time by me). The class is *durable text asserting a capability
+nobody checked*, and user-facing copy is the instance that reaches an actual human
+rather than the next maintainer.
+
+## A docstring's safety argument is a claim about the code beside it — when a comment names a failure mode as unacceptable, the next thing written is the test proving it cannot happen, derived from the DOCSTRING rather than the diff, because stating a danger reads as defending against it and a mutation sweep only asks whether the lines you wrote are defended
+
+2026-08-05, and like its sibling above it arrived inside the fix for the defect it
+describes.
+
+`clean_name`'s citation rules were rewritten to strip a bare citation from a
+proposed title. The docstring argued the safety at length and correctly: a
+trailing hostname alone cannot be evidence of a citation, *because* `Composition
+No.5` is dot-joined word characters exactly as `tate.org.uk` is, and dropping the
+tail would leave `Composition` and merge every numbered canvas by that painter —
+the failure direction with no recovery, the one the whole module exists to refuse.
+
+The rule then shipped requiring only a **bracketed URL** beside the hostname. A
+title supplies one as readily as a citation does, so `Composition No.5
+(https://example.com/x)` cleaned to `Composition`. The exact merge the paragraph
+above it forbade, in the commit whose subject was forbidding it.
+
+**Three things failed at once, and only the last is surprising.** The test written
+alongside pinned the sibling case — a hostname-shaped word with *no* URL — so it
+passed. The mutation sweep passed too, and that is the instructive part: a sweep
+asks whether the branches you *wrote* are defended, and this was a branch reasoned
+about and never written. Nothing in a sweep can ask about the guard that is
+missing. And the reviewer who found it did so by reading the docstring's own claim
+and testing it against the regex, which is precisely the check the author skipped.
+
+**The mechanical form of the rule:** when a docstring says "X would be a
+disaster", write the test for X from that sentence, before looking at the code —
+because reading the code is what convinces you X is handled.
+
+Two further instances the same day, both the same shape:
+
+- The fix for the above introduced `urlsplit`, which raises `ValueError` on an
+  unbalanced `[`. One commit earlier, in the same session, `observations.observe`
+  had been fixed for raising where its docstring promised it never would. Inside
+  startup repair the new raise is a plane that will not boot, every start, for as
+  long as one bad title is stored.
+- Correcting the now-false hostname sentence in `clean_name` left the identical
+  sentence standing in the test docstring that `clean_name` had just been edited
+  to cite as its safety.
+
+## Two redundant defences look exactly like two undefended branches in a mutation sweep — when a survivor surprises you on a line you believe is load-bearing, check whether a SIBLING guard rescues the same input before writing anything, because the fix is a case per guard that the other cannot rescue, not a broader test
+
+2026-08-05. After the merge above was fixed, the rule carried two guards: a
+hostname pattern requiring an alphabetic top-level domain (so `No.5` is not
+host-shaped) and a `_drop_citation` callback comparing the word against the URL's
+own host.
+
+A five-mutation sweep reported two survivors — one per guard. Both looked like
+real coverage gaps and neither was: the single test case was rescued by *either*
+guard alone, so removing one left the suite green. Redundancy and absence produce
+the same SURVIVED line, and the tool's own documentation warns that a survivor and
+a mutation-that-was-never-a-defect are indistinguishable from outside.
+
+The resolution is not a broader test but a **narrower** one per guard: an input the
+other cannot save. Here that meant `The Miracle of St.Mark
+(https://example.com/x)` — host-shaped *with* an alphabetic TLD, so only the host
+comparison can rescue it — and a stored `Composition No.5 (` — damaged, so no URL
+survives to compare against and only the shape rule can rescue it. Both mutations
+then died.
+
+The same session produced the opposite case, and telling them apart is the skill:
+a mutation reordering two passes survived, was investigated, and turned out to
+change no outcome at all — a genuine non-defect, correctly dropped rather than
+pinned. A later change made the order load-bearing for real, and the same mutation
+started being caught. **Confirm a survivor is a defect before writing a test for
+it, and confirm it is not merely shadowed before believing it is one.**
+
+## A bug report's stated CAUSE is a hypothesis, held to the same standard of proof as its symptom — run the cheapest experiment that could refute it before building on it, because the symptom was observed while the cause was reasoned, and both get recorded in artifacts as though they were observed
+
+2026-08-05. Seven `proposed_title` rows were stored corrupted, ending on a dangling
+open parenthesis. The walkthrough recorded the finding carefully — it was checked
+against the catalogue, and the entry says so — and concluded: *"Nothing in this
+codebase truncates a title, so phase 1's model emitted them this way."* The issue
+filed from it repeated the conclusion and cited three source locations as evidence.
+
+The symptom was observed. The cause was **reasoned from reading the code**, and
+was wrong. One command refuted it:
+
+```python
+clean_name('The Persistence of Memory (1931) - cited from blog.artsper.com (https://blog.artsper.com/...)')
+# -> 'The Persistence of Memory (1931) - cited from blog.artsper.com ('
+```
+
+Character for character the stored value. `_BARE_URL` was `https?://\S+`, greedy
+to the next space, so it ate the bracket that *closed* the citation and left the
+one that opened it.
+
+**What the wrong cause would have cost:** the issue's own "Expected" section
+proposed rejecting at ingestion, repairing, or constraining phase 1's response
+schema — three fixes aimed at the provider, none of which touch the regex that did
+it, and one of which spends a paid call to test. The cited evidence was accurate;
+only the inference from it was not.
+
+**The second half of the defect was invisible from the same reasoning.**
+`work_dedup_key` derives from the same cleaned title, so each row keyed as a
+different painting from the same work proposed cleanly — a rejection would not
+have suppressed the work it was about, silently. Reading the code found the
+symptom's location; executing it found the blast radius.
+
+## A grep that retires a claim must be scoped by the repository, never by the file type you found it in — run it with no `--include` and filter by eye, or state the scope you searched beside the claim you retired, because a scoped search is indistinguishable from an exhaustive one in its output
+
+2026-08-05. A third project plane's manifest landed while four artifacts still
+enumerated two. The fix was made and the commit message said the claim had been
+"retired by grep rather than locally" — invoking this repo's own standing rule.
+
+The grep ran with `--include="*.md"`. It returned clean. Two more copies sat in
+`.prawduct/project-state.yaml`: the `test_commands` preamble ("Two independent
+projects, two interpreters, two suites") and the v1-scope line ("one suite per
+plane"). The reviewer found both.
+
+**Why it fails silently:** the claim was *found* in Markdown, so Markdown is where
+the search goes — and the clean result of an under-scoped search is byte-identical
+to the clean result of an exhaustive one. This is the same shape as the recorded
+rule that a guard's effective scope is invisible in its result, applied to an
+ad-hoc search rather than a committed check.
+
+**The cheap discipline:** grep the whole tree with no `--include`, exclude `.git`,
+and read the hit list. If the volume is genuinely unmanageable, write the scope you
+searched next to the claim you retired, so the next reader knows what was not
+looked at.
+
+## A defect class found in one module is a question to ask of every module the same commit touches — grep the diff for the shape you just fixed before committing, because the fix is the cheapest moment to notice the sibling and having just fixed "this must never raise" does not prompt "can what I just wrote raise?"
+
+2026-08-05. One commit fixed `observations.observe`, whose docstring promised
+"nothing raises" while its catch was `(OSError, JSONDecodeError)` against a
+`read_text(encoding="utf-8")` — so non-UTF-8 bytes raised `UnicodeDecodeError`, a
+`ValueError`, escaping to the browser as a 500 and taking down the product's only
+alerting surface.
+
+**The same commit introduced the identical failure one file over.** Its other half
+added `_drop_citation` to `dedup.py`, calling `urlsplit` on model-authored URL
+text. `urlsplit` raises `ValueError` on an unbalanced `[` in the authority — it
+reads one as an IPv6 opener — and nothing caught it. At the engine seam that fails
+a run already paid for; inside `DiscoveryService.reconcile` it fails the *start*,
+every start, for as long as the row is stored: a plane that will not boot because
+of one bad stored title.
+
+Having spent the same commit reasoning about a function that must never raise did
+not produce the question "can the function I just wrote raise?" The two halves were
+reviewed as separate concerns because they *were* separate concerns — one an
+observability parser, one an identity derivation — and the shared property was the
+failure mode, not the subject.
+
+**The mechanical form:** after fixing any defect, re-read the diff asking only
+"where else does this shape appear here?" — not across the codebase, which is a
+backlog item, but across the commit, which is free.
+
+## A backlog item's body is evidence about the day it was written — re-verify each item against the current tree before acting on it, because closed work goes on looking open, and a thorough body makes re-verification cheap rather than unnecessary
+
+Measured on one pass of seventeen open `effort:S stage:ready` items, all re-checked
+against the working tree rather than read. Two (#37, #43) had been fixed three days
+earlier by a commit that never closed them, so a triage that trusted the bodies
+would have rebuilt shipped work — and would have rebuilt it *badly*, because the
+shipped fix was better than the issue's proposal. One (#39) was half-done, its code
+half solved with a `finally` where the issue asked for `except BaseException:`. One
+(#32) named a function, a wrapper and four line numbers that no longer exist while
+its defect sat exactly where it always had.
+
+The trap is that thoroughness reads as freshness. These bodies carry file:line
+evidence, repro steps and scope-outs, which is what made each re-check take
+seconds — and is also what makes them most convincing to skim. **The cost of
+re-verification is low precisely in the backlogs where skipping it is most
+tempting.**
+
+Applies to `pick` as much as to triage: an item's `stage:` and `effort:` labels are
+the filer's judgement on the day of filing, and neither is re-derived when the tree
+moves underneath them.
+
+## A guard that lives only in code scheduled for deletion leaves with it — when fixing a defect in a retiring module, fix the surviving replacement too even where it is currently unreachable, because the reachability argument is about today and the deletion is about the code that stays
+
+An argument-injection fix landed in `image_utils.get_dezoomify_file` — a scheme
+refusal plus a `--` end-of-options fence — with a test and a comment explaining why
+the fence was not dead code. All of it sits in the 2024 root modules, which Chunk 20
+deletes.
+
+The surviving `curation/acquisition/dezoomify.py` had no fence. It was not
+vulnerable: `check_fetchable` refuses any scheme but http/https a caller earlier,
+and a `-` string parses to no scheme at all. That is a correct reachability
+argument and it is the wrong question. At retirement the fix, its test and its
+comment all leave together, and what remains is a plane whose only defence is a
+guarantee held one module away, with nothing asserting it — so a later widening of
+`ALLOWED_SCHEMES`, or a second caller reaching `tile_fetch` unguarded, reopens the
+hole silently.
+
+The comment there made it worse than absence: it called the URL "the last
+option-free argument", which is false twice over — `staged` follows it, and nothing
+makes it option-free. It credited the argv list, which defeats *shell*
+metacharacters, for a property only the upstream scheme check provides. **A comment
+crediting the wrong mechanism is how the next call site inherits the gap**, because
+the reader carries away the lesson it teaches rather than the guarantee it has.
+

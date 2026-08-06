@@ -15,6 +15,7 @@ import pytest
 
 from curation.discovery.images import FoundImage, ImageQuery, ImageSearchFailure
 from curation.discovery.phase_two import CONFIDENT, TITLE_ONLY, UNATTRIBUTED_RECORD, PhaseTwoEngine
+from curation.persistence.discovery_records import UnresolvedReason
 from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
 from curation.services.display_fit import ArtworkBox, DisplayFit
 
@@ -46,6 +47,10 @@ class StubSearch:
         self._instances = instances
         self._fails = fails
 
+    @property
+    def provider(self) -> str:
+        return "artic"
+
     def find_images(self, query: ImageQuery):
         if self._fails:
             raise ImageSearchFailure("the museum could not be reached")
@@ -54,9 +59,29 @@ class StubSearch:
     def fetch_preview(self, url: str) -> bytes | None:
         return b"jpeg"
 
+    def tile_url(self, url: str) -> str:
+        """Unused by phase 2, and implemented so this really is an `ImageSearch`.
+
+        A stand-in that satisfies only the members its own tests call will pass
+        while the Protocol grows past it, and the next member added at the fetch
+        seam would find this class silently non-conforming.
+        """
+        return f"https://www.artic.edu/iiif/2/{abs(hash(url)) % 100000}"
+
 
 def resolve(*instances: FoundImage, title: str, artist: str | None = None):
-    return PhaseTwoEngine(StubSearch(*instances), box=BOX).resolve(ImageQuery(title=title, artist=artist))
+    """The instances that survived, which is what most of this module is about.
+
+    Tests that care *why* the rest did not survive call `refusals` below; keeping
+    them separate means a test asserting on the surviving list cannot pass by
+    accidentally reading a refusal set that happens to be empty.
+    """
+    return PhaseTwoEngine(StubSearch(*instances), box=BOX).resolve(ImageQuery(title=title, artist=artist)).instances
+
+
+def refusals(*instances: FoundImage, title: str, artist: str | None = None) -> frozenset[UnresolvedReason]:
+    """Which gates turned results away for this work."""
+    return PhaseTwoEngine(StubSearch(*instances), box=BOX).resolve(ImageQuery(title=title, artist=artist)).refusals
 
 
 # -- the near-match, which is the whole point -----------------------------------
@@ -67,9 +92,10 @@ def test_a_real_work_by_a_real_artist_is_refused_when_it_is_not_the_work_asked_f
 
     Every candidate here scored well against the live query. None is the
     requested work, and the correct answer is nothing at all — because an empty
-    result makes the work `unresolved`, which is the signal that phase 1 may have
-    proposed something that does not exist, and a low-confidence near-match
-    launders exactly that signal away.
+    result makes the work `unresolved` for the one reason that carries the
+    invented-work signal, `NOT_HELD`, and a low-confidence near-match launders
+    exactly that signal away. Scoped to this case on purpose: the other routes to
+    `unresolved` say the collection *has* the work, which is nearly the opposite.
     """
     judged = resolve(
         an_instance("Ann-In Memory", artist="Joseph Cornell"),
@@ -92,6 +118,101 @@ def test_the_same_title_by_a_different_painter_is_refused_rather_than_scored_low
     judged = resolve(an_instance("American Gothic", artist="Elizabeth Layton"), title="American Gothic", artist="Grant Wood")
 
     assert judged == []
+
+
+# -- which gate refused, which is what an empty result has to be able to say ----
+#
+# An empty judgement is the same object however it was arrived at, so the reason
+# has to be carried out of here or it is gone: the discarded results never become
+# rows, and nothing downstream can reconstruct why they were discarded.
+
+
+def test_a_collection_holding_no_such_title_reports_not_held():
+    """The invented-work signal, and the only refusal that carries it."""
+    refused = refusals(
+        an_instance("Ann-In Memory", artist="Joseph Cornell"),
+        title="The Persistence of Memory",
+        artist="Salvador Dalí",
+    )
+
+    assert refused == {UnresolvedReason.NOT_HELD}
+
+
+def test_a_collection_holding_the_title_under_another_painter_reports_identity_refused():
+    """Nearly the opposite of `not_held`: the collection has it, under another name."""
+    refused = refusals(an_instance("American Gothic", artist="Elizabeth Layton"), title="American Gothic", artist="Grant Wood")
+
+    assert refused == {UnresolvedReason.IDENTITY_REFUSED}
+
+
+def test_a_matching_record_the_provider_could_not_size_reports_size_unknown():
+    sizeless = an_instance("American Gothic", artist="Grant Wood", width=None, height=None)
+
+    refused = refusals(sizeless, title="American Gothic", artist="Grant Wood")
+
+    assert refused == {UnresolvedReason.SIZE_UNKNOWN}
+
+
+def test_the_two_ways_a_result_can_fail_identity_are_reported_apart():
+    """The distinction the whole column exists for, in one search.
+
+    A single query returns both a different painting and the right title under
+    the wrong painter. Reporting one label for the pair would answer "the museum
+    does not have it" about a museum that demonstrably does.
+    """
+    refused = refusals(
+        an_instance("A Memory", artist="Gene Charlton"),
+        an_instance("American Gothic", artist="Elizabeth Layton"),
+        title="American Gothic",
+        artist="Grant Wood",
+    )
+
+    assert refused == {UnresolvedReason.NOT_HELD, UnresolvedReason.IDENTITY_REFUSED}
+
+
+def test_a_provider_that_returns_nothing_at_all_refuses_nothing():
+    """No record came back to refuse, which downstream reads as `not_held` — vacuously true.
+
+    Asserted here rather than left implicit because an empty refusal set and a
+    `not_held` refusal are different objects that mean the same thing, and a
+    derivation that defaulted the other way would call an empty search a
+    disagreement about an artist nobody named.
+    """
+    assert refusals(title="American Gothic", artist="Grant Wood") == frozenset()
+
+
+def test_a_work_that_resolves_cleanly_refuses_nothing():
+    """An assertion that would pass on an always-empty set is worth nothing, so this pins the other side."""
+    held = an_instance("American Gothic", artist="Grant Wood")
+
+    assert refusals(held, title="American Gothic", artist="Grant Wood") == frozenset()
+
+
+def test_the_engine_never_reports_a_reason_that_is_read_from_stored_rows():
+    """The engine's vocabulary is the shallow gates only, and the depth ranking relies on it.
+
+    `BELOW_FLOOR` and `ALL_REJECTED` share a depth, which is safe precisely
+    because they are derived where the rows are and can never appear in a
+    refusal set to be ranked against each other. Nothing else states that, so an
+    engine that started emitting one would introduce a silent tie broken by set
+    iteration order — a wrong label on a work, chosen by nothing.
+
+    Written as a set difference rather than as a list of the three it may emit,
+    so a sixth member added to the enum is covered by the rule instead of missed
+    by an inventory taken today.
+    """
+    from_rows = {UnresolvedReason.BELOW_FLOOR, UnresolvedReason.ALL_REJECTED}
+    emitted = refusals(
+        an_instance("A Memory", artist="Gene Charlton"),
+        an_instance("American Gothic", artist="Elizabeth Layton"),
+        an_instance("American Gothic", artist="Grant Wood", width=None, height=None),
+        an_instance("Small Study", artist="Grant Wood", width=300, height=200),
+        title="American Gothic",
+        artist="Grant Wood",
+    )
+
+    assert emitted & from_rows == set(), "the engine emitted a reason only the store may derive"
+    assert emitted, "the fixture refused nothing, so this would pass with the check removed"
 
 
 def test_the_right_painter_is_kept_when_both_are_offered():

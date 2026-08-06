@@ -6,7 +6,9 @@ catalogue somewhere unintended. These tests assert the refusals, not just the
 happy path.
 """
 
+import os
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -30,13 +32,18 @@ from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 def _clean_env(monkeypatch):
     """Resolve from this process's environment and nothing else.
 
-    `from_env` calls `load_dotenv(override=True)` with no path, and dotenv
-    searches from `config.py`'s own directory upward — never the cwd — so
-    chdir'ing to a scratch directory isolates nothing. With `override=True` a
-    real `.env` beats every value set here, and the documented setup step
-    (`cp .env.example .env`) creates exactly that file: without this stub the
-    whole module is green only on a machine where nobody has followed the
-    README.
+    `from_env` calls `load_dotenv()` with no path, and dotenv searches from
+    `config.py`'s own directory upward — never the cwd — so chdir'ing to a
+    scratch directory isolates nothing.
+
+    The stub is still needed after the 2026-08-05 precedence fix, for the half
+    that fix did not change: a name this fixture *deletes* is absent from the
+    environment, so a real `.env` is free to supply it, and the documented
+    setup step (`cp .env.example .env`) creates exactly that file. Every
+    missing-value assertion below would otherwise be green only on a machine
+    where nobody has followed the README. Names this fixture *sets* no longer
+    need it — that is what `test_an_exported_value_beats_the_dotenv_file`
+    pins.
     """
     monkeypatch.setattr("curation.config.load_dotenv", lambda **_: False)
     for name in (
@@ -50,6 +57,61 @@ def _clean_env(monkeypatch):
         "TV_PANEL_DIAGONAL_INCHES",
     ):
         monkeypatch.delenv(name, raising=False)
+
+
+def _dotenv_supplying(monkeypatch, **values):
+    """Stand in for `python-dotenv`, honouring its real precedence flag.
+
+    Measured against the installed python-dotenv on 2026-08-05: with no
+    `override` an entry already in `os.environ` is left alone, and the file's
+    value is used only for names that are absent; `override=True` replaces
+    both. The fake reproduces exactly that, so it is the *library* being stood
+    in for — `Settings.from_env` itself is driven for real, and if it ever
+    passes `override=True` again the fake honours it and the caller below goes
+    red. A stub that simply ignored the flag would make that mutation
+    invisible, which is the whole failure this pair of tests exists to catch.
+    """
+
+    def loader(*_args, override=False, **_kwargs):
+        for name, value in values.items():
+            if override or name not in os.environ:
+                monkeypatch.setenv(name, value)
+        return True
+
+    return loader
+
+
+def test_an_exported_value_beats_the_dotenv_file(monkeypatch):
+    """`.env` supplies defaults; whatever is already exported wins.
+
+    The inverse shipped until 2026-08-05 and made
+    `ART_ROOT=/tmp/scratch uv run python -m curation` boot against the real
+    catalogue — the export was discarded rather than refused, so the wrong
+    tree looked exactly like the right one.
+    """
+    monkeypatch.setenv("ART_ROOT", "/from-the-environment")
+    monkeypatch.setattr(
+        "curation.config.load_dotenv",
+        _dotenv_supplying(monkeypatch, ART_ROOT="/from-the-dotenv-file"),
+    )
+
+    assert Settings.from_env().art_root == Path("/from-the-environment")
+
+
+def test_the_dotenv_file_still_supplies_what_the_environment_does_not(monkeypatch):
+    """The other half, and it is not redundant with the test above.
+
+    Deleting the `load_dotenv()` call outright would satisfy that one and
+    break every machine set up by the documented `cp .env.example .env` step.
+    This is the case that test cannot rescue.
+    """
+    monkeypatch.delenv("ART_ROOT", raising=False)
+    monkeypatch.setattr(
+        "curation.config.load_dotenv",
+        _dotenv_supplying(monkeypatch, ART_ROOT="/from-the-dotenv-file"),
+    )
+
+    assert Settings.from_env().art_root == Path("/from-the-dotenv-file")
 
 
 def test_a_missing_art_root_fails_fast_and_names_the_file_to_fix():

@@ -20,6 +20,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+from curation.discovery.browse import BrowseQuery, CollectionBrowseFailure, OfferedGroup
 from curation.discovery.engine import (
     EngineFailure,
     EngineSpend,
@@ -181,7 +182,25 @@ class FakeImageSearch:
     fails_for: set[str] = field(default_factory=set)
     asked: list[str] = field(default_factory=list)
     fetched: list[str] = field(default_factory=list)
+    resolved: list[str] = field(default_factory=list)
     preview_bytes: bytes | None = b"\xff\xd8\xff\xe0 jpeg"
+
+    @property
+    def provider(self) -> str:
+        return "artic"
+
+    def tile_url(self, url: str) -> str:
+        """The image service for an object, as the real client derives one.
+
+        Mirrors the real shape rather than echoing the argument: the whole point
+        of this seam is that the URL a source records and the URL the tiles come
+        from are *different strings*, and a stand-in that returned its input
+        would make a caller that skipped the resolution step pass.
+        """
+        self.resolved.append(url)
+        if self.unreachable:
+            raise ImageSearchFailure(f"could not reach the collection to resolve {url!r}")
+        return f"https://www.artic.edu/iiif/2/{abs(hash(url)) % 100000}"
 
     def find_images(self, query: ImageQuery) -> Sequence[FoundImage]:
         self.asked.append(query.title)
@@ -216,19 +235,88 @@ def a_decodable_jpeg(width: int = 1200, height: int = 900) -> bytes:
     return buffer.getvalue()
 
 
-def a_museum_holding(*titles: str, sizes: dict[str, tuple[int, int]] | None = None) -> FakeImageSearch:
+def a_museum_holding(
+    *titles: str,
+    sizes: dict[str, tuple[int, int]] | None = None,
+    held_as: dict[str, str] | None = None,
+) -> FakeImageSearch:
     """A provider holding one instance of each named work, with showable previews.
 
     Sizes default to a gallery-grade scan, because most tests want a work that
     clears the resolution floor and only a few care about the one that does not.
     Pass `sizes` to make a particular work small.
+
+    **`held_as` separates the title asked for from the title the collection files
+    the work under**, which the query-keyed shape alone cannot express. Real
+    collections do this constantly — a work catalogued under its full descriptive
+    title, or in another language — and the identity comparison above the seam
+    exists precisely to judge the difference. Without this, every fixture agreed
+    with its query by construction and no test could reach the disagreement.
     """
     measured = sizes or {}
+    spelled = held_as or {}
     holdings = {}
     for title in titles:
         width, height = measured.get(title, (6000, 4500))
         slug = title.lower().replace(" ", "-")
-        holdings[title] = (an_image(title, url=f"https://artic.edu/{slug}", width=width, height=height),)
+        holdings[title] = (an_image(spelled.get(title, title), url=f"https://artic.edu/{slug}", width=width, height=height),)
     found = FakeImageSearch(holdings=holdings)
     found.preview_bytes = a_decodable_jpeg()
     return found
+
+
+@dataclass
+class FakeCollectionBrowse:
+    """A collection that holds whatever it was built to hold, keyed by artist.
+
+    Keyed by the artist asked about, because the interesting supplement cases are
+    the uneven ones — one artist with fifty works, one with two, one the
+    collection has never heard of — and a browse that answered identically for
+    every facet could not produce the spread the round-robin exists to make.
+
+    `matched` is tracked apart from the works returned so a test can express "the
+    collection holds four hundred and you are seeing three", which is the figure
+    every offered work's rationale has to quote.
+    """
+
+    holdings: dict[str, Sequence[FoundImage]] = field(default_factory=dict)
+    matched: dict[str, int] = field(default_factory=dict)
+    unreachable: bool = False
+    asked: list[list[str]] = field(default_factory=list)
+
+    @property
+    def provider(self) -> str:
+        return "artic"
+
+    def browse(self, queries: Sequence[BrowseQuery], *, per_query: int) -> Sequence[OfferedGroup]:
+        self.asked.append([query.artist for query in queries])
+        if self.unreachable:
+            raise CollectionBrowseFailure("could not reach the collection to browse it")
+        groups = []
+        for query in queries:
+            works = tuple(self.holdings.get(query.artist, ()))[:per_query]
+            groups.append(
+                OfferedGroup(
+                    query=query,
+                    matched=self.matched.get(query.artist, len(self.holdings.get(query.artist, ()))),
+                    works=works,
+                )
+            )
+        return tuple(groups)
+
+
+def a_collection_holding(**by_artist: Sequence[str]) -> FakeCollectionBrowse:
+    """A collection holding the named works for each artist, ready to be offered.
+
+    Sized to clear the display floor, because a supplement's whole job is to put
+    something showable in front of a curator and a fixture that quietly fell
+    below the floor would test the exclusion rather than the offer.
+    """
+    holdings = {
+        artist: tuple(
+            an_image(title, artist=artist, url=f"https://artic.edu/{title.lower().replace(' ', '-')}", width=6000, height=4500)
+            for title in titles
+        )
+        for artist, titles in by_artist.items()
+    }
+    return FakeCollectionBrowse(holdings=holdings)

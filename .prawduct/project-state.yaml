@@ -557,7 +557,7 @@ product_definition:
       - "Hard monthly LLM spend cap that fails closed"
       - "OpenRouter multi-provider model access"
       - "E-paper label rendering behind a display interface"
-      - "Test suite established — done 2026-07-27, one suite per plane, both declared as test_commands (this read 'none exists today' until 2026-08-01)"
+      - "Test suite established — done 2026-07-27, one per plane that has code, both declared as test_commands (this read 'none exists today' until 2026-08-01, and 'one suite per plane' until 2026-08-05, when a third plane's manifest landed ahead of its first module)"
       - "Deployment values out of source (ART_ROOT first); token_file out of git"
     accommodate:          # Design for but don't build yet
       - "Multiple household accounts with per-user curation (explicitly not v1 — single operator with named profiles)"
@@ -893,6 +893,54 @@ technical_decisions:
       alternatives_considered: ["Display plane as a thin client that fails when the server is down — rejected; inverts the availability priority."]
       date: 2026-07-19
   technology:
+    - decision: "Cover the browser client with Playwright against the real surface — a dev-only harness, with the shipped client staying a plain served file and no build step."
+      rationale: >
+        Operator's call 2026-08-05, settling issue #30 and its four options. The
+        client began as pure rendering and is not any more: Chunk 19A alone added
+        nine branches of prose composition over a run's tallies, a poll loop with
+        generation-based supersession, repaint suppression against a payload
+        signature, and a gate estimate with its own failure path. Chunk 19B adds
+        the review grid, alternates, verdicts and image selection — the most
+        stateful screen in the product. Neither Python suite executes a line of
+        any of it.
+
+        Playwright over the three cheaper options because it is the only one that
+        covers the defect class that has actually escaped here twice. Both
+        escapees were visual or wiring — `replaceChildren` coercing null to the
+        string "null" and putting it on the page, and every image tile silently
+        taking the shape of its own picture — and a jsdom harness over the pure
+        functions would have caught neither. A third arrived this session and was
+        found by reading rather than by any test: the run view repainted on every
+        poll, so a keyboard user standing on "Approve the list" lost the focus
+        every two seconds.
+
+        THE PI OBJECTION IN THE ISSUE DOES NOT APPLY AND SHOULD NOT BE REPEATED.
+        It reads as "a Node toolchain in a repo that has deliberately avoided
+        one, on a plane that has to run on a Pi" — but the Pi runs the *product*,
+        not the suite. The decision this could have violated is "no framework and
+        no build step" for the shipped client (`design_decisions.visual_direction`,
+        Chunk 10B), and that decision is untouched: `app.js` remains one hand-written
+        file served as-is, and nothing about deploying to the Pi changes. What
+        lands is a dev/CI dependency, in its own directory, that the display and
+        curation planes neither import nor know about.
+
+        The costs are named rather than discovered: ~200MB of downloaded browsers
+        on a dev machine, a slower CI leg, and a second language's package
+        manifest inside `curation/`. Accepted against a product whose only human
+        interface is this client.
+
+        AMENDED AT BUILD, 2026-08-05, operator's call: the third cost is not paid.
+        Playwright publishes first-party Python bindings, so the harness is
+        `pytest-playwright` in `curation/tests/browser/` behind a `browser` marker
+        — one language, one suite, one command, and no second package manifest.
+        This paragraph had assumed Node without the alternative having been put;
+        it was verified to install and import on this repo's 3.14 before the
+        choice was made rather than after. Two consequences beyond the manifest:
+        the harness reuses the suite's own server, catalogue and image fixtures
+        instead of rebuilding each state through the HTTP API, and its dependency
+        sits in an opt-in `browser` group for the same reason `eval` has one, so
+        the default `uv sync` is untouched. The other two costs stand as written.
+
     - decision: "Build the catalogue's durable tier as first-party SQLite shaped to 3tears' DurableStore contract; do not adopt 3tears collections, and take no 3tears core dependency."
       rationale: >
         Verified against the source rather than assumed (artifacts/3tears-integration-findings.md):
@@ -1581,6 +1629,63 @@ technical_decisions:
         - "No gate, but phase 1 exposed as its own operation — pushes the discipline onto the caller rather than the system."
       date: 2026-07-19
   integrations:
+    - decision: "A run MAY offer works the curator did not name — adjacent, similar and derivative works are welcome — bounded, labelled, and only after phase 2's gate has refused."
+      rationale: >
+        Ratified by the operator 2026-08-04, answering the question two runs that
+        resolved nothing forced. It is what product-brief.md's own Vision already
+        asks for — "works the curator has not seen and could not have named" — and
+        the artifact text is in product-brief.md § Core Flows, flow 2.
+
+        Scoped at the same time to ARTIST ADJACENCY for the first build, because
+        that is the only facet reproduced against the live collection. Style,
+        classification and period miss on ordinary spellings (their keyword fields
+        hold museum-internal strings), and asking by relevance instead returns
+        American Gothic for a Dutch still-life query. Widening past artist is a
+        measurement before it is a feature.
+      alternatives_considered:
+        - "No — the run reports what it could not find and stops. Coherent and cheap, but it makes the browser surface's acceptance criterion (intent to wall, with images) unmeetable for a natural intent, which would have to be renegotiated in the same breath."
+        - "Yes, but only when the curator explicitly asks for alternatives — sounds safe and is worse: it puts a second decision in front of a curator already looking at an empty screen."
+      consequences: >
+        A run's work list stops being a flat list of what phase 1 said. The review
+        grid, the API work list, the unresolved count and the approval gate each
+        gain a second kind of row to render, count and explain.
+
+        The offered half is honest about its supply: it comes from one collection
+        with a measured skew, and for 20th-century intents that collection is
+        overwhelmingly in copyright. A curator asking for Banksy still gets nothing
+        offered, correctly.
+
+        Two invariants are load-bearing and are stated in the artifact rather than
+        left to the build: an offered work carries the collection's own title and
+        artist verbatim and is never presented as the work the curator named; and
+        no image found by the browse may ever be attached to a work phase 1 named.
+        A derivative offered AS ITSELF is welcome; the same object offered as the
+        named work is the confident near-match flow 2 forbids.
+      date: 2026-08-04
+    - decision: "Rights on works the SYSTEM chooses: record them, show them, never gate or filter on them."
+      rationale: >
+        Operator, 2026-08-04, in those words: "This is the wrong app to get into
+        whether a photograph of a Banksy piece is acceptable to show in my own
+        living room." Constraint 13 already holds rights to a quality weight and
+        never an exclusion; this extends the same answer to works the system offers
+        rather than works a curator's intent named, which is the case constraint 13
+        was not decided for.
+      alternatives_considered:
+        - "Prefer public domain in ranking — largely inert for the runs that motivated the feature: Ellsworth Kelly is 61 imaged / 0 public domain, Frank Stella 14 / 0."
+        - "Public-domain only for offered works — cleanest rights position, and returns ZERO for both observed intents, which kills the feature for exactly its use case."
+      consequences: >
+        This materially raises how often in-copyright masters are acquired through
+        the tiled-fetch path, and nothing downstream refuses on rights — selection
+        never reads them and acceptance promotes them onto the Source without
+        objecting. That composition is the cost of the decision and is recorded
+        here rather than discovered later.
+
+        Deliberately NOT decided at the same time: whether the contemporary-web
+        half of the integrations decision below gets built or retracted. The
+        operator deferred it ("let's address rights later; for now, content"). The
+        measurement that forces it eventually is in
+        nonfunctional-requirements.md § The Supply Horizon.
+      date: 2026-08-04
     - decision: "Discovery searches museum/public-domain collections AND the contemporary web (gallery sites, prize announcements, artist portfolios)."
       rationale: >
         Confirmed 2026-07-19. The curator's motivating example — "find recent
@@ -1622,6 +1727,31 @@ technical_decisions:
         - "Strictly LAN with no remote access — simpler still, but no access while away."
       date: 2026-07-19
   operational:
+    - decision: "The service account for both systemd units is `tvpi`; ART_ROOT's path is deliberately left open until the cutover."
+      date: 2026-08-04
+      rationale: >
+        Decided 2026-08-04 by the operator. The name was the only part in
+        question and it is kept: it is what the committed unit, deploy/README.md
+        and this product's history already say, so renaming would have bought
+        nothing but a diff across all of them.
+
+        The account does not exist on the machine. The Pi was rebuilt onto a
+        fresh card and `tvpi` did not survive it — only `brooks` (uid 1000, sudo,
+        already in spi and gpio). It is created as part of the systemd-unit
+        cutover rather than before it, because the account, its group
+        memberships, moving ART_ROOT under it and both unit files are one change:
+        any landing alone leaves a machine that is neither the old arrangement
+        nor the new one.
+
+        ART_ROOT's path is NOT settled by this decision and that is deliberate.
+        The committed unit puts the art tree at /home/tvpi/art, inside a home
+        directory a no-login account has no other use for; a neutral path is the
+        shape to prefer at cutover. Deciding it costs nothing today because every
+        reader of that path is already configuration.
+
+        Full shape — no login, no sudo, groups spi and gpio, owning ART_ROOT and
+        the checkout — in operational-spec.md § The Service Account.
+
     - decision: "uv is the dependency manager for both planes, structured as two SIBLING uv projects (AMENDED 2026-07-20: not a uv workspace)."
       rationale: >
         Decided 2026-07-20 by the operator. Recorded here after Critic review found
@@ -1901,6 +2031,35 @@ design_decisions:
         On the wall asks what the display plane was actually asked to show, and
         the gap between those two is the product's most important disclosure.
       date: 2026-08-01
+    - decision: >
+        The discovery half arrived and the UI is five sections and three detail
+        views: Works, Discovery, Themes, On the wall, and Health, with Work, Run
+        and Review opening in place. Run and Review both keep Discovery lit
+        while they are open. Review is addressed by the RUN whose works are
+        being judged, not by a work.
+      rationale: >
+        Recorded 2026-08-05. This does not replace the entry above — that one
+        was correct on its date and said in as many words that the discovery
+        screens were absent because they bound services not yet built. Those
+        services arrived across chunks 14 to 19B, and each screen came with its
+        service exactly as planned. What went unrecorded is that the list itself
+        had moved on, so a reader taking "four sections" as current would design
+        against a UI that no longer exists.
+
+        Review is per-run rather than per-work because a curator judges a run's
+        output as a set, and a per-work address would make the grid unreachable
+        by URL — the client says so at `DETAIL_VIEWS` and this is that reason,
+        not a second one derived here.
+
+        Run and Review keep the Discovery tab lit for the same reason Work keeps
+        Works lit: a detail view is a place inside a section, and a highlight
+        that went dark on the way in would read as having left it.
+
+        Checkable against the code rather than taken on trust: the five names
+        are the keys of `VIEWS` and the three are the keys of `DETAIL_VIEWS` in
+        `curation/src/curation/http/static/app.js`, with `tab` holding which
+        section stays lit.
+      date: 2026-08-05
   interaction_patterns:
     - decision: >
         State is carried by a glyph and a word before it is carried by colour;
@@ -1922,6 +2081,58 @@ design_decisions:
         The third exists because a failure a curator learns about by noticing a
         colour is a failure that gets missed.
       date: 2026-08-01
+    - decision: >
+        The discovery screens' own patterns. A live run is polled every two
+        seconds and a poll repaints only when the payload changed. A run over
+        the proposal threshold stops and asks, and says that nothing further is
+        spent until the curator decides. Cost is disclosed as two figures — this
+        run, and the family including every re-search — beside searches used
+        against the allowance, and never as a verdict. A candidate card carries
+        its alternates behind a disclosure that fetches when opened. A card with
+        no picture says WHICH kind of pictureless it is, and names no way back
+        when there is none.
+      rationale: >
+        Recorded 2026-08-05. The three patterns above still hold; these are the
+        ones the discovery screens introduced and nobody wrote down.
+
+        The repaint rule is the load-bearing half of the poll, not an
+        optimisation. `render` replaces the whole subtree, so an unchanged
+        repaint destroys whatever the keyboard user was standing on — tabbing to
+        Approve and pausing to read loses the focus two seconds later, every
+        time, on the one screen whose whole job is to be decided on. Compared
+        against the payload rather than the status, because a work list filling
+        in underneath a settled status is exactly the change worth repainting
+        for. A poll generation is claimed at the top of the paint and rechecked
+        after every await, so a superseded paint cannot paint over a later one
+        or leave a second timer beside it.
+
+        The approval gate says what has NOT been spent, because a curator
+        deciding whether to continue is deciding about money, and a gate that
+        only reported the count would leave them guessing at the thing they are
+        actually being asked about.
+
+        Two cost figures rather than one: a run billed little whose re-searches
+        cost ten times more is the case they exist to keep apart. When the
+        family total cannot be computed the absence is said out loud, because a
+        panel showing only this run's spend with nothing to mark the gap is read
+        as the whole cost of having asked. Usage and allowance are shown as two
+        numbers and never as a judgement — the usage is this run's history, the
+        allowance is the deployment's setting as it stands now.
+
+        Alternates load on open rather than with the grid: a thirty-work page
+        would otherwise carry up to twelve instances each, and a curator opens
+        the alternates for the few works whose first answer they doubt.
+
+        The pictureless card is the pattern with the most expensive history.
+        Nothing found and every scan rejected are different states, and reading
+        only "is there a picture" flattened them — telling a curator no scan was
+        found directly above a disclosure listing the scans they had just turned
+        down. It also names no way back, deliberately: a first attempt at the
+        fix invented "Restore one from the scans below", which the product
+        forbids three ways over. The general rule that came out of it is worth
+        more than the case — a sentence in a UI is a claim about what the
+        software can do, and it needs the same verification as any other claim.
+      date: 2026-08-05
   accessibility_approach: >
     Two surfaces with completely different accessibility profiles, and the
     important one is physical.
@@ -1942,6 +2153,24 @@ design_decisions:
     length. The 2024 implementation hardcodes "Sans 18" for a panel geometry that
     is no longer the target, so this needs re-deriving for the 1448x1072 panel
     rather than carrying forward.
+
+    MEASURED ON THE PANEL 2026-08-04, and the headline is that the 16 levels are
+    not the default. omni-epd brings this driver up in 1-bit `bw`, and the obvious
+    sanity check cannot detect it because `max_colors` reports 16 in BOTH modes —
+    only reading `mode` is honest. Every legibility claim above assumes 16 levels,
+    so the driver has to set the mode explicitly and assert on `mode`. The 2024
+    code shows what the trap catches: display.py:41 passes greyscale_bits=1 to an
+    ArtLabel that never uses it, so the wall has been rendering 1-bit type into a
+    1-bit panel with nothing reporting it. Also measured: full-frame draw 1.5-1.9s
+    against the 15s budget (~10x headroom), display() returns None in both modes
+    so exceptions are the only failure signal, and no partial refresh exists on
+    this driver's surface at all — every label change is a full frame.
+
+    Type sizing is still NOT settled. The operator's look narrowed it to roughly
+    mid-20s through low-40s px and killed "Sans 18", but that ladder was rendered
+    with PIL/DejaVu and the product renders with Pango — different rasterizer,
+    different metrics, so the numbers do not transfer. Full measurements in
+    platform-and-dependency-findings.md § The e-paper panel.
 
     The TV surface has no accessibility affordances by deliberate design — it is
     artwork on a wall, and adding overlays would violate the product's core
@@ -2143,6 +2372,24 @@ design_decisions:
 #   priority: high | medium | low
 
 open_questions:
+  - question: "Where does ART_ROOT live on the Pi once the `tvpi` service account exists?"
+    context: >
+      Raised 2026-08-04, deliberately left open when the service-account NAME was
+      decided (see technical_decisions.operational). The committed unit puts the
+      art tree at /home/tvpi/art, inside a home directory that a no-login,
+      no-sudo account has no other use for. A neutral path — /srv/art or
+      /var/lib/samsung-art — matches what the account actually is.
+
+      Deciding it costs nothing today because every reader of that path is
+      already configuration: ART_ROOT in the root .env, which is where the norm
+      against deployment values in source put it. Deciding it LATE costs nothing
+      either, as long as it is decided at the cutover rather than defaulted into
+      by whoever writes the unit file.
+    decide_by: >
+      Chunk 13, with the systemd units. The account, its group memberships, the
+      ART_ROOT move and both unit files are one coherent change; this question is
+      the part of it that is still a choice.
+
   # RESOLVED 2026-08-04 by the operator: option (a) — the health panel does NOT
   # surface `limit_remaining`, in any form. Chunk 19's health-panel half is
   # unblocked and builds without it.
@@ -2624,7 +2871,7 @@ views_enabled: true
 # Do not hand-edit — overwritten on next regen.
 scope_rollups:
   v1-build:
-    chunks: ["01", "02", "03", "04", "05", "06", "07", "07B", "08A", "08B", "09", "10", "10B", "11", "14A", "14B", "15", "16A", "16B", "17A", "17B", "18A", "18B"]
+    chunks: ["01", "02", "03", "04", "05", "06", "07", "07B", "08A", "08B", "09", "10", "10B", "11", "14A", "14B", "15", "16A", "16B", "17A", "17B", "18A", "18B", "19A", "19B", "21", "22", "23"]
     releases: []
 
 # =============================================================================
@@ -2675,11 +2922,17 @@ coverage_required: false
 #   Whitespace-separated test trees for the coverage verifier (default:
 #   `tests`). One verifier run unions discovery across all of them.
 
-# Two independent projects, two interpreters, two suites — both must pass, and
-# the hook must run the real invocations rather than its `sys.executable -m
-# pytest` default, which resolves neither. The curation plane is uv-managed on
-# its own pinned interpreter, so it is reached with `--directory` (shell
-# operators are unsupported here, and `cd` is a shell operator).
+# Three independent projects, three interpreters, two suites — both of the two
+# must pass, and the hook must run the real invocations rather than its
+# `sys.executable -m pytest` default, which resolves neither. The curation plane
+# is uv-managed on its own pinned interpreter, so it is reached with `--directory`
+# (shell operators are unsupported here, and `cd` is a shell operator).
+#
+# The display plane is deliberately absent rather than forgotten: it holds a
+# project manifest and no module, so its pytest would collect nothing and exit 5
+# — neither a pass nor a failure. A declared command that cannot fail is worse
+# than an absent one, so its entry lands with the commit that writes its first
+# module. Same commit, same reason, as the plane-isolation test.
 test_commands:
   - uv run pytest tests --junit-xml={junit_xml} -q
   - uv run --directory curation pytest --junit-xml={junit_xml} -q
@@ -2739,7 +2992,7 @@ api_versioning_decided: "none — no version negotiation. MCP tool names frozen,
 # backlog_prefixes: []
 # backlog_external_imports: []
 
-backlog_last_groomed_at: 2026-08-04
+backlog_last_groomed_at: 2026-08-05
 
 # -----------------------------------------------------------------------------
 # BACKLOG SERVICE CUTOVER (API §2.4)

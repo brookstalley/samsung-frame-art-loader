@@ -7,7 +7,6 @@ the mounted MCP server work. A test that skipped it would pass against an
 application that fails every request in production.
 """
 
-import socket
 import struct
 import threading
 import time
@@ -35,12 +34,14 @@ from curation.config import (
     DEFAULT_MAT_WIDTH_INCHES,
     DEFAULT_MAX_IMAGE_BYTES,
     DEFAULT_MIN_FREE_BYTES,
+    DEFAULT_OFFERED_WORKS_PER_RUN,
     DEFAULT_OUTPUT_COST_USD_PER_MTOK,
     DEFAULT_PHASE1_INPUT_TOKENS,
     DEFAULT_PHASE1_OUTPUT_TOKENS,
     DEFAULT_PHASE1_SEARCH_ALLOWANCE,
     DEFAULT_PHASE2_SEARCHES_PER_WORK,
     DEFAULT_PORT,
+    DEFAULT_PREVIEW_MAX_BYTES,
     DEFAULT_PREVIEW_SWEEP_INTERVAL_SECONDS,
     DEFAULT_RESOLUTION_FLOOR_INCHES,
     DEFAULT_ROTATION_INTERVAL_SECONDS,
@@ -107,11 +108,14 @@ def discovery_store(catalogue_file: SqliteDurableStore) -> SqliteDiscovery:
 def settings(tmp_path) -> Settings:
     """The deployment values a test runs against, over a scratch art tree.
 
-    Constructed rather than read from the environment: `Settings.from_env` loads
-    `.env` with override, so a test that went through it would run against
-    whatever the developer's machine happens to hold — and would pass or fail
-    depending on it. Every value is the shipped default, so a test's geometry is
-    the geometry a fresh deployment gets.
+    Constructed rather than read from the environment: `Settings.from_env`
+    resolves a real `.env` from the config module's own directory upward, so a
+    test that went through it would run against whatever the developer's machine
+    happens to hold — and would pass or fail depending on it. (That is true of
+    every name the environment does not already carry, and stayed true when the
+    2026-08-05 precedence fix stopped the file beating names it does.) Every
+    value here is the shipped default, so a test's geometry is the geometry a
+    fresh deployment gets.
     """
     return Settings(
         art_root=tmp_path,
@@ -126,6 +130,7 @@ def settings(tmp_path) -> Settings:
         tile_timeout_seconds=DEFAULT_TILE_TIMEOUT_SECONDS,
         max_image_bytes=DEFAULT_MAX_IMAGE_BYTES,
         min_free_bytes=DEFAULT_MIN_FREE_BYTES,
+        preview_max_bytes=DEFAULT_PREVIEW_MAX_BYTES,
         rotation_interval_seconds=DEFAULT_ROTATION_INTERVAL_SECONDS,
         rotation_shuffle=DEFAULT_ROTATION_SHUFFLE,
         preview_sweep_interval_seconds=DEFAULT_PREVIEW_SWEEP_INTERVAL_SECONDS,
@@ -138,6 +143,7 @@ def settings(tmp_path) -> Settings:
         approval_threshold=DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
         phase1_search_allowance=DEFAULT_PHASE1_SEARCH_ALLOWANCE,
         phase2_searches_per_work=DEFAULT_PHASE2_SEARCHES_PER_WORK,
+        offered_works_per_run=DEFAULT_OFFERED_WORKS_PER_RUN,
         search_cost_usd=Decimal(DEFAULT_SEARCH_COST_USD),
         input_cost_usd_per_mtok=Decimal(DEFAULT_INPUT_COST_USD_PER_MTOK),
         output_cost_usd_per_mtok=Decimal(DEFAULT_OUTPUT_COST_USD_PER_MTOK),
@@ -191,7 +197,7 @@ def services(
     engine: FakeEngine,
 ) -> Services:
     """Every service, wired the way the entry point wires them."""
-    return Services.bind(
+    bound = Services.bind(
         catalogue=store,
         discovery=discovery_store,
         wall=wall,
@@ -213,7 +219,27 @@ def services(
             panel_height=settings.tv_panel_height_px,
             box=settings.tv_artwork_box,
         ),
+        # A museum source records the object's page; the tile fetcher needs the
+        # image service, and only the provider can say where that is. Wired here
+        # even though these tests configure no image *search*, because a catalogue
+        # holding artic works and a deployment able to fetch them is a real
+        # arrangement — and without it every such fetch refuses before reaching
+        # the code the test is about.
+        tile_targets={"artic": lambda url: f"https://www.artic.edu/iiif/2/{abs(hash(url)) % 100000}"},
+        # Stated rather than looked up, for every test that reaches acquisition. A
+        # suite whose job is to be green cannot depend on the network — pyproject
+        # says so and deselects the tests that deliberately do. Without this the
+        # fetch policy resolves real hostnames, so a machine with no DNS fails tests
+        # about wiring, and one with hostile DNS could pass them for the wrong reason.
+        #
+        # Passed through the container rather than assigned onto the built service.
+        # It was `bound.acquisition._resolve = …` until 2026-08-04, and a private
+        # attribute written from outside is a guard that disarms in silence: rename
+        # it and every acquisition test starts resolving real hostnames again with
+        # nothing failing to say so.
+        resolve=lambda _host: ["93.184.216.34"],
     )
+    return bound
 
 
 @pytest.fixture
@@ -314,9 +340,19 @@ def seeded_service(service: CatalogueService) -> CatalogueService:
 
 @pytest.fixture
 def server_url(services: Services, seeded_service: CatalogueService) -> Iterator[str]:
-    """A real HTTP server on an ephemeral port, serving the real application."""
+    """A real HTTP server on an ephemeral port, serving the real application.
+
+    **uvicorn is asked for port 0 and the port is read back from the socket it
+    actually bound.** The obvious alternative — claim a port from the OS, close
+    it, and hand uvicorn the number — has a window between the close and
+    uvicorn's bind in which anything else on the machine can take it. That window
+    is nearly harmless when one suite runs alone and is a live race the moment
+    tests run in parallel, because every worker boots servers continuously and
+    they draw from the same ephemeral range. Reading the port back is a little
+    more to know about uvicorn and has no window at all.
+    """
     app = create_app(services)
-    config = uvicorn.Config(app, host="127.0.0.1", port=_free_port(), log_level="warning")
+    config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="warning")
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, daemon=True)
     thread.start()
@@ -328,8 +364,13 @@ def server_url(services: Services, seeded_service: CatalogueService) -> Iterator
             pytest.fail("the curation server did not start within 20 seconds")
         time.sleep(0.02)
 
+    # Only valid once `started` is set — that is what puts the bound sockets on
+    # the server — which is why this reads after the wait rather than beside the
+    # config above.
+    port = server.servers[0].sockets[0].getsockname()[1]
+
     try:
-        yield f"http://{config.host}:{config.port}"
+        yield f"http://{config.host}:{port}"
     finally:
         server.should_exit = True
         thread.join(timeout=20)
@@ -396,17 +437,6 @@ def decodable_jpeg():
         return path
 
     return _write
-
-
-def _free_port() -> int:
-    """Claim a port from the OS and hand it straight to uvicorn.
-
-    uvicorn can bind port 0 itself, but then the chosen port is only readable
-    through its internal socket list. Asking first is less to know about.
-    """
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        return probe.getsockname()[1]
 
 
 @pytest.fixture

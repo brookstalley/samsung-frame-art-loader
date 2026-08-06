@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from curation.http.pages import STATIC_DIR
+from curation.persistence.discovery_records import ResolutionStatus, Verdict, WorkProvenance
 from curation.persistence.records import ArtworkStatus
 from curation.services.display_fit import DisplayFit
 
@@ -162,31 +163,80 @@ def test_the_rules_that_check_was_run_against_are_most_of_the_stylesheet():
         assert selector in COMPONENT_RULES, f"{selector} is not in the text the colour check reads"
 
 
-def test_every_state_a_badge_can_carry_has_a_block_of_its_own():
+#: Every axis a badge expresses, as the states one badge slot chooses between.
+#:
+#: **Derived from the enums, not written out.** A hardcoded tuple is complete on
+#: the day it is typed and cannot fail in the direction these tests exist to
+#: catch: a state added to the client with no block of its own leaves the tuple
+#: untouched and the suite green, because the guard's scope would be the tuple
+#: rather than what the client can emit. Every enum here is closed by its own
+#: docstring, so growing one is exactly the event that should turn this red.
+#:
+#: The ordinary case of an axis is excluded wherever the client draws no badge
+#: for it — `accepted` on catalogue status, `proposed` on provenance, `pending`
+#: on the verdict. The absence is how that case is shown, and a badge on every
+#: card makes the states that matter harder to pick out rather than easier.
+#:
+#: Grouped by axis rather than pooled, because "no two look alike" is only true
+#: *within* one. `.badge-native` and `.badge-resolved` are deliberately identical
+#: rules: they are the unremarkable state of two unrelated judgements, they never
+#: occupy the same slot, and the word inside each badge is what tells them apart.
+BADGE_AXES = {
+    #: `unknown` is the client's own state for a work with no fit verdict, and it
+    #: belongs to no enum — which is why it is a literal.
+    "display fit": [str(fit) for fit in DisplayFit] + ["unknown"],
+    "catalogue status": [str(status) for status in ArtworkStatus if status is not ArtworkStatus.ACCEPTED],
+    "provenance": [str(provenance) for provenance in WorkProvenance if provenance is not WorkProvenance.PROPOSED],
+    #: `resolutionBadge` writes `badge-${resolution_status}`. Without this row a
+    #: sixth `ResolutionStatus` is forced by `test_client_vocabulary.py` to supply
+    #: a glyph and a sentence, gets no signal that a block is owed, and falls
+    #: through to the base `.badge` — which is `border: 1px solid`, pixel-identical
+    #: to `.badge-resolved`. Two states of one axis then paint alike.
+    "resolution": [str(status) for status in ResolutionStatus],
+    #: The axis the accessibility decision names outright: "accept/reject in a
+    #: candidate grid needs a non-colour indicator".
+    "verdict": [str(verdict) for verdict in Verdict if verdict is not Verdict.PENDING],
+    #: States of an image instance rather than of a work, and the client's own —
+    #: the scan a verdict would accept on, and one already turned down. They sit
+    #: side by side on an alternate's row.
+    "instance": ["on_offer", "refused"],
+}
+
+
+@pytest.mark.parametrize("axis", sorted(BADGE_AXES))
+def test_every_state_a_badge_can_carry_has_a_block_of_its_own(axis):
     """Two states sharing a class paint identically and drift together.
 
     An archived work and a below-floor work are unrelated judgements — one is
     catalogue status, the other is display fit — so a colour change intended for
     one must not silently reach the other.
-
-    **The list is derived from the enums, not written out here.** A hardcoded
-    tuple is complete on the day it is typed and cannot fail in the direction
-    this test exists to catch: a state added to the client with no block of its
-    own leaves the tuple untouched and the suite green, because the guard's scope
-    would be the tuple rather than what the client can emit. Both enums are
-    closed by their own docstrings, so growing one is exactly the event that
-    should turn this red.
     """
-    #: `accepted` is excluded because `statusBadge` returns null for it — the
-    #: absence of a badge is how the ordinary case is shown. `unknown` is the
-    #: client's own state for a work with no fit verdict and belongs to no enum,
-    #: which is why it is the one literal here.
-    states = [str(fit) for fit in DisplayFit]
-    states += [str(status) for status in ArtworkStatus if status is not ArtworkStatus.ACCEPTED]
-    states += ["unknown"]
-
-    for state in states:
+    for state in BADGE_AXES[axis]:
         assert f".badge-{state}" in COMPONENT_RULES, f"the {state} badge has no block of its own"
+
+
+@pytest.mark.parametrize("axis", sorted(BADGE_AXES))
+def test_no_two_states_of_one_axis_are_pixel_identical(axis):
+    """A block of its own is not the same thing as a look of its own.
+
+    The guard above is satisfied by an empty rule, and an empty rule paints
+    exactly like the base `.badge`. That is not hypothetical on this surface: the
+    accessibility decision requires accept and reject to be told apart *without*
+    colour, so the two must differ in border, weight or fill — and a block
+    copy-pasted for a new verdict, with only the selector changed, would pass
+    every other check here while making a rejection look like an acceptance in
+    greyscale.
+    """
+    seen = {}
+    for state in BADGE_AXES[axis]:
+        match = re.search(rf"\.badge-{re.escape(state)}\s*\{{([^}}]*)\}}", COMPONENT_RULES)
+        assert match, f".badge-{state} has no block"
+        #: Declarations as a set, so reordering them is not a difference.
+        declarations = frozenset(part.strip() for part in match.group(1).split(";") if part.strip())
+        assert declarations, f".badge-{state} is an empty block, which paints as the base badge"
+        clash = seen.get(declarations)
+        assert clash is None, f"{axis}: .badge-{state} and .badge-{clash} are pixel-identical"
+        seen[declarations] = state
 
 
 def test_the_stylesheet_the_test_read_is_the_one_the_server_serves():

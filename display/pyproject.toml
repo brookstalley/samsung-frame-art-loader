@@ -1,0 +1,125 @@
+[project]
+name = "display"
+version = "0.1.0"
+description = "Display plane — reads the theme manifest, drives the television, owns this device's own state."
+# **The plane whose version is pinned by hardware, and the reason the two planes
+# are sibling uv projects rather than one workspace.** Raspberry Pi OS Trixie
+# ships 3.13, and the IT8951 e-paper driver compiles Cython from 2023 sources
+# targeting 3.13/3.12 — verified building and importing on 3.13/aarch64 under
+# uv's PEP 517 isolation, 2026-08-04. The curation plane declares `>=3.14`, and a
+# workspace mixing that with this floor refuses to lock at all.
+#
+# 3.12 is a floor, not a fallback anyone expects to need. It is declared because
+# nothing here requires 3.13, and a floor that matches what the code actually
+# uses is the one that stays true.
+requires-python = ">=3.12"
+dependencies = [
+    # **NOT the PyPI package of the same name, and not interchangeable with it.**
+    # PyPI `samsungtvws` ships a synchronous art client only — no `async_art`
+    # module and no event callbacks — and this plane is built on both. The fork
+    # declares the same version string (3.0.5) as the release, so `pip list`
+    # cannot tell them apart and a well-meant "upgrade" fails at import rather
+    # than loudly. Pinned to the commit verified against the live television.
+    "samsungtvws @ git+https://github.com/NickWaterton/samsung-tv-ws-api.git@fe95ef1d784cd32f49bf9a07ec479576574eea07",
+    # Floor of 13.0 is set by what the fork above *imports*, not by what it
+    # declares. It declares `>=10.2` and imports `websockets.asyncio.client` and
+    # `websockets.protocol.State`, neither of which exists before 13.0 — so a
+    # resolve honouring the declared floor installs cleanly and fails at import.
+    # A declared floor is a claim; what a package imports is the constraint.
+    "websockets>=13",
+    # The wall's daily rhythm: television brightness follows the sun's position
+    # rather than the clock, so a winter afternoon and a summer evening are not
+    # given the same panel.
+    "astral",
+    # The local zone the sun position is computed in.
+    "tzlocal",
+    "python-dotenv",
+]
+
+# Deliberately absent, and each for a reason worth stating rather than
+# rediscovering:
+#
+#   omni_epd, pycairo, PyGObject — the e-paper label panel and its text
+#     rendering. They arrive with the chunk that renders the label, because this
+#     plane drives the television before it drives the panel and a dependency
+#     declared ahead of the code that imports it is one nobody can check.
+#
+#     **That rule is suspended above for `astral` and `tzlocal`, and knowingly.**
+#     Every declared entry lands before the module importing it, since this
+#     manifest ships ahead of the plane's first module — but the other three
+#     answer for themselves and these two do not. `samsungtvws` and
+#     `websockets>=13` are pinned against a television they were measured on,
+#     which is what the lock exists to hold; `python-dotenv` is inert. `astral`
+#     and `tzlocal` serve the sun-position brightness port, which the build plan
+#     records as an open assumption the operator may defer — so if it is
+#     deferred, these are locked entries nothing imports and nothing will prompt
+#     anyone to notice. They are cheap and pure-Python, which is why they were
+#     let through rather than held; the cost of being wrong is two unused rows in
+#     the lock, against the panel group's compiled toolchain.
+#
+#   pillow — nothing here decodes an image. The television is handed a *path*
+#     and streams the file itself; composing the canvas is the curation plane's
+#     job and its output crosses as a file, not as pixels.
+#
+#   Any HTTP client. This is not an omission — it is the norm: the theme manifest
+#     file is the only channel from curation to display. The television websocket
+#     is the exemption, because talking to the television is this plane's whole
+#     job.
+#
+#     **Nothing enforces that mechanically yet, and this comment must not claim
+#     otherwise.** `tests/preferences/test_plane_isolation.py` is owed and does
+#     not exist; it is a deliverable of the chunk creating this plane and has to
+#     arrive WITH the first module here, because a check written over an empty
+#     package passes vacuously and a green suite is exactly what a violation
+#     looks like without it. Until then the norm is held by Critic judgement
+#     alone — see `project-preferences.md` § Enforcement, which retracted this
+#     same claim about this same path on 2026-08-01 and keeps it as the repo's
+#     cautionary example. An earlier draft of this file wrote it a second time.
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+    "black>=24",
+]
+
+[tool.uv]
+# **This plane is an application, not a distributable, and saying so is what makes
+# `uv run` work here at all.** Without it uv builds the project before running
+# anything, and the build fails twice over: hatchling refuses the git-sourced
+# `samsungtvws` above as a direct reference, and there is no package directory for
+# it to put in a wheel. Both failures land before ruff or black sees a file — so
+# the lint and format commands documented for this plane did not run against an
+# empty tree, they did not run at all.
+#
+# Nothing here is ever installed by another project: the display plane is started
+# by a systemd unit against this directory. Neither sibling needs this line —
+# both really are packages.
+package = false
+
+[tool.black]
+# The floor rather than the target: formatting that only parses on 3.13 would
+# break the 3.12 this plane declares it supports.
+target-version = ["py312"]
+line-length = 130
+
+[tool.ruff]
+line-length = 130
+target-version = "py312"
+
+[tool.ruff.lint]
+# The same strict set the curation plane carries, and for the same reason: this
+# is new code with no legacy carve-out, so every rule applies to all of it.
+# `T20` matters more here than anywhere else in the repo — this plane runs
+# unattended on a Pi under systemd, where a `print()` has no level and no
+# timestamp and a failure is invisible in the journal.
+select = ["E", "F", "I", "UP", "B", "T20", "TRY", "ANN"]
+ignore = ["TRY003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ANN"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

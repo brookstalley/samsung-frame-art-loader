@@ -479,6 +479,10 @@ they test the outcome rather than the transformation.
 
 ## An idempotence test that holds the inputs still tests the wrong half
 
+## A backlog item's body is evidence about the day it was written — re-verify each item against the current tree before acting on it, because closed work goes on looking open, and a thorough body makes re-verification cheap rather than unnecessary
+
+## A guard that lives only in code scheduled for deletion leaves with it — when fixing a defect in a retiring module, fix the surviving replacement too even where it is currently unreachable, because the reachability argument is about today and the deletion is about the code that stays
+
 ## Adding code to a repo means asking which guards were scoped to the old shape
 
 ## Prose explaining a distinction is not a mechanism recording it
@@ -911,3 +915,38 @@ filenames encode identity in at least three mutually inconsistent conventions
 ## A decision that DESCOPES something has to be walked back through every artifact that promised it — the promising artifacts are never the one you are editing when you make the call
 
 ## When a chunk is parked behind access it does not have, check which of its DEPENDENCIES actually need that access — a dependency inherits the parking by adjacency rather than by need, and one that gates the parked work is the cheapest thing to take early
+
+## A claim about a live machine's current state decays silently — read the machine, never a comment that describes it, because when shell access is available the check costs one command and the assertion costs a wrong plan
+
+## A sweep grep built from the text you just wrote searches for your own vocabulary — when retiring a claim, run the second pass with a pattern the OLD text would have produced, because the phrasings the diff removed are exactly the ones the new phrasings cannot match
+
+## Reachability of an enum value is a property of the paths that ARRIVE at it, not of the site that looks most likely to set it — search for a route, never reason from one write site, or a value gets ruled out while a test covering its real path already passes
+
+## A guard evaluated inside the filters it guards can manufacture the confidence it exists to withhold — range a safety check over the population the HAZARD lives in, never the narrowed one the feature reads, because the filter that makes the feature correct is the one that can hide the colliding case
+
+## A computed value with no production reader is an unimplemented requirement — before calling a "report X separately" requirement done, grep the symbol and check that a caller outside `tests/` exists, because a property with tests and no consumer looks finished from inside and changes nothing a user sees
+
+## A generated block's stale-looking state is evidence about the generator, not a defect to tidy — when a checkbox, index or table looks wrong, find what writes it before editing it, because hand-fixing derived output desynchronises it from its source and destroys the signal that something upstream is unset
+
+## Closing a gap means sweeping the artifacts that assert the gap is open — grep for the absence you just removed, not only for the thing you just added, because a document saying "there is no X" reads as current guidance and sends the next builder to rebuild the debt you just paid
+
+## Two verification passes that agree can both be vacuous — when a result is one you cannot derive, run the smallest thing that reproduces it by hand before believing either, because agreement between two runs of the same broken instrument is not corroboration
+
+## A pytest exit code that is neither 0 nor 1 is not a verdict — any tool reading `returncode != 0` as "the test caught it" reports success for a run that collected nothing, and every opt-in marker in this repo makes that the DEFAULT outcome of naming such a test on the command line
+
+## Running a generator tells you what it will DO, not whether its input is right — when derived output looks wrong, ask the generator AND then check the source tag against how every prior instance was tagged, because "no tag" reads identically as a deliberate state and as a missing one
+
+## A sentence a UI shows is a claim about what the software can do, and needs the same verification as a docstring's claim about a guard — before writing "do X to fix this", grep for the endpoint and the control that would let a user do X, because the wording ships as a promise and a mutation check cannot tell a reachable assertion from a true one
+## A docstring's safety argument is a claim about the code beside it — when a comment names a failure mode as unacceptable, the next thing written is the test proving it cannot happen, derived from the DOCSTRING rather than the diff, because stating a danger reads as defending against it and a mutation sweep only asks whether the lines you wrote are defended
+
+## Two redundant defences look exactly like two undefended branches in a mutation sweep — when a survivor surprises you on a line you believe is load-bearing, check whether a SIBLING guard rescues the same input before writing anything, because the fix is a case per guard that the other cannot rescue, not a broader test
+
+## A bug report's stated CAUSE is a hypothesis, held to the same standard of proof as its symptom — run the cheapest experiment that could refute it before building on it, because the symptom was observed while the cause was reasoned, and both get recorded in artifacts as though they were observed
+
+## A grep that retires a claim must be scoped by the repository, never by the file type you found it in — run it with no `--include` and filter by eye, or state the scope you searched beside the claim you retired, because a scoped search is indistinguishable from an exhaustive one in its output
+
+## A defect class found in one module is a question to ask of every module the same commit touches — grep the diff for the shape you just fixed before committing, because the fix is the cheapest moment to notice the sibling and having just fixed "this must never raise" does not prompt "can what I just wrote raise?"
+
+## When a comment names a SYMBOL as the source of truth for a set, derive the test's inputs from that symbol — parametrise over the tuple/enum/registry the prose points at rather than retyping its members, because a hand-copied list makes the invariant true only for the members that existed when it was written, and the failure of the one added later is exactly the silent outcome the comment was warning about
+
+## A test rewritten to accommodate a change needs the mutation check MORE than a new test does — after adjusting an assertion that your own change turned red, re-break the thing the test originally caught and confirm it still fails, because the pressure is to make it pass and the cheapest way to do that is to drop the assertion that was doing the work

@@ -10,6 +10,290 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The review half — the grid, its alternates, the panel — added 2026-08-05
+
+**What to look at.** The review grid reached from a finished run ("Review these
+works"), the alternates behind a card, and the Health tab. This is the screen a
+curator spends their session in, and the tests hold that every figure on it is
+right; what they cannot hold is whether judging thirty paintings on it is
+pleasant or a chore.
+
+**Free to look at if a run already exists**, which it will if you looked at the
+run half. Nothing on this screen spends — accepting, rejecting and choosing a
+scan are all local — with one exception named on the screen itself: "Look again
+for these" starts a re-search, which does spend.
+
+```sh
+cd curation
+uv run python -m curation
+# then open the CURATION_PORT from .env — http://127.0.0.1:8770/ as shipped
+# → Discovery → open a finished run → "Review these works"
+```
+
+**Specific things worth an opinion, because each was a judgement call:**
+
+1. **The alternates are a disclosure on the card, not a screen of their own.**
+   The choice is between the picture on the card and the ones behind it, and a
+   curator who had to navigate away would be choosing from memory. The cost is
+   that opening one pushes every card below it down the page. A side panel or a
+   modal would trade differently.
+2. **A "Why (optional)" field on every card.** It is what makes a rejection say
+   *why* — a studio copy rather than merely "no" — and it is also a text input on
+   thirty cards, which is a lot of furniture. It could be revealed only when
+   Reject is pressed, at the cost of a second click on the commonest path.
+3. **A work whose every scan is below the floor still shows a picture**, with a
+   note saying accepting will be refused until a scan is chosen. The alternative
+   — hiding it — is the one thing the contract forbids, but the note is doing
+   real work and it may not be doing enough of it.
+4. **The health panel prints the display plane's reported document as raw
+   key/value rows.** Nothing writes one yet, so today it is invisible; it will
+   read machine-ish when Chunk 13 lands. Deliberate — only `reported_at` is
+   contract, so naming the other fields here would invent a second one — but if
+   it reads badly in practice that is worth knowing before the writer exists.
+5. **Backup age says "No backup has recorded itself here"**, permanently, until
+   Chunk 20. It is a true observation and the panel's whole contract is stating
+   those. Say if it reads as a defect rather than as a fact.
+
+**The operator walked this on 2026-08-05.** Against a corpus of 40 accepted works
+— all rendered for the first time that day — and the 19-work Dali run. Findings
+below; each was checked against the code or the catalogue before being written
+down, and which ones are defects rather than preferences is stated rather than
+left to the reader.
+
+*On the five questions above:* only **#5** was answered — the backup line reads as
+a fact, not a defect, and stays. #4 was not reachable (nothing writes a heartbeat
+yet, so the panel shows the absence sentence rather than the key/value rows the
+question is about); re-ask it when Chunk 13 lands. #1 was answered *against* the
+current design, by #C below. #2 and #3 went unremarked.
+
+**Confirmed defects — verified, not merely reported:**
+
+- **A. `Other scans (N)` counts the scan already on the card.** The disclosure is
+  labelled from `instances_held`, which is every instance the work holds
+  *including the one pictured above it*. Every work in the Dali run holds exactly
+  one, so nineteen cards invite a curator to open "Other scans (1)" and find
+  nothing they had not already seen. The operator guessed this from the screen and
+  the catalogue confirms it: one instance per work, and it is the selected one.
+  Either the count drops the shown instance or the label stops saying "other" —
+  and the two are not equivalent, because a curator uses the number to decide
+  whether opening it is worth the scroll.
+
+- **B. Seven `proposed_title` values are corrupted, and it is the data, not the
+  rendering.** They end mid-citation on a dangling open parenthesis — *"The
+  Persistence of Memory (1931) - cited from blog.artsper.com ("*.
+
+  **Fixed 2026-08-05, and the cause was ours rather than the model's.** This
+  entry first read "nothing in this codebase truncates a title, so phase 1's
+  model emitted them this way", which was wrong: `clean_name` did it. The model
+  wrote an ordinary bare citation — `- cited from blog.artsper.com
+  (https://blog.artsper.com/en/a-closer-look/dali/)` — and the rule that strips a
+  URL was greedy to the next space, so it ate the bracket that *closed* the
+  citation and left the one that opened it. Feeding that exact string to
+  `clean_name` reproduced the stored value character for character. The
+  hypothesis was checkable in one command and was not checked before it was
+  written down.
+
+  **The visible half was the smaller half.** `work_dedup_key` is derived from the
+  same cleaned title, so each of the seven keyed as a different painting from the
+  same work proposed cleanly — a rejection would not have suppressed the work it
+  was about, silently, which is the failure a curator cannot see. Both halves are
+  repaired at startup and both are pinned by tests.
+
+**Requirements the walkthrough surfaced — none of them designed here:**
+
+- **C. The alternates disclosure is unusable in a grid column.** This answers
+  question #1 above with a failure rather than an opinion: expanding "other scans"
+  crams the alternates into the narrow column the card occupies. The disclosure
+  shape is the problem, not its contents.
+
+- **D. An accepted work should be pictured as it will hang** — the composed
+  render, mat and mat colour included, rather than the bare image. The preview a
+  curator judges by should be the thing the television shows.
+
+- **E. Mat colour has no control on any human surface.** `set_mat` and
+  `choose_mat` exist as services and as MCP tools, so an agent can do what a
+  curator cannot. What is asked for is re-running the AI choice, plus one-press
+  black and one-press off-white — the two neutrals a curator reaches for without
+  wanting a judgement made about them.
+
+- **F. The run table should show a thumbnail where it says "has an image".** *(Open — issue #92, re-scoped S -> M on 2026-08-06; the run view's rows carry no instance reference, so the thumbnail needs a payload decision. The words it quotes now read "the run found an image", per issue #99.)* On
+  the run detail view the Image column renders the words `has an image`; the
+  review grid beside it shows the picture. A curator scanning a run is asking
+  *which* image, and the answer is already on disk.
+
+- **G. "Where it came from" is not understood.** *(Resolved 2026-08-06, issue
+  #93.)* It headed the run table's provenance column and meant *how this row
+  entered the run* — asked for by the model, or offered by the collection on top.
+  In an art catalogue that phrase reads as the work's own provenance, which
+  museum holds it.
+
+  **The column is gone rather than renamed**, which is a correction to the
+  sentence above: it was *not* "doing necessary work" on that screen. The
+  offered/asked-for distinction is necessary, and this table was its fourth
+  statement — after the tally's separate counts, the run sentence, and the line
+  directly above the rows. What the per-row badge added was which *particular*
+  work was offered, on a screen where nothing is decided per work. The badge
+  stays on the review card, where the deciding happens.
+
+- **H. A per-work preview of the e-paper card** would be welcome once that card
+  exists. Depends on Chunk 13; recorded here so it is not rediscovered.
+
+- **I. The offered-work sentence contradicts the screen it is printed on.** Every
+  offered card reads *"…an artist this run named but could not confirm a work
+  for"*, while seven works the run named for that same artist sit on the same
+  page. The Dali run holds 7 `proposed` and 12 `offered`; the seven are real
+  proposals — *The Persistence of Memory*, *Lobster Telephone*, *Metamorphosis of
+  Narcissus* and four more — and each is badged `not held`. So the sentence is
+  true only under a narrow reading of *confirm* ("resolved to a work the
+  collection holds"), and nothing on the screen teaches that reading. The
+  operator's objection was that the works say "Salvador Dalí" right underneath;
+  the sharper version is that the run demonstrably *did* name works for the
+  artist, and the sentence appears to deny it.
+
+  `_offer_rationale`'s docstring anticipates the near miss — it notes the artist
+  named is the run's spelling while the work carries the collection's own
+  attribution — so the collision was seen from the writing end and judged
+  survivable. Seen from the reading end, on a page carrying both halves at once,
+  it is not.
+
+  **A second unexplained number sits beside it.** The sentence says *"one of 25
+  works it holds"* and twelve cards appear, because `offered_works_per_run` caps
+  the offer at twelve. Each number is honest alone; together, and split across
+  two views, they invite a curator to go looking for thirteen missing works. Any
+  rewording should carry the cap or drop the total.
+
+  Repetition compounds all of it: this is one identical 30-word sentence printed
+  twelve times down a single page, carrying per-*group* information on a per-card
+  line.
+
+## Decisions taken during the 2026-08-05 walkthrough
+
+**The mat policy, settled with the operator against the corpus rather than in the
+abstract.** Recorded here because it changes what item **E** above asks for, and a
+reader finding E alone would build the wrong thing.
+
+- **Every work always has a mat**, and the non-AI default is the **existing
+  dominant-colour derivation** (Pillow median-cut), not off-white. Off-white was
+  the operator's opening proposal and was withdrawn on evidence: the 41 hand-tuned
+  2024 mats run L\* 6.7–45.2 with a median of 20.7, `nonfunctional-requirements.md`
+  § Output Quality makes that corpus the regression bar, and
+  `test_mat_corpus.py`'s `CORPUS_MAX_LIGHTNESS = 50.0` enforces it. The named
+  failure mode — a pale work competing with a lighter mat — is the reason the bar
+  exists. The mechanical fallback is free, deterministic, already built, and lands
+  in the region the corpus occupies.
+- **Black and off-white become presets a curator presses**, so choosing one is a
+  judgement someone made rather than something applied silently to forty works.
+- **The AI becomes an opt-in button that offers several candidate colours** shown
+  against the work, with nothing applied until the curator picks one. The current
+  choice stays current until then. This makes the spend buy options rather than a
+  fait accompli, and it is the control that must say on itself that it spends.
+- **Existing mats are never overwritten** — already true today and not a change:
+  `prepare(force=True)` re-renders without re-choosing, and `mat_colors` keeps
+  every choice with one marked current.
+- **Consequence to retire deliberately:** a guaranteed default means the
+  `NO_MAT_COLOR` exclusion can never fire again, so that branch and its reason
+  become dead and should be removed rather than left looking live.
+
+### The run half of the browser surface — added 2026-08-05
+
+**What to look at.** The Discovery tab: entering an intent with the estimate
+beside the field, the approval gate, and the run view while a run is working and
+after it has finished. The tests hold that every figure is correct; what they
+cannot hold is whether the screen makes the decision it is asking for an easy one.
+
+**This look costs money, and here is exactly how much.** A real run spends about
+**$0.013** — the phase-1 model call plus its search allowance. Everything except
+starting a run is free to look at: the estimate, the run list, and any run
+already in the catalogue. If you would rather not spend, the first two are still
+worth an opinion and the third can be read against a run from an earlier session.
+
+```sh
+cd curation
+uv run python -m curation
+# then open the CURATION_PORT from .env — http://127.0.0.1:8770/ as shipped
+# → the Discovery tab
+```
+
+Without `OPENROUTER_API_KEY` set, starting a run is refused with a sentence
+saying why, which is itself worth seeing once — it is the first thing a fresh
+deployment does.
+
+**Specific things worth an opinion, because each was a judgement call:**
+
+1. **The estimate sits above the button, not beside the result.** It reads
+   "Asking costs at most $0.01336. One model call plus up to 10 web searches,
+   which is the most phase 1 may use. Bounded, not typical." A ceiling rather
+   than a typical figure, because a run may use the whole allowance. Two
+   opinions wanted: does a bound read as reassuring or as evasive, and are five
+   decimal places on a hundredth of a dollar precision or noise? The figure is a
+   `Decimal` for good reasons and rendering fewer digits is a display choice
+   nothing else depends on.
+2. **A second estimate appears at the approval gate**, because that is where the
+   phase-2 decision is actually made. It reads "Approving costs $0. Resolving
+   the N works this run proposed. Phase 2 asks museum APIs, which are free, and
+   identifies works locally — so approving this run spends nothing further. The
+   gate is on the work count, not the price." The basis is doing the work there;
+   a bare "$0" beside an approve button would invite reading the gate as being
+   about money.
+3. **Two badges per work: where it came from, and whether it got an image.**
+   Offered works — the ones a wired collection volunteered rather than ones the
+   model named — carry a 2px dashed border and the word "offered", against the
+   plain border and "asked for" of the rest. The whole design rests on a curator
+   seeing that difference *without reading*, because accepting an offered work
+   believing you asked for it is the failure this labelling exists to prevent.
+   Can you? Two badges sit in one cell and this is the densest thing on the
+   screen; if it reads as clutter, say so.
+4. **An unresolved work's reason is a badge with the sentence in its tooltip.**
+   "too small", "wrong artist", "not held". Only "not held" suggests the work may
+   not exist. Is the short word enough on its own, or does the distinction that
+   matters need to be on the page rather than on hover? A tooltip is invisible on
+   a touch screen and to anyone not hunting for it, which is the argument against
+   the current choice.
+5. **The page polls every two seconds and stops when the run ends.** Watch a run
+   from `resolving_works` through to a terminal state. Does it feel live, or does
+   it feel like it is doing nothing? Two seconds was chosen against a Pi's
+   modesty, not measured against a curator's patience.
+
+   **A test makes this check now, and it is still worth making by hand once.**
+   On a run sitting at the approval gate, press Tab until "Approve the list" has
+   the focus ring, then take your hands off the keyboard for ten seconds and
+   press Enter. It must approve. A repaint on each poll would have thrown the
+   focus away silently, so what you are checking is that the page leaves the DOM
+   alone when nothing about the run changed. Do the same on a run that *is*
+   changing — focus will legitimately move there, and that is the cost of the
+   view being live.
+
+   **What covers this, corrected 2026-08-05.** This paragraph used to read "the
+   client has no test runner … none of them is executed by a test", and invited
+   reopening that trade if the surface kept growing logic of this kind. It did,
+   and the trade was reopened and settled: the client is executed by a real
+   browser against a real server in `curation/tests/browser/` (marker `browser`).
+   The focus check above, the supersession of an in-flight repaint, and the
+   polling are each executed — by `test_a_poll_that_changes_nothing_leaves_the_focus_alone`,
+   `test_a_paint_superseded_in_flight_never_reaches_the_page`,
+   `test_two_concurrent_paints_leave_only_one_poll_chain` and
+   `test_leaving_the_run_view_stops_its_polling`. **The no-build-step decision
+   this entry named is untouched** — it governs the *shipped* client, which is
+   still one hand-written file served as-is; what landed is a dev and CI harness.
+
+   **So the honest limit has moved rather than gone.** No browser test judges
+   whether the screen is legible, whether the layout holds at the window size you
+   actually use, whether two badges in one cell read as dense or as clutter, or
+   whether the decision this page asks for is an easy one to make. Those are what
+   this entry exists to collect, and they are why it is still Pending.
+6. **The searches table prints raw ISO timestamps** — `2026-08-05T13:14:25.812…`
+   — because that is what the rest of this surface does (the health panel shows
+   `reported_at` the same way) and inventing a date format for one table would
+   make it the odd one out. It is still the worst-reading thing on the screen,
+   and the run list is the one place a curator scans many of them at once. If
+   you want them humanised, that is a convention decision for the whole surface
+   rather than a fix here, and it is yours to make.
+7. **The completed sentence rates over what the model proposed.** "This run
+   finished: 1 of 3 works it was asked for have an image", with the offered works
+   named in a separate clause. The alternative — one merged count — reads better
+   and reports a resolution rate the run never achieved. Confirm the honest
+   version is legible enough to keep.
+
 ### The mat corpus look — is the new engine at least as good as 2024? — added 2026-08-03
 
 **This is the product's stated quality bar and no test can settle it.**
@@ -106,6 +390,15 @@ with the below-floor work pictured and marked `is_on_offer: false`.
 
 ### The loader unit starts clean with its declared `EnvironmentFile=` — added 2026-08-02
 
+> **Blocked as written, 2026-08-04.** The Pi was rebuilt onto a fresh card: there
+> is no `tvpi` user and no `/home/tvpi/...` tree, so every path below names
+> something that does not exist, and the checkout is three merges behind `main`.
+> **This item cannot be performed until the Chunk 13 cutover creates the account
+> and installs the new units**, at which point the unit under test is a different
+> file and this item should be rewritten rather than run. Left here rather than
+> deleted because the *question* — does the un-prefixed `EnvironmentFile=` start
+> clean on the real machine — is still owed.
+
 **Not visual — this needs the Pi, and it is quick.** The unit now declares
 `EnvironmentFile=/home/tvpi/source/samsung-frame-art-loader/.env` un-prefixed and
 sets `StartLimitIntervalSec=0` / `RestartSec=10`. Everything about that was
@@ -156,6 +449,12 @@ pip install -r requirements.txt          # the new pins
 python tv_api_check.py --image "$ART_ROOT/ready/<a 4K composite>.jpg"
 ```
 
+> **`ready/` is empty on the rebuilt card and the 2024 composites are gone with
+> the old one** (2026-08-04), so there is no 4K composite to point this at. Any
+> real JPEG the set will accept proves the same thing — this checks what the
+> *television* does with an upload, not what the renderer produced. Use a
+> bench file, or run it after the first work is prepared.
+
 It uploads one image, watches which callback the set emits, removes that image
 and confirms the removal — touching nothing else on the wall — and exits non-zero
 if any check fails. Paste its output onto issue #3; the last three acceptance
@@ -188,18 +487,42 @@ it is subjective by nature.
 
 **How to bring it up over the real works, without touching the deployed tree:**
 
+> **Corrected 2026-08-04, and the correction itself expired 2026-08-06.**
+>
+> The recipe below replaced one that set `ART_ROOT` in the environment, on the
+> grounds that **`ART_ROOT` could not be overridden that way**: `config.py`
+> called `load_dotenv(override=True)`, and `find_dotenv()` walks up from *that
+> module's own file*, so the checkout's `.env` won over the environment no matter
+> what was exported. The old recipe seeded the real `ART_ROOT` while printing
+> that it had — which reads as success, the first line being the only tell.
+> Verified by running it.
+>
+> **That `override=True` has since been retired**, precisely because discarding
+> an exported value in silence is the failure shape this product exists to
+> correct. An exported `ART_ROOT` now wins, so the recipe the 2026-08-04 note
+> declared impossible would work today. The recipe below is kept anyway: it does
+> not depend on which way the precedence runs, which is the property worth having
+> in a document somebody follows months later.
+
 ```sh
-# A scratch art root with the real masters read-only behind a symlink.
-SCRATCH=$(mktemp -d)/art && mkdir -p "$SCRATCH" && ln -s ~/art/raw "$SCRATCH/raw"
+# The masters, read-only behind a symlink, inside the ART_ROOT `.env` names.
+# One `rm ~/samsung-art/raw` undoes it; nothing is copied.
+ln -sfn ~/art/raw "$(grep '^ART_ROOT=' .env | cut -d= -f2-)/raw"
 cd curation
-ART_ROOT=$SCRATCH uv run python -m curation.seed ../all.json
-ART_ROOT=$SCRATCH CURATION_PORT=8791 uv run python -m curation
-# then open http://127.0.0.1:8791/
+uv run python -m curation.seed ../all.json   # re-runnable; fills in what was absent
+uv run python -m curation
+# then open the CURATION_PORT from .env — http://127.0.0.1:8770/ as shipped
 ```
+
+To serve a *second* copy on another port without disturbing the first, change
+`CURATION_PORT` in `.env` — for the same reason, it is not settable per command.
 
 `~/art` on the dev Mac holds `raw/` and no `ready/`, so every work will show its
 master image and the wall view will report every work as `no_rendition`. **That is
-correct, not a fault** — the television renders live on the Pi. To see a mixed
+correct, not a fault** — and as of 2026-08-04 it is also permanent for these
+works: the Pi was rebuilt and the 2024 renditions were on the old card, so
+`ready/` exists nowhere. Re-rendering the corpus is real work, not a missing
+symlink. To see a mixed
 manifest, give a few works a rendition first; the wall view is the section most
 worth seeing with both states in it.
 

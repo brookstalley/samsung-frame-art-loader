@@ -98,6 +98,28 @@ DEFAULT_TILE_TIMEOUT_SECONDS: Final[int] = 1800
 #: protect the disk and a header is the source's claim about itself.
 DEFAULT_MAX_IMAGE_BYTES: Final[int] = 512 * 1024 * 1024
 
+#: The largest preview body a museum may serve before it is refused. Enforced
+#: while streaming, for the same reason `DEFAULT_MAX_IMAGE_BYTES` is: the ceiling
+#: exists to protect memory, and `Content-Length` is the source's claim about
+#: itself.
+#:
+#: **This one bounds RAM rather than the disk**, which is why it is three orders
+#: of magnitude smaller. A preview is read whole into memory before anything
+#: touches the filesystem, and the URL comes out of a museum's JSON with
+#: redirects followed, so the final host need not even be the one that was asked.
+#: `architecture.md` § Scaling Model ranks memory during acquisition as the one
+#: input that could exhaust the Pi; the unit's `MemoryMax` contains the blast to
+#: "curation dies" rather than "the wall goes dark", which is the cap working and
+#: not the absence of a problem — a run lost to a thumbnail is still the tail
+#: wagging the dog.
+#:
+#: Sized against measurement, not intuition: five Art Institute previews sampled
+#: 2026-08-05 ran 89-193 KiB, the service serves exactly one derivative width
+#: (843 px, every other request redirects to it), and this ceiling is some eighty
+#: times the largest of those. It is not a prediction of the biggest legitimate
+#: preview — it is the point past which a body has stopped being one.
+DEFAULT_PREVIEW_MAX_BYTES: Final[int] = 16 * 1024 * 1024
+
 #: Free space that must remain after an acquisition, below which one is refused.
 #:
 #: **This guards the catalogue, not the fetch.** `catalogue.sqlite` sits on the
@@ -166,6 +188,20 @@ DEFAULT_RESOLUTION_FLOOR_INCHES: Final[float] = 12.0
 #: never fires on an ordinary one and does fire on a run that read the intent far
 #: more broadly than intended.
 DEFAULT_DISCOVERY_APPROVAL_THRESHOLD: Final[int] = 25
+
+#: How many works a run may offer from a wired collection, on top of the list it
+#: proposed. A bound rather than everything held, because the collection's supply
+#: dwarfs a work list — one real run's four artists have 69 offerable works
+#: between them, and Ellsworth Kelly alone has 51.
+#:
+#: **At that ratio the bound is the selection mechanism, not a safety rail**, and
+#: nothing else can be: the museum's relevance score survives a filter-only query
+#: and cannot order the candidates (`artic-api-findings.md`). So the works kept
+#: are taken round-robin across the artists the run named, and this number is how
+#: many rounds that gets. Twelve is about half the approval threshold, which keeps
+#: a supplement visibly secondary to the list a curator actually approved while
+#: still giving a four-artist run three works each.
+DEFAULT_OFFERED_WORKS_PER_RUN: Final[int] = 12
 
 #: How many web searches phase 1 may make. Flat, because phase 1's entire job is
 #: to *produce* the work count that phase 2's allowance derives from — there is
@@ -341,6 +377,9 @@ class Settings:
     tile_timeout_seconds: int
     max_image_bytes: int
     min_free_bytes: int
+    #: The memory ceiling on a preview body, distinct from the two disk ceilings
+    #: above because it bounds a read that never reaches the filesystem.
+    preview_max_bytes: int
     #: What discovery is allowed to do, and what a provider charges for doing it.
     #: Prices move — one recorded model price drifted 28% in twelve days — and the
     #: allowances are policy a household sets, so none of these may be a literal
@@ -348,6 +387,7 @@ class Settings:
     approval_threshold: int
     phase1_search_allowance: int
     phase2_searches_per_work: int
+    offered_works_per_run: int
     search_cost_usd: Decimal
     input_cost_usd_per_mtok: Decimal
     output_cost_usd_per_mtok: Decimal
@@ -398,6 +438,7 @@ class Settings:
             approval_threshold=self.approval_threshold,
             phase1_search_allowance=self.phase1_search_allowance,
             phase2_searches_per_work=self.phase2_searches_per_work,
+            offered_works_per_run=self.offered_works_per_run,
             search_cost_usd=self.search_cost_usd,
             input_cost_usd_per_mtok=self.input_cost_usd_per_mtok,
             output_cost_usd_per_mtok=self.output_cost_usd_per_mtok,
@@ -500,8 +541,17 @@ class Settings:
 
         `ART_ROOT` has no default on purpose. A plausible-looking one would
         write the catalogue somewhere unintended and look like it had worked.
+
+        **`.env` supplies defaults and the process environment wins**, which is
+        what `load_dotenv()` without `override` means. The inverse was in place
+        until 2026-08-05 and made `ART_ROOT=/tmp/scratch uv run python -m
+        curation` boot against the real catalogue instead: the exported value
+        was ignored rather than refused. Note that dotenv resolves its file
+        upward from *this module's* directory and never from the cwd, so
+        `cd`-ing into a scratch tree isolates nothing either way — the
+        environment is the only lever, and it now works.
         """
-        load_dotenv(override=True)
+        load_dotenv()
         art_root = Path(_require("ART_ROOT"))
         return cls(
             art_root=art_root,
@@ -538,6 +588,7 @@ class Settings:
             # deployment's choice, it is the guard switched off — and the thing it
             # guards is the one file in this product that cannot be re-derived.
             min_free_bytes=_positive_int("MIN_FREE_BYTES", DEFAULT_MIN_FREE_BYTES),
+            preview_max_bytes=_positive_int("PREVIEW_MAX_BYTES", DEFAULT_PREVIEW_MAX_BYTES),
             # Zero is allowed throughout rather than refused: a threshold of zero
             # gates every run, and an allowance of zero forbids searching. Both
             # are coherent settings for a cautious deployment, and refusing them
@@ -545,6 +596,9 @@ class Settings:
             approval_threshold=_counted("DISCOVERY_APPROVAL_THRESHOLD", DEFAULT_DISCOVERY_APPROVAL_THRESHOLD),
             phase1_search_allowance=_counted("DISCOVERY_PHASE1_SEARCH_ALLOWANCE", DEFAULT_PHASE1_SEARCH_ALLOWANCE),
             phase2_searches_per_work=_counted("DISCOVERY_PHASE2_SEARCHES_PER_WORK", DEFAULT_PHASE2_SEARCHES_PER_WORK),
+            # Zero is a coherent setting here too: a deployment that wants only
+            # what the model named turns the supplement off without unwiring it.
+            offered_works_per_run=_counted("DISCOVERY_OFFERED_WORKS_PER_RUN", DEFAULT_OFFERED_WORKS_PER_RUN),
             search_cost_usd=_priced("DISCOVERY_SEARCH_COST_USD", DEFAULT_SEARCH_COST_USD),
             input_cost_usd_per_mtok=_priced("DISCOVERY_INPUT_COST_USD_PER_MTOK", DEFAULT_INPUT_COST_USD_PER_MTOK),
             output_cost_usd_per_mtok=_priced("DISCOVERY_OUTPUT_COST_USD_PER_MTOK", DEFAULT_OUTPUT_COST_USD_PER_MTOK),

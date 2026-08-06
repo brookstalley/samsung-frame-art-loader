@@ -11,6 +11,40 @@ path's error handling is written entirely against the behaviours recorded here. 
 is the durable form of a probe, in the same role `artic-api-findings.md` and
 `openrouter-api-findings.md` play for their interfaces.
 
+## What the binary will accept as input — and what this product actually hands it
+
+**Added 2026-08-04, measured.** The input must be a zoomable image's
+*meta-information* URL. It is **not** a museum page, and it is not a museum API
+object — the binary tries eleven dezoomers against whatever it is given and
+reports that all of them declined.
+
+| Given | Result |
+|---|---|
+| `https://www.artic.edu/artworks/91194/golden-bird` (page) | **all eleven dezoomers decline** |
+| `https://api.artic.edu/api/v1/artworks/91194` (API object) | **all eleven dezoomers decline** |
+| `https://www.artic.edu/iiif/2/<image_id>` (IIIF base) | fetched, 6 tiles |
+| `https://artsandculture.google.com/asset/<slug>/<id>` (page) | fetched — GA&C has a dezoomer that scrapes its own page |
+
+**Google Arts & Culture is the exception that hides the rule.** Its page URL works
+because the binary ships a dedicated dezoomer for that site. Nothing equivalent
+exists for a museum's own pages, so the same "just pass the source URL" call is
+right for one provider and wrong for the other, and a spot-check that happened to
+pick a GA&C work would report success.
+
+**Reaching a IIIF base from an artic page needs a resolution step the binary does
+not perform:** `GET https://api.artic.edu/api/v1/artworks/{id}?fields=image_id`
+returns `data.image_id` and `config.iiif_url`, and joining them gives the base
+that works. That is what the 2024 pipeline did at `image_utils.py:393-394`, and it
+still works — verified the same day against the same object.
+
+**This matters because the URL a source carries is deliberately not a fetchable
+one.** `discovery/artic.py` sets `FoundImage.url` to the museum's object link and
+says so in a comment: it is the instance's *identity*, "the bytes are reached
+through `acquisition_method`". So a fetch path that hands `source.url` straight to
+this binary is reading that field as something it was never meant to be. The
+defect is issue #77, which carries the root cause: the IIIF `image_id` needed to
+build a working URL is fetched, used once for `preview_url`, and never persisted.
+
 ## The headline: exit codes classify nothing
 
 | Exit | Observed cases |

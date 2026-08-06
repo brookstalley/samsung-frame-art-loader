@@ -420,6 +420,42 @@ async def test_a_missing_tile_binary_reaches_the_caller_with_its_remedy(server_u
     assert "DEZOOMIFY_PATH" in payload["error"]
 
 
+async def test_an_unresolvable_provider_reaches_the_caller_with_its_remedy(server_url, services, monkeypatch):
+    """The third raise-rather-record condition, and the reachable one.
+
+    A catalogue holding Art Institute works with no ARTIC_USER_AGENT configured
+    is an ordinary deployment, not a contrived one — it is what every seeded
+    install starts as. Without this arm the refusal arrives through the generic
+    handler as "failed unexpectedly", which is the outcome its two siblings above
+    are translated to prevent, and the operational runbook promises a named one.
+    """
+    work, primary = _a_work_with_sources(services)
+    # Exactly what the container builds when no image provider is configured.
+    monkeypatch.setattr(services.acquisition, "_tile_targets", {})
+
+    payload, errored = await call(
+        server_url, "art_catalogue", action="retry_acquisition", artwork_id=work.id, source_id=primary.id
+    )
+
+    assert errored is True
+    assert "ARTIC_USER_AGENT" in payload["error"]
+    # The remedy has to say the sources are fine, or its reader goes to the museum.
+    assert "no source is at fault" in payload["error"]
+
+
+async def test_an_unresolvable_provider_records_nothing_against_the_source(server_url, services, monkeypatch):
+    """A wiring fault must leave no `failed` row on a source that is perfectly good."""
+    work, primary = _a_work_with_sources(services)
+    monkeypatch.setattr(services.acquisition, "_tile_targets", {})
+
+    await call(server_url, "art_catalogue", action="retry_acquisition", artwork_id=work.id, source_id=primary.id)
+
+    refreshed = next(s for s in services.catalogue.list_sources(work.id) if s.id == primary.id)
+    # Pinned to the value the fixture recorded, not merely "not FAILED" — which
+    # would pass however the status moved.
+    assert refreshed.last_fetch_status is FetchStatus.PARTIAL_TILES
+
+
 async def test_a_full_disk_reaches_the_caller_with_its_remedy(server_url, services, monkeypatch):
     from dataclasses import replace
 

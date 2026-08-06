@@ -12,7 +12,9 @@ hold **29 of 36**.
 what they recovered:
 
 - *A citation in the title.* Handled before this module sees it, at the engine
-  seam, because it corrupts the displayed title too.
+  seam, because it corrupts the displayed title too. Two forms, both real: inside
+  markdown, and bare with its URL in brackets after it. The bare one reached a
+  curator's review cards seven times before it was recognised.
 - *An appended year.* `Abstraction Blue` came back as `Abstraction Blue (1927)`
   minutes later, from the same model on the same intent. The single largest cause.
 - *A cataloguing clause.* `..., from the series Thirty-six Views of Mount Fuji`.
@@ -67,11 +69,18 @@ patterns" fails when it stops being true rather than decaying quietly.
 **Replacing this is a re-key of existing rows, not just a change of function.**
 Keys already written under an older rule have to be recomputed when the rule
 changes, or suppression splits into two regimes and the same work is proposed
-twice — once under each. Anything replacing this owes that migration.
+twice — once under each. **That migration is paid by a mechanism rather than by
+each change:** `DiscoveryService.reconcile` re-cleans every stored title at
+startup and rewrites the key of any it changed, so a rule improved here reaches
+rows already on disk. It is idempotent and normally a no-op. The debt was real —
+seven rows sat in a catalogue keyed under a citation this module now strips, and
+a rejection of any of them would not have suppressed the same painting proposed
+cleanly.
 """
 
 import re
 import unicodedata
+from urllib.parse import urlsplit
 
 #: An inline markdown link, `[text](url)`. A search-augmented answer cites as it
 #: writes and does not confine that to prose: real runs returned titles like
@@ -81,6 +90,37 @@ _MARKDOWN_LINK = re.compile(r"\[([^\]]*)\]\(\s*<?[^)\s]*>?\s*\)")
 #: A URL that arrived without the markdown wrapper around it.
 _BARE_URL = re.compile(r"https?://\S+")
 
+#: A hostname as it appears in running text. The last segment must be alphabetic,
+#: which is what a top-level domain is and what a title's own numbering is not:
+#: `No.5` and `Op.12` are dot-joined word characters exactly as `tate.org.uk` is,
+#: and only the final segment tells them apart.
+_HOSTNAME = r"[\w-]+(?:\.[\w-]+)*\.[A-Za-z]{2,}"
+
+#: The same citation written without markdown around the hostname:
+#: `blog.artsper.com (https://blog.artsper.com/en/a-closer-look/dali/)`. Seven
+#: real proposals carried this, and `_MARKDOWN_LINK` cannot see it — there are no
+#: brackets to match, so the hostname is plain text and only the URL was ever
+#: removed.
+#:
+#: The hostname is optional here and the bracketed URL is not, because the URL is
+#: the part that is unambiguously not a title. What the optional half costs is
+#: covered by `_drop_citation` below, which drops it only when it can prove it.
+_BARE_CITATION = re.compile(rf"\s*(?:({_HOSTNAME})\s*)?\(\s*(https?://[^\s)]*)\s*\)?")
+
+#: The same citation after `_BARE_URL` has already eaten it, which is what the
+#: catalogue holds: `https?://\S+` is greedy to the next space, so it consumed the
+#: `)` that closed the wrapper and left the `(` orphaned — `Lobster Telephone
+#: (1938) - cited from tate.org.uk (`. Recognising the damaged form is what lets
+#: `reconcile` repair rows written before the rule above existed, rather than
+#: needing a one-off script that would then be dead code.
+#:
+#: **Here the hostname cannot be proved**, because the URL that would have named
+#: its host is exactly what the old rule removed. The alphabetic top-level domain
+#: is what stands in for that proof, and it is why the shape of `_HOSTNAME`
+#: matters more here than above: this rule rewrites rows already on disk, and the
+#: only evidence left in one is the shape of the text.
+_DAMAGED_CITATION = re.compile(rf"\s*{_HOSTNAME}\s*\($")
+
 #: Link text that is a hostname rather than words — `artic.edu`,
 #: `access-ok.okeeffemuseum.org`. Across 128 captured proposals every citation
 #: appearing in a title field looked like this, and not one was part of the name.
@@ -88,6 +128,21 @@ _HOSTLIKE = re.compile(r"^[\w-]+(?:\.[\w-]+)+$")
 
 #: What a removed citation leaves hanging: the dash, pipe or comma it was joined on.
 _DANGLING_TAIL = re.compile(r"[\s–—,;|/-]+$")
+
+#: What a removed citation leaves hanging when the model introduced it in words
+#: instead of in punctuation — `- cited from`, `– see`. `_DANGLING_TAIL` reaches
+#: the dash but stops at the first letter, so without this the seven real rows
+#: read `The Persistence of Memory (1931) - cited from`.
+#:
+#: **Applied only when a citation was actually removed, never as a blind trailing
+#: strip**, because these are ordinary words: Ingres painted `The Source`, and a
+#: rule that took the last word off any title ending in one would merge it with
+#: `The`. Requiring a citation to have just been dropped is what makes the words
+#: evidence rather than coincidence.
+_CITATION_LEAD_IN = re.compile(
+    r"[\s–—,;|/-]*\b(?:cited|sourced|source|via|see|from|image|images)\b(?:\s+(?:from|at|on|by))?\s*$",
+    re.IGNORECASE,
+)
 
 #: Everything that is not a letter, a digit or a space. Punctuation varies with
 #: the cataloguer rather than with the work — "Portrait of Madame X" and
@@ -181,16 +236,96 @@ def clean_name(value: str) -> str:
     is words it is kept, since a model that linked the name itself would otherwise
     lose it entirely.
 
+    **Dropped whole means the words that introduced it too.** A model writes a
+    citation two ways — inside markdown, or bare with its URL in brackets after
+    it — and either can be joined to the title by prose rather than by a dash.
+    Removing only the link left `The Persistence of Memory (1931) - cited from`
+    in the catalogue seven times over, which reads as a defect in the title and
+    keys as a different painting from the same work proposed cleanly.
+
     Deliberately not a general sanitiser: it removes link *syntax*, not
     punctuation, diacritics or parentheses, all of which occur in real titles.
+
+    **Order is load-bearing, and it is the only thing keeping the citation rules
+    out of a markdown link.** `_BARE_CITATION` matches a bracketed URL with or
+    without a hostname in front of it, so it fits `](https://nga.gov/...)` as
+    readily as `nga.gov (https://nga.gov/...)`. Running the markdown pass first is
+    what means it never sees one: by then the whole link is gone. An earlier draft
+    ran them the other way round, took the URL out from under the markdown rule
+    and stranded the `[nga.gov]` that rule was the only thing able to recognise,
+    which cost ten of the corpus's united works.
+
+    That safety used to live in the pattern — the hostname was mandatory, and `]`
+    is not a hostname character — and it was moved into the sequence deliberately.
+    A mandatory hostname made `Composition No.5 (https://example.com/x)` clean to
+    `Composition`, because a title's last word is dot-joined word characters
+    exactly as a hostname is. `_drop_citation` tells those apart by asking the URL
+    which host it names, and asking requires matching the URL whether or not a
+    hostname precedes it. `test_the_bare_citation_rules_do_not_reach_inside_a_markdown_one`
+    is what now holds the order.
+
+    **Can return an empty string**, for a value that was nothing but a citation.
+    Callers decide what that means: the engine seam drops the proposal, and
+    `reconcile` leaves the stored row alone rather than overwriting a title with
+    nothing.
     """
+    dropped = False
 
     def unlink(match: re.Match[str]) -> str:
+        nonlocal dropped
         text = match.group(1).strip()
-        return "" if _HOSTLIKE.match(text) else text
+        if _HOSTLIKE.match(text):
+            dropped = True
+            return ""
+        return text
 
-    cleaned = _WHITESPACE.sub(" ", _BARE_URL.sub(" ", _MARKDOWN_LINK.sub(unlink, value))).strip()
-    return _DANGLING_TAIL.sub("", cleaned).strip()
+    cleaned = _MARKDOWN_LINK.sub(unlink, value)
+    cleaned, bare = _BARE_CITATION.subn(_drop_citation, cleaned)
+    cleaned, damaged = _DAMAGED_CITATION.subn(" ", cleaned)
+    cleaned = _WHITESPACE.sub(" ", _BARE_URL.sub(" ", cleaned)).strip()
+    cleaned = _DANGLING_TAIL.sub("", cleaned).strip()
+    if not (dropped or bare or damaged):
+        return cleaned
+    # Idempotent because this branch is not reached on a second application:
+    # there is no citation left to remove, so the words that introduced one are
+    # never treated as a lead-in on a value that has already been cleaned.
+    return _DANGLING_TAIL.sub("", _CITATION_LEAD_IN.sub("", cleaned)).strip()
+
+
+def _drop_citation(match: re.Match[str]) -> str:
+    """Remove a bracketed URL, and the hostname before it only where it *is* the host.
+
+    **The word before a citation's brackets is not always the citation's.** It is
+    the hostname when a model writes `tate.org.uk (https://www.tate.org.uk/...)`,
+    and it is the title's own last word when one writes `Composition No.5
+    (https://example.com/x)` — both are dot-joined word characters, and taking the
+    second leaves `Composition`, which merges every numbered canvas by that
+    painter under one identity. That is the failure a curator never sees, so the
+    rule is not allowed to guess: the URL names its own host, and the word is
+    dropped only when the two agree.
+
+    Agreement is by suffix, because a citation names the site and the URL names
+    the server — `tate.org.uk` against `www.tate.org.uk` is one source, not two.
+    The bracketed URL goes either way: it is unambiguously not part of a title.
+
+    **A URL that will not parse keeps the word.** `urlsplit` raises on an
+    unbalanced `[` or `]` in the authority — it reads one as the start of an IPv6
+    address — and a model is as free to emit `(https://tate.org.uk])` as anything
+    else. Raising here would be the expensive kind of failure twice over: at the
+    engine seam it fails a run that has already been paid for, and inside
+    `reconcile` it fails *startup*, for as long as the row is stored, which is a
+    plane that will not boot because of one bad title. Unparseable means the
+    hostname cannot be proved, and unproved means the word stays.
+    """
+    named, url = match.group(1), match.group(2)
+    if named is None:
+        return " "
+    try:
+        host = urlsplit(url).hostname or ""
+    except ValueError:
+        return f" {named}"
+    site = named.casefold()
+    return " " if host == site or host.endswith(f".{site}") else f" {named}"
 
 
 def title_key(title: str) -> str:

@@ -86,7 +86,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Literal, get_args
 
-from curation.persistence.catalogue import StorageError, StoreMisuseError
+from curation.persistence.errors import StorageError, StoreMisuseError
 
 log = logging.getLogger(__name__)
 

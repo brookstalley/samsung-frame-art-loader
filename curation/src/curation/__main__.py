@@ -1,18 +1,22 @@
 """Run the curation plane: `uv run python -m curation`."""
 
+import argparse
 import logging
 import shutil
+import sys
+from collections.abc import Sequence
 
 import uvicorn
 
-from curation import logs
+from curation import art_root, logs
 from curation.acquisition.mat import MatEngine
 from curation.acquisition.preparation import PreparationSettings
 from curation.acquisition.service import AcquisitionSettings
 from curation.acquisition.transport import http_stream
 from curation.app import create_app
 from curation.config import Settings
-from curation.discovery.artic import build_image_search
+from curation.discovery.artic import build_collection_browse, build_image_search
+from curation.discovery.browse import CollectionBrowse
 from curation.discovery.engine import DiscoveryEngine, unavailable_engine
 from curation.discovery.images import ImageSearch
 from curation.discovery.openrouter import OpenRouterClient
@@ -87,11 +91,49 @@ def _image_search(settings: Settings) -> ImageSearch | None:
     """
     if not settings.artic_user_agent:
         return None
-    return build_image_search(user_agent=settings.artic_user_agent)
+    return build_image_search(
+        user_agent=settings.artic_user_agent,
+        preview_max_bytes=settings.preview_max_bytes,
+    )
 
 
-def main() -> None:
-    """Resolve configuration, open the catalogue, and serve."""
+def _collection(settings: Settings) -> CollectionBrowse | None:
+    """The collection a run supplements from, or nothing when none is configured.
+
+    Gated on the same identifier as phase 2 and for the same reason: it is the
+    same museum, asked a second kind of question, and that museum asks callers to
+    say who they are. A deployment that has not said so browses nothing rather
+    than browsing anonymously.
+    """
+    if not settings.artic_user_agent:
+        return None
+    return build_collection_browse(user_agent=settings.artic_user_agent)
+
+
+def main(argv: Sequence[str] = ()) -> None:
+    """Resolve configuration, open the catalogue, and serve.
+
+    **Arguments are passed in rather than read off `sys.argv`.** The default is
+    "no arguments", so calling `main()` from a test parses nothing instead of
+    parsing pytest's own command line — which is what it did for one commit, and
+    it turned seven startup tests into `SystemExit: 2`. The process entry point
+    below supplies the real ones.
+    """
+    parser = argparse.ArgumentParser(
+        prog="python -m curation",
+        description="Run the curation plane.",
+    )
+    parser.add_argument(
+        "--init",
+        action="store_true",
+        help=(
+            "Create ART_ROOT as a new, empty art root if it is not one already. "
+            "Needed once per deployment; without it a directory that is not an art root is refused, "
+            "so a mistyped ART_ROOT reports an error instead of quietly becoming a second collection."
+        ),
+    )
+    arguments = parser.parse_args(argv)
+
     logs.configure(level=logging.INFO)
     settings = Settings.from_env()
     log = logging.getLogger(__name__)
@@ -135,11 +177,15 @@ def main() -> None:
     # because the test that reads as the guard here deliberately cannot see a
     # deployment's own `.env` — see `test_the_search_price_matches_the_engine_that_is_pinned`.
     log.info(
-        "discovery gate=%d works phase1_searches=%d phase2_searches_per_work=%d search_engine=%s "
-        "search_price=$%s phase1_estimate=$%s",
+        "discovery gate=%d works phase1_searches=%d phase2_searches_per_work=%d offered_works_per_run=%s "
+        "search_engine=%s search_price=$%s phase1_estimate=$%s",
         discovery.approval_threshold,
         discovery.phase1_search_allowance,
         discovery.phase2_searches_per_work,
+        # Named rather than left at 0, because this is the setting whose "off" is
+        # otherwise invisible: a run that offers nothing because the supplement is
+        # disabled looks exactly like one whose collection held nothing.
+        "disabled" if discovery.offered_works_per_run <= 0 else discovery.offered_works_per_run,
         settings.discovery_search_engine,
         discovery.search_cost_usd,
         discovery.phase1_estimate_usd,
@@ -197,7 +243,11 @@ def main() -> None:
         settings.ready_path,
     )
 
-    settings.art_root.mkdir(parents=True, exist_ok=True)
+    # Before anything is created, and before the catalogue is opened. The two
+    # steps this replaces were individually reasonable and silent together: a
+    # `mkdir(exist_ok=True)` followed by `CREATE TABLE IF NOT EXISTS` turned a
+    # typo in ART_ROOT into a fresh empty collection that started cleanly.
+    art_root.prepare(settings.art_root, settings.catalogue_path, initialise=arguments.init)
     # One connection behind both halves of the model: acceptance promotes a
     # candidate's image instances into a work's sources, and that has to commit
     # once or not at all.
@@ -217,6 +267,7 @@ def main() -> None:
             engine=_engine(settings),
             discovery_settings=settings.discovery_settings,
             image_search=image_search,
+            collection=_collection(settings),
             previews=(
                 None if image_search is None else PreviewSettings(art_root=settings.art_root, directory=settings.previews_path)
             ),
@@ -274,4 +325,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
