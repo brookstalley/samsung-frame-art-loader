@@ -608,9 +608,12 @@ says whether a comparison was possible, and `disagreement()` says how it came
 out. A caller that reads only the second reports a pass for "they agree" and for
 "one side said nothing" alike, which is the conflation that let a check comparing
 `None` look satisfied. Driven against both captured payloads: fed the art
-channel's, the panel line now reads `[note] panel size: not compared — this
-television reported no model name`; fed the REST payload against
+channel's, the panel line now reads `[note] panel size: not compared — no model
+name was read from this television`; fed the REST payload against
 `TV_PANEL_DIAGONAL_INCHES=42`, it fails with the full 104.9-against-88.1 warning.
+(It says "was read" rather than "the television reported none" on purpose: on the
+path where the REST endpoint does not answer, nothing ever asked the set, and the
+failing `model` check above the line carries that reason.)
 
 **What that leaves for the next run on the set**, and it is small: the REST read
 itself has only been exercised against a captured payload, so the live pass
