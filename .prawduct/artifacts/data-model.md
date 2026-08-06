@@ -1123,8 +1123,8 @@ the entity that enforces the second Direction norm.
 | Field | Type | Constraints | Description |
 |---|---|---|---|
 | `id` | UUID | PK | |
-| `artwork_id` | UUID | required | Reference to the catalogue's Artwork id. |
-| `tv_content_id` | string | required | The TV's own identifier for the uploaded image. |
+| `artwork_id` | UUID | required, unique | Reference to the catalogue's Artwork id. One television holds at most one image per work. |
+| `tv_content_id` | string | **required when `upload_status = 'uploaded'`, null otherwise** | The TV's own identifier for the uploaded image. |
 | `tv_thumb_md5` | string | nullable | Used to re-match after the TV loses or renames content. |
 | `uploaded_at` | datetime | auto | |
 | `upload_status` | enum | required | `uploaded` \| `failed` \| `orphaned`. |
@@ -1133,6 +1133,17 @@ the entity that enforces the second Direction norm.
 > exception, logged, and still reported success — recording `tv_content_id =
 > None` while the retry loop set `success = True`. A nullable id with no status
 > makes that failure indistinguishable from "not yet uploaded".
+>
+> **`tv_content_id`'s constraint was `required` until 2026-08-06, and that could
+> not be built.** A `failed` row has no id to record — that is what failed — so
+> the two columns as written could not both be satisfied, and a builder would have
+> had to choose silently between deleting the row (losing the distinction the
+> status exists to draw) and inventing an id. The conditional form above is the
+> reading that makes the entity coherent, and the display plane enforces it as a
+> **check constraint rather than as care**: a row cannot claim `uploaded` without
+> naming the identifier the television gave back, so the 2024 defect is unwritable
+> rather than merely avoided. The absence of a row still means "never tried",
+> which is the third state and the reason a failure keeps its row.
 
 ## Relationships
 

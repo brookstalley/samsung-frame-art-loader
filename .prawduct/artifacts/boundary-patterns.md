@@ -90,13 +90,20 @@
 
 ### curation ↔ display contract
 
-- **Exists:** **the producing half does**, as of 2026-07-31 — curation writes
+- **Exists: both halves, as of 2026-08-06.** Curation writes
   `theme-manifest.json` into `ART_ROOT` (schema major 1), atomically, with the
-  rotation settings and directive block the design calls for. **The consuming
-  half does not:** the display plane does not exist yet, so nothing reads this
-  file yet. Curation also *reads* the reverse-direction heartbeat and reports
-  honestly that none exists, which stays the true state until a display plane
-  runs and writes one.
+  rotation settings and directive block the design calls for; the display plane
+  polls its mtime, refuses a major it does not recognise while keeping the last
+  good document, and converges the television on what it lists. The reverse
+  direction is still one-sided: curation *reads* a heartbeat and reports honestly
+  that none exists, which stays true until the chunk that writes one.
+
+  **Exercised end to end by neither plane's suite, and that is the residual.**
+  Each side is tested against its own reading of the contract — curation asserts
+  what it writes, display asserts what it parses, and the two fixtures were
+  written from the same document — but nothing runs a real manifest from the real
+  builder into the real reader. The cheap version of that check is the live pass
+  on the Pi, which is outstanding.
 - **Producer:** curation plane. **Consumer:** display plane. **Same machine.**
 - **Contract:** the **theme manifest** — a versioned JSON document written
   atomically (temp + `os.replace`) into the shared `ART_ROOT` and polled by display

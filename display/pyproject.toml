@@ -31,8 +31,14 @@ dependencies = [
     # rather than the clock, so a winter afternoon and a summer evening are not
     # given the same panel.
     "astral",
-    # The local zone the sun position is computed in.
-    "tzlocal",
+    # **`tzlocal` was here and is not any more (2026-08-06).** It was declared as
+    # "the local zone the sun position is computed in", and when the sun-position
+    # port actually landed nothing imported it: the daemon's clock reads
+    # `datetime.now(UTC).astimezone()`, which takes the zone from the platform, and
+    # the 2024 module's `tzlocal.get_localzone()` was a dependency for a thing the
+    # standard library already does. The comment below predicted exactly this
+    # outcome for a declared-early entry and named the moment it would be due for
+    # checking; this is that check, made rather than assumed.
     "python-dotenv",
 ]
 
@@ -44,18 +50,20 @@ dependencies = [
 #     plane drives the television before it drives the panel and a dependency
 #     declared ahead of the code that imports it is one nobody can check.
 #
-#     **That rule is suspended above for `astral` and `tzlocal`, and knowingly.**
-#     Every declared entry lands before the module importing it, since this
-#     manifest ships ahead of the plane's first module — but the other three
-#     answer for themselves and these two do not. `samsungtvws` and
-#     `websockets>=13` are pinned against a television they were measured on,
-#     which is what the lock exists to hold; `python-dotenv` is inert. `astral`
-#     and `tzlocal` serve the sun-position brightness port, which the build plan
-#     records as an open assumption the operator may defer — so if it is
-#     deferred, these are locked entries nothing imports and nothing will prompt
-#     anyone to notice. They are cheap and pure-Python, which is why they were
-#     let through rather than held; the cost of being wrong is two unused rows in
-#     the lock, against the panel group's compiled toolchain.
+#     **That rule was suspended for `astral` and `tzlocal` when this manifest
+#     shipped ahead of the plane's first module, and the bill came due on
+#     2026-08-06.** The reasoning was that both served the sun-position
+#     brightness port, which the build plan recorded as an assumption the
+#     operator might defer — so if it were deferred they would be locked entries
+#     nothing imports, with nothing to prompt anyone to notice. The port was not
+#     deferred; it landed with the daemon, and it took up `astral` and left
+#     `tzlocal` unimported, which is precisely the predicted outcome arriving by
+#     an unpredicted route. `tzlocal` is gone.
+#
+#     The lesson worth keeping is not "never declare early" — it is that a
+#     declaration made early carries an obligation to *check* it at the moment
+#     the importing code lands, and that check has to be somebody's, because
+#     nothing mechanical looks for a dependency that is merely unused.
 #
 #   pillow — nothing here decodes an image. The television is handed a *path*
 #     and streams the file itself; composing the canvas is the curation plane's
@@ -66,15 +74,18 @@ dependencies = [
 #     is the exemption, because talking to the television is this plane's whole
 #     job.
 #
-#     **Nothing enforces that mechanically yet, and this comment must not claim
-#     otherwise.** `tests/preferences/test_plane_isolation.py` is owed and does
-#     not exist; it is a deliverable of the chunk creating this plane and has to
-#     arrive WITH the first module here, because a check written over an empty
-#     package passes vacuously and a green suite is exactly what a violation
-#     looks like without it. Until then the norm is held by Critic judgement
-#     alone — see `project-preferences.md` § Enforcement, which retracted this
-#     same claim about this same path on 2026-08-01 and keeps it as the repo's
-#     cautionary example. An earlier draft of this file wrote it a second time.
+#     **Enforced mechanically since 2026-08-06** by
+#     `tests/preferences/test_plane_isolation.py`, which landed in the same commit
+#     as this plane's first modules — the sequencing this comment previously
+#     described as owed, and owed for a reason: a check written over an empty
+#     package passes vacuously, and a green suite is exactly what a violation
+#     looks like without it. It reads the source rather than the running system,
+#     follows imports transitively through this repository's own files, and
+#     exempts the television websocket. `project-preferences.md` § Enforcement
+#     carries the row, which moved back from Critic to Test when the file
+#     appeared — and keeps its own history as this repo's cautionary example,
+#     because that row named this path for three sessions while nothing was
+#     there. An earlier draft of THIS file wrote the same claim a second time.
 
 [dependency-groups]
 dev = [

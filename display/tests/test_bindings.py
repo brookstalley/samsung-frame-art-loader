@@ -93,6 +93,44 @@ class TestUploading:
         assert len(tv.holding) == 4
         assert len(tv.selected) == 1, "filling the theme in moved the wall"
 
+    async def test_a_work_that_keeps_failing_is_not_retried_every_second(
+        self, daemon: Daemon, tv: FakeTv, publish, state: DisplayState, clock, settings, caplog
+    ):
+        """A reachable set refusing one image is not the same fault as an asleep one.
+
+        Only the second backs off with the connection. Without a wait of its own,
+        the first costs a round trip, a WARNING and a rewritten row **every poll**
+        — an unbounded small-write source on the SD card the observability
+        strategy sizes writes for, and a journal whose rate limiter then drops the
+        lines that matter.
+        """
+        publish(["w1"], interval_seconds=3600)
+        tv.refuse_uploads = True
+
+        with caplog.at_level(logging.WARNING):
+            for _ in range(20):
+                await daemon.tick()
+                clock.advance(1)
+
+        failures = [r for r in caplog.records if r.__dict__.get("event") == "binding.upload_failed"]
+        assert len(failures) == 1, "a failing upload was retried on every pass"
+        assert state.binding_for("w1").upload_status is UploadStatus.FAILED
+
+    async def test_a_work_that_failed_is_tried_again_once_the_wait_is_up(
+        self, daemon: Daemon, tv: FakeTv, publish, state: DisplayState, clock, settings
+    ):
+        """The wait is a wait, not a giving up: whatever was wrong may be fixed."""
+        publish(["w1"], interval_seconds=3600)
+        tv.refuse_uploads = True
+        await daemon.tick()
+        assert state.binding_for("w1").upload_status is UploadStatus.FAILED
+
+        tv.refuse_uploads = False
+        clock.advance(settings.upload_retry_seconds + 1)
+        await daemon.tick()
+
+        assert state.binding_for("w1").is_on_the_television
+
     async def test_a_work_already_on_the_television_is_not_uploaded_again(self, daemon: Daemon, tv: FakeTv, publish, clock):
         publish(["w1", "w2"], interval_seconds=10)
         await daemon.tick()
@@ -159,6 +197,49 @@ class TestOrphans:
         assert rebound.is_on_the_television
         assert rebound.tv_content_id != vanished
         assert rebound.tv_content_id in tv.holding
+
+    async def test_a_binding_the_set_refuses_mid_rotation_is_rebound_rather_than_retried_forever(
+        self, daemon: Daemon, tv: FakeTv, publish, state: DisplayState, clock, caplog
+    ):
+        """The wall-freezing case, and the reason a refusal is not read as an outage.
+
+        Somebody removes one image from the phone app. The manifest does not
+        change, so nothing re-checks the binding — and a daemon that treated the
+        refusal as "the television is asleep" would back off and retry the same
+        doomed id forever, with the wall stuck on the previous picture.
+        """
+        publish(["w1", "w2"], interval_seconds=10)
+        await daemon.tick()
+        await daemon.tick()
+        stale = state.binding_for("w2").tv_content_id
+        del tv.holding[stale]  # removed from the phone app; no manifest rewrite
+
+        clock.advance(10)
+        with caplog.at_level(logging.WARNING):
+            await daemon.tick()
+
+        assert tv.on_the_wall.name == "w2.jpg", "the wall froze on a binding the set had forgotten"
+        assert state.binding_for("w2").tv_content_id != stale
+        assert "binding.orphaned" in {r.__dict__.get("event") for r in caplog.records}
+
+    async def test_a_refusal_the_set_cannot_explain_is_still_an_outage(
+        self, daemon: Daemon, tv: FakeTv, publish, state: DisplayState, clock, settings
+    ):
+        """The other side of that judgement, so the fix cannot swallow a real fault.
+
+        If the set still lists the id it just refused, the binding is not the
+        problem and inventing a re-upload would paper over whatever is.
+        """
+        publish(["w1"], interval_seconds=10)
+        await daemon.tick()
+        content_id = state.binding_for("w1").tv_content_id
+
+        clock.advance(10)
+        tv.refuse_selection_of.add(content_id)  # still listed, still refused
+        wait = await daemon.tick()
+
+        assert wait == settings.tv_retry_min_seconds, "a refusal the set could not explain was not treated as an outage"
+        assert state.binding_for("w1").tv_content_id == content_id, "a live binding was thrown away"
 
     async def test_an_unconfirmable_removal_is_reported_as_unknown_and_retried(self, daemon: Daemon, tv: FakeTv, publish, caplog):
         """The library discards the reply to a removal, so claiming either outcome

@@ -169,6 +169,47 @@ async def test_a_directive_is_not_consumed_while_the_television_is_asleep(
     assert state.last_acted_sequence == 2
 
 
+async def test_a_next_is_not_consumed_when_the_set_drops_mid_step(daemon: Daemon, tv: FakeTv, publish, state: DisplayState):
+    """The unpinned branch's version of the rule, in the only window it can bite.
+
+    **Finding this window took two attempts and a mutation sweep**, and the shape
+    of it is worth keeping. A directive always arrives on a manifest rewrite, and
+    a rewrite is an adoption, and an adoption reconciles with the set *before* the
+    directive is looked at — so a television that is already asleep fails there and
+    the directive is simply not reached, surviving for free on the pass after the
+    set comes back.
+
+    What is left is the genuine race: the set answers at the top of the pass and is
+    gone by the selection. That is what this reproduces, and it is the only thing
+    the statement order in `_act_on_directive` protects. A sweep that swapped those
+    two statements survived two earlier tests written against an already-asleep
+    set, both of which passed because the code under test never ran.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+    assert tv.on_the_wall.name == "w1.jpg"
+    doomed = state.binding_for("w2").tv_content_id
+
+    # The set still lists the image and refuses to show it: alive at the top of
+    # the pass, gone by the selection.
+    tv.refuse_selection_of.add(doomed)
+    publish(["w1", "w2", "w3"], sequence=2)
+    await daemon.tick()
+    assert state.last_acted_sequence == 1, "the step was consumed against a television that never performed it"
+
+    tv.refuse_selection_of.clear()
+    await daemon.tick()
+
+    # **It lands on w3, not w2, and that is the design rather than a near miss.**
+    # The cursor moves past a work before it is shown, so one whose selection
+    # failed is stepped over exactly as a missing render is — the alternative is a
+    # `next` that keeps returning to the work that just would not display. What
+    # the rule protects is that the step *happens at all*: with the sequence
+    # consumed before the attempt, the wall would still be on w1.
+    assert tv.on_the_wall.name == "w3.jpg", "the directive was lost to a momentary drop"
+    assert state.last_acted_sequence == 2
+
+
 async def test_a_pin_whose_render_is_missing_is_still_consumed(
     daemon: Daemon, tv: FakeTv, publish, state: DisplayState, art_root
 ):

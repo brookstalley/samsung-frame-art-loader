@@ -120,7 +120,14 @@ def television_brightness(relative_brightness: float, *, minimum: int, maximum: 
     relative value above 1.0 just after sunrise, and a value off the end of the
     set's scale is refused by the television rather than saturated by it — which
     would take the whole call down over an arithmetic edge.
+
+    **Clamped once, on the way out.** The first version clamped the input to 0..1
+    as well, and a mutation sweep on 2026-08-06 showed that inner clamp could be
+    deleted with no test objecting — because it could not be *observed*: the outer
+    one produces the same answer for every input, so the two together were one
+    guard and one line that only looked like a guard. A redundant check is not
+    free; it is a second place a future reader has to reason about and a line a
+    coverage report scores as defended.
     """
     span = maximum - minimum
-    value = round(max(0.0, min(1.0, relative_brightness)) * span) + minimum
-    return max(minimum, min(maximum, value))
+    return max(minimum, min(maximum, round(relative_brightness * span) + minimum))

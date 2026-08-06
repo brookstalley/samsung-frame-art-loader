@@ -127,6 +127,23 @@ fork commit against aiohttp 3.14.3; that is an argument from a sibling plane's
 resolver, not a measurement on the set. `pi-freeze-2024.txt` records the pre-move
 version of all five and is the rollback.
 
+> **Attempted on 2026-08-06 and got no further than the handshake**, which is
+> recorded so the next person does not read "owed" as "nobody has tried". The
+> television was in standby for the whole attempt; with the set asleep the
+> remote-control channel accepts a websocket and then sends nothing, and the art
+> channel answers `ms.channel.timeOut` after ~15 s. **That failure looks exactly
+> like a library incompatibility and is not one** — which matters here more than
+> usual, because a library incompatibility is precisely what a reader of this
+> section is checking for. Confirm `PowerState: 'on'` before drawing any
+> conclusion about the pins:
+>
+>     curl -s http://<TV_ADDRESS>:8001/api/v2/ | python3 -m json.tool | grep PowerState
+>
+> The bumped set was exercised as far as the wire in the process: a clean 3.12
+> interpreter carrying exactly these pins built the client, reached the set over
+> the LAN, and failed only at pairing. What remains unproven is everything past
+> the handshake — upload, select and confirmed delete.
+
 `samsungtvws` and `websockets` moved together on 2026-08-01 — a two-year-old fork
 SHA to fork master, and websockets 12.0 to 16.1.1, which the new library requires.
 ~~That pair has been verified to resolve and import, and has not yet been run

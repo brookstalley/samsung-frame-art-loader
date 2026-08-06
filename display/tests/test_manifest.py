@@ -154,6 +154,25 @@ class TestWatching:
         refusals = [record for record in caplog.records if record.__dict__.get("event") == "manifest.version_refused"]
         assert len(refusals) == 1
 
+    def test_a_manifest_that_is_not_valid_utf8_is_refused_rather_than_fatal(self, art_root: Path, caplog):
+        """`UnicodeDecodeError` is a `ValueError`, not an `OSError`.
+
+        So it escaped the read's own except clause and every frame above it,
+        taking the daemon down over exactly the kind of malformed file this
+        module exists to refuse — a truncated write from a filesystem that lost
+        power mid-`replace` produces it.
+        """
+        write_manifest(art_root, a_document())
+        watcher = a_watcher(art_root)
+        good = watcher.poll()
+
+        (art_root / "theme-manifest.json").write_bytes(b'{"schema": {"major": 1}, "entries": [], "\xff\xfe": 1}')
+
+        with caplog.at_level(logging.ERROR):
+            assert watcher.poll() is None
+        assert watcher.current is good
+        assert "manifest.not_text" in {r.__dict__.get("event") for r in caplog.records}
+
     def test_a_manifest_that_has_never_appeared_is_not_an_error(self, art_root: Path, caplog):
         """A plane that has not published yet is a normal state on a fresh install,
         and this one holding still until it does is the availability norm working."""

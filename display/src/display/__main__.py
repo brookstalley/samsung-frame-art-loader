@@ -47,8 +47,13 @@ async def _run() -> int:
     for received in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(received, stop.set)
 
-    with DisplayState(settings.state_path) as state:
-        daemon = Daemon(settings=settings, tv=tv, state=state, watcher=watcher, clock=Clock.system())
+    # One clock for both, because the daemon measures an upload's retry wait
+    # against a timestamp the store wrote. Two sources here would be two answers
+    # to the same question, and the store's is the one that has to survive a
+    # restart.
+    clock = Clock.system()
+    with DisplayState(settings.state_path, now=clock.now) as state:
+        daemon = Daemon(settings=settings, tv=tv, state=state, watcher=watcher, clock=clock)
         await daemon.run(stop)
     return 0
 

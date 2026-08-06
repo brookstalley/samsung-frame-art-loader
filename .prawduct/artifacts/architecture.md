@@ -483,8 +483,17 @@ is no network between planes.
 - **Purpose:** make the physical world match the manifest.
 - **Platform:** Python 3.13 venv, systemd `Restart=always`. Genuinely always-on.
 - **Owned state (sole writer):** `display-state.sqlite` — TV content-id bindings,
-  per-work upload status, last selected work, brightness state, and the
-  last-acted-on directive sequence (see § The theme manifest). **Panel geometry
+  per-work upload status, last selected work, whether this device has already
+  switched the set's own slideshow off, and the last-acted-on directive sequence
+  (see § The theme manifest).
+
+  *(**Two corrections from building it, 2026-08-06.** "Brightness state" was
+  listed here and is deliberately **not** persisted: it is recomputed from the sun
+  and the clock on a timer, so a stored copy could only ever be a value that has
+  gone stale — including after somebody moves the brightness with the remote —
+  and the cost of not having it is one idempotent call on restart. The slideshow
+  flag replaced it, and that one genuinely must survive a restart: `Restart=always`
+  makes restarts routine and the call is only correct to make once.)* **Panel geometry
   is deliberately not listed** (corrected 2026-07-20 — it appeared here while
   every other artifact makes it *configuration* both planes read): a copy held as
   device state could drift from the value curation judges sources against, which

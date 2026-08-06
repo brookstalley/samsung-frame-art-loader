@@ -89,6 +89,16 @@ DEFAULT_UPLOAD_TIMEOUT_SECONDS: Final[float] = 60.0
 #: unattended daemon is a wedge, not an error.
 DEFAULT_TV_CONNECT_TIMEOUT_SECONDS: Final[float] = 30.0
 
+#: How long a work whose upload failed is left alone before it is tried again.
+#: **A television that is reachable and refuses one image is a different fault
+#: from one that is asleep**, and it does not back off with the connection: the
+#: pass would otherwise retry it every second, each attempt costing a round trip,
+#: a WARNING and a row rewritten. `observability-strategy.md` sizes writes on this
+#: medium deliberately, and an unbounded small-write source on an SD card is the
+#: thing it says not to build. Wall time rather than elapsed, so the wait survives
+#: a restart — a crash loop must not turn into a retry loop.
+DEFAULT_UPLOAD_RETRY_SECONDS: Final[float] = 300.0
+
 #: Reconnection backoff after the television goes away. An asleep set is the
 #: expected operating condition rather than an incident, so the ceiling is low
 #: enough that the wall resumes promptly when someone turns it on and high enough
@@ -128,6 +138,7 @@ class Settings:
     poll_interval_seconds: float
     brightness_interval_seconds: float
     upload_timeout_seconds: float
+    upload_retry_seconds: float
     tv_connect_timeout_seconds: float
     tv_retry_min_seconds: float
     tv_retry_max_seconds: float
@@ -208,6 +219,7 @@ def load(environ: dict[str, str] | None = None) -> Settings:
         poll_interval_seconds=_float(env, "MANIFEST_POLL_SECONDS", DEFAULT_POLL_INTERVAL_SECONDS),
         brightness_interval_seconds=_float(env, "BRIGHTNESS_INTERVAL_SECONDS", DEFAULT_BRIGHTNESS_INTERVAL_SECONDS),
         upload_timeout_seconds=_float(env, "TV_UPLOAD_TIMEOUT_SECONDS", DEFAULT_UPLOAD_TIMEOUT_SECONDS),
+        upload_retry_seconds=_float(env, "TV_UPLOAD_RETRY_SECONDS", DEFAULT_UPLOAD_RETRY_SECONDS),
         tv_connect_timeout_seconds=_float(env, "TV_CONNECT_TIMEOUT_SECONDS", DEFAULT_TV_CONNECT_TIMEOUT_SECONDS),
         tv_retry_min_seconds=_float(env, "TV_RETRY_MIN_SECONDS", DEFAULT_TV_RETRY_MIN_SECONDS),
         tv_retry_max_seconds=_float(env, "TV_RETRY_MAX_SECONDS", DEFAULT_TV_RETRY_MAX_SECONDS),

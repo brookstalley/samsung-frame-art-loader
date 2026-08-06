@@ -71,6 +71,7 @@ def settings(art_root: Path) -> Settings:
         poll_interval_seconds=1.0,
         brightness_interval_seconds=300.0,
         upload_timeout_seconds=60.0,
+        upload_retry_seconds=300.0,
         tv_connect_timeout_seconds=30.0,
         tv_retry_min_seconds=5.0,
         tv_retry_max_seconds=300.0,
@@ -80,8 +81,12 @@ def settings(art_root: Path) -> Settings:
 
 
 @pytest.fixture
-def state(settings: Settings) -> Iterator[DisplayState]:
-    with DisplayState(settings.state_path) as store:
+def state(settings: Settings, clock: "FakeClock") -> Iterator[DisplayState]:
+    # The store shares the daemon's clock, because the daemon measures a retry
+    # wait against a timestamp the store wrote. Two clocks there is not a test
+    # detail — it is a wait computed from the difference between today and a
+    # fixture's chosen afternoon.
+    with DisplayState(settings.state_path, now=lambda: clock.as_clock().now()) as store:
         yield store
 
 

@@ -10,6 +10,68 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The display daemon against the wall — added 2026-08-06
+
+**Status:** pending. This is the acceptance criterion Chunk 12 cannot close by
+itself, and the chunk is deliberately still unchecked because of it. Everything in
+that chunk is verified against a test double; **no line of it has spoken to a
+television.**
+
+**The television has to be awake first, and this is the whole trick.** With the
+set in standby or art mode, the remote-control channel accepts the websocket
+handshake and then sends nothing, and the art channel answers
+`ms.channel.timeOut` — which reads exactly like a library incompatibility and is
+not one. `PowerState: 'on'` is the entire fix. Check it before suspecting
+anything else:
+
+```sh
+curl -s http://<TV_ADDRESS>:8001/api/v2/ | python3 -m json.tool | grep PowerState
+```
+
+**Two things to run, in this order.**
+
+*First, the pin bump this repo already owed.* The 2026-08-06 security work moved
+`aiohttp` 3.9.5 → 3.14.3 under the television client, and what backs it today is a
+call-site check in a clean interpreter plus a sibling lockfile resolving the same
+fork commit — a resolver argument, not a measurement on the set. It was attempted
+on 2026-08-06 and got no further than the pairing handshake, the set having been
+in standby all session.
+
+```sh
+python tv_api_check.py --image "$ART_ROOT/ready/<any 4K composite>.jpg"
+```
+
+Expect a pairing prompt on the screen the first time a given machine asks, and
+accept it. Rollback for the pins is `deploy/pi-freeze-2024.txt`.
+
+*Then the daemon itself.*
+
+```sh
+cd display && uv run python -m display
+```
+
+**What to watch for, each being a behaviour chosen against a plausible
+alternative:**
+
+1. **The wall rotates the active theme**, and the first picture appears in
+   seconds rather than minutes — uploads are carried one per pass precisely so
+   the wall is not blank while forty works go up.
+2. **`next` and `show_now` land within about a second.** That is the poll
+   interval's whole justification; if it feels slow, the number is wrong.
+3. **A restart neither moves the wall nor loses its place.** Stop the process and
+   start it: the same picture should still be there, and the *next* rotation
+   should go to the work after it. This one was got wrong in the first
+   implementation and is the most likely to be got wrong again.
+4. **Killing curation changes nothing.** Stop the curation plane and leave the
+   wall alone for a few rotations.
+5. **The legacy uploads are gone from the set**, and the works the manifest names
+   are the only things in the user-upload category. A fresh binding table treats
+   everything already on the television as an orphan — that is intended, and it
+   is the one step that is not reversible from here.
+6. **Brightness follows the sun.** Worth looking at across a dusk rather than at
+   one instant; the curve is ported from the 2024 plane and should not read as a
+   change to anyone living with it.
+
 ### The review half — the grid, its alternates, the panel — added 2026-08-05
 
 **What to look at.** The review grid reached from a finished run ("Review these

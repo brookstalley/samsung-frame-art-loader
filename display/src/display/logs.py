@@ -119,6 +119,11 @@ class JsonFormatter(logging.Formatter):
 #: rather than evicting handlers it knows nothing about.
 _INSTALLED: Final[str] = "_display_log_handler"
 
+#: The television client's logger, floored at INFO in `configure` because its
+#: `_check_for_token` writes the pairing token at DEBUG. Named here rather than
+#: inline so the reason travels with the name.
+_TELEVISION_CLIENT: Final[str] = "samsungtvws"
+
 
 def configure(level: int = logging.INFO) -> None:
     """Install the plane's log shape on the root logger.
@@ -144,3 +149,13 @@ def configure(level: int = logging.INFO) -> None:
             root.removeHandler(existing)
     root.addHandler(handler)
     root.setLevel(level)
+
+    # **The television client logs the pairing token at DEBUG**, and the handler
+    # above is on the *root* logger, so anything that ever turns this plane's
+    # verbosity up would put that token in the journal — of a product whose
+    # observability strategy names it as a secret, in a repository that is public,
+    # and whose very first chunk existed because that token had been committed.
+    # Floored here rather than trusted to nobody ever passing `level=DEBUG`: the
+    # moment somebody debugs a connection problem is exactly the moment they
+    # would, and it is also when journal excerpts get pasted into issues.
+    logging.getLogger(_TELEVISION_CLIENT).setLevel(max(level, logging.INFO))

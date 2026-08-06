@@ -17,8 +17,12 @@ Usage:
     # An opt-in suite needs its marker, or pytest collects nothing:
     uv run python tools/mutation_sweep.py m.json tests/browser/test_x.py -- -m browser
 
-`mutations.json` is a list of objects with `label`, `file` (relative to the
-curation project root), `find` and `replace`. `find` must appear in the file; a
+    # Another plane, from that plane's own directory — its interpreter, its
+    # lockfile, its `addopts`. `--project` must come first:
+    uv run python ../curation/tools/mutation_sweep.py --project . m.json tests/test_x.py
+
+`mutations.json` is a list of objects with `label`, `file` (relative to the swept
+project's root), `find` and `replace`. `find` must appear in the file; a
 mutation whose pattern has drifted is reported rather than silently skipped,
 because a sweep that quietly tests nothing is worse than no sweep.
 
@@ -67,6 +71,7 @@ a branch that was already covered. Setting `PYTHONDONTWRITEBYTECODE` in the chil
 environment removes the cache from the question entirely.
 """
 
+import functools
 import json
 import os
 import pathlib
@@ -75,7 +80,17 @@ import subprocess
 import sys
 from dataclasses import dataclass
 
-#: The curation project root — this file lives in `tools/` directly beneath it.
+#: The project this sweep runs in: the one holding the files a mutation names and
+#: the one `uv run pytest` is invoked from. Defaults to the curation plane, which
+#: this file lives directly beneath, and moves with `--project` — the display
+#: plane is a sibling uv project with its own interpreter, lockfile and `addopts`,
+#: so running its tests from here would apply the wrong ones (including this
+#: project's `-n auto` and its marker deselection) to a different suite.
+#:
+#: A module-level global rather than a parameter threaded through four functions,
+#: because every one of them wants the same answer and a sweep that used two
+#: different roots would mutate a file in one project and test the other — which
+#: reports every mutation as surviving, and looks exactly like a coverage gap.
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
@@ -112,6 +127,30 @@ def load(path: pathlib.Path) -> list[Mutation]:
         raise SweepError(f"a mutation in {path} is missing a field or has an extra one: {exc}") from exc
 
 
+@functools.cache
+def serial_flags() -> tuple[str, ...]:
+    """`-n0`, but only where there is an xdist to say it to.
+
+    The flag is not universal: it comes from `pytest-xdist`, and a project without
+    that plugin rejects it as an unrecognised argument — pytest exit **4**, a
+    usage error, which this tool correctly refuses to interpret and which reads as
+    "your suite is broken" rather than "that flag does not exist here". The
+    curation plane has xdist because its suite is slow enough to want it; the
+    display plane does not, its suite running in under a second serial.
+
+    Asked once per process, of the project being swept rather than of this file's
+    own environment — they are different interpreters with different lockfiles.
+    """
+    probe = subprocess.run(
+        ["uv", "run", "python", "-c", "import xdist"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return ("-n0",) if probe.returncode == 0 else ()
+
+
 def run_tests(targets: list[str]) -> subprocess.CompletedProcess[str]:
     """Run the chosen slice of the suite. One place, so the sweep and its baseline agree.
 
@@ -132,7 +171,7 @@ def run_tests(targets: list[str]) -> subprocess.CompletedProcess[str]:
         # slice `(mutations + 1)` times, where per-run worker startup is most of
         # the bill — measured at 67s serial against 65s parallel for ten
         # mutations over two files.
-        ["uv", "run", "pytest", "-n0", *targets, "-q", "-x", "--no-header", "-p", "no:cacheprovider"],
+        ["uv", "run", "pytest", *serial_flags(), *targets, "-q", "-x", "--no-header", "-p", "no:cacheprovider"],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -263,6 +302,19 @@ def sweep(mutations: list[Mutation], targets: list[str]) -> int:
 
 
 def main(argv: list[str]) -> int:
+    global ROOT
+    if argv and argv[0] == "--project":
+        if len(argv) < 2:
+            say("--project needs a directory", error=True)
+            return 2
+        ROOT = pathlib.Path(argv[1]).resolve()
+        if not (ROOT / "pyproject.toml").is_file():
+            # Checked here rather than discovered as "your mutation's file does
+            # not exist", which is the same message a drifted pattern produces
+            # and would send the reader to the wrong problem entirely.
+            say(f"the sweep is misconfigured: {ROOT} is not a project — it holds no pyproject.toml", error=True)
+            return 2
+        argv = argv[2:]
     if len(argv) < 2:
         say(__doc__ or "")
         return 2

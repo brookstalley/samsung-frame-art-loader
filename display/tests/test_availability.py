@@ -65,9 +65,9 @@ async def test_the_backoff_is_bounded(daemon: Daemon, tv: FakeTv, publish, setti
     assert max(waits) == settings.tv_retry_max_seconds
 
 
-async def test_recovery_is_logged_and_resets_the_backoff(daemon: Daemon, tv: FakeTv, publish, settings, caplog):
+async def test_recovery_is_logged_and_resets_the_backoff(daemon: Daemon, tv: FakeTv, publish, settings, clock, caplog):
     """The pair of lines is what gives an outage a length in the journal."""
-    publish(["w1"])
+    publish(["w1", "w2"], interval_seconds=10)
     tv.unavailable = True
     await daemon.tick()
     await daemon.tick()
@@ -77,8 +77,38 @@ async def test_recovery_is_logged_and_resets_the_backoff(daemon: Daemon, tv: Fak
         await daemon.tick()
 
     assert "tv.recovered" in {r.__dict__.get("event") for r in caplog.records}
+
+    # The clock has to move for the *next* failure to happen at all: the backoff
+    # is only observable through a pass that has something to say to the set, and
+    # the test below is why that is not a wrinkle in this test.
     tv.unavailable = True
+    clock.advance(10)
     assert await daemon.tick() == settings.tv_retry_min_seconds
+
+
+async def test_a_daemon_with_nothing_to_say_does_not_discover_the_set_is_gone(
+    daemon: Daemon, tv: FakeTv, publish, settings, clock
+):
+    """And that is right, not a gap.
+
+    Between rotations there is no call to make: the manifest has not changed, the
+    directive has not advanced, the theme is fully uploaded, and the wall is
+    holding a picture the television owns. A liveness poll would be traffic bought
+    to learn something nothing is waiting on — and the outage is discovered by the
+    next pass that actually needs the set, which is the pass that could not have
+    proceeded anyway.
+    """
+    publish(["w1", "w2"], interval_seconds=1000)
+    await daemon.tick()
+    for _ in range(3):
+        await daemon.tick()
+    calls_before = tv.connects
+
+    tv.unavailable = True
+    waits = [await daemon.tick() for _ in range(5)]
+
+    assert waits == [settings.poll_interval_seconds] * 5, "an idle pass went to the television to check on it"
+    assert tv.connects == calls_before
 
 
 async def test_the_wall_is_shown_as_soon_as_the_set_comes_back(daemon: Daemon, tv: FakeTv, publish):
@@ -91,6 +121,53 @@ async def test_the_wall_is_shown_as_soon_as_the_set_comes_back(daemon: Daemon, t
     await daemon.tick()
 
     assert tv.on_the_wall.name == "w1.jpg"
+
+
+async def test_orphan_removal_owed_during_an_outage_happens_when_the_set_returns(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState
+):
+    """The declared deliverable, on the path it is most likely to be needed.
+
+    Removing what the binding table cannot account for was reachable from exactly
+    one place — the tick a manifest is first seen on — and the watcher reports a
+    manifest once. A set asleep on that tick aborted the pass and the work was
+    never attempted again, so on a fresh install the legacy uploads the chunk
+    exists to clear would have stayed on the television for ever. Owing the work
+    until it is done, rather than attempting it when the news arrives, is the fix.
+    """
+    from pathlib import Path
+
+    tv.holding["MY-LEGACY-1"] = Path("/gone/legacy-1.jpg")
+    tv.unavailable = True
+    publish(["w1"])
+
+    await daemon.tick()
+    assert "MY-LEGACY-1" in tv.holding, "the fake let a call through while unavailable"
+
+    tv.unavailable = False
+    await daemon.tick()
+
+    assert "MY-LEGACY-1" not in tv.holding, "orphan removal was dropped rather than deferred"
+
+
+async def test_a_reconciliation_interrupted_halfway_is_still_owed(daemon: Daemon, tv: FakeTv, publish):
+    """Cleared on the far side of the call, so a set that goes away during it does
+    not leave the work recorded as done."""
+    from pathlib import Path
+
+    tv.holding["MY-LEGACY-1"] = Path("/gone/legacy-1.jpg")
+    tv.removal_unconfirmable = True
+    publish(["w1"])
+    await daemon.tick()
+    assert "MY-LEGACY-1" in tv.holding
+
+    tv.unavailable = True
+    await daemon.tick()
+    tv.unavailable = False
+    tv.removal_unconfirmable = False
+    await daemon.tick()
+
+    assert "MY-LEGACY-1" not in tv.holding
 
 
 async def test_a_manifest_published_while_the_set_is_asleep_is_still_adopted(

@@ -446,6 +446,37 @@ recorded acceptance was reached the same way and was re-swept rather than assume
 all fourteen caught.** A vacuous proof and a false claim are different faults, and
 that one was the first.
 
+**Chunk 12 is built and is deliberately NOT checked off (2026-08-06).** The
+display plane exists — manifest polling and version refusal, host-driven
+rotation, `TvBinding` in `display-state.sqlite`, directive semantics, orphan
+removal, the sun-position brightness port, and the television behind an abstract
+interface — with 94 tests, all three planes green, and lint clean. **What is
+missing is the half no double can supply**: the acceptance criteria call for a
+live pass on the Pi, and the television was in standby for the whole session, so
+not one line of this has spoken to a set. The chunk stays open until it has;
+`operator-verification.md` carries what to run and the standby trap that will
+otherwise be misread as a library fault.
+
+`tests/preferences/test_plane_isolation.py` landed with the plane's first modules,
+which closes the two-session-old finding that the norm index named an enforcement
+artifact that had never existed — and the row in `project-preferences.md` moves
+back from Critic to Test naming it. The other deliverable that had been waiting on
+the same event landed too: the third `test_commands` entry, the third CI leg, and
+the guard that the new leg needs no `--ignore` set.
+
+Four things were settled at build and recorded where their rules live: a **restart
+re-shows the picture already on the wall** rather than advancing, because
+`Restart=always` would otherwise turn a crash loop into a strobing wall; a
+**directive is consumed after the attempt, never before**, so an outage delays a
+jump instead of eating it (`api-contract.md`); **uploads are carried one per pass**
+rather than batched on adoption, because a forty-work theme at ten seconds an
+upload would blank the wall for five minutes against a one-second poll interval;
+and the **e-paper panel's geometry became configuration** (`operational-spec.md`).
+Two artifacts were corrected against what the build proved rather than left to
+drift — `TvBinding.tv_content_id` could not be `required` while a `failed` row
+exists to have no id, and `display-state.sqlite` does not persist brightness
+because a stored copy could only ever be stale.
+
 ## Scaffolding
 
 ### Project Initialization
@@ -1554,6 +1585,14 @@ two missing deliverables.)*
   display plane. Cutover: the Pi runs the two new units; `tvart.py` stops being
   the production entry point (legacy files remain until Chunk 20).
 - **Depends on:** Chunk 12; Chunk 04 (panel stack installs under uv)
+- **Carries a number the unit must not be written without.** `TimeoutStopSec`
+  has to clear this daemon's worst-case pass, which is a television connection
+  attempt: roughly 15 s of blocking construction plus the 30 s art-channel
+  ceiling. A SIGTERM landing inside one is honoured when that pass ends, not
+  during it — measured at ~22 s against a sleeping set on 2026-08-06, with ~45 s
+  the worst case. systemd's 90 s default clears it, so this is a note against
+  *shortening* it: a unit that SIGKILLs the process leaves the set holding a
+  half-open art channel until it times out on its own side.
 - **Artifacts consumed:** `observability-strategy.md` § The Health Surface,
   `operational-spec.md` § Process Management, `nonfunctional-requirements.md`
   § Output Quality (label legibility) and Performance (15 s label budget),

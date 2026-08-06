@@ -329,7 +329,16 @@ class SamsungTv(TvClient):
         try:
             return await awaitable
         except _LIBRARY_FAILURES as exc:
-            self._art = None
+            # **Closed, not merely dropped.** Several of these arrive over a
+            # perfectly healthy socket — `AssertionError` is this library's
+            # request-timeout, and `ResponseError` is the set saying no — so
+            # abandoning the reference leaves the websocket open and, worse,
+            # leaves the reader task `start_listening` spawned holding it alive
+            # against collection. On a daemon that runs for months, one leak per
+            # transient error is the whole failure.
+            art, self._art = self._art, None
+            if art is not None:
+                await self._quietly_close(art)
             raise TvUnavailable(f"{verb} failed against the television at {self._host} ({_named(exc)})") from exc
 
 

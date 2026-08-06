@@ -786,9 +786,17 @@ fetching and 4K compositing off a Pi 4" is **retired and must not be cited**;
 nothing moved off it. That claim was also weaker than it read — the existing code
 downsizes to 2048² before the LAB/k-means work, so peak memory is a few hundred MB.
 
-It survives because the display plane **does not want 3tears at all** — it needs an
-HTTP client, `samsungtvws`, PIL, and the e-paper driver, and three-tier entities are
-of no use to it. Beyond that: it matches the upstream/derived data contract below,
+It survives because the display plane **does not want 3tears at all** — it needs
+`samsungtvws`, the e-paper driver, and nothing else that plane offers; three-tier
+entities are of no use to it. *(Corrected 2026-08-06, when that plane was built:
+this read "it needs an HTTP client, `samsungtvws`, PIL, and the e-paper driver".
+It needs neither of the other two, and the HTTP client is now **forbidden** —
+`tests/preferences/test_plane_isolation.py` fails the build on one, because the
+only thing this plane could reach with a general client is the curation process,
+which is the second channel the manifest-only norm exists to prevent. PIL went
+the same way for a duller reason: the television is handed a path and streams the
+file itself, so nothing here decodes an image. A dependency list written from a
+design sketch is a guess until the code lands.)* Beyond that: it matches the upstream/derived data contract below,
 it makes "e-paper behind an interface" a process boundary rather than a convention,
 and it is what lets the display plane keep working when curation is down.
 

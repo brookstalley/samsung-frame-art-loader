@@ -49,7 +49,7 @@ from display import brightness as brightness_module
 from display.config import Settings
 from display.logs import work_context
 from display.manifest import Entry, Manifest, Watcher
-from display.state import DisplayState
+from display.state import Binding, DisplayState, UploadStatus
 from display.tv import RemovalOutcome, TvClient, TvRemovalUnconfirmed, TvUnavailable, TvUploadFailed
 
 log = logging.getLogger(__name__)
@@ -99,7 +99,23 @@ class Daemon:
         #: a property of this run rather than something written back anywhere.
         self._order: list[int] = []
         self._cursor: int = 0
-        self._selected_at: float | None = None
+
+        #: **Two facts that were one field until they were told apart.** When the
+        #: last rotation was *attempted* governs the timer; whether anything has
+        #: ever reached the wall governs whether a restart re-shows or steps past.
+        #: Sharing one nullable float made a pass that showed nothing look like a
+        #: process that had just started, so the timer never armed and a theme with
+        #: no renders walked its whole list once a second, for ever.
+        self._attempted_at: float | None = None
+        self._has_shown = False
+
+        #: Reconciling the binding table against the set is **owed until it is
+        #: done**, not attempted once when a manifest lands. A new manifest is
+        #: reported by the watcher on exactly one tick; if the set is asleep on
+        #: that tick — which this module's own note says is most of them — the
+        #: tick aborts, and tying the work to that one flag drops orphan removal
+        #: entirely rather than deferring it.
+        self._reconciliation_owed = False
         self._brightness_at: float | None = None
         self._brightness_value: int | None = None
         self._retry_seconds: float = settings.tv_retry_min_seconds
@@ -132,6 +148,7 @@ class Daemon:
         adopted = self._watcher.poll()
         if adopted is not None:
             self._adopt(adopted)
+            self._reconciliation_owed = True
 
         manifest = self._watcher.current
         if manifest is None:
@@ -139,8 +156,12 @@ class Daemon:
 
         try:
             await self._connected()
-            if adopted is not None:
-                await self._reconcile_with_the_set(adopted)
+            if self._reconciliation_owed:
+                # Cleared only when the work actually settled: a set that goes
+                # away halfway through raises, and one that cannot say what it
+                # removed reports so — both leave the work owed for a later pass
+                # rather than recorded as done.
+                self._reconciliation_owed = not await self._reconcile_with_the_set(manifest)
             await self._apply_brightness()
             acted = await self._act_on_directive(manifest)
             if not acted:
@@ -165,6 +186,17 @@ class Daemon:
         if manifest.shuffle:
             self._rng.shuffle(self._order)
 
+        # **Only when the wall is empty.** A wall with nothing on it should try
+        # again the moment a new manifest lands — renders appearing normally comes
+        # with curation republishing, and the alternative is a blank wall sitting
+        # out three minutes it has no reason to. A wall that *is* showing
+        # something must not have its timer restarted by a rewrite: `sync` fires
+        # on every catalogue edit, and resetting here would step the wall on each
+        # one, which is the same defect as the cursor rule below in a different
+        # coat.
+        if not self._has_shown:
+            self._attempted_at = None
+
         self._cursor = 0
         resumed_from = self._state.last_selected_work_id
         if resumed_from is None:
@@ -188,7 +220,7 @@ class Daemon:
         # this process is running and holding its place in memory; pointing back
         # at the current work there would hand it a second full interval on every
         # catalogue edit, which on a busy afternoon is a wall that stops moving.
-        self._cursor = found_at if self._selected_at is None else (found_at + 1) % len(self._order)
+        self._cursor = found_at if not self._has_shown else (found_at + 1) % len(self._order)
 
     # -- directives --------------------------------------------------------
 
@@ -282,9 +314,20 @@ class Daemon:
     # -- rotation ----------------------------------------------------------
 
     async def _rotate_if_due(self, manifest: Manifest) -> None:
+        """Step the wall on when the interval is up — and only then.
+
+        **The clock is stamped before the attempt, not after a success**, which is
+        what bounds a theme nothing can be shown from. Every entry logs one
+        WARNING as it is skipped, so a forty-work theme with a pruned image tree
+        costs forty lines *per interval* rather than forty lines per second. The
+        second cadence is not a tidiness problem: journald rate-limits, and the
+        lines it drops are the ERRORs this plane's only failure channel exists to
+        carry.
+        """
         due_after = manifest.rotation_interval_seconds
-        if self._selected_at is not None and self._clock.monotonic() - self._selected_at < due_after:
+        if self._attempted_at is not None and self._clock.monotonic() - self._attempted_at < due_after:
             return
+        self._attempted_at = self._clock.monotonic()
         await self._advance(manifest)
 
     async def _advance(self, manifest: Manifest) -> bool:
@@ -325,9 +368,17 @@ class Daemon:
             if content_id is None:
                 return False
 
-            await self._tv.select_image(content_id)
+            try:
+                await self._tv.select_image(content_id)
+            except TvUnavailable:
+                content_id = await self._rebind_or_reraise(entry, render, content_id)
+                if content_id is None:
+                    return False
+                await self._tv.select_image(content_id)
+
             self._state.set_last_selected_work_id(entry.work_id)
-            self._selected_at = self._clock.monotonic()
+            self._attempted_at = self._clock.monotonic()
+            self._has_shown = True
             log.info(
                 "showing %s",
                 entry.label.get("title") or entry.work_id,
@@ -346,6 +397,57 @@ class Daemon:
         binding = self._state.binding_for(entry.work_id)
         if binding is not None and binding.is_on_the_television:
             return binding.tv_content_id
+        if self._too_soon_to_retry(binding):
+            return None
+        return await self._upload(entry, render)
+
+    def _too_soon_to_retry(self, binding: Binding | None) -> bool:
+        """Whether a work that failed to upload should be left alone this pass.
+
+        **A set that is reachable and refuses one image does not back off with the
+        connection**, which is the other failure and has its own retry. Without
+        this, one bad render is a round trip, a WARNING and a rewritten row every
+        second for as long as it stays in the theme — an unbounded small-write
+        source on the SD card that `observability-strategy.md` says not to build,
+        and a journal in which the rate limiter starts dropping the lines that
+        matter.
+
+        Measured against wall time, because the failure is recorded in the store
+        and must outlive the process: under `Restart=always` an elapsed-time wait
+        would reset on every restart, so a crash loop would become a retry loop.
+        """
+        if binding is None or binding.upload_status is not UploadStatus.FAILED:
+            return False
+        waited = (self._clock.now() - binding.uploaded_at).total_seconds()
+        return waited < self._settings.upload_retry_seconds
+
+    async def _rebind_or_reraise(self, entry: Entry, render: Path, refused: str) -> str | None:
+        """Work out whether the set is gone or the *binding* is, and fix the second.
+
+        **A refused selection is ambiguous and the library cannot disambiguate
+        it** — a dead websocket and an id the set has never heard of arrive as the
+        same failure. Guessing "outage" is the expensive mistake: somebody
+        removing one image from the phone app would freeze the wall on a backoff
+        that retries the same doomed id forever, because the manifest never
+        changes and nothing else would ever re-check that binding.
+
+        So the question is put to the television, which is this codebase's
+        standing answer to a client whose return values cannot be trusted in
+        either direction: if the set still lists the id, the fault is not the
+        binding and the original failure stands. If the listing itself fails,
+        that is a real outage and it propagates from here.
+        """
+        listed = await self._tv.listed_content_ids()
+        if refused in listed:
+            raise TvUnavailable(f"the television refused to select {refused}, which it says it is holding")
+
+        self._state.mark_orphaned(entry.work_id)
+        log.warning(
+            "the television refused %s and does not list it; re-uploading %s",
+            refused,
+            entry.work_id,
+            extra={"event": "binding.orphaned", "tv_content_id": refused},
+        )
         return await self._upload(entry, render)
 
     async def _upload(self, entry: Entry, render: Path) -> str | None:
@@ -388,6 +490,8 @@ class Daemon:
             binding = self._state.binding_for(entry.work_id)
             if binding is not None and binding.is_on_the_television:
                 continue
+            if self._too_soon_to_retry(binding):
+                continue
             render = self._settings.art_root / entry.render_path
             if not render.is_file():
                 # Not a failure to record: nothing was attempted, and writing a
@@ -398,7 +502,7 @@ class Daemon:
                 await self._upload(entry, render)
             return
 
-    async def _reconcile_with_the_set(self, manifest: Manifest) -> None:
+    async def _reconcile_with_the_set(self, manifest: Manifest) -> bool:
         """Compare what this device believes against what the television lists.
 
         Runs when a manifest is adopted, not every pass. The comparison costs a
@@ -426,9 +530,9 @@ class Daemon:
                 extra={"event": "binding.orphaned", "tv_content_id": binding.tv_content_id, "work_id": entry.work_id},
             )
 
-        await self._remove_orphans(listed)
+        return await self._remove_orphans(listed)
 
-    async def _remove_orphans(self, listed: frozenset[str]) -> None:
+    async def _remove_orphans(self, listed: frozenset[str]) -> bool:
         """Take off the television everything this device cannot account for.
 
         **The binding table is the whole authority**, which is why a fresh install
@@ -445,7 +549,7 @@ class Daemon:
         accounted = self._state.accounted_content_ids()
         orphans = sorted(listed - accounted)
         if not orphans:
-            return
+            return True
 
         try:
             outcome: RemovalOutcome = await self._tv.remove(orphans)
@@ -459,7 +563,7 @@ class Daemon:
                 exc,
                 extra={"event": "tv.orphan_removal_unconfirmed", "requested": orphans},
             )
-            return
+            return False
 
         log.info(
             "removed %d image(s) the binding table does not account for",
@@ -470,6 +574,7 @@ class Daemon:
                 "surviving": list(outcome.surviving),
             },
         )
+        return outcome.complete
 
     # -- the television ----------------------------------------------------
 

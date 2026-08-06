@@ -25,6 +25,7 @@ development rather than a wall that silently shows nothing.
 import logging
 import sqlite3
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -111,7 +112,13 @@ _SLIDESHOW_DISABLED: Final[str] = "native_slideshow_disabled"
 class DisplayState:
     """The device's store, opened once and held for the life of the process."""
 
-    def __init__(self, path: Path) -> None:
+    def __init__(self, path: Path, *, now: Callable[[], datetime] | None = None) -> None:
+        # **The same clock the daemon compares against, or the wait it computes is
+        # nonsense.** `uploaded_at` on a failed row is what the retry wait is
+        # measured from, so a store stamping the real clock while the loop reads an
+        # injected one gives a difference of years — which reads as "long enough"
+        # or "not yet" depending only on which side of today the test sits.
+        self._now = now if now is not None else (lambda: datetime.now(UTC))
         self._path = path
         self._connection = sqlite3.connect(path)
         self._connection.row_factory = sqlite3.Row
@@ -181,9 +188,21 @@ class DisplayState:
         rows = self._connection.execute("SELECT tv_content_id FROM tv_binding WHERE tv_content_id IS NOT NULL").fetchall()
         return frozenset(row["tv_content_id"] for row in rows)
 
-    def record_upload(self, artwork_id: str, tv_content_id: str, *, tv_thumb_md5: str | None = None) -> Binding:
-        """Record that the television is holding this work's image, under this id."""
-        return self._write_binding(artwork_id, tv_content_id, UploadStatus.UPLOADED, tv_thumb_md5)
+    def record_upload(self, artwork_id: str, tv_content_id: str) -> Binding:
+        """Record that the television is holding this work's image, under this id.
+
+        **`tv_thumb_md5` is modelled and nothing writes it**, which is stated here
+        rather than left to be discovered from a column of nulls. `data-model.md`
+        gives it as "used to re-match after the TV loses or renames content", and
+        re-matching as built does not need it: a binding whose id the set stops
+        listing is marked orphaned and uploaded again, which costs one transfer
+        and is correct even when the set renamed nothing. Fetching a thumbnail per
+        work to compare hashes would cost more than the re-upload it saves.
+        The column stays because the entity is modelled; the keyword argument that
+        no caller ever passed is gone, because a parameter nothing supplies reads
+        as a capability rather than as a gap.
+        """
+        return self._write_binding(artwork_id, tv_content_id, UploadStatus.UPLOADED, None)
 
     def record_upload_failure(self, artwork_id: str) -> Binding:
         """Record that an upload was attempted and did not land.
@@ -205,7 +224,7 @@ class DisplayState:
         status: UploadStatus,
         tv_thumb_md5: str | None,
     ) -> Binding:
-        uploaded_at = datetime.now(UTC)
+        uploaded_at = self._now()
         self._connection.execute(
             """
             INSERT INTO tv_binding (id, artwork_id, tv_content_id, tv_thumb_md5, uploaded_at, upload_status)

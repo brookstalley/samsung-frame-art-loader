@@ -98,6 +98,55 @@ async def test_a_theme_whose_every_render_is_missing_does_not_spin(daemon: Daemo
     assert [r.__dict__.get("event") for r in caplog.records].count("rotation.render_missing") == 2
 
 
+async def test_a_theme_that_can_show_nothing_warns_once_an_interval_not_once_a_second(
+    daemon: Daemon, tv: FakeTv, publish, clock, caplog
+):
+    """The other half of "does not spin", and the half that bites in production.
+
+    Bounding one pass is not enough: the *timer* has to arm too. It was stamped
+    only on a successful selection, so a theme that could show nothing looked like
+    a process that had just started on every tick — forty works with a pruned
+    image tree emitting forty WARNINGs a second, indefinitely. journald then
+    rate-limits and starts dropping lines, and the ones it drops are the ERRORs
+    that are this plane's only failure channel.
+    """
+    publish(["w1", "w2", "w3"], interval_seconds=60, renders=False)
+
+    with caplog.at_level(logging.WARNING):
+        for _ in range(10):
+            await daemon.tick()
+            clock.advance(1)
+
+    missing = [r for r in caplog.records if r.__dict__.get("event") == "rotation.render_missing"]
+    assert len(missing) == 3, "the whole theme was walked again on every poll"
+
+    with caplog.at_level(logging.WARNING):
+        clock.advance(60)
+        await daemon.tick()
+
+    assert len([r for r in caplog.records if r.__dict__.get("event") == "rotation.render_missing"]) == 6
+
+
+async def test_a_new_manifest_is_tried_at_once_rather_than_waiting_out_the_interval(
+    daemon: Daemon, tv: FakeTv, publish, art_root, clock
+):
+    """So a wall with nothing to show recovers when the renders arrive.
+
+    Renders appearing normally comes with curation republishing, and making the
+    wall sit out three minutes it has no reason to would be the timer above
+    over-applied.
+    """
+    publish(["w1"], interval_seconds=180, renders=False)
+    await daemon.tick()
+    assert tv.selected == []
+
+    (art_root / "ready" / "w1.jpg").write_bytes(b"a render, at last")
+    publish(["w1"], sequence=1, interval_seconds=180)
+    await daemon.tick()
+
+    assert tv.on_the_wall.name == "w1.jpg"
+
+
 async def test_a_restart_keeps_the_picture_and_then_carries_on_from_it(settings, tv: FakeTv, state: DisplayState, clock, publish):
     """A restart must not lose its place — and must not move the wall either.
 

@@ -252,6 +252,18 @@ class Watcher:
 
         try:
             text = self._path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            # **Not an `OSError`** — it is a `ValueError`, so it escaped the clause
+            # below and every frame above it, taking the process down over a
+            # malformed file this module exists to refuse. A truncated write from a
+            # filesystem that lost power mid-`replace` produces exactly this.
+            log.error(  # noqa: TRY400 -- the byte offset is the finding; the stack is codecs internals
+                "the manifest at %s is not valid UTF-8 (%s); keeping the one already loaded",
+                self._path,
+                exc,
+                extra={"event": "manifest.not_text", "manifest_path": str(self._path)},
+            )
+            return None
         except OSError as exc:
             log.warning(
                 "could not read the manifest at %s (%s); keeping the one already loaded",

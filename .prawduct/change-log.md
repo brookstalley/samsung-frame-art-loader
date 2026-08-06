@@ -134,6 +134,46 @@ symmetric claim to the one the root leg already carried, written separately
 because the plane that will grow an opt-in group first is this one, the moment
 the e-paper panel arrives behind an optional install.
 
+**The Critic round returned 0 blocking, 17 warning, 11 note, and the warnings
+were worth having.** Four were live defects on paths a test double hides, and
+they share a shape worth naming: *work that is owed and gets attempted exactly
+once*. Reconciling the binding table against the set — which is what removes the
+legacy uploads, this chunk's stated deliverable — was reachable only on the tick
+a manifest first arrives, and that tick aborts when the set is asleep, which the
+module's own docstring says is most of them. It is now owed until it settles. Its
+three siblings: a selection the set refuses was read as an outage, so one image
+deleted from the phone app would freeze the wall on a backoff retrying a dead id
+for ever; a dropped client was abandoned without `close()`, leaking a websocket
+and its reader task per transient error on a daemon that runs for months; and a
+non-UTF-8 manifest raised `UnicodeDecodeError`, which is a `ValueError` and not an
+`OSError`, so it escaped every frame and killed the process over exactly the kind
+of malformed file that module exists to refuse.
+
+**Two were log floods, and they are not a tidiness complaint.** A theme whose
+renders are all missing walked its whole list once a second, because the rotation
+timer was stamped on success rather than on the attempt; a work the set refuses to
+accept was re-uploaded every pass, with a WARNING and a row rewritten each time.
+journald rate-limits, and the lines it drops first are the ERRORs that are this
+plane's only failure channel — a plane whose whole premise is that failure here is
+silent.
+
+**A mutation sweep ran over the plane's new branches and found what a green suite
+could not.** Twenty-nine mutations, and the survivors were the interesting part:
+one branch was *dead code* (brightness was clamped twice, so the inner clamp could
+be deleted with no test objecting), one test asserted a rule against a set that was
+already asleep — so the code under test never ran and the assertion passed for the
+wrong reason — and the last survivor was `tv/samsung.py` having **no tests at
+all**. That is the module holding every correction for the library's misreporting,
+and the daemon suite runs against a double, so nothing reached it. It has eighteen
+now, against a stubbed library: an upload that lands while reporting failure is
+found by reading the set's own listing back, and a failed call is proven to close
+the connection rather than abandon it.
+
+The sweep tool needed two changes to reach this plane at all — a `--project` flag,
+since it was hardwired to the curation root, and `-n0` made conditional on the
+project actually having xdist, which display does not and which made pytest exit 4
+and read as a broken suite.
+
 ## 2026-08-06: The small-issue sweep — eleven closed, and the two guards that were guarding a copy
 
 <!-- prawduct: scope=v1-build -->
