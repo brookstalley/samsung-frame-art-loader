@@ -878,7 +878,24 @@ async function viewDiscovery(generation) {
   } else {
     panels.push(
       el("div", { class: "panel" }, [
-        el("h3", { text: `Searches (${runs.count})` }),
+        // Both figures whenever they differ. The server caps this listing, and a
+        // heading reading "Searches (50)" over a history of four hundred is a
+        // silently short list — indistinguishable from a complete one, which is
+        // how a curator concludes their older searches are gone. The count alone
+        // was what this rendered for one commit, immediately after the cap was
+        // added on the server and before anything here read `total`.
+        el("h3", { text: runs.truncated ? `Searches (${runs.count} of ${runs.total})` : `Searches (${runs.count})` }),
+        runs.truncated
+          ? el("p", {
+              class: "note",
+              // No paging on this listing, so the note must not imply one. What
+              // reaches an older run is opening it directly: the run view takes
+              // an id in the fragment and is reachable from anywhere.
+              text:
+                `Showing the ${runs.count} most recent of ${runs.total} searches. ` +
+                "Older ones are still here and still open at their own address; this list does not page.",
+            })
+          : null,
         table(
           "Every search, newest first. A re-search is a run too, and is listed here with its parent.",
           ["Asked for", "Kind", "State", "Started", "Open"],

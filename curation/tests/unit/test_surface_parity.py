@@ -32,10 +32,12 @@ from datetime import UTC, datetime
 
 import pytest
 
+from curation.http import api as http_api
 from curation.http import models as http_models
 from curation.mcp import bindings
 from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, RunKind, RunStatus
 from curation.persistence.records import Artist, Artwork, Theme
+from curation.services.discovery import VerdictOutcome
 
 WHEN = datetime(2026, 8, 6, 12, 0, tzinfo=UTC)
 
@@ -304,3 +306,41 @@ def _view(work: CandidateWork):
     from curation.services.review import CandidateView  # noqa: PLC0415
 
     return CandidateView(work=work, instances_held=0, instances_surviving=0, shown=None)
+
+
+def test_the_two_verdict_notices_say_exactly_the_same_thing():
+    """Two copies of one sentence, held identical by a test rather than by memory.
+
+    `http/api.py`'s copy carried a docstring explaining why it did *not* share
+    with the MCP one — "that one is written for a model and names tool calls in
+    backticks; this one is read by a person". That is true of the run-view
+    sentence and false of this: the text names artists, and the two functions
+    were byte-for-byte identical, so the paragraph asserted a divergence nobody
+    had built and nothing would have caught.
+
+    They stay two — the day one needs a reader-specific word is the day sharing
+    would be in the way, and merging formatters across surfaces is what the
+    Decision Log declines. This is what makes "identical" a fact instead of a
+    coincidence: a word changed on one surface and not the other fails here.
+    """
+    minted = Artist(id="art_1", name="Hokusai")
+    outcome = VerdictOutcome(
+        work=_work(),
+        minted_artist=minted,
+        duplicate_candidates=(Artist(id="art_2", name="Katsushika Hokusai"),),
+    )
+
+    assert http_api._verdict_notice(outcome) == bindings._verdict_notice(outcome)
+
+
+def test_the_two_verdict_notices_are_both_silent_on_the_same_input():
+    """Identical text is half the claim; identical *silence* is the other half.
+
+    Both return None unless a mint and a near-miss arrive together, and a copy
+    that drifted on the guard rather than on the wording would still pass the
+    test above for every case that produces a sentence.
+    """
+    outcome = VerdictOutcome(work=_work(), minted_artist=None, duplicate_candidates=())
+
+    assert http_api._verdict_notice(outcome) is None
+    assert bindings._verdict_notice(outcome) is None

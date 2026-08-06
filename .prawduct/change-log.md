@@ -48,6 +48,94 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-06: The small-issue sweep — eleven closed, and the two guards that were guarding a copy
+
+<!-- prawduct: scope=v1-build -->
+
+**Why:** the backlog held seventeen `effort:S` items across nine unrelated areas,
+and small items left grouped by nothing get worked one at a time forever. Grouped
+by what they actually share, most of them turned out to be four pieces of work
+rather than seventeen.
+
+**Four closed without code.** #19's dead `uploaded_files = {}` had already gone
+when `b49a4f5` rewrote `delete_all_uploaded` for a different fault — and the
+lifecycle question that kept it from being fixed in place got answered on the way
+past, `tv_content_id` being the bookkeeping. It closed without the Chunk 12
+supersession it expected, that adoption having been descoped on evidence. #10
+(the second-look shelf) was ruled won't-do: the operator is the only MCP caller.
+#46 and #42 went upstream as prawduct#606 and #607, both re-verified against
+v3.2.6 first — and #46 got *stronger* in the process. It was filed as facts that
+fail to reach the ledger; `plugin/lib/ledger.py` is fail-closed on its kind
+vocabulary, so there is no resolution kind for `ledger-append` to accept. A
+design gap, not a dropped write.
+
+**CI was showing two green checks and neither watched the suites** (#82, #84,
+#98). A workflow now runs both default suites and all three planes' lint on every
+PR; a failing scheduled probe opens one issue per contract in the backlog the
+operator already reads; and an *unfired* schedule is caught by measuring how long
+since each tier last succeeded, per tier, because a healthy monthly run would
+otherwise vouch for three missed Mondays.
+
+Two corrections came out of the Critic round on that. The paid tier no longer
+fails on never-run — the first version went red the moment it reached `main` with
+the only remedies being to wait a month or spend real credit, and a check whose
+green costs money is a check that gets ignored, taking the free tier's finding
+down with it. And nothing created the `api-drift` label, so `gh issue create
+--label` would have raised on the first real failure: the alerting path failing
+exactly when needed.
+
+**The guard was reading the wrong number, and only a CI leg could reveal it.**
+pytest reports an `xfail` as `<skipped>` and counts it in the suite's `skipped`
+attribute, so `assert_tests_ran.py` failed the new leg naming a dependency that
+was never missing. An `xfail` is the opposite of an unprovisioned test. Nothing
+had ever run a suite containing one in CI, so the defect had nowhere to show.
+
+**One record, one shape** (#36, #100). The candidate-work seven keys were written
+at four sites; three are now one function, and the fourth — the HTTP model — is
+held to it by a test with a *named* exemption, where a stale exemption is itself
+a failure. `architecture.md`'s per-surface-formatting entry is scoped rather than
+amended away: it describes the artwork pair, which genuinely differs, and that
+divergence is now asserted too, being the entry's only evidence.
+
+**Two listings and a watch that could not stop** (#54, #83). `list_runs` returned
+the whole history on both surfaces, growing with the number of runs *and* the
+length of what people typed. The cap is the service's, so the two surfaces cannot
+disagree about how much history exists. The run poll re-armed for ever on a
+permanent failure: a stale bookmark had the tab asking for a run that will never
+exist every two seconds, bounded only by navigation. Counted consecutively, not
+cumulatively, and keyed by run id — the issue said generation, and `state.poll`
+increments every poll, so a generation-keyed count would reset each tick and
+never reach any threshold.
+
+**Two silently-wrong deployment values** (#22, #75). A typo in `ART_ROOT` created
+a directory, created an empty catalogue, and started cleanly. A marker file now
+refuses that, and a directory already holding a catalogue counts as marked, so
+the check cannot take a live install down. `TV_PANEL_DIAGONAL_INCHES` is now
+checkable rather than merely documentable — a claim `.env.example` had carried
+for two days before anything delivered it.
+
+**Three rounds of the sweep, three findings, and one of them was the tool.**
+Assertions written straight against a tree that already agrees can only ever be
+seen to pass: `==` loosened to `<=` changed no test, and a single fabricated case
+breaking two directions at once passed on whichever assertion fired first. Then
+the sweep tool itself — with `-x` under xdist a failing test exits **2**, not 1,
+so every *caught* mutation looked like the unclassifiable exit it refuses to
+guess at, and a sweep aborted on its first real catch calling itself
+misconfigured. `-n auto` is in this plane's `addopts`, so the invocation
+`CLAUDE.md` documents could only complete when nothing was caught.
+
+**The Critic's blocking finding was the same shape one level up.** The run-listing
+cap was asserted against a helper that rebuilt `runs[:MAX_RUNS_LISTED]` — the
+production expression, copied — so deleting the slice from the service left both
+suites green. That slice is the whole of #54.
+
+**Also corrected: the dotenv precedence flip had reached two of four sites.** The
+service unit and the operational spec both still promised that `EnvironmentFile=`
+was a presence guard rather than the value source, which inverted when
+`override=True` was retired. systemd's parser now decides, and the two parsers
+differ on quoting — so a mis-parsed `ART_ROOT` is live. What covers the worst
+case is now a mechanism rather than a promise: the marker check above.
+
 ## 2026-08-05: The seven fixes the fix-or-file pass identified and did not do
 
 <!-- prawduct: scope=v1-build -->

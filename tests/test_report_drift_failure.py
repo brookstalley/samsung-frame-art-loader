@@ -57,6 +57,29 @@ class FakeGh:
         return None
 
 
+def test_the_dedup_label_is_created_before_anything_uses_it():
+    """The first real drift failure would otherwise raise instead of filing.
+
+    Nothing creates the `api-drift` label, and `gh issue create --label` on a
+    repository that has never had one exits non-zero. So the alerting path was
+    written to fail at exactly the moment it was needed, leaving no trace but a
+    red workflow — the shape this whole route exists to replace.
+
+    `--force` is what makes it idempotent: without it the *second* run fails
+    because the label already exists, which is the same defect wearing the
+    opposite sign.
+    """
+    script = _load()
+    gh = FakeGh()
+
+    script.main("Museum APIs (free)", RUN_URL, gh=gh)
+
+    created = gh.call_named("label", "create")
+    assert created is not None, "the label is used by two calls below and created by none"
+    assert "--force" in created, "a create that fails on the second run is not idempotent"
+    assert gh.calls.index(created) == 0, "the label must exist before the calls that use it"
+
+
 def test_a_first_failure_opens_an_issue():
     script = _load()
     gh = FakeGh(open_issues=[])

@@ -189,12 +189,24 @@ the silent failure this is meant to remove: the process starts, raises at import
 against five missing variables, and dies for a reason nobody connects to a file
 that was never placed.
 
-**The directive is a presence guard, not the value source.** `load_dotenv(override=True)`
-re-parses the same file inside the process and wins, so systemd's parser and
-python-dotenv's cannot disagree about what the process ends up seeing — only
-about whether the unit starts at all. Anything relying on the two parsers
-agreeing on quoting or inline comments would be relying on something this
-arrangement does not promise.
+**The directive is the value source — corrected 2026-08-06.** It was a presence
+guard while `config.py` called `load_dotenv(override=True)`, which re-parsed the
+same file inside the process and won. That `override=True` was retired, because
+discarding an exported value in silence is this product's worst failure shape, so
+python-dotenv now supplies *defaults* and whatever is already in the environment
+wins. systemd has put this file's contents there before the process starts.
+
+So the guarantee inverted, and the paragraph this replaces asserted the old one.
+The two parsers **can** now disagree about what the process sees — they differ on
+quoting and inline comments — and a mis-parsed value is live rather than
+overwritten.
+
+What covers the worst case is a mechanism rather than a promise: `curation.art_root`
+refuses to start against a directory that is neither marked nor holding a
+catalogue, so an `ART_ROOT` systemd parsed into something else reports an error
+instead of quietly creating an empty second collection. The other four required
+variables still raise at import when absent, which is the case a mis-parse most
+often produces.
 
 *(Settled 2026-08-01: this said "a `.env` file per plane", and what exists is one
 shared root file — `.env.example` carries both planes' values, and

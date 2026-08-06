@@ -61,6 +61,23 @@ TIER_JOBS = {
     "paid": ("OpenRouter (spends money)",),
 }
 
+#: Whether a tier that has *never* succeeded is a fault, or merely a clock that
+#: has not started. The two tiers answer differently, and the difference is money.
+#:
+#: The free tier: yes. A workflow sitting on an unmerged branch has never run and
+#: never will, which is the fault this file exists for, and the remedy —
+#: dispatching it once by hand, as `api-drift.yml`'s header already prescribes —
+#: is free and takes seconds.
+#:
+#: The paid tier: no, and this is the correction to a first version that failed
+#: on both. That version went red the moment it reached `main` and the *only*
+#: ways to clear it were to wait for the first of the month or to spend real
+#: money on a manual dispatch. A check whose green costs money is a check that
+#: gets ignored, and an ignored check takes the free tier's finding down with it.
+#: An un-started paid clock is silent; once it has succeeded once, staleness is
+#: measured against it like any other.
+FAIL_WHEN_NEVER_RUN = {"free": True, "paid": False}
+
 
 def newest_success(runs: list[dict], job_names: tuple[str, ...]) -> datetime | None:
     """When any of `job_names` last succeeded, or None if it never has.
@@ -85,12 +102,19 @@ def main(runs: list[dict], now: datetime) -> int:
         limit = STALE_AFTER[tier]
 
         if last is None:
+            if not FAIL_WHEN_NEVER_RUN[tier]:
+                print(
+                    f"{tier}: has never run, which is not reported as a fault — see FAIL_WHEN_NEVER_RUN. "
+                    "It starts being measured once it has succeeded once."
+                )
+                continue
             print(
                 f"::error::The {tier} API-drift probes have never completed successfully. "
                 "GitHub fires `schedule` only for workflows on the default branch, so this is "
                 "what a drift workflow that has not yet been merged — or one whose first run "
                 "failed — looks like. Dispatch it by hand once (Actions -> API drift -> Run "
-                "workflow) to prove the wiring, rather than waiting a week to find a typo."
+                "workflow) to prove the wiring, rather than waiting a week to find a typo. "
+                "That dispatch is free: leave 'Also run the OpenRouter probes' unticked."
             )
             worst = 1
             continue

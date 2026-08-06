@@ -13,6 +13,7 @@ is specifically about a run being observable while it is in flight.
 
 import logging
 import threading
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -21,6 +22,7 @@ from fakes import FakeImageSearch, a_work, an_image
 from curation.discovery.engine import WorkList
 from curation.discovery.phase_two import PhaseTwoEngine
 from curation.persistence.discovery_records import (
+    DiscoveryRun,
     InitiatedBy,
     ResolutionStatus,
     RunKind,
@@ -30,7 +32,7 @@ from curation.persistence.discovery_records import (
 )
 from curation.services.errors import ServiceError
 from curation.services.previews import PreviewCache, PreviewSettings
-from curation.services.runner import DiscoveryRunner
+from curation.services.runner import MAX_RUNS_LISTED, DiscoveryRunner
 
 
 @pytest.fixture
@@ -566,3 +568,62 @@ def test_a_deployment_with_no_image_provider_refuses_a_re_search_rather_than_min
         blind.resolve_images(candidate_work_ids=[work.id], initiated_by=InitiatedBy.WEB_UI)
 
     assert [run for run in services.discovery.list_runs(kind=RunKind.RESOLVE)] == []
+
+
+# -- the cap the listing applies -------------------------------------------------
+
+
+def test_list_runs_caps_what_it_returns_and_still_reports_the_total(services, runner):
+    """The cap driven through the service that applies it, not through a copy of it.
+
+    The tests in `test_bindings.py` build their fixture with
+    `RunListing(runs=runs[:MAX_RUNS_LISTED], total=len(runs))` — the same
+    expression as `runner.list_runs` — so every one of them asserts a property of
+    the test helper. Deleting the slice from the service left both suites green,
+    and that slice is the whole of the bound: without it a household box that has
+    been discovering art for a year returns its entire history in one payload,
+    into a model's context window.
+
+    Written against the store directly rather than by starting runs, because what
+    is under test is the bound and the total, and fifty-two real discovery runs
+    would take the same assertion and make it slow.
+    """
+    for index in range(MAX_RUNS_LISTED + 7):
+        services.discovery._store.add_run(
+            DiscoveryRun(
+                id=f"r{index:03d}",
+                kind=RunKind.DISCOVERY,
+                initiated_by=InitiatedBy.MCP_CLIENT,
+                status=RunStatus.COMPLETED,
+                approval_required=False,
+                started_at=datetime(2026, 8, 2, 9, 0, tzinfo=UTC),
+                intent_text=f"request {index}",
+            )
+        )
+
+    listing = runner.list_runs()
+
+    assert len(listing.runs) == MAX_RUNS_LISTED, "the service returned an unbounded listing"
+    assert listing.total == MAX_RUNS_LISTED + 7, "the total must count what was left out, not what was returned"
+    assert listing.truncated is True
+
+
+def test_a_history_that_fits_is_returned_whole_and_says_nothing_was_cut(services, runner):
+    """The paired negative: a bound must not become a bound that always fires."""
+    for index in range(3):
+        services.discovery._store.add_run(
+            DiscoveryRun(
+                id=f"r{index}",
+                kind=RunKind.DISCOVERY,
+                initiated_by=InitiatedBy.MCP_CLIENT,
+                status=RunStatus.COMPLETED,
+                approval_required=False,
+                started_at=datetime(2026, 8, 2, 9, 0, tzinfo=UTC),
+            )
+        )
+
+    listing = runner.list_runs()
+
+    assert len(listing.runs) == 3
+    assert listing.total == 3
+    assert listing.truncated is False

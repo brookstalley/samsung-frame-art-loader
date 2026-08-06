@@ -10,6 +10,7 @@ all.
 import pytest
 from payloads import a_candidate, a_run, a_run_view, a_spend, an_estimate
 
+from curation.http.models import RunListOut
 from curation.persistence.discovery_records import ResolutionStatus, RunStatus, UnresolvedReason
 
 # At import time, not in a fixture. A marker deselection still *collects* this
@@ -425,3 +426,48 @@ def test_failures_with_a_success_between_them_never_end_the_watch(ui):
         f"only {attempts} requests — a cumulative count gives up on the sixth, so the watch "
         "was ended by failures that had a success between them"
     )
+
+
+# -- the discovery listing's own truncation ---------------------------------
+
+
+def _a_run_list(count: int, total: int) -> dict:
+    """A `/api/runs` payload as the capped service now produces one."""
+    return RunListOut(
+        runs=[a_run(run_id=f"r{index}", intent=f"request {index}") for index in range(count)],
+        count=count,
+        total=total,
+        truncated=total > count,
+    ).model_dump(mode="json")
+
+
+def test_a_truncated_search_list_says_how_much_history_it_is_not_showing(ui):
+    """The signal the server gained and the client dropped for one commit.
+
+    Capping `list_runs` bounded a payload that had grown with every search ever
+    made. It also made "Searches (50)" over a history of four hundred a silently
+    short list — indistinguishable from a complete one, which is how a curator
+    concludes their older searches are gone. `total` and `truncated` were on the
+    wire and nothing here read them.
+    """
+    ui.serve("**/api/runs*", _a_run_list(count=50, total=407))
+
+    ui.open("#discovery")
+    ui.page.wait_for_selector("h3:has-text('Searches')")
+
+    text = ui.text()
+    assert "50 of 407" in text
+    assert "does not page" in text, "a note implying paging sends a curator to an affordance that does not exist"
+
+
+def test_a_complete_search_list_says_nothing_about_truncation(ui):
+    """Saying nothing is the honest answer when nothing was left behind."""
+    ui.serve("**/api/runs*", _a_run_list(count=4, total=4))
+
+    ui.open("#discovery")
+    ui.page.wait_for_selector("h3:has-text('Searches')")
+
+    text = ui.text()
+    assert "Searches (4)" in text
+    assert "of 4" not in text, "a complete list must not be dressed as a partial one"
+    assert "does not page" not in text

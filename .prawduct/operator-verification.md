@@ -479,14 +479,22 @@ it is subjective by nature.
 
 **How to bring it up over the real works, without touching the deployed tree:**
 
-> **Corrected 2026-08-04 — the recipe below replaces one that could not work.**
-> It set `ART_ROOT` in the environment, and **`ART_ROOT` cannot be overridden that
-> way**: `config.py` calls `load_dotenv(override=True)`, and `find_dotenv()` walks
-> up from *that module's own file*, so the checkout's `.env` wins over the
-> environment no matter where the command is run from or what is exported. The old
-> recipe therefore seeded the real `ART_ROOT` while printing that it had, which
-> reads as success — it says which root it used in its first line, and that line
-> was the only tell. Verified by running it.
+> **Corrected 2026-08-04, and the correction itself expired 2026-08-06.**
+>
+> The recipe below replaced one that set `ART_ROOT` in the environment, on the
+> grounds that **`ART_ROOT` could not be overridden that way**: `config.py`
+> called `load_dotenv(override=True)`, and `find_dotenv()` walks up from *that
+> module's own file*, so the checkout's `.env` won over the environment no matter
+> what was exported. The old recipe seeded the real `ART_ROOT` while printing
+> that it had — which reads as success, the first line being the only tell.
+> Verified by running it.
+>
+> **That `override=True` has since been retired**, precisely because discarding
+> an exported value in silence is the failure shape this product exists to
+> correct. An exported `ART_ROOT` now wins, so the recipe the 2026-08-04 note
+> declared impossible would work today. The recipe below is kept anyway: it does
+> not depend on which way the precedence runs, which is the property worth having
+> in a document somebody follows months later.
 
 ```sh
 # The masters, read-only behind a symlink, inside the ART_ROOT `.env` names.

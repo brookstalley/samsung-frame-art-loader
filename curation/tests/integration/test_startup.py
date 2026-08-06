@@ -11,6 +11,7 @@ from dataclasses import replace
 from decimal import Decimal
 
 import curation.__main__ as entry_point
+from curation.art_root import MARKER_NAME
 from curation.config import (
     DEFAULT_ACQUISITION_USER_AGENT,
     DEFAULT_DISCOVERY_APPROVAL_THRESHOLD,
@@ -109,7 +110,18 @@ def _defaults(art_root, **overrides) -> Settings:
 
 
 def _stub_settings(monkeypatch, art_root, **overrides) -> None:
-    """Make `from_env` yield those defaults, so `main()` runs against them."""
+    """Make `from_env` yield those defaults, so `main()` runs against them.
+
+    The art root is marked, which is what an operator's one-time
+    `python -m curation --init` does. Without it startup now refuses — a
+    directory that is neither marked nor holding a catalogue is a mistyped
+    `ART_ROOT`, and the plane will not turn one into a second empty collection.
+    Every test below is about what startup *logs* and *wires*, so each one wants
+    a root that already exists rather than the refusal, which
+    `tests/unit/test_art_root.py` covers on its own terms.
+    """
+    art_root.mkdir(parents=True, exist_ok=True)
+    (art_root / MARKER_NAME).write_text("marked for the tests", encoding="utf-8")
     monkeypatch.setattr(Settings, "from_env", classmethod(lambda cls: _defaults(art_root, **overrides)))
 
 

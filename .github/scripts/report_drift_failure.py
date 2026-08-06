@@ -90,6 +90,17 @@ def body_for(contract: str, run_url: str) -> str:
 
 
 def main(contract: str, run_url: str, gh=_gh) -> int:
+    # The label has to exist before either call below can use it, and nothing
+    # creates it: `gh issue create --label api-drift` on a repository that has
+    # never had one exits non-zero, so the very first real drift failure would
+    # raise here instead of filing — the alerting path failing at exactly the
+    # moment it was needed, and leaving no trace but a red workflow.
+    #
+    # `--force` is what makes this idempotent: without it the second run fails
+    # because the label already exists, which is the same defect wearing the
+    # opposite sign.
+    gh("label", "create", LABEL, "--description", "Opened by the API-drift workflow", "--color", "B60205", "--force")
+
     found = json.loads(gh("issue", "list", "--state", "open", "--label", LABEL, "--limit", "100", "--json", "number,title"))
     existing = choose(found, contract)
 

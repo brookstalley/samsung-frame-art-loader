@@ -826,11 +826,19 @@ def _verdict_notice(outcome: VerdictOutcome) -> str | None:
     moment it happens, where a field on a payload nobody re-reads would not
     reach them.
 
-    Composed here rather than shared with the MCP surface's, which is the same
-    call the run view's sentence made and for the same reason: that one is written
-    for a model and names tool calls in backticks. This one is read by a person
-    looking at the card they just accepted. The *facts* are not written twice —
-    both read the names off the same outcome.
+    **This is a byte-for-byte copy of `mcp/bindings.py`'s, and that is now
+    stated rather than explained away.** The paragraph here used to claim the
+    divergence the run-view sentence really has — "that one is written for a
+    model and names tool calls in backticks; this one is read by a person" —
+    which is true of `runSentence` and simply false of this: the text names
+    artists, not tool calls, and the two functions are identical.
+
+    They stay two, because the day one of them does need a reader-specific
+    word is the day sharing them would be in the way, and because merging a
+    formatter across the surfaces is what `architecture.md`'s 2026-07-27 entry
+    declines. What changed is that the copy is held identical by
+    `tests/unit/test_surface_parity.py` rather than by a docstring asserting a
+    difference that was not there.
     """
     minted = outcome.minted_artist
     # Both conditions rather than the one that carries the message. Near-misses

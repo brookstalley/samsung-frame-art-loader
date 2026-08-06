@@ -92,22 +92,16 @@ flakes when workers contend for cores.
 `tools/mutation_sweep.py`, which drives `app.js` as happily as a Python file:
 delete the branch and watch a test go red.
 
-**Sweeping this suite needs the marker passed through, and forgetting it used to
-pass silently:**
+**Sweeping this suite needs the marker passed through:**
 
 ```sh
 cd curation && uv run python tools/mutation_sweep.py m.json tests/browser/test_x.py -- -m browser
 ```
 
-(The `-n0` this line used to carry is now the tool's default — see the sweep
-paragraph further down. The marker is still yours to pass.)
-
-Without `-- -m browser` pytest collects nothing and exits 5, which the sweep read
-as a caught mutation until 2026-08-05 — twenty-one mutations reported caught by
-runs that executed no test at all. The tool now runs the chosen tests unmutated
-first and refuses to sweep unless they run and pass, so the mistake fails loudly;
-the flag is still yours to pass. Re-run with it, two of those twenty-one survived
-and both were real coverage gaps.
+Without it pytest collects nothing and exits 5. The tool refuses to sweep unless
+the chosen tests run and pass unmutated, so forgetting the marker now fails
+loudly instead of reporting every mutation caught by runs that executed no test.
+(`-n0` is the tool's own default — see the sweep paragraph below.)
 
 ## The live suites
 
@@ -159,14 +153,9 @@ run on, and it is the check that a diff review does not substitute for — the
 undefended branches all looked right when read.
 
 Budget `(mutations + 1) x the time your chosen test paths take`. **The sweep runs
-serial, and that is now the tool's own doing rather than yours** — it passes
-`-n0` ahead of your arguments, so a `-n` of your own still wins.
-
-That is a correctness fix, not a speed one. With `-x` under xdist a failing test
-ends the session as INTERRUPTED and pytest exits **2**, not 1 — so every *caught*
-mutation looked like the unclassifiable exit the tool refuses to guess at, and a
-sweep aborted on its first real catch reporting itself misconfigured. `-n auto`
-is in this plane's `addopts`, so that was the default path: as of 2026-08-06 the
-documented invocation could only complete when nothing was caught. Serial costs
-nothing worth having — 67s against 65s for ten mutations over two files, because
-a slice run `(mutations + 1)` times is dominated by per-run worker startup.
+serial by the tool's own doing** — it passes `-n0` ahead of your arguments, so a
+`-n` of your own still wins. That is correctness, not speed: with `-x` under
+xdist a failing test ends the session as INTERRUPTED and pytest exits **2**, not
+1, so every *caught* mutation looked like the unclassifiable exit the tool
+refuses to guess at. Serial costs nothing worth having here — 67s against 65s for
+ten mutations over two files, a slice being dominated by per-run worker startup.

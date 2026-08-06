@@ -1,11 +1,14 @@
 """Run the curation plane: `uv run python -m curation`."""
 
+import argparse
 import logging
 import shutil
+import sys
+from collections.abc import Sequence
 
 import uvicorn
 
-from curation import logs
+from curation import art_root, logs
 from curation.acquisition.mat import MatEngine
 from curation.acquisition.preparation import PreparationSettings
 from curation.acquisition.service import AcquisitionSettings
@@ -107,8 +110,30 @@ def _collection(settings: Settings) -> CollectionBrowse | None:
     return build_collection_browse(user_agent=settings.artic_user_agent)
 
 
-def main() -> None:
-    """Resolve configuration, open the catalogue, and serve."""
+def main(argv: Sequence[str] = ()) -> None:
+    """Resolve configuration, open the catalogue, and serve.
+
+    **Arguments are passed in rather than read off `sys.argv`.** The default is
+    "no arguments", so calling `main()` from a test parses nothing instead of
+    parsing pytest's own command line — which is what it did for one commit, and
+    it turned seven startup tests into `SystemExit: 2`. The process entry point
+    below supplies the real ones.
+    """
+    parser = argparse.ArgumentParser(
+        prog="python -m curation",
+        description="Run the curation plane.",
+    )
+    parser.add_argument(
+        "--init",
+        action="store_true",
+        help=(
+            "Create ART_ROOT as a new, empty art root if it is not one already. "
+            "Needed once per deployment; without it a directory that is not an art root is refused, "
+            "so a mistyped ART_ROOT reports an error instead of quietly becoming a second collection."
+        ),
+    )
+    arguments = parser.parse_args(argv)
+
     logs.configure(level=logging.INFO)
     settings = Settings.from_env()
     log = logging.getLogger(__name__)
@@ -218,7 +243,11 @@ def main() -> None:
         settings.ready_path,
     )
 
-    settings.art_root.mkdir(parents=True, exist_ok=True)
+    # Before anything is created, and before the catalogue is opened. The two
+    # steps this replaces were individually reasonable and silent together: a
+    # `mkdir(exist_ok=True)` followed by `CREATE TABLE IF NOT EXISTS` turned a
+    # typo in ART_ROOT into a fresh empty collection that started cleanly.
+    art_root.prepare(settings.art_root, settings.catalogue_path, initialise=arguments.init)
     # One connection behind both halves of the model: acceptance promotes a
     # candidate's image instances into a work's sources, and that has to commit
     # once or not at all.
@@ -296,4 +325,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
