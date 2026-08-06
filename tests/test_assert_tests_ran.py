@@ -54,6 +54,13 @@ SKIPPED_CASE = (
     '<skipped message="dezoomify-rs is not installed"/>'
     "</testcase>"
 )
+#: pytest reports an expected failure as a `<skipped>` element and counts it in
+#: the suite's `skipped` attribute, telling the two apart only by `type`.
+XFAIL_CASE = (
+    '<testcase classname="tests.unit.test_identity" name="test_a_reversed_name_is_accepted">'
+    '<skipped type="pytest.xfail" message="artist identity is order-sensitive"/>'
+    "</testcase>"
+)
 
 
 @SHAPES
@@ -88,6 +95,61 @@ def test_the_failure_names_which_dependency_was_missing(tmp_path, capsys):
     printed = capsys.readouterr().out
     assert "tests.live.test_a::test_it_still_holds" in printed
     assert "dezoomify-rs is not installed" in printed
+
+
+@SHAPES
+def test_an_expected_failure_is_not_read_as_a_missing_dependency(tmp_path, shape, capsys):
+    """An `xfail` ran and failed as recorded. It is the opposite of unprovisioned.
+
+    pytest gives it a `<skipped>` element and counts it in the suite's `skipped`
+    attribute, so a guard reading that attribute cannot tell a documented
+    expected failure from an absent secret. This one is told apart by `type`.
+
+    Found the day the default suites first got a CI leg: the curation suite
+    carries one `xfail` for an order-sensitivity in artist identity, and the job
+    went red naming a dependency that was never missing. Until then no CI job ran
+    a suite that contained an `xfail`, so the defect had nowhere to show.
+    """
+    guard = _load()
+    report = _report(tmp_path, shape.format(tests=2, skipped=1, cases=PASSING_CASE + XFAIL_CASE))
+
+    assert guard.main(report) == 0
+    printed = capsys.readouterr().out
+    assert "xfailed 1" in printed, "an expected failure must be reported, not silently discounted"
+    assert "::error::" not in printed
+
+
+@SHAPES
+def test_a_real_skip_beside_an_expected_failure_still_fails_the_job(tmp_path, shape, capsys):
+    """The distinction must not become a hole: one xfail cannot cover for a skip.
+
+    This is the mutation the fix invites — classify by type, then count the
+    wrong bucket — and it would leave a job green whenever a documented xfail
+    happened to sit in the same suite as an unprovisioned test.
+    """
+    guard = _load()
+    report = _report(tmp_path, shape.format(tests=3, skipped=2, cases=PASSING_CASE + XFAIL_CASE + SKIPPED_CASE))
+
+    assert guard.main(report) == 1
+    printed = capsys.readouterr().out
+    assert "dezoomify-rs is not installed" in printed
+    assert "1 test(s) skipped" in printed, "the count must exclude the xfail, or it misstates what is wrong"
+
+
+def test_suite_level_skips_with_no_case_detail_still_fail_the_job(tmp_path, capsys):
+    """A report the classifier cannot read must not thereby win a pass.
+
+    The `type` attribute is the only thing separating an xfail from a missing
+    dependency, so a report that declares skips at suite level and carries no
+    `<skipped>` case elements — another tool's output, a truncated file — is
+    unclassifiable. It fails, because the safe direction for an unknown is to
+    refuse rather than to wave through.
+    """
+    guard = _load()
+    report = _report(tmp_path, NESTED.format(tests=4, skipped=2, cases=PASSING_CASE))
+
+    assert guard.main(report) == 1
+    assert "no testcase detail" in capsys.readouterr().out
 
 
 def test_a_marker_that_selected_nothing_fails_the_job(tmp_path, capsys):

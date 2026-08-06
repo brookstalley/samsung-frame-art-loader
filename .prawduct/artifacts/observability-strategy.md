@@ -398,6 +398,54 @@ trigger: if undetected staleness turns out to be annoying in practice, or if
 unattended/scheduled discovery is ever added — the latter removes the curator from
 the session, which is what makes self-announcing failures self-announcing.
 
+### The one surface the panel does not cover: CI
+
+**Scope correction, 2026-08-06.** The decision above says "the curation UI health
+panel as the only alerting surface", and it was written when every failure in
+this strategy happened on the operator's own hardware. There is now a class that
+does not: a foreign API moving under a measurement recorded in one of the
+`*-api-findings.md` documents. `.github/workflows/api-drift.yml` re-runs those
+measurements on a schedule, and the panel cannot show its result — the panel
+reads a running display plane, and this failure happens on GitHub's runners,
+possibly while nothing of ours is running at all.
+
+So the panel-only rule is amended rather than broken: **it governs the running
+product; CI has its own route, and this section is that route written down.** Two
+distinct faults, two mechanisms, because a run that failed and a run that never
+happened leave completely different traces:
+
+**A probe ran and failed.** The failing job opens an issue in this repo's
+backlog, one per contract, via `.github/scripts/report_drift_failure.py`. Repeat
+failures comment on the open issue rather than opening another, so the comment
+history is how long the contract has been moving. **It does not close itself when
+the probe goes green**, and that is deliberate: a green run proves the probe
+passed, not that anyone reconciled the findings document against what the API now
+returns. The operator closes it, having done that work.
+
+*Why an issue rather than email.* GitHub's default Actions email for a scheduled
+run goes to whoever last edited the cron file, is silently absent for anyone whose
+Actions notifications are off, and breaks the moment somebody else touches the
+file. It is also the exact mechanism the 2026-07-20 decision rules out. An issue
+survives an unread inbox, does not depend on edit history, and lands where the
+remedial work is already tracked. Scheduled runs only — a hand-dispatched run
+already has somebody watching it.
+
+**The schedule stopped firing.** Nothing above can fire, because no job runs.
+This is the same shape as the preview sweep's `preview.swept`: the positive
+signal is a successful run, and its *absence* over an interval is the fault.
+`suites.yml`'s `drift-freshness` job measures how long since each tier last
+succeeded — **free after 21 days, paid after 75** — reading the tiers apart,
+because a healthy monthly run would otherwise vouch for three missed Mondays.
+Both known routes land here: a workflow not on the default branch has never run,
+and a schedule GitHub disabled for repository inactivity stops refreshing.
+
+*Its limit, stated rather than implied.* That job runs only on a push to `main`,
+so absence is detected at the next push, not continuously. A pull request cannot
+fix either fault, so failing one would be a red check nobody on that branch can
+clear. The undetected window is therefore exactly the window in which nobody was
+working — which is the same window in which GitHub disables a schedule, and the
+same one in which a stale museum measurement costs nothing.
+
 ## Spend as an Observability Signal
 
 Spend is a *signal* here, not only a cost control: the hard cap cannot be trusted
@@ -463,3 +511,6 @@ signal exists:
 | A work silently absent from a theme | **The manifest build reports exclusions** with a per-work reason — see `architecture.md`. Not a log line: a first-class UI surface |
 | Mat colour degraded to the dominant-colour fallback | Recorded on the record itself (`MatColor.method`), not merely logged. The 2024 code degrades invisibly |
 | Curation killed mid-run (OOM, deploy restart, crash) | **Startup reconciliation logs one line per run it moves to `interrupted`**, at WARNING, with the run id and its prior status. This is the only signal that a run died — the dying process cannot report its own death, and the operator's next clue would otherwise be `resolve_images` refusing work ids. Silence here means reconciliation did not run, which is itself the bug (`data-model.md` → State Machines) |
+| A foreign API moved under a recorded measurement | **An issue in this repo's backlog, one per contract**, opened by the failing `api-drift.yml` job; repeat failures comment on it rather than opening another. Not the panel — this failure happens on GitHub's runners, possibly while nothing of ours is running. It stays open until a human reconciles the `*-api-findings.md` document, because a green re-run proves the probe passed and nothing about whether anyone did the work. See § The one surface the panel does not cover |
+| The API-drift schedule stopped firing | **The only signal is a positive one, exactly as with the preview sweep**: a successful run per tier, whose *absence* is the fault. `suites.yml`'s `drift-freshness` job fails past 21 days (free) or 75 days (paid), reading the tiers apart so a healthy monthly run cannot vouch for three missed Mondays. Covers both routes — never on the default branch, and disabled for repository inactivity. Detected at the next push to `main`, not continuously |
+| A default-suite regression reaches `main` | `suites.yml` runs both default suites on every pull request and every push to `main`. Until 2026-08-06 there was no such signal at all: the repo had two workflows, and neither ran the suites that gate correctness, so a reviewer reading two green checks was reading the browser suite and a schedule |

@@ -1,0 +1,167 @@
+# Run the two default suites, the three planes' lint, and the check that the
+# drift schedule is still alive.
+#
+# WHAT THIS IS FOR. Until this file existed, the repo had two workflows and
+# neither ran the suites that gate correctness: `api-drift.yml` runs the live
+# probes on a schedule, `browser.yml` runs the browser suite. So the root tests
+# and the curation tests gated nothing in CI, and every default-suite regression
+# was caught only by whoever remembered to run them locally before pushing —
+# which is exactly the guarantee CI exists to remove, and the one a reviewer
+# assumes is in place because two green workflows are showing on the PR.
+#
+# TRIGGERS. Pull requests, and pushes to `main`. Deliberately not every push to
+# every branch: `pull_request` already fires on each push to a PR head, so the
+# wider trigger would only double the runs. `browser.yml` made the same call for
+# the same reason, and the two legs should agree — a contributor reasoning about
+# what gates their branch should not have to hold two policies in their head.
+#
+# TWO SUITES, TWO JOBS. They are independent projects with independent
+# interpreters and no shared state, so one job would only serialise them and
+# report a single conclusion for two unrelated things. Separately, each names
+# which plane broke.
+#
+# LINT IS ITS OWN JOB, and that is not just tidiness: lint covers *three* planes
+# where tests cover two. `display/` currently holds a project manifest and no
+# module, so it has lint but nothing to test. Folding lint into the test jobs
+# would leave the display plane's lint with no job to live in.
+
+name: Default suites
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: suites-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  root:
+    name: "The 2024 modules"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Run the root suite
+        # `uv run`, not a bare `pytest`. pytest, ruff and black live in a
+        # `[dependency-groups] dev` group that only uv installs, so a bare call
+        # gets either command-not-found or a system-Python pytest resolving
+        # different dependencies — a green run that means nothing.
+        run: uv run pytest tests -v --junitxml=results.xml
+      - name: Fail if nothing actually ran
+        if: always()
+        run: python3 .github/scripts/assert_tests_ran.py results.xml
+
+  curation:
+    name: "The curation plane"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Run the curation suite
+        working-directory: curation
+        # THE TWO `--ignore`s ARE LOAD-BEARING, and they are what a plain
+        # `uv run pytest` cannot do here. The default `addopts` *deselects* the
+        # opt-in markers, but deselection happens after collection, and the
+        # browser and eval modules `importorskip` their groups at import — groups
+        # a default `uv sync` deliberately does not install. Those import skips
+        # land in the report, and the guard below reads any skip as a
+        # provisioning failure and fails the job. Green suite, red leg, nothing
+        # wrong: the alarm that cries wolf until nobody reads it.
+        #
+        # `tests/live` is deliberately NOT ignored — its modules import cleanly
+        # and its tests are marker-deselected, so it contributes no skip.
+        #
+        # The ignore set is not maintained by hand:
+        # `tests/test_default_suite_ci_scope.py` derives it from the tree and
+        # fails if a directory that needs ignoring is missing — or if one that
+        # does not need it is listed, because over-excluding is how coverage
+        # silently shrinks.
+        run: uv run pytest tests --ignore=tests/browser --ignore=tests/eval -v --junitxml=results.xml
+      - name: Fail if nothing actually ran
+        if: always()
+        run: python3 .github/scripts/assert_tests_ran.py curation/results.xml
+
+  lint:
+    name: "Lint and format, all three planes"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: The 2024 modules
+        run: |
+          uv run ruff check .
+          uv run black --check .
+      - name: The curation plane
+        working-directory: curation
+        run: |
+          uv run ruff check .
+          uv run black --check .
+      - name: The display plane
+        working-directory: display
+        # This plane holds a project manifest and no module yet, so both commands
+        # run against an empty tree and pass trivially. That is the point of
+        # wiring it now rather than later: the leg is in place the day the first
+        # module lands, instead of being remembered afterwards.
+        run: |
+          uv run ruff check .
+          uv run black --check .
+
+  drift-freshness:
+    name: "Are the drift probes still running?"
+    # ONLY ON A PUSH TO `main`, and the restriction is the design rather than a
+    # saving. The fault this looks for — the workflow not being on the default
+    # branch, or GitHub disabling the schedule after repository inactivity —
+    # cannot be fixed from a pull request, so failing one would be a red check
+    # nobody on that branch can clear. A push to `main` is both the moment the
+    # first fault becomes fixable and a reliable sign somebody is around to act.
+    #
+    # ITS LIMIT, STATED: this detects absence at the next push to `main`, not
+    # continuously. A repo that goes quiet for a year gets told on the first push
+    # after it wakes up. That is the right trade here — GitHub only disables a
+    # schedule for inactivity, so the undetected window is exactly the window in
+    # which nobody was working anyway.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect the drift workflow's recent runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # A 404 here is a real answer, not an error: it is what "the workflow is
+        # not on the default branch" looks like from the API, which is one of the
+        # two faults being checked for. It becomes an empty list, and the script
+        # reports it as never having run.
+        run: |
+          set -uo pipefail
+          if ! runs=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/workflows/api-drift.yml/runs?per_page=20" \
+                --jq '[.workflow_runs[] | {createdAt: .created_at, id: .id}]' 2>/dev/null); then
+            runs='[]'
+          fi
+          echo "$runs" | jq -c '.[]' | while read -r run; do
+            id=$(echo "$run" | jq -r '.id')
+            jobs=$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${id}/jobs" \
+              --jq '[.jobs[] | {name: .name, conclusion: .conclusion}]' 2>/dev/null || echo '[]')
+            echo "$run" | jq -c --argjson jobs "$jobs" '. + {jobs: $jobs}'
+          done | jq -s '.' > drift-runs.json
+          cat drift-runs.json
+      - name: Fail if a tier has gone quiet
+        run: python3 .github/scripts/check_drift_freshness.py < drift-runs.json

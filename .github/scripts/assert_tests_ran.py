@@ -21,6 +21,20 @@ So a skip here is read as a provisioning failure rather than a legitimate
 absence. In CI every dependency is meant to be present; if one is not, that is
 the finding.
 
+**An `xfail` is not one of those skips, and the distinction is load-bearing.**
+pytest reports an expected failure in JUnit as a `<skipped>` element and counts
+it in the suite's `skipped` attribute — indistinguishable from a missing
+dependency if you read the attribute, which is what this file used to do. An
+`xfail` is the opposite of an unprovisioned test: it ran, it failed exactly as
+recorded, and the recording is a deliberate artefact of a decision someone wrote
+down. Failing the job on one would mean a suite could never carry a documented
+expected failure and a CI leg at the same time.
+
+Found the day the default suites first got a CI leg: the curation suite carries
+one `xfail`, and the job went red naming a "dependency not provisioned" that was
+a documented order-sensitivity in artist identity. Nothing was broken; the guard
+was reading the wrong number.
+
 Usage: assert_tests_ran.py <junit-xml-path>
 """
 
@@ -51,23 +65,46 @@ def main(path: Path) -> int:
     errors = sum(int(s.get("errors", 0)) for s in suites)
     ran = tests - skipped
 
-    print(f"collected {tests}, ran {ran}, skipped {skipped}, failed {failures}, errored {errors}")
+    # The suite attribute counts expected failures alongside real skips, so the
+    # cases are walked to tell them apart. An `xfail` carries type
+    # "pytest.xfail"; a genuine skip carries "pytest.skip" or, in reports from
+    # other tools, no type at all — which is read as a real skip, because the
+    # safe direction for an unknown is to fail the job rather than pass it.
+    blocking = []
+    expected_failures = 0
+    for suite in suites:
+        for case in suite.iter("testcase"):
+            skip = case.find("skipped")
+            if skip is None:
+                continue
+            if skip.get("type") == "pytest.xfail":
+                expected_failures += 1
+                continue
+            name = f"{case.get('classname', '')}::{case.get('name', '')}".lstrip(":")
+            blocking.append((name, skip.get("message", "no reason given")))
+
+    # A report whose suite attribute claims skips but carries no `<skipped>` case
+    # elements is one this walk cannot classify. Trust the attribute there: a
+    # tool that omits the detail must not thereby win a pass.
+    if skipped and not blocking and not expected_failures:
+        blocking = [("<unnamed>", f"{skipped} skip(s) reported at suite level with no testcase detail")]
+
+    summary = f"collected {tests}, ran {ran}, skipped {len(blocking)}, failed {failures}, errored {errors}"
+    if expected_failures:
+        summary += f", xfailed {expected_failures}"
+    print(summary)
 
     if tests == 0:
         print("::error::No tests were collected. The marker expression selected nothing.")
         return 1
 
-    if skipped:
+    if blocking:
         # Named individually — "3 skipped" does not tell you which dependency is
         # missing, and that is the only thing worth knowing here.
-        for suite in suites:
-            for case in suite.iter("testcase"):
-                skip = case.find("skipped")
-                if skip is not None:
-                    name = f"{case.get('classname', '')}::{case.get('name', '')}".lstrip(":")
-                    print(f"::error::skipped in CI: {name} — {skip.get('message', 'no reason given')}")
+        for name, message in blocking:
+            print(f"::error::skipped in CI: {name} — {message}")
         print(
-            f"::error::{skipped} test(s) skipped. In CI a skip means a dependency was not provisioned "
+            f"::error::{len(blocking)} test(s) skipped. In CI a skip means a dependency was not provisioned "
             "— an absent or expired secret, or a failed install — not a legitimate absence. "
             "This job verified less than it appears to have."
         )

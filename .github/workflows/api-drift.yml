@@ -1,6 +1,20 @@
 # Re-run the live probes on a schedule, so a foreign API changing under us is
 # something we are told rather than something a curator discovers.
 #
+# HOW WE ARE TOLD, since that sentence is only true if something makes it true.
+# A failing job opens — or comments on — an issue in this repo's backlog, via
+# `.github/scripts/report_drift_failure.py`. That is deliberate rather than
+# incidental: `observability-strategy.md`'s 2026-07-20 alerting decision rules out
+# email and external monitors, and GitHub's default Actions email for a scheduled
+# run is delivered to whoever last edited this file, is silently absent for anyone
+# whose Actions notifications are off, and breaks the moment somebody else touches
+# the cron. An issue survives an unread inbox and lands where the remedial work is
+# already tracked. One open issue per contract; repeat failures comment on it.
+#
+# The *absence* of a run is a different fault and has a different mechanism —
+# `suites.yml`'s `drift-freshness` job, which measures how long since each tier
+# last succeeded. A schedule that stops firing leaves nothing here to fail.
+#
 # WHAT THIS IS FOR. The `live_*` suites are the durable form of the
 # `*-api-findings.md` documents: each records a measurement the product is
 # written against, and a document nobody re-runs quietly stops describing the
@@ -45,13 +59,20 @@ concurrency:
   group: api-drift
   cancel-in-progress: false
 
+# `issues: write` is wider than a probe run needs, and it is what buys the
+# failure route: without it the only notification is the default Actions email,
+# whose limits are in the header above. Nothing here reads an issue's contents;
+# the scripts only list titles, create, and comment.
 permissions:
   contents: read
+  issues: write
 
 jobs:
   # One job per marker rather than a single `-m "a or b"` run, so a museum outage
   # does not mask the binary result and the failure notification names which
-  # contract moved.
+  # contract moved. That second half is now real: each job reports its own
+  # failure under its own contract name, so the issue title says which one moved
+  # without anyone opening the run.
   #
   # EVERY JOB SCOPES THE PATH AS WELL AS THE MARKER, and that is load-bearing
   # rather than tidy. `-m live_museum` alone still *collects* the whole tests
@@ -85,6 +106,18 @@ jobs:
       - name: Fail if nothing actually ran
         if: always()
         run: python3 .github/scripts/assert_tests_ran.py curation/results.xml
+      - name: Say so where a human will see it
+        # Scheduled runs only. A hand-dispatched run already has somebody
+        # watching its output — that is what dispatching it means — and filing an
+        # issue at them would be noise while they are mid-debug. The unwatched
+        # run is the one that needs a durable artefact.
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 .github/scripts/report_drift_failure.py
+          "Museum APIs (free)"
+          "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
   binary:
     name: "dezoomify-rs (free)"
@@ -118,6 +151,14 @@ jobs:
       - name: Fail if nothing actually ran
         if: always()
         run: python3 .github/scripts/assert_tests_ran.py curation/results.xml
+      - name: Say so where a human will see it
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 .github/scripts/report_drift_failure.py
+          "dezoomify-rs (free)"
+          "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
   openrouter:
     name: "OpenRouter (spends money)"
@@ -146,3 +187,11 @@ jobs:
         # in CI is a provisioning failure, not a legitimate absence.
         if: always()
         run: python3 .github/scripts/assert_tests_ran.py curation/results.xml
+      - name: Say so where a human will see it
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 .github/scripts/report_drift_failure.py
+          "OpenRouter (spends money)"
+          "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
