@@ -2208,6 +2208,11 @@ binds already exists and is contract-tested.
   floor), `api-contract.md` (the work row and its token budget),
   `observability-strategy.md` (the two-way split that does not name a record which
   was never retrieved), issue #78
+- **Foreign API:** museum APIs (ARTIC) — the artist fold changes what the phase-2
+  query *sends*, so it is a change to a foreign surface even though it adds no
+  new endpoint. Its `verify-api` step is the RED live test named first in the
+  description, which measured the artist facet against the live collection rather
+  than assuming it; `artic-api-findings.md` carries the result.
 - **Visual change:** no — the reason reaches the wire and the review surfaces
   render it, but no new page
 - **Deliverables:** the `unresolved_reason` column (additive and nullable, so the
@@ -2336,6 +2341,13 @@ binds already exists and is contract-tested.
   its four conditions on every offered work), `nonfunctional-requirements.md`
   § The Supply Horizon, `data-model.md` § CandidateWork, `architecture.md` (adding
   a provider is a pre-authorised bounded extension)
+- **Foreign API:** museum APIs (ARTIC) — and this is the bundle's largest new
+  query surface: a POST search with `filters`/`top_hits`/`terms` aggregations, a
+  wall-type keyword filter, and an ambiguity-bounded surname retry, none of which
+  any earlier chunk sends. Its `verify-api` step is the "Step 0 ran 2026-08-04"
+  section below, which measured the facet live before the design was fixed and
+  found the case-sensitivity asymmetry between `artwork_type_title.keyword` and
+  `artist_title.keyword`; `artic-api-findings.md` § Browsing by artist carries it.
 - **Visual change:** yes — a run's work list stops being a flat list of what phase
   1 said, so the review grid, the API work list and the approval count each gain a
   second kind of row to render, count and explain. That is why this is a chunk and

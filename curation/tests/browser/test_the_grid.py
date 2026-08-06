@@ -26,11 +26,13 @@ pytest.importorskip(
 
 @pytest.fixture
 def a_catalogue_past_one_page(service, seeded_service):
-    """101 works — one more than `MAX_LIST_LIMIT`, so exactly two pages.
+    """101 works — one more than a whole number of server pages.
 
-    One over the cap rather than comfortably over it: the second page holding a
+    Deliberately one over rather than comfortably over: a final page holding a
     single work is what catches an off-by-one that drops or repeats the boundary
-    row, which a round 200 would render invisible.
+    row, which a round 200 would render invisible. That holds whatever the
+    server's page size is — 101 is not a multiple of it — which is why the
+    fixture survived the client giving up its own `limit`.
     """
     for number in range(98):
         service.add_artwork(title=f"Study number {number:03d}")
@@ -38,20 +40,45 @@ def a_catalogue_past_one_page(service, seeded_service):
 
 
 def test_the_grid_pages_through_a_catalogue_larger_than_one_page(ui, a_catalogue_past_one_page):
-    """Every work arrives, across as many requests as that takes."""
+    """Every work arrives, across as many requests as that takes.
+
+    **Across as many as it takes, not a fixed number.** The client sends no
+    `limit`, so how many pages this is depends on the server's default and is
+    the server's business — pinning a count here would put that number in the
+    test as well as the client, which is the coupling `fetchAllWorks` gave up on
+    2026-08-05. What the loop owes is that it starts at the beginning, makes
+    progress every time, and stops having collected everything.
+    """
     ui.open("#works")
     ui.page.wait_for_selector("h2")
 
     assert ui.page.inner_text("h2") == f"{a_catalogue_past_one_page} works"
     assert ui.page.locator("ul.grid li.card").count() == a_catalogue_past_one_page
 
-    # The count alone passes against a server that ignored the cap and answered
-    # in one page, which would leave the loop this test exists for unexecuted.
-    # Asserting the requests is what pins that it actually paged.
+    # The count alone passes against a server that answered in one page, which
+    # would leave the loop this test exists for unexecuted. Asserting the
+    # requests is what pins that it actually paged.
     pages = ui.requests_matching("/api/works?")
-    assert len(pages) == 2
-    assert "offset=0" in pages[0]
-    assert "offset=100" in pages[1]
+    assert len(pages) > 1, "the grid never paged, so its paging loop went unexecuted"
+
+    # The rule itself, and the reason the count above is not pinned. A client
+    # that names a page size names the server's cap, and `list_artworks` refuses
+    # anything above it with a 400 that `api()` throws — so the day the cap were
+    # lowered, this view and the theme picker would fail outright while the
+    # review grid, which asks for nothing, kept paging.
+    assert all(
+        "limit=" not in page for page in pages
+    ), "the grid asked for a page size, re-coupling the default landing view to the server's cap"
+
+    offsets = [int(page.split("offset=")[1].split("&")[0]) for page in pages]
+    assert offsets[0] == 0, "the first request skipped the start of the catalogue"
+    assert offsets == sorted(
+        set(offsets)
+    ), "offsets repeated or went backwards, so a page was re-fetched or the loop made no progress"
+    # No gap between pages: the works already in hand are what the next offset is
+    # derived from, so a jump would mean the boundary row was never asked for —
+    # the exact off-by-one this fixture's 101st work exists to expose.
+    assert offsets[-1] < a_catalogue_past_one_page, "the loop asked past the end of the catalogue"
 
 
 def test_the_grid_says_nothing_is_missing_when_nothing_is(ui, a_catalogue_past_one_page):

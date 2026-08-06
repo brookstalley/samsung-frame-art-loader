@@ -38,17 +38,29 @@ async function api(path, options) {
   return body;
 }
 
-/* The catalogue caps a page at 100 (MAX_LIST_LIMIT), and the design target is
- * hundreds of works — so both the grid and the theme picker page through to the
- * end rather than showing the first hundred. The picker is the one that made
- * this necessary: a truncated grid is a visible short list, but a truncated
- * picker means a curator simply cannot put work 101 in a theme, and is told
- * nothing about why.
+/* The design target is hundreds of works, so both the grid and the theme picker
+ * page through to the end rather than showing the first page. The picker is the
+ * one that made this necessary: a truncated grid is a visible short list, but a
+ * truncated picker means a curator simply cannot put work 101 in a theme, and is
+ * told nothing about why.
+ *
+ * **No `limit` is sent**, which is the same rule `fetchAllCandidates` states
+ * below and for the same reason. This asked for `limit=100` — a copy of the
+ * service's `MAX_LIST_LIMIT` — until 2026-08-05, and that copy was a live break
+ * waiting on an unrelated edit: `list_artworks` *refuses* a limit above its cap,
+ * the refusal arrives as a 400, and `api()` throws. So the day anyone lowered
+ * the catalogue's cap, the Works grid — the default landing view — and the theme
+ * picker would have failed outright while the review grid, which asks for
+ * nothing, kept paging.
+ *
+ * The cost is paid knowingly: the server's default page is smaller than its cap,
+ * so this makes more round trips than asking for the maximum would. They are
+ * against a loopback server on the same box, and `PAGE_CEILING` still admits far
+ * more works than the design target.
  *
  * `PAGE_CEILING` is a runaway guard, not a policy. If it is ever hit the caller
  * reports how many were left out, because a cap nobody mentions is the silent
  * omission this product exists to refuse. */
-const PAGE_SIZE = 100;
 const PAGE_CEILING = 50;
 
 async function fetchAllWorks() {
@@ -56,7 +68,7 @@ async function fetchAllWorks() {
   let total = 0;
   let truncated = false;
   for (let page = 0; page < PAGE_CEILING; page += 1) {
-    const body = await api(`/api/works?limit=${PAGE_SIZE}&offset=${works.length}`);
+    const body = await api(`/api/works?offset=${works.length}`);
     total = body.total;
     works.push(...body.works);
     // The stopping condition is what actually arrived, not what the server says

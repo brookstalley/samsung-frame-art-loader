@@ -44,6 +44,19 @@ dependencies = [
 #     plane drives the television before it drives the panel and a dependency
 #     declared ahead of the code that imports it is one nobody can check.
 #
+#     **That rule is suspended above for `astral` and `tzlocal`, and knowingly.**
+#     Every declared entry lands before the module importing it, since this
+#     manifest ships ahead of the plane's first module — but the other three
+#     answer for themselves and these two do not. `samsungtvws` and
+#     `websockets>=13` are pinned against a television they were measured on,
+#     which is what the lock exists to hold; `python-dotenv` is inert. `astral`
+#     and `tzlocal` serve the sun-position brightness port, which the build plan
+#     records as an open assumption the operator may defer — so if it is
+#     deferred, these are locked entries nothing imports and nothing will prompt
+#     anyone to notice. They are cheap and pure-Python, which is why they were
+#     let through rather than held; the cost of being wrong is two unused rows in
+#     the lock, against the panel group's compiled toolchain.
+#
 #   pillow — nothing here decodes an image. The television is handed a *path*
 #     and streams the file itself; composing the canvas is the curation plane's
 #     job and its output crosses as a file, not as pixels.

@@ -48,12 +48,15 @@ unbounded bill.
 > authoritatively, and the two would drift.
 >
 > *(Unchanged, and deliberately: this says where the number comes from **if** it is
-> shown. Whether to show `limit_remaining` on the health panel is a separate,
-> open question as of 2026-08-02 — it lags the provider's own enforcement by
-> minutes and was observed reporting credit remaining while calls were already
-> being refused. See `project-state.yaml` → `open_questions`. Answering that
-> question "no" would not touch this corollary; answering it "yes" makes the lag
-> something the surface has to state.)*
+> shown. **Whether to show it was settled "no" by the operator on 2026-08-04:
+> `limit_remaining` is not surfaced in any form.** It lags the provider's own
+> enforcement by minutes and was observed reporting credit remaining while calls
+> were already being refused, so a panel carrying it would tell a curator they
+> had budget at the moment they did not. That answer leaves this corollary
+> exactly as it stands — it governs where the number is read from, not whether it
+> is displayed — which is why the corollary was not swept when the question was.
+> `services/health.py` carries the same decision at the site that would hold the
+> field, and says not to add it back without reopening the decision.)*
 >
 > **Scope note:** this norm governs *ceilings*, not *budgeting*. A per-run search
 > cap (below, under Cost) is application-enforced and does not depart from this —

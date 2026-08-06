@@ -19,7 +19,7 @@ from types import SimpleNamespace
 import pytest
 
 from curation.acquisition.dezoomify import DezoomifyUnavailable
-from curation.acquisition.service import AcquisitionOutcome, AcquisitionResult
+from curation.acquisition.service import _DEPLOYMENT_FAULTS, AcquisitionOutcome, AcquisitionResult
 from curation.acquisition.space import NotEnoughSpace
 from curation.acquisition.tiles import TileTargetUnavailable
 from curation.mcp.bindings import (
@@ -317,31 +317,57 @@ def test_every_acquisition_outcome_is_accounted_for():
 # fail for a non-MCP caller, so this one no longer tries to cover it.
 
 
-@pytest.mark.parametrize(
-    ("raised", "remedy"),
-    [
-        (NotEnoughSpace("Only 1 byte free."), "MIN_FREE_BYTES"),
-        (DezoomifyUnavailable("dezoomify-rs is not on PATH."), "DEZOOMIFY_PATH"),
-        (TileTargetUnavailable("no resolver for provider 'artic'."), "ARTIC_USER_AGENT"),
-    ],
-)
-def test_a_deployment_fault_is_translated_into_a_remedy(raised, remedy, caplog):
+#: The environment variable each condition's remedy must name, keyed by the
+#: condition. A table rather than three literals in the parametrisation, so the
+#: test below can be driven from `_DEPLOYMENT_FAULTS` itself while still
+#: asserting the one thing that differs per condition — what an operator changes.
+_REMEDY_FOR = {
+    NotEnoughSpace: "MIN_FREE_BYTES",
+    DezoomifyUnavailable: "DEZOOMIFY_PATH",
+    TileTargetUnavailable: "ARTIC_USER_AGENT",
+}
+
+
+def test_every_raise_rather_than_record_condition_has_a_remedy_of_its_own():
+    """The invariant both modules state in prose, asserted instead of promised.
+
+    `service.py` says a new raise-rather-record condition belongs in
+    `_DEPLOYMENT_FAULTS`; `bindings.py` says every one of them needs an `except`
+    clause here, and that adding one to the service without one here is
+    **silent** — the generic handler drops the exception text, so the deliberate
+    refusal arrives as the very "failed unexpectedly" those clauses exist to
+    prevent. Nothing enforced either sentence, so a fourth member added to the
+    tuple shipped that outcome with a green suite.
+
+    This closes the gap at the table, and the parametrised test below closes it
+    at the clause: a condition with no entry fails here, and a condition with an
+    entry but no `except` clause fails there by raising something that is not a
+    `ServiceError`.
+    """
+    assert set(_DEPLOYMENT_FAULTS) == set(
+        _REMEDY_FOR
+    ), "a raise-rather-record condition was added or removed without its operator remedy"
+
+
+@pytest.mark.parametrize("condition", _DEPLOYMENT_FAULTS, ids=lambda c: c.__name__)
+def test_a_deployment_fault_is_translated_into_a_remedy(condition, caplog):
     """The caller gets something it can act on rather than "failed unexpectedly".
 
-    Parametrised over the three rather than written once, because the clauses are
-    three separate `except` branches and a test over one of them says nothing
-    about the other two — which is how the third came to exist with no coverage.
+    Driven from `_DEPLOYMENT_FAULTS` rather than a hand-written list, so the
+    coverage cannot fall behind the set it is covering — the clauses are separate
+    `except` branches, a test over one says nothing about the others, and that is
+    how the third came to exist with no coverage in the first place.
     """
 
     class _Refusing:
         def acquire(self, artwork_id, *, source_id=None):
-            raise raised
+            raise condition("the deployment is not in a state that allows this.")
 
     services = SimpleNamespace(acquisition=_Refusing())
 
     with caplog.at_level(logging.ERROR), pytest.raises(ServiceError) as failure:
         _retry_acquisition(services, {"artwork_id": "art-1"})
 
-    assert remedy in str(failure.value), "the caller is told nothing it can act on"
+    assert _REMEDY_FOR[condition] in str(failure.value), "the caller is told nothing it can act on"
     events = [record for record in caplog.records if getattr(record, "event", None) == "acquisition.deployment_fault"]
     assert events == [], "the binding journalled a fault the service already journals; an MCP refusal would be logged twice"
