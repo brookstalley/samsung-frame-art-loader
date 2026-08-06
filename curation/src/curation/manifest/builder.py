@@ -35,8 +35,9 @@ from curation.persistence.records import (
     MatColor,
     Original,
     Rendition,
-    RenditionKind,
     Theme,
+    is_current,
+    tv_renditions_newest_first,
 )
 
 log = logging.getLogger(__name__)
@@ -193,7 +194,11 @@ def assess(inputs: WorkInputs) -> Exclusion | None:
             ExclusionReason.NO_RENDITION,
             "It has a master image but has not been rendered for the television yet.",
         )
-    if inputs.tv_rendition.source_content_hash != inputs.original.content_hash:
+    # Through the shared predicate, because it already owns what "current"
+    # means. This re-derived it inline, so a change to the rule would have
+    # decided manifest membership by the old one while the review grid used the
+    # new — the work badged current and silently dropped from the wall.
+    if not is_current(inputs.tv_rendition, inputs.original):
         return _excluded(
             artwork,
             ExclusionReason.STALE_RENDITION,
@@ -305,8 +310,12 @@ def _artist_dates(artist: Artist) -> str | None:
 
 
 def tv_rendition_of(renditions: Sequence[Rendition]) -> Rendition | None:
-    """The most recently generated television render, or None if there is none."""
-    candidates = [rendition for rendition in renditions if rendition.kind is RenditionKind.TV_DISPLAY]
-    if not candidates:
-        return None
-    return max(candidates, key=lambda rendition: (rendition.generated_at, rendition.id))
+    """The television render the wall would use, or None if there is none.
+
+    The preference itself lives with the records, so the thumbnail service can
+    walk the same order and the two cannot pick different pictures of the same
+    work. Stale renders are included on purpose — `assess` needs one in hand to
+    say "needs regenerating" rather than "never rendered".
+    """
+    ordered = tv_renditions_newest_first(renditions)
+    return ordered[0] if ordered else None

@@ -437,17 +437,19 @@ class DisplayService:
     def _gather(self, artwork_id: str) -> WorkInputs:
         """Collect everything the readiness rule judges one work on."""
         detail = self._catalogue.get_artwork(artwork_id)
+        # Everything here comes through the catalogue service, because it owns
+        # what each of these means. Renditions reached straight past it into the
+        # store until 2026-08-05, and the hazard was the one the mat colour was
+        # already routed around: a second path to the same fact decides manifest
+        # membership while the first decides everything else, and only one of
+        # them is updated when the rule changes. The readiness rule judges the
+        # record rather than the view, so the view is unwrapped here — the rule
+        # it would have read is now a shared predicate `assess` calls directly.
         return WorkInputs(
             artwork=detail.artwork,
             artist=detail.artist,
-            original=self._store.get_original(artwork_id),
-            # Straight to the store, because `CatalogueService.list_renditions`
-            # returns a `RenditionView` and the readiness rule judges the record.
-            tv_rendition=tv_rendition_of(self._store.list_renditions(artwork_id)),
-            # Through the catalogue service, because it already owns what
-            # "current" means. A second copy of that rule here would decide
-            # manifest membership while the first decided everything else, and
-            # only one of them would be updated when the rule changed.
+            original=self._catalogue.get_original(artwork_id),
+            tv_rendition=tv_rendition_of([view.rendition for view in self._catalogue.list_renditions(artwork_id)]),
             mat_color=self._catalogue.current_mat_color(artwork_id),
         )
 

@@ -415,7 +415,23 @@ is no network between planes.
   `ThumbnailService` produces the downscaled copies that make a forty-card grid a
   page, recording each as a `RenditionKind.THUMBNAIL` so the cache is catalogued
   rather than loose on disk and inherits the staleness rule already governing the
-  television render. `SurveyService` composes a work with the two derived facts a
+  television render.
+
+  **That "inherits" became true on 2026-08-05 and was not before.** The rule was
+  written twice — once in `CatalogueService.list_renditions`, once inline in the
+  manifest builder, which reached past the service into the store to feed itself
+  — so a change to what "current" means would have landed in one and left the
+  other deciding wall membership by the old one: a work badged current on the
+  review grid and silently dropped from the wall as `stale_rendition`. Both the
+  predicate (`is_current`) and the preference between several television renders
+  (`tv_renditions_newest_first`) now live with the records, and the grid, the
+  thumbnail service and the manifest all read them. The second of those closed a
+  live disagreement rather than a hypothetical one: the builder took the most
+  recently generated render while the thumbnail service took the first current
+  one the store returned, and the unique index on `(artwork_id, kind,
+  target_width, target_height)` makes two television renders reachable.
+
+  `SurveyService` composes a work with the two derived facts a
   human-facing surface needs beside it — how large it would render on this
   deployment's wall, and which held image it would be shown — because
   `api-contract.md` requires that same pairing of `art_review`, and a composition
