@@ -50,7 +50,7 @@
 
 ## 2026-08-07: The safety gate reopened the flood it was standing next to
 
-<!-- prawduct: chunks=12 | scope=v1-build -->
+<!-- prawduct: chunks=12 | status=shipped | scope=v1-build -->
 
 **Why:** the art-mode gate added in the entry below went in *front* of the
 backoff on the directive path instead of behind it. Rotation reads
@@ -104,7 +104,7 @@ reporting one at ERROR would invert the defect that handler exists to fix.
 
 ## 2026-08-07: The wall takes the television from whoever is watching it
 
-<!-- prawduct: chunks=12 | scope=v1-build -->
+<!-- prawduct: chunks=12 | status=shipped | scope=v1-build -->
 
 **Why:** with the operator watching a programme and the daemon rotating normally,
 a due rotation sent `select_image` and **the set switched itself into art mode**.
@@ -173,7 +173,7 @@ written test could not have failed.
 
 ## 2026-08-07: The confirming read was reading the wrong thing, and the wall parked
 
-<!-- prawduct: chunks=12 | scope=v1-build -->
+<!-- prawduct: chunks=12 | status=shipped | scope=v1-build -->
 
 **Why:** the entry below added a confirming read for selections, verified it
 against a dark set, and shipped it. The first pass with the set in **art mode**
@@ -240,7 +240,7 @@ silently end every future confirmation. Covered, then re-swept.
 
 ## 2026-08-07: The television takes selections and displays none of them
 
-<!-- prawduct: chunks=12 | scope=v1-build -->
+<!-- prawduct: chunks=12 | status=shipped | scope=v1-build -->
 
 **Why:** the display plane met a real television for the first time, and the very
 first pass reported showing a work the wall was not showing.
@@ -370,7 +370,7 @@ what confirms them against a television.
 
 ## 2026-08-06: The display plane exists — and the guard that could not be written until it did
 
-<!-- prawduct: chunks=12 | scope=v1-build -->
+<!-- prawduct: chunks=12 | status=shipped | scope=v1-build -->
 
 **Why:** Chunk 12. The wall is still driven by `tvart.py`; this is the plane that
 replaces it — poll the manifest, keep the television holding what the manifest

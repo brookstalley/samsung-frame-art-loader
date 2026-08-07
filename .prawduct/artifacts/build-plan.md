@@ -130,7 +130,7 @@ re-created the same silence one line further down.
 - [x] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [x] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
-- [ ] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
+- [x] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
