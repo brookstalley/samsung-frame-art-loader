@@ -99,6 +99,17 @@ DEFAULT_TV_CONNECT_TIMEOUT_SECONDS: Final[float] = 30.0
 #: a restart — a crash loop must not turn into a retry loop.
 DEFAULT_UPLOAD_RETRY_SECONDS: Final[float] = 300.0
 
+#: How long the set is given to actually show an image after it is selected.
+#: **A selection is confirmed rather than assumed, and this is the window.** The
+#: set acknowledges a real selection in about two seconds, so this is sized well
+#: above that; the reason it exists at all is the failure it catches. A
+#: television whose panel is dark accepts `select_image`, returns no error, emits
+#: no event, and goes on displaying whatever it displayed before — indefinitely.
+#: A daemon that trusted the call's return would report a rotation it did not
+#: perform, once per interval, for as long as the set stayed dark. Confirming
+#: costs one read per rotation and turns that silence into a stated fact.
+DEFAULT_SELECT_CONFIRM_SECONDS: Final[float] = 8.0
+
 #: Reconnection backoff after the television goes away. An asleep set is the
 #: expected operating condition rather than an incident, so the ceiling is low
 #: enough that the wall resumes promptly when someone turns it on and high enough
@@ -139,6 +150,7 @@ class Settings:
     brightness_interval_seconds: float
     upload_timeout_seconds: float
     upload_retry_seconds: float
+    select_confirm_seconds: float
     tv_connect_timeout_seconds: float
     tv_retry_min_seconds: float
     tv_retry_max_seconds: float
@@ -220,6 +232,7 @@ def load(environ: dict[str, str] | None = None) -> Settings:
         brightness_interval_seconds=_float(env, "BRIGHTNESS_INTERVAL_SECONDS", DEFAULT_BRIGHTNESS_INTERVAL_SECONDS),
         upload_timeout_seconds=_float(env, "TV_UPLOAD_TIMEOUT_SECONDS", DEFAULT_UPLOAD_TIMEOUT_SECONDS),
         upload_retry_seconds=_float(env, "TV_UPLOAD_RETRY_SECONDS", DEFAULT_UPLOAD_RETRY_SECONDS),
+        select_confirm_seconds=_float(env, "TV_SELECT_CONFIRM_SECONDS", DEFAULT_SELECT_CONFIRM_SECONDS),
         tv_connect_timeout_seconds=_float(env, "TV_CONNECT_TIMEOUT_SECONDS", DEFAULT_TV_CONNECT_TIMEOUT_SECONDS),
         tv_retry_min_seconds=_float(env, "TV_RETRY_MIN_SECONDS", DEFAULT_TV_RETRY_MIN_SECONDS),
         tv_retry_max_seconds=_float(env, "TV_RETRY_MAX_SECONDS", DEFAULT_TV_RETRY_MAX_SECONDS),

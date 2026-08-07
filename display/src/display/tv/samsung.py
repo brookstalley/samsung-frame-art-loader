@@ -265,15 +265,48 @@ class SamsungTv(TvClient):
         return None
 
     async def select_image(self, content_id: str) -> None:
-        """Put an image the set already holds on the wall.
+        """Ask the set to put an image it already holds on the wall.
 
-        Not confirmed against the set, unlike upload and removal, and the
-        asymmetry is deliberate: the wall is checked by the next thing that looks
-        at it, whereas a mis-recorded upload or removal corrupts a store that
-        outlives the process. The set's `image_selected` event is the confirming
-        signal, and the plane that renders the label is the one that needs it.
+        **Asking is all this does, and the caller must confirm it.** This once
+        returned with no check, on the reasoning that the wall would be checked by
+        the next thing to look at it. Nothing looks: a television observed on
+        2026-08-07 with its panel dark accepted this call, raised nothing, emitted
+        none of the three art-mode events, and went on displaying the image it had
+        — through repeated attempts over twelve seconds. The failure is therefore
+        silent and permanent rather than transient, which is exactly the shape a
+        return value cannot carry. `current_content_id` is the confirming read.
         """
         await self._call("select_image", self._client().select_image(content_id, show=True))
+
+    async def current_content_id(self) -> str | None:
+        """Ask the set what is on the wall, tolerating an answer it will not give.
+
+        Shaped as "or None" rather than raising, because a set that declines to
+        describe its own display is not the same event as one that has gone away
+        — the caller's response is to leave the wall alone and say what it could
+        not establish, not to reconnect. A malformed answer is treated as no
+        answer for the same reason: the alternative is comparing a selection
+        against a value whose meaning nobody knows.
+        """
+        answer = await self._call("get_current", self._client().get_current())
+        if not isinstance(answer, dict):
+            return None
+        content_id = answer.get("content_id")
+        return content_id if isinstance(content_id, str) and content_id else None
+
+    async def reported_art_mode(self) -> str | None:
+        """The set's own art-mode flag, for a log line and nothing else.
+
+        Swallows every failure rather than propagating one: this runs only on a
+        path that has already established something is wrong, and a diagnostic
+        that can itself raise would replace the report of the real fault with a
+        report of the failed attempt to describe it.
+        """
+        try:
+            mode = await self._call("get_artmode", self._client().get_artmode())
+        except TvUnavailable:
+            return None
+        return mode if isinstance(mode, str) else None
 
     async def remove(self, content_ids: Sequence[str]) -> RemovalOutcome:
         """Remove images, then read the set's own list to find out what happened.

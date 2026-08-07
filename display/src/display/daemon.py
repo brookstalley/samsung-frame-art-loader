@@ -37,6 +37,7 @@ the picture stays up regardless because the television holds it.
 """
 
 import asyncio
+import enum
 import logging
 import random
 import time
@@ -44,6 +45,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 
 from display import brightness as brightness_module
 from display.config import Settings
@@ -53,6 +55,31 @@ from display.state import Binding, DisplayState, UploadStatus
 from display.tv import RemovalOutcome, TvClient, TvRemovalUnconfirmed, TvUnavailable, TvUploadFailed
 
 log = logging.getLogger(__name__)
+
+#: How often the set is re-asked what it is displaying, while confirming a
+#: selection. Short enough that a rotation is not visibly delayed by the check,
+#: long enough that confirming costs a handful of reads rather than a spin.
+_CONFIRM_POLL_SECONDS: Final[float] = 0.5
+
+
+class Shown(enum.Enum):
+    """What came of trying to put one work on the wall.
+
+    **Three outcomes rather than a boolean, because two failures want opposite
+    responses.** A work that cannot be shown — no render, no binding — means try
+    the next one, which is what makes a theme with a pruned image tree degrade to
+    the works that survive. A wall that is not accepting selections at all means
+    try *nothing* else: every remaining work would fail identically, and a pass
+    that walked forty of them would cost eighty round trips and consume the whole
+    rotation order against a television that displayed none of it.
+    """
+
+    YES = "yes"
+    #: This work could not be shown; another might.
+    SKIP = "skip"
+    #: The television took the request and displayed nothing. No work will fare
+    #: better until that changes, so the pass ends here.
+    WALL_UNCHANGED = "wall_unchanged"
 
 
 @dataclass(frozen=True)
@@ -108,6 +135,13 @@ class Daemon:
         #: no renders walked its whole list once a second, for ever.
         self._attempted_at: float | None = None
         self._has_shown = False
+
+        #: Whether the wall has already been reported as not accepting selections.
+        #: Held for the same reason `_reported_unavailable` is: a television whose
+        #: panel is dark stays dark for hours, and a line per rotation would be a
+        #: hundred a night saying the one thing that has not changed. Reported on
+        #: the way in and on the way out, never in between.
+        self._reported_wall_unchanged = False
 
         #: Reconciling the binding table against the set is **owed until it is
         #: done**, not attempted once when a manifest lands. A new manifest is
@@ -323,7 +357,14 @@ class Daemon:
         # Rotation continues *from* the pin rather than resuming where it was, so
         # the next step is the work after the pinned one.
         self._cursor = (self._order.index(position) + 1) % len(self._order)
-        shown = await self._show(manifest, manifest.entries[position])
+        outcome = await self._show(manifest, manifest.entries[position])
+        if outcome is Shown.WALL_UNCHANGED:
+            # Left unconsumed, by the same rule that leaves it unconsumed through
+            # an outage: the jump is delayed rather than eaten. A television that
+            # took the request and displayed nothing has not performed the jump,
+            # and recording it here would mean the curator's pin evaporated while
+            # the panel was dark and the wall came back on some other picture.
+            return False
         self._state.set_last_acted_sequence(observed)
         log.info(
             "directive %d: jumping to work %s",
@@ -331,7 +372,7 @@ class Daemon:
             manifest.pinned_work_id,
             extra={"event": "directive.acted", "sequence": observed, "directive": "show_now"},
         )
-        return shown
+        return outcome is Shown.YES
 
     # -- rotation ----------------------------------------------------------
 
@@ -362,6 +403,7 @@ class Daemon:
         if not self._order:
             return False
         for _ in range(len(self._order)):
+            resume_at = self._cursor
             position = self._order[self._cursor]
             self._cursor = (self._cursor + 1) % len(self._order)
             if self._cursor == 0 and manifest.shuffle:
@@ -369,11 +411,20 @@ class Daemon:
                 # keeping it would give the household the same "random" sequence
                 # every day, which reads as a bug in the shuffle.
                 self._rng.shuffle(self._order)
-            if await self._show(manifest, manifest.entries[position]):
+            outcome = await self._show(manifest, manifest.entries[position])
+            if outcome is Shown.YES:
                 return True
+            if outcome is Shown.WALL_UNCHANGED:
+                # The place is given back rather than consumed. A television that
+                # displayed nothing has not shown this work, so the wall coming
+                # back should show it — not the one after it. Without this, an
+                # evening with the panel dark would walk the whole theme and the
+                # first picture of the morning would be wherever that landed.
+                self._cursor = resume_at
+                return False
         return False
 
-    async def _show(self, manifest: Manifest, entry: Entry) -> bool:
+    async def _show(self, manifest: Manifest, entry: Entry) -> Shown:
         """Put one work on the wall, or say why it could not be."""
         with work_context(entry.work_id):
             render = self._settings.art_root / entry.render_path
@@ -384,23 +435,37 @@ class Daemon:
                     render,
                     extra={"event": "rotation.render_missing", "render_path": str(render)},
                 )
-                return False
+                return Shown.SKIP
 
             content_id = await self._content_id_for(entry, render)
             if content_id is None:
-                return False
+                return Shown.SKIP
 
             try:
                 await self._tv.select_image(content_id)
             except TvUnavailable:
                 content_id = await self._rebind_or_reraise(entry, render, content_id)
                 if content_id is None:
-                    return False
+                    return Shown.SKIP
                 await self._tv.select_image(content_id)
 
+            if not await self._wall_is_showing(content_id):
+                await self._report_wall_unchanged(content_id)
+                return Shown.WALL_UNCHANGED
+
+            # Recorded only once the set is displaying it. A work written here on
+            # the strength of the request alone would make a restart re-show
+            # something that was never on the wall, and would tell the plane that
+            # renders the label to caption a picture nobody can see.
             self._state.set_last_selected_work_id(entry.work_id)
             self._attempted_at = self._clock.monotonic()
             self._has_shown = True
+            if self._reported_wall_unchanged:
+                log.info(
+                    "the television is changing what it displays again",
+                    extra={"event": "rotation.wall_recovered"},
+                )
+                self._reported_wall_unchanged = False
             log.info(
                 "showing %s",
                 entry.label.get("title") or entry.work_id,
@@ -410,7 +475,64 @@ class Daemon:
                     "theme_id": manifest.theme_id,
                 },
             )
-            return True
+            return Shown.YES
+
+    async def _wall_is_showing(self, content_id: str) -> bool:
+        """Wait, briefly, for the set to actually display what it was asked to.
+
+        **Polled rather than asked once**, because a healthy set takes a moment:
+        the acknowledgement of a real selection has been measured arriving about
+        two seconds after the request, so a single immediate read would report
+        every successful rotation as a failure. It returns the instant the set
+        agrees, so the common path costs whatever the set takes and no more, and
+        only the failing path spends the whole window.
+
+        A set that will not say what it displays is treated as agreement. The
+        alternative — calling it a failure — would stop rotation on a television
+        that is working, on the strength of a question it declined to answer, and
+        this plane's standing posture is that an incomplete wall beats a dark one.
+        """
+        deadline = self._clock.monotonic() + self._settings.select_confirm_seconds
+        # Bounded by a count of reads as well as by the clock, and both bounds are
+        # load-bearing. The clock is the one that matters in production, where a
+        # read costs about a second and the count would be generous. The count is
+        # what makes this safe under an injected clock that only moves when
+        # something moves it: with time alone, a set that never agrees would be
+        # asked for ever.
+        attempts = 1 + int(self._settings.select_confirm_seconds / _CONFIRM_POLL_SECONDS)
+        for remaining in range(attempts, 0, -1):
+            showing = await self._tv.current_content_id()
+            if showing is None or showing == content_id:
+                return True
+            if remaining == 1 or self._clock.monotonic() >= deadline:
+                return False
+            await asyncio.sleep(_CONFIRM_POLL_SECONDS)
+        return False
+
+    async def _report_wall_unchanged(self, content_id: str) -> None:
+        """Say once that the set is taking selections and displaying none of them.
+
+        The art-mode flag is read here and nowhere else. It is the answer to the
+        operator's actual question — *why is the wall not changing* — and reading
+        it on this path costs one call on a rotation that has already failed,
+        where reading it before every selection would cost one on every rotation
+        that is about to succeed.
+        """
+        if self._reported_wall_unchanged:
+            return
+        self._reported_wall_unchanged = True
+        mode = await self._tv.reported_art_mode()
+        log.warning(
+            "the television accepted %s and is not displaying it; "
+            "it reports art mode %s. Rotation is deferred until the wall changes",
+            content_id,
+            mode if mode is not None else "nothing at all",
+            extra={
+                "event": "rotation.wall_unchanged",
+                "tv_content_id": content_id,
+                "art_mode": mode,
+            },
+        )
 
     # -- bindings ----------------------------------------------------------
 

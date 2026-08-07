@@ -115,6 +115,30 @@ class TvClient(ABC):
         """Put an image the set already holds on the wall."""
 
     @abstractmethod
+    async def current_content_id(self) -> str | None:
+        """What the television says it is displaying right now, or None if it won't say.
+
+        The confirming read for a selection, and it exists because the call that
+        makes one cannot be trusted: a set whose panel is dark accepts
+        `select_image`, raises nothing, emits no event, and keeps displaying what
+        it displayed before. Asking what it *shows* is the only way to tell that
+        apart from a selection that worked, and it is the same argument that
+        makes `remove` read the set's own list back rather than believe a reply.
+        """
+
+    @abstractmethod
+    async def reported_art_mode(self) -> str | None:
+        """The set's own art-mode flag, or None if it would not answer.
+
+        Diagnosis, never control flow — nothing decides what to do from this.
+        It is asked only when a selection has already been shown not to have
+        landed, so that the one line an operator reads says *why* the wall is not
+        changing rather than merely that it is not. The flag is the set's own word
+        and is not a capability test: this television serves uploads, removals and
+        brightness perfectly well while reporting art mode off.
+        """
+
+    @abstractmethod
     async def remove(self, content_ids: Sequence[str]) -> RemovalOutcome:
         """Remove images, and report what the television holds afterwards."""
 

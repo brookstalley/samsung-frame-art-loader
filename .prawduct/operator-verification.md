@@ -17,16 +17,29 @@ itself, and the chunk is deliberately still unchecked because of it. Everything 
 that chunk is verified against a test double; **no line of it has spoken to a
 television.**
 
-**The television has to be awake first, and this is the whole trick** — but
-"awake" does not mean "showing television". With the set in **standby** the
-remote-control channel accepts the websocket handshake and then sends nothing,
-and the art channel answers `ms.channel.timeOut`, which reads exactly like a
-library incompatibility and is not one. **Art mode is not that state**: a run on
-2026-08-06 with the set in art mode passed all nine checks, constructed in 4.53s,
-and reported `PowerState: "on"`. Art mode is the wall's normal condition and the
-daemon's normal operating environment, so a note reading it as an obstacle would
-have sent the next person hunting a fault that is not there. `PowerState` is
-still the thing to check before suspecting anything else:
+**The television has to be in art mode, and what makes that hard to see is that
+almost everything works without it.** This paragraph previously said that a set
+in standby refuses the handshake and answers `ms.channel.timeOut`. **That is
+wrong, and it was measured wrong on 2026-08-07**: with the set dark and reporting
+`PowerState: standby`, both websocket channels opened, and uploads, deletions,
+listings, brightness and the whole of `available()` worked. The daemon ran a full
+pass against it — disabling the native slideshow, removing 41 orphans, uploading a
+work — and the only thing that failed was the picture changing.
+
+**So `PowerState` tells you whether the panel is lit and nothing more.** The one
+capability that needs art mode is `select_image`, which in the dark state is
+accepted, raises nothing, emits no event and changes nothing — indefinitely. The
+full map of which call works in which state is `artifacts/samsung-tv-state-findings.md`;
+read it before concluding anything is broken. Two consequences for whoever runs
+this: the set cannot be woken over the API (`set_artmode('on')` returns cleanly
+and does nothing, and Wake-on-LAN to the advertised MAC has no effect), so
+**someone has to be at the set**; and a daemon that logs `showing X` is now
+telling the truth, because it reads back what the television displays before it
+says so.
+
+A run on 2026-08-06 with the set in art mode passed all nine checks, constructed
+in 4.53s, and reported `PowerState: "on"`. `PowerState` is still worth reading
+first, as the cheapest thing that distinguishes a dark panel from a lit one:
 
 ```sh
 curl -s http://<TV_ADDRESS>:8001/api/v2/ | python3 -m json.tool | grep PowerState
@@ -67,6 +80,31 @@ alternative:**
 6. **Brightness follows the sun.** Worth looking at across a dusk rather than at
    one instant; the curve is ported from the 2024 plane and should not read as a
    change to anyone living with it.
+
+**Three of these need the panel lit, and one needs it dark**, which is the whole
+reason this entry cannot be closed from a desk:
+
+7. **A rotation the set performs is confirmed, and this is the half no test can
+   reach.** The daemon reads back what the television says it is displaying
+   before it claims to have shown anything. That the read *catches* a wall which
+   is not changing is proven against the real set; that it **agrees promptly on a
+   healthy one has never been observed**, because it needs art mode. If the read
+   is wrong there, the symptom is unmissable and the opposite of silent: every
+   rotation reports `rotation.wall_unchanged` and the wall stops. Watch the first
+   two rotations in art mode before anything else.
+8. **Then switch the set off and leave the daemon running.** Expect exactly one
+   WARNING — `the television accepted … and is not displaying it; it reports art
+   mode off. Rotation is deferred until the wall changes` — and then silence, not
+   a line per interval.
+9. **Switch it back on.** Expect one `the television is changing what it displays
+   again`, and the wall to resume **on the work it was deferred at**, not
+   somewhere further along the theme.
+
+`artifacts/samsung-tv-state-findings.md` is the map of which call works in which
+state, and carries its own list of what is still unmeasured — the art-mode
+column, the television-on column, and whether `KEY_POWER` lights the panel. If
+you are at the set anyway, those are cheap to settle and nothing else can settle
+them.
 
 ### The review half — the grid, its alternates, the panel — added 2026-08-05
 

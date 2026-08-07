@@ -8,6 +8,7 @@ slideshow is switched off once so the two cannot fight.
 
 import logging
 import random
+from dataclasses import replace
 
 from fakes import FakeTv
 
@@ -244,3 +245,135 @@ async def test_shuffle_reorders_on_each_pass(settings, tv: FakeTv, state: Displa
     assert sorted(shown[: len(works)]) == sorted(works)
     assert sorted(shown[len(works) :]) == sorted(works)
     assert shown[: len(works)] != shown[len(works) :], "the second pass repeated the first pass's order"
+
+
+# -- a television that takes selections and displays none of them --------------
+#
+# Observed on a real set on 2026-08-07 with its panel dark: `select_image`
+# returned, raised nothing and emitted none of the three art-mode events, while
+# what the set displayed did not change across repeated attempts over twelve
+# seconds. Every call a daemon can make succeeded; the only thing that failed was
+# the picture changing. These tests exist because the failure is invisible from
+# the call, so nothing above the seam can infer it — it has to be read back.
+
+
+async def test_a_selection_the_set_does_not_display_is_not_reported_as_shown(
+    daemon: Daemon, tv: FakeTv, state: DisplayState, publish, caplog
+):
+    publish(["w1", "w2"])
+    tv.displays_nothing_selected = True
+
+    with caplog.at_level(logging.INFO):
+        await daemon.tick()
+
+    assert tv.selected, "the daemon never asked the set to show anything"
+    assert tv.on_the_wall is None, "the fake put a picture up that the set never displayed"
+    assert not [
+        r for r in caplog.records if getattr(r, "event", None) == "rotation.selected"
+    ], "the daemon reported a rotation the television did not perform"
+    assert (
+        state.last_selected_work_id is None
+    ), "a work never displayed was recorded as the one on the wall, so a restart would re-show it"
+
+
+async def test_a_wall_that_displays_nothing_ends_the_pass_rather_than_walking_the_theme(daemon: Daemon, tv: FakeTv, publish):
+    """A missing render means try the next work; a dark wall means try no work.
+
+    They were one boolean, and every remaining work would have been attempted
+    against a set that displays none of them — forty selects and forty confirming
+    reads per interval, with the whole rotation order consumed against a
+    television showing nothing.
+    """
+    publish(["w1", "w2", "w3", "w4"])
+    tv.displays_nothing_selected = True
+
+    await daemon.tick()
+
+    assert len(tv.selected) == 1, f"the pass tried {len(tv.selected)} works against a wall that displays none"
+
+
+async def test_it_says_the_wall_is_not_changing_once_not_once_a_rotation(daemon: Daemon, tv: FakeTv, publish, clock, caplog):
+    """A panel stays dark for hours. One line per rotation is a hundred a night
+    saying the one thing that has not changed, and journald drops what it
+    rate-limits — which would be the ERRORs this plane's only failure channel
+    carries."""
+    publish(["w1", "w2"], interval_seconds=10)
+    tv.displays_nothing_selected = True
+    tv.art_mode = "off"
+
+    with caplog.at_level(logging.INFO):
+        for _ in range(6):
+            await daemon.tick()
+            clock.advance(10)
+
+    reports = [r for r in caplog.records if getattr(r, "event", None) == "rotation.wall_unchanged"]
+    assert len(reports) == 1, f"the dark wall was reported {len(reports)} times"
+    assert reports[0].art_mode == "off", "the one line an operator reads does not say why the wall is not changing"
+
+
+async def test_the_wall_coming_back_is_reported_and_rotation_resumes(daemon: Daemon, tv: FakeTv, publish, clock, caplog):
+    publish(["w1", "w2"], interval_seconds=10)
+    tv.displays_nothing_selected = True
+    await daemon.tick()
+
+    with caplog.at_level(logging.INFO):
+        tv.displays_nothing_selected = False
+        clock.advance(10)
+        await daemon.tick()
+
+    assert tv.on_the_wall is not None, "rotation did not resume when the set started displaying again"
+    assert [
+        r for r in caplog.records if getattr(r, "event", None) == "rotation.wall_recovered"
+    ], "the wall came back and nothing said so, so the WARNING above it stands unresolved in the log"
+
+
+async def test_a_deferred_work_is_the_one_that_appears_when_the_wall_comes_back(daemon: Daemon, tv: FakeTv, publish, clock):
+    """The place is given back rather than consumed. A television that displayed
+    nothing has not shown that work, so the wall coming back should show it —
+    not the one after it."""
+    # Four works and two dark passes, chosen so that a cursor which *was*
+    # consumed lands somewhere else. Three of each made the theme wrap exactly
+    # back to the right answer, and the test passed with the restore deleted — a
+    # mutation sweep is what caught it.
+    publish(["w1", "w2", "w3", "w4"], interval_seconds=10)
+    tv.displays_nothing_selected = True
+
+    for _ in range(2):
+        await daemon.tick()
+        clock.advance(10)
+
+    tv.displays_nothing_selected = False
+    await daemon.tick()
+
+    assert tv.on_the_wall.name == "w1.jpg", "an evening of a dark panel walked the theme forward"
+
+
+async def test_a_set_that_will_not_say_what_it_displays_is_taken_at_its_word(daemon: Daemon, tv: FakeTv, publish, caplog):
+    """Silence is not disagreement. Treating an unanswered question as a failure
+    would stop rotation on a working television, and an incomplete wall beats a
+    dark one."""
+    publish(["w1", "w2"])
+    tv.will_not_say_what_it_displays = True
+
+    with caplog.at_level(logging.INFO):
+        await daemon.tick()
+
+    assert [
+        r for r in caplog.records if getattr(r, "event", None) == "rotation.selected"
+    ], "rotation stopped because the set declined to describe its own display"
+    assert not [r for r in caplog.records if getattr(r, "event", None) == "rotation.wall_unchanged"]
+
+
+async def test_a_set_that_agrees_late_is_confirmed_rather_than_failed(settings, tv: FakeTv, state: DisplayState, clock, publish):
+    """A real set acknowledges a selection about two seconds after the request,
+    so a single immediate read would report every successful rotation as a
+    failure. This is the one test that exercises the window's duration."""
+    publish(["w1", "w2"])
+    settings = replace(settings, select_confirm_seconds=2.0)
+    watcher = Watcher(settings.manifest_path, rotation_interval_fallback=180, shuffle_fallback=False)
+    daemon = Daemon(settings=settings, tv=tv, state=state, watcher=watcher, clock=clock.as_clock())
+
+    tv.answer_after_reads = 2
+    await daemon.tick()
+
+    assert tv.on_the_wall.name == "w1.jpg", "a set that took a moment to agree was called a failure"

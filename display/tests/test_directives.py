@@ -240,3 +240,29 @@ async def test_the_sequence_zero_baseline_is_not_special(daemon: Daemon, publish
     await daemon.tick()
 
     assert state.last_acted_sequence == sequence
+
+
+async def test_a_directive_is_not_consumed_by_a_wall_that_displays_nothing(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState
+):
+    """The same rule as an outage, reached by a route that raises nothing.
+
+    A television whose panel is dark takes `select_image`, returns cleanly and
+    goes on displaying what it had — so the jump did not happen while every call
+    reported success. Consuming the sequence here would evaporate the curator's
+    pin: the manifest does not change when a directive fails, so nothing would
+    ever present it again, and the wall would come back on some other picture.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+
+    tv.displays_nothing_selected = True
+    publish(["w1", "w2", "w3"], sequence=2, pinned_work_id="w3")
+    await daemon.tick()
+    assert state.last_acted_sequence == 1, "the directive was consumed against a wall that never changed"
+
+    tv.displays_nothing_selected = False
+    await daemon.tick()
+
+    assert tv.on_the_wall.name == "w3.jpg", "the pin was not honoured once the wall started changing again"
+    assert state.last_acted_sequence == 2

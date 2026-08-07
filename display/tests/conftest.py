@@ -72,6 +72,10 @@ def settings(art_root: Path) -> Settings:
         brightness_interval_seconds=300.0,
         upload_timeout_seconds=60.0,
         upload_retry_seconds=300.0,
+        # Zero, so a confirmation is one read and no test waits on a real sleep.
+        # The window's *duration* is exercised where it is the subject, by a test
+        # that moves the clock itself.
+        select_confirm_seconds=0.0,
         tv_connect_timeout_seconds=30.0,
         tv_retry_min_seconds=5.0,
         tv_retry_max_seconds=300.0,

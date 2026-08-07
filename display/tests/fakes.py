@@ -15,8 +15,14 @@ daemon's behaviour not at all.
 
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Final
 
 from display.tv import RemovalOutcome, TvClient, TvRemovalUnconfirmed, TvUnavailable, TvUploadFailed
+
+#: A picture the set holds that this product did not put there — an art-store
+#: image, in the category the daemon neither uploads to nor removes from. The set
+#: is displaying one of these before the daemon has shown anything.
+FOREIGN_IMAGE: Final[str] = "SAM-F0000"
 
 
 class FakeTv(TvClient):
@@ -46,6 +52,34 @@ class FakeTv(TvClient):
         #: that apart from an id the set has simply forgotten — the two arrive as
         #: the same exception and want opposite responses.
         self.refuse_selection_of: set[str] = set()
+
+        #: The set takes every selection and displays none of them. **Observed on
+        #: a real television on 2026-08-07**, with its panel dark: `select_image`
+        #: returned, raised nothing and emitted no event, while what the set
+        #: displayed did not change over twelve seconds and repeated attempts.
+        #: Armed here because the failure is invisible from the call — a fake that
+        #: could not reproduce it let the daemon report rotations that never
+        #: happened, and every test passed.
+        self.displays_nothing_selected = False
+        #: What the set says it is displaying. It starts on a picture of the set's
+        #: own rather than on nothing, because **a Frame is never displaying
+        #: nothing** — the one observed refusing selections went on showing an
+        #: art-store image throughout. That is what makes the failure detectable:
+        #: the observable is that the wall did not *change*, not that it is blank.
+        #: `None` is reserved for a set that declines to answer, which is a third
+        #: thing again from agreeing and from disagreeing.
+        self.displaying: str | None = FOREIGN_IMAGE
+        self.will_not_say_what_it_displays = False
+        #: How many reads the set takes before it admits to displaying what it was
+        #: asked for. A real one acknowledges in about two seconds, so "agrees
+        #: immediately" is the unrealistic case and a confirmation that only
+        #: worked against it would fail every real rotation.
+        self.answer_after_reads = 1
+        self._reads_since_selection = 0
+        #: A selection the set has taken but not yet admitted to displaying.
+        self._pending: str | None = None
+        #: The set's own art-mode flag, as it would report it.
+        self.art_mode: str | None = "on"
 
     async def connect(self) -> None:
         """Cheap once connected, exactly as the real client is.
@@ -96,6 +130,22 @@ class FakeTv(TvClient):
         if content_id in self.refuse_selection_of:
             raise TvUnavailable(f"the television refused {content_id}")
         self.selected.append(content_id)
+        self._reads_since_selection = 0
+        if not self.displays_nothing_selected:
+            self._pending = content_id
+
+    async def current_content_id(self) -> str | None:
+        self._check_reachable()
+        if self.will_not_say_what_it_displays:
+            return None
+        self._reads_since_selection += 1
+        if self._pending is not None and self._reads_since_selection >= self.answer_after_reads:
+            self.displaying = self._pending
+            self._pending = None
+        return self.displaying
+
+    async def reported_art_mode(self) -> str | None:
+        return self.art_mode
 
     async def remove(self, content_ids: Sequence[str]) -> RemovalOutcome:
         self._check_reachable()
@@ -125,5 +175,11 @@ class FakeTv(TvClient):
 
     @property
     def on_the_wall(self) -> Path | None:
-        """The file the wall is showing, or None if nothing was ever selected."""
-        return self.holding.get(self.selected[-1]) if self.selected else None
+        """The file the wall is *displaying*, or None if it is displaying none.
+
+        Read from what the set displays rather than from the last id requested,
+        so that a test asserting a picture reached the wall cannot be satisfied by
+        a request the set ignored. Those were the same thing until a television
+        was found accepting selections and displaying nothing.
+        """
+        return self.holding.get(self.displaying) if self.displaying else None

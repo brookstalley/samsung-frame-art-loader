@@ -454,9 +454,30 @@ interface — with a suite of its own, all three planes green, and lint clean.
 **What is missing is the half no double can supply**: the acceptance criteria
 call for a live pass on the Pi, and the television was in standby for the whole
 session, so not one line of this has spoken to a set. The chunk stays open until
-it has; `operator-verification.md` carries what to run and the trap that will
-otherwise be misread as a library fault — **standby, not art mode**: a run on
-2026-08-06 with the set in art mode passed every check.
+it has; `operator-verification.md` carries what to run.
+
+**It spoke to a set on 2026-08-07, and the first thing it found was a defect no
+double could have produced.** The daemon ran a full pass against the real
+television from the dev Mac — native slideshow disabled, 41 legacy orphans
+removed, brightness set from the solar angle, a work uploaded and selected — and
+reported `showing Blue Half Circle` at a wall that was still displaying an
+art-store image. **The set was dark, and in that state `select_image` is accepted
+and ignored**: no error, no event, no change, indefinitely, while every other
+call in a rotation succeeds. So a selection is now confirmed by reading back what
+the set displays, and "the wall did not change" is its own outcome — the pass
+ends rather than walking the theme, the place is given back, the `show_now` stays
+unconsumed by the same rule an outage leaves it unconsumed, and it is said once
+with the set's own art-mode flag rather than once per interval.
+
+**This also retired a claim this plan and `operator-verification.md` both
+carried** — that standby is the failure state where the art channel answers
+`ms.channel.timeOut`. It is not: both websocket channels open, and `PowerState`
+reports whether the panel is lit and nothing more. The state map is
+`samsung-tv-state-findings.md`, written from measurement, and it is honest about
+its gaps: the art-mode column is one run plus inference, the television-on column
+is empty, and **the confirming read is proven to catch a dark wall but has never
+been observed agreeing on a healthy one** — which is now the first thing to watch
+in art mode, because if it is wrong there the wall stops.
 
 `tests/preferences/test_plane_isolation.py` landed with the plane's first modules,
 which closes the two-session-old finding that the norm index named an enforcement
@@ -1553,9 +1574,24 @@ two missing deliverables.)*
   persistence/coalescing/regression, binding state machine (TV faked at its
   interface, built after Chunk 05's verified shapes); orphan removal — an upload
   the binding table does not account for is removed, and a work the manifest
-  still names is never removed; hardware — a live pass on the Pi: the theme
-  reaches the wall, `next`/`show_now` land within the poll interval, a deleted
-  render file skips with a WARNING and rotation continues
+  still names is never removed; **a set that takes selections and displays none
+  of them** — not reported as shown, not recorded as on the wall, the pass ended
+  rather than the theme walked, the place given back, the directive left
+  unconsumed, and said once rather than once an interval; hardware — a live pass
+  on the Pi: the theme reaches the wall, `next`/`show_now` land within the poll
+  interval, a deleted render file skips with a WARNING and rotation continues
+
+  **The selection-confirmation half arrived from the hardware, on 2026-08-07, and
+  is the reason this chunk was worth holding open.** Every unit test passed
+  against a double that could not express the failure: a real television with its
+  panel dark accepts `select_image`, raises nothing, emits none of the three
+  art-mode events and goes on displaying what it had, while uploads, deletions,
+  listings and brightness all succeed. The daemon reported `showing X` at a wall
+  that never changed — the 2024 defect class this plane made impossible for
+  uploads and had left open for selection. `samsung-tv-state-findings.md` records
+  which call works in which state; `architecture.md` § Failure Modes carries the
+  rule; the double can now be armed with the behaviour, which is what makes the
+  tests above possible at all.
 - **Acceptance criteria:** the wall rotates the active theme from the new
   daemon; killing curation changes nothing about display's behaviour; a display
   restart neither re-executes the last directive nor loses its place
