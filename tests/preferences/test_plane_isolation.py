@@ -39,8 +39,15 @@ REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 DISPLAY_PACKAGE = REPOSITORY_ROOT / "display" / "src" / "display"
 
 #: Where a module name may resolve to a file **in this repository**. Ordered by
-#: how a plane's own code would find it; the search is exhaustive rather than
-#: first-match-wins, so a name that exists in two planes is reported for both.
+#: how a plane's own code would find it, and **first match wins** — a name
+#: present in two planes resolves to the display one, which is what an import
+#: from a display module would actually get.
+#:
+#: That ordering cannot weaken the ban, and the reason is worth stating because
+#: it is not obvious: a `curation.*` name is rejected by `_forbidden` *before*
+#: resolution is ever attempted, so the guard never depends on finding the
+#: curation copy of anything. Resolution exists only to keep walking repo-local
+#: files, and following the display copy is the honest answer there.
 SEARCH_ROOTS: tuple[pathlib.Path, ...] = (
     REPOSITORY_ROOT / "display" / "src",
     REPOSITORY_ROOT / "curation" / "src",

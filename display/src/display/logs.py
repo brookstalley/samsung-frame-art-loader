@@ -66,11 +66,6 @@ def work_context(work_id: str) -> Iterator[None]:
         _WORK_ID.reset(token)
 
 
-def current_work_id() -> str | None:
-    """The work being acted on here, if this is inside one."""
-    return _WORK_ID.get()
-
-
 class WorkCorrelationFilter(logging.Filter):
     """Stamp the bound work id onto every record that passes through.
 
@@ -119,10 +114,16 @@ class JsonFormatter(logging.Formatter):
 #: rather than evicting handlers it knows nothing about.
 _INSTALLED: Final[str] = "_display_log_handler"
 
-#: The television client's logger, floored at INFO in `configure` because its
-#: `_check_for_token` writes the pairing token at DEBUG. Named here rather than
-#: inline so the reason travels with the name.
+#: The television client's logger, floored at WARNING in `configure` because it
+#: writes the pairing token at INFO. Named here rather than inline so the reason
+#: travels with the name.
 _TELEVISION_CLIENT: Final[str] = "samsungtvws"
+
+#: The level the client's own logging is held at or above. **WARNING, not INFO,
+#: and the difference is the whole point**: the token line is emitted at INFO, so
+#: a floor of INFO permits exactly what it was written to prevent. Nothing below
+#: WARNING in that library says anything this plane's own events do not.
+_TELEVISION_CLIENT_FLOOR: Final[int] = logging.WARNING
 
 
 def configure(level: int = logging.INFO) -> None:
@@ -150,12 +151,15 @@ def configure(level: int = logging.INFO) -> None:
     root.addHandler(handler)
     root.setLevel(level)
 
-    # **The television client logs the pairing token at DEBUG**, and the handler
-    # above is on the *root* logger, so anything that ever turns this plane's
-    # verbosity up would put that token in the journal — of a product whose
-    # observability strategy names it as a secret, in a repository that is public,
-    # and whose very first chunk existed because that token had been committed.
-    # Floored here rather than trusted to nobody ever passing `level=DEBUG`: the
-    # moment somebody debugs a connection problem is exactly the moment they
-    # would, and it is also when journal excerpts get pasted into issues.
-    logging.getLogger(_TELEVISION_CLIENT).setLevel(max(level, logging.INFO))
+    # **The television client logs the pairing token at INFO** — `New token %s`,
+    # on every pairing — and the handler above is on the *root* logger, so without
+    # this the token lands in the journal as JSON at the default level. Not only
+    # when somebody debugs: a fresh pairing is enough. The observability strategy
+    # names the token as a secret, the repository is public, and this product's
+    # very first chunk existed because that token had been committed once already.
+    #
+    # This floor read INFO until 2026-08-07, which permitted precisely the line it
+    # was written to stop; the belief that the token was a DEBUG line was never
+    # checked against the pinned fork. The lesson is cheap and general: a guard
+    # aimed at a specific line has to be verified against that line.
+    logging.getLogger(_TELEVISION_CLIENT).setLevel(max(level, _TELEVISION_CLIENT_FLOOR))

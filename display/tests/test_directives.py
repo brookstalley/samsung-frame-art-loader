@@ -242,6 +242,46 @@ async def test_the_sequence_zero_baseline_is_not_special(daemon: Daemon, publish
     assert state.last_acted_sequence == sequence
 
 
+async def test_a_pin_is_not_delivered_onto_a_television_somebody_is_watching(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState
+):
+    """A jump is still a selection, and a selection takes the screen.
+
+    The rotation timer does not govern this path, so without its own check a
+    `show_now` would interrupt a programme the moment a curator pressed the
+    button — the one route to the wall that has no interval in front of it.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+
+    tv.art_mode = "off"
+    publish(["w1", "w2", "w3"], sequence=2, pinned_work_id="w3")
+    before = len(tv.selected)
+    await daemon.tick()
+
+    assert len(tv.selected) == before, "a pin took the screen off whoever was watching"
+    assert state.last_acted_sequence == 1, "the pin was consumed against a wall it never reached"
+
+
+async def test_a_pin_held_back_is_delivered_when_the_set_returns_to_art_mode(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState
+):
+    """Held, not dropped. The manifest does not change when a directive is
+    refused, so a consumed pin is one the curator never gets."""
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+    tv.art_mode = "off"
+    publish(["w1", "w2", "w3"], sequence=2, pinned_work_id="w3")
+    await daemon.tick()
+
+    tv.art_mode = "on"
+    tv.art_mode_announced = True
+    await daemon.tick()
+
+    assert tv.on_the_wall.name == "w3.jpg", "the pin was lost while the television was in use"
+    assert state.last_acted_sequence == 2
+
+
 async def test_a_directive_is_not_consumed_by_a_wall_that_displays_nothing(
     daemon: Daemon, tv: FakeTv, publish, state: DisplayState, clock
 ):

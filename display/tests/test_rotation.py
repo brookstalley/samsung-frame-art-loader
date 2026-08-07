@@ -253,7 +253,9 @@ async def test_shuffle_reorders_on_each_pass(settings, tv: FakeTv, state: Displa
 # what the set displayed did not change across repeated attempts over twelve
 # seconds. Every call a daemon can make succeeded; the only thing that failed was
 # the picture changing. These tests exist because the failure is invisible from
-# the call, so nothing above the seam can infer it — it has to be read back.
+# the call: nothing above the seam can infer it, and the set's silence — no
+# `image_selected` announcement — is the only thing that distinguishes it from a
+# rotation that worked.
 
 
 async def test_a_selection_the_set_does_not_display_is_not_reported_as_shown(
@@ -279,9 +281,9 @@ async def test_a_wall_that_displays_nothing_ends_the_pass_rather_than_walking_th
     """A missing render means try the next work; a dark wall means try no work.
 
     They were one boolean, and every remaining work would have been attempted
-    against a set that displays none of them — forty selects and forty confirming
-    reads per interval, with the whole rotation order consumed against a
-    television showing nothing.
+    against a set that displays none of them — forty selects per interval, each
+    waiting out the whole confirmation window, with the entire rotation order
+    consumed against a television showing nothing.
     """
     publish(["w1", "w2", "w3", "w4"])
     tv.displays_nothing_selected = True
@@ -297,8 +299,10 @@ async def test_it_says_the_wall_is_not_changing_once_not_once_a_rotation(daemon:
     rate-limits — which would be the ERRORs this plane's only failure channel
     carries."""
     publish(["w1", "w2"], interval_seconds=10)
+    # Art mode stays *on*: a set that says it is showing art and then does not
+    # change is the only route left to this branch, now that a set reporting art
+    # mode off is never asked to select at all.
     tv.displays_nothing_selected = True
-    tv.art_mode = "off"
 
     with caplog.at_level(logging.INFO):
         for _ in range(6):
@@ -306,8 +310,8 @@ async def test_it_says_the_wall_is_not_changing_once_not_once_a_rotation(daemon:
             clock.advance(10)
 
     reports = [r for r in caplog.records if getattr(r, "event", None) == "rotation.wall_unchanged"]
-    assert len(reports) == 1, f"the dark wall was reported {len(reports)} times"
-    assert reports[0].art_mode == "off", "the one line an operator reads does not say why the wall is not changing"
+    assert len(reports) == 1, f"the still wall was reported {len(reports)} times"
+    assert reports[0].art_mode == "on", "the one line an operator reads does not say what the set claims about itself"
 
 
 async def test_the_wall_coming_back_is_reported_and_rotation_resumes(daemon: Daemon, tv: FakeTv, publish, clock, caplog):
@@ -366,6 +370,111 @@ async def test_a_set_that_says_it_took_the_image_and_is_not_showing_it_is_believ
         r for r in caplog.records if getattr(r, "event", None) == "rotation.selected"
     ], "the set said it was not showing the image and the daemon reported it as shown"
     assert [r for r in caplog.records if getattr(r, "event", None) == "rotation.wall_unchanged"]
+
+
+# -- the television belongs to whoever is using it -----------------------------
+#
+# Measured on a real set on 2026-08-07, with the operator watching a programme: a
+# due rotation sent `select_image`, the set **switched itself into art mode**, and
+# the picture they were watching was gone. It is not a polite refusal like the
+# dark state's, and somebody watching television is a daily event rather than an
+# edge case. So nothing reaches the wall unless the set says it is showing art —
+# and `get_artmode` is what says so, reading `off` for both a dark panel and a
+# programme, and `on` only for art mode.
+
+
+async def test_a_television_somebody_is_watching_is_left_alone(daemon: Daemon, tv: FakeTv, publish, caplog):
+    publish(["w1", "w2"])
+    tv.art_mode = "off"
+
+    with caplog.at_level(logging.INFO):
+        await daemon.tick()
+
+    assert tv.selected == [], "the daemon took the screen off whoever was watching"
+    assert [r for r in caplog.records if getattr(r, "event", None) == "rotation.wall_not_ours"]
+
+
+async def test_the_theme_does_not_advance_while_the_set_is_somebody_else_s(daemon: Daemon, tv: FakeTv, publish, clock):
+    """The place is kept, not consumed.
+
+    An evening of television would otherwise walk the whole theme against a wall
+    nobody could see, and the first picture of the morning would be wherever that
+    happened to land.
+    """
+    publish(["w1", "w2", "w3", "w4"], interval_seconds=10)
+    tv.art_mode = "off"
+
+    for _ in range(4):
+        await daemon.tick()
+        clock.advance(10)
+
+    tv.art_mode = "on"
+    await daemon.tick()
+
+    assert tv.on_the_wall.name == "w1.jpg", "an evening of television walked the theme forward"
+
+
+async def test_the_wall_comes_back_the_moment_the_set_announces_art_mode(daemon: Daemon, tv: FakeTv, publish, clock, caplog):
+    """Recovery is by the set's own announcement, not by waiting out the backoff.
+
+    Without this, switching off a programme would leave the wall blank for the
+    remainder of a wait that has doubled its way up to five minutes — and unlike
+    a panel left dark overnight, this transition happens every time somebody
+    finishes watching something.
+    """
+    # **A long interval and a short pause, deliberately.** With the two equal, a
+    # daemon that wrongly spent the interval while the wall was not its own would
+    # still look right here — the elapsed time would have covered the loss
+    # exactly. That arithmetic-agrees-with-the-bug shape is what a sweep catches
+    # and a reading does not, and it caught this test.
+    publish(["w1", "w2"], interval_seconds=180)
+    tv.art_mode = "off"
+    for _ in range(6):
+        await daemon.tick()
+        clock.advance(5)
+    assert tv.selected == []
+
+    # The set says it has changed, and the clock barely moves: the point is that
+    # none of the remaining wait — neither the backoff nor the rotation interval —
+    # has to elapse before the picture comes back.
+    tv.art_mode = "on"
+    tv.art_mode_announced = True
+    with caplog.at_level(logging.INFO):
+        await daemon.tick()
+
+    assert tv.on_the_wall.name == "w1.jpg", "the wall waited out a backoff the set had already ended"
+    assert [r for r in caplog.records if getattr(r, "event", None) == "rotation.wall_returned"]
+
+
+async def test_it_says_the_wall_is_not_ours_once_not_once_a_rotation(daemon: Daemon, tv: FakeTv, publish, clock, caplog):
+    """Somebody watches television for hours. A line per attempt would bury the
+    ERRORs that are this plane's only failure channel."""
+    publish(["w1", "w2"], interval_seconds=10)
+    tv.art_mode = "off"
+
+    with caplog.at_level(logging.INFO):
+        for _ in range(6):
+            await daemon.tick()
+            clock.advance(10)
+
+    reports = [r for r in caplog.records if getattr(r, "event", None) == "rotation.wall_not_ours"]
+    assert len(reports) == 1, f"a television in use was reported {len(reports)} times"
+
+
+async def test_asking_whether_the_wall_is_ours_is_not_done_once_a_second(daemon: Daemon, tv: FakeTv, publish, clock):
+    """The check costs a request, and the poll interval is one second.
+
+    Backing off is what makes a gate on every rotation affordable; without it an
+    evening of television is tens of thousands of round trips at the set.
+    """
+    publish(["w1", "w2"], interval_seconds=10)
+    tv.art_mode = "off"
+
+    for _ in range(30):
+        await daemon.tick()
+        clock.advance(1)
+
+    assert tv.art_mode_reads < 10, f"the set was asked {tv.art_mode_reads} times in thirty seconds"
 
 
 async def test_the_backoff_starts_over_once_the_set_behaves_again(daemon: Daemon, tv: FakeTv, publish, clock):

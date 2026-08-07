@@ -110,6 +110,18 @@ _IMAGE_SELECTED: Final[str] = "image_selected"
 #: `is_shown` when the set means it. A string rather than a boolean on the wire.
 _IS_SHOWN_YES: Final[str] = "Yes"
 
+#: Everything the set says when its art mode may have changed. All four are
+#: treated identically — as "ask again" — so none of their payloads is parsed and
+#: the list can grow without anything downstream having to learn a new shape.
+#: `wakeup` and `go_to_standby` are here because the transition this plane waits
+#: for is somebody picking up a remote, which is what they report.
+_ART_MODE_ANNOUNCEMENTS: Final[tuple[str, ...]] = (
+    "art_mode_changed",
+    "artmode_status",
+    "go_to_standby",
+    "wakeup",
+)
+
 
 class SamsungTv(TvClient):
     """One television, reached over the art websocket."""
@@ -139,6 +151,11 @@ class SamsungTv(TvClient):
         #: map because selection here is strictly sequential — one reconciliation
         #: loop, one image at a time, the same property `upload`'s marker relies on.
         self._awaiting: tuple[str, asyncio.Future[bool]] | None = None
+
+        #: Whether the set has said something about art mode that nobody has
+        #: collected yet. An edge, not a state: it says "ask again", and the
+        #: answer always comes from a fresh read.
+        self._art_mode_announced = False
 
     async def connect(self) -> None:
         """Build the client off the loop, then open the art channel under a ceiling."""
@@ -179,6 +196,13 @@ class SamsungTv(TvClient):
         # from this handler rather than registered alongside it. A second
         # *distinct* event is safe, and is another line here plus a handler.
         art.set_callback(_IMAGE_SELECTED, self._on_image_selected)
+        for announcement in _ART_MODE_ANNOUNCEMENTS:
+            art.set_callback(announcement, self._on_art_mode_changed)
+
+        # A reconnection is itself news: the set may have entered art mode while
+        # this plane could not hear it, and without this the wall would sit out
+        # whatever wait was in force when the connection dropped.
+        self._art_mode_announced = True
         self._art = art
 
     def _on_image_selected(self, _event: str, response: dict[str, Any]) -> None:
@@ -373,6 +397,38 @@ class SamsungTv(TvClient):
             # connection: a stale slot would let the *next* connection's first
             # announcement resolve a future nobody is waiting on any more.
             self._awaiting = None
+
+    async def showing_art(self) -> bool:
+        """Whether the set is showing art, read fresh every time it is asked.
+
+        **Never answered from the announcements below**, deliberately. A cached
+        view of the set's state is wrong in the one direction that matters: a
+        missed announcement would license a selection into somebody's programme,
+        and that is silent, daily and rude. A read costs one round trip on a
+        rotation that happens every few minutes.
+
+        Anything other than the set plainly saying `on` is a no, including a reply
+        this seam cannot read — a wall that waits is late, a wall that does not is
+        an interruption.
+        """
+        mode = await self._call("get_artmode", self._client().get_artmode())
+        return mode == "on"
+
+    def art_mode_announcement_pending(self) -> bool:
+        announced, self._art_mode_announced = self._art_mode_announced, False
+        return announced
+
+    def _on_art_mode_changed(self, _event: str, _response: dict[str, Any]) -> None:
+        """Note that the set said something about art mode, and nothing more.
+
+        The payload is deliberately not parsed. This is a nudge to go and ask
+        again, not a source of truth, so the only thing worth knowing is that
+        *something changed* — which makes it correct for `art_mode_changed`,
+        `artmode_status` and the wake and standby notices alike, without this
+        seam having to model each one's spelling. Getting the payload wrong would
+        then be impossible rather than merely unlikely.
+        """
+        self._art_mode_announced = True
 
     async def reported_art_mode(self) -> str | None:
         """The set's own art-mode flag, for a log line and nothing else.

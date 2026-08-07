@@ -189,6 +189,41 @@ systemd with `Restart=always` and must survive TV power-cycles, websocket drops,
 and network outages without anyone SSHing in. The curator is not on call for their
 own living room.
 
+### The television belongs to whoever is using it
+
+**The display plane never takes the screen from a person.** It may only put a
+picture up when the set is *already* showing art. If somebody is watching
+something, or the set is off, the wall waits — it does not select, it does not
+advance its place in the theme, and it does not consume a pending directive.
+
+This is a requirement about the household, not about the API, and it outranks
+availability: **a wall that is late is a smaller failure than a television that
+interrupts the person watching it.** The availability target above says the
+display plane is "down" when it is not advancing through the theme; this is the
+one condition under which not advancing is correct.
+
+Recorded 2026-08-07, after it happened. It was not written down before because
+the failure had never been observed, and the plane had a deliberate decision
+pointing the other way — art mode was read only *after* a selection failed, on
+the reasoning that reading it beforehand would spend a call on every rotation
+about to succeed. That priced a wasted call against nothing, because the cost on
+the other side had not been measured. It has now: with the operator watching a
+programme, a due rotation sent `select_image` and the set **switched itself into
+art mode**, and the picture they were watching was gone. Somebody watching
+television is a daily event, so this is a daily interruption, not an edge case.
+
+**What the plane may rely on**, from `samsung-tv-state-findings.md`: `get_artmode`
+answers `on` only in art mode, and `off` in both the states where selecting is
+wrong — so one reading distinguishes them, and `PowerState` does not (it reads
+`on` for a television programme). The set announces its own transitions on the art
+channel, so returning to art mode is observed rather than waited for.
+
+**Not in scope, deliberately: the plane does not turn the television on.** A dark
+set stays dark until a person lights it. That is a product decision — a picture
+frame that switches itself on is a different appliance — and it currently costs
+nothing to honour, since neither `select_image` nor `set_artmode('on')` can wake
+this set anyway.
+
 ### Durability — the catalogue is the irreplaceable asset, not the images
 
 This is the non-obvious one, and it inverts the intuitive backup priority.

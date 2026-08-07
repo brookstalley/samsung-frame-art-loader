@@ -330,6 +330,21 @@ incompatibility and is not one — `PowerState: 'on'` is the entire fix, after w
 the set shows its allow dialogue and a token is issued. Anyone debugging a
 first-connection failure should check power state before suspecting anything else.
 
+> **Corrected 2026-08-07, and the correction is narrower than it looks.** The
+> paragraph above describes *pairing*, with no token yet issued. It does **not**
+> generalise to a client that already holds one: with a cached token in
+> `TV_TOKEN_FILE`, both websocket channels open in **standby** (art channel in
+> 2.4 s) and in **art mode**, and uploads, deletions, listings and brightness all
+> succeed against a set whose panel is dark.
+>
+> So **`ms.channel.timeOut` is not a power-state signature.** It has since been
+> seen with the set *in art mode and working*, after about twenty
+> connect-and-close cycles in three minutes plus a daemon killed with SIGKILL that
+> never closed its socket — which points at a cap on concurrent art-channel
+> clients, with abandoned ones held until they time out. Read it as "too many
+> connections lately", not "the set is asleep". `samsung-tv-state-findings.md`
+> carries the state-by-state map.
+
 The art channel itself is reachable **without** a token and answers
 `ms.channel.connect` with a client list, so "the art channel responds" is not
 evidence that pairing succeeded.

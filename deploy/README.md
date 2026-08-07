@@ -128,14 +128,22 @@ resolver, not a measurement on the set. `pi-freeze-2024.txt` records the pre-mov
 version of all five and is the rollback.
 
 > **Attempted on 2026-08-06 and got no further than the handshake**, which is
-> recorded so the next person does not read "owed" as "nobody has tried". The
-> television was in standby for the whole attempt; with the set asleep the
-> remote-control channel accepts a websocket and then sends nothing, and the art
-> channel answers `ms.channel.timeOut` after ~15 s. **That failure looks exactly
-> like a library incompatibility and is not one** — which matters here more than
-> usual, because a library incompatibility is precisely what a reader of this
-> section is checking for. Confirm `PowerState: 'on'` before drawing any
-> conclusion about the pins:
+> recorded so the next person does not read "owed" as "nobody has tried".
+>
+> **The diagnosis in this note was wrong, and is corrected here rather than
+> quietly deleted** (2026-08-07). It said a set in standby refuses the art
+> channel with `ms.channel.timeOut` and that `PowerState: 'on'` is the fix. With a
+> cached pairing token both channels open in standby — the art channel in 2.4 s —
+> and the whole surface works against a dark panel. `ms.channel.timeOut` has since
+> been seen with the set **in art mode and healthy**, after heavy connection churn
+> and a SIGKILLed client that never closed its socket, so it reads as a
+> concurrent-client limit rather than a power state. If you meet it, wait a couple
+> of minutes rather than reconnecting harder, and stop this plane with SIGTERM so
+> it closes its own socket.
+>
+> `PowerState` is still worth reading — it is the cheapest thing that separates a
+> dark panel from a lit one — but it does **not** distinguish art mode from
+> somebody watching television, and `get_artmode` is what does:
 >
 >     curl -s http://<TV_ADDRESS>:8001/api/v2/ | python3 -m json.tool | grep PowerState
 >

@@ -12,10 +12,24 @@ each entry, which is the durable form.
 
 ### The display daemon against the wall — added 2026-08-06
 
-**Status:** pending. This is the acceptance criterion Chunk 12 cannot close by
-itself, and the chunk is deliberately still unchecked because of it. Everything in
-that chunk is verified against a test double; **no line of it has spoken to a
-television.**
+**Status: answered on 2026-08-07 — all three acceptance criteria met on the real
+set, and the pass found a defect on the way.** Three unattended rotations at the
+manifest's 180 s (Calder → Hokusai → Klee; intervals 182 s and 181 s), each
+matching what the operator saw with their own eyes; the third with the curation
+plane stopped; then a restart that re-showed the same picture without moving the
+wall and carried on to the next work. Items 1, 3, 4 and 5 below are settled.
+
+**What the pass found, because it is the reason this entry was worth keeping
+open.** The confirming read shipped the day before was wrong in the direction
+that stops the wall: `get_current` describes the art-store slot, not the display,
+so every real rotation read as a failure and the wall parked on one picture.
+Confirmation is now the set's own `image_selected` announcement. The read had
+been verified against a *dark* set, where it agrees with the failure because it
+never changes at all — which is why one state's worth of evidence proved nothing.
+
+**Still owed here:** item 2 (`next` / `show_now` latency, which needs the curation
+plane up), item 6 (brightness across a dusk), and item 9 (whether the five-minute
+recovery ceiling reads as broken in the room).
 
 **The television has to be in art mode, and what makes that hard to see is that
 almost everything works without it.** This paragraph previously said that a set
@@ -26,20 +40,17 @@ listings, brightness and the whole of `available()` worked. The daemon ran a ful
 pass against it — disabling the native slideshow, removing 41 orphans, uploading a
 work — and the only thing that failed was the picture changing.
 
-**So `PowerState` tells you whether the panel is lit and nothing more.** The one
-capability that needs art mode is `select_image`, which in the dark state is
-accepted, raises nothing, emits no event and changes nothing — indefinitely. The
-full map of which call works in which state is `artifacts/samsung-tv-state-findings.md`;
-read it before concluding anything is broken. Two consequences for whoever runs
-this: the set cannot be woken over the API (`set_artmode('on')` returns cleanly
-and does nothing, and Wake-on-LAN to the advertised MAC has no effect), so
-**someone has to be at the set**; and a daemon that logs `showing X` is now
-telling the truth, because it reads back what the television displays before it
-says so.
+**So `PowerState` tells you whether the panel is lit and nothing more** — it
+reads `on` for art mode and for somebody watching a channel alike. **`get_artmode`
+is the discriminator**, answering `on` only in art mode, and the daemon now gates
+every selection on it. The full map is `artifacts/samsung-tv-state-findings.md`;
+read it before concluding anything is broken.
 
-A run on 2026-08-06 with the set in art mode passed all nine checks, constructed
-in 4.53s, and reported `PowerState: "on"`. `PowerState` is still worth reading
-first, as the cheapest thing that distinguishes a dark panel from a lit one:
+The consequence for whoever runs this: the set cannot be woken over the API
+(`set_artmode('on')` returns cleanly and does nothing, and Wake-on-LAN to the
+advertised MAC has no effect), so **someone has to be at the set** to put it into
+art mode. `PowerState` is still worth reading first, as the cheapest thing that
+distinguishes a dark panel from a lit one:
 
 ```sh
 curl -s http://<TV_ADDRESS>:8001/api/v2/ | python3 -m json.tool | grep PowerState
@@ -81,33 +92,32 @@ alternative:**
    one instant; the curve is ported from the 2024 plane and should not read as a
    change to anyone living with it.
 
-**Three of these need the panel lit, and one needs it dark**, which is the whole
-reason this entry cannot be closed from a desk:
+**These three need a person at the set**, which is the whole reason this entry
+cannot be closed from a desk:
 
-7. **A rotation the set performs is confirmed, and this is the half no test can
-   reach.** The daemon reads back what the television says it is displaying
-   before it claims to have shown anything. That the read *catches* a wall which
-   is not changing is proven against the real set; that it **agrees promptly on a
-   healthy one has never been observed**, because it needs art mode. If the read
-   is wrong there, the symptom is unmissable and the opposite of silent: every
-   rotation reports `rotation.wall_unchanged` and the wall stops. Watch the first
-   two rotations in art mode before anything else.
+7. **A rotation the set performs is confirmed against the set's own word.**
+   *Settled 2026-08-07.* The daemon waits for the television's `image_selected`
+   announcement — which names the image and carries `is_shown` — before claiming
+   to have shown anything, and every rotation of that pass matched what the
+   operator could see. The earlier read this entry described, `get_current`, was
+   removed: it reports the art-store slot rather than the wall, so it denied real
+   rotations and parked the wall on one picture.
 8. **Then switch the set off and leave the daemon running.** Expect exactly one
-   WARNING — `the television accepted … and is not displaying it; it reports art
-   mode off. Rotation is deferred until the wall changes` — and then silence, not
-   a line per interval.
+   INFO — `the television is not in art mode; leaving the wall alone until it is`
+   — and then silence, not a line per interval. A set that is off is never asked
+   to select at all now: selecting on a lit set that is showing a *programme*
+   switches it into art mode and takes the screen off whoever is watching, so
+   nothing reaches the wall unless `get_artmode` says art mode is on.
 9. **Switch it back on, and time how long the wall takes to come back.** Expect
    one `the television is changing what it displays again`, and the wall to
    resume **on the work it was deferred at**, not somewhere further along the
-   theme. **The latency is the judgement call worth your opinion.** A set found
-   ignoring selections is backed off from on the same ladder as an unreachable
-   one — 5 seconds doubling to 300 — so after a long evening dark, the wall can
-   take up to five minutes to notice you switched it on. That is consistent with
-   what this plane already does for a television that has gone away, and it was
-   chosen over asking once a second, which against a real set is a selection and
-   a whole confirmation window spent waiting, every second, all night. If five
-   minutes reads as broken in the room, the ceiling is the thing to change, and
-   say so.
+   theme. **Expected to be about a second, and that is the thing to check.** The
+   backoff ladder still runs to 300 s, but the set *announces* its own art-mode
+   transitions and that announcement clears the wait — so switching the panel on
+   should bring the wall back on the next poll rather than after a wait that has
+   doubled its way up. If it instead takes minutes, the announcement is not
+   arriving and the ladder is doing the work: say so, because the fix is then a
+   different one from lowering the ceiling.
 
 `artifacts/samsung-tv-state-findings.md` is the map of which call works in which
 state, and carries its own list of what is still unmeasured — what

@@ -129,6 +129,39 @@ class TvClient(ABC):
         """
 
     @abstractmethod
+    async def showing_art(self) -> bool:
+        """Whether the set is showing art, and may therefore be asked to change it.
+
+        **This is a permission question, not a diagnostic.** Selecting an image on
+        a set that is showing a television programme does not fail politely — it
+        switches the set into art mode and takes the screen off the person
+        watching (measured; `samsung-tv-state-findings.md`). So nothing may be put
+        on the wall without asking this first.
+
+        **False on anything short of a clear yes**, including a reply this seam
+        cannot read. The two errors are not symmetric: a wall that waits is late,
+        and a wall that does not wait interrupts somebody's evening. Raises
+        `TvUnavailable` when the set could not be asked at all, which is the
+        existing outage path and a different event again.
+        """
+
+    @abstractmethod
+    def art_mode_announcement_pending(self) -> bool:
+        """Whether the set has announced an art-mode change since this was last asked.
+
+        **A hint that it is worth asking again, never an answer in itself.** The
+        set announces its own transitions, so a wall that backed off because
+        nobody was in art mode can resume the moment somebody is, instead of
+        sitting out the remainder of a wait. What it must not become is a cached
+        view of the set's state: a missed announcement would then freeze the wall
+        for ever or, worse, license a selection into somebody's programme. Missing
+        one here costs only promptness, because the decision is still a fresh
+        read.
+
+        Synchronous and consuming — it reports an edge, and clears it.
+        """
+
+    @abstractmethod
     async def reported_art_mode(self) -> str | None:
         """The set's own art-mode flag, or None if it would not answer.
 

@@ -32,24 +32,38 @@ def _restore_root_logging():
 
 
 class TestTheTokenCannotReachTheJournal:
-    def test_the_television_client_is_floored_at_info_even_in_debug(self):
+    def test_the_television_client_is_floored_above_info_even_in_debug(self):
         """The control itself.
 
-        The fork's `_check_for_token` writes the token at DEBUG, and `configure`
-        attaches this plane's handler to the *root* logger — so turning verbosity
-        up anywhere would carry it out. The moment somebody debugs a connection
-        problem is exactly the moment they would.
+        `configure` attaches this plane's handler to the *root* logger, so
+        anything the fork logs is carried out unless its own logger is held above
+        it. The floor must clear INFO, not merely reach it: the fork's token line
+        is `_LOGGING.info("New token %s", token)`.
         """
         logs.configure(logging.DEBUG)
 
-        assert logging.getLogger("samsungtvws").level == logging.INFO
+        assert logging.getLogger("samsungtvws").level > logging.INFO
 
     def test_the_floor_does_not_drag_the_client_up_past_a_quieter_run(self):
-        """`max`, not a bare assignment: a deployment running at WARNING should not
-        find one library chattering at INFO underneath it."""
-        logs.configure(logging.WARNING)
+        """`max`, not a bare assignment: a deployment running at ERROR should not
+        find one library chattering underneath it."""
+        logs.configure(logging.ERROR)
 
-        assert logging.getLogger("samsungtvws").level == logging.WARNING
+        assert logging.getLogger("samsungtvws").level == logging.ERROR
+
+    def test_a_token_logged_at_info_by_that_logger_is_not_emitted(self, capsys):
+        """**The line that actually leaks it, at the level it actually uses.**
+
+        This is the regression for a floor that read INFO until 2026-08-07 and so
+        permitted the exact line it was written to stop — and, because the token
+        is written on every *pairing* rather than only under debugging, permitted
+        it at the default level with nobody doing anything unusual.
+        """
+        logs.configure(logging.INFO)
+
+        logging.getLogger("samsungtvws.connection").info("New token %s", "a-real-pairing-token")
+
+        assert "a-real-pairing-token" not in capsys.readouterr().err
 
     def test_a_token_logged_at_debug_by_that_logger_is_not_emitted(self, capsys):
         """Asserted through the handler rather than through the level number, so a

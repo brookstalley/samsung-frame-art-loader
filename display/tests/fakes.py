@@ -35,6 +35,10 @@ class FakeTv(TvClient):
         self.brightness: list[int] = []
         self.removed: list[tuple[str, ...]] = []
         self.connects = 0
+        #: How many times the connection was let go. The art channel being closed
+        #: on the way out is load-bearing: the set holds an abandoned client's slot
+        #: for minutes, so a daemon that skipped it could not reconnect after a crash.
+        self.closed = 0
         self.slideshow_disabled = 0
         self._next_id = 0
         self._connected = False
@@ -72,8 +76,17 @@ class FakeTv(TvClient):
         #: set answering "I took it and I am not showing it" is a different wire
         #: behaviour from it never answering, and both mean the wall did not move.
         self.admits_not_showing: set[str] = set()
-        #: The set's own art-mode flag, as it would report it.
+        #: The set's own art-mode flag, as it would report it. `"on"` by default
+        #: because art mode is the deployment's normal condition; set it to
+        #: `"off"` to model a television somebody is watching or a dark panel,
+        #: **both of which the wall must not touch** — selecting on a set showing
+        #: a programme switches it into art mode and takes the screen.
         self.art_mode: str | None = "on"
+        #: Whether the set has announced an art-mode change nobody has collected
+        #: yet. Armed by a test to model the set saying "I am in art mode now".
+        self.art_mode_announced = False
+        #: How many times the set has been asked whether it is showing art.
+        self.art_mode_reads = 0
 
     async def connect(self) -> None:
         """Cheap once connected, exactly as the real client is.
@@ -95,18 +108,19 @@ class FakeTv(TvClient):
         self._connected = True
 
     async def close(self) -> None:
-        return None
+        self.closed += 1
+        self._connected = False
 
     async def disable_native_slideshow(self) -> None:
-        self._check_reachable()
+        self._check_usable()
         self.slideshow_disabled += 1
 
     async def listed_content_ids(self) -> frozenset[str]:
-        self._check_reachable()
+        self._check_usable()
         return frozenset(self.holding)
 
     async def upload(self, path: Path) -> str:
-        self._check_reachable()
+        self._check_usable()
         if self.refuse_uploads:
             raise TvUploadFailed(f"{path.name} is not on the television after an upload attempt")
         self._next_id += 1
@@ -115,14 +129,14 @@ class FakeTv(TvClient):
         return content_id
 
     async def show(self, content_id: str) -> bool:
-        self._check_reachable()
+        self._check_usable()
         if content_id not in self.holding:
             # The real set answers an unknown id with an error rather than a
             # blank wall, and a fake that accepted anything would let a daemon
             # bug — selecting an orphaned binding — pass every test.
-            raise TvUnavailable(f"the television does not hold {content_id}")
+            raise self._dropping(TvUnavailable(f"the television does not hold {content_id}"))
         if content_id in self.refuse_selection_of:
-            raise TvUnavailable(f"the television refused {content_id}")
+            raise self._dropping(TvUnavailable(f"the television refused {content_id}"))
         self.selected.append(content_id)
         if self.displays_nothing_selected or content_id in self.admits_not_showing:
             # The wall is left where it was, which is the point: the request was
@@ -131,11 +145,37 @@ class FakeTv(TvClient):
         self.displaying = content_id
         return True
 
+    def _dropping(self, exc: TvUnavailable) -> TvUnavailable:
+        """Mark the connection gone, the way the real client does on any failure.
+
+        **This is not decoration, and a fake without it hides a whole dead
+        branch.** `SamsungTv._call` abandons and closes its client on every
+        failure — it holds a websocket whose state after an error is not knowable
+        — so the caller's *next* request raises "not connected" rather than
+        reaching the set. A fake that kept answering after raising let the
+        daemon's rebind path look reachable when against the real client it could
+        never run: the listing it depends on would have raised first.
+        """
+        self._connected = False
+        return exc
+
+    async def showing_art(self) -> bool:
+        self._check_usable()
+        # Counted because this costs a request against the real set, and the poll
+        # interval is one second: "the gate is affordable" is a claim about how
+        # often it is asked, and nothing else here can express it.
+        self.art_mode_reads += 1
+        return self.art_mode == "on"
+
+    def art_mode_announcement_pending(self) -> bool:
+        announced, self.art_mode_announced = self.art_mode_announced, False
+        return announced
+
     async def reported_art_mode(self) -> str | None:
         return self.art_mode
 
     async def remove(self, content_ids: Sequence[str]) -> RemovalOutcome:
-        self._check_reachable()
+        self._check_usable()
         if self.removal_unconfirmable:
             raise TvRemovalUnconfirmed("the removal request was refused; what the set holds is unknown")
         requested = tuple(content_ids)
@@ -146,8 +186,23 @@ class FakeTv(TvClient):
         return RemovalOutcome(requested=requested, surviving=tuple(c for c in requested if c in self.holding))
 
     async def set_brightness(self, value: int) -> None:
-        self._check_reachable()
+        self._check_usable()
         self.brightness.append(value)
+
+    def _check_usable(self) -> None:
+        """What every call except `connect` must pass, and both halves matter.
+
+        **A dropped connection refuses work until somebody reconnects.** The real
+        client raises "not connected to the television" whenever it is holding no
+        handle, and it lets go of that handle on *any* failure. A fake that went
+        on answering after raising made a whole branch of the daemon look
+        reachable that could never run against the shipped client — the rebind
+        path, whose first act is to ask the set a question the real client would
+        have refused.
+        """
+        self._check_reachable()
+        if not self._connected:
+            raise TvUnavailable("not connected to the television")
 
     def _check_reachable(self) -> None:
         if self.unavailable:

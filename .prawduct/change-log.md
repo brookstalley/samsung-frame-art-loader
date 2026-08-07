@@ -48,9 +48,78 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-07: The wall takes the television from whoever is watching it
+
+<!-- prawduct: chunks=12 | scope=v1-build -->
+
+**Why:** with the operator watching a programme and the daemon rotating normally,
+a due rotation sent `select_image` and **the set switched itself into art mode**.
+The picture they were watching was gone. That cell of the state map had read *not
+tried — it would take the screen off whoever is watching*; it does exactly that,
+and somebody watching television is a daily event rather than an edge case.
+
+**The requirement did not exist, so it was written before the code** —
+`nonfunctional-requirements.md` § Availability, "The television belongs to whoever
+is using it". It outranks availability: a wall that is late is a smaller failure
+than a television that interrupts the person watching it. The plane deliberately
+does **not** turn a dark set on, which currently costs nothing since neither
+`select_image` nor `set_artmode('on')` can wake one.
+
+**One reading decides it.** `get_artmode` answers `off` for both a dark panel and
+a programme, and `on` only for art mode, so a single check covers both states the
+wall must not touch; `PowerState` cannot, reading `on` for a programme too. A no
+freezes everything the existing still-wall path already freezes — no selection, no
+advance through the theme, no directive consumed — which made this a second route
+into tested behaviour rather than new machinery.
+
+**Recovery is by the set's own announcement, not by waiting.** Subscribing to
+`art_mode_changed` / `artmode_status` / `go_to_standby` / `wakeup` clears the
+backoff, so switching a programme off brings the wall back on the next poll
+instead of after a wait that has doubled its way to five minutes — which matters
+because this transition happens every time somebody finishes watching something. A
+reconnection counts as an announcement for the same reason. **The announcement is
+never the answer**: it says "ask again", and the decision is always a fresh read,
+so a missed one costs promptness and can never license a selection into a
+programme.
+
+### Also in this commit: both Critic blockers from the cumulative review
+
+- **The rebind path was dead code against the real client.** `_call` drops and
+  closes its connection on *any* failure, so `_rebind_or_reraise`'s first act —
+  asking the set what it lists — would have raised "not connected" before reaching
+  the television, and the whole mark-orphaned / re-upload branch could never run.
+  It reconnects first now. **The double was what hid it**: `FakeTv` raised without
+  clearing its connected flag, so the fake kept answering where the real client
+  would have refused. The fake now models the refusal, which is what makes the fix
+  provable — the mutation survived the first sweep until it did.
+- **The pairing token could reach the journal at the default level.** The
+  television client's logger was floored at INFO on the belief that the token is a
+  DEBUG line; the pinned fork logs `New token %s` at **INFO**
+  (`samsungtvws/connection.py:101`), so the floor permitted precisely the line it
+  was written to stop, on any pairing, with nobody doing anything unusual. Floored
+  at WARNING, with a regression test at the level that actually leaks it.
+
+Eleven further findings were dispositioned in the same pass. Fixed: the daemon
+now closes the art channel on *every* exit including an unexpected one (the set
+holds an abandoned client's slot for minutes, so under `Restart=always` a crash
+could lock the daemon out of its own television); README, `deploy/README.md`,
+`operator-verification.md` and `platform-and-dependency-findings.md` no longer
+carry the pre-hardware framing or the retired `ms.channel.timeOut` standby
+signature this same work retired; the build plan now says plainly that the live
+pass ran **from a development Mac, not the Pi**, and names the three things in it
+still unobserved; a duplicated binding predicate became one function; an uncalled
+accessor was deleted; the plane-isolation guard's comment now describes what its
+resolver does. Six were accepted as facts with reasons.
+
+**Twenty mutations across two batches, all caught.** Two survived their first
+sweep and both were real: the reconnect above, and a recovery test whose clock
+advanced by exactly one interval per loop, so the arithmetic agreed with the bug
+it was meant to catch. That is the third time in two sessions a deliberately
+written test could not have failed.
+
 ## 2026-08-07: The confirming read was reading the wrong thing, and the wall parked
 
-<!-- prawduct: chunks=12 | scope=v1 -->
+<!-- prawduct: chunks=12 | scope=v1-build -->
 
 **Why:** the entry below added a confirming read for selections, verified it
 against a dark set, and shipped it. The first pass with the set in **art mode**
@@ -96,8 +165,10 @@ on the real set.** Three unattended rotations at the manifest's 180 s — Calder
 Hokusai → Klee, intervals 182 s and 181 s — each confirmed against the set and
 each matching what the operator saw with their own eyes; the third with the
 curation plane stopped; then a restart that re-showed the same picture without
-moving the wall and carried on to the next work. 39 works uploaded one per pass,
-brightness set from the solar angle, no WARNING or ERROR in the run.
+moving the wall and carried on to the next work. Brightness was set from the
+solar angle and the whole run logged five INFO lines and no WARNING or ERROR.
+The theme's uploads — 39 of them, one per pass as designed — had gone up during
+the earlier pass that afternoon, so this run had only bindings to read.
 
 **Also measured, and recorded in `samsung-tv-state-findings.md`:** art mode
 reports over the API after all — `get_artmode` answers `on`, which retires "it has
@@ -115,7 +186,7 @@ silently end every future confirmation. Covered, then re-swept.
 
 ## 2026-08-07: The television takes selections and displays none of them
 
-<!-- prawduct: chunks=12 | scope=v1 -->
+<!-- prawduct: chunks=12 | scope=v1-build -->
 
 **Why:** the display plane met a real television for the first time, and the very
 first pass reported showing a work the wall was not showing.

@@ -58,7 +58,7 @@ a set showing a television channel. **It does not discriminate art mode** —
 | `upload` | works | not tried | works — 39 in one pass |
 | `delete` / `delete_list` | works — 41 removed in one call | not tried | works |
 | `set_slideshow_status` | works | not tried | works |
-| **`select_image`** | **accepted and ignored** | **not tried — it would take the screen off whoever is watching** | works; `image_selected` at +0.49 s and +1.04 s |
+| **`select_image`** | **accepted and ignored** | **switches the set into art mode and takes the screen** | works; `image_selected` at +0.49 s and +1.04 s |
 | **`set_artmode('on')`** | **accepted and ignored** | not tried | n/a |
 | `get_slideshow_status.current_content_id` | not tried | not tried | **empty while the slideshow is off** |
 | `get_auto_rotation_status` | **never answers** (`AssertionError`) | **never answers** | **never answers** |
@@ -83,6 +83,30 @@ that is dark — and the one plane that would notice, the label renderer, would
 caption pictures nobody can see. This is why the display plane treats "the set
 took it and displayed nothing" as its own outcome rather than as a failure to
 show one work.
+
+### Selecting an image takes the screen from somebody watching television
+
+**Measured 2026-08-07, with the operator watching a programme and the display
+daemon rotating on its normal interval.** The rotation came due, `select_image`
+was sent, and the set **switched itself into art mode** — `image_selected` came
+back with `is_shown: "Yes"`, the daemon truthfully logged `showing Landscape with
+Two Poplars`, and the person watching lost the picture they were watching.
+
+This was listed here as *not tried, because it would take the screen off whoever
+is watching*. It does exactly that. It is the likeliest complaint this product
+could cause in a household, it is not rare — somebody watching television is a
+daily occurrence — and **nothing in the display plane currently prevents it**: the
+daemon does not consult art mode before selecting, by a deliberate decision that
+reading it "before every selection would cost one call on every rotation that is
+about to succeed". That trade was priced against a wasted call. The real price is
+a television that grabs itself back from its owner every few minutes.
+
+**The asymmetry is worth holding on to**, because it decides what a fix can rely
+on: `select_image` moves the set from *television* into art mode, and does **not**
+move it from *dark* into art mode, where it is accepted and ignored. So the call
+is not a general "wake into art mode" — the panel has to already be lit. The
+matching `get_artmode` readings are the discriminator a fix would gate on: `on`
+in art mode, `off` in both the states where selecting is wrong.
 
 ### `get_current_artwork` does not describe the wall
 
@@ -178,10 +202,9 @@ crash-loops could lock itself out of its own television.
 
 ## What is still owed
 
-1. **What `select_image` does to somebody watching television.** Not tried on
-   purpose: the plausible outcomes are that it is ignored, as in the dark state,
-   or that it takes the screen away from a person mid-programme. The second is
-   the one worth knowing about, and it is the likeliest source of a complaint
-   this product could cause in a household.
-2. **Whether `KEY_POWER` lights the panel**, and what it lights it to.
-3. **The concurrent-client limit** described in the section above.
+1. **Whether `KEY_POWER` lights the panel**, and what it lights it to.
+2. **The concurrent-client limit** described in the section above.
+3. **Whether a set moved into art mode by `select_image` returns to the
+   programme** when the viewer presses the source or power key, or whether they
+   have to navigate back — i.e. how expensive the interruption above actually is
+   to recover from.

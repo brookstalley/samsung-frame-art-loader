@@ -137,6 +137,12 @@ class Daemon:
         #: the way in and on the way out, never in between.
         self._reported_wall_unchanged = False
 
+        #: Held for the same reason, and reported at INFO rather than WARNING
+        #: because somebody watching their own television is not a fault. It is
+        #: still said, because "the wall stopped" otherwise has no explanation in
+        #: the journal at all.
+        self._reported_not_our_wall = False
+
         #: When the wall may next be asked to change, once it has been found not
         #: changing. **Rotation has a timer and the directive path does not**, so
         #: without this a `show_now` left unconsumed — which is the right thing to
@@ -173,11 +179,20 @@ class Daemon:
             self._settings.art_root,
             extra={"event": "daemon.started", **self._settings.startup_lines()},
         )
-        while not stop.is_set():
-            interval = await self.tick()
-            await self._wait(stop, interval)
-        await self._tv.close()
-        log.info("display plane stopped", extra={"event": "daemon.stopped"})
+        try:
+            while not stop.is_set():
+                interval = await self.tick()
+                await self._wait(stop, interval)
+        finally:
+            # **Closed on every way out, including the unexpected one.** An
+            # exception escaping the loop used to skip this entirely, leaving the
+            # art websocket open at the set — and the set has been observed
+            # refusing new art-channel connections for minutes after a client went
+            # away without closing, apparently holding the slot until it times
+            # out. Under `Restart=always` that turns one crash into a daemon that
+            # cannot reach its own television on the way back up.
+            await self._tv.close()
+            log.info("display plane stopped", extra={"event": "daemon.stopped"})
 
     async def tick(self) -> float:
         """One pass. Returns how long to wait before the next one.
@@ -330,6 +345,16 @@ class Daemon:
         # missing — is still an attempt, and is consumed. Retrying that one every
         # second would fill the journal with a failure that will not change until
         # a file appears.
+        #
+        # **A jump onto a television somebody is watching is not attempted at
+        # all**, and is therefore not consumed: the curator gets their picture
+        # when the set comes back to art mode, by the same rule that makes an
+        # outage delay a jump rather than eat it. Checked here rather than in
+        # `_advance`, so the baselining and regression arms above still keep this
+        # device's sequence honest while the wall is somebody else's.
+        if not await self._the_wall_is_ours_to_change():
+            return False
+
         if manifest.pinned_work_id is None:
             acted = await self._advance(manifest)
             self._state.set_last_acted_sequence(observed)
@@ -406,6 +431,12 @@ class Daemon:
             # Gated by the same wait as a jump. The rotation interval is normally
             # the longer of the two, so this only bites where the backoff has
             # grown past it — a set left dark for hours.
+            return
+        if not await self._the_wall_is_ours_to_change():
+            # **The clock is deliberately not stamped.** An interval the wall was
+            # never allowed to use has not been spent, so when the set comes back
+            # to art mode the picture should change at once rather than sit out
+            # the remainder of a rotation nobody could see.
             return
         self._attempted_at = self._clock.monotonic()
         await self._advance(manifest)
@@ -496,13 +527,60 @@ class Daemon:
             )
             return Shown.YES
 
+    async def _the_wall_is_ours_to_change(self) -> bool:
+        """Whether the set is showing art, and may therefore be asked to change it.
+
+        **The television belongs to whoever is using it**
+        (`nonfunctional-requirements.md`). Selecting an image on a set showing a
+        programme does not fail politely: it switches the set into art mode and
+        takes the screen off the person watching. So nothing reaches the wall
+        without asking first, and a no freezes everything — no selection, no
+        advance through the theme, no directive consumed — exactly as a wall that
+        would not change does.
+
+        **Asked only when something is about to happen**, which is what keeps a
+        one-second poll from becoming a request per second: rotation consults this
+        when its interval is up, and the directive path only when a sequence has
+        actually moved. A no then backs off on the shared ladder, so a whole
+        evening of television costs a handful of reads rather than thousands.
+        """
+        if await self._tv.showing_art():
+            if self._reported_not_our_wall:
+                log.info(
+                    "the television is showing art again; resuming the rotation",
+                    extra={"event": "rotation.wall_returned"},
+                )
+                self._reported_not_our_wall = False
+            return True
+
+        if not self._reported_not_our_wall:
+            # Said once for the same reason a dark wall is: somebody watches
+            # television for hours, and a line per attempt would bury the ERRORs
+            # that are this plane's only failure channel.
+            self._reported_not_our_wall = True
+            log.info(
+                "the television is not in art mode; leaving the wall alone until it is",
+                extra={"event": "rotation.wall_not_ours"},
+            )
+        self._hold_off_the_wall()
+        return False
+
     def _wall_attempt_is_due(self) -> bool:
         """Whether the wall may be asked to change again yet.
 
-        Only ever false after an attempt the television took and did not act on.
-        A set that is behaving has no wait, so nothing here delays a rotation or a
-        jump in normal operation.
+        False after an attempt the television took and did not act on, and after
+        finding somebody else using the set. A television behaving normally in art
+        mode has no wait, so nothing here delays a rotation or a jump in normal
+        operation.
+
+        **An announcement from the set clears the wait**, because it is news
+        rather than a retry — the same rule a new manifest gets. Without it,
+        somebody switching from a programme back to art mode would watch a blank
+        wall for the remainder of a backoff that had grown to five minutes; with
+        it, the next poll asks again and the picture comes back in about a second.
         """
+        if self._tv.art_mode_announcement_pending():
+            self._wall_is_answering()
         return self._wall_retry_not_before is None or self._clock.monotonic() >= self._wall_retry_not_before
 
     def _hold_off_the_wall(self) -> None:
@@ -550,7 +628,8 @@ class Daemon:
     async def _content_id_for(self, entry: Entry, render: Path) -> str | None:
         """This work's id on the television, uploading it now if it has none."""
         binding = self._state.binding_for(entry.work_id)
-        if binding is not None and binding.is_on_the_television and not _render_changed(binding, render):
+        if _is_current(binding, render):
+            assert binding is not None  # _is_current is false for None
             return binding.tv_content_id
         if self._too_soon_to_retry(binding):
             return None
@@ -591,7 +670,18 @@ class Daemon:
         either direction: if the set still lists the id, the fault is not the
         binding and the original failure stands. If the listing itself fails,
         that is a real outage and it propagates from here.
+
+        **The connection is re-established first, and without that this whole
+        method is unreachable.** The failure that sends us here arrives from the
+        television client, which drops and closes its connection on *any* failure
+        — it holds a websocket whose state after an error is not knowable, so it
+        refuses to reason on it. The very next request would therefore raise "not
+        connected" rather than reaching the set, the outage arm would swallow it,
+        and every branch below would be dead code. Reconnecting costs nothing when
+        the set is there and raises the real outage when it is not, which is
+        exactly the distinction being drawn.
         """
+        await self._connected()
         listed = await self._tv.listed_content_ids()
         if refused in listed:
             raise TvUnavailable(f"the television refused to select {refused}, which it says it is holding")
@@ -645,7 +735,7 @@ class Daemon:
         for entry in manifest.entries:
             render = self._settings.art_root / entry.render_path
             binding = self._state.binding_for(entry.work_id)
-            if binding is not None and binding.is_on_the_television and not _render_changed(binding, render):
+            if _is_current(binding, render):
                 continue
             if self._too_soon_to_retry(binding):
                 continue
@@ -835,6 +925,20 @@ def _fingerprint(render: Path) -> str | None:
     except OSError:
         return None
     return f"{stat.st_mtime_ns}:{stat.st_size}"
+
+
+def _is_current(binding: Binding | None, render: Path) -> bool:
+    """Whether this work's picture is already on the television, and still right.
+
+    **One question with two callers**, which is why it is a function rather than
+    a condition written twice: one caller decides whether a content id can be
+    reused, the other whether an upload still needs carrying, and they are the
+    same question asked from opposite ends. Written out twice they drifted once
+    already — the fingerprint half was added because the first reading was
+    incomplete, and had it been added to only one of the two the wall would show
+    a stale composition for exactly as long as nobody looked.
+    """
+    return binding is not None and binding.is_on_the_television and not _render_changed(binding, render)
 
 
 def _render_changed(binding: Binding, render: Path) -> bool:

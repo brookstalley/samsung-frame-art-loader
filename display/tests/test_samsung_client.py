@@ -89,6 +89,12 @@ class StubArt:
         if handler is not None:
             handler("d2d_service_message", response)  # type: ignore[operator]
 
+    def fire(self, trigger: str, data: dict) -> None:
+        """Deliver one of the set's announcements to whoever subscribed to it."""
+        handler = self.callbacks.get(trigger)
+        if handler is not None:
+            handler("d2d_service_message", {"event": "d2d_service_message", "data": json.dumps(data)})  # type: ignore[operator]
+
     async def start_listening(self) -> None:
         return None
 
@@ -479,6 +485,79 @@ async def test_connecting_subscribes_to_the_announcement(art: StubArt, tmp_path)
     await tv.connect()
 
     assert "image_selected" in art.callbacks
+
+
+# -- whether the wall is ours to change ---------------------------------------
+#
+# Selecting on a set showing a programme switches it into art mode and takes the
+# screen off the person watching, so this is a permission question and it is
+# answered conservatively: only a plain `on` is a yes.
+
+
+@pytest.mark.parametrize(
+    "reply, expected",
+    [
+        pytest.param("on", True, id="the set says it is showing art"),
+        pytest.param("off", False, id="a programme, or a dark panel"),
+        pytest.param("", False, id="an empty answer"),
+        pytest.param({"value": "on"}, False, id="a shape this seam cannot read"),
+        pytest.param(None, False, id="no answer at all"),
+    ],
+)
+async def test_only_a_plain_yes_lets_the_wall_be_touched(tv: SamsungTv, art: StubArt, reply: object, expected: bool):
+    """A wall that waits is late; a wall that does not is an interruption."""
+    art.artmode_reply = reply
+
+    assert await tv.showing_art() is expected
+
+
+async def test_a_set_that_cannot_be_asked_is_an_outage_not_a_refusal(tv: SamsungTv, art: StubArt):
+    """`TvUnavailable`, not False. Holding the wall and reconnecting is a
+    different response from leaving somebody's television alone."""
+    art.artmode_raises = ResponseError("the set stopped answering")
+
+    with pytest.raises(TvUnavailable):
+        await tv.showing_art()
+
+
+async def test_an_art_mode_announcement_is_reported_once_and_then_cleared(tv: SamsungTv, art: StubArt):
+    """An edge, not a state. It says "ask again", and asking is what settles it —
+    so a second read of the same announcement would license a second free attempt
+    at a wall that may still not be ours."""
+    art.fire("art_mode_changed", {"event": "art_mode_changed", "status": "on"})
+
+    assert tv.art_mode_announcement_pending() is True
+    assert tv.art_mode_announcement_pending() is False
+
+
+@pytest.mark.parametrize("announcement", ["art_mode_changed", "artmode_status", "go_to_standby", "wakeup"])
+async def test_every_way_the_set_mentions_art_mode_counts(tv: SamsungTv, art: StubArt, announcement: str):
+    """None of these payloads is parsed, so all four can share one handler — which
+    is why the set's spelling cannot be got wrong here."""
+    tv.art_mode_announcement_pending()  # clear the one connecting leaves behind
+    art.fire(announcement, {"event": announcement})
+
+    assert tv.art_mode_announcement_pending() is True
+
+
+async def test_connecting_counts_as_an_announcement(art: StubArt, tmp_path):
+    """A reconnection is news: the set may have entered art mode while this plane
+    could not hear it, and otherwise the wall sits out a wait whose reason has
+    gone."""
+    tv = SamsungTv(
+        host="10.0.0.1",
+        port=8002,
+        token_file=tmp_path / "token_file",
+        client_name="tvpi-test",
+        connect_timeout_seconds=1.0,
+        upload_timeout_seconds=5.0,
+        select_confirm_seconds=0.05,
+    )
+    tv._construct = lambda: art  # type: ignore[method-assign]
+
+    await tv.connect()
+
+    assert tv.art_mode_announcement_pending() is True
 
 
 async def test_the_art_mode_flag_is_passed_through(tv: SamsungTv, art: StubArt):

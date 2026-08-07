@@ -12,6 +12,8 @@ the handling: which exceptions are caught, what they exit with, and what the
 operator is told.
 """
 
+import asyncio
+
 import pytest
 
 from display import __main__ as entry
@@ -66,3 +68,28 @@ def test_an_unexpected_failure_is_not_swallowed_into_a_tidy_exit(monkeypatch):
 
     with pytest.raises(RuntimeError):
         entry.main()
+
+
+async def test_a_crash_still_closes_the_art_channel_on_the_way_out(settings, tv, state, clock):
+    """`Restart=always` makes the exit path load-bearing.
+
+    The set has been observed refusing new art-channel connections for minutes
+    after a client vanished without closing, apparently holding the slot until it
+    times out. So a daemon that skipped its close on the unexpected exit would
+    come back up unable to reach the television it just crashed away from.
+    """
+    from display.daemon import Daemon
+    from display.manifest import Watcher
+
+    watcher = Watcher(settings.manifest_path, rotation_interval_fallback=180, shuffle_fallback=False)
+    daemon = Daemon(settings=settings, tv=tv, state=state, watcher=watcher, clock=clock.as_clock())
+
+    async def explode() -> float:
+        raise RuntimeError("something nobody predicted")
+
+    daemon.tick = explode  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError):
+        await daemon.run(asyncio.Event())
+
+    assert tv.closed, "the art channel was left open at the set"

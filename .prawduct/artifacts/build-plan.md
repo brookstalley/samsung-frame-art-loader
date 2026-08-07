@@ -1589,6 +1589,17 @@ two missing deliverables.)*
   on the Pi: the theme reaches the wall, `next`/`show_now` land within the poll
   interval, a deleted render file skips with a WARNING and rotation continues
 
+  **What the live pass actually covered, stated precisely** (2026-08-07), because
+  "the hardware pass is done" is easy to read as more than it is. It ran **from
+  the development Mac against the real television**, not from the Pi: the theme
+  reached the wall, rotation and restart and curation-independence were all
+  observed. **Three things in the line above remain unobserved** — `next` and
+  `show_now` landing within the poll interval, a deleted render skipping with a
+  WARNING while rotation continues, and anything at all running on the Pi. The
+  first two are cheap and are in `operator-verification.md`; the third is Chunk
+  13's, which is where the Pi, the units and the panel arrive. So this chunk is
+  proven against real hardware and **not** proven as a deployment.
+
   **The selection-confirmation half arrived from the hardware, on 2026-08-07, and
   is the reason this chunk was worth holding open.** Every unit test passed
   against a double that could not express the failure: a real television with its
