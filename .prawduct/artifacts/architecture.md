@@ -502,9 +502,17 @@ is no network between planes.
   deliberately deferred (`data-model.md` § Deliberately not modelled).
   This is the ratified data-model norm ("per-device runtime state never lives in
   the catalogue") given a process to live in.
-- **Reconciliation loop:** read manifest → ensure every listed work is uploaded to
-  the TV → rotate through the list on a timer → on each `image_selected` callback,
-  render and push the e-paper label.
+- **Reconciliation loop, as built (2026-08-06/07):** poll the manifest's mtime
+  (~1 s) → adopt a new one, refusing an unrecognised major and keeping the last
+  good document → reconcile the binding table against the set, removing what it
+  holds that nothing accounts for → apply sun-position brightness → act on at most
+  one directive → rotate when the interval is up. **Uploads are carried one per
+  pass rather than batched on adoption**, so a fresh install shows something in
+  seconds instead of blanking the wall for the five minutes forty uploads take.
+  **A selection is confirmed by reading back what the set displays** before
+  anything is logged or recorded (§ Failure Modes). The e-paper label is Chunk
+  13's, and the `image_selected` callback it will hang off is not registered yet
+  — nothing in this plane consumes a television event today.
 - **Renders the e-paper label** (decided 2026-07-20 — see Decision Log). The
   **e-paper panel's** geometry (1448×1072) stays with the plane that owns that
   panel. Display does *not* render the mat — the mat is composed by curation into

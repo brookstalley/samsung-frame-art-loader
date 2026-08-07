@@ -48,6 +48,63 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-07: The television takes selections and displays none of them
+
+<!-- prawduct: chunks=12 | scope=v1 -->
+
+**Why:** the display plane met a real television for the first time, and the very
+first pass reported showing a work the wall was not showing.
+
+**What the hardware said.** With the set dark — `PowerState: standby`, art mode
+`off` — `select_image` is accepted, raises nothing, emits none of the three
+art-mode events, and changes nothing, indefinitely. Everything else in a rotation
+works: the art channel opens in 2.4 s, and uploads, deletions, listings and
+brightness all succeed. The one failure a return value cannot carry was the one
+the daemon trusted a return value for, and it is the everyday condition of a set
+somebody switched off rather than an edge case.
+
+**What changed.** A selection is confirmed by reading back what the set says it
+displays — the argument `remove()` already made, that reading state beats
+believing a reply. "The set took it and displayed nothing" became its own outcome
+rather than a failure to show one work, because the two want opposite responses:
+a missing render means try the next work; a wall displaying nothing means try
+none of them. Nothing is recorded as having been on the wall, the place in the
+rotation is given back, a `show_now` is left unconsumed by the rule that already
+survives an outage, and it is said once with the set's own art-mode flag, then
+again on recovery.
+
+**A defect introduced and caught in the same session.** Leaving the pin
+unconsumed removed the only brake on the directive path, which has no timer where
+rotation does — a select plus a confirming read every poll, all night. It backs
+off now on the ladder an unreachable set already uses. Found by scrubbing the
+diff, not by a test failing.
+
+**The state map is new.** `samsung-tv-state-findings.md` records which call works
+in which state, because the library's vocabulary misleads: `on()` and
+`in_artmode()` both derive from REST `PowerState`, which says only whether the
+panel is lit — the television state and art mode both report `on`. It retires a
+claim this repo carried in two places (that standby refuses the handshake), and
+it is honest about the gap that matters: **art mode has never been observed over
+the API on this set**, `get_artmode` having answered `off` every time it has been
+asked. The confirming read is proven to catch a dark wall and has never been seen
+agreeing on a healthy one.
+
+**Also settled by measurement:** the set advertises a brightness range of 0–10
+and accepts −4, reading it straight back — so `TV_MIN_BRIGHTNESS=-4`, carried
+forward from the 2024 plane on faith, is correct. And the dark state cannot be
+left in software: `set_artmode('on')` returns cleanly and does nothing, and
+Wake-on-LAN to the advertised MAC has no effect on a set reporting `networkType:
+wired`.
+
+**Critic:** 1 blocking, 13 warnings, 10 notes. The blocking one was right — the
+two new methods sit in the one module with no double beneath it and no test
+reached them; nine tests now do. The reviewers independently found the retry
+flood, judging the commit before its fix. Chunk 12 remains open: the live pass
+still needs art mode, and that is now the first thing to watch.
+
+**Tests:** 150 / 1925 / 155. Eighteen mutations swept across three sweeps, all
+caught — two only after the sweep exposed tests passing by coincidence.
+
 ## 2026-08-06: Two checks that reported on measurements they never took
 
 <!-- prawduct: scope=v1-build -->

@@ -40,6 +40,16 @@ class StubArt:
         self.listing_raises: Exception | None = None
         self.delete_raises: Exception | None = None
         self.undeletable: set[str] = set()
+        #: What the set answers when asked what it is displaying. The real shape,
+        #: as recorded from the deployment's own television.
+        self.current_reply: object = {
+            "event": "get_current_artwork",
+            "content_id": "MY-F0001",
+            "content_type": "artstore",
+        }
+        self.current_raises: Exception | None = None
+        self.artmode_reply: object = "on"
+        self.artmode_raises: Exception | None = None
 
     async def start_listening(self) -> None:
         return None
@@ -72,6 +82,22 @@ class StubArt:
 
     async def set_brightness(self, value: int) -> None:
         self.brightness.append(value)
+
+    async def get_current(self) -> object:
+        """What the set says it is displaying — including the shapes it should not send.
+
+        Typed as `object` because the point of the tests below is what this seam
+        does with a reply that is not the documented one: the library asserts on
+        an empty answer and passes anything else straight through.
+        """
+        if self.current_raises is not None:
+            raise self.current_raises
+        return self.current_reply
+
+    async def get_artmode(self) -> object:
+        if self.artmode_raises is not None:
+            raise self.artmode_raises
+        return self.artmode_reply
 
 
 @pytest.fixture
@@ -267,3 +293,76 @@ class TestTheRestOfTheSurface:
 
         with pytest.raises(TvUnavailable):
             await tv.listed_content_ids()
+
+
+# -- the confirming read ------------------------------------------------------
+#
+# The read the whole selection-confirmation design rests on. It has to answer
+# three ways rather than two: the id it was given, a *different* id, or nothing
+# it can vouch for — and the daemon treats the third as agreement, because a set
+# that declines to describe its own display must not stop a working wall. That
+# choice is only safe if "declines" is genuinely distinguished here.
+
+
+async def test_it_reports_the_id_the_set_names(tv: SamsungTv, art: StubArt):
+    art.current_reply = {"event": "get_current_artwork", "content_id": "MY-F0007", "content_type": "mypicture"}
+
+    assert await tv.current_content_id() == "MY-F0007"
+
+
+async def test_it_reports_an_id_that_is_not_the_one_we_asked_for(tv: SamsungTv, art: StubArt):
+    """The case the design exists for: the set displaying something else.
+
+    Returned verbatim rather than compared here — the seam reports what the
+    television says, and the loop is what decides whether that is agreement.
+    """
+    art.current_reply = {"event": "get_current_artwork", "content_id": "SAM-F0222", "content_type": "artstore"}
+
+    assert await tv.current_content_id() == "SAM-F0222"
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        pytest.param("not a mapping at all", id="reply is not a dict"),
+        pytest.param({"event": "get_current_artwork"}, id="no content_id in it"),
+        pytest.param({"content_id": ""}, id="content_id is empty"),
+        pytest.param({"content_id": 12345}, id="content_id is not a string"),
+    ],
+)
+async def test_an_answer_it_cannot_vouch_for_is_no_answer(tv: SamsungTv, art: StubArt, reply: object):
+    """Each of these would otherwise be compared against a content id, and a
+    comparison against a value whose meaning nobody knows is worse than none."""
+    art.current_reply = reply
+
+    assert await tv.current_content_id() is None
+
+
+async def test_a_set_that_goes_away_mid_read_is_an_outage_not_a_disagreement(tv: SamsungTv, art: StubArt):
+    """`TvUnavailable`, not None. The two want opposite responses: an outage holds
+    the wall and reconnects, while "cannot say" lets the rotation stand."""
+    art.current_raises = ResponseError("the set stopped answering")
+
+    with pytest.raises(TvUnavailable):
+        await tv.current_content_id()
+    assert art.closed == 1, "the connection was kept after a failure nobody can reason about"
+
+
+async def test_the_art_mode_flag_is_passed_through(tv: SamsungTv, art: StubArt):
+    art.artmode_reply = "off"
+
+    assert await tv.reported_art_mode() == "off"
+
+
+async def test_a_failure_to_read_the_art_mode_flag_is_swallowed(tv: SamsungTv, art: StubArt):
+    """It runs only where something has already gone wrong, and a diagnostic that
+    can raise replaces the report of the real fault with a report of itself."""
+    art.artmode_raises = ResponseError("no answer")
+
+    assert await tv.reported_art_mode() is None
+
+
+async def test_an_art_mode_reply_that_is_not_a_string_is_no_reply(tv: SamsungTv, art: StubArt):
+    art.artmode_reply = {"value": "on"}
+
+    assert await tv.reported_art_mode() is None

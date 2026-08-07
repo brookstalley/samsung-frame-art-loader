@@ -268,6 +268,37 @@
   transported because it is cheap and disposable, not because it would be wrong
   elsewhere.
 
+### display ↔ television
+
+- **Exists:** **yes**, as of 2026-08-06 — `display/src/display/tv/client.py` is the
+  interface and `samsung.py` the one implementation.
+- **Producer:** the television (a foreign device running Tizen). **Consumer:**
+  display plane. **Crosses a machine boundary**, over two websockets and a REST
+  endpoint on the LAN.
+- **Contract:** an abstract base class, not a structural protocol — deliberately,
+  so a verb added to the boundary fails the test double at import rather than
+  leaving it behind while every test stays green. Everything the library does
+  badly is corrected *below* the seam, and what crosses it is the corrected form:
+  an upload returns an id or raises, a removal reports what the set actually
+  holds afterwards, a selection is confirmed by a read, and every connection
+  failure arrives as one `TvUnavailable` whatever the library's seven exception
+  types did.
+- **The interface exists because the client behind it is a liability** — the
+  `samsungtvws` fork is unowned and pinned to a commit. The mitigation was never
+  "switch upstreams"; it is keeping this surface small enough that replacing the
+  client is a swap.
+- **This is the surface where a return value means least.** Measured on the
+  deployment's own set: `select_image` is accepted, raises nothing, emits no
+  event and changes nothing whenever the panel is dark, while every other verb
+  succeeds. So **no state-changing verb here is believed on its return** —
+  uploads and removals read the set's list back, and selections read what it says
+  it is displaying. `samsung-tv-state-findings.md` is the state-by-state map, and
+  it is the artifact to read before adding a verb.
+- **Tested at the seam and only at the seam** — `display/tests/test_samsung_client.py`
+  stubs the library, because the daemon suite runs against `FakeTv` and proves
+  nothing about this file. A mutation sweep once deleted the close-on-failure here
+  with no test objecting, for exactly that reason.
+
 ### Configuration
 
 - **Exists:** **yes**, as of 2026-07-27 — every deployment value reads from `.env`

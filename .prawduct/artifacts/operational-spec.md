@@ -507,6 +507,9 @@ been taken. Two consequences worth stating:
 This read "no test suite exists — zero tests across 2,216 lines"; that departure was
 closed the same day and both planes now have suites, so the risk is no longer
 absence of testing but the specific norms nothing yet checks.)* The **plane-isolation
-test** that enforces a ratified Direction norm is still filed and unbuilt (issue #7),
-and the service-layer norm's own enforcement column says "Critic" — a reviewer
-reading handlers, with no test that fails when logic creeps into a binding.
+test** that enforces a ratified Direction norm was built on 2026-08-06 with the
+display plane's first modules (issue #7) — imports resolved transitively, HTTP-client
+construction banned with the television websocket exempted, and planted violations
+proving both halves can fail. What remains uncovered is the **service-layer norm**,
+whose enforcement column says "Critic" — a reviewer reading handlers, with no test
+that fails when logic creeps into a binding.

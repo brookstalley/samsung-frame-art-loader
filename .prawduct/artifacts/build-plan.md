@@ -18,7 +18,7 @@ depends_on:
 governed_by:
   - artifact: architecture
     dispositions:
-      - "the theme manifest file is the only channel from curation to display → conforms: every display chunk reads the manifest and image tree only; interactive commands ride the manifest's directive block (the recorded R-17 decision); issue #7's plane-isolation test lands in Chunk 12 (moved from 11 on 2026-08-01 — it checks the `display/` package, which Chunk 12 is the one to create) and enforces it mechanically from there. Until then the norm is Critic-enforced, which is what `project-preferences.md` now says; it previously named the test as though it already existed"
+      - "the theme manifest file is the only channel from curation to display → conforms: every display chunk reads the manifest and image tree only; interactive commands ride the manifest's directive block (the recorded R-17 decision); issue #7's plane-isolation test landed 2026-08-06 with the display plane's first modules and **enforces it mechanically now** — `tests/preferences/test_plane_isolation.py`, imports resolved transitively, HTTP-client construction banned with the television websocket exempted, planted violations proving both halves can fail. `project-preferences.md`'s enforcement column moved from Critic back to Test naming that file"
       - "operation logic lives only in the service layer; MCP tools and HTTP handlers are thin bindings → conforms: Chunk 07 establishes the registry/handler split as a directory boundary before any tool exists, and every later surface chunk binds service methods only; registry generation carries no per-tool logic"
   - artifact: nonfunctional-requirements
     dispositions:

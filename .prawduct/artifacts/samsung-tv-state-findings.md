@@ -23,33 +23,50 @@ the set can actually do. These are the names this product uses.
 | Name here | How you get there | REST `PowerState` | `get_artmode` |
 |---|---|---|---|
 | **Dark** | The set is switched off at the remote; the panel shows nothing | `standby` | `off` |
-| **Art mode** | The wall is showing art — the deployment's normal condition | `on` *(2026-08-06)* | not observed |
-| **Television** | Somebody is watching something | not observed | not observed |
+| **Television** | Somebody is watching something | `on` | `off` |
+| **Art mode** | The wall is showing art — the deployment's normal condition | **not observed** | **not observed** |
 | **Unreachable** | Power cut, network down | no answer | no answer |
 
-**"Standby" is not a state of the art service.** The REST endpoint reports
+**`PowerState` says whether the panel is lit, and nothing else.** It reports
 `standby` for a set whose art channel opens in 2.4 seconds and serves uploads,
-deletions, listings and brightness changes without complaint. Read it as *the
-panel is not lit*, never as *the set is unavailable*.
+deletions, listings and brightness changes without complaint; it reports `on` for
+a set showing a television channel. **It does not discriminate art mode** —
+`get_artmode` is the only thing that does, and the library's `on()` and
+`in_artmode()` are built on `PowerState`, which is why they mislead.
+
+> **Art mode has never been observed over the API on this set.** `get_artmode`
+> has answered `off` on every occasion it has been asked, in both states above.
+> A run on 2026-08-06 passed nine checks with `PowerState: "on"` and was recorded
+> as being in art mode, but that reading is now known not to establish it — the
+> television state produces the same value. **So the art-mode row above is empty
+> on purpose, and everything this product believes about art mode rests on the
+> `image_selected` event observed firing at +2.15 s in that run.** Confirming it
+> is the first thing to do at the set.
 
 ## What works in each state
 
-| Capability | Dark | Art mode | Television |
+| Capability | Dark | Television | Art mode |
 |---|---|---|---|
-| REST device info (`:8001`) | works, instant | works | not observed |
-| Art channel opens (`start_listening`) | works, 2.4 s | works, 4.5 s construct *(2026-08-06)* | not observed |
-| Remote-control channel opens | works, 1.5 s | works | not observed |
-| `available` (list content) | works — 96 items | works | not observed |
-| `get_current` | works | not observed | not observed |
-| `get_device_info`, `get_api_version` | works | works | not observed |
-| `get_brightness` / `set_brightness` | works | works | not observed |
-| `upload` | works | works | not observed |
-| `delete` / `delete_list` | works — 41 removed in one call | works | not observed |
-| `set_slideshow_status` | works | works | not observed |
-| **`select_image`** | **accepted and ignored** | works; `image_selected` at +2.15 s *(2026-08-06)* | not observed |
-| **`set_artmode('on')`** | **accepted and ignored** | n/a | not observed |
-| `get_auto_rotation_status` | **never answers** (`AssertionError`) | **never answers** *(2026-08-06)* | not observed |
+| REST device info (`:8001`) | works, instant | works | works *(2026-08-06)* |
+| Art channel opens (`start_listening`) | works, 2.4 s | works, 2.4 s | works, 4.5 s construct *(2026-08-06)* |
+| Remote-control channel opens | works, 1.5 s | works, 1.4 s | works *(2026-08-06)* |
+| `available` (list content) | works — 96 items | works — 96 items | works |
+| `get_current` | works | works | **not observed** |
+| `get_device_info`, `get_api_version` | works | works | works |
+| `get_brightness` / `set_brightness` | works | works (read) | works |
+| `upload` | works | not tried | works |
+| `delete` / `delete_list` | works — 41 removed in one call | not tried | works |
+| `set_slideshow_status` | works | not tried | works |
+| **`select_image`** | **accepted and ignored** | **not tried — it would take the screen off whoever is watching** | `image_selected` at +2.15 s *(2026-08-06)* |
+| **`set_artmode('on')`** | **accepted and ignored** | not tried | n/a |
+| `get_auto_rotation_status` | **never answers** (`AssertionError`) | **never answers** | **never answers** *(2026-08-06)* |
 | Wake-on-LAN to the advertised MAC | **no effect** | n/a | n/a |
+
+**The television state is read-identical to the dark one.** Every question
+answers the same way, in the same time, with the same values — including
+`get_artmode: off`. Nothing a daemon can *read* tells these two apart except
+`PowerState`, and nothing tells either of them from art mode except `get_artmode`,
+which has never yet said `on`.
 
 ### The finding that matters
 
@@ -111,12 +128,18 @@ not be used to clamp anything.
 
 ## What is still owed
 
-1. **The art-mode column**, measured rather than inferred — in particular
-   `get_current` after a selection, which is the confirming read the display
-   plane now depends on. It is proven to catch the dark state; that it agrees
-   promptly on a healthy one rests on the `image_selected` timing from
-   2026-08-06 and has not been observed directly.
-2. **The television column**, entirely. What a daemon rotating the wall does to
-   somebody watching a film is unknown, and it is the state most likely to
-   produce a complaint.
-3. **Whether `KEY_POWER` lights the panel**, and what it lights it to.
+1. **Art mode itself, at all.** `get_artmode` has never returned `on` here. Until
+   it does, the state this product is built for is one nobody has confirmed the
+   set reports, and every capability in that column is inference from a single
+   run whose art-mode reading is now known not to establish art mode.
+2. **`get_current` after a selection in art mode** — the confirming read the
+   display plane now depends on. It is proven to *catch* a wall that is not
+   changing; that it *agrees* on one that is has never been observed. If it does
+   not, the failure is loud rather than silent — every rotation reports
+   `rotation.wall_unchanged` and the wall stops — but it stops the wall.
+3. **What `select_image` does to somebody watching television.** Not tried on
+   purpose: the plausible outcomes are that it is ignored, as in the dark state,
+   or that it takes the screen away from a person mid-programme. The second is
+   the one worth knowing about, and it is the likeliest source of a complaint
+   this product could cause in a household.
+4. **Whether `KEY_POWER` lights the panel**, and what it lights it to.

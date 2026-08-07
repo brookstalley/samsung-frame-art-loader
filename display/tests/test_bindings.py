@@ -331,3 +331,26 @@ class TestOrphans:
         publish(["w1"], sequence=1)
         await daemon.tick()
         assert "MY-LEGACY-1" not in tv.holding, "the next adoption did not try again"
+
+
+async def test_a_store_from_a_newer_plane_is_refused_rather_than_opened(tmp_path: Path):
+    """The same rule as a manifest major from the future, and for the same reason.
+
+    A reader that guesses at a shape it does not know writes damage, and this is
+    the one file on the device whose loss is not free — the bindings are what
+    stand between a restart and re-uploading the whole theme. Refusing at open is
+    also the only moment it can be refused: after that the writes have happened.
+    """
+    from display.state import StateSchemaTooNew
+    from display.state.store import SCHEMA_VERSION
+
+    path = tmp_path / "display-state.sqlite"
+    with DisplayState(path) as store:
+        store.set_last_selected_work_id("w1")
+    with sqlite3.connect(path) as connection:
+        connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
+
+    with pytest.raises(StateSchemaTooNew) as refusal:
+        DisplayState(path).__enter__()
+
+    assert str(SCHEMA_VERSION) in str(refusal.value), "the refusal does not say which schema this plane understands"
