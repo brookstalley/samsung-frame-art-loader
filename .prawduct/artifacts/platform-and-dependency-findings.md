@@ -418,9 +418,16 @@ and must not assume the call returns.
 > first-contact tooling.
 
 **The set can be driven out of standby from software.** `KEY_POWER` over the
-*remote-control* channel works, and that channel is reachable in standby while the
-art channel is not. Two presses were needed from standby: the first produced
-`PowerState: 'on'` with no art app running, the second brought the art app up.
+*remote-control* channel works. Two presses were needed from standby: the first
+produced `PowerState: 'on'` with no art app running, the second brought the art
+app up.
+
+> **One clause here was retired on 2026-08-07**: this used to add "and that
+> channel is reachable in standby while the art channel is not". The art channel
+> *is* reachable in standby — it opens in 2.4 s with a cached pairing token, and
+> serves uploads, deletions, listings and brightness against a dark panel. What
+> is not available there is `select_image` taking effect, which is a different
+> statement. See `samsung-tv-state-findings.md`.
 
 > **What is NOT established, and should not be inferred from the above.** The
 > power states almost certainly form a three-way arrangement — fully on, art mode,

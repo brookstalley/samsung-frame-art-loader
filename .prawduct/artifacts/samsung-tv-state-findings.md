@@ -154,9 +154,11 @@ records it measured, needing *two* presses from standby: the first brings
 `PowerState` to `'on'` with no art app running, the second brings the art app up.
 That is the same two-step this document's own state table implies, since the
 middle state is the television one. Corrected 2026-08-07 rather than re-measured;
-if it is ever re-run, record it in one place and link the other. The channel opens in
-this state, so it is the remaining candidate; what it wakes the set *to* — art
-or a source — is unknown.
+if it is ever re-run, record it in one place and link the other.
+
+**So the dark state can be left in software after all** — by `KEY_POWER`, not by
+anything on the art channel. What this section's two bullets establish is
+narrower and still holds: `set_artmode('on')` and Wake-on-LAN do not do it.
 
 ## Two library semantics that will mislead you
 
