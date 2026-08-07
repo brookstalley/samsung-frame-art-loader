@@ -203,6 +203,7 @@ class Watcher:
         self._seen_stamp: tuple[int, int] | None = None
         self._current: Manifest | None = None
         self._reported_absent = False
+        self._reported_unstatable = False
 
     @property
     def current(self) -> Manifest | None:
@@ -232,14 +233,30 @@ class Watcher:
                 self._reported_absent = True
             return None
         except OSError as exc:
-            log.warning(
-                "could not stat the manifest at %s (%s); keeping the one already loaded",
-                self._path,
-                exc,
-                extra={"event": "manifest.unstatable", "manifest_path": str(self._path)},
-            )
+            if not self._reported_unstatable:
+                # **Once, for the same reason the arm above says its piece once.**
+                # The faults that reach here do not clear on their own — EIO from
+                # a failing SD card, EACCES, ESTALE on a mount that went away —
+                # so at a one-second poll this is 86,400 identical WARNINGs a day
+                # into a journal that rate-limits, and the lines it drops are the
+                # ERRORs that are this plane's only failure channel. Said again
+                # when it recovers, so the log carries both ends.
+                log.warning(
+                    "could not stat the manifest at %s (%s); keeping the one already loaded",
+                    self._path,
+                    exc,
+                    extra={"event": "manifest.unstatable", "manifest_path": str(self._path)},
+                )
+                self._reported_unstatable = True
             return None
 
+        if self._reported_unstatable:
+            log.info(
+                "the manifest at %s can be read again",
+                self._path,
+                extra={"event": "manifest.statable", "manifest_path": str(self._path)},
+            )
+            self._reported_unstatable = False
         self._reported_absent = False
         # Size joins mtime because a filesystem whose mtime has one-second
         # resolution can land two writes in the same tick, and the second would

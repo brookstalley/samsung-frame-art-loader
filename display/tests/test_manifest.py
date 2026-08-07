@@ -207,3 +207,51 @@ class TestWatching:
         adopted = watcher.poll()
         assert adopted is not None
         assert adopted.directive_sequence == 9
+
+
+class TestAnUnreadableManifestIsSaidOnce:
+    """The third instance of a class this plane has fixed twice already.
+
+    The faults that reach the `OSError` arm do not clear on their own — EIO from a
+    failing card, EACCES, ESTALE on a dropped mount — so at a one-second poll an
+    unguarded WARNING is 86,400 identical lines a day, into a journal that
+    rate-limits and whose dropped lines are the ERRORs this plane depends on.
+    """
+
+    def test_a_persistent_stat_failure_is_reported_once(self, tmp_path, caplog, monkeypatch):
+        path = tmp_path / "theme-manifest.json"
+        path.write_text("{}")
+        watcher = Watcher(path, rotation_interval_fallback=180, shuffle_fallback=False)
+
+        def unreadable(*_args, **_kwargs):
+            raise OSError(5, "Input/output error")
+
+        monkeypatch.setattr(Path, "stat", unreadable)
+        with caplog.at_level(logging.WARNING):
+            for _ in range(20):
+                watcher.poll()
+
+        reports = [r for r in caplog.records if getattr(r, "event", None) == "manifest.unstatable"]
+        assert len(reports) == 1, f"an unreadable manifest was reported {len(reports)} times"
+
+    def test_the_recovery_is_said_too(self, tmp_path, caplog, monkeypatch):
+        """Otherwise the WARNING stands unresolved in the journal for ever."""
+        path = tmp_path / "theme-manifest.json"
+        path.write_text("{}")
+        watcher = Watcher(path, rotation_interval_fallback=180, shuffle_fallback=False)
+
+        real_stat = Path.stat
+        broken = True
+
+        def sometimes(self, *args, **kwargs):
+            if broken:
+                raise OSError(5, "Input/output error")
+            return real_stat(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "stat", sometimes)
+        watcher.poll()
+        broken = False
+        with caplog.at_level(logging.INFO):
+            watcher.poll()
+
+        assert [r for r in caplog.records if getattr(r, "event", None) == "manifest.statable"]

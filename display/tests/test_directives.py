@@ -328,6 +328,61 @@ async def test_a_pin_held_back_is_delivered_when_the_set_returns_to_art_mode(
     assert state.last_acted_sequence == 2
 
 
+async def test_a_bare_next_is_not_consumed_by_a_wall_that_displays_nothing(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState, clock, caplog
+):
+    """The unpinned half of the rule below, which had nothing behind it.
+
+    Every other dark-wall directive test publishes a `pinned_work_id`, so the
+    `next` branch was defended only by resembling the pin branch — and it did not:
+    it consumed the sequence unconditionally and logged `directive.acted` for a
+    step the wall never made. That is a false success of exactly the kind this
+    plane makes structurally impossible for uploads.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+
+    tv.displays_nothing_selected = True
+    publish(["w1", "w2", "w3"], sequence=2)  # a bare `next`, no pin
+    with caplog.at_level(logging.INFO):
+        await daemon.tick()
+
+    assert state.last_acted_sequence == 1, "a `next` was eaten by a wall that never changed"
+    assert not [
+        r for r in caplog.records if getattr(r, "event", None) == "directive.acted"
+    ], "the journal recorded a step the wall never made"
+
+    tv.displays_nothing_selected = False
+    clock.advance(5)
+    await daemon.tick()
+
+    assert state.last_acted_sequence == 2, "the `next` was not honoured once the wall started changing again"
+
+
+async def test_a_next_against_an_unshowable_theme_is_still_consumed(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState, art_root
+):
+    """The other side of that distinction, and why it is not one boolean.
+
+    A theme whose renders are missing is the curator's own catalogue, not a
+    television refusing to move: retrying it every second would fill the journal
+    with a failure that cannot change until a file appears. So this one *is*
+    consumed, where the wall-unchanged case above is not.
+    """
+    publish(["w1", "w2"], sequence=1)
+    await daemon.tick()
+
+    # `renders=False` rather than deleting the files: `publish` recreates them by
+    # default, so unlinking first and republishing put them straight back and this
+    # test passed without ever reaching the branch it names.
+    publish(["w1", "w2"], sequence=2, renders=False)
+    for name in ("w1", "w2"):
+        (art_root / "ready" / f"{name}.jpg").unlink(missing_ok=True)
+    await daemon.tick()
+
+    assert state.last_acted_sequence == 2, "a `next` at a theme that can show nothing was retried for ever"
+
+
 async def test_a_directive_is_not_consumed_by_a_wall_that_displays_nothing(
     daemon: Daemon, tv: FakeTv, publish, state: DisplayState, clock
 ):

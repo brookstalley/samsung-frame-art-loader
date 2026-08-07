@@ -94,12 +94,17 @@ Two Poplars`, and the person watching lost the picture they were watching.
 
 This was listed here as *not tried, because it would take the screen off whoever
 is watching*. It does exactly that. It is the likeliest complaint this product
-could cause in a household, it is not rare — somebody watching television is a
-daily occurrence — and **nothing in the display plane currently prevents it**: the
-daemon does not consult art mode before selecting, by a deliberate decision that
-reading it "before every selection would cost one call on every rotation that is
-about to succeed". That trade was priced against a wasted call. The real price is
-a television that grabs itself back from its owner every few minutes.
+could cause in a household, and it is not rare — somebody watching television is
+a daily occurrence.
+
+**It is prevented as of 2026-08-07.** The daemon had not consulted art mode before
+selecting, by a deliberate decision that reading it "before every selection would
+cost one call on every rotation that is about to succeed" — a trade priced against
+a wasted call, with the cost on the other side unmeasured. Measured, it is a
+television that grabs itself back from its owner every few minutes. The plane now
+asks `get_artmode` before every selection and declines unless it says `on`; see
+`nonfunctional-requirements.md` § "The television belongs to whoever is using
+it".
 
 **The asymmetry is worth holding on to**, because it decides what a fix can rely
 on: `select_image` moves the set from *television* into art mode, and does **not**
@@ -143,7 +148,13 @@ Two exits were tried and neither works:
   7. The set reports `networkType: wired` and advertises no wired MAC, so the
   packet is reaching an interface that is not listening.
 
-`KEY_POWER` over the remote-control channel is **untried**. The channel opens in
+`KEY_POWER` over the remote-control channel **works, and this document was wrong
+to call it untried** — `platform-and-dependency-findings.md` § Waking the set
+records it measured, needing *two* presses from standby: the first brings
+`PowerState` to `'on'` with no art app running, the second brings the art app up.
+That is the same two-step this document's own state table implies, since the
+middle state is the television one. Corrected 2026-08-07 rather than re-measured;
+if it is ever re-run, record it in one place and link the other. The channel opens in
 this state, so it is the remaining candidate; what it wakes the set *to* — art
 or a source — is unknown.
 
@@ -192,9 +203,9 @@ makes the next one likelier to fail. Retrying harder is the wrong response.
 **This retires a claim two artifacts used to carry**, that `ms.channel.timeOut`
 is the signature of a set that is not in art mode. It is not: it has now been
 seen in art mode, and the dark state opens the channel in 2.4 s. `samsung.py`'s
-connect path still names art mode in its timeout message; that message is a
-plausible guess offered to an operator, not a diagnosis, and the honest version
-of it is that the set accepted a socket and then said nothing.
+connect path no longer names art mode in its timeout message either — it used to
+send the reader to the remote control for a fault that clears by waiting, and now
+reports what has been observed instead.
 
 **Unquantified**, and worth knowing before the Pi runs `Restart=always`: how many
 clients the set allows, and how long an abandoned one is held. A daemon that
@@ -202,9 +213,8 @@ crash-loops could lock itself out of its own television.
 
 ## What is still owed
 
-1. **Whether `KEY_POWER` lights the panel**, and what it lights it to.
-2. **The concurrent-client limit** described in the section above.
-3. **Whether a set moved into art mode by `select_image` returns to the
+1. **The concurrent-client limit** described in the section above.
+2. **Whether a set moved into art mode by `select_image` returns to the
    programme** when the viewer presses the source or power key, or whether they
    have to navigate back — i.e. how expensive the interruption above actually is
    to recover from.

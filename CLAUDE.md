@@ -58,6 +58,22 @@ Run the curation plane: `cd curation && uv run python -m curation`. It needs
 `CURATION_PORT`, its JSON API under `/api`, and MCP clients connect to `/mcp` on
 the same port.
 
+Run the display plane: `cd display && uv run python -m display`. **It drives the
+real television**, so it is not a thing to start casually: it uploads, deletes and
+selects against whatever `TV_ADDRESS` points at. **Stop it with SIGTERM, never
+SIGKILL** — the set holds an abandoned art-channel client's slot for minutes, and
+a hard kill can leave the next connection refused. It declines to touch a set that
+is not in art mode, so it will not interrupt somebody watching television.
+
+**The mutation sweep runs per plane, and the display plane needs `--project`:**
+
+```sh
+cd display && uv run python ../curation/tools/mutation_sweep.py --project . m.json tests/
+```
+
+Without it the tool sweeps the curation project with the display plane's paths and
+reports every mutation as drifted.
+
 The curation suite boots a real uvicorn server per test class of surface work.
 Do not replace that with an in-process ASGI transport: Starlette does not run a
 mounted sub-app's lifespan, and the lifespan is what makes the MCP mount work,

@@ -387,14 +387,22 @@ class Daemon:
             return False
 
         if manifest.pinned_work_id is None:
-            acted = await self._advance(manifest)
+            outcome = await self._advance(manifest)
+            if outcome is Shown.WALL_UNCHANGED:
+                # Left unconsumed, exactly as the pinned branch below leaves a
+                # jump the wall never made. A `next` the television took and did
+                # not act on has not stepped anything, and the manifest does not
+                # change when a directive fails — so consuming it here would
+                # evaporate the curator's press and log a step that never
+                # happened.
+                return False
             self._state.set_last_acted_sequence(observed)
             log.info(
                 "directive %d: stepping to the next work",
                 observed,
                 extra={"event": "directive.acted", "sequence": observed, "directive": "next"},
             )
-            return acted
+            return outcome is Shown.YES
 
         position = manifest.index_of(manifest.pinned_work_id)
         if position is None:
@@ -472,15 +480,25 @@ class Daemon:
         self._attempted_at = self._clock.monotonic()
         await self._advance(manifest)
 
-    async def _advance(self, manifest: Manifest) -> bool:
+    async def _advance(self, manifest: Manifest) -> Shown:
         """Show the next work that can be shown, skipping the ones that cannot.
 
         Bounded by the length of the list, so a theme whose every render is
         missing logs its warnings once per pass and returns, rather than spinning
         on a loop that can never succeed.
+
+        **Returns the outcome rather than a boolean, and the distinction is load
+        bearing.** "Nothing here could be shown" and "the wall would not change"
+        are both failures to move the picture and they want opposite answers from
+        a caller holding a directive: the first is the curator's own theme having
+        no usable render, which is consumed and reported, while the second is the
+        jump never having been attempted, which must be left for the wall coming
+        back. Collapsed into one `False`, a bare `next` at a set that takes
+        selections and displays none of them was eaten and logged as performed —
+        the false-success class this plane exists to make impossible.
         """
         if not self._order:
-            return False
+            return Shown.SKIP
         for _ in range(len(self._order)):
             resume_at = self._cursor
             position = self._order[self._cursor]
@@ -492,7 +510,7 @@ class Daemon:
                 self._rng.shuffle(self._order)
             outcome = await self._show(manifest, manifest.entries[position])
             if outcome is Shown.YES:
-                return True
+                return Shown.YES
             if outcome is Shown.WALL_UNCHANGED:
                 # The place is given back rather than consumed. A television that
                 # displayed nothing has not shown this work, so the wall coming
@@ -500,8 +518,8 @@ class Daemon:
                 # evening with the panel dark would walk the whole theme and the
                 # first picture of the morning would be wherever that landed.
                 self._cursor = resume_at
-                return False
-        return False
+                return Shown.WALL_UNCHANGED
+        return Shown.SKIP
 
     async def _show(self, manifest: Manifest, entry: Entry) -> Shown:
         """Put one work on the wall, or say why it could not be."""
@@ -632,11 +650,12 @@ class Daemon:
     async def _report_wall_unchanged(self, content_id: str) -> None:
         """Say once that the set is taking selections and displaying none of them.
 
-        The art-mode flag is read here and nowhere else. It is the answer to the
-        operator's actual question — *why is the wall not changing* — and reading
-        it on this path costs one call on a rotation that has already failed,
-        where reading it before every selection would cost one on every rotation
-        that is about to succeed.
+        **The flag is read here for the operator, and separately before every
+        selection for the wall's own safety.** The two readings answer different
+        questions and neither replaces the other: the gate asks *may this
+        television be touched at all*, and this line answers *why is it not
+        changing* for somebody reading the journal. This one costs a call on a
+        rotation that has already failed, so it is free in the ordinary case.
         """
         if self._reported_wall_unchanged:
             return

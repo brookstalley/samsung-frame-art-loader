@@ -513,9 +513,11 @@ is no network between planes.
   before anything is logged or recorded (§ Failure Modes). That callback is
   registered by the television seam, per connection, and confirming a selection
   is its only consumer today — it resolves the one selection currently waiting
-  and nothing keeps a view of the set's state between calls. The e-paper label is
-  Chunk 13's and is the first consumer that will want one, because captioning the
-  wall means knowing what is on it after the moment it was put there.
+  and nothing keeps a view of the set's state between calls. The label renderer is
+  the first consumer that will want one, because captioning the wall means knowing
+  what is on it after the moment it was put there — and the library keeps one
+  handler per event rather than a list, so a second subscriber to this event
+  replaces the confirmation handler rather than joining it.
 - **Renders the e-paper label** (decided 2026-07-20 — see Decision Log). The
   **e-paper panel's** geometry (1448×1072) stays with the plane that owns that
   panel. Display does *not* render the mat — the mat is composed by curation into
