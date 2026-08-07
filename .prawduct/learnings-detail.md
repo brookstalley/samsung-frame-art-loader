@@ -8,6 +8,43 @@ Entries older than 2026-07-31 still keep their evidence inline in `learnings.md`
 That is the shape the record linter asks them to leave, and moving them is its own
 piece of work rather than a side effect of adding a rule — tracked as issue #26.
 
+## A test double expresses what you already believe the dependency does, so it cannot catch "says yes, does nothing"
+
+**2026-08-07, Chunk 12.** The display plane was built, Critic-reviewed, green
+across three suites, and reported putting pictures on a wall that never changed.
+
+The daemon called `select_image` and logged `showing <title>` on the strength of
+the call returning. Against the deployment's own Samsung Frame with its panel
+dark, that call is **accepted and ignored**: it raises nothing, emits none of the
+three art-mode events, and `get_current` does not move — confirmed over twelve
+seconds and repeated attempts. Every other verb in a rotation worked in that same
+state: the art channel opened in 2.4s, and uploads, deletions, listings and
+brightness all succeeded. So the wall could sit on an art-store image all night
+while the journal filled with successful rotations.
+
+**Why no test caught it.** `FakeTv` modelled selection as `self.selected.append(id)`,
+and `on_the_wall` read back from that list. Asking "did the picture change" and
+"did we ask for the picture to change" were the *same question* in the double, so
+no assertion could tell them apart. The double was not sloppy — it was faithful to
+the model held at the time, which was that a set either performs a selection or
+raises. The failure mode outside that model is the one it cannot express, and that
+is a structural property of doubles rather than a mistake in this one.
+
+The fix that made the tests possible was to give the fake a `displaying` field
+separate from `selected`, starting on a foreign image because **a Frame is never
+displaying nothing**, plus a `displays_nothing_selected` flag arming the observed
+behaviour. `on_the_wall` now reads from what is displayed, so a test asserting a
+picture reached the wall can no longer be satisfied by a request the set ignored.
+
+**The generalisation.** This is the test-double corollary of
+[[do-not-trust-a-foreign-clients-return-value]]. That rule says confirm a
+boundary library's claim against the remote system. This one says the *suite* has
+the same blind spot as the code: if the verb has no confirming read, the double
+inherits your belief that the verb works, and green means only that your model is
+self-consistent. Before believing a boundary is covered, ask what the dependency
+would look like if it accepted a request and did nothing — and if the double
+cannot be made to do that, the coverage is imaginary.
+
 ## When an artifact works a rule on two cases, derive the rule from one and check the other
 
 An artifact that illustrates a rule twice has stated it three times: once in prose

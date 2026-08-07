@@ -408,3 +408,29 @@ async def test_the_backoff_starts_over_once_the_set_behaves_again(daemon: Daemon
     await daemon.tick()
 
     assert len(tv.selected) > attempts, "the wait carried its grown value across a recovery"
+
+
+async def test_the_rotation_timer_does_not_re_ask_a_wall_the_backoff_is_holding_off(daemon: Daemon, tv: FakeTv, publish, clock):
+    """The other half of the wait, and the half that bites in the deployment.
+
+    The two timers are independent: rotation comes due on the manifest's interval,
+    the wall's wait on a ladder that doubles to five minutes. Once the ladder is
+    longer than the interval — which is the shipped case, 300 against 180 — every
+    rotation in between would ask a television already known to be ignoring
+    selections, which is the flood the ladder exists to stop.
+    """
+    publish(["w1", "w2"], interval_seconds=1)
+    tv.displays_nothing_selected = True
+
+    await daemon.tick()  # attempt, then wait 5
+    clock.advance(5)
+    await daemon.tick()  # attempt, then wait 10
+    attempts = len(tv.selected)
+    assert attempts == 2, "the ladder did not let the second attempt through"
+
+    # Rotation is due on every one of these; the wall's wait is not up until t=15.
+    for _ in range(9):
+        clock.advance(1)
+        await daemon.tick()
+
+    assert len(tv.selected) == attempts, "the rotation timer asked a wall the backoff was holding off"

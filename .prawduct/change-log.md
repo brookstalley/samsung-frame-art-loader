@@ -102,8 +102,10 @@ reached them; nine tests now do. The reviewers independently found the retry
 flood, judging the commit before its fix. Chunk 12 remains open: the live pass
 still needs art mode, and that is now the first thing to watch.
 
-**Tests:** 150 / 1925 / 155. Eighteen mutations swept across three sweeps, all
-caught — two only after the sweep exposed tests passing by coincidence.
+**Tests:** 150 / 1925 / 159. Nineteen mutations swept across four sweeps, all
+caught — two only after the sweep exposed tests passing by coincidence, and one
+after a second review round found the rotation half of the wall backoff
+undefended while the directive half was covered.
 
 ## 2026-08-06: Two checks that reported on measurements they never took
 

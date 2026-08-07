@@ -47,6 +47,14 @@ coverage floor all agreed it was covered.
 remote system's own state before acting on it** — ask, then read the remote list
 back, and keep *unconfirmable* apart from *failed*.
 
+## A test double expresses what you already believe the dependency does, so it cannot catch "says yes, does nothing"
+
+**When a dependency's state-changing verb has no confirming read, make the double
+able to model acceptance-without-effect before trusting a green suite** — because
+a double is written from your model of the dependency, so the failure mode you did
+not know about is exactly the one it cannot express, and every test passes while
+the real system ignores you. Detail: [[double-cannot-express-acceptance-without-effect]]
+
 ## Retiring a claim is a repo-wide grep, not a local edit
 
 **When you void, amend, or supersede a factual claim, grep the whole repo for it
