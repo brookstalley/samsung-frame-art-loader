@@ -36,9 +36,10 @@ displaying nothing**, plus a `displays_nothing_selected` flag arming the observe
 behaviour. `on_the_wall` now reads from what is displayed, so a test asserting a
 picture reached the wall can no longer be satisfied by a request the set ignored.
 
-**The generalisation.** This is the test-double corollary of
-[[do-not-trust-a-foreign-clients-return-value]]. That rule says confirm a
-boundary library's claim against the remote system. This one says the *suite* has
+**The generalisation.** This is the test-double corollary of "Do not trust a
+foreign client's return value in either direction — confirm against the system
+itself". That rule says confirm a boundary library's claim against the remote
+system. This one says the *suite* has
 the same blind spot as the code: if the verb has no confirming read, the double
 inherits your belief that the verb works, and green means only that your model is
 self-consistent. Before believing a boundary is covered, ask what the dependency

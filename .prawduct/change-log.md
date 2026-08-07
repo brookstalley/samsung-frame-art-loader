@@ -102,6 +102,13 @@ reached them; nine tests now do. The reviewers independently found the retry
 flood, judging the commit before its fix. Chunk 12 remains open: the live pass
 still needs art mode, and that is now the first thing to watch.
 
+The composition root also got its first tests. `__main__.py` has two refusals to
+start — a missing deployment value and a store written by a newer plane — and
+both are read by somebody at a terminal, so both owe a non-zero exit, a sentence
+on stderr and no traceback. A third holds that anything *other* than those two
+keeps its traceback, because a bug wearing the same tidy two-line exit would send
+whoever read it to the wrong file.
+
 **Tests:** 150 / 1925 / 159. Nineteen mutations swept across four sweeps, all
 caught — two only after the sweep exposed tests passing by coincidence, and one
 after a second review round found the rotation half of the wall backoff

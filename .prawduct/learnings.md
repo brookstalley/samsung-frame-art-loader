@@ -53,7 +53,7 @@ back, and keep *unconfirmable* apart from *failed*.
 able to model acceptance-without-effect before trusting a green suite** — because
 a double is written from your model of the dependency, so the failure mode you did
 not know about is exactly the one it cannot express, and every test passes while
-the real system ignores you. Detail: [[double-cannot-express-acceptance-without-effect]]
+the real system ignores you.
 
 ## Retiring a claim is a repo-wide grep, not a local edit
 
