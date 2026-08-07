@@ -483,8 +483,17 @@ is no network between planes.
 - **Purpose:** make the physical world match the manifest.
 - **Platform:** Python 3.13 venv, systemd `Restart=always`. Genuinely always-on.
 - **Owned state (sole writer):** `display-state.sqlite` — TV content-id bindings,
-  per-work upload status, last selected work, brightness state, and the
-  last-acted-on directive sequence (see § The theme manifest). **Panel geometry
+  per-work upload status, last selected work, whether this device has already
+  switched the set's own slideshow off, and the last-acted-on directive sequence
+  (see § The theme manifest).
+
+  *(**Two corrections from building it, 2026-08-06.** "Brightness state" was
+  listed here and is deliberately **not** persisted: it is recomputed from the sun
+  and the clock on a timer, so a stored copy could only ever be a value that has
+  gone stale — including after somebody moves the brightness with the remote —
+  and the cost of not having it is one idempotent call on restart. The slideshow
+  flag replaced it, and that one genuinely must survive a restart: `Restart=always`
+  makes restarts routine and the call is only correct to make once.)* **Panel geometry
   is deliberately not listed** (corrected 2026-07-20 — it appeared here while
   every other artifact makes it *configuration* both planes read): a copy held as
   device state could drift from the value curation judges sources against, which
@@ -493,9 +502,22 @@ is no network between planes.
   deliberately deferred (`data-model.md` § Deliberately not modelled).
   This is the ratified data-model norm ("per-device runtime state never lives in
   the catalogue") given a process to live in.
-- **Reconciliation loop:** read manifest → ensure every listed work is uploaded to
-  the TV → rotate through the list on a timer → on each `image_selected` callback,
-  render and push the e-paper label.
+- **Reconciliation loop, as built (2026-08-06/07):** poll the manifest's mtime
+  (~1 s) → adopt a new one, refusing an unrecognised major and keeping the last
+  good document → reconcile the binding table against the set, removing what it
+  holds that nothing accounts for → apply sun-position brightness → act on at most
+  one directive → rotate when the interval is up. **Uploads are carried one per
+  pass rather than batched on adoption**, so a fresh install shows something in
+  seconds instead of blanking the wall for the five minutes forty uploads take.
+  **A selection is confirmed by the set's own `image_selected` announcement**
+  before anything is logged or recorded (§ Failure Modes). That callback is
+  registered by the television seam, per connection, and confirming a selection
+  is its only consumer today — it resolves the one selection currently waiting
+  and nothing keeps a view of the set's state between calls. The label renderer is
+  the first consumer that will want one, because captioning the wall means knowing
+  what is on it after the moment it was put there — and the library keeps one
+  handler per event rather than a list, so a second subscriber to this event
+  replaces the confirmation handler rather than joining it.
 - **Renders the e-paper label** (decided 2026-07-20 — see Decision Log). The
   **e-paper panel's** geometry (1448×1072) stays with the plane that owns that
   panel. Display does *not* render the mat — the mat is composed by curation into
@@ -697,6 +719,7 @@ catalogue does not apply. What remains:
 | Manifest references a missing image file | one work unshowable | Display **skips it, logs at WARNING, continues the rotation.** Never crashes, never blanks the wall. Fatal-for-one-item, per the recorded error taxonomy |
 | Manifest has an unknown major schema version | new theme not adopted | Display **keeps the previous manifest** and logs at ERROR. Refusing to guess beats rendering a misparse |
 | TV unreachable / websocket drop | rotation stalls | Retry with backoff; the TV holds its last image. Expected operating condition, not an incident |
+| **TV reachable, panel dark: it takes selections and displays none of them** | rotation stalls, and every call reports success | **The one failure a return value cannot carry**, and it is the everyday condition of a set someone switched off — measured on the deployment's own television (`samsung-tv-state-findings.md`): uploads, deletions, listings and brightness all work, while `select_image` is accepted, raises nothing, emits no event, and changes nothing. So **a selection is confirmed by the set's own `image_selected` announcement**, which carries the id and an `is_shown` flag and does not fire at all in this state. It is the *only* sound signal: the set answers a "what are you displaying" question with the art-store slot, unchanged by anything this product selects, so the obvious confirming *read* reports every real rotation as a failure and parks the wall on one picture (measured 2026-08-07, both directions). Because the announcement is pushed rather than polled, **asking and confirming are one operation** at the television seam — a listener registered after the request races an answer measured arriving in half a second. A selection that did not land is its own outcome rather than a failure to show one work: the pass ends instead of walking the theme, the place in the rotation is given back rather than consumed, a `show_now` is left unconsumed by the same rule an outage leaves it unconsumed, and nothing is recorded as having been on the wall. Said **once**, with the set's own art-mode flag in the line, and said again when it recovers. **Backed off from on the same ladder as an unreachable set** (5 s doubling to 300 s, reset on recovery), because the rotation timer governs rotation and nothing governed the directive path: an unconsumed `show_now` — which is the correct thing to leave behind — would otherwise be re-asked once per poll all night. The cost is that the wall resumes within the current wait of someone switching the set on rather than instantly, which is the same trade this plane already makes for a television that has gone away |
 | E-paper write fails | label stale | Log and continue; never let a panel failure stop the TV rotation |
 | Budget exhausted mid-run (the provider refuses — a 403; see `openrouter-api-findings.md`) | discovery halts partially | `halted_by_budget`, a modelled outcome. Already-acquired works stay acquired |
 | Preview sweep stops running | **curation only, and silently** | The characteristic failure of the plane's one periodic job: no error, no refusal, and no symptom until the SD card fills. It is upstream of the row below, and the only signal is positive — `preview.swept` at INFO on **every** pass, including the ones that reclaim nothing, so absence over an interval is the fault. A pass that hangs instead of stopping is the neighbouring case and reads differently: `preview.sweep_started` with no `preview.swept`, and at shutdown a `preview.sweep_wedged` warning, because that pass holds the store lock the next generation of services will want |

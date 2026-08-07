@@ -8,6 +8,44 @@ Entries older than 2026-07-31 still keep their evidence inline in `learnings.md`
 That is the shape the record linter asks them to leave, and moving them is its own
 piece of work rather than a side effect of adding a rule — tracked as issue #26.
 
+## A test double expresses what you already believe the dependency does, so it cannot catch "says yes, does nothing"
+
+**2026-08-07, Chunk 12.** The display plane was built, Critic-reviewed, green
+across three suites, and reported putting pictures on a wall that never changed.
+
+The daemon called `select_image` and logged `showing <title>` on the strength of
+the call returning. Against the deployment's own Samsung Frame with its panel
+dark, that call is **accepted and ignored**: it raises nothing, emits none of the
+three art-mode events, and `get_current` does not move — confirmed over twelve
+seconds and repeated attempts. Every other verb in a rotation worked in that same
+state: the art channel opened in 2.4s, and uploads, deletions, listings and
+brightness all succeeded. So the wall could sit on an art-store image all night
+while the journal filled with successful rotations.
+
+**Why no test caught it.** `FakeTv` modelled selection as `self.selected.append(id)`,
+and `on_the_wall` read back from that list. Asking "did the picture change" and
+"did we ask for the picture to change" were the *same question* in the double, so
+no assertion could tell them apart. The double was not sloppy — it was faithful to
+the model held at the time, which was that a set either performs a selection or
+raises. The failure mode outside that model is the one it cannot express, and that
+is a structural property of doubles rather than a mistake in this one.
+
+The fix that made the tests possible was to give the fake a `displaying` field
+separate from `selected`, starting on a foreign image because **a Frame is never
+displaying nothing**, plus a `displays_nothing_selected` flag arming the observed
+behaviour. `on_the_wall` now reads from what is displayed, so a test asserting a
+picture reached the wall can no longer be satisfied by a request the set ignored.
+
+**The generalisation.** This is the test-double corollary of "Do not trust a
+foreign client's return value in either direction — confirm against the system
+itself". That rule says confirm a boundary library's claim against the remote
+system. This one says the *suite* has
+the same blind spot as the code: if the verb has no confirming read, the double
+inherits your belief that the verb works, and green means only that your model is
+self-consistent. Before believing a boundary is covered, ask what the dependency
+would look like if it accepted a request and did nothing — and if the double
+cannot be made to do that, the coverage is imaginary.
+
 ## When an artifact works a rule on two cases, derive the rule from one and check the other
 
 An artifact that illustrates a rule twice has stated it three times: once in prose
@@ -1297,4 +1335,66 @@ makes it option-free. It credited the argv list, which defeats *shell*
 metacharacters, for a property only the upstream scheme check provides. **A comment
 crediting the wrong mechanism is how the next call site inherits the gap**, because
 the reader carries away the lesson it teaches rather than the guarantee it has.
+
+
+## A diagnostic whose "all clear" and "cannot tell" print the same line has retired the question it asks — when a check can be quiet for more than one reason, give each quiet state its own outcome naming which side said nothing, because a reader treats a pass as a measurement and the false one propagates into artifacts as evidence
+
+Worked instance, 2026-08-06. `tv_api_check.py`'s panel-size check called
+`panel_check.disagreement(model, configured)` and reported `ok` on `None`, with
+the detail "the configured diagonal agrees with the set, or neither side stated
+one" — the `or` being the whole defect written out in the message. `model` was in
+fact `None` on every run since the check was written, because it was read from the
+art channel's payload rather than the REST one, so the check had never compared
+anything. A live run reported nine checks and zero failures with two of them
+having measured nothing.
+
+**The propagation is the part that raises this above a cosmetic fault.** The same
+run's callback check reported `fired: d2d_service_message` — the library's outer
+message type, constant across all three registered events — and the operator note
+written from that output concluded that *nothing* fired, contradicting an earlier
+instrumented finding for no reason, while the run's own "0 failed" line said
+otherwise (the check fails when none fire). A diagnostic's output is read as
+evidence about the hardware, so a state the tool cannot distinguish becomes a
+false fact in a durable artifact rather than a gap someone notices.
+
+**The fix that generalises is splitting the question, not correcting the message.**
+`panel_check.not_compared()` answers "was a comparison possible" and
+`disagreement()` answers "how did it come out"; a caller that reports a pass
+without asking the first is claiming a measurement it did not take, and that is
+now visible at the call site instead of buried in one function's tri-state return.
+Sibling shape already in this log: the mutation sweep reading pytest's exit 5
+("collected nothing") as a caught mutation.
+
+## A test that advances an injected clock must not step by a multiple of the interval under test
+
+Observed three times in two sessions, every one written deliberately in the belief
+that it covered the branch, and every one found by a mutation sweep rather than by
+reading:
+
+- A cursor-restore test using three works and three dark passes, so the rotation
+  wrapped exactly back to the right answer and the restore could be deleted with
+  nothing objecting.
+- A wall-backoff test where nothing at all defended the ladder *resetting* after
+  recovery.
+- An art-mode recovery test whose loop advanced by exactly one rotation interval,
+  so a daemon that wrongly spent the interval while the wall was not its own
+  still produced the expected picture.
+
+The fix in each case was to make the advance and the period incommensurate — a
+180 s interval stepped by 5 s, rather than a 10 s interval stepped by 10 s.
+
+## A guard aimed at a named line must be verified against that line
+
+The television client's logger was floored at INFO specifically to stop the
+`samsungtvws` fork logging the pairing token, on the belief that the token was a
+DEBUG line. The fork logs it with `_LOGGING.info("New token %s", token)`
+(`samsungtvws/connection.py:101`), so the floor permitted the exact line it
+existed to prevent — at the *default* level, on every pairing, with nobody doing
+anything unusual. The comment naming the threat and the threshold chosen to stop
+it disagreed for a day, in a public repository whose first chunk existed because
+that token had been committed once already.
+
+The check that would have settled it was one `grep token` over the installed
+package. Sibling shape already in this log: `get_current_artwork` adopted as a
+confirming read on the strength of what it was assumed to report.
 

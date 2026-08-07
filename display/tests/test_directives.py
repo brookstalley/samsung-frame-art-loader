@@ -1,0 +1,439 @@
+"""Interactive commands, which ride the manifest rather than a channel of their own.
+
+The three semantics that do not follow from "it is a state file" are the three
+tested hardest here: a restart must not re-execute the last jump, rapid commands
+coalesce to one step, and a sequence that goes backwards is a restored catalogue
+rather than an instruction.
+"""
+
+import logging
+
+import pytest
+from fakes import FakeTv
+
+from display.daemon import Daemon
+from display.state import DisplayState
+
+
+async def test_a_first_start_adopts_the_sequence_without_acting(daemon: Daemon, tv: FakeTv, publish, state: DisplayState):
+    """A device that has never acted takes what it finds as its baseline.
+
+    Acting instead would execute, at install time, whatever `show_now` somebody
+    issued last week — and `Restart=always` means "install time" happens often.
+    """
+    publish(["w1", "w2", "w3"], sequence=42, pinned_work_id="w3")
+
+    await daemon.tick()
+
+    assert state.last_acted_sequence == 42
+    # Rotation still starts: baselining suppresses the *directive*, not the wall.
+    assert len(tv.selected) == 1
+    assert tv.on_the_wall.name == "w1.jpg"
+
+
+async def test_a_restart_does_not_re_execute_the_last_directive(
+    settings, tv: FakeTv, state: DisplayState, clock, publish, caplog
+):
+    """The whole reason the sequence is persisted, tested end to end.
+
+    The first daemon acts on the jump; a second one, built over the same store
+    against the same unchanged manifest, must not act on it again.
+
+    Asserted on the directive rather than on how many `select_image` calls were
+    made, because a restart legitimately re-selects the work already on the wall —
+    see the rotation suite. What must not happen is the *directive* firing twice.
+    """
+    from display.manifest import Watcher
+
+    def a_daemon() -> Daemon:
+        watcher = Watcher(settings.manifest_path, rotation_interval_fallback=180, shuffle_fallback=False)
+        return Daemon(settings=settings, tv=tv, state=state, watcher=watcher, clock=clock.as_clock())
+
+    publish(["w1", "w2", "w3"], sequence=1)
+    first = a_daemon()
+    await first.tick()  # baselines at 1, shows w1
+
+    publish(["w1", "w2", "w3"], sequence=2, pinned_work_id="w3")
+    await first.tick()
+    assert tv.on_the_wall.name == "w3.jpg"
+
+    restarted = a_daemon()
+    with caplog.at_level(logging.INFO):
+        await restarted.tick()
+
+    acted = [r for r in caplog.records if r.__dict__.get("event") == "directive.acted"]
+    assert acted == [], "the restarted daemon executed a directive it had already acted on"
+    assert state.last_acted_sequence == 2
+    assert tv.on_the_wall.name == "w3.jpg", "the restart moved the wall"
+
+
+async def test_rapid_directives_coalesce_into_one_step(daemon: Daemon, tv: FakeTv, publish):
+    """Two `next` calls inside one poll interval advance the counter twice and are
+    observed once, which is one step — the intended behaviour, not an approximation."""
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+    assert tv.on_the_wall.name == "w1.jpg"
+
+    publish(["w1", "w2", "w3"], sequence=3)  # two `next` calls, one poll
+    await daemon.tick()
+
+    assert tv.on_the_wall.name == "w2.jpg"
+    assert len(tv.selected) == 2
+
+
+async def test_a_sequence_that_goes_backwards_re_baselines_without_acting(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState, caplog
+):
+    """A restored catalogue brings back an older counter. Replaying the pin it
+    carried is exactly what this rule exists to prevent."""
+    publish(["w1", "w2", "w3"], sequence=10)
+    await daemon.tick()
+    selections = len(tv.selected)
+
+    publish(["w1", "w2", "w3"], sequence=4, pinned_work_id="w3")
+    with caplog.at_level(logging.WARNING):
+        await daemon.tick()
+
+    assert len(tv.selected) == selections, "a regression was treated as a directive"
+    assert state.last_acted_sequence == 4, "the older sequence was not adopted as the new baseline"
+    assert [r.__dict__.get("event") for r in caplog.records].count("directive.regressed") == 1
+
+
+async def test_after_a_regression_the_next_advance_is_acted_on(daemon: Daemon, tv: FakeTv, publish):
+    """Re-baselining has to leave the mechanism armed, or one restore disables
+    `next` until the counter climbs back past where it was."""
+    publish(["w1", "w2"], sequence=10)
+    await daemon.tick()
+    publish(["w1", "w2"], sequence=4)
+    await daemon.tick()
+
+    publish(["w1", "w2"], sequence=5)
+    await daemon.tick()
+
+    assert tv.on_the_wall.name == "w2.jpg"
+
+
+async def test_a_pin_the_theme_does_not_carry_warns_and_keeps_rotating(
+    daemon: Daemon, tv: FakeTv, publish, caplog, state: DisplayState
+):
+    """`show_now` checks readiness, not theme membership, so this is the default
+    path rather than a rare race: only this plane can decide what to do with a pin
+    it cannot resolve, and stalling the wall is not it."""
+    publish(["w1", "w2"], sequence=1)
+    await daemon.tick()
+
+    publish(["w1", "w2"], sequence=2, pinned_work_id="a-work-in-another-theme")
+    with caplog.at_level(logging.WARNING):
+        await daemon.tick()
+
+    assert [r.__dict__.get("event") for r in caplog.records].count("directive.pin_unresolvable") == 1
+    assert state.last_acted_sequence == 2, "an unresolvable pin must be consumed, or it warns every second"
+    assert tv.on_the_wall.name == "w1.jpg", "the wall moved for a pin that could not be resolved"
+
+
+async def test_a_pin_continues_the_rotation_from_the_pinned_work(daemon: Daemon, tv: FakeTv, publish, clock):
+    publish(["w1", "w2", "w3", "w4"], sequence=1, interval_seconds=180)
+    await daemon.tick()
+
+    publish(["w1", "w2", "w3", "w4"], sequence=2, pinned_work_id="w3")
+    await daemon.tick()
+    assert tv.on_the_wall.name == "w3.jpg"
+
+    clock.advance(180)
+    await daemon.tick()
+
+    assert tv.on_the_wall.name == "w4.jpg", "rotation did not continue from the pin"
+
+
+async def test_a_directive_is_not_consumed_while_the_television_is_asleep(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState
+):
+    """An outage must delay a jump, never eat it.
+
+    The manifest does not change when a directive fails, so a sequence marked
+    acted-on during an outage is a `show_now` the curator never gets — nothing
+    would ever present it again.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+
+    tv.unavailable = True
+    publish(["w1", "w2", "w3"], sequence=2, pinned_work_id="w3")
+    await daemon.tick()
+    assert state.last_acted_sequence == 1, "the directive was consumed against a television that never heard it"
+
+    tv.unavailable = False
+    await daemon.tick()
+
+    assert tv.on_the_wall.name == "w3.jpg"
+    assert state.last_acted_sequence == 2
+
+
+async def test_a_next_is_not_consumed_when_the_set_drops_mid_step(daemon: Daemon, tv: FakeTv, publish, state: DisplayState):
+    """The unpinned branch's version of the rule, in the only window it can bite.
+
+    **Finding this window took two attempts and a mutation sweep**, and the shape
+    of it is worth keeping. A directive always arrives on a manifest rewrite, and
+    a rewrite is an adoption, and an adoption reconciles with the set *before* the
+    directive is looked at — so a television that is already asleep fails there and
+    the directive is simply not reached, surviving for free on the pass after the
+    set comes back.
+
+    What is left is the genuine race: the set answers at the top of the pass and is
+    gone by the selection. That is what this reproduces, and it is the only thing
+    the statement order in `_act_on_directive` protects. A sweep that swapped those
+    two statements survived two earlier tests written against an already-asleep
+    set, both of which passed because the code under test never ran.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+    assert tv.on_the_wall.name == "w1.jpg"
+    doomed = state.binding_for("w2").tv_content_id
+
+    # The set still lists the image and refuses to show it: alive at the top of
+    # the pass, gone by the selection.
+    tv.refuse_selection_of.add(doomed)
+    publish(["w1", "w2", "w3"], sequence=2)
+    await daemon.tick()
+    assert state.last_acted_sequence == 1, "the step was consumed against a television that never performed it"
+
+    tv.refuse_selection_of.clear()
+    await daemon.tick()
+
+    # **It lands on w3, not w2, and that is the design rather than a near miss.**
+    # The cursor moves past a work before it is shown, so one whose selection
+    # failed is stepped over exactly as a missing render is — the alternative is a
+    # `next` that keeps returning to the work that just would not display. What
+    # the rule protects is that the step *happens at all*: with the sequence
+    # consumed before the attempt, the wall would still be on w1.
+    assert tv.on_the_wall.name == "w3.jpg", "the directive was lost to a momentary drop"
+    assert state.last_acted_sequence == 2
+
+
+async def test_a_pin_whose_render_is_missing_is_still_consumed(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState, art_root
+):
+    """An attempt that completes and shows nothing is still an attempt.
+
+    Distinct from the outage above: this one will not change until a file
+    appears, so retrying it every second fills the journal to no purpose.
+    """
+    publish(["w1", "w2"], sequence=1)
+    await daemon.tick()
+    (art_root / "ready" / "w2.jpg").unlink()
+
+    publish(["w1", "w2"], sequence=2, pinned_work_id="w2", renders=False)
+    await daemon.tick()
+
+    assert state.last_acted_sequence == 2
+    assert tv.on_the_wall.name == "w1.jpg"
+
+
+@pytest.mark.parametrize("sequence", [0, 1])
+async def test_the_sequence_zero_baseline_is_not_special(daemon: Daemon, publish, state: DisplayState, sequence: int):
+    """Zero is a real sequence, and `None` is the only "never acted" value.
+
+    Conflating them would make a fresh catalogue's first `next` invisible.
+    """
+    publish(["w1"], sequence=sequence)
+
+    await daemon.tick()
+
+    assert state.last_acted_sequence == sequence
+
+
+async def test_a_pin_is_not_delivered_onto_a_television_somebody_is_watching(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState
+):
+    """A jump is still a selection, and a selection takes the screen.
+
+    The rotation timer does not govern this path, so without its own check a
+    `show_now` would interrupt a programme the moment a curator pressed the
+    button — the one route to the wall that has no interval in front of it.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+
+    tv.art_mode = "off"
+    publish(["w1", "w2", "w3"], sequence=2, pinned_work_id="w3")
+    before = len(tv.selected)
+    await daemon.tick()
+
+    assert len(tv.selected) == before, "a pin took the screen off whoever was watching"
+    assert state.last_acted_sequence == 1, "the pin was consumed against a wall it never reached"
+
+
+async def test_a_held_back_directive_does_not_ask_the_set_once_a_second(daemon: Daemon, tv: FakeTv, publish, clock):
+    """The directive path has no timer, so the wait has to be read before the ask.
+
+    An unconsumed directive is still unconsumed on the next poll, so anything
+    downstream of a question put to the television is asked again a second later
+    for the length of a programme. Asking whether the wall is ours costs a real
+    request — putting it in front of the backoff spends thousands of them, which
+    is the same flood the backoff exists to stop arriving by a cheaper-looking
+    route.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+
+    tv.art_mode = "off"
+    publish(["w1", "w2", "w3"], sequence=2, pinned_work_id="w3")
+    before = tv.art_mode_reads
+    for _ in range(30):
+        await daemon.tick()
+        clock.advance(1)
+
+    asked = tv.art_mode_reads - before
+    assert asked < 10, f"a pending directive asked the set {asked} times in thirty seconds"
+
+
+async def test_a_held_back_next_does_not_ask_the_set_once_a_second(daemon: Daemon, tv: FakeTv, publish, clock):
+    """The same guard, reached by `next` rather than by a pin.
+
+    Both kinds run through the same two lines, so this is defended by
+    construction — but "by construction" is what the last three defects in this
+    plane all looked like before a sweep, and a `next` carries no `pinned_work_id`
+    to make the paths obviously identical to a reader.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+
+    tv.art_mode = "off"
+    publish(["w1", "w2", "w3"], sequence=2)  # a bare `next`, no pin
+    before = tv.art_mode_reads
+    for _ in range(30):
+        await daemon.tick()
+        clock.advance(1)
+
+    asked = tv.art_mode_reads - before
+    assert asked < 10, f"a pending `next` asked the set {asked} times in thirty seconds"
+
+
+async def test_a_pin_held_back_is_delivered_when_the_set_returns_to_art_mode(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState
+):
+    """Held, not dropped. The manifest does not change when a directive is
+    refused, so a consumed pin is one the curator never gets."""
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+    tv.art_mode = "off"
+    publish(["w1", "w2", "w3"], sequence=2, pinned_work_id="w3")
+    await daemon.tick()
+
+    tv.art_mode = "on"
+    tv.art_mode_announced = True
+    await daemon.tick()
+
+    assert tv.on_the_wall.name == "w3.jpg", "the pin was lost while the television was in use"
+    assert state.last_acted_sequence == 2
+
+
+async def test_a_bare_next_is_not_consumed_by_a_wall_that_displays_nothing(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState, clock, caplog
+):
+    """The unpinned half of the rule below, which had nothing behind it.
+
+    Every other dark-wall directive test publishes a `pinned_work_id`, so the
+    `next` branch was defended only by resembling the pin branch — and it did not:
+    it consumed the sequence unconditionally and logged `directive.acted` for a
+    step the wall never made. That is a false success of exactly the kind this
+    plane makes structurally impossible for uploads.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+
+    tv.displays_nothing_selected = True
+    publish(["w1", "w2", "w3"], sequence=2)  # a bare `next`, no pin
+    with caplog.at_level(logging.INFO):
+        await daemon.tick()
+
+    assert state.last_acted_sequence == 1, "a `next` was eaten by a wall that never changed"
+    assert not [
+        r for r in caplog.records if getattr(r, "event", None) == "directive.acted"
+    ], "the journal recorded a step the wall never made"
+
+    tv.displays_nothing_selected = False
+    clock.advance(5)
+    await daemon.tick()
+
+    assert state.last_acted_sequence == 2, "the `next` was not honoured once the wall started changing again"
+
+
+async def test_a_next_against_an_unshowable_theme_is_still_consumed(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState, art_root
+):
+    """The other side of that distinction, and why it is not one boolean.
+
+    A theme whose renders are missing is the curator's own catalogue, not a
+    television refusing to move: retrying it every second would fill the journal
+    with a failure that cannot change until a file appears. So this one *is*
+    consumed, where the wall-unchanged case above is not.
+    """
+    publish(["w1", "w2"], sequence=1)
+    await daemon.tick()
+
+    # `renders=False` rather than deleting the files: `publish` recreates them by
+    # default, so unlinking first and republishing put them straight back and this
+    # test passed without ever reaching the branch it names.
+    publish(["w1", "w2"], sequence=2, renders=False)
+    for name in ("w1", "w2"):
+        (art_root / "ready" / f"{name}.jpg").unlink(missing_ok=True)
+    await daemon.tick()
+
+    assert state.last_acted_sequence == 2, "a `next` at a theme that can show nothing was retried for ever"
+
+
+async def test_a_directive_is_not_consumed_by_a_wall_that_displays_nothing(
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState, clock
+):
+    """The same rule as an outage, reached by a route that raises nothing.
+
+    A television whose panel is dark takes `select_image`, returns cleanly and
+    goes on displaying what it had — so the jump did not happen while every call
+    reported success. Consuming the sequence here would evaporate the curator's
+    pin: the manifest does not change when a directive fails, so nothing would
+    ever present it again, and the wall would come back on some other picture.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+
+    tv.displays_nothing_selected = True
+    publish(["w1", "w2", "w3"], sequence=2, pinned_work_id="w3")
+    await daemon.tick()
+    assert state.last_acted_sequence == 1, "the directive was consumed against a wall that never changed"
+
+    tv.displays_nothing_selected = False
+    # The wall is not re-asked instantly: a set found ignoring selections is
+    # backed off from, on the same ladder as an unreachable one, so recovery
+    # costs the current wait rather than a call per poll while it stays dark.
+    clock.advance(5)
+    await daemon.tick()
+
+    assert tv.on_the_wall.name == "w3.jpg", "the pin was not honoured once the wall started changing again"
+    assert state.last_acted_sequence == 2
+
+
+async def test_a_pin_against_a_dark_wall_is_not_re_attempted_every_poll(daemon: Daemon, tv: FakeTv, publish, clock):
+    """The directive path has no timer of its own, and the wall being dark leaves
+    the sequence unconsumed — so nothing would stop it re-asking once a second.
+
+    That is the same defect the rotation timer exists to prevent, reached by the
+    other route: each attempt is a selection that a television is going to ignore,
+    followed by the whole confirmation window spent waiting for an announcement
+    that will never come — all night, at one second apart.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+
+    tv.displays_nothing_selected = True
+    publish(["w1", "w2", "w3"], sequence=2, pinned_work_id="w3")
+    before = len(tv.selected)
+    for _ in range(10):
+        await daemon.tick()
+        clock.advance(1)
+
+    # Ten polls, and the retry floor is five seconds: two attempts, not ten. The
+    # assertion is against the *ladder* rather than a number of seconds, because
+    # what is being fixed is the cadence being the poll's.
+    attempts = len(tv.selected) - before
+    assert attempts == 2, f"the pin was attempted {attempts} times in ten one-second polls"

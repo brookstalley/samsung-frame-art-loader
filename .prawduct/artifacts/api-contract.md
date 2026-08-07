@@ -221,9 +221,23 @@ read is a second, rarer route to the same state.)
 
 The membership check is deliberately **not** added here: only the display plane
 can decide what to do with a pin it cannot resolve, and choosing at the writing
-end would design that behaviour from the wrong plane. The plane that builds the
-display side settles it — log
-one WARNING and carry on rotating, by the same posture as a missing render file.
+end would design that behaviour from the wrong plane.
+
+**Settled 2026-08-06, when that plane was built.** Display logs one WARNING
+naming the work and carries on rotating — the same posture as a missing render
+file, and for the same reason: the wall going black is always worse than the wall
+being incomplete. Two consequences are worth stating here rather than leaving to
+the implementation, because a caller can observe both:
+
+- **The directive is consumed.** The sequence advances on this plane's side even
+  though nothing moved, so the manifest is not re-read as a standing instruction.
+  Without that, an unresolvable pin would warn once per poll — every second,
+  forever — about a condition that will not change until somebody switches theme.
+- **A pin issued while the television is asleep is *not* consumed**, and that
+  asymmetry is deliberate. An unresolvable pin has been answered; an undelivered
+  one has not, and since the manifest does not change, a sequence marked
+  acted-on during an outage is a `show_now` the curator never gets. An outage
+  therefore delays a jump rather than eating it.
 
 Two consequences worth stating because they surprise:
 

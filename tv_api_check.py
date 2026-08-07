@@ -25,6 +25,7 @@ import time
 import requests
 from samsungtvws.async_art import SamsungTVAsyncArt
 from samsungtvws.exceptions import ConnectionFailure, HttpApiError, ResponseError
+from samsungtvws.rest import SamsungTVRest
 from websockets.exceptions import WebSocketException
 
 import config
@@ -42,9 +43,10 @@ logging.basicConfig(format="%(levelname)s:%(message)s", level=logging.INFO)
 #: television actually sends.
 IMAGE_CHANGED_EVENTS = ("slideshow_image_changed", "auto_rotation_image_changed", "image_selected")
 
-#: Ceiling for the calls the client's own `timeout=` reaches: the REST request
-#: for the model year, and opening the websocket. Named because both default to
-#: no limit, so a set that drops packets rather than refusing them would hang
+#: Ceiling for the REST and websocket calls: the model-year request the client
+#: makes inside its own constructor, the `/api/v2/` read this module makes for the
+#: model name, and opening the websocket. Named because all of them default to no
+#: limit, so a set that drops packets rather than refusing them would hang
 #: construction forever and report no elapsed figure at all.
 #:
 #: It does NOT govern art requests once the connection is up — those carry their
@@ -162,6 +164,56 @@ def _configured_diagonal() -> float | None:
         return None
 
 
+def _reported_model(report: Report) -> str | None:
+    """The set's own `modelName`, read from the REST endpoint that carries it.
+
+    **Not from the art client's `get_device_info()`**, which returns the *art
+    channel's* payload — `current_rotation_status`, `support_brightness_sensor`,
+    `resolution_type` and no `device` key at all. The
+    `{"device": {"modelName": ...}}` shape belongs to the `/api/v2/` REST route,
+    a different endpoint over a different protocol, and asking the art channel
+    for it yields a `None` that no exception marks. A live run against a set that
+    names itself perfectly well reported "model: not reported" and, worse, a
+    satisfied panel-size check that had compared nothing — which is why the
+    caller now asks whether a comparison was possible before reporting one.
+
+    **The port is the configured one, not a literal**, and that matters because
+    the library derives the scheme from it: `_is_ssl_connection()` is
+    `port == 8002`, so the same route is `https` there and `http` on 8001. Both
+    serve it. Passing `config.tv_port` is what keeps this read on the endpoint
+    the art client's own constructor already reached for the model year — a
+    hardcoded 8001 here would silently be a second television address.
+
+    Synchronous inside an async run on purpose: this is the same blocking
+    `requests` call the art client already makes in its own constructor, the
+    checks here run one after another rather than concurrently, and an aiohttp
+    session opened for one REST read would cost more than the block does.
+    """
+    rest = SamsungTVRest(host=config.tv_address, port=config.tv_port, timeout=TV_TIMEOUT_SECONDS)
+    try:
+        info = rest.rest_device_info()
+    except (OSError, HttpApiError, ResponseError) as err:
+        # Failed rather than noted, and the constructor is why: it reached this
+        # same endpoint for the model year before returning, so by the time this
+        # runs the set has already answered here once. A second read that does
+        # not is a finding about this television, not about the tool.
+        report.fail("model", f"the REST endpoint carrying the model name did not answer ({type(err).__name__}: {err})")
+        return None
+
+    device = info.get("device", {}) if isinstance(info, dict) else {}
+    model = device.get("modelName")
+    # The library branches on the model YEAR, not the name: from 2024 it mints a
+    # pairing token before the art channel will accept one. Which side of that
+    # line this panel falls on is worth having written down, and `model` is the
+    # field the year is parsed out of — a `24_`-prefixed string on this set.
+    report.note(
+        "model",
+        f"{model or 'not reported'} ({device.get('model') or 'no model year reported'}) — "
+        "record both; the token handshake changes for 2024-or-later panels",
+    )
+    return model
+
+
 async def check_identity(tv_art: SamsungTVAsyncArt, report: Report) -> None:
     """What this television is, and which half of the API split it speaks."""
     if not await tv_art.supported():
@@ -172,27 +224,33 @@ async def check_identity(tv_art: SamsungTVAsyncArt, report: Report) -> None:
     version = await tv_art.get_api_version()
     report.ok("api version", f"{version} — {_api_generation(version)}")
 
-    info = await tv_art.get_device_info()
-    model = info.get("device", {}).get("modelName") if isinstance(info, dict) else None
-    # The library branches on the model YEAR, not the name: from 2024 it mints a
-    # pairing token before the art channel will accept one. Which side of that
-    # line this panel falls on is worth having written down.
-    report.note("model", f"{model or 'not reported'} — record it; the token handshake changes for 2024-or-later panels")
+    model = _reported_model(report)
+    configured = _configured_diagonal()
 
     # The set names its own size, so the configured diagonal is checkable rather
-    # than merely documentable — and until now it was only ever documented. A
-    # live deployment ran 42" against this 50" panel and every judgement about
-    # whether a work was big enough for the wall was silently mis-sized.
+    # than merely documentable. A live deployment ran 42" against this 50" panel
+    # and every judgement about whether a work was big enough for the wall was
+    # silently mis-sized.
     #
-    # Warned, not failed: this tool reports what it finds, and a diagonal
-    # disagreeing with the panel is a `.env` fix rather than a broken television.
-    # Silent when the model line is one this codebase has not verified a parse
-    # against, which is most of them.
-    mismatch = panel_check.disagreement(model, _configured_diagonal())
+    # Three outcomes, not two. A comparison that could not be made is reported as
+    # such rather than as a pass — an "ok" covering "they agree" and "one side
+    # said nothing" alike is what let a check that compared nothing look
+    # satisfied for as long as it did.
+    #
+    # A disagreement IS a failure here, and that is a different call from the one
+    # `panel_check` records: a running deployment only warns, because refusing to
+    # start would couple startup to a reachable television. This tool is run by
+    # hand against a set that is awake, so the ambiguity is gone and the exit
+    # status is the point — a `.env` naming the wrong panel should gate a deploy.
+    uncomparable = panel_check.not_compared(model, configured)
+    if uncomparable is not None:
+        report.note("panel size", uncomparable)
+        return
+    mismatch = panel_check.disagreement(model, configured)
     if mismatch is not None:
         report.fail("panel size", mismatch)
     else:
-        report.ok("panel size", "the configured diagonal agrees with the set, or neither side stated one")
+        report.ok("panel size", f'{model} names the same panel TV_PANEL_DIAGONAL_INCHES describes at {configured:g}"')
 
 
 def _api_generation(version: str) -> str:
@@ -214,15 +272,36 @@ def _api_generation(version: str) -> str:
     return "new API (slideshow_* verbs)" if int(major) >= 4 else "old API (auto_rotation_* verbs)"
 
 
+def _record_when_fired(trigger: str, fired: list[str]):
+    """A callback that records WHICH event provoked it.
+
+    The trigger has to be captured here rather than read from the callback's own
+    arguments, and that is the whole reason this function exists. The library
+    dispatches on the *sub*-event inside the message — `self.callbacks[sub_event]`
+    — but invokes the callback with the *outer* websocket message type, which is
+    `d2d_service_message` for all three of these and for everything else the art
+    channel sends. A recorder that appended its first argument therefore reported
+    `d2d_service_message` whichever event had fired, and a run's output could not
+    say which of the three this set emits — the one question the registration
+    exists to answer. It read as a finding about the television and was a
+    property of the library's argument order.
+
+    Selection by sub-event is what makes the closure exact: the callback
+    registered under `image_selected` runs only when that is the sub-event.
+    """
+
+    async def on_event(event, response):
+        fired.append(trigger)
+
+    return on_event
+
+
 async def check_callbacks(tv_art: SamsungTVAsyncArt, report: Report, content_id: str | None) -> None:
     """Register all three change events and see which ones this set emits."""
     fired: list[str] = []
 
-    async def on_event(event, response):
-        fired.append(event)
-
     for trigger in IMAGE_CHANGED_EVENTS:
-        tv_art.set_callback(trigger, on_event)
+        tv_art.set_callback(trigger, _record_when_fired(trigger, fired))
 
     if content_id is None:
         report.note("callbacks", "registered, but nothing was selected to provoke one — pass --image to test properly")

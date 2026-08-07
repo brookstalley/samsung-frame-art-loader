@@ -14,11 +14,60 @@ inline, which the record linter flags; moving them is tracked as issue #26.
 label which is which** — a measurement earns confidence, and the mechanism written
 beside it inherits that confidence without earning any.
 
+## A test double that fails EARLIER than the real thing makes every test past it vacuous
+
+**When** a fake stands in for a client with connection state, **make it fail where
+the real one fails**, not at the first opportunity — and check what it *lets
+through*, not just what it returns. **Because** a double that raises at the top of
+a call sequence prevents every later line from executing, and the tests asserting
+those lines pass with no assertion looking wrong.
+
+Worked instance, 2026-08-06: `FakeTv.connect()` re-checked reachability on every
+call, while the real `SamsungTv.connect()` returns immediately once it holds a
+client — so in production a set that goes away is discovered by the next *real*
+call, and in the fake it was discovered at the top of the tick. Two tests
+asserting "a directive is not consumed while the television is asleep" passed
+because the directive code never ran. Making the fake faithful turned both red,
+and one was a genuine behaviour with no coverage at all.
+
+**The tell is a test that passes on the first try for a rule you have not
+implemented yet.** The general check: for each test, name the line that would
+have to execute for the assertion to mean anything, and confirm the fixture
+reaches it. A mutation sweep answers this mechanically and found this one.
+
+**Its sibling: the module with no tests is the one the doubles replaced.**
+`display/src/display/tv/samsung.py` exists entirely to correct a library that
+misreports in both directions, and nothing reached it — the suite runs against
+the double by design. A green suite, a passing review, and a symbol-reference
+coverage floor all agreed it was covered.
+
 ## Do not trust a foreign client's return value in either direction — confirm against the system itself
 
 **When a boundary library reports success or failure, verify the claim against the
 remote system's own state before acting on it** — ask, then read the remote list
 back, and keep *unconfirmable* apart from *failed*.
+
+## A test double expresses what you already believe the dependency does, so it cannot catch "says yes, does nothing"
+
+**When a dependency's state-changing verb has no confirming read, make the double
+able to model acceptance-without-effect before trusting a green suite** — because
+a double is written from your model of the dependency, so the failure mode you did
+not know about is exactly the one it cannot express, and every test passes while
+the real system ignores you.
+
+## A test that advances an injected clock must not step by a multiple of the interval under test
+
+**When a test drives a fake clock, choose amounts that are not multiples of the
+period the code computes against** — because a step equal to the interval makes a
+daemon that *wrongly consumed* that interval indistinguishable from one that
+correctly withheld it, and the test then passes on arithmetic rather than on
+behaviour.
+
+## A guard aimed at a named line must be verified against that line
+
+**When you clamp, filter or redact one named line in a dependency, open the
+dependency and read that line before choosing the threshold** — because a guard
+built on a remembered level protects nothing and looks exactly like protection.
 
 ## Retiring a claim is a repo-wide grep, not a local edit
 
@@ -786,9 +835,17 @@ fetching and 4K compositing off a Pi 4" is **retired and must not be cited**;
 nothing moved off it. That claim was also weaker than it read — the existing code
 downsizes to 2048² before the LAB/k-means work, so peak memory is a few hundred MB.
 
-It survives because the display plane **does not want 3tears at all** — it needs an
-HTTP client, `samsungtvws`, PIL, and the e-paper driver, and three-tier entities are
-of no use to it. Beyond that: it matches the upstream/derived data contract below,
+It survives because the display plane **does not want 3tears at all** — it needs
+`samsungtvws`, the e-paper driver, and nothing else that plane offers; three-tier
+entities are of no use to it. *(Corrected 2026-08-06, when that plane was built:
+this read "it needs an HTTP client, `samsungtvws`, PIL, and the e-paper driver".
+It needs neither of the other two, and the HTTP client is now **forbidden** —
+`tests/preferences/test_plane_isolation.py` fails the build on one, because the
+only thing this plane could reach with a general client is the curation process,
+which is the second channel the manifest-only norm exists to prevent. PIL went
+the same way for a duller reason: the television is handed a path and streams the
+file itself, so nothing here decodes an image. A dependency list written from a
+design sketch is a guess until the code lands.)* Beyond that: it matches the upstream/derived data contract below,
 it makes "e-paper behind an interface" a process boundary rather than a convention,
 and it is what lets the display plane keep working when curation is down.
 
@@ -954,3 +1011,5 @@ filenames encode identity in at least three mutually inconsistent conventions
 ## A dependency bump's evidence is the call sites, never the suite — before believing a version move, exercise the upstream API the code actually reaches in a clean interpreter, because a manifest no suite installs (`requirements.txt` here, which the root project does not declare) makes a green `pytest` a statement about versions that did not move
 
 ## Before calling a shared pinned upstream risky to bump, read the SIBLING lockfiles — when two projects in a repo pin the same git dependency, one plane's resolved lock is evidence about the other's, and the version you are afraid to move to may already be resolved and running next door
+
+## A diagnostic whose "all clear" and "cannot tell" print the same line has retired the question it asks — when a check can be quiet for more than one reason, give each quiet state its own outcome naming which side said nothing, because a reader treats a pass as a measurement and the false one propagates into artifacts as evidence

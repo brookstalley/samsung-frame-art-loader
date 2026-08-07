@@ -266,6 +266,15 @@ Panel geometry was briefly listed as a second shared value; it is not, because
   forty rows.)*
 - **E-paper panel geometry** (1448×1072) — **display only**, for label typesetting.
 
+  *(**Became configuration on 2026-08-06**, with the display plane's first
+  modules: `EPD_PANEL_WIDTH_PX` and `EPD_PANEL_HEIGHT_PX`, defaulting to the
+  reference panel's figures. Until then it was a number in prose, which is the
+  same standing the TV's geometry had before it was hoisted — and the rule below
+  that nothing may hardcode either panel's size applies to this one too. The
+  plane logs the resolved pair at startup beside its `ART_ROOT`. Nothing reads it
+  yet: the label renders with the chunk that drives the panel, and the value is
+  hoisted here because the plane that will read it is the plane that now exists.)*
+
 Because neither is shared, neither can drift between planes. A wrong TV size is
 still a real defect — the mat comes out the wrong width and the review grid's
 warnings are computed against a TV that isn't there — but it is a single-plane
@@ -498,6 +507,9 @@ been taken. Two consequences worth stating:
 This read "no test suite exists — zero tests across 2,216 lines"; that departure was
 closed the same day and both planes now have suites, so the risk is no longer
 absence of testing but the specific norms nothing yet checks.)* The **plane-isolation
-test** that enforces a ratified Direction norm is still filed and unbuilt (issue #7),
-and the service-layer norm's own enforcement column says "Critic" — a reviewer
-reading handlers, with no test that fails when logic creeps into a binding.
+test** that enforces a ratified Direction norm was built on 2026-08-06 with the
+display plane's first modules (issue #7) — imports resolved transitively, HTTP-client
+construction banned with the television websocket exempted, and planted violations
+proving both halves can fail. What remains uncovered is the **service-layer norm**,
+whose enforcement column says "Critic" — a reviewer reading handlers, with no test
+that fails when logic creeps into a binding.

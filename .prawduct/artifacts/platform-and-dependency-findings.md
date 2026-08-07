@@ -330,6 +330,21 @@ incompatibility and is not one — `PowerState: 'on'` is the entire fix, after w
 the set shows its allow dialogue and a token is issued. Anyone debugging a
 first-connection failure should check power state before suspecting anything else.
 
+> **Corrected 2026-08-07, and the correction is narrower than it looks.** The
+> paragraph above describes *pairing*, with no token yet issued. It does **not**
+> generalise to a client that already holds one: with a cached token in
+> `TV_TOKEN_FILE`, both websocket channels open in **standby** (art channel in
+> 2.4 s) and in **art mode**, and uploads, deletions, listings and brightness all
+> succeed against a set whose panel is dark.
+>
+> So **`ms.channel.timeOut` is not a power-state signature.** It has since been
+> seen with the set *in art mode and working*, after about twenty
+> connect-and-close cycles in three minutes plus a daemon killed with SIGKILL that
+> never closed its socket — which points at a cap on concurrent art-channel
+> clients, with abandoned ones held until they time out. Read it as "too many
+> connections lately", not "the set is asleep". `samsung-tv-state-findings.md`
+> carries the state-by-state map.
+
 The art channel itself is reachable **without** a token and answers
 `ms.channel.connect` with a client list, so "the art channel responds" is not
 evidence that pairing succeeded.
@@ -347,6 +362,18 @@ slideshow. It means the old/new API split costs this product nothing — the eve
 it depends on is the one that is not part of that split — and that a display
 process needs to register exactly one callback, not three.
 
+**That finding came from instrumented probes, and it could not have come from a
+callback's own arguments** — which is a trap for anything that registers one.
+`process_event` selects the callback by the *sub*-event carried inside the
+message (`self.callbacks[sub_event]`) but invokes it with the *outer* websocket
+message type, so **every art-channel callback is called with
+`event="d2d_service_message"`**, whichever event actually fired. A recorder that
+logs its first argument reports that constant forever and looks like a finding
+about the television. Capture the trigger in a closure at registration instead;
+selection by sub-event is what makes that exact. This cost a live run its answer
+to the question the registration exists to ask, and the run's report gave no sign
+it had.
+
 ### Detecting that the set is actually in art mode
 
 **This is the signal a display process needs, and the obvious candidates do not
@@ -356,7 +383,7 @@ wrong answer looks right until it fails.
 | Candidate | Verdict |
 |---|---|
 | `PowerState` from the REST endpoint | **Cannot distinguish art mode from normal TV** — reports `'on'` for both. Only tells you `'standby'` vs not |
-| `get_artmode()` | Returns `'on'` correctly, but **can only ever confirm the positive case**: it requires `start_listening()` to have succeeded first, and that call is what fails when art mode is off |
+| `get_artmode()` | **Answers in both directions** — `'on'` in art mode, `'off'` for a dark panel and for a television programme alike. See the correction below; the claim that it can only confirm the positive case was wrong |
 | Presence of an `isHost: true` client in the art channel's `ms.channel.connect` frame | **Works, in both directions, without `start_listening()`** |
 
 The set's own art application appears in the art channel's client list as a
@@ -372,10 +399,35 @@ on a different attempt, so the behaviour is not even consistent between runs.
 Anything that calls `start_listening()` unattended needs its own timeout around it
 and must not assume the call returns.
 
+> **Corrected 2026-08-07, and this one is load-bearing rather than tidying.** The
+> premise above — that `start_listening()` fails whenever art mode is off, so
+> `get_artmode()` can only ever confirm the positive case — does not hold with a
+> **cached pairing token**. With one in `TV_TOKEN_FILE` the art channel opens in
+> 2.4 s against a dark panel and against a set showing a programme, and
+> `get_artmode()` answers `'off'` in both, `'on'` in art mode. All three readings
+> are measured.
+>
+> **The display plane's safety gate depends on exactly that negative case.**
+> Selecting an image on a set showing a television programme switches it into art
+> mode and takes the screen off the person watching, so the daemon asks
+> `get_artmode()` before every selection and declines unless it says `on`. Had
+> this row still been believed, the gate would have looked impossible to build.
+>
+> The `isHost` technique below is still the only method that works *without* a
+> token, which is what it was written for, and it remains the right answer for
+> first-contact tooling.
+
 **The set can be driven out of standby from software.** `KEY_POWER` over the
-*remote-control* channel works, and that channel is reachable in standby while the
-art channel is not. Two presses were needed from standby: the first produced
-`PowerState: 'on'` with no art app running, the second brought the art app up.
+*remote-control* channel works. Two presses were needed from standby: the first
+produced `PowerState: 'on'` with no art app running, the second brought the art
+app up.
+
+> **One clause here was retired on 2026-08-07**: this used to add "and that
+> channel is reachable in standby while the art channel is not". The art channel
+> *is* reachable in standby — it opens in 2.4 s with a cached pairing token, and
+> serves uploads, deletions, listings and brightness against a dark panel. What
+> is not available there is `select_image` taking effect, which is a different
+> statement. See `samsung-tv-state-findings.md`.
 
 > **What is NOT established, and should not be inferred from the above.** The
 > power states almost certainly form a three-way arrangement — fully on, art mode,

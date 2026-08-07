@@ -90,13 +90,20 @@
 
 ### curation ↔ display contract
 
-- **Exists:** **the producing half does**, as of 2026-07-31 — curation writes
+- **Exists: both halves, as of 2026-08-06.** Curation writes
   `theme-manifest.json` into `ART_ROOT` (schema major 1), atomically, with the
-  rotation settings and directive block the design calls for. **The consuming
-  half does not:** the display plane does not exist yet, so nothing reads this
-  file yet. Curation also *reads* the reverse-direction heartbeat and reports
-  honestly that none exists, which stays the true state until a display plane
-  runs and writes one.
+  rotation settings and directive block the design calls for; the display plane
+  polls its mtime, refuses a major it does not recognise while keeping the last
+  good document, and converges the television on what it lists. The reverse
+  direction is still one-sided: curation *reads* a heartbeat and reports honestly
+  that none exists, which stays true until the chunk that writes one.
+
+  **Exercised end to end by neither plane's suite, and that is the residual.**
+  Each side is tested against its own reading of the contract — curation asserts
+  what it writes, display asserts what it parses, and the two fixtures were
+  written from the same document — but nothing runs a real manifest from the real
+  builder into the real reader. The cheap version of that check is the live pass
+  on the Pi, which is outstanding.
 - **Producer:** curation plane. **Consumer:** display plane. **Same machine.**
 - **Contract:** the **theme manifest** — a versioned JSON document written
   atomically (temp + `os.replace`) into the shared `ART_ROOT` and polled by display
@@ -113,8 +120,12 @@
   never by foreign key* (`data-model.md` → Relationships).
 - **This boundary is governed by a ratified norm.** The manifest is the *only*
   channel from curation to display (`architecture.md` § Direction). A change that
-  adds a second one is a norm departure requiring a recorded decision, and issue #7
-  files the plane-isolation test that enforces it.
+  adds a second one is a norm departure requiring a recorded decision. Since
+  2026-08-06 the norm is enforced mechanically rather than by judgement:
+  `tests/preferences/test_plane_isolation.py` (issue #7) parses every display
+  module, follows imports transitively through this repository's own files, and
+  fails on a curation import or an HTTP client — the television websocket
+  exempted, because talking to the set is that plane's job.
 - **The reverse direction exists and is narrow:** display writes a heartbeat/status
   file that curation reads. Sole writer is display; it never checks whether anyone
   read it, so it creates no dependency in the protected direction.
@@ -256,6 +267,37 @@
   nothing — a thumbnail is a thumbnail. It is regenerated rather than
   transported because it is cheap and disposable, not because it would be wrong
   elsewhere.
+
+### display ↔ television
+
+- **Exists:** **yes**, as of 2026-08-06 — `display/src/display/tv/client.py` is the
+  interface and `samsung.py` the one implementation.
+- **Producer:** the television (a foreign device running Tizen). **Consumer:**
+  display plane. **Crosses a machine boundary**, over two websockets and a REST
+  endpoint on the LAN.
+- **Contract:** an abstract base class, not a structural protocol — deliberately,
+  so a verb added to the boundary fails the test double at import rather than
+  leaving it behind while every test stays green. Everything the library does
+  badly is corrected *below* the seam, and what crosses it is the corrected form:
+  an upload returns an id or raises, a removal reports what the set actually
+  holds afterwards, a selection is confirmed by a read, and every connection
+  failure arrives as one `TvUnavailable` whatever the library's seven exception
+  types did.
+- **The interface exists because the client behind it is a liability** — the
+  `samsungtvws` fork is unowned and pinned to a commit. The mitigation was never
+  "switch upstreams"; it is keeping this surface small enough that replacing the
+  client is a swap.
+- **This is the surface where a return value means least.** Measured on the
+  deployment's own set: `select_image` is accepted, raises nothing, emits no
+  event and changes nothing whenever the panel is dark, while every other verb
+  succeeds. So **no state-changing verb here is believed on its return** —
+  uploads and removals read the set's list back, and selections read what it says
+  it is displaying. `samsung-tv-state-findings.md` is the state-by-state map, and
+  it is the artifact to read before adding a verb.
+- **Tested at the seam and only at the seam** — `display/tests/test_samsung_client.py`
+  stubs the library, because the daemon suite runs against `FakeTv` and proves
+  nothing about this file. A mutation sweep once deleted the close-on-failure here
+  with no test objecting, for exactly that reason.
 
 ### Configuration
 

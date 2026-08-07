@@ -48,6 +48,488 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-07: The safety gate reopened the flood it was standing next to
+
+<!-- prawduct: chunks=12 | status=shipped | scope=v1-build -->
+
+**Why:** the art-mode gate added in the entry below went in *front* of the
+backoff on the directive path instead of behind it. Rotation reads
+`_wall_attempt_is_due()` and then asks the set; the directive path asked first,
+and its only wait-check sat downstream inside the pin branch. Since a directive
+is deliberately left unconsumed while the wall belongs to somebody else, `tick`
+re-entered every poll and put a real request to the television **once a second
+for the length of a programme** — the flood commit `f435179` was written to close,
+reopened for `next` as well as `show_now`, by a gate whose own docstring argues
+it is affordable *because* it is asked rarely.
+
+**The existing affordability test could not have caught it**: it drives rotation,
+and its directive sequence never moves. The directive-path equivalent is added,
+and both now assert against `FakeTv.art_mode_reads`.
+
+**A crash and a clean stop wrote the same line.** `daemon.stopped` at INFO was the
+entire record of an exception escaping the loop, so a wall somebody switched off
+and one falling over under `Restart=always` read identically in the journal —
+which is this plane's only failure channel. A crash now logs ERROR with a
+traceback under its own event and re-raises unchanged, so systemd still sees a
+failed unit.
+
+**Two records were wrong in ways that mattered more than staleness usually does.**
+`platform-and-dependency-findings.md` said `get_artmode()` "can only ever confirm
+the positive case", because `start_listening()` was believed to fail whenever art
+mode is off. With a cached pairing token it does not fail: the art channel opens
+against a dark panel and against a programme, and `get_artmode` answers in all
+three states. **The safety gate depends on exactly the negative reading that row
+called impossible** — had it still been believed, the gate would have looked
+unbuildable. And `deploy/README.md` still owed a hardware run for the aiohttp
+bump, which had been done on 2026-08-06 (9 checks, 0 failed) and which this branch
+then drove through 39 uploads and 41 deletions.
+
+Test evidence recorded across all three suites — **2261 passed, 0 failed** at that
+commit, 2266 by the tip as later commits added tests — which
+also closes a review finding that no run covered this tree. Four mutations on the
+new branches, all caught.
+
+**A follow-up retired that same claim everywhere else it was written**, which is
+the part worth recording: correcting it in one artifact left it standing in two
+module docstrings and — the one that matters — in the error message a person
+actually reads. The connect timeout used to tell them the set was "most likely not
+in art mode", sending them to the remote control for a fault that clears by
+waiting. It now says what has been observed instead. **This is the repo's own
+learning ("retiring a claim is a repo-wide grep, not a local edit") missed on the
+very commit that added a learning**, which is a fair measure of how easily a
+correction stops at the first file. The contract test moved with the message
+rather than being relaxed: equally specific, asserting the remedy instead of the
+wrong diagnosis. `except BaseException` in the daemon's supervisor was narrowed to
+`Exception` in the same pass — a cancellation is a shutdown, not a crash, and
+reporting one at ERROR would invert the defect that handler exists to fix.
+
+## 2026-08-07: The wall takes the television from whoever is watching it
+
+<!-- prawduct: chunks=12 | status=shipped | scope=v1-build -->
+
+**Why:** with the operator watching a programme and the daemon rotating normally,
+a due rotation sent `select_image` and **the set switched itself into art mode**.
+The picture they were watching was gone. That cell of the state map had read *not
+tried — it would take the screen off whoever is watching*; it does exactly that,
+and somebody watching television is a daily event rather than an edge case.
+
+**The requirement did not exist, so it was written before the code** —
+`nonfunctional-requirements.md` § Availability, "The television belongs to whoever
+is using it". It outranks availability: a wall that is late is a smaller failure
+than a television that interrupts the person watching it. The plane deliberately
+does **not** turn a dark set on, which currently costs nothing since neither
+`select_image` nor `set_artmode('on')` can wake one.
+
+**One reading decides it.** `get_artmode` answers `off` for both a dark panel and
+a programme, and `on` only for art mode, so a single check covers both states the
+wall must not touch; `PowerState` cannot, reading `on` for a programme too. A no
+freezes everything the existing still-wall path already freezes — no selection, no
+advance through the theme, no directive consumed — which made this a second route
+into tested behaviour rather than new machinery.
+
+**Recovery is by the set's own announcement, not by waiting.** Subscribing to
+`art_mode_changed` / `artmode_status` / `go_to_standby` / `wakeup` clears the
+backoff, so switching a programme off brings the wall back on the next poll
+instead of after a wait that has doubled its way to five minutes — which matters
+because this transition happens every time somebody finishes watching something. A
+reconnection counts as an announcement for the same reason. **The announcement is
+never the answer**: it says "ask again", and the decision is always a fresh read,
+so a missed one costs promptness and can never license a selection into a
+programme.
+
+### Also in this commit: both Critic blockers from the cumulative review
+
+- **The rebind path was dead code against the real client.** `_call` drops and
+  closes its connection on *any* failure, so `_rebind_or_reraise`'s first act —
+  asking the set what it lists — would have raised "not connected" before reaching
+  the television, and the whole mark-orphaned / re-upload branch could never run.
+  It reconnects first now. **The double was what hid it**: `FakeTv` raised without
+  clearing its connected flag, so the fake kept answering where the real client
+  would have refused. The fake now models the refusal, which is what makes the fix
+  provable — the mutation survived the first sweep until it did.
+- **The pairing token could reach the journal at the default level.** The
+  television client's logger was floored at INFO on the belief that the token is a
+  DEBUG line; the pinned fork logs `New token %s` at **INFO**
+  (`samsungtvws/connection.py:101`), so the floor permitted precisely the line it
+  was written to stop, on any pairing, with nobody doing anything unusual. Floored
+  at WARNING, with a regression test at the level that actually leaks it.
+
+Eleven further findings were dispositioned in the same pass. Fixed: the daemon
+now closes the art channel on *every* exit including an unexpected one (the set
+holds an abandoned client's slot for minutes, so under `Restart=always` a crash
+could lock the daemon out of its own television); README, `deploy/README.md`,
+`operator-verification.md` and `platform-and-dependency-findings.md` no longer
+carry the pre-hardware framing or the retired `ms.channel.timeOut` standby
+signature this same work retired; the build plan now says plainly that the live
+pass ran **from a development Mac, not the Pi**, and names the three things in it
+still unobserved; a duplicated binding predicate became one function; an uncalled
+accessor was deleted; the plane-isolation guard's comment now describes what its
+resolver does. Six were accepted as facts with reasons.
+
+**Twenty mutations across two batches, all caught.** Two survived their first
+sweep and both were real: the reconnect above, and a recovery test whose clock
+advanced by exactly one interval per loop, so the arithmetic agreed with the bug
+it was meant to catch. That is the third time in two sessions a deliberately
+written test could not have failed.
+
+## 2026-08-07: The confirming read was reading the wrong thing, and the wall parked
+
+<!-- prawduct: chunks=12 | status=shipped | scope=v1-build -->
+
+**Why:** the entry below added a confirming read for selections, verified it
+against a dark set, and shipped it. The first pass with the set in **art mode**
+showed what that verification could not: `get_current` does not describe the wall,
+so every real rotation was reported as a failure and the wall stopped on one
+picture.
+
+**What the hardware said.** `get_current_artwork` reports the *art-store slot* —
+its replies carry `"content_type": "artstore"` — and it named the same id,
+`SAM-F0222`, across every observation ever made against this set, in all three
+states, before and after selections that visibly changed the picture. Measured in
+art mode: the wall changed to the requested image, `image_selected` fired at
++1.04 s with `is_shown: "Yes"`, and 37 seconds of polling `get_current` never
+moved. `get_slideshow_status.current_content_id` is empty while the slideshow is
+off, which is the state this plane requires, so it is not an alternative. **There
+is no reader on this firmware that answers "what is on the wall".**
+
+**Why the dark-state verification could not catch it.** In the dark state the
+wrong read *agrees with the failure* — it reports a wall that is not changing,
+because it never changes. The one state it was tested in is precisely the one
+where a value that means nothing and a value that means everything are
+indistinguishable. The consequence in the room: the cursor only advances on a
+confirmed show, so the daemon re-selected the same work on every backoff step and
+the wall held one picture.
+
+**What changed.** Confirmation is the set's own `image_selected` announcement,
+which carries both halves the question needs — which image, and `is_shown` — and
+which does not fire at all in the dark state, so it still catches the defect the
+entry below found. Because it is *pushed*, **asking and confirming became one
+operation** at the television seam (`show(content_id) -> bool`): a listener
+registered after the request races an answer measured arriving in 0.49 s, and the
+old two-call shape is what forced confirmation to be a poll after the fact.
+`select_image` and `current_content_id` left the `TvClient` interface; the daemon
+no longer owns a confirmation window.
+
+A redundant selection is announced too, so the restart path that re-shows the
+current picture confirms normally rather than reporting every restart as a stuck
+wall — measured, because that path would otherwise have been the next thing to
+break.
+
+**The live pass then completed, and Chunk 12's three acceptance criteria are met
+on the real set.** Three unattended rotations at the manifest's 180 s — Calder →
+Hokusai → Klee, intervals 182 s and 181 s — each confirmed against the set and
+each matching what the operator saw with their own eyes; the third with the
+curation plane stopped; then a restart that re-showed the same picture without
+moving the wall and carried on to the next work. Brightness was set from the
+solar angle and the whole run logged five INFO lines and no WARNING or ERROR.
+The theme's uploads — 39 of them, one per pass as designed — had gone up during
+the earlier pass that afternoon, so this run had only bindings to read.
+
+**Also measured, and recorded in `samsung-tv-state-findings.md`:** art mode
+reports over the API after all — `get_artmode` answers `on`, which retires "it has
+never returned `on` here" and makes it a real discriminator, while `PowerState`
+still distinguishes only whether the panel is lit. And `ms.channel.timeOut` was
+seen **in art mode**, after ~20 connect/close cycles and a SIGKILLed daemon that
+never closed its socket; it is a connection-slot symptom, not the art-mode
+signature two artifacts described. How many art-channel clients the set allows is
+unquantified and matters for a Pi running `Restart=always`.
+
+**Eight mutations, all caught** — including the arm-before-send ordering and the
+`is_shown` check. One survived the first sweep: a duplicate announcement resolving
+an already-resolved waiter, which would raise on the library's reader task and
+silently end every future confirmation. Covered, then re-swept.
+
+## 2026-08-07: The television takes selections and displays none of them
+
+<!-- prawduct: chunks=12 | status=shipped | scope=v1-build -->
+
+**Why:** the display plane met a real television for the first time, and the very
+first pass reported showing a work the wall was not showing.
+
+**What the hardware said.** With the set dark — `PowerState: standby`, art mode
+`off` — `select_image` is accepted, raises nothing, emits none of the three
+art-mode events, and changes nothing, indefinitely. Everything else in a rotation
+works: the art channel opens in 2.4 s, and uploads, deletions, listings and
+brightness all succeed. The one failure a return value cannot carry was the one
+the daemon trusted a return value for, and it is the everyday condition of a set
+somebody switched off rather than an edge case.
+
+**What changed.** A selection is confirmed by reading back what the set says it
+displays — the argument `remove()` already made, that reading state beats
+believing a reply. "The set took it and displayed nothing" became its own outcome
+rather than a failure to show one work, because the two want opposite responses:
+a missing render means try the next work; a wall displaying nothing means try
+none of them. Nothing is recorded as having been on the wall, the place in the
+rotation is given back, a `show_now` is left unconsumed by the rule that already
+survives an outage, and it is said once with the set's own art-mode flag, then
+again on recovery.
+
+**A defect introduced and caught in the same session.** Leaving the pin
+unconsumed removed the only brake on the directive path, which has no timer where
+rotation does — a select plus a confirming read every poll, all night. It backs
+off now on the ladder an unreachable set already uses. Found by scrubbing the
+diff, not by a test failing.
+
+**The state map is new.** `samsung-tv-state-findings.md` records which call works
+in which state, because the library's vocabulary misleads: `on()` and
+`in_artmode()` both derive from REST `PowerState`, which says only whether the
+panel is lit — the television state and art mode both report `on`. It retires a
+claim this repo carried in two places (that standby refuses the handshake), and
+it is honest about the gap that matters: **art mode has never been observed over
+the API on this set**, `get_artmode` having answered `off` every time it has been
+asked. The confirming read is proven to catch a dark wall and has never been seen
+agreeing on a healthy one.
+
+**Also settled by measurement:** the set advertises a brightness range of 0–10
+and accepts −4, reading it straight back — so `TV_MIN_BRIGHTNESS=-4`, carried
+forward from the 2024 plane on faith, is correct. And the dark state cannot be
+left in software: `set_artmode('on')` returns cleanly and does nothing, and
+Wake-on-LAN to the advertised MAC has no effect on a set reporting `networkType:
+wired`.
+
+**Critic:** 1 blocking, 13 warnings, 10 notes. The blocking one was right — the
+two new methods sit in the one module with no double beneath it and no test
+reached them; nine tests now do. The reviewers independently found the retry
+flood, judging the commit before its fix. Chunk 12 remains open: the live pass
+still needs art mode, and that is now the first thing to watch.
+
+The composition root also got its first tests. `__main__.py` has two refusals to
+start — a missing deployment value and a store written by a newer plane — and
+both are read by somebody at a terminal, so both owe a non-zero exit, a sentence
+on stderr and no traceback. A third holds that anything *other* than those two
+keeps its traceback, because a bug wearing the same tidy two-line exit would send
+whoever read it to the wrong file.
+
+**Tests:** 150 / 1925 / 159. Nineteen mutations swept across four sweeps, all
+caught — two only after the sweep exposed tests passing by coincidence, and one
+after a second review round found the rotation half of the wall backoff
+undefended while the directive half was covered.
+
+## 2026-08-06: Two checks that reported on measurements they never took
+
+<!-- prawduct: scope=v1-build -->
+
+**Why:** The live `tv_api_check.py` run that cleared the 2026-08-06 dependency
+bump passed nine checks and failed none, and two of those nine had measured
+nothing. Neither said so. That is the fault worth naming above either bug: a
+check whose "cannot tell" and "all clear" print the same line is worse than no
+check, because it retires the question.
+
+**The panel-size check was comparing `None` on every run since it was written.**
+It read `modelName` from the art client's `get_device_info()`, which returns the
+*art channel's* payload — `current_rotation_status`, `support_brightness_sensor`,
+`resolution_type`, no `device` key at all. The `{"device": {"modelName": …}}`
+shape belongs to the REST endpoint at `/api/v2/`, a different endpoint over a
+different protocol. So the model was always `None`, `disagreement(None, …)`
+returned `None`, and the check took its "neither side stated one" branch and
+reported `ok`. It exists because a live deployment ran `TV_PANEL_DIAGONAL_INCHES=42`
+against a 50" panel and mis-sized every judgement about whether a work belonged on
+the wall — and `.env.example` ships that 42, so the misconfiguration it guards
+against is the one a fresh clone starts in. The guard worked; nothing reached it.
+
+The model now comes from `samsungtvws.rest.SamsungTVRest.rest_device_info()`, the
+public synchronous client for that endpoint, and the note reports `modelName`
+beside the `24_`-prefixed model year — the field the token handshake actually
+turns on, which the comment beside it had asked for and the code had never
+supplied.
+
+**The structural half is `panel_check.not_compared()`**, and it is what stops the
+next one. `disagreement()` is quiet in three unrelated states — the set named no
+size, the deployment configured none, the two agree — and any caller reading only
+that answer must either report a pass for all three or invent the distinction
+itself. Now one function says whether a comparison was possible and the other
+says how it came out; a caller that reports a pass without asking the first is
+claiming a measurement it did not take. The tool prints three outcomes where it
+printed two, and `not compared` names which side said nothing. An unset diagonal
+says the built-in default is in use and unchecked, rather than "not set", which
+reads as harmless and is not.
+
+**The callback check could not name the event it was registered for**, and its
+output looked as though it had. The library selects a callback by the *sub*-event
+inside the message (`self.callbacks[sub_event]`) and invokes it with the *outer*
+websocket message type, so all three art-channel callbacks are called with
+`event="d2d_service_message"`. The recorder appended that first argument, so
+every run reported the same constant whichever event fired — and the 2026-08-06
+operator note read it at face value and concluded that *nothing* fired, a claim
+its own "0 failed" line contradicted, since the check fails when none do. The
+recorder now captures its trigger in a closure at registration. That is exact
+precisely because selection is by sub-event.
+
+**Six mutations of the new branches, all caught**; three suites green (150 / 134
+/ 1925). The library's argument-order trap is written into
+`platform-and-dependency-findings.md` rather than only fixed, because the display
+plane registers no callback yet and is the next thing that will.
+
+**`tv_api_check.py` still has no unit tests and still cannot have them here** —
+it imports `samsungtvws`, which the root project deliberately does not install.
+The decision that could be moved was moved: `panel_check` is importable by the
+root suite and now carries both halves of the panel question. The two call-site
+fixes were driven against the payloads the live run captured — fed the art
+channel's, the panel line reads `not compared`; fed the REST payload against 42,
+it fails with the full 104.9-against-88.1 warning — and the next run on the set is
+what confirms them against a television.
+
+## 2026-08-06: The display plane exists — and the guard that could not be written until it did
+
+<!-- prawduct: chunks=12 | status=shipped | scope=v1-build -->
+
+**Why:** Chunk 12. The wall is still driven by `tvart.py`; this is the plane that
+replaces it — poll the manifest, keep the television holding what the manifest
+lists, rotate over it, and execute the directives a curator's `next` and
+`show_now` ride in on. **The chunk is not closed**: its acceptance calls for a
+live pass on the Pi, and the television has been in standby all session.
+Everything below is verified against a double.
+
+**`tests/preferences/test_plane_isolation.py` finally exists**, and its
+sequencing was the point rather than an accident of scheduling. The norm index
+named that path as a live `Test` mechanism for three sessions while no such file
+had ever existed; the correction that caught it also said why it could not be
+written yet — a check over an empty package passes vacuously — and why it must
+not wait, since the window in which display code exists unguarded is exactly the
+window in which "just fetch the label text live" gets written and passes every
+test. So it landed in the same commit as the plane's first modules. It follows
+imports **transitively through this repository's own files**, which is the
+difference between a guard and a formality: a direct-only check is evaded by one
+shared helper, and the helper is where the import would actually land.
+Third-party packages are deliberately not followed, and that is what makes the
+television exemption structural — `samsungtvws` drags `aiohttp` in behind it, and
+neither is display's import to answer for. Both halves were driven red on purpose
+against the real tree before being trusted.
+
+**Four things were settled at build that the artifacts had left open.**
+
+*A restart re-shows the picture that is already up, rather than advancing.* The
+acceptance criterion says a restart must neither re-execute the last directive
+nor lose its place, and the first implementation read that as "resume after the
+last work" — which advances the wall every time the unit bounces. Under
+`Restart=always` that turns a crash loop into a strobing wall, which is much
+worse than the alternative it was avoiding. Re-selecting what is showing is
+idempotent and invisible; the place is kept because the *next* step is the work
+after it. A `sync` mid-interval takes the opposite branch, because a running
+process holding its place in memory would otherwise be handed a second full
+interval on every catalogue edit.
+
+*A directive is consumed after the attempt, never before.* Every path that acts
+on one can find the television asleep, and a sequence marked acted-on during an
+outage is a `show_now` the curator never gets — the manifest does not change, so
+nothing would ever present it again. An attempt that *completes* and shows
+nothing, such as a pin whose render is missing, is still an attempt and is
+consumed; retrying that one every second fills the journal with a failure that
+will not change until a file appears. Both halves are now in `api-contract.md`
+§ How `art_display` reaches the display plane, which is where the question was
+parked.
+
+*Uploads are carried one per pass rather than done in a batch on adoption.* A
+fresh install has an empty binding table and a theme of forty works at the better
+part of ten seconds each. Uploading them all before the first `select_image`
+leaves the wall on yesterday's picture for five minutes — and leaves a curator
+pressing "next" with nothing happening for five minutes, against a poll interval
+that is one second precisely because that wait is the one the product may not
+have.
+
+*The e-paper panel's geometry became configuration*, `EPD_PANEL_WIDTH_PX` and
+`EPD_PANEL_HEIGHT_PX`, defaulting to the reference 1448×1072. It was a number in
+prose, which is the standing the television's geometry had before it was hoisted,
+and `operational-spec.md`'s own rule that nothing may hardcode either panel's
+size reaches this one too.
+
+**The television's two known lies are corrected at the seam and nowhere else.**
+`upload()` reports failure on uploads that succeeded, and `delete_list()` never
+reads its reply — so an upload is attributed by reading the set's own listing
+back (the `image_date` this request stamped, plus a before-snapshot, because
+either signal alone can be wrong), and a removal reports what the set holds
+afterwards. Everything above the seam is written against an abstract `TvClient`
+and never imports the fork, which is what keeps an unowned, four-months-static
+upstream a swap rather than a rewrite.
+
+**`display/` is a package now, and `[tool.uv] package = false` is gone.** Both of
+that setting's recorded reasons were artefacts of the empty tree: hatchling
+refuses a git-sourced direct reference unless told one is intended (one line), and
+there was no package directory to build (there is one now). It had to change,
+because `src/` layout and "never installed" cannot both hold — `python -m display`
+finds nothing on the path.
+
+The plane also brought the third `test_commands` entry, the third CI leg in
+`suites.yml`, and a guard that the new leg needs no `--ignore` set — the
+symmetric claim to the one the root leg already carried, written separately
+because the plane that will grow an opt-in group first is this one, the moment
+the e-paper panel arrives behind an optional install.
+
+**The Critic round returned 0 blocking, 17 warning, 11 note, and the warnings
+were worth having.** Four were live defects on paths a test double hides, and
+they share a shape worth naming: *work that is owed and gets attempted exactly
+once*. Reconciling the binding table against the set — which is what removes the
+legacy uploads, this chunk's stated deliverable — was reachable only on the tick
+a manifest first arrives, and that tick aborts when the set is asleep, which the
+module's own docstring says is most of them. It is now owed until it settles. Its
+three siblings: a selection the set refuses was read as an outage, so one image
+deleted from the phone app would freeze the wall on a backoff retrying a dead id
+for ever; a dropped client was abandoned without `close()`, leaking a websocket
+and its reader task per transient error on a daemon that runs for months; and a
+non-UTF-8 manifest raised `UnicodeDecodeError`, which is a `ValueError` and not an
+`OSError`, so it escaped every frame and killed the process over exactly the kind
+of malformed file that module exists to refuse.
+
+**Two were log floods, and they are not a tidiness complaint.** A theme whose
+renders are all missing walked its whole list once a second, because the rotation
+timer was stamped on success rather than on the attempt; a work the set refuses to
+accept was re-uploaded every pass, with a WARNING and a row rewritten each time.
+journald rate-limits, and the lines it drops first are the ERRORs that are this
+plane's only failure channel — a plane whose whole premise is that failure here is
+silent.
+
+**A mutation sweep ran over the plane's new branches and found what a green suite
+could not.** Twenty-nine mutations, and the survivors were the interesting part:
+one branch was *dead code* (brightness was clamped twice, so the inner clamp could
+be deleted with no test objecting), one test asserted a rule against a set that was
+already asleep — so the code under test never ran and the assertion passed for the
+wrong reason — and the last survivor was `tv/samsung.py` having **no tests at
+all**. That is the module holding every correction for the library's misreporting,
+and the daemon suite runs against a double, so nothing reached it. It has eighteen
+now, against a stubbed library: an upload that lands while reporting failure is
+found by reading the set's own listing back, and a failed call is proven to close
+the connection rather than abandon it.
+
+The sweep tool needed two changes to reach this plane at all — a `--project` flag,
+since it was hardwired to the curation root, and `-n0` made conditional on the
+project actually having xdist, which display does not and which made pytest exit 4
+and read as a broken suite.
+
+**The verify round returned one blocking finding, and it was the right one to
+catch: a security control with no test.** The clamp that stops the fork's DEBUG
+line putting the television's pairing token in the journal had one caller and no
+test, so `max`→`min` or a renamed constant would have passed the suite silently —
+against a public repository whose very first chunk existed to undo that token
+being committed. `display/tests/test_logs.py` now asserts the level *and* that the
+token does not reach the stream.
+
+**A question the operator asked about the library turned up a live defect nothing
+was looking for.** Talking through what a device-driver interface would need
+surfaced that `render_path` is `ready/{artwork_id}.jpg` and **stable across
+re-renders**: a curator changing a mat colour rewrites the bytes under an
+unchanged name, the binding still reads `uploaded`, and the television goes on
+showing the old composition indefinitely with every record in the product
+agreeing. `set_mat_color` and `regenerate` both shipped in 18B, so it is reachable
+by ordinary use. The binding now carries a `render_fingerprint` — modification
+time and size, not a hash, because the rotation reads it per entry per pass and
+hashing forty 2 MB composites a second is real I/O on an SD card to answer a
+question `stat` answers. That is `display-state.sqlite` schema 2, and it exercised
+the widening step the store was built with rather than leaving it theoretical.
+
+**Orphan removal also learned the difference between two failures that look
+alike.** A set that answers and *keeps* an image has established the state of the
+world — the outcome is already reported at WARNING — so reconciliation settles and
+the next manifest re-arms it. A set nobody could get an answer out of leaves the
+work owed, retried on a wait rather than every second. That distinction shipped
+one commit before its test, which the round caught: restoring the old value passed
+the whole suite, because nothing had ever produced a removal the set survived.
+
+The direction that conversation was actually about — abstracting the display
+device so the Samsung client becomes one driver among several — is filed as
+**#102** rather than built. The seam is already most of the way there; what does
+not generalise is the *shape* of the interface, whose upload-then-select-by-id
+contract is a Frame artifact that no other device wants.
+
 ## 2026-08-06: The small-issue sweep — eleven closed, and the two guards that were guarding a copy
 
 <!-- prawduct: scope=v1-build -->

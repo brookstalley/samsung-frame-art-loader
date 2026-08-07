@@ -21,7 +21,7 @@ set would be turned off, and then the case it was written for goes unreported to
 
 import pytest
 
-from panel_check import TOLERANCE_INCHES, disagreement, size_from_model
+from panel_check import TOLERANCE_INCHES, disagreement, not_compared, size_from_model
 
 #: The set this product is deployed against, and the string its API actually
 #: returned on 2026-08-04. The one model line the parse is verified against.
@@ -116,3 +116,57 @@ def test_the_size_is_read_from_the_start_of_the_string_not_from_anywhere_in_it()
 def test_a_lowercase_model_string_is_still_read():
     """The field is a string from a foreign API; nothing guarantees its case."""
     assert size_from_model(REAL_MODEL.lower()) == 50
+
+
+def test_a_comparison_that_can_be_made_reports_no_reason_it_could_not():
+    """The paired positive, and the only state in which a caller may report a pass."""
+    assert not_compared(REAL_MODEL, 50.0) is None
+    assert not_compared(REAL_MODEL, 42.0) is None, "a disagreement is still a comparison"
+
+
+@pytest.mark.parametrize(
+    "model, configured, expected_in_reason",
+    [
+        (None, 42.0, "no model name was read"),
+        ("", 42.0, "no model name was read"),
+        ("not a samsung model string", 42.0, "not a samsung model string"),
+        (REAL_MODEL, None, "TV_PANEL_DIAGONAL_INCHES is not set"),
+    ],
+)
+def test_every_quiet_state_that_is_not_an_agreement_says_why(model, configured, expected_in_reason):
+    """The silent pass this pairing exists to stop, one state at a time.
+
+    Each of these makes `disagreement` return None for a reason that has nothing
+    to do with the two sides agreeing. A caller reading only that answer reports
+    a satisfied check over a measurement it never took — which is exactly what a
+    live run did, for every call, while the model name it was comparing came
+    from a payload that has never carried one.
+    """
+    assert disagreement(model, configured) is None, "the state under test is a quiet one"
+
+    reason = not_compared(model, configured)
+
+    assert reason is not None
+    assert expected_in_reason in reason
+
+
+def test_both_sides_missing_names_both_rather_than_the_first_it_meets():
+    """An operator who fixes only the half they were told about runs the check again for nothing."""
+    reason = not_compared(None, None)
+
+    assert "no model name was read" in reason
+    assert "TV_PANEL_DIAGONAL_INCHES is not set" in reason
+
+
+def test_an_unset_diagonal_says_the_default_is_in_use_rather_than_that_nothing_is():
+    """ "Not configured" is not "no opinion" — curation reasons at its default regardless.
+
+    The fault this module exists for is a diagonal that disagrees with the set,
+    and an unset one reaches it by a different road: the default applies, it is a
+    plausible wrong answer, and nothing has checked it against this television.
+    Saying only "not set" would read as harmless.
+    """
+    reason = not_compared(REAL_MODEL, None)
+
+    assert "built-in default" in reason
+    assert "has checked that against this set" in reason

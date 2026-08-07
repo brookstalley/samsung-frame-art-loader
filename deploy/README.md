@@ -106,8 +106,8 @@ it is deployed again:
 
 ## Before you install the current `requirements.txt` on the Pi
 
-Two pin moves are described here. This one is the more recent, and it is the one
-still owing a hardware run.
+Two pin moves are described here. This one is the more recent; both have now
+been exercised against the real television.
 
 `aiohttp` (3.9.5 → 3.14.3), `lxml` (5.2.2 → 6.1.1), `pillow` (10.4.0 → 12.3.0),
 `python-dotenv` (1.0.1 → 1.2.2) and `requests` (2.32.3 → 2.34.2) moved together on
@@ -118,14 +118,45 @@ upstream call site these modules reach still behaves — the Pillow surface, the
 was left at 4.12.3: it was the companion bump lxml 6 looked likely to force, and
 the parse was verified against 6.1.1 without it.
 
-**It has not been run against the television, and that check is owed.** `aiohttp`
-is not imported anywhere in this repo — it is the `samsungtvws` fork's transport,
-which puts this move on the same footing as the one below, and the `tv_api_check.py`
-invocation described there is what discharges it. The reason the jump was safe to
-make without hardware in hand is that `display/uv.lock` already resolves the *same*
-fork commit against aiohttp 3.14.3; that is an argument from a sibling plane's
-resolver, not a measurement on the set. `pi-freeze-2024.txt` records the pre-move
-version of all five and is the rollback.
+**It has been run against the television, and the check is discharged.**
+`aiohttp` is not imported anywhere in this repo — it is the `samsungtvws` fork's
+transport — so what was owed was a measurement on the set rather than an argument
+from a resolver. `tv_api_check.py` passed 9 checks and 0 failures against the real
+television on 2026-08-06 on `aiohttp` 3.14.3, `websockets` 16.1.1, `requests`
+2.34.2 and the pinned fork. **The display plane then drove that transport hard on
+2026-08-07** — 39 uploads, 41 deletions, brightness writes and confirmed
+selections, unattended, across several hours. `pi-freeze-2024.txt` records the
+pre-move version of all five and remains the rollback.
+
+> **Attempted on 2026-08-06 and got no further than the handshake**, which is
+> recorded so the next person does not read "owed" as "nobody has tried".
+>
+> **The diagnosis in this note was wrong, and is corrected here rather than
+> quietly deleted** (2026-08-07). It said a set in standby refuses the art
+> channel with `ms.channel.timeOut` and that `PowerState: 'on'` is the fix. With a
+> cached pairing token both channels open in standby — the art channel in 2.4 s —
+> and the whole surface works against a dark panel. `ms.channel.timeOut` has since
+> been seen with the set **in art mode and healthy**, after heavy connection churn
+> and a SIGKILLed client that never closed its socket, so it reads as a
+> concurrent-client limit rather than a power state. If you meet it, wait a couple
+> of minutes rather than reconnecting harder, and stop this plane with SIGTERM so
+> it closes its own socket.
+>
+> `PowerState` is worth reading as the cheapest thing that separates a dark panel
+> from a lit one, and this is how:
+>
+>     curl -s http://<TV_ADDRESS>:8001/api/v2/ | python3 -m json.tool | grep PowerState
+>
+> **It cannot tell art mode from somebody watching television** — it reads `on`
+> for both. Only `get_artmode` does that, over the art websocket rather than this
+> REST endpoint, which is why there is no one-liner for it here; the display
+> plane asks it before every selection.
+>
+> The bumped set was exercised as far as the wire in the process: a clean 3.12
+> interpreter carrying exactly these pins built the client, reached the set over
+> the LAN, and failed only at pairing. **Everything past the handshake is proven
+> now** — the display plane drove these pins through 39 uploads, 41 deletions and
+> confirmed selections against the real television on 2026-08-07.
 
 `samsungtvws` and `websockets` moved together on 2026-08-01 — a two-year-old fork
 SHA to fork master, and websockets 12.0 to 16.1.1, which the new library requires.

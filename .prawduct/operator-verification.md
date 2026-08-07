@@ -10,6 +10,121 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The display daemon against the wall — added 2026-08-06
+
+**Status: answered on 2026-08-07 — all three acceptance criteria met on the real
+set, and the pass found a defect on the way.** Three unattended rotations at the
+manifest's 180 s (Calder → Hokusai → Klee; intervals 182 s and 181 s), each
+matching what the operator saw with their own eyes; the third with the curation
+plane stopped; then a restart that re-showed the same picture without moving the
+wall and carried on to the next work. Items 1, 3, 4 and 5 below are settled.
+
+**What the pass found, because it is the reason this entry was worth keeping
+open.** The confirming read shipped the day before was wrong in the direction
+that stops the wall: `get_current` describes the art-store slot, not the display,
+so every real rotation read as a failure and the wall parked on one picture.
+Confirmation is now the set's own `image_selected` announcement. The read had
+been verified against a *dark* set, where it agrees with the failure because it
+never changes at all — which is why one state's worth of evidence proved nothing.
+
+**Still owed here:** item 2 (`next` / `show_now` latency, which needs the curation
+plane up), item 6 (brightness across a dusk), and item 9 (whether the five-minute
+recovery ceiling reads as broken in the room).
+
+**The television has to be in art mode, and what makes that hard to see is that
+almost everything works without it.** This paragraph previously said that a set
+in standby refuses the handshake and answers `ms.channel.timeOut`. **That is
+wrong, and it was measured wrong on 2026-08-07**: with the set dark and reporting
+`PowerState: standby`, both websocket channels opened, and uploads, deletions,
+listings, brightness and the whole of `available()` worked. The daemon ran a full
+pass against it — disabling the native slideshow, removing 41 orphans, uploading a
+work — and the only thing that failed was the picture changing.
+
+**So `PowerState` tells you whether the panel is lit and nothing more** — it
+reads `on` for art mode and for somebody watching a channel alike. **`get_artmode`
+is the discriminator**, answering `on` only in art mode, and the daemon now gates
+every selection on it. The full map is `artifacts/samsung-tv-state-findings.md`;
+read it before concluding anything is broken.
+
+The consequence for whoever runs this: the set cannot be woken over the API
+(`set_artmode('on')` returns cleanly and does nothing, and Wake-on-LAN to the
+advertised MAC has no effect), so **someone has to be at the set** to put it into
+art mode. `PowerState` is still worth reading first, as the cheapest thing that
+distinguishes a dark panel from a lit one:
+
+```sh
+curl -s http://<TV_ADDRESS>:8001/api/v2/ | python3 -m json.tool | grep PowerState
+```
+
+**What remains here is the daemon itself.** The pin bump this entry used to ask
+for first — the 2026-08-06 security work moving `aiohttp` 3.9.5 → 3.14.3 under
+the television client, backed until then only by a call-site check in a clean
+interpreter and a sibling lockfile resolving the same fork commit — **ran against
+the set on 2026-08-06 and passed 9 checks, 0 failed**, on `aiohttp` 3.14.3,
+`websockets` 16.1.1, `requests` 2.34.2 and the pinned fork. That is a measurement
+on the hardware rather than a resolver argument, and it is recorded with its
+numbers under the 2026-08-01 entry below. Rollback for the pins remains
+`deploy/pi-freeze-2024.txt`.
+
+```sh
+cd display && uv run python -m display
+```
+
+**What to watch for, each being a behaviour chosen against a plausible
+alternative:**
+
+1. **The wall rotates the active theme**, and the first picture appears in
+   seconds rather than minutes — uploads are carried one per pass precisely so
+   the wall is not blank while forty works go up.
+2. **`next` and `show_now` land within about a second.** That is the poll
+   interval's whole justification; if it feels slow, the number is wrong.
+3. **A restart neither moves the wall nor loses its place.** Stop the process and
+   start it: the same picture should still be there, and the *next* rotation
+   should go to the work after it. This one was got wrong in the first
+   implementation and is the most likely to be got wrong again.
+4. **Killing curation changes nothing.** Stop the curation plane and leave the
+   wall alone for a few rotations.
+5. **The legacy uploads are gone from the set**, and the works the manifest names
+   are the only things in the user-upload category. A fresh binding table treats
+   everything already on the television as an orphan — that is intended, and it
+   is the one step that is not reversible from here.
+6. **Brightness follows the sun.** Worth looking at across a dusk rather than at
+   one instant; the curve is ported from the 2024 plane and should not read as a
+   change to anyone living with it.
+
+**These three need a person at the set**, which is the whole reason this entry
+cannot be closed from a desk:
+
+7. **A rotation the set performs is confirmed against the set's own word.**
+   *Settled 2026-08-07.* The daemon waits for the television's `image_selected`
+   announcement — which names the image and carries `is_shown` — before claiming
+   to have shown anything, and every rotation of that pass matched what the
+   operator could see. The earlier read this entry described, `get_current`, was
+   removed: it reports the art-store slot rather than the wall, so it denied real
+   rotations and parked the wall on one picture.
+8. **Then switch the set off and leave the daemon running.** Expect exactly one
+   INFO — `the television is not in art mode; leaving the wall alone until it is`
+   — and then silence, not a line per interval. A set that is off is never asked
+   to select at all now: selecting on a lit set that is showing a *programme*
+   switches it into art mode and takes the screen off whoever is watching, so
+   nothing reaches the wall unless `get_artmode` says art mode is on.
+9. **Switch it back on, and time how long the wall takes to come back.** Expect
+   one `the television is changing what it displays again`, and the wall to
+   resume **on the work it was deferred at**, not somewhere further along the
+   theme. **Expected to be about a second, and that is the thing to check.** The
+   backoff ladder still runs to 300 s, but the set *announces* its own art-mode
+   transitions and that announcement clears the wait — so switching the panel on
+   should bring the wall back on the next poll rather than after a wait that has
+   doubled its way up. If it instead takes minutes, the announcement is not
+   arriving and the ladder is doing the work: say so, because the fix is then a
+   different one from lowering the ceiling.
+
+`artifacts/samsung-tv-state-findings.md` is the map of which call works in which
+state, and carries its own list of what is still unmeasured — what
+`select_image` does to somebody watching television, whether `KEY_POWER` lights
+the panel, and how many art-channel clients the set allows at once. If you are at
+the set anyway, those are cheap to settle and nothing else can settle them.
+
 ### The review half — the grid, its alternates, the panel — added 2026-08-05
 
 **What to look at.** The review grid reached from a finished run ("Review these
@@ -437,6 +552,17 @@ the checkout's absolute paths are machine-specific and already flagged as such i
 
 ### The samsungtvws move, against the live television — added 2026-08-01
 
+**Status: the television half is answered; the Pi half is not.** The 2026-08-06
+run reached the set and passed, so what the library does against real hardware is
+no longer an open question. It ran from a **macOS client against a hand-built
+virtualenv holding only the television-path pins** — because nothing in this repo
+installs `requirements.txt` on a Mac: that file carries `omni_epd`, `pycairo` and
+`PyGObject`, none of which build there, and the root project declares only
+`python-dotenv`, so `uv run python tv_api_check.py` fails at `import samsungtvws`.
+**So `pip install -r requirements.txt` on the Pi remains unverified**, and that is
+the half of this entry still owing. The pins are proven against the television;
+they are not proven to install on the machine that will run them.
+
 **Not visual — this one needs the hardware, not your eyes.** The library pin and
 `websockets` both moved, and every claim behind the move comes from reading
 source. What a television does is a separate question, and this is the only thing
@@ -447,6 +573,17 @@ On the Pi, with the set awake:
 ```sh
 pip install -r requirements.txt          # the new pins
 python tv_api_check.py --image "$ART_ROOT/ready/<a 4K composite>.jpg"
+```
+
+To reproduce the client-only run anywhere else, build the television-path pins
+into a throwaway environment rather than reaching for `requirements.txt`:
+
+```sh
+uv venv --python 3.12 /tmp/tvcheck && VIRTUAL_ENV=/tmp/tvcheck uv pip install \
+  "aiohttp==3.14.3" "async_timeout==4.0.3" "websockets==16.1.1" \
+  "requests==2.34.2" "python-dotenv==1.2.2" \
+  "samsungtvws @ git+https://github.com/NickWaterton/samsung-tv-ws-api.git@fe95ef1d784cd32f49bf9a07ec479576574eea07"
+/tmp/tvcheck/bin/python tv_api_check.py --image "$ART_ROOT/ready/<any real JPEG>.jpg"
 ```
 
 > **`ready/` is empty on the rebuilt card and the 2024 composites are gone with
@@ -461,19 +598,103 @@ if any check fails. Paste its output onto issue #3; the last three acceptance
 boxes there are exactly what it measures.
 
 **Four numbers worth recording from the run**, because each is an input to the
-display daemon rather than a pass/fail:
+display daemon rather than a pass/fail. **Run 2026-08-06 from a macOS client
+against the set in art mode: 9 checks, 0 failed.** What it measured:
 
-1. **How long construction blocks.** It makes a REST call and, on 2024-or-later
-   panels, a token round trip, all inside `__init__`.
-2. **Which callback events this set emits.** Three are registered:
-   `slideshow_image_changed` and `auto_rotation_image_changed` are the same
-   notion under two spellings, and the wrong one fails silently, so both go on;
-   `image_selected` is the acknowledgement of the request the script itself
-   made. The run prints whichever fired — record all of them.
-3. **The reported model and API version**, which is what the old/new verb split
-   turns on.
-4. **Upload seconds against file size**, streamed by path. The comparison against
-   the old whole-file-in-memory route is the reason the pin moved.
+1. **How long construction blocks: 4.53s**, against the tool's own 15s ceiling.
+   It makes a REST call and, on 2024-or-later panels, a token round trip, all
+   inside `__init__` — and this set is a 2024 panel, so the token trip is on the
+   path. **The daemon cannot construct a client on its event loop**; 4.5 seconds
+   of blocking I/O in an async loop stalls every other thing that loop owes,
+   including the poll interval the `next`/`show_now` responsiveness depends on.
+   A thread or an executor is a design constraint here, not a tuning choice.
+2. **Which callback events this set emits: the run could not say, and its output
+   looked as though it had.** Three are registered: `slideshow_image_changed`
+   and `auto_rotation_image_changed` are the same notion under two spellings, and
+   the wrong one fails silently, so both go on; `image_selected` is the
+   acknowledgement of the request the script itself made. The report read
+   `fired: d2d_service_message`, which **is not one of the three** — it is the
+   outer websocket message type the library passes to every art-channel callback,
+   whichever sub-event selected it. So what the run establishes is only that **at
+   least one of the three fired** within 5s of `select_image`; the check fails
+   when none do, and this run had no failures. Which one was unrecoverable from
+   the output. *(Second defect fixed in the same pass as the model one below: the
+   recorder now captures the trigger it was registered under, so a run names the
+   event. This entry originally read the output at face value and concluded that
+   nothing fired — a claim its own "0 failed" line contradicted.)*
+
+   **Nothing here disturbs the earlier instrumented finding** that only
+   `image_selected` fires, at +2.15s, and that the two rotation spellings are
+   slideshow-advance events a host-driven wall never provokes
+   (`platform-and-dependency-findings.md`). The next run is what confirms it from
+   the tool rather than from a probe.
+3. **The reported model and API version: `QN50LS03DAFXZA` (`24_PONTUSM_FTV`),
+   API `5.0.1.0`** — the new half of the verb split, so `slideshow_*`. The model
+   came from `/api/v2/` by hand, **not from the tool, which reported "model: not
+   reported" against a set that names itself perfectly well** — see the defect
+   note below.
+4. **Upload seconds against file size: 2.2 MB in 3.0s**, first byte to
+   acknowledgement, streamed by path. The comparison against the old
+   whole-file-in-memory route is the reason the pin moved.
+
+**A defect this run exposed, which is why item 3 above needed a hand check.**
+`check_identity` reads the model from `get_device_info()`, but on the async art
+client that is the *art channel's* payload — `current_rotation_status`,
+`support_brightness_sensor`, `resolution_type` and so on, with **no model and no
+`device` key at all**. The `{"device": {"modelName": …}}` shape the code destructures
+is what the *REST* endpoint returns. So `model` is always `None`, and the cost is
+not the cosmetic note: `panel_check.disagreement(None, …)` returns `None`, so the
+**panel size check silently takes its "neither side stated one" branch and passes
+without measuring anything**. That check exists because a live deployment ran 42"
+against this 50" panel and mis-sized every judgement about whether a work belonged
+on the wall — and `.env.example` still ships `TV_PANEL_DIAGONAL_INCHES=42`, so
+the misconfiguration it guards against is the one a fresh clone starts in.
+Confirmed by hand that the public `SamsungTVAsyncRest.rest_device_info()` returns
+the expected shape, and that `disagreement("QN50LS03DAFXZA", 42.0)` produces the
+full warning — the guard works; nothing was reaching it.
+
+**Fixed, in two halves, and the second is the one that generalises.** The model
+now comes from `samsungtvws.rest.SamsungTVRest.rest_device_info()` — the public
+synchronous client for the `/api/v2/` route, which is where that shape lives, at
+the configured `TV_PORT` rather than a literal (the library reads the scheme off
+the port: `https` on 8002, `http` on 8001, and both serve the route) — and the
+note reports `modelName` and the `24_`-prefixed model year
+together, since the year is what the token handshake turns on. The second half is
+that **`panel_check` now answers two questions instead of one**: `not_compared()`
+says whether a comparison was possible, and `disagreement()` says how it came
+out. A caller that reads only the second reports a pass for "they agree" and for
+"one side said nothing" alike, which is the conflation that let a check comparing
+`None` look satisfied. Driven against both captured payloads: fed the art
+channel's, the panel line now reads `[note] panel size: not compared — no model
+name was read from this television`; fed the REST payload against
+`TV_PANEL_DIAGONAL_INCHES=42`, it fails with the full 104.9-against-88.1 warning.
+(It says "was read" rather than "the television reported none" on purpose: on the
+path where the REST endpoint does not answer, nothing ever asked the set, and the
+failing `model` check above the line carries that reason.)
+
+**What that leaves for the next run on the set**, and it is small: the REST read
+itself has only been exercised against a captured payload, so the live pass
+should confirm the `model` note names the set and the `panel size` line is an
+`ok` or a `FAIL` — **never a `not compared`**. A `not compared` from a television
+that answered everything else is the same defect wearing its new name, and now it
+says so on the line rather than needing a hand check.
+
+**The art channel's payload is worth having anyway**, because two fields bear on
+the daemon: `support_brightness_sensor: "TRUE"` (the set has its own sensor,
+which the ported sun-following curve is in addition to, not instead of) and
+`current_rotation_status: 1`.
+
+> **Picked up 2026-08-07 as issue #107**, after the operator found the wall
+> reading bright on an overcast afternoon while the sun curve had it at 8–9 —
+> which is exactly the case a solar angle cannot see. `get_artmode_settings`
+> reports the sensor is switched **off** (`brightness_sensor_setting: "off"`),
+> and the library exposes `set_brightness_sensor_setting`.
+>
+> **The flag above says a sensor exists; it is not a reading.** Nothing here has
+> ever fetched an ambient *value*, which is why the first step is establishing
+> whether one can be read at all. If the sensor only drives the set's own
+> auto-brightness, the honest answer is to stop writing `set_brightness`
+> altogether rather than to blend the two — a different design, not a variant.
 
 **If it fails, the rollback is `deploy/pi-freeze-2024.txt`** and nothing else has
 changed on the Pi — the new pins only take effect on an install.

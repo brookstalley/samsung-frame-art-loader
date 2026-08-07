@@ -200,9 +200,13 @@ classification:
           than the 2,216 it measured on 2026-07-19. `operational-spec.md` re-scoped this
           exact risk the day the departure closed and this entry was not updated with
           it, so the register carried a retired factor for eight days. What remains is
-          the narrower risk that artifact names — norms with no mechanical enforcement,
-          chiefly the plane-isolation test (issue #7), unbuildable until the `display/`
-          package exists.
+          the narrower risk that artifact names — norms with no mechanical enforcement.
+          **The plane-isolation test is no longer an example of it**: it was built with
+          the display plane's first modules on 2026-08-06, checks imports transitively,
+          bans HTTP-client construction with the television websocket exempted, and
+          carries planted-violation tests proving both halves can fail. This entry said
+          it was "unbuildable until the `display/` package exists" for a day after that
+          package existed — the same lag this very entry was written to record.
 
           LEVEL DELIBERATELY HELD AT MEDIUM, and it is the owner's to lower. The
           re-scope above was owed — `operational-spec.md` had already recorded it — but
@@ -2871,7 +2875,7 @@ views_enabled: true
 # Do not hand-edit — overwritten on next regen.
 scope_rollups:
   v1-build:
-    chunks: ["01", "02", "03", "04", "05", "06", "07", "07B", "08A", "08B", "09", "10", "10B", "11", "14A", "14B", "15", "16A", "16B", "17A", "17B", "18A", "18B", "19A", "19B", "21", "22", "23"]
+    chunks: ["01", "02", "03", "04", "05", "06", "07", "07B", "08A", "08B", "09", "10", "10B", "11", "12", "14A", "14B", "15", "16A", "16B", "17A", "17B", "18A", "18B", "19A", "19B", "21", "22", "23"]
     releases: []
 
 # =============================================================================
@@ -2922,22 +2926,23 @@ coverage_required: false
 #   Whitespace-separated test trees for the coverage verifier (default:
 #   `tests`). One verifier run unions discovery across all of them.
 
-# Three independent projects, three interpreters, two suites — both of the two
-# must pass, and the hook must run the real invocations rather than its
-# `sys.executable -m pytest` default, which resolves neither. The curation plane
-# is uv-managed on its own pinned interpreter, so it is reached with `--directory`
-# (shell operators are unsupported here, and `cd` is a shell operator).
+# Three independent projects, three interpreters, three suites — all three must
+# pass, and the hook must run the real invocations rather than its
+# `sys.executable -m pytest` default, which resolves none of them. Each plane is
+# uv-managed on its own pinned interpreter, so the two under a subdirectory are
+# reached with `--directory` (shell operators are unsupported here, and `cd` is a
+# shell operator).
 #
-# The display plane is deliberately absent rather than forgotten: it holds a
-# project manifest and no module, so its pytest would collect nothing and exit 5
-# — neither a pass nor a failure. A declared command that cannot fail is worse
-# than an absent one, so its entry lands with the commit that writes its first
-# module. Same commit, same reason, as the plane-isolation test.
+# The display plane's entry landed 2026-08-06 with its first module, which is
+# when it stopped being a command that could not fail: until then its pytest
+# collected nothing and exited 5 — neither a pass nor a failure. Same commit,
+# same reason, as the plane-isolation test.
 test_commands:
   - uv run pytest tests --junit-xml={junit_xml} -q
   - uv run --directory curation pytest --junit-xml={junit_xml} -q
+  - uv run --directory display pytest --junit-xml={junit_xml} -q
 
-tests_dirs: tests curation/tests
+tests_dirs: tests curation/tests display/tests
 
 # =============================================================================
 # OPERATOR VERIFICATION (opt-in, v1.4+)

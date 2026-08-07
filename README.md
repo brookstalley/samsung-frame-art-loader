@@ -7,17 +7,23 @@ exactly one file between them:
 
 - **curation** (`curation/`, Python 3.14) — the catalogue, discovery, image
   preparation, an HTTP API and an MCP server. It writes the theme manifest.
-  **Built**, and the only plane with code in it today.
+  **Built.**
 - **display** (`display/`, Python 3.13 on the Pi; 3.12 declared floor) — polls that manifest, drives
   the TV and the e-paper panel, and keeps showing art whether or not curation is
-  running. **Not built yet:** `display/` holds a project manifest and no module,
-  so the package exists as a place for the first one to land and nothing more.
-  The root `display.py` is a 2024 module and does none of this.
+  running. **Built as of 2026-08-06, except the panel:** it reads the manifest,
+  rotates the active theme over the television, keeps its own record of what that
+  set is holding, and executes the `next` and `show_now` directives the manifest
+  carries. The e-paper label, the heartbeat and the systemd units are the next
+  chunk. The root `display.py` is a 2024 module and does none of this.
 
-**What runs the wall right now is the 2024 loader at the repository root**, and it
-does so until the display plane exists. Said plainly because a reader who takes
-the design for the state would look for a package that is not there, and because
-the manifest curation already writes has, for now, nothing on the other end of it.
+**What runs the wall day to day is still the 2024 loader at the repository root.**
+The new display plane has now driven the real television — on 2026-08-07 it
+rotated a theme unattended, confirmed every picture against the set, survived a
+restart without moving the wall, and kept going with the curation plane stopped.
+It did so **from a development Mac, not from the Pi**, so what is proven is the
+plane's behaviour against real hardware rather than the deployment: the systemd
+units, the panel and the Pi itself are the next chunk, and that is the cutover.
+Take the plane as working and not yet deployed.
 
 ## Where things are written down
 

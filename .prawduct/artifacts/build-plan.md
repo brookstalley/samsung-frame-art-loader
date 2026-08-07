@@ -18,7 +18,7 @@ depends_on:
 governed_by:
   - artifact: architecture
     dispositions:
-      - "the theme manifest file is the only channel from curation to display → conforms: every display chunk reads the manifest and image tree only; interactive commands ride the manifest's directive block (the recorded R-17 decision); issue #7's plane-isolation test lands in Chunk 12 (moved from 11 on 2026-08-01 — it checks the `display/` package, which Chunk 12 is the one to create) and enforces it mechanically from there. Until then the norm is Critic-enforced, which is what `project-preferences.md` now says; it previously named the test as though it already existed"
+      - "the theme manifest file is the only channel from curation to display → conforms: every display chunk reads the manifest and image tree only; interactive commands ride the manifest's directive block (the recorded R-17 decision); issue #7's plane-isolation test landed 2026-08-06 with the display plane's first modules and **enforces it mechanically now** — `tests/preferences/test_plane_isolation.py`, imports resolved transitively, HTTP-client construction banned with the television websocket exempted, planted violations proving both halves can fail. `project-preferences.md`'s enforcement column moved from Critic back to Test naming that file"
       - "operation logic lives only in the service layer; MCP tools and HTTP handlers are thin bindings → conforms: Chunk 07 establishes the registry/handler split as a directory boundary before any tool exists, and every later surface chunk binds service methods only; registry generation carries no per-tool logic"
   - artifact: nonfunctional-requirements
     dispositions:
@@ -130,7 +130,7 @@ re-created the same silence one line further down.
 - [x] Chunk 05: Replace the samsungtvws pin, verified on hardware (issue #3)
 - [x] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
-- [ ] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
+- [x] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
@@ -445,6 +445,67 @@ targets unmutated first and refuses to sweep unless they run and pass. **Chunk 2
 recorded acceptance was reached the same way and was re-swept rather than assumed —
 all fourteen caught.** A vacuous proof and a false claim are different faults, and
 that one was the first.
+
+**Chunk 12 is built and is deliberately NOT checked off (2026-08-06).** The
+display plane exists — manifest polling and version refusal, host-driven
+rotation, `TvBinding` in `display-state.sqlite`, directive semantics, orphan
+removal, the sun-position brightness port, and the television behind an abstract
+interface — with a suite of its own, all three planes green, and lint clean.
+**What is missing is the half no double can supply**: the acceptance criteria
+call for a live pass on the Pi, and the television was in standby for the whole
+session, so not one line of this has spoken to a set. The chunk stays open until
+it has; `operator-verification.md` carries what to run.
+
+**It spoke to a set on 2026-08-07, and the first thing it found was a defect no
+double could have produced.** The daemon ran a full pass against the real
+television from the dev Mac — native slideshow disabled, 41 legacy orphans
+removed, brightness set from the solar angle, a work uploaded and selected — and
+reported `showing Blue Half Circle` at a wall that was still displaying an
+art-store image. **The set was dark, and in that state `select_image` is accepted
+and ignored**: no error, no event, no change, indefinitely, while every other
+call in a rotation succeeds. So a selection is now confirmed against the set
+rather than assumed, and "the wall did not change" is its own outcome — the pass
+ends rather than walking the theme, the place is given back, the `show_now` stays
+unconsumed by the same rule an outage leaves it unconsumed, and it is said once
+with the set's own art-mode flag rather than once per interval.
+
+**This also retired a claim this plan and `operator-verification.md` both
+carried** — that standby is the failure state where the art channel answers
+`ms.channel.timeOut`. It is not: both websocket channels open, and `PowerState`
+reports whether the panel is lit and nothing more. (`ms.channel.timeOut` has since
+been seen *in art mode*, after heavy connection churn and a SIGKILLed daemon; it
+is a connection-slot symptom, not a state signature.) The state map is
+`samsung-tv-state-findings.md`, written from measurement.
+
+**The wall was watched in art mode on 2026-08-07 and the confirming read was
+wrong**, in the direction that stops the wall: `get_current` reports the
+art-store slot, so every real rotation read as a failure and the wall parked on
+one picture. Confirmation moved to the set's own `image_selected` announcement,
+and the live pass then completed — three unattended rotations at the manifest's
+180 s (Calder → Hokusai → Klee), each matching what the operator saw; the third
+with curation stopped; and a restart that re-showed the same picture and then
+carried on to the next work. **Chunk 12's three acceptance criteria are met on
+the real television.**
+
+`tests/preferences/test_plane_isolation.py` landed with the plane's first modules,
+which closes the two-session-old finding that the norm index named an enforcement
+artifact that had never existed — and the row in `project-preferences.md` moves
+back from Critic to Test naming it. The other deliverable that had been waiting on
+the same event landed too: the third `test_commands` entry, the third CI leg, and
+the guard that the new leg needs no `--ignore` set.
+
+Four things were settled at build and recorded where their rules live: a **restart
+re-shows the picture already on the wall** rather than advancing, because
+`Restart=always` would otherwise turn a crash loop into a strobing wall; a
+**directive is consumed after the attempt, never before**, so an outage delays a
+jump instead of eating it (`api-contract.md`); **uploads are carried one per pass**
+rather than batched on adoption, because a forty-work theme at ten seconds an
+upload would blank the wall for five minutes against a one-second poll interval;
+and the **e-paper panel's geometry became configuration** (`operational-spec.md`).
+Two artifacts were corrected against what the build proved rather than left to
+drift — `TvBinding.tv_content_id` could not be `required` while a `failed` row
+exists to have no id, and `display-state.sqlite` does not persist brightness
+because a stored copy could only ever be stale.
 
 ## Scaffolding
 
@@ -1500,7 +1561,8 @@ two missing deliverables.)*
   > from the 41 legacy `tv_content_id` values in `all.json`, so that a fresh empty
   > table would not re-upload 41 images and orphan the set already on the
   > television. **Its premise no longer holds.** The 2024 renders those uploads
-  > were made from are gone from the art tree — `ready/` holds exactly one file —
+  > were made from are gone from the art tree — the ready directory under the art
+  > root held exactly one file when this was written —
   > and seeding only ever recorded a 2024 render as a work's television rendition
   > when that file was present, so 39 of 40 accepted works have no television
   > rendition at all and the one that does was composed by the current pipeline
@@ -1508,7 +1570,8 @@ two missing deliverables.)*
   > that is **not** the render its manifest entry names: the wall would show the
   > 2024 composition while the catalogue recorded the current one as displayed.
   > No join survives either — the legacy index addresses works by source URL and
-  > by `ready/{stem}_r{resize}.jpg`, and neither reaches a manifest whose entries
+  > by the 2024 render naming, which suffixed each source stem with its resize
+  > width, and neither reaches a manifest whose entries
   > carry an artwork id and a UUID-named render path.
   >
   > So the mass upload the deliverable existed to avoid is the correct behaviour:
@@ -1519,9 +1582,56 @@ two missing deliverables.)*
   persistence/coalescing/regression, binding state machine (TV faked at its
   interface, built after Chunk 05's verified shapes); orphan removal — an upload
   the binding table does not account for is removed, and a work the manifest
-  still names is never removed; hardware — a live pass on the Pi: the theme
-  reaches the wall, `next`/`show_now` land within the poll interval, a deleted
-  render file skips with a WARNING and rotation continues
+  still names is never removed; **a set that takes selections and displays none
+  of them** — not reported as shown, not recorded as on the wall, the pass ended
+  rather than the theme walked, the place given back, the directive left
+  unconsumed, and said once rather than once an interval; hardware — a live pass
+  on the Pi: the theme reaches the wall, `next`/`show_now` land within the poll
+  interval, a deleted render file skips with a WARNING and rotation continues
+
+  **What the live pass actually covered, stated precisely** (2026-08-07), because
+  "the hardware pass is done" is easy to read as more than it is. It ran **from
+  the development Mac against the real television**, not from the Pi: the theme
+  reached the wall, rotation and restart and curation-independence were all
+  observed. **Three things in the line above remain unobserved** — `next` and
+  `show_now` landing within the poll interval, a deleted render skipping with a
+  WARNING while rotation continues, and anything at all running on the Pi. The
+  first two are cheap and are in `operator-verification.md`; the third is Chunk
+  13's, which is where the Pi, the units and the panel arrive. So this chunk is
+  proven against real hardware and **not** proven as a deployment.
+
+  **The selection-confirmation half arrived from the hardware, on 2026-08-07, and
+  is the reason this chunk was worth holding open.** Every unit test passed
+  against a double that could not express the failure: a real television with its
+  panel dark accepts `select_image`, raises nothing, emits none of the three
+  art-mode events and goes on displaying what it had, while uploads, deletions,
+  listings and brightness all succeed. The daemon reported `showing X` at a wall
+  that never changed — the 2024 defect class this plane made impossible for
+  uploads and had left open for selection. `samsung-tv-state-findings.md` records
+  which call works in which state; `architecture.md` § Failure Modes carries the
+  rule; the double can now be armed with the behaviour, which is what makes the
+  tests above possible at all.
+
+  **The first pass in art mode, on 2026-08-07, then found the confirmation itself
+  wrong — and this is the finding to carry past this chunk.** `get_current` was
+  adopted as the confirming read the day before and had been *verified against a
+  dark set*, where it agrees with the failure because it never changes at all. It
+  reports the art-store slot: it named one `SAM-*` id across every observation
+  ever made here while the wall visibly changed underneath it. So the mechanism
+  built to stop the daemon claiming rotations it had not performed instead denied
+  every rotation it *had* — and because the cursor only advances on a confirmed
+  show, the wall parked on one picture and re-selected it on every backoff step.
+  Confirmation is now the set's own `image_selected` announcement, which carries
+  the id and `is_shown` and does not fire at all in the dark state; selecting and
+  confirming became one operation at the seam, because an event measured arriving
+  in half a second cannot be listened for after the request that causes it.
+
+  **Both defects were invisible to nine passing suites and to two Critic rounds,
+  and each was found only by the next state of real hardware.** The first needed a
+  dark set, the second needed a lit one. The generalisable part is not "test
+  against hardware" but that **a double encodes what you already believe**, so the
+  states you have not been in are exactly the ones it cannot model — and that a
+  read verified in one state can be pure coincidence in that state.
 - **Acceptance criteria:** the wall rotates the active theme from the new
   daemon; killing curation changes nothing about display's behaviour; a display
   restart neither re-executes the last directive nor loses its place
@@ -1532,6 +1642,23 @@ two missing deliverables.)*
 
 ### Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
 
+- **Inherits three things from the display plane's first chunk**, written here so
+  a deferral does not quietly become a drop:
+  1. **Collapse the repeated report-once shape.** The daemon holds three
+     `report / recover / clear` episodes (unavailable, wall-unchanged, wall-not-
+     ours) and two doubling ladders with identical bounds, each arrived at one
+     commit at a time and only rhyming when read whole. **The panel and the
+     heartbeat want a fourth episode of the same shape**, so collapsing them is
+     cheapest inside a commit that is being made anyway.
+  2. **The television seam keeps ONE handler per event, not a list.** A label that
+     subscribes to `image_selected` *replaces* the selection-confirmation handler
+     and every rotation then reports a wall that will not move, silently, while
+     the label works perfectly. Fan out from the existing handler; issue **#106**
+     carries the design.
+  3. **Write the `verify-api` step this plan owes.** Chunk 12 is the only
+     Foreign-API chunk whose Done-when never carried one — the substance was done
+     and recorded in `samsung-tv-state-findings.md`, but the step was missing, and
+     this chunk is the next to touch that API.
 - **Carries a decision trigger.** The IT8951 pin-or-vendor decision
   (`project-state.yaml` → `technical_decisions.operational`) was unblocked on
   2026-08-04 and deliberately left un-taken, with this chunk named as when to take
@@ -1554,6 +1681,14 @@ two missing deliverables.)*
   display plane. Cutover: the Pi runs the two new units; `tvart.py` stops being
   the production entry point (legacy files remain until Chunk 20).
 - **Depends on:** Chunk 12; Chunk 04 (panel stack installs under uv)
+- **Carries a number the unit must not be written without.** `TimeoutStopSec`
+  has to clear this daemon's worst-case pass, which is a television connection
+  attempt: roughly 15 s of blocking construction plus the 30 s art-channel
+  ceiling. A SIGTERM landing inside one is honoured when that pass ends, not
+  during it — measured at ~22 s against a sleeping set on 2026-08-06, with ~45 s
+  the worst case. systemd's 90 s default clears it, so this is a note against
+  *shortening* it: a unit that SIGKILLs the process leaves the set holding a
+  half-open art channel until it times out on its own side.
 - **Artifacts consumed:** `observability-strategy.md` § The Health Surface,
   `operational-spec.md` § Process Management, `nonfunctional-requirements.md`
   § Output Quality (label legibility) and Performance (15 s label budget),
