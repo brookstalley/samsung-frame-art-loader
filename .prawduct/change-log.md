@@ -88,6 +88,20 @@ Test evidence recorded across all three suites — **2261 passed, 0 failed** —
 also closes a review finding that no run covered this tree. Four mutations on the
 new branches, all caught.
 
+**A follow-up retired that same claim everywhere else it was written**, which is
+the part worth recording: correcting it in one artifact left it standing in two
+module docstrings and — the one that matters — in the error message a person
+actually reads. The connect timeout used to tell them the set was "most likely not
+in art mode", sending them to the remote control for a fault that clears by
+waiting. It now says what has been observed instead. **This is the repo's own
+learning ("retiring a claim is a repo-wide grep, not a local edit") missed on the
+very commit that added a learning**, which is a fair measure of how easily a
+correction stops at the first file. The contract test moved with the message
+rather than being relaxed: equally specific, asserting the remedy instead of the
+wrong diagnosis. `except BaseException` in the daemon's supervisor was narrowed to
+`Exception` in the same pass — a cancellation is a shutdown, not a crash, and
+reporting one at ERROR would invert the defect that handler exists to fix.
+
 ## 2026-08-07: The wall takes the television from whoever is watching it
 
 <!-- prawduct: chunks=12 | scope=v1-build -->
