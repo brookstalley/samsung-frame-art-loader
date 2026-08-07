@@ -1642,6 +1642,23 @@ two missing deliverables.)*
 
 ### Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
 
+- **Inherits three things from the display plane's first chunk**, written here so
+  a deferral does not quietly become a drop:
+  1. **Collapse the repeated report-once shape.** The daemon holds three
+     `report / recover / clear` episodes (unavailable, wall-unchanged, wall-not-
+     ours) and two doubling ladders with identical bounds, each arrived at one
+     commit at a time and only rhyming when read whole. **The panel and the
+     heartbeat want a fourth episode of the same shape**, so collapsing them is
+     cheapest inside a commit that is being made anyway.
+  2. **The television seam keeps ONE handler per event, not a list.** A label that
+     subscribes to `image_selected` *replaces* the selection-confirmation handler
+     and every rotation then reports a wall that will not move, silently, while
+     the label works perfectly. Fan out from the existing handler; issue **#106**
+     carries the design.
+  3. **Write the `verify-api` step this plan owes.** Chunk 12 is the only
+     Foreign-API chunk whose Done-when never carried one — the substance was done
+     and recorded in `samsung-tv-state-findings.md`, but the step was missing, and
+     this chunk is the next to touch that API.
 - **Carries a decision trigger.** The IT8951 pin-or-vendor decision
   (`project-state.yaml` → `technical_decisions.operational`) was unblocked on
   2026-08-04 and deliberately left un-taken, with this chunk named as when to take

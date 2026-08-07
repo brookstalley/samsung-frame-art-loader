@@ -142,16 +142,21 @@ pre-move version of all five and remains the rollback.
 > of minutes rather than reconnecting harder, and stop this plane with SIGTERM so
 > it closes its own socket.
 >
-> `PowerState` is still worth reading — it is the cheapest thing that separates a
-> dark panel from a lit one — but it does **not** distinguish art mode from
-> somebody watching television, and `get_artmode` is what does:
+> `PowerState` is worth reading as the cheapest thing that separates a dark panel
+> from a lit one, and this is how:
 >
 >     curl -s http://<TV_ADDRESS>:8001/api/v2/ | python3 -m json.tool | grep PowerState
 >
+> **It cannot tell art mode from somebody watching television** — it reads `on`
+> for both. Only `get_artmode` does that, over the art websocket rather than this
+> REST endpoint, which is why there is no one-liner for it here; the display
+> plane asks it before every selection.
+>
 > The bumped set was exercised as far as the wire in the process: a clean 3.12
 > interpreter carrying exactly these pins built the client, reached the set over
-> the LAN, and failed only at pairing. What remains unproven is everything past
-> the handshake — upload, select and confirmed delete.
+> the LAN, and failed only at pairing. **Everything past the handshake is proven
+> now** — the display plane drove these pins through 39 uploads, 41 deletions and
+> confirmed selections against the real television on 2026-08-07.
 
 `samsungtvws` and `websockets` moved together on 2026-08-01 — a two-year-old fork
 SHA to fork master, and websockets 12.0 to 16.1.1, which the new library requires.

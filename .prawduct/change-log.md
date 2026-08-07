@@ -84,7 +84,8 @@ unbuildable. And `deploy/README.md` still owed a hardware run for the aiohttp
 bump, which had been done on 2026-08-06 (9 checks, 0 failed) and which this branch
 then drove through 39 uploads and 41 deletions.
 
-Test evidence recorded across all three suites — **2261 passed, 0 failed** — which
+Test evidence recorded across all three suites — **2261 passed, 0 failed** at that
+commit, 2266 by the tip as later commits added tests — which
 also closes a review finding that no run covered this tree. Four mutations on the
 new branches, all caught.
 
