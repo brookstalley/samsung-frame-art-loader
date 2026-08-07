@@ -96,9 +96,17 @@ reason this entry cannot be closed from a desk:
    WARNING — `the television accepted … and is not displaying it; it reports art
    mode off. Rotation is deferred until the wall changes` — and then silence, not
    a line per interval.
-9. **Switch it back on.** Expect one `the television is changing what it displays
-   again`, and the wall to resume **on the work it was deferred at**, not
-   somewhere further along the theme.
+9. **Switch it back on, and time how long the wall takes to come back.** Expect
+   one `the television is changing what it displays again`, and the wall to
+   resume **on the work it was deferred at**, not somewhere further along the
+   theme. **The latency is the judgement call worth your opinion.** A set found
+   ignoring selections is backed off from on the same ladder as an unreachable
+   one — 5 seconds doubling to 300 — so after a long evening dark, the wall can
+   take up to five minutes to notice you switched it on. That is consistent with
+   what this plane already does for a television that has gone away, and it was
+   chosen over asking once a second, which against a real set is a selection and
+   a confirming read every second all night. If five minutes reads as broken in
+   the room, the ceiling is the thing to change, and say so.
 
 `artifacts/samsung-tv-state-findings.md` is the map of which call works in which
 state, and carries its own list of what is still unmeasured — the art-mode

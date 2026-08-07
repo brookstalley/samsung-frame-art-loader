@@ -377,3 +377,34 @@ async def test_a_set_that_agrees_late_is_confirmed_rather_than_failed(settings, 
     await daemon.tick()
 
     assert tv.on_the_wall.name == "w1.jpg", "a set that took a moment to agree was called a failure"
+
+
+async def test_the_backoff_starts_over_once_the_set_behaves_again(daemon: Daemon, tv: FakeTv, publish, clock):
+    """Otherwise unrelated dark spells compound.
+
+    The wait doubles while the set ignores selections, which is right for one
+    evening with the panel off. Carrying the grown wait past a recovery would
+    mean the third brief spell in a week backing off five minutes — a wall that
+    takes longer and longer to come back for no reason anyone could observe.
+    """
+    publish(["w1", "w2"], interval_seconds=1)
+    tv.displays_nothing_selected = True
+
+    await daemon.tick()  # attempt, then wait 5
+    clock.advance(5)
+    await daemon.tick()  # attempt, then wait 10
+
+    tv.displays_nothing_selected = False
+    clock.advance(10)
+    await daemon.tick()
+    assert tv.on_the_wall is not None, "the set started behaving and the wall did not come back"
+
+    tv.displays_nothing_selected = True
+    clock.advance(1)
+    await daemon.tick()  # attempt, and the wait must be the floor again
+    attempts = len(tv.selected)
+
+    clock.advance(5)
+    await daemon.tick()
+
+    assert len(tv.selected) > attempts, "the wait carried its grown value across a recovery"

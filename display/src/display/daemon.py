@@ -143,6 +143,17 @@ class Daemon:
         #: the way in and on the way out, never in between.
         self._reported_wall_unchanged = False
 
+        #: When the wall may next be asked to change, once it has been found not
+        #: changing. **Rotation has a timer and the directive path does not**, so
+        #: without this a `show_now` left unconsumed — which is the right thing to
+        #: do with a jump that never happened — would be re-asked on every poll: a
+        #: selection and a confirming read every second, all night, at a set that
+        #: will ignore both. It backs off on the same ladder as an unreachable
+        #: television, because "the set is not doing what it is told" is that same
+        #: situation arriving by a route that raises nothing.
+        self._wall_retry_not_before: float | None = None
+        self._wall_retry_seconds = settings.tv_retry_min_seconds
+
         #: Reconciling the binding table against the set is **owed until it is
         #: done**, not attempted once when a manifest lands. A new manifest is
         #: reported by the watcher on exactly one tick; if the set is asleep on
@@ -354,6 +365,13 @@ class Daemon:
             )
             return False
 
+        if not self._wall_attempt_is_due():
+            # The set has already been found taking selections and displaying
+            # none of them. The pin stays unconsumed and is tried again when the
+            # backoff is up; asking now would be the same call at the same
+            # television, once per poll, for as long as the panel stays dark.
+            return False
+
         # Rotation continues *from* the pin rather than resuming where it was, so
         # the next step is the work after the pinned one.
         self._cursor = (self._order.index(position) + 1) % len(self._order)
@@ -389,6 +407,11 @@ class Daemon:
         """
         due_after = manifest.rotation_interval_seconds
         if self._attempted_at is not None and self._clock.monotonic() - self._attempted_at < due_after:
+            return
+        if not self._wall_attempt_is_due():
+            # Gated by the same wait as a jump. The rotation interval is normally
+            # the longer of the two, so this only bites where the backoff has
+            # grown past it — a set left dark for hours.
             return
         self._attempted_at = self._clock.monotonic()
         await self._advance(manifest)
@@ -451,7 +474,9 @@ class Daemon:
 
             if not await self._wall_is_showing(content_id):
                 await self._report_wall_unchanged(content_id)
+                self._hold_off_the_wall()
                 return Shown.WALL_UNCHANGED
+            self._wall_is_answering()
 
             # Recorded only once the set is displaying it. A work written here on
             # the strength of the request alone would make a restart re-show
@@ -508,6 +533,30 @@ class Daemon:
                 return False
             await asyncio.sleep(_CONFIRM_POLL_SECONDS)
         return False
+
+    def _wall_attempt_is_due(self) -> bool:
+        """Whether the wall may be asked to change again yet.
+
+        Only ever false after an attempt the television took and did not act on.
+        A set that is behaving has no wait, so nothing here delays a rotation or a
+        jump in normal operation.
+        """
+        return self._wall_retry_not_before is None or self._clock.monotonic() >= self._wall_retry_not_before
+
+    def _hold_off_the_wall(self) -> None:
+        """Back off before asking again, and lengthen the wait each time.
+
+        Bounded by the same ceiling as a reconnection, so a night with the panel
+        off costs a handful of attempts rather than one a second — and the wall
+        resumes within that ceiling of somebody switching the set back on.
+        """
+        self._wall_retry_not_before = self._clock.monotonic() + self._wall_retry_seconds
+        self._wall_retry_seconds = min(self._wall_retry_seconds * 2, self._settings.tv_retry_max_seconds)
+
+    def _wall_is_answering(self) -> None:
+        """Forget the backoff, because the set is acting on what it is told."""
+        self._wall_retry_not_before = None
+        self._wall_retry_seconds = self._settings.tv_retry_min_seconds
 
     async def _report_wall_unchanged(self, content_id: str) -> None:
         """Say once that the set is taking selections and displaying none of them.

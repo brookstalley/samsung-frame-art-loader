@@ -243,7 +243,7 @@ async def test_the_sequence_zero_baseline_is_not_special(daemon: Daemon, publish
 
 
 async def test_a_directive_is_not_consumed_by_a_wall_that_displays_nothing(
-    daemon: Daemon, tv: FakeTv, publish, state: DisplayState
+    daemon: Daemon, tv: FakeTv, publish, state: DisplayState, clock
 ):
     """The same rule as an outage, reached by a route that raises nothing.
 
@@ -262,7 +262,36 @@ async def test_a_directive_is_not_consumed_by_a_wall_that_displays_nothing(
     assert state.last_acted_sequence == 1, "the directive was consumed against a wall that never changed"
 
     tv.displays_nothing_selected = False
+    # The wall is not re-asked instantly: a set found ignoring selections is
+    # backed off from, on the same ladder as an unreachable one, so recovery
+    # costs the current wait rather than a call per poll while it stays dark.
+    clock.advance(5)
     await daemon.tick()
 
     assert tv.on_the_wall.name == "w3.jpg", "the pin was not honoured once the wall started changing again"
     assert state.last_acted_sequence == 2
+
+
+async def test_a_pin_against_a_dark_wall_is_not_re_attempted_every_poll(daemon: Daemon, tv: FakeTv, publish, clock):
+    """The directive path has no timer of its own, and the wall being dark leaves
+    the sequence unconsumed — so nothing would stop it re-asking once a second.
+
+    That is the same defect the rotation timer exists to prevent, reached by the
+    other route: each attempt is a `select_image` plus a confirming read against a
+    television that is going to ignore both, all night, at one second apart.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+
+    tv.displays_nothing_selected = True
+    publish(["w1", "w2", "w3"], sequence=2, pinned_work_id="w3")
+    before = len(tv.selected)
+    for _ in range(10):
+        await daemon.tick()
+        clock.advance(1)
+
+    # Ten polls, and the retry floor is five seconds: two attempts, not ten. The
+    # assertion is against the *ladder* rather than a number of seconds, because
+    # what is being fixed is the cadence being the poll's.
+    attempts = len(tv.selected) - before
+    assert attempts == 2, f"the pin was attempted {attempts} times in ten one-second polls"
