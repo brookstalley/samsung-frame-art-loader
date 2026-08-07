@@ -60,23 +60,14 @@ the real system ignores you.
 **When a test drives a fake clock, choose amounts that are not multiples of the
 period the code computes against** — because a step equal to the interval makes a
 daemon that *wrongly consumed* that interval indistinguishable from one that
-correctly withheld it, and the test passes on arithmetic rather than on behaviour.
-Observed three times in two sessions: a cursor restore whose three works and three
-passes wrapped exactly back to the right answer, a backoff whose reset was never
-defended, and an art-mode recovery test whose loop advanced by exactly one
-rotation interval. Every one was written deliberately, believing it covered the
-branch; only a mutation sweep told them apart from tests that could fail.
+correctly withheld it, and the test then passes on arithmetic rather than on
+behaviour.
 
 ## A guard aimed at a named line must be verified against that line
 
-**When you clamp, filter, or redact something specific in a dependency, open the
-dependency and read the line before choosing the threshold** — because a guard
+**When you clamp, filter or redact one named line in a dependency, open the
+dependency and read that line before choosing the threshold** — because a guard
 built on a remembered level protects nothing and looks exactly like protection.
-The television client's logger was floored at INFO to stop it logging the pairing
-token, on the belief that the token was a DEBUG line; the fork logs it with
-`_LOGGING.info`, so the floor permitted the one line it existed to prevent, at the
-default level, on every pairing. The check that would have settled it was one
-grep.
 
 ## Retiring a claim is a repo-wide grep, not a local edit
 

@@ -1364,3 +1364,37 @@ without asking the first is claiming a measurement it did not take, and that is
 now visible at the call site instead of buried in one function's tri-state return.
 Sibling shape already in this log: the mutation sweep reading pytest's exit 5
 ("collected nothing") as a caught mutation.
+
+## A test that advances an injected clock must not step by a multiple of the interval under test
+
+Observed three times in two sessions, every one written deliberately in the belief
+that it covered the branch, and every one found by a mutation sweep rather than by
+reading:
+
+- A cursor-restore test using three works and three dark passes, so the rotation
+  wrapped exactly back to the right answer and the restore could be deleted with
+  nothing objecting.
+- A wall-backoff test where nothing at all defended the ladder *resetting* after
+  recovery.
+- An art-mode recovery test whose loop advanced by exactly one rotation interval,
+  so a daemon that wrongly spent the interval while the wall was not its own
+  still produced the expected picture.
+
+The fix in each case was to make the advance and the period incommensurate — a
+180 s interval stepped by 5 s, rather than a 10 s interval stepped by 10 s.
+
+## A guard aimed at a named line must be verified against that line
+
+The television client's logger was floored at INFO specifically to stop the
+`samsungtvws` fork logging the pairing token, on the belief that the token was a
+DEBUG line. The fork logs it with `_LOGGING.info("New token %s", token)`
+(`samsungtvws/connection.py:101`), so the floor permitted the exact line it
+existed to prevent — at the *default* level, on every pairing, with nobody doing
+anything unusual. The comment naming the threat and the threshold chosen to stop
+it disagreed for a day, in a public repository whose first chunk existed because
+that token had been committed once already.
+
+The check that would have settled it was one `grep token` over the installed
+package. Sibling shape already in this log: `get_current_artwork` adopted as a
+confirming read on the strength of what it was assumed to report.
+

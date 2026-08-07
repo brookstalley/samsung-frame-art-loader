@@ -8,9 +8,12 @@ what is encoded here is the *behaviour* they establish:
 * **Constructing the client performs blocking network I/O** — 0.24 s with a
   cached token, 8.4 s while pairing, ~15 s against a set that is asleep, which is
   most of the time. It cannot happen on the event loop, so it happens on a thread.
-* **`start_listening()` hangs rather than raising** when the set is not in art
-  mode, and on another attempt raised after ~15 s. Not even consistent between
-  runs, so it gets a ceiling of this plane's own.
+* **`start_listening()` can hang rather than raise**, and on another attempt
+  raised after ~15 s — not even consistent between runs, so it gets a ceiling of
+  this plane's own. **Not a symptom of art mode being off**, which is what it was
+  first taken for: with a cached token the channel opens against a dark panel and
+  against a set showing a programme. It has been seen failing *in* art mode after
+  heavy connect-and-close churn, which points at a cap on concurrent clients.
 * **`upload()` reports failure on uploads that succeeded.** The image is on the
   wall and the caller is told it is not, which is worse than a plain failure
   because it lies in the safe-looking direction: a caller that retries duplicates
@@ -170,13 +173,17 @@ class SamsungTv(TvClient):
         try:
             await asyncio.wait_for(art.start_listening(), timeout=self._connect_timeout)
         except TimeoutError as exc:
-            # The set accepted the websocket and then said nothing, which is what
-            # it does when art mode is off. Distinguished in the message because
-            # it is the one failure a person can fix by picking up the remote.
+            # The set accepted the websocket and then said nothing. **The cause is
+            # not known from here**, and the message says so rather than naming
+            # art mode: with a cached token this channel opens perfectly well
+            # against a dark panel and against a programme, and this failure has
+            # been observed *in* art mode after many connections in quick
+            # succession. Waiting is the move that has actually worked.
             await self._quietly_close(art)
             raise TvUnavailable(
                 f"the television at {self._host} accepted a connection but never opened the art channel within "
-                f"{self._connect_timeout:.0f}s; it is most likely not in art mode"
+                f"{self._connect_timeout:.0f}s; it has been seen doing this after many connections in quick "
+                "succession, and clearing after a couple of minutes' quiet"
             ) from exc
         except _LIBRARY_FAILURES as exc:
             await self._quietly_close(art)

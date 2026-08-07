@@ -287,6 +287,28 @@ async def test_a_held_back_directive_does_not_ask_the_set_once_a_second(daemon: 
     assert asked < 10, f"a pending directive asked the set {asked} times in thirty seconds"
 
 
+async def test_a_held_back_next_does_not_ask_the_set_once_a_second(daemon: Daemon, tv: FakeTv, publish, clock):
+    """The same guard, reached by `next` rather than by a pin.
+
+    Both kinds run through the same two lines, so this is defended by
+    construction — but "by construction" is what the last three defects in this
+    plane all looked like before a sweep, and a `next` carries no `pinned_work_id`
+    to make the paths obviously identical to a reader.
+    """
+    publish(["w1", "w2", "w3"], sequence=1)
+    await daemon.tick()
+
+    tv.art_mode = "off"
+    publish(["w1", "w2", "w3"], sequence=2)  # a bare `next`, no pin
+    before = tv.art_mode_reads
+    for _ in range(30):
+        await daemon.tick()
+        clock.advance(1)
+
+    asked = tv.art_mode_reads - before
+    assert asked < 10, f"a pending `next` asked the set {asked} times in thirty seconds"
+
+
 async def test_a_pin_held_back_is_delivered_when_the_set_returns_to_art_mode(
     daemon: Daemon, tv: FakeTv, publish, state: DisplayState
 ):

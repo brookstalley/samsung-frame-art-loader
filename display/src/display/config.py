@@ -84,9 +84,11 @@ DEFAULT_BRIGHTNESS_INTERVAL_SECONDS: Final[float] = 300.0
 DEFAULT_UPLOAD_TIMEOUT_SECONDS: Final[float] = 60.0
 
 #: The ceiling on opening the art channel. `start_listening()` has been observed
-#: **hanging** rather than raising when the set is not in art mode, so a caller
-#: that does not impose its own bound never returns at all — which for an
-#: unattended daemon is a wedge, not an error.
+#: **hanging** rather than raising, so a caller that does not impose its own bound
+#: never returns at all — which for an unattended daemon is a wedge, not an error.
+#: The trigger is not art mode being off, as this note once said: the channel
+#: opens against a dark panel, and the hang has been seen in art mode after many
+#: connections in quick succession.
 DEFAULT_TV_CONNECT_TIMEOUT_SECONDS: Final[float] = 30.0
 
 #: How long a work whose upload failed is left alone before it is tried again.

@@ -310,9 +310,16 @@ class TestFailureLeavesNothingBehind:
 
 
 class TestConnecting:
-    async def test_a_set_that_never_opens_the_art_channel_says_so_in_those_terms(self, tv: SamsungTv, art: StubArt, tmp_path):
-        """It is the one failure a person can fix by picking up the remote, so the
-        message names it rather than reporting a timeout."""
+    async def test_a_set_that_never_opens_the_art_channel_says_what_has_worked(self, tv: SamsungTv, art: StubArt, tmp_path):
+        """The message offers the remedy that has actually worked, not a guess.
+
+        It used to say "most likely not in art mode", which was the diagnosis this
+        repo believed until 2026-08-07 and is false: with a cached token the
+        channel opens against a dark panel and against a set showing a programme,
+        and this failure has been seen *in* art mode after many connections in
+        quick succession. Naming a cause the reader can neither confirm nor act on
+        sends them to the remote when what has cleared it is waiting.
+        """
 
         async def never_returns() -> None:
             await asyncio.sleep(10)
@@ -324,7 +331,7 @@ class TestConnecting:
         # ceiling, which is what is under test here.
         tv._construct = lambda: art  # type: ignore[method-assign]
 
-        with pytest.raises(TvUnavailable, match="art mode"):
+        with pytest.raises(TvUnavailable, match="many connections in quick succession"):
             await tv.connect()
 
         assert art.closed == 1, "the half-open connection was left behind"

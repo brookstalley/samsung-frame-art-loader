@@ -184,9 +184,12 @@ class Daemon:
             while not stop.is_set():
                 interval = await self.tick()
                 await self._wait(stop, interval)
-        except BaseException:  # noqa: BLE001 - re-raised immediately; see below
-            # prawduct:allow prawduct/broad-except -- a top-level supervisor: this
-            # records what killed an unattended process and re-raises unchanged.
+        except Exception:  # prawduct:allow prawduct/broad-except -- top-level supervisor; records and re-raises unchanged
+            # **`Exception`, not `BaseException`, and the difference is a wrong
+            # log line.** `CancelledError` and `KeyboardInterrupt` are shutdowns,
+            # not crashes; reporting one as `daemon.crashed` at ERROR would be the
+            # inverse of the defect this exists to fix. They still reach the
+            # `finally`, so the art channel is closed either way.
             #
             # **Nothing is swallowed and nothing is handled** — the exception goes
             # straight back out, so systemd still sees a failed unit and

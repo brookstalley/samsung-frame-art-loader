@@ -48,6 +48,46 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-07: The safety gate reopened the flood it was standing next to
+
+<!-- prawduct: chunks=12 | scope=v1-build -->
+
+**Why:** the art-mode gate added in the entry below went in *front* of the
+backoff on the directive path instead of behind it. Rotation reads
+`_wall_attempt_is_due()` and then asks the set; the directive path asked first,
+and its only wait-check sat downstream inside the pin branch. Since a directive
+is deliberately left unconsumed while the wall belongs to somebody else, `tick`
+re-entered every poll and put a real request to the television **once a second
+for the length of a programme** — the flood commit `f435179` was written to close,
+reopened for `next` as well as `show_now`, by a gate whose own docstring argues
+it is affordable *because* it is asked rarely.
+
+**The existing affordability test could not have caught it**: it drives rotation,
+and its directive sequence never moves. The directive-path equivalent is added,
+and both now assert against `FakeTv.art_mode_reads`.
+
+**A crash and a clean stop wrote the same line.** `daemon.stopped` at INFO was the
+entire record of an exception escaping the loop, so a wall somebody switched off
+and one falling over under `Restart=always` read identically in the journal —
+which is this plane's only failure channel. A crash now logs ERROR with a
+traceback under its own event and re-raises unchanged, so systemd still sees a
+failed unit.
+
+**Two records were wrong in ways that mattered more than staleness usually does.**
+`platform-and-dependency-findings.md` said `get_artmode()` "can only ever confirm
+the positive case", because `start_listening()` was believed to fail whenever art
+mode is off. With a cached pairing token it does not fail: the art channel opens
+against a dark panel and against a programme, and `get_artmode` answers in all
+three states. **The safety gate depends on exactly the negative reading that row
+called impossible** — had it still been believed, the gate would have looked
+unbuildable. And `deploy/README.md` still owed a hardware run for the aiohttp
+bump, which had been done on 2026-08-06 (9 checks, 0 failed) and which this branch
+then drove through 39 uploads and 41 deletions.
+
+Test evidence recorded across all three suites — **2261 passed, 0 failed** — which
+also closes a review finding that no run covered this tree. Four mutations on the
+new branches, all caught.
+
 ## 2026-08-07: The wall takes the television from whoever is watching it
 
 <!-- prawduct: chunks=12 | scope=v1-build -->
