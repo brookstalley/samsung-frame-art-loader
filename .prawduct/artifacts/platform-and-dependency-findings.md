@@ -383,7 +383,7 @@ wrong answer looks right until it fails.
 | Candidate | Verdict |
 |---|---|
 | `PowerState` from the REST endpoint | **Cannot distinguish art mode from normal TV** — reports `'on'` for both. Only tells you `'standby'` vs not |
-| `get_artmode()` | Returns `'on'` correctly, but **can only ever confirm the positive case**: it requires `start_listening()` to have succeeded first, and that call is what fails when art mode is off |
+| `get_artmode()` | **Answers in both directions** — `'on'` in art mode, `'off'` for a dark panel and for a television programme alike. See the correction below; the claim that it can only confirm the positive case was wrong |
 | Presence of an `isHost: true` client in the art channel's `ms.channel.connect` frame | **Works, in both directions, without `start_listening()`** |
 
 The set's own art application appears in the art channel's client list as a
@@ -398,6 +398,24 @@ condition was also observed raising `ms.channel.timeOut` after roughly 15 second
 on a different attempt, so the behaviour is not even consistent between runs.
 Anything that calls `start_listening()` unattended needs its own timeout around it
 and must not assume the call returns.
+
+> **Corrected 2026-08-07, and this one is load-bearing rather than tidying.** The
+> premise above — that `start_listening()` fails whenever art mode is off, so
+> `get_artmode()` can only ever confirm the positive case — does not hold with a
+> **cached pairing token**. With one in `TV_TOKEN_FILE` the art channel opens in
+> 2.4 s against a dark panel and against a set showing a programme, and
+> `get_artmode()` answers `'off'` in both, `'on'` in art mode. All three readings
+> are measured.
+>
+> **The display plane's safety gate depends on exactly that negative case.**
+> Selecting an image on a set showing a television programme switches it into art
+> mode and takes the screen off the person watching, so the daemon asks
+> `get_artmode()` before every selection and declines unless it says `on`. Had
+> this row still been believed, the gate would have looked impossible to build.
+>
+> The `isHost` technique below is still the only method that works *without* a
+> token, which is what it was written for, and it remains the right answer for
+> first-contact tooling.
 
 **The set can be driven out of standby from software.** `KEY_POWER` over the
 *remote-control* channel works, and that channel is reachable in standby while the

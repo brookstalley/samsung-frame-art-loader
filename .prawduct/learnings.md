@@ -55,6 +55,29 @@ a double is written from your model of the dependency, so the failure mode you d
 not know about is exactly the one it cannot express, and every test passes while
 the real system ignores you.
 
+## A test that advances an injected clock must not step by a multiple of the interval under test
+
+**When a test drives a fake clock, choose amounts that are not multiples of the
+period the code computes against** — because a step equal to the interval makes a
+daemon that *wrongly consumed* that interval indistinguishable from one that
+correctly withheld it, and the test passes on arithmetic rather than on behaviour.
+Observed three times in two sessions: a cursor restore whose three works and three
+passes wrapped exactly back to the right answer, a backoff whose reset was never
+defended, and an art-mode recovery test whose loop advanced by exactly one
+rotation interval. Every one was written deliberately, believing it covered the
+branch; only a mutation sweep told them apart from tests that could fail.
+
+## A guard aimed at a named line must be verified against that line
+
+**When you clamp, filter, or redact something specific in a dependency, open the
+dependency and read the line before choosing the threshold** — because a guard
+built on a remembered level protects nothing and looks exactly like protection.
+The television client's logger was floored at INFO to stop it logging the pairing
+token, on the belief that the token was a DEBUG line; the fork logs it with
+`_LOGGING.info`, so the floor permitted the one line it existed to prevent, at the
+default level, on every pairing. The check that would have settled it was one
+grep.
+
 ## Retiring a claim is a repo-wide grep, not a local edit
 
 **When you void, amend, or supersede a factual claim, grep the whole repo for it

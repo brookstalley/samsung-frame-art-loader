@@ -106,8 +106,8 @@ it is deployed again:
 
 ## Before you install the current `requirements.txt` on the Pi
 
-Two pin moves are described here. This one is the more recent, and it is the one
-still owing a hardware run.
+Two pin moves are described here. This one is the more recent; both have now
+been exercised against the real television.
 
 `aiohttp` (3.9.5 → 3.14.3), `lxml` (5.2.2 → 6.1.1), `pillow` (10.4.0 → 12.3.0),
 `python-dotenv` (1.0.1 → 1.2.2) and `requests` (2.32.3 → 2.34.2) moved together on
@@ -118,14 +118,15 @@ upstream call site these modules reach still behaves — the Pillow surface, the
 was left at 4.12.3: it was the companion bump lxml 6 looked likely to force, and
 the parse was verified against 6.1.1 without it.
 
-**It has not been run against the television, and that check is owed.** `aiohttp`
-is not imported anywhere in this repo — it is the `samsungtvws` fork's transport,
-which puts this move on the same footing as the one below, and the `tv_api_check.py`
-invocation described there is what discharges it. The reason the jump was safe to
-make without hardware in hand is that `display/uv.lock` already resolves the *same*
-fork commit against aiohttp 3.14.3; that is an argument from a sibling plane's
-resolver, not a measurement on the set. `pi-freeze-2024.txt` records the pre-move
-version of all five and is the rollback.
+**It has been run against the television, and the check is discharged.**
+`aiohttp` is not imported anywhere in this repo — it is the `samsungtvws` fork's
+transport — so what was owed was a measurement on the set rather than an argument
+from a resolver. `tv_api_check.py` passed 9 checks and 0 failures against the real
+television on 2026-08-06 on `aiohttp` 3.14.3, `websockets` 16.1.1, `requests`
+2.34.2 and the pinned fork. **The display plane then drove that transport hard on
+2026-08-07** — 39 uploads, 41 deletions, brightness writes and confirmed
+selections, unattended, across several hours. `pi-freeze-2024.txt` records the
+pre-move version of all five and remains the rollback.
 
 > **Attempted on 2026-08-06 and got no further than the handshake**, which is
 > recorded so the next person does not read "owed" as "nobody has tried".

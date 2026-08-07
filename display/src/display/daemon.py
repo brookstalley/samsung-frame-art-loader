@@ -179,10 +179,26 @@ class Daemon:
             self._settings.art_root,
             extra={"event": "daemon.started", **self._settings.startup_lines()},
         )
+        crashed = False
         try:
             while not stop.is_set():
                 interval = await self.tick()
                 await self._wait(stop, interval)
+        except BaseException:  # noqa: BLE001 - re-raised immediately; see below
+            # prawduct:allow prawduct/broad-except -- a top-level supervisor: this
+            # records what killed an unattended process and re-raises unchanged.
+            #
+            # **Nothing is swallowed and nothing is handled** — the exception goes
+            # straight back out, so systemd still sees a failed unit and
+            # `Restart=always` still restarts. What this buys is the only record
+            # that will exist: this plane's failure channel is the journal, and
+            # without an ERROR here a crash left `daemon.stopped` at INFO, which is
+            # the identical line a clean shutdown writes. An operator reading the
+            # log could not tell a wall that was switched off from one that fell
+            # over in a loop.
+            crashed = True
+            log.exception("the display plane is stopping on an error", extra={"event": "daemon.crashed"})
+            raise
         finally:
             # **Closed on every way out, including the unexpected one.** An
             # exception escaping the loop used to skip this entirely, leaving the
@@ -192,7 +208,8 @@ class Daemon:
             # out. Under `Restart=always` that turns one crash into a daemon that
             # cannot reach its own television on the way back up.
             await self._tv.close()
-            log.info("display plane stopped", extra={"event": "daemon.stopped"})
+            if not crashed:
+                log.info("display plane stopped", extra={"event": "daemon.stopped"})
 
     async def tick(self) -> float:
         """One pass. Returns how long to wait before the next one.
@@ -352,6 +369,17 @@ class Daemon:
         # outage delay a jump rather than eat it. Checked here rather than in
         # `_advance`, so the baselining and regression arms above still keep this
         # device's sequence honest while the wall is somebody else's.
+        #
+        # **The wait is read before the set is asked, and that order is the whole
+        # point.** This path has no timer of its own: an unconsumed directive is
+        # still unconsumed on the next poll, so anything downstream of a question
+        # put to the television is asked again a second later, all evening. Asking
+        # whether the wall is ours costs a real request, so putting that question
+        # in front of the wait would spend thousands of them across one programme
+        # — the same shape as the selection flood the backoff was introduced to
+        # stop, arriving by a cheaper-looking route.
+        if not self._wall_attempt_is_due():
+            return False
         if not await self._the_wall_is_ours_to_change():
             return False
 
@@ -628,8 +656,7 @@ class Daemon:
     async def _content_id_for(self, entry: Entry, render: Path) -> str | None:
         """This work's id on the television, uploading it now if it has none."""
         binding = self._state.binding_for(entry.work_id)
-        if _is_current(binding, render):
-            assert binding is not None  # _is_current is false for None
+        if binding is not None and _is_current(binding, render):
             return binding.tv_content_id
         if self._too_soon_to_retry(binding):
             return None

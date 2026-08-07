@@ -93,3 +93,32 @@ async def test_a_crash_still_closes_the_art_channel_on_the_way_out(settings, tv,
         await daemon.run(asyncio.Event())
 
     assert tv.closed, "the art channel was left open at the set"
+
+
+async def test_a_crash_is_distinguishable_from_a_clean_stop_in_the_log(settings, tv, state, clock, caplog):
+    """The journal is this plane's only failure channel.
+
+    A crash used to write `daemon.stopped` at INFO — the identical line a clean
+    shutdown writes — so an operator reading the log could not tell a wall
+    somebody switched off from one falling over in a `Restart=always` loop.
+    """
+    import logging
+
+    from display.daemon import Daemon
+    from display.manifest import Watcher
+
+    watcher = Watcher(settings.manifest_path, rotation_interval_fallback=180, shuffle_fallback=False)
+    daemon = Daemon(settings=settings, tv=tv, state=state, watcher=watcher, clock=clock.as_clock())
+
+    async def explode() -> float:
+        raise RuntimeError("something nobody predicted")
+
+    daemon.tick = explode  # type: ignore[method-assign]
+
+    with caplog.at_level(logging.INFO), pytest.raises(RuntimeError):
+        await daemon.run(asyncio.Event())
+
+    events = [r.__dict__.get("event") for r in caplog.records]
+    assert "daemon.crashed" in events, "a crash left no ERROR behind"
+    assert "daemon.stopped" not in events, "a crash reported itself as a clean shutdown"
+    assert any(r.levelno >= logging.ERROR for r in caplog.records)

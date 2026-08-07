@@ -684,6 +684,18 @@ the daemon: `support_brightness_sensor: "TRUE"` (the set has its own sensor,
 which the ported sun-following curve is in addition to, not instead of) and
 `current_rotation_status: 1`.
 
+> **Picked up 2026-08-07 as issue #107**, after the operator found the wall
+> reading bright on an overcast afternoon while the sun curve had it at 8–9 —
+> which is exactly the case a solar angle cannot see. `get_artmode_settings`
+> reports the sensor is switched **off** (`brightness_sensor_setting: "off"`),
+> and the library exposes `set_brightness_sensor_setting`.
+>
+> **The flag above says a sensor exists; it is not a reading.** Nothing here has
+> ever fetched an ambient *value*, which is why the first step is establishing
+> whether one can be read at all. If the sensor only drives the set's own
+> auto-brightness, the honest answer is to stop writing `set_brightness`
+> altogether rather than to blend the two — a different design, not a variant.
+
 **If it fails, the rollback is `deploy/pi-freeze-2024.txt`** and nothing else has
 changed on the Pi — the new pins only take effect on an install.
 
