@@ -48,6 +48,71 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-07: The confirming read was reading the wrong thing, and the wall parked
+
+<!-- prawduct: chunks=12 | scope=v1 -->
+
+**Why:** the entry below added a confirming read for selections, verified it
+against a dark set, and shipped it. The first pass with the set in **art mode**
+showed what that verification could not: `get_current` does not describe the wall,
+so every real rotation was reported as a failure and the wall stopped on one
+picture.
+
+**What the hardware said.** `get_current_artwork` reports the *art-store slot* —
+its replies carry `"content_type": "artstore"` — and it named the same id,
+`SAM-F0222`, across every observation ever made against this set, in all three
+states, before and after selections that visibly changed the picture. Measured in
+art mode: the wall changed to the requested image, `image_selected` fired at
++1.04 s with `is_shown: "Yes"`, and 37 seconds of polling `get_current` never
+moved. `get_slideshow_status.current_content_id` is empty while the slideshow is
+off, which is the state this plane requires, so it is not an alternative. **There
+is no reader on this firmware that answers "what is on the wall".**
+
+**Why the dark-state verification could not catch it.** In the dark state the
+wrong read *agrees with the failure* — it reports a wall that is not changing,
+because it never changes. The one state it was tested in is precisely the one
+where a value that means nothing and a value that means everything are
+indistinguishable. The consequence in the room: the cursor only advances on a
+confirmed show, so the daemon re-selected the same work on every backoff step and
+the wall held one picture.
+
+**What changed.** Confirmation is the set's own `image_selected` announcement,
+which carries both halves the question needs — which image, and `is_shown` — and
+which does not fire at all in the dark state, so it still catches the defect the
+entry below found. Because it is *pushed*, **asking and confirming became one
+operation** at the television seam (`show(content_id) -> bool`): a listener
+registered after the request races an answer measured arriving in 0.49 s, and the
+old two-call shape is what forced confirmation to be a poll after the fact.
+`select_image` and `current_content_id` left the `TvClient` interface; the daemon
+no longer owns a confirmation window.
+
+A redundant selection is announced too, so the restart path that re-shows the
+current picture confirms normally rather than reporting every restart as a stuck
+wall — measured, because that path would otherwise have been the next thing to
+break.
+
+**The live pass then completed, and Chunk 12's three acceptance criteria are met
+on the real set.** Three unattended rotations at the manifest's 180 s — Calder →
+Hokusai → Klee, intervals 182 s and 181 s — each confirmed against the set and
+each matching what the operator saw with their own eyes; the third with the
+curation plane stopped; then a restart that re-showed the same picture without
+moving the wall and carried on to the next work. 39 works uploaded one per pass,
+brightness set from the solar angle, no WARNING or ERROR in the run.
+
+**Also measured, and recorded in `samsung-tv-state-findings.md`:** art mode
+reports over the API after all — `get_artmode` answers `on`, which retires "it has
+never returned `on` here" and makes it a real discriminator, while `PowerState`
+still distinguishes only whether the panel is lit. And `ms.channel.timeOut` was
+seen **in art mode**, after ~20 connect/close cycles and a SIGKILLed daemon that
+never closed its socket; it is a connection-slot symptom, not the art-mode
+signature two artifacts described. How many art-channel clients the set allows is
+unquantified and matters for a Pi running `Restart=always`.
+
+**Eight mutations, all caught** — including the arm-before-send ordering and the
+`is_shown` check. One survived the first sweep: a duplicate announcement resolving
+an already-resolved waiter, which would raise on the library's reader task and
+silently end every future confirmation. Covered, then re-swept.
+
 ## 2026-08-07: The television takes selections and displays none of them
 
 <!-- prawduct: chunks=12 | scope=v1 -->

@@ -99,15 +99,19 @@ DEFAULT_TV_CONNECT_TIMEOUT_SECONDS: Final[float] = 30.0
 #: a restart — a crash loop must not turn into a retry loop.
 DEFAULT_UPLOAD_RETRY_SECONDS: Final[float] = 300.0
 
-#: How long the set is given to actually show an image after it is selected.
-#: **A selection is confirmed rather than assumed, and this is the window.** The
-#: set acknowledges a real selection in about two seconds, so this is sized well
-#: above that; the reason it exists at all is the failure it catches. A
-#: television whose panel is dark accepts `select_image`, returns no error, emits
-#: no event, and goes on displaying whatever it displayed before — indefinitely.
-#: A daemon that trusted the call's return would report a rotation it did not
-#: perform, once per interval, for as long as the set stayed dark. Confirming
-#: costs one read per rotation and turns that silence into a stated fact.
+#: How long the set is given to announce that it is displaying an image it was
+#: asked for. **A selection is confirmed rather than assumed, and this is the
+#: window.** The announcement has been measured arriving 0.49 s and 1.04 s after
+#: the request, so this is sized well above that; the reason it exists at all is
+#: the failure it catches. A television whose panel is dark accepts
+#: `select_image`, returns no error, emits no event, and goes on displaying
+#: whatever it displayed before — indefinitely. A daemon that trusted the call's
+#: return would report a rotation it did not perform, once per interval, for as
+#: long as the set stayed dark.
+#:
+#: **It is a ceiling on the failing path only.** A set that is working answers
+#: inside a second and the wait ends there, so raising this does not slow
+#: rotation; it only lengthens how long a dark wall takes to be reported.
 DEFAULT_SELECT_CONFIRM_SECONDS: Final[float] = 8.0
 
 #: Reconnection backoff after the television goes away. An asleep set is the

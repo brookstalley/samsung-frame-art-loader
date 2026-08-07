@@ -105,14 +105,15 @@ reason this entry cannot be closed from a desk:
    take up to five minutes to notice you switched it on. That is consistent with
    what this plane already does for a television that has gone away, and it was
    chosen over asking once a second, which against a real set is a selection and
-   a confirming read every second all night. If five minutes reads as broken in
-   the room, the ceiling is the thing to change, and say so.
+   a whole confirmation window spent waiting, every second, all night. If five
+   minutes reads as broken in the room, the ceiling is the thing to change, and
+   say so.
 
 `artifacts/samsung-tv-state-findings.md` is the map of which call works in which
-state, and carries its own list of what is still unmeasured — the art-mode
-column, the television-on column, and whether `KEY_POWER` lights the panel. If
-you are at the set anyway, those are cheap to settle and nothing else can settle
-them.
+state, and carries its own list of what is still unmeasured — what
+`select_image` does to somebody watching television, whether `KEY_POWER` lights
+the panel, and how many art-channel clients the set allows at once. If you are at
+the set anyway, those are cheap to settle and nothing else can settle them.
 
 ### The review half — the grid, its alternates, the panel — added 2026-08-05
 

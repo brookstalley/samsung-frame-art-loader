@@ -61,23 +61,17 @@ class FakeTv(TvClient):
         #: could not reproduce it let the daemon report rotations that never
         #: happened, and every test passed.
         self.displays_nothing_selected = False
-        #: What the set says it is displaying. It starts on a picture of the set's
-        #: own rather than on nothing, because **a Frame is never displaying
-        #: nothing** — the one observed refusing selections went on showing an
-        #: art-store image throughout. That is what makes the failure detectable:
-        #: the observable is that the wall did not *change*, not that it is blank.
-        #: `None` is reserved for a set that declines to answer, which is a third
-        #: thing again from agreeing and from disagreeing.
+        #: What the set is displaying. It starts on a picture of the set's own
+        #: rather than on nothing, because **a Frame is never displaying nothing**
+        #: — the one observed refusing selections went on showing an art-store
+        #: image throughout. That is what makes the failure detectable: the
+        #: observable is that the wall did not *change*, not that it is blank.
         self.displaying: str | None = FOREIGN_IMAGE
-        self.will_not_say_what_it_displays = False
-        #: How many reads the set takes before it admits to displaying what it was
-        #: asked for. A real one acknowledges in about two seconds, so "agrees
-        #: immediately" is the unrealistic case and a confirmation that only
-        #: worked against it would fail every real rotation.
-        self.answer_after_reads = 1
-        self._reads_since_selection = 0
-        #: A selection the set has taken but not yet admitted to displaying.
-        self._pending: str | None = None
+        #: Ids the set announces as selected while reporting `is_shown: "No"`. A
+        #: distinct arming from `displays_nothing_selected`, which is silence: the
+        #: set answering "I took it and I am not showing it" is a different wire
+        #: behaviour from it never answering, and both mean the wall did not move.
+        self.admits_not_showing: set[str] = set()
         #: The set's own art-mode flag, as it would report it.
         self.art_mode: str | None = "on"
 
@@ -120,7 +114,7 @@ class FakeTv(TvClient):
         self.holding[content_id] = path
         return content_id
 
-    async def select_image(self, content_id: str) -> None:
+    async def show(self, content_id: str) -> bool:
         self._check_reachable()
         if content_id not in self.holding:
             # The real set answers an unknown id with an error rather than a
@@ -130,19 +124,12 @@ class FakeTv(TvClient):
         if content_id in self.refuse_selection_of:
             raise TvUnavailable(f"the television refused {content_id}")
         self.selected.append(content_id)
-        self._reads_since_selection = 0
-        if not self.displays_nothing_selected:
-            self._pending = content_id
-
-    async def current_content_id(self) -> str | None:
-        self._check_reachable()
-        if self.will_not_say_what_it_displays:
-            return None
-        self._reads_since_selection += 1
-        if self._pending is not None and self._reads_since_selection >= self.answer_after_reads:
-            self.displaying = self._pending
-            self._pending = None
-        return self.displaying
+        if self.displays_nothing_selected or content_id in self.admits_not_showing:
+            # The wall is left where it was, which is the point: the request was
+            # taken and the picture did not change.
+            return False
+        self.displaying = content_id
+        return True
 
     async def reported_art_mode(self) -> str | None:
         return self.art_mode

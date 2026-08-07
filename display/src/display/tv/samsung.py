@@ -17,10 +17,26 @@ what is encoded here is the *behaviour* they establish:
   the image. So an upload is confirmed against the set's own content list.
 * **`delete_list()` never reads its reply** — it sends and returns None whether
   the set removed anything or not. Removal is confirmed the same way.
+* **`select_image()` neither reports nor can be asked what it did.** It sends and
+  returns; the set announces the result by *emitting* `image_selected`, carrying
+  the id and an `is_shown` flag. Selection is confirmed by listening for that
+  event from before the request goes out.
 
-The rule those last two share, and the one to apply to any verb added later:
+The rule those three share, and the one to apply to any verb added later:
 **this library's return values are not trustworthy in either direction; confirm
 against the television itself.**
+
+**`get_current_artwork` is not that confirmation, and believing it was cost this
+plane two days.** It reports the *art-store* slot — its replies carry
+`"content_type": "artstore"` — and it is unaffected by selecting a user upload.
+Measured on 2026-08-07 against a set in art mode: the wall visibly changed to the
+requested image, `image_selected` fired at +1.0 s with `is_shown: "Yes"`, and
+`get_current_artwork` went on naming the same art-store id it had named for days,
+through 37 seconds of polling. It was adopted as the confirming read a day
+earlier because it *agreed* in the dark state — where it is right by coincidence,
+having simply never changed. There is no reader on this firmware that answers
+"what is on the wall"; `get_slideshow_status.current_content_id` is empty while
+the slideshow is off, which is the state this plane requires.
 
 **Nothing above this seam imports `samsungtvws`.** That is not tidiness — it is
 what makes the standing risk survivable, since the fork is unowned, static, and
@@ -86,6 +102,14 @@ _LIBRARY_FAILURES: Final[tuple[type[Exception], ...]] = (
 #: letting the television draw a second one over it would frame the frame.
 _NO_MATTE: Final[str] = "none"
 
+#: The set's announcement that a selection took effect. It carries the id and an
+#: `is_shown` flag, and it is the only signal on this firmware that distinguishes
+#: a selection the wall acted on from one it accepted and ignored.
+_IMAGE_SELECTED: Final[str] = "image_selected"
+
+#: `is_shown` when the set means it. A string rather than a boolean on the wire.
+_IS_SHOWN_YES: Final[str] = "Yes"
+
 
 class SamsungTv(TvClient):
     """One television, reached over the art websocket."""
@@ -99,6 +123,7 @@ class SamsungTv(TvClient):
         client_name: str,
         connect_timeout_seconds: float,
         upload_timeout_seconds: float,
+        select_confirm_seconds: float,
     ) -> None:
         self._host = host
         self._port = port
@@ -106,7 +131,14 @@ class SamsungTv(TvClient):
         self._client_name = client_name
         self._connect_timeout = connect_timeout_seconds
         self._upload_timeout = upload_timeout_seconds
+        self._select_confirm = select_confirm_seconds
         self._art: SamsungTVAsyncArt | None = None
+
+        #: The selection currently awaiting the set's announcement, as the id that
+        #: was asked for and the future its answer resolves. One slot rather than a
+        #: map because selection here is strictly sequential — one reconciliation
+        #: loop, one image at a time, the same property `upload`'s marker relies on.
+        self._awaiting: tuple[str, asyncio.Future[bool]] | None = None
 
     async def connect(self) -> None:
         """Build the client off the loop, then open the art channel under a ceiling."""
@@ -133,7 +165,50 @@ class SamsungTv(TvClient):
             await self._quietly_close(art)
             raise TvUnavailable(f"the television at {self._host} refused the art channel ({_named(exc)})") from exc
 
+        # Registered per connection, not once per process: `_call` abandons the
+        # client on any failure, so the next attempt is a *new* object and a
+        # subscription made against the old one would leave selections
+        # unconfirmable for the rest of the daemon's life.
+        #
+        # **The library keeps one handler per event, not a list** — its
+        # `set_callback` is a plain dict assignment — so a second subscriber to
+        # `image_selected` does not join this one, it *replaces* it. The failure
+        # is silent and total: every selection then falls to its timeout and is
+        # reported as a wall that did not change, while the newcomer works
+        # perfectly. Anything else here that wants this event must be fanned out
+        # from this handler rather than registered alongside it. A second
+        # *distinct* event is safe, and is another line here plus a handler.
+        art.set_callback(_IMAGE_SELECTED, self._on_image_selected)
         self._art = art
+
+    def _on_image_selected(self, _event: str, response: dict[str, Any]) -> None:
+        """Resolve the selection this announcement is about, if it is ours.
+
+        Deliberately synchronous and total: it runs on the library's reader task,
+        where an exception is not delivered to anybody who could act on it and
+        would take the socket's reader down with it. Anything unrecognised is left
+        alone, and the waiting selection falls to its timeout — which reports the
+        wall as unchanged, the safe direction, since claiming a picture is up when
+        it is not is the defect this whole path exists to prevent.
+
+        An announcement for a *different* id is ignored rather than treated as a
+        refusal: the set echoes selections nobody here made when somebody uses the
+        remote, and letting one of those resolve this future would report the
+        wrong work as shown.
+        """
+        pending = self._awaiting
+        if pending is None:
+            return
+        content_id, waiter = pending
+        if waiter.done():
+            return
+        try:
+            announced = json.loads(response["data"])
+        except (KeyError, TypeError, json.JSONDecodeError):
+            return
+        if not isinstance(announced, dict) or announced.get("content_id") != content_id:
+            return
+        waiter.set_result(announced.get("is_shown") == _IS_SHOWN_YES)
 
     def _construct(self) -> SamsungTVAsyncArt:
         """Blocking, and therefore called only from a worker thread.
@@ -264,35 +339,40 @@ class SamsungTv(TvClient):
             return str(arrived[0]["content_id"])
         return None
 
-    async def select_image(self, content_id: str) -> None:
-        """Ask the set to put an image it already holds on the wall.
+    async def show(self, content_id: str) -> bool:
+        """Select an image and wait for the set to announce that it is displayed.
 
-        **Asking is all this does, and the caller must confirm it.** This once
-        returned with no check, on the reasoning that the wall would be checked by
-        the next thing to look at it. Nothing looks: a television observed on
-        2026-08-07 with its panel dark accepted this call, raised nothing, emitted
-        none of the three art-mode events, and went on displaying the image it had
-        — through repeated attempts over twelve seconds. The failure is therefore
-        silent and permanent rather than transient, which is exactly the shape a
-        return value cannot carry. `current_content_id` is the confirming read.
+        **The waiter is armed before the request goes out**, which is the whole
+        reason this is one method rather than two. The announcement has been
+        measured arriving 0.49 s after the request, well inside the window a
+        caller would need to register a listener afterwards, so a select-then-
+        listen shape drops the answer it is waiting for and reports a working wall
+        as stuck.
+
+        A set that never announces gets `False` rather than an exception: with its
+        panel dark this television accepts the request, raises nothing, emits no
+        event, and goes on displaying what it had — indefinitely, while uploads,
+        removals and brightness all succeed. That is a stated outcome, not a
+        connection failure, and the caller distinguishes them.
+
+        **A redundant selection is announced too** — asking for the image already
+        displayed emits the event with `is_shown: "Yes"` (measured 2026-08-07), so
+        the restart path that re-shows the current picture confirms normally
+        rather than reporting every restart as a wall that would not move.
         """
-        await self._call("select_image", self._client().select_image(content_id, show=True))
-
-    async def current_content_id(self) -> str | None:
-        """Ask the set what is on the wall, tolerating an answer it will not give.
-
-        Shaped as "or None" rather than raising, because a set that declines to
-        describe its own display is not the same event as one that has gone away
-        — the caller's response is to leave the wall alone and say what it could
-        not establish, not to reconnect. A malformed answer is treated as no
-        answer for the same reason: the alternative is comparing a selection
-        against a value whose meaning nobody knows.
-        """
-        answer = await self._call("get_current", self._client().get_current())
-        if not isinstance(answer, dict):
-            return None
-        content_id = answer.get("content_id")
-        return content_id if isinstance(content_id, str) and content_id else None
+        waiter: asyncio.Future[bool] = asyncio.get_running_loop().create_future()
+        self._awaiting = (content_id, waiter)
+        try:
+            await self._call("select_image", self._client().select_image(content_id, show=True))
+            try:
+                return await asyncio.wait_for(waiter, timeout=self._select_confirm)
+            except TimeoutError:
+                return False
+        finally:
+            # Cleared on every route out, including the failure that drops the
+            # connection: a stale slot would let the *next* connection's first
+            # announcement resolve a future nobody is waiting on any more.
+            self._awaiting = None
 
     async def reported_art_mode(self) -> str | None:
         """The set's own art-mode flag, for a log line and nothing else.

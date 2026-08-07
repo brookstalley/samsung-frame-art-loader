@@ -40,6 +40,7 @@ async def _run() -> int:
         client_name=settings.tv_client_name,
         connect_timeout_seconds=settings.tv_connect_timeout_seconds,
         upload_timeout_seconds=settings.upload_timeout_seconds,
+        select_confirm_seconds=settings.select_confirm_seconds,
     )
 
     stop = asyncio.Event()

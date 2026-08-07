@@ -24,7 +24,7 @@ the set can actually do. These are the names this product uses.
 |---|---|---|---|
 | **Dark** | The set is switched off at the remote; the panel shows nothing | `standby` | `off` |
 | **Television** | Somebody is watching something | `on` | `off` |
-| **Art mode** | The wall is showing art — the deployment's normal condition | **not observed** | **not observed** |
+| **Art mode** | The wall is showing art — the deployment's normal condition | `on` | `on` |
 | **Unreachable** | Power cut, network down | no answer | no answer |
 
 **`PowerState` says whether the panel is lit, and nothing else.** It reports
@@ -34,14 +34,15 @@ a set showing a television channel. **It does not discriminate art mode** —
 `get_artmode` is the only thing that does, and the library's `on()` and
 `in_artmode()` are built on `PowerState`, which is why they mislead.
 
-> **Art mode has never been observed over the API on this set.** `get_artmode`
-> has answered `off` on every occasion it has been asked, in both states above.
-> A run on 2026-08-06 passed nine checks with `PowerState: "on"` and was recorded
-> as being in art mode, but that reading is now known not to establish it — the
-> television state produces the same value. **So the art-mode row above is empty
-> on purpose, and everything this product believes about art mode rests on the
-> `image_selected` event observed firing at +2.15 s in that run.** Confirming it
-> is the first thing to do at the set.
+> **Art mode was first observed over the API on 2026-08-07**, and `get_artmode`
+> is a real discriminator after all: it answered `on` for the first time with the
+> set in art mode, having answered `off` in both other states. The earlier
+> readings were not a broken flag — they were the television and dark states,
+> which `PowerState` cannot tell from art mode and `get_artmode` can.
+>
+> **`PowerState` still says only whether the panel is lit.** It reads `on` for
+> art mode and for somebody watching a channel alike, so it distinguishes those
+> two from `standby` and nothing more. Gate on `get_artmode` or on nothing.
 
 ## What works in each state
 
@@ -51,38 +52,62 @@ a set showing a television channel. **It does not discriminate art mode** —
 | Art channel opens (`start_listening`) | works, 2.4 s | works, 2.4 s | works, 4.5 s construct *(2026-08-06)* |
 | Remote-control channel opens | works, 1.5 s | works, 1.4 s | works *(2026-08-06)* |
 | `available` (list content) | works — 96 items | works — 96 items | works |
-| `get_current` | works | works | **not observed** |
+| `get_current` | answers, **means nothing** | answers, **means nothing** | answers, **means nothing** |
 | `get_device_info`, `get_api_version` | works | works | works |
 | `get_brightness` / `set_brightness` | works | works (read) | works |
-| `upload` | works | not tried | works |
+| `upload` | works | not tried | works — 39 in one pass |
 | `delete` / `delete_list` | works — 41 removed in one call | not tried | works |
 | `set_slideshow_status` | works | not tried | works |
-| **`select_image`** | **accepted and ignored** | **not tried — it would take the screen off whoever is watching** | `image_selected` at +2.15 s *(2026-08-06)* |
+| **`select_image`** | **accepted and ignored** | **not tried — it would take the screen off whoever is watching** | works; `image_selected` at +0.49 s and +1.04 s |
 | **`set_artmode('on')`** | **accepted and ignored** | not tried | n/a |
-| `get_auto_rotation_status` | **never answers** (`AssertionError`) | **never answers** | **never answers** *(2026-08-06)* |
+| `get_slideshow_status.current_content_id` | not tried | not tried | **empty while the slideshow is off** |
+| `get_auto_rotation_status` | **never answers** (`AssertionError`) | **never answers** | **never answers** |
 | Wake-on-LAN to the advertised MAC | **no effect** | n/a | n/a |
 
 **The television state is read-identical to the dark one.** Every question
 answers the same way, in the same time, with the same values — including
-`get_artmode: off`. Nothing a daemon can *read* tells these two apart except
-`PowerState`, and nothing tells either of them from art mode except `get_artmode`,
-which has never yet said `on`.
+`get_artmode: off`. Nothing a daemon can *read* tells those two apart except
+`PowerState`; `get_artmode` is what separates both of them from art mode.
 
 ### The finding that matters
 
 **In the dark state the set accepts `select_image`, returns no error, emits no
 event, and goes on displaying what it was displaying.** Confirmed over twelve
-seconds and repeated attempts, with `get_current` unchanged throughout and not
-one of `image_selected`, `slideshow_image_changed`, `auto_rotation_image_changed`
-firing — nor even the outer `d2d_service_message` that wraps them.
+seconds and repeated attempts, with not one of `image_selected`,
+`slideshow_image_changed`, `auto_rotation_image_changed` firing — nor even the
+outer `d2d_service_message` that wraps them.
 
 Everything else a daemon does in a rotation succeeds in this state. So a rotation
 loop that trusts return values reports a moving wall, indefinitely, at a panel
 that is dark — and the one plane that would notice, the label renderer, would
-caption pictures nobody can see. **This is why a selection is confirmed by
-reading `get_current` back**, and why the display plane treats "the set took it
-and displayed nothing" as its own outcome rather than as a failure to show one
-work.
+caption pictures nobody can see. This is why the display plane treats "the set
+took it and displayed nothing" as its own outcome rather than as a failure to
+show one work.
+
+### `get_current_artwork` does not describe the wall
+
+**It reports the art-store slot, and no reader on this firmware answers "what is
+displayed".** Its replies carry `"content_type": "artstore"`, and it named the
+same id — `SAM-F0222` — across every observation ever made here: dark,
+television, and art mode, before and after selections that visibly changed the
+picture. Measured 2026-08-07 in art mode: the wall changed to the requested
+image, `image_selected` fired at +1.04 s with `is_shown: "Yes"`, and 37 seconds
+of polling `get_current` never moved off `SAM-F0222`.
+
+**It was briefly adopted as the confirming read, on 2026-08-06, and it is worth
+recording why that looked right.** In the dark state it *agrees* with the failure
+— it reports a wall that is not changing, because it never changes. So the one
+state it was tested against is the one where a value that means nothing is
+indistinguishable from a value that means everything. The cost was a day, and a
+wall that parked on a single picture the first time the set was in art mode: the
+cursor only advances on a confirmed show, so the daemon re-selected the same work
+on every backoff step.
+
+**The only sound confirmation is the `image_selected` event**, which carries both
+halves the question needs — *which* image, and `is_shown` — and which does not
+fire at all in the dark state. It is emitted for a redundant selection too, so
+re-showing the picture already on the wall confirms normally, which is what the
+restart path depends on.
 
 ### The dark state cannot be left in software
 
@@ -126,20 +151,37 @@ not be used to clamp anything.
   product depends on it; `set_slideshow_status(duration=0)` is what disables the
   set's own rotation, and that works.
 
+## The art channel can refuse to open, and it is not about art mode
+
+`start_listening()` failed repeatedly on 2026-08-07 **with the set in art mode
+and serving everything else** — alternating between hanging to the 30 s ceiling
+and raising `ConnectionFailure: {'event': 'ms.channel.timeOut'}`. It cleared on
+its own after a couple of minutes' quiet.
+
+What preceded it was heavy connection churn: about twenty open-and-close cycles
+in three minutes from a polling probe, then a daemon **killed with SIGKILL**, so
+its websocket was never closed from the set's side. The likeliest reading is a
+small cap on concurrent art-channel clients, with abandoned ones held until they
+time out — which would mean every failed attempt, itself holding a slot for 30 s,
+makes the next one likelier to fail. Retrying harder is the wrong response.
+
+**This retires a claim two artifacts used to carry**, that `ms.channel.timeOut`
+is the signature of a set that is not in art mode. It is not: it has now been
+seen in art mode, and the dark state opens the channel in 2.4 s. `samsung.py`'s
+connect path still names art mode in its timeout message; that message is a
+plausible guess offered to an operator, not a diagnosis, and the honest version
+of it is that the set accepted a socket and then said nothing.
+
+**Unquantified**, and worth knowing before the Pi runs `Restart=always`: how many
+clients the set allows, and how long an abandoned one is held. A daemon that
+crash-loops could lock itself out of its own television.
+
 ## What is still owed
 
-1. **Art mode itself, at all.** `get_artmode` has never returned `on` here. Until
-   it does, the state this product is built for is one nobody has confirmed the
-   set reports, and every capability in that column is inference from a single
-   run whose art-mode reading is now known not to establish art mode.
-2. **`get_current` after a selection in art mode** — the confirming read the
-   display plane now depends on. It is proven to *catch* a wall that is not
-   changing; that it *agrees* on one that is has never been observed. If it does
-   not, the failure is loud rather than silent — every rotation reports
-   `rotation.wall_unchanged` and the wall stops — but it stops the wall.
-3. **What `select_image` does to somebody watching television.** Not tried on
+1. **What `select_image` does to somebody watching television.** Not tried on
    purpose: the plausible outcomes are that it is ignored, as in the dark state,
    or that it takes the screen away from a person mid-programme. The second is
    the one worth knowing about, and it is the likeliest source of a complaint
    this product could cause in a household.
-4. **Whether `KEY_POWER` lights the panel**, and what it lights it to.
+2. **Whether `KEY_POWER` lights the panel**, and what it lights it to.
+3. **The concurrent-client limit** described in the section above.

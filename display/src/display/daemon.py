@@ -45,7 +45,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final
 
 from display import brightness as brightness_module
 from display.config import Settings
@@ -55,11 +54,6 @@ from display.state import Binding, DisplayState, UploadStatus
 from display.tv import RemovalOutcome, TvClient, TvRemovalUnconfirmed, TvUnavailable, TvUploadFailed
 
 log = logging.getLogger(__name__)
-
-#: How often the set is re-asked what it is displaying, while confirming a
-#: selection. Short enough that a rotation is not visibly delayed by the check,
-#: long enough that confirming costs a handful of reads rather than a spin.
-_CONFIRM_POLL_SECONDS: Final[float] = 0.5
 
 
 class Shown(enum.Enum):
@@ -147,8 +141,8 @@ class Daemon:
         #: changing. **Rotation has a timer and the directive path does not**, so
         #: without this a `show_now` left unconsumed — which is the right thing to
         #: do with a jump that never happened — would be re-asked on every poll: a
-        #: selection and a confirming read every second, all night, at a set that
-        #: will ignore both. It backs off on the same ladder as an unreachable
+        #: selection a second, each waiting out the confirmation window, all night
+        #: at a set that will ignore every one. It backs off on the same ladder as an unreachable
         #: television, because "the set is not doing what it is told" is that same
         #: situation arriving by a route that raises nothing.
         self._wall_retry_not_before: float | None = None
@@ -465,14 +459,14 @@ class Daemon:
                 return Shown.SKIP
 
             try:
-                await self._tv.select_image(content_id)
+                shown = await self._tv.show(content_id)
             except TvUnavailable:
                 content_id = await self._rebind_or_reraise(entry, render, content_id)
                 if content_id is None:
                     return Shown.SKIP
-                await self._tv.select_image(content_id)
+                shown = await self._tv.show(content_id)
 
-            if not await self._wall_is_showing(content_id):
+            if not shown:
                 await self._report_wall_unchanged(content_id)
                 self._hold_off_the_wall()
                 return Shown.WALL_UNCHANGED
@@ -501,38 +495,6 @@ class Daemon:
                 },
             )
             return Shown.YES
-
-    async def _wall_is_showing(self, content_id: str) -> bool:
-        """Wait, briefly, for the set to actually display what it was asked to.
-
-        **Polled rather than asked once**, because a healthy set takes a moment:
-        the acknowledgement of a real selection has been measured arriving about
-        two seconds after the request, so a single immediate read would report
-        every successful rotation as a failure. It returns the instant the set
-        agrees, so the common path costs whatever the set takes and no more, and
-        only the failing path spends the whole window.
-
-        A set that will not say what it displays is treated as agreement. The
-        alternative — calling it a failure — would stop rotation on a television
-        that is working, on the strength of a question it declined to answer, and
-        this plane's standing posture is that an incomplete wall beats a dark one.
-        """
-        deadline = self._clock.monotonic() + self._settings.select_confirm_seconds
-        # Bounded by a count of reads as well as by the clock, and both bounds are
-        # load-bearing. The clock is the one that matters in production, where a
-        # read costs about a second and the count would be generous. The count is
-        # what makes this safe under an injected clock that only moves when
-        # something moves it: with time alone, a set that never agrees would be
-        # asked for ever.
-        attempts = 1 + int(self._settings.select_confirm_seconds / _CONFIRM_POLL_SECONDS)
-        for remaining in range(attempts, 0, -1):
-            showing = await self._tv.current_content_id()
-            if showing is None or showing == content_id:
-                return True
-            if remaining == 1 or self._clock.monotonic() >= deadline:
-                return False
-            await asyncio.sleep(_CONFIRM_POLL_SECONDS)
-        return False
 
     def _wall_attempt_is_due(self) -> bool:
         """Whether the wall may be asked to change again yet.

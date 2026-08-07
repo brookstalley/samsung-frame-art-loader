@@ -8,7 +8,6 @@ slideshow is switched off once so the two cannot fight.
 
 import logging
 import random
-from dataclasses import replace
 
 from fakes import FakeTv
 
@@ -348,35 +347,25 @@ async def test_a_deferred_work_is_the_one_that_appears_when_the_wall_comes_back(
     assert tv.on_the_wall.name == "w1.jpg", "an evening of a dark panel walked the theme forward"
 
 
-async def test_a_set_that_will_not_say_what_it_displays_is_taken_at_its_word(daemon: Daemon, tv: FakeTv, publish, caplog):
-    """Silence is not disagreement. Treating an unanswered question as a failure
-    would stop rotation on a working television, and an incomplete wall beats a
-    dark one."""
+async def test_a_set_that_says_it_took_the_image_and_is_not_showing_it_is_believed(daemon: Daemon, tv: FakeTv, publish, caplog):
+    """The set has two ways of not moving the wall, and both mean the same thing.
+
+    It can stay silent, which is the dark panel, or it can announce the selection
+    while saying `is_shown: "No"`. The second is the one a daemon that merely
+    counted announcements would get wrong, reporting a rotation from the set's own
+    word that it had not performed one.
+    """
     publish(["w1", "w2"])
-    tv.will_not_say_what_it_displays = True
+    tv.admits_not_showing = {"MY-F0001"}
 
     with caplog.at_level(logging.INFO):
         await daemon.tick()
 
-    assert [
+    assert tv.selected, "the daemon never asked the set to show anything"
+    assert not [
         r for r in caplog.records if getattr(r, "event", None) == "rotation.selected"
-    ], "rotation stopped because the set declined to describe its own display"
-    assert not [r for r in caplog.records if getattr(r, "event", None) == "rotation.wall_unchanged"]
-
-
-async def test_a_set_that_agrees_late_is_confirmed_rather_than_failed(settings, tv: FakeTv, state: DisplayState, clock, publish):
-    """A real set acknowledges a selection about two seconds after the request,
-    so a single immediate read would report every successful rotation as a
-    failure. This is the one test that exercises the window's duration."""
-    publish(["w1", "w2"])
-    settings = replace(settings, select_confirm_seconds=2.0)
-    watcher = Watcher(settings.manifest_path, rotation_interval_fallback=180, shuffle_fallback=False)
-    daemon = Daemon(settings=settings, tv=tv, state=state, watcher=watcher, clock=clock.as_clock())
-
-    tv.answer_after_reads = 2
-    await daemon.tick()
-
-    assert tv.on_the_wall.name == "w1.jpg", "a set that took a moment to agree was called a failure"
+    ], "the set said it was not showing the image and the daemon reported it as shown"
+    assert [r for r in caplog.records if getattr(r, "event", None) == "rotation.wall_unchanged"]
 
 
 async def test_the_backoff_starts_over_once_the_set_behaves_again(daemon: Daemon, tv: FakeTv, publish, clock):

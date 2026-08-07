@@ -277,8 +277,9 @@ async def test_a_pin_against_a_dark_wall_is_not_re_attempted_every_poll(daemon: 
     the sequence unconsumed — so nothing would stop it re-asking once a second.
 
     That is the same defect the rotation timer exists to prevent, reached by the
-    other route: each attempt is a `select_image` plus a confirming read against a
-    television that is going to ignore both, all night, at one second apart.
+    other route: each attempt is a selection that a television is going to ignore,
+    followed by the whole confirmation window spent waiting for an announcement
+    that will never come — all night, at one second apart.
     """
     publish(["w1", "w2", "w3"], sequence=1)
     await daemon.tick()

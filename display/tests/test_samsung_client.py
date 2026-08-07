@@ -13,6 +13,7 @@ the connection it can no longer reason about.
 """
 
 import asyncio
+import json
 
 import pytest
 from samsungtvws.exceptions import ResponseError
@@ -40,16 +41,53 @@ class StubArt:
         self.listing_raises: Exception | None = None
         self.delete_raises: Exception | None = None
         self.undeletable: set[str] = set()
-        #: What the set answers when asked what it is displaying. The real shape,
-        #: as recorded from the deployment's own television.
-        self.current_reply: object = {
-            "event": "get_current_artwork",
-            "content_id": "MY-F0001",
-            "content_type": "artstore",
-        }
-        self.current_raises: Exception | None = None
         self.artmode_reply: object = "on"
         self.artmode_raises: Exception | None = None
+
+        self.callbacks: dict[str, object] = {}
+        self.select_raises: Exception | None = None
+        #: Whether the set announces the selection at all. False is the dark set:
+        #: the request is taken, nothing is raised, and no event is ever emitted.
+        self.announces = True
+        #: The `is_shown` flag on the announcement, as a string on the wire.
+        self.announce_is_shown = "Yes"
+        #: An id to announce instead of the one selected — the set echoing a
+        #: selection somebody made with the remote.
+        self.announce_content_id: str | None = None
+        #: The `data` payload verbatim, for the shapes a set should not send.
+        self.announce_payload: object | None = None
+        #: Whether the announcement arrives *during* `select_image` rather than
+        #: after it returns. The real set is asynchronous, so the scheduled route
+        #: is the realistic one; the synchronous route is how a listener armed
+        #: after the request would miss the answer, and is asserted below.
+        self.announces_synchronously = False
+        #: How many times the set announces the one selection. More than one is a
+        #: duplicate event, which resolves an already-resolved waiter.
+        self.announce_times = 1
+
+    def set_callback(self, trigger: str, callback: object = None) -> None:
+        if callback is None:
+            self.callbacks.pop(trigger, None)
+        else:
+            self.callbacks[trigger] = callback
+
+    def _announcement(self, content_id: str) -> dict:
+        if self.announce_payload is not None:
+            data = self.announce_payload
+        else:
+            data = json.dumps(
+                {
+                    "event": "image_selected",
+                    "content_id": self.announce_content_id or content_id,
+                    "is_shown": self.announce_is_shown,
+                }
+            )
+        return {"event": "d2d_service_message", "data": data}
+
+    def _fire(self, response: dict) -> None:
+        handler = self.callbacks.get("image_selected")
+        if handler is not None:
+            handler("d2d_service_message", response)  # type: ignore[operator]
 
     async def start_listening(self) -> None:
         return None
@@ -76,23 +114,22 @@ class StubArt:
 
     async def select_image(self, content_id: str, show: bool = True) -> None:
         self.selected.append(content_id)
+        if self.select_raises is not None:
+            raise self.select_raises
+        if not self.announces:
+            return
+        response = self._announcement(content_id)
+        for _ in range(self.announce_times):
+            if self.announces_synchronously:
+                self._fire(response)
+            else:
+                asyncio.get_running_loop().call_soon(self._fire, response)
 
     async def set_slideshow_status(self, duration: int = 0, **kwargs: object) -> None:
         self.slideshow_duration = duration
 
     async def set_brightness(self, value: int) -> None:
         self.brightness.append(value)
-
-    async def get_current(self) -> object:
-        """What the set says it is displaying — including the shapes it should not send.
-
-        Typed as `object` because the point of the tests below is what this seam
-        does with a reply that is not the documented one: the library asserts on
-        an empty answer and passes anything else straight through.
-        """
-        if self.current_raises is not None:
-            raise self.current_raises
-        return self.current_reply
 
     async def get_artmode(self) -> object:
         if self.artmode_raises is not None:
@@ -106,7 +143,15 @@ def art() -> StubArt:
 
 
 @pytest.fixture
-def tv(art: StubArt, tmp_path) -> SamsungTv:
+async def tv(art: StubArt, tmp_path) -> SamsungTv:
+    """Connected the way production connects, not by assigning the client in.
+
+    **`connect` is what subscribes to the set's announcements**, so a fixture
+    that reached past it would leave every selection here confirmed by a
+    subscription the daemon never makes — and the one test that checks the
+    registration would be the only thing standing between that and a green
+    suite. Going through it costs a thread hop and buys the guarantee.
+    """
     client = SamsungTv(
         host="10.0.0.1",
         port=8002,
@@ -114,8 +159,13 @@ def tv(art: StubArt, tmp_path) -> SamsungTv:
         client_name="tvpi-test",
         connect_timeout_seconds=1.0,
         upload_timeout_seconds=5.0,
+        # Short because four tests below deliberately wait it out. Production's
+        # window is seconds; nothing here depends on the number, only on it
+        # elapsing.
+        select_confirm_seconds=0.05,
     )
-    client._art = art  # already connected; `connect` itself is exercised below
+    client._construct = lambda: art  # the constructor is the blocking network I/O
+    await client.connect()
     return client
 
 
@@ -241,7 +291,7 @@ class TestFailureLeavesNothingBehind:
             await tv.listed_content_ids()
 
         with pytest.raises(TvUnavailable, match="not connected"):
-            await tv.select_image("MY-1")
+            await tv.show("MY-1")
 
     async def test_every_library_exception_arrives_as_one_type(self, tv: SamsungTv, art: StubArt):
         """The daemon's response is the same to all of them, and branching on the
@@ -295,57 +345,140 @@ class TestTheRestOfTheSurface:
             await tv.listed_content_ids()
 
 
-# -- the confirming read ------------------------------------------------------
+# -- confirming that a selection reached the wall -----------------------------
 #
-# The read the whole selection-confirmation design rests on. It has to answer
-# three ways rather than two: the id it was given, a *different* id, or nothing
-# it can vouch for — and the daemon treats the third as agreement, because a set
-# that declines to describe its own display must not stop a working wall. That
-# choice is only safe if "declines" is genuinely distinguished here.
+# The set announces a selection by emitting `image_selected`; there is no reader
+# on this firmware that answers "what is on the wall". `get_current_artwork` was
+# used for a day and reports the art-store slot instead — it named the same id
+# for days while the wall visibly changed — so the whole design rests on the
+# event, and on listening for it from before the request goes out.
 
 
-async def test_it_reports_the_id_the_set_names(tv: SamsungTv, art: StubArt):
-    art.current_reply = {"event": "get_current_artwork", "content_id": "MY-F0007", "content_type": "mypicture"}
+async def test_a_selection_the_set_announces_is_reported_shown(tv: SamsungTv, art: StubArt):
+    assert await tv.show("MY-F0007") is True
+    assert art.selected == ["MY-F0007"]
 
-    assert await tv.current_content_id() == "MY-F0007"
 
+async def test_a_set_that_announces_nothing_reports_the_wall_unchanged(tv: SamsungTv, art: StubArt):
+    """The defect this path exists for, and the one no return value can carry.
 
-async def test_it_reports_an_id_that_is_not_the_one_we_asked_for(tv: SamsungTv, art: StubArt):
-    """The case the design exists for: the set displaying something else.
-
-    Returned verbatim rather than compared here — the seam reports what the
-    television says, and the loop is what decides whether that is agreement.
+    With its panel dark this television takes the request, raises nothing and
+    emits no event, while uploads, removals and brightness all keep working. It
+    is reported as a wall that did not move, not as an outage.
     """
-    art.current_reply = {"event": "get_current_artwork", "content_id": "SAM-F0222", "content_type": "artstore"}
+    art.announces = False
 
-    assert await tv.current_content_id() == "SAM-F0222"
+    assert await tv.show("MY-F0007") is False
+
+
+async def test_a_set_that_admits_it_is_not_showing_is_not_believed_to_be(tv: SamsungTv, art: StubArt):
+    """`is_shown` is read rather than the announcement merely being counted."""
+    art.announce_is_shown = "No"
+
+    assert await tv.show("MY-F0007") is False
+
+
+async def test_an_announcement_about_another_image_does_not_confirm_ours(tv: SamsungTv, art: StubArt):
+    """The set echoes selections nobody here made — somebody using the remote.
+
+    Resolving on any announcement would report the wrong work as the one on the
+    wall, and the daemon records what it believes is displayed.
+    """
+    art.announce_content_id = "SAM-F0222"
+
+    assert await tv.show("MY-F0007") is False
+
+
+async def test_the_announcement_is_caught_even_when_it_arrives_during_the_request(tv: SamsungTv, art: StubArt):
+    """Why selecting and confirming are one call rather than two.
+
+    The real set has been measured announcing 0.49 s after the request, so a
+    caller that registered its listener *after* `select_image` returned would be
+    racing it — and would report a working wall as stuck. Arming first is what
+    this asserts: the stub fires the event before the request even returns.
+    """
+    art.announces_synchronously = True
+
+    assert await tv.show("MY-F0007") is True
+
+
+async def test_the_same_announcement_arriving_twice_is_harmless(tv: SamsungTv, art: StubArt):
+    """A duplicate event must not raise out of the handler.
+
+    It runs on the library's reader task, so an exception there is delivered to
+    nobody who could act on it and takes the socket's reader down with it — the
+    connection then looks alive while no announcement ever arrives again, and
+    every selection for the rest of the daemon's life reports the wall unchanged.
+    """
+    art.announces_synchronously = True
+    art.announce_times = 2
+
+    assert await tv.show("MY-F0007") is True
 
 
 @pytest.mark.parametrize(
-    "reply",
+    "payload",
     [
-        pytest.param("not a mapping at all", id="reply is not a dict"),
-        pytest.param({"event": "get_current_artwork"}, id="no content_id in it"),
-        pytest.param({"content_id": ""}, id="content_id is empty"),
-        pytest.param({"content_id": 12345}, id="content_id is not a string"),
+        pytest.param("not json at all", id="payload is not json"),
+        pytest.param(json.dumps(["a", "list"]), id="payload is not a mapping"),
+        pytest.param(json.dumps({"event": "image_selected"}), id="no content_id in it"),
     ],
 )
-async def test_an_answer_it_cannot_vouch_for_is_no_answer(tv: SamsungTv, art: StubArt, reply: object):
-    """Each of these would otherwise be compared against a content id, and a
-    comparison against a value whose meaning nobody knows is worse than none."""
-    art.current_reply = reply
+async def test_an_announcement_it_cannot_read_confirms_nothing(tv: SamsungTv, art: StubArt, payload: object):
+    """Unreadable is treated as unheard, which falls to the timeout and reports
+    the wall unchanged — the safe direction, since claiming a picture is up when
+    it is not is the whole defect."""
+    art.announce_payload = payload
 
-    assert await tv.current_content_id() is None
+    assert await tv.show("MY-F0007") is False
 
 
-async def test_a_set_that_goes_away_mid_read_is_an_outage_not_a_disagreement(tv: SamsungTv, art: StubArt):
-    """`TvUnavailable`, not None. The two want opposite responses: an outage holds
-    the wall and reconnects, while "cannot say" lets the rotation stand."""
-    art.current_raises = ResponseError("the set stopped answering")
+async def test_a_set_that_goes_away_mid_selection_is_an_outage_not_a_still_wall(tv: SamsungTv, art: StubArt):
+    """`TvUnavailable`, not False. The two want opposite responses: an outage
+    holds the wall and reconnects, while a still wall backs off and says why."""
+    art.select_raises = ResponseError("the set stopped answering")
 
     with pytest.raises(TvUnavailable):
-        await tv.current_content_id()
+        await tv.show("MY-F0007")
     assert art.closed == 1, "the connection was kept after a failure nobody can reason about"
+
+
+async def test_a_late_announcement_resolves_nothing_after_the_attempt_is_over(tv: SamsungTv, art: StubArt):
+    """The waiting slot is cleared on every route out.
+
+    A set that answers after the window has closed must not have its reply
+    applied to whatever selection came next — which is what a slot left in place
+    across attempts would do.
+    """
+    art.announces = False
+    assert await tv.show("MY-F0007") is False
+
+    art._fire(art._announcement("MY-F0007"))  # the set, answering far too late
+
+    assert tv._awaiting is None
+
+
+async def test_connecting_subscribes_to_the_announcement(art: StubArt, tmp_path):
+    """Registered per connection, not once per process.
+
+    A failed call abandons the client, so the next attempt is a new object; a
+    subscription made against the old one would leave every later selection
+    unconfirmable for the life of the daemon.
+    """
+    tv = SamsungTv(
+        host="10.0.0.1",
+        port=8002,
+        token_file=tmp_path / "token_file",
+        client_name="tvpi-test",
+        connect_timeout_seconds=1.0,
+        upload_timeout_seconds=5.0,
+        select_confirm_seconds=0.05,
+    )
+    tv._construct = lambda: art  # type: ignore[method-assign]
+
+    await tv.connect()
+
+    assert "image_selected" in art.callbacks
 
 
 async def test_the_art_mode_flag_is_passed_through(tv: SamsungTv, art: StubArt):

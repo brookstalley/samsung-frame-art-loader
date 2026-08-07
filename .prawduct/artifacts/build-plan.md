@@ -463,8 +463,8 @@ removed, brightness set from the solar angle, a work uploaded and selected — a
 reported `showing Blue Half Circle` at a wall that was still displaying an
 art-store image. **The set was dark, and in that state `select_image` is accepted
 and ignored**: no error, no event, no change, indefinitely, while every other
-call in a rotation succeeds. So a selection is now confirmed by reading back what
-the set displays, and "the wall did not change" is its own outcome — the pass
+call in a rotation succeeds. So a selection is now confirmed against the set
+rather than assumed, and "the wall did not change" is its own outcome — the pass
 ends rather than walking the theme, the place is given back, the `show_now` stays
 unconsumed by the same rule an outage leaves it unconsumed, and it is said once
 with the set's own art-mode flag rather than once per interval.
@@ -472,12 +472,20 @@ with the set's own art-mode flag rather than once per interval.
 **This also retired a claim this plan and `operator-verification.md` both
 carried** — that standby is the failure state where the art channel answers
 `ms.channel.timeOut`. It is not: both websocket channels open, and `PowerState`
-reports whether the panel is lit and nothing more. The state map is
-`samsung-tv-state-findings.md`, written from measurement, and it is honest about
-its gaps: the art-mode column is one run plus inference, the television-on column
-is empty, and **the confirming read is proven to catch a dark wall but has never
-been observed agreeing on a healthy one** — which is now the first thing to watch
-in art mode, because if it is wrong there the wall stops.
+reports whether the panel is lit and nothing more. (`ms.channel.timeOut` has since
+been seen *in art mode*, after heavy connection churn and a SIGKILLed daemon; it
+is a connection-slot symptom, not a state signature.) The state map is
+`samsung-tv-state-findings.md`, written from measurement.
+
+**The wall was watched in art mode on 2026-08-07 and the confirming read was
+wrong**, in the direction that stops the wall: `get_current` reports the
+art-store slot, so every real rotation read as a failure and the wall parked on
+one picture. Confirmation moved to the set's own `image_selected` announcement,
+and the live pass then completed — three unattended rotations at the manifest's
+180 s (Calder → Hokusai → Klee), each matching what the operator saw; the third
+with curation stopped; and a restart that re-showed the same picture and then
+carried on to the next work. **Chunk 12's three acceptance criteria are met on
+the real television.**
 
 `tests/preferences/test_plane_isolation.py` landed with the plane's first modules,
 which closes the two-session-old finding that the norm index named an enforcement
@@ -1592,6 +1600,27 @@ two missing deliverables.)*
   which call works in which state; `architecture.md` § Failure Modes carries the
   rule; the double can now be armed with the behaviour, which is what makes the
   tests above possible at all.
+
+  **The first pass in art mode, on 2026-08-07, then found the confirmation itself
+  wrong — and this is the finding to carry past this chunk.** `get_current` was
+  adopted as the confirming read the day before and had been *verified against a
+  dark set*, where it agrees with the failure because it never changes at all. It
+  reports the art-store slot: it named one `SAM-*` id across every observation
+  ever made here while the wall visibly changed underneath it. So the mechanism
+  built to stop the daemon claiming rotations it had not performed instead denied
+  every rotation it *had* — and because the cursor only advances on a confirmed
+  show, the wall parked on one picture and re-selected it on every backoff step.
+  Confirmation is now the set's own `image_selected` announcement, which carries
+  the id and `is_shown` and does not fire at all in the dark state; selecting and
+  confirming became one operation at the seam, because an event measured arriving
+  in half a second cannot be listened for after the request that causes it.
+
+  **Both defects were invisible to nine passing suites and to two Critic rounds,
+  and each was found only by the next state of real hardware.** The first needed a
+  dark set, the second needed a lit one. The generalisable part is not "test
+  against hardware" but that **a double encodes what you already believe**, so the
+  states you have not been in are exactly the ones it cannot model — and that a
+  read verified in one state can be pure coincidence in that state.
 - **Acceptance criteria:** the wall rotates the active theme from the new
   daemon; killing curation changes nothing about display's behaviour; a display
   restart neither re-executes the last directive nor loses its place

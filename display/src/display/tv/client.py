@@ -111,19 +111,21 @@ class TvClient(ABC):
         """
 
     @abstractmethod
-    async def select_image(self, content_id: str) -> None:
-        """Put an image the set already holds on the wall."""
+    async def show(self, content_id: str) -> bool:
+        """Put an image the set already holds on the wall, and say whether it appeared.
 
-    @abstractmethod
-    async def current_content_id(self) -> str | None:
-        """What the television says it is displaying right now, or None if it won't say.
+        **Asking and confirming are one call because they cannot safely be two.**
+        The television reports a selection by *emitting* an event, not by
+        answering a later question, so the only sound confirmation listens from
+        before the request is sent. Split across two calls, every caller races
+        the set — and the shape invites the confirming *read* that this seam
+        previously carried, which was measured answering about something else
+        entirely (see `samsung.py`).
 
-        The confirming read for a selection, and it exists because the call that
-        makes one cannot be trusted: a set whose panel is dark accepts
-        `select_image`, raises nothing, emits no event, and keeps displaying what
-        it displayed before. Asking what it *shows* is the only way to tell that
-        apart from a selection that worked, and it is the same argument that
-        makes `remove` read the set's own list back rather than believe a reply.
+        Returns False for the failure the return value of a bare selection cannot
+        express: a set that accepts the request, raises nothing, and goes on
+        displaying what it had. Raises `TvUnavailable` if the set could not be
+        asked at all — which is a different event, and the caller treats it so.
         """
 
     @abstractmethod
