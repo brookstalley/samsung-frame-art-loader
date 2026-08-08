@@ -1771,7 +1771,7 @@ hardware.
   rotates the wall while rendering a label per selection; a panel that fails at
   init, at draw and mid-run each leave rotation running; the heartbeat file
   appears under `ART_ROOT` as `display-heartbeat.json` with `reported_at`, and
-  curation's existing reader — `curation/manifest/heartbeat.py`, built before any
+  curation's existing reader — `curation/src/curation/manifest/heartbeat.py`, built before any
   writer existed — reads it without modification
 - **Done when:**
   0. ~~verify-api — probe omni-epd/IT8951's runtime display surface on the real

@@ -21,7 +21,7 @@ changing.
 
 from abc import ABC, abstractmethod
 
-from display.panel.layout import Layout, Surface
+from display.panel.layout import Layout, Measure, Surface
 
 
 class SurfaceUnavailable(Exception):
@@ -49,6 +49,21 @@ class LabelSurface(ABC):
 
         A property of the device rather than a constant anywhere else: this is the
         one place that knows how big this particular panel or window is.
+        """
+
+    @property
+    @abstractmethod
+    def measure(self) -> Measure:
+        """How this surface measures text, for the layout tier to arrange with.
+
+        **On the surface rather than beside it, because only the surface knows.**
+        Line breaking depends on the real face at the real size, so the numbers
+        must come from whatever will actually draw — and a caller that had to
+        build a measurer itself would be constructing the rasterizer outside this
+        seam, which is the seam not existing.
+
+        A caller therefore needs nothing but this object: ask for `geometry`, lay
+        out against `measure`, hand the result to `show`.
         """
 
     @abstractmethod

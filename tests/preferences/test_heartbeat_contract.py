@@ -35,9 +35,11 @@ SHARED_CONSTANTS = ("HEARTBEAT_FILENAME", "REPORTED_AT_KEY")
 def string_constants(source: pathlib.Path) -> dict[str, str]:
     """Every module-level `NAME: ... = "literal"` in a file, without importing it.
 
-    Annotated assignments only, which is how both modules declare these — they are
-    `Final[str]`. A plain assignment would be missed, so the emptiness of the
-    result is asserted against rather than assumed.
+    Both spellings are read: an annotated assignment, which is how both modules
+    declare these today (`Final[str]`), and a plain one, so a module that drops
+    its annotation does not silently fall out of the comparison. Only single-name
+    targets count — a tuple unpack holding one of these would be a shape neither
+    module uses and guessing at it would be worse than missing it.
     """
     tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
     found: dict[str, str] = {}

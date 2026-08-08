@@ -1,0 +1,59 @@
+# The curation plane: catalogue, discovery, acquisition, the browser UI and MCP.
+#
+# Install to /etc/systemd/system/curation.service. See deploy/README.md for the
+# cutover, which creates the `tvpi` account this unit runs as.
+
+[Unit]
+Description=Samsung Frame art wall — curation plane
+Documentation=file:///home/tvpi/source/samsung-frame-art-loader/deploy/README.md
+
+# Same reasoning as the display unit: the stock five-starts-in-ten-seconds limit
+# turns a reproducible fault into a unit that gives up after five log lines.
+# Paired with RestartSec= below, which is what makes "retry forever" safe.
+StartLimitIntervalSec=0
+
+# No ordering dependency on the display plane, in either direction. Neither
+# requires the other to start.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tvpi
+Group=tvpi
+
+WorkingDirectory=/home/tvpi/source/samsung-frame-art-loader/curation
+
+# Un-prefixed, for the reason spelled out in display.service: a missing
+# environment file must refuse to start rather than fail at import.
+EnvironmentFile=/home/tvpi/source/samsung-frame-art-loader/.env
+
+ExecStart=/usr/bin/env uv run python -m curation
+
+# **`on-failure`, not `always`, and the difference is deliberate.** This plane's
+# downtime is not visible on the wall: the display plane goes on rotating the
+# last manifest for as long as it takes, which is the availability norm working
+# rather than degradation. A clean exit here is somebody stopping it on purpose,
+# and it should stay stopped.
+Restart=on-failure
+RestartSec=5
+
+# **The one non-obvious setting in this file, and it exists because of
+# co-location.** A runaway acquisition — a genuine gigapixel scan is 20–40x the
+# measured corpus maximum — must not be able to invoke the OOM killer against
+# the display plane sharing this box. Capping this plane converts a shared-fate
+# failure into a contained one, which is most of what the process split buys on
+# a single machine: curation dies, the wall keeps turning, and the journal says
+# which happened.
+MemoryMax=2G
+
+# Nothing here talks to the television or the panel, so there is no half-open
+# hardware channel to protect on the way out and systemd's default stop timeout
+# is left alone.
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=curation
+
+[Install]
+WantedBy=multi-user.target

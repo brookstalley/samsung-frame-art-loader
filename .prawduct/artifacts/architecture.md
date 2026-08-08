@@ -553,13 +553,16 @@ is no network between planes.
   seconds instead of blanking the wall for the five minutes forty uploads take.
   **A selection is confirmed by the set's own `image_selected` announcement**
   before anything is logged or recorded (§ Failure Modes). That callback is
-  registered by the television seam, per connection, and confirming a selection
-  is its only consumer today — it resolves the one selection currently waiting
-  and nothing keeps a view of the set's state between calls. The label renderer is
-  the first consumer that will want one, because captioning the wall means knowing
-  what is on it after the moment it was put there — and the library keeps one
-  handler per event rather than a list, so a second subscriber to this event
-  replaces the confirmation handler rather than joining it.
+  registered by the television seam, per connection. **The library keeps one
+  handler per event rather than a list**, so a second subscriber registered
+  directly would replace the confirmation handler rather than join it — silently,
+  after which every rotation falls to its timeout and reports a wall that will not
+  move while the newcomer works perfectly. That hazard is closed as of 2026-08-07:
+  the seam fans the announcement out through `TvClient.observe_selections`, which
+  resolves the pending selection first and then hands the announcement to every
+  observer, isolating each so one that raises costs neither another observer nor
+  the socket's reader task. Adding a listener is therefore safe; registering one
+  with the library directly is still not, and nothing should.
 - **Renders the e-paper label** (decided 2026-07-20 — see Decision Log). The
   **e-paper panel's** geometry (1448×1072) stays with the plane that owns that
   panel. Display does *not* render the mat — the mat is composed by curation into

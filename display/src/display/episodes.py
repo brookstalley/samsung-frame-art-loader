@@ -30,10 +30,11 @@ from collections.abc import Callable
 class ReportOnce:
     """A condition that persists, announced at each edge and never in between.
 
-    Holds no message and no log level: the four conditions using it report at
-    WARNING, at INFO, and one of them has to ask the television a question before
-    it can write its line. What is common is the *bookkeeping* — has this been
-    said, and is this the moment it stops being true — and that is all this is.
+    Holds no message and no log level: the three conditions using it today report
+    at WARNING, at INFO, and one of them has to ask the television a question
+    before it can write its line. What is common is the *bookkeeping* — has this
+    been said, and is this the moment it stops being true — and that is all this
+    is.
 
     Both methods answer "is this an edge?" rather than mutating and staying
     silent, so a caller cannot report without transitioning or transition without

@@ -1,10 +1,12 @@
 """The heartbeat this plane writes, and the atomicity curation's polling needs.
 
-The cross-plane half — that curation's reader accepts what this writes — is
-asserted from the curation suite, where that reader can be imported. This plane
-may not import it: the isolation guard forbids it, and rightly, since a display
-module reaching into curation is the second channel the whole norm exists to
-prevent. What is pinned here is the shape; what is pinned there is the agreement.
+The cross-plane half — that both planes spell the filename and the instant the
+same way — is asserted by `tests/preferences/test_heartbeat_contract.py` in the
+repository-root suite, which reads both sources with AST. It lives there because
+neither plane can import the other: the isolation guard forbids display reaching
+into curation, and rightly, since that is the second channel the whole norm
+exists to prevent. What is pinned here is the shape; what is pinned there is the
+agreement.
 """
 
 import json

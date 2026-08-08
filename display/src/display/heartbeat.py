@@ -9,7 +9,7 @@ still giving a health surface something real to read.
 
 **Two names in this document are a contract rather than a preference, because the
 reader was built first.** The file is `display-heartbeat.json` under `ART_ROOT`
-and the instant is spelled `reported_at`. `curation/manifest/heartbeat.py` treats
+and the instant is spelled `reported_at`. `curation/src/curation/manifest/heartbeat.py` treats
 any other spelling as an unreadable heartbeat and says so — so a writer that
 called the field `timestamp` would produce a plane that looks *down* to curation
 while running perfectly. That is this product's defining failure mode
@@ -114,12 +114,22 @@ def path_in(art_root: Path) -> Path:
 def write(art_root: Path, health: Health, *, reported_at: datetime) -> None:
     """Put the heartbeat on disk, atomically, replacing whatever was there.
 
-    **Temp-and-rename, the same discipline as the manifest**, and for a sharper
-    reason here: curation polls this file on its own schedule, so a plain
-    truncating write leaves a window in which the reader sees half a document —
-    which it correctly reports as an unreadable heartbeat, i.e. as this plane
+    **Temp-and-rename, and the same discipline as the manifest builder's
+    `write_atomically` down to the `fsync`.** Two different failures are being
+    closed and only one of them is the obvious one.
+
+    The obvious one is the reader: curation polls this file on its own schedule,
+    so a plain truncating write leaves a window in which it sees half a document
+    — which it correctly reports as an unreadable heartbeat, i.e. as this plane
     being broken. `os.replace` is atomic within a filesystem, and the temp file is
     made in the same directory to guarantee that.
+
+    The other is power. This runs on a Pi with an SD card and no UPS, and a
+    rename can reach the disk before the bytes it renames do — so a cut at the
+    wrong moment leaves a heartbeat that exists, is the right size, and contains
+    nothing. `flush` plus `os.fsync` before the rename is what orders them, and
+    leaving it out is the defect that only ever appears after an outage, which is
+    exactly when somebody is reading this file to find out what happened.
 
     Raises on failure rather than swallowing. The caller is the one that knows a
     heartbeat is an annotation and not the product, and it is the caller that
@@ -129,12 +139,19 @@ def write(art_root: Path, health: Health, *, reported_at: datetime) -> None:
     temporary = destination.with_name(f"{destination.name}.tmp")
     payload = json.dumps(health.document(reported_at=reported_at), indent=2, ensure_ascii=False)
     try:
-        temporary.write_text(payload + "\n", encoding="utf-8")
+        with temporary.open("w", encoding="utf-8") as handle:
+            handle.write(payload + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
         os.replace(temporary, destination)
-    except OSError:
-        # The partial temp file is this plane's litter, not curation's problem —
-        # but it is named `.tmp` precisely so a reader never mistakes it for the
-        # heartbeat, so failing to remove it costs nothing and must not mask the
-        # original error.
+    except BaseException:
+        # **`BaseException`, matching the manifest builder**: a `KeyboardInterrupt`
+        # or a cancelled task between the write and the rename would otherwise
+        # leave the temp file behind for ever. It is named `.tmp` so a reader can
+        # never mistake it for the heartbeat, so this is tidiness rather than
+        # correctness — but it is tidiness on a device nobody visits.
+        #
+        # Nothing is swallowed: the cleanup is best-effort and the original
+        # exception goes straight back out.
         temporary.unlink(missing_ok=True)
         raise
