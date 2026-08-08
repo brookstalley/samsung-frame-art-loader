@@ -193,3 +193,64 @@ class TestConfirmationIsStillItself:
         tv._on_image_selected("image_selected", announcement("MY_F0009", is_shown=False))
 
         assert waiter.result() is True
+
+
+class TestSubscribingTwiceIsSubscribingOnce:
+    """**The list is per client object and lives as long as the process**, while
+    the library callbacks it fans out from are re-registered on every
+    reconnection. A caller that reasonably re-subscribed after a drop would
+    otherwise be told twice per announcement for the rest of the daemon's life —
+    and what follows an announcement here is a full-frame e-paper redraw, so a
+    duplicate is one and a half seconds of the panel drawing what it just drew.
+    """
+
+    def test_the_same_observer_registered_twice_is_told_once(self, tv: SamsungTv):
+        heard = []
+
+        tv.observe_selections(heard.append)
+        tv.observe_selections(heard.append)
+
+        tv._on_image_selected("image_selected", announcement("tv-1"))
+
+        assert len(heard) == 1, "one announcement reached a re-subscribed observer twice"
+
+    def test_two_different_observers_are_both_told(self, tv: SamsungTv):
+        """The guard must reject duplicates, not second subscribers — collapsing
+        those is the original defect wearing different clothes."""
+        first, second = [], []
+
+        tv.observe_selections(first.append)
+        tv.observe_selections(second.append)
+
+        tv._on_image_selected("image_selected", announcement("tv-1"))
+
+        assert len(first) == 1 and len(second) == 1
+
+
+class TestTheDoubleMatchesTheClientOnThisSeam:
+    """A fake that is *stricter* than the thing it stands in for is the direction
+    that hurts: a test describing behaviour the product really has fails, and the
+    obvious fix is to weaken the test rather than the double.
+
+    `SamsungTv._tell_observers` isolates each observer, on the grounds that they
+    are strangers to each other and this runs on the socket's reader task.
+    `FakeTv.announce` did not, until this was noticed.
+    """
+
+    def test_a_raising_observer_does_not_cost_a_later_one_its_announcement(self):
+        from fakes import FakeTv
+
+        tv = FakeTv()
+        heard = []
+
+        tv.observe_selections(_explode)
+        tv.observe_selections(heard.append)
+
+        tv.announce("tv-1", is_shown=True)
+
+        assert heard, "a raising observer took a later one's announcement with it"
+        assert tv.observer_failures == 1, "the failure was hidden rather than isolated"
+
+
+def _explode(_announcement) -> None:
+    raise RuntimeError("the label renderer fell over")

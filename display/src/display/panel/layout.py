@@ -51,8 +51,14 @@ LEADING: Final[float] = 0.35
 
 
 @dataclass(frozen=True, slots=True)
-class Surface:
-    """The geometry a label is being laid out for.
+class Geometry:
+    """The size and margin a label is being laid out for.
+
+    **Named for what it is rather than for what it describes**, which is not a
+    nicety: this package also has a `LabelSurface` — the device a label is put
+    onto — and `EpaperSurface(geometry=Surface(...))` was a line nobody could read
+    twice the same way. One of the two had to give, and the device kept the word
+    because that is the seam other code is written against.
 
     **Geometry is a parameter, never a constant.** The deployment may hold
     several devices with panels of different sizes, and a device may draw its
@@ -110,7 +116,7 @@ class Block:
 class Layout:
     """A whole label, placed on a surface, with an honest account of what did not fit."""
 
-    surface: Surface
+    surface: Geometry
     blocks: tuple[Block, ...]
     #: Lines that were left off because the surface could not hold them at a
     #: legible size, outermost-droppable last. Empty is the normal case.
@@ -121,7 +127,7 @@ class Layout:
         return not self.blocks
 
 
-def lay_out(lines: tuple[str, ...], surface: Surface, measure: Measure) -> Layout:
+def lay_out(lines: tuple[str, ...], surface: Geometry, measure: Measure) -> Layout:
     """Place the label's lines top-down, dropping from the bottom what will not fit.
 
     `lines` arrives in wall-label order — title, artist, nationality, dates,
@@ -149,7 +155,7 @@ def lay_out(lines: tuple[str, ...], surface: Surface, measure: Measure) -> Layou
     )
 
 
-def _place(lines: tuple[str, ...], surface: Surface, measure: Measure) -> list[Block]:
+def _place(lines: tuple[str, ...], surface: Geometry, measure: Measure) -> list[Block]:
     """Stack these lines from the top margin down, at the size each one earns."""
     blocks: list[Block] = []
     y = surface.margin_px
@@ -184,7 +190,7 @@ def _size_for(index: int) -> int:
     return BODY_SIZE_PX
 
 
-def _overflows(blocks: list[Block], surface: Surface) -> bool:
+def _overflows(blocks: list[Block], surface: Geometry) -> bool:
     """Whether the stack runs past the bottom margin.
 
     Measured to the bottom of the last block rather than by summing heights and

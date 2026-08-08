@@ -52,7 +52,7 @@ from display.config import Settings
 from display.episodes import Backoff, ReportOnce
 from display.logs import work_context
 from display.manifest import Entry, Manifest, Watcher
-from display.panel import LabelSurface, SurfaceUnavailable, lay_out, read_label
+from display.panel import LabelSurface, lay_out, read_label
 from display.state import Binding, DisplayState, UploadStatus
 from display.tv import RemovalOutcome, SelectionAnnouncement, TvClient, TvRemovalUnconfirmed, TvUnavailable, TvUploadFailed
 
@@ -216,7 +216,19 @@ class Daemon:
         #: then be retried at the poll rate — one listing, one removal request and
         #: one INFO line a second, which is the same unbounded cadence as the two
         #: this loop already guards against.
-        self._reconcile_not_before: float | None = None
+        #:
+        #: **The same `Backoff` the connection and the upload retry use**, at a
+        #: fixed wait rather than a doubling one — equal bounds make `hold`'s
+        #: ladder a constant. It was a hand-rolled pair of a nullable float and a
+        #: comparison until the shape it rhymed with was extracted; keeping the
+        #: last copy would have left one due-time gate whose reset, its
+        #: "immediately the first time" rule and its arithmetic all had to be read
+        #: rather than recognised.
+        self._reconcile_wait = Backoff(
+            minimum=settings.tv_retry_max_seconds,
+            maximum=settings.tv_retry_max_seconds,
+            monotonic=clock.monotonic,
+        )
         self._brightness_at: float | None = None
         self._brightness_value: int | None = None
 
@@ -298,7 +310,7 @@ class Daemon:
             # usually what arrives after somebody has fixed whatever the set was
             # unhappy about. The wait exists to stop a *retry* loop, not to make
             # the plane ignore news.
-            self._reconcile_not_before = None
+            self._reconcile_wait.clear()
 
         manifest = self._watcher.current
         if manifest is None:
@@ -312,15 +324,16 @@ class Daemon:
 
         try:
             await self._connected()
-            if self._reconciliation_owed and self._reconcile_is_due():
+            if self._reconciliation_owed and self._reconcile_wait.is_due():
                 # Cleared only when the work actually settled: a set that goes
                 # away halfway through raises, and one that cannot say what it
                 # removed reports so — both leave the work owed for a later pass
                 # rather than recorded as done.
                 self._reconciliation_owed = not await self._reconcile_with_the_set(manifest)
-                self._reconcile_not_before = (
-                    None if not self._reconciliation_owed else self._clock.monotonic() + self._settings.tv_retry_max_seconds
-                )
+                if self._reconciliation_owed:
+                    self._reconcile_wait.hold()
+                else:
+                    self._reconcile_wait.clear()
             await self._apply_brightness()
             acted = await self._act_on_directive(manifest)
             if not acted:
@@ -389,14 +402,6 @@ class Daemon:
         # at the current work there would hand it a second full interval on every
         # catalogue edit, which on a busy afternoon is a wall that stops moving.
         self._cursor = found_at if not self._has_shown else (found_at + 1) % len(self._order)
-
-    def _reconcile_is_due(self) -> bool:
-        """Whether enough time has passed to bother the set about this again.
-
-        Only ever false after an attempt that left the work owed — the first one
-        happens immediately, which is what a fresh install needs.
-        """
-        return self._reconcile_not_before is None or self._clock.monotonic() >= self._reconcile_not_before
 
     # -- directives --------------------------------------------------------
 
@@ -686,7 +691,14 @@ class Daemon:
                 self._surface.measure,
             )
             self._surface.show(layout)
-        except SurfaceUnavailable as exc:
+        # **Widened from `SurfaceUnavailable` alone once a real surface existed,
+        # and the docstring above is why.** `show` converts its own failures, but
+        # `geometry` and `measure` are read outside it — and `measure` on the
+        # e-paper surface reaches a text stack through C bindings, which raises
+        # GLib errors related to nothing this module can name. A promise that
+        # nothing in here may stop the wall cannot be kept by a catch that lists
+        # the exceptions somebody thought of.
+        except Exception as exc:  # prawduct:allow prawduct/broad-except -- see above
             self._label_working = False
             self._record_error(f"the label surface refused a label ({exc})")
             if self._label_failed.begin():

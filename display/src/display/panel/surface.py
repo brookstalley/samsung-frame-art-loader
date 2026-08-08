@@ -25,7 +25,7 @@ changing.
 
 from abc import ABC, abstractmethod
 
-from display.panel.layout import Layout, Measure, Surface
+from display.panel.layout import Geometry, Layout, Measure
 
 
 class SurfaceUnavailable(Exception):
@@ -48,7 +48,7 @@ class LabelSurface(ABC):
 
     @property
     @abstractmethod
-    def geometry(self) -> Surface:
+    def geometry(self) -> Geometry:
         """The surface's own size and margin, for the layout tier to arrange within.
 
         A property of the device rather than a constant anywhere else: this is the

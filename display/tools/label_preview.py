@@ -25,7 +25,7 @@ from pathlib import Path
 from PIL import Image
 
 from display.panel import lay_out, read_label
-from display.panel.layout import Surface
+from display.panel.layout import Geometry
 from display.panel.pango import PangoRasterizer
 
 #: A work with every field populated, which is the case worth looking at: the
@@ -69,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
         layout_module.TITLE_SIZE_PX = args.title_px
 
     rasterizer = PangoRasterizer()
-    surface = Surface(width_px=args.width_px, height_px=args.height_px, margin_px=args.margin_px)
+    surface = Geometry(width_px=args.width_px, height_px=args.height_px, margin_px=args.margin_px)
     laid_out = lay_out(read_label(SAMPLE).lines(), surface, rasterizer.measure)
     raster = rasterizer.render(laid_out)
 

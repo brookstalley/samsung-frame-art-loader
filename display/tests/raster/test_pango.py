@@ -22,13 +22,13 @@ import pytest
 
 pytest.importorskip("gi", reason="the typesetter needs the `raster` group: uv sync --group raster")
 
-from display.panel.layout import Block, Layout, Surface  # noqa: E402 -- after the group check above
+from display.panel.layout import Block, Geometry, Layout  # noqa: E402 -- after the group check above
 from display.panel.pango import PangoRasterizer  # noqa: E402 -- importing it is what needs the group
 
 #: **Deliberately not a multiple of four.** Cairo pads each row of an A8 surface
 #: out to a four-byte boundary, so a width of 1448 — the reference panel's, and
 #: divisible by four — hides a stride bug completely. This one does not.
-AWKWARD = Surface(width_px=101, height_px=60, margin_px=5)
+AWKWARD = Geometry(width_px=101, height_px=60, margin_px=5)
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def rasterizer() -> PangoRasterizer:
     return PangoRasterizer()
 
 
-def a_layout(text: str = "Cat Litter", *, size_px: int = 12, y_px: int = 5, surface: Surface = AWKWARD) -> Layout:
+def a_layout(text: str = "Cat Litter", *, size_px: int = 12, y_px: int = 5, surface: Geometry = AWKWARD) -> Layout:
     return Layout(
         surface=surface,
         blocks=(Block(text=text, size_px=size_px, x_px=surface.margin_px, y_px=y_px, width_px=0, height_px=0),),

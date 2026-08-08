@@ -18,10 +18,10 @@ import logging
 import pytest
 
 from display.panel.epaper import GREYSCALE_MODE, EpaperSurface, open_panel
-from display.panel.layout import Block, Layout, Surface
+from display.panel.layout import Block, Geometry, Layout
 from display.panel.raster import Raster, Rasterizer
 
-GEOMETRY = Surface(width_px=8, height_px=4, margin_px=1)
+GEOMETRY = Geometry(width_px=8, height_px=4, margin_px=1)
 
 
 class FakeEpd:
@@ -276,3 +276,44 @@ class TestOpeningAPanelThatIsNotThere:
             open_panel("no_such_vendor.no_such_panel")
 
         assert "no_such_vendor.no_such_panel" in str(raised.value), "the operator is not told which device could not be opened"
+
+
+class TestTypesettingFailsInsideTheGuardRatherThanBeforeIt:
+    """`show` promises one exception type, and it has to be true of all of its work.
+
+    The rasterizer is a text stack reached through C bindings; a font map that
+    cannot be built raises something unrelated to anything the driver throws.
+    Typesetting outside the guard would make the promise true only of the half
+    that touches hardware — and the caller catches by type.
+    """
+
+    def test_a_rasterizer_that_raises_is_a_surface_that_is_unavailable(self):
+        from display.panel.surface import SurfaceUnavailable
+
+        class Broken(FlatRasterizer):
+            def render(self, layout):
+                raise RuntimeError("the text stack could not build a font map")
+
+        surface = a_surface(rasterizer=Broken())
+
+        with pytest.raises(SurfaceUnavailable) as raised:
+            surface.show(a_layout())
+
+        assert "could not build a font map" in str(raised.value)
+
+    def test_the_panel_is_not_touched_when_typesetting_failed(self):
+        """A frame that was never drawn must not cost a `prepare`/`sleep` cycle,
+        which on e-paper is real current and real seconds."""
+
+        class Broken(FlatRasterizer):
+            def render(self, layout):
+                raise RuntimeError("the text stack could not build a font map")
+
+        from display.panel.surface import SurfaceUnavailable
+
+        epd = FakeEpd()
+
+        with pytest.raises(SurfaceUnavailable):
+            a_surface(epd=epd, rasterizer=Broken()).show(a_layout())
+
+        assert epd.calls == [], "the panel was woken for a frame that did not exist"

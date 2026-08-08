@@ -18,7 +18,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
-from display.panel import Extent, LabelSurface, Layout, Measure, Surface, SurfaceUnavailable
+from display.panel import Extent, Geometry, LabelSurface, Layout, Measure, SurfaceUnavailable
 from display.tv import (
     RemovalOutcome,
     SelectionAnnouncement,
@@ -59,6 +59,10 @@ class FakeTv(TvClient):
         #: is re-registered per connection — a fake that dropped them on
         #: reconnection would hide a subscriber lost to an overnight outage.
         self.selection_observers: list[SelectionObserver] = []
+        #: How many observers raised while being told. Counted rather than
+        #: swallowed silently, so a test can assert the isolation happened rather
+        #: than merely that nothing exploded.
+        self.observer_failures = 0
         self.announced: list[SelectionAnnouncement] = []
 
         #: Armed failures. Each is the real client's behaviour, named for what a
@@ -179,7 +183,18 @@ class FakeTv(TvClient):
         announcement = SelectionAnnouncement(content_id=content_id, is_shown=is_shown)
         self.announced.append(announcement)
         for observer in self.selection_observers:
-            observer(announcement)
+            try:
+                observer(announcement)
+            except Exception:  # prawduct:allow prawduct/broad-except -- mirrors the real client; see below
+                # **Isolated because the real client isolates**, and a fake that
+                # did not would be stricter than the thing it stands in for — the
+                # direction that hurts. `SamsungTv._tell_observers` catches per
+                # observer, on the grounds that observers are strangers to each
+                # other and this runs on the socket's reader task. A fake that let
+                # one raise through would fail a test describing behaviour the
+                # product actually has, and the fix would have been to weaken the
+                # test.
+                self.observer_failures += 1
 
     def _dropping(self, exc: TvUnavailable) -> TvUnavailable:
         """Mark the connection gone, the way the real client does on any failure.
@@ -204,7 +219,11 @@ class FakeTv(TvClient):
         return self.art_mode == "on"
 
     def observe_selections(self, observer: SelectionObserver) -> None:
-        self.selection_observers.append(observer)
+        # Idempotent, as the real client is: subscribing twice must not mean being
+        # told twice, or a double that tolerated it would let a caller ship a
+        # duplicate registration this suite could never see.
+        if observer not in self.selection_observers:
+            self.selection_observers.append(observer)
 
     def art_mode_announcement_pending(self) -> bool:
         announced, self.art_mode_announced = self.art_mode_announced, False
@@ -278,15 +297,21 @@ class FakeSurface(LabelSurface):
     """
 
     def __init__(self, *, width_px: int = 1448, height_px: int = 1072, margin_px: int = 40) -> None:
-        self._geometry = Surface(width_px=width_px, height_px=height_px, margin_px=margin_px)
+        self._geometry = Geometry(width_px=width_px, height_px=height_px, margin_px=margin_px)
         #: Every layout this surface was asked to draw, in order.
         self.shown: list[Layout] = []
         self.closed = 0
         #: Armed failure: the panel refuses whatever it is handed.
         self.refuses = False
+        #: Armed failure of a different kind: **measuring** blows up, with
+        #: something that is not `SurfaceUnavailable`. That is not a hypothetical
+        #: shape — the real surface's `measure` reaches Pango through C bindings,
+        #: which raise GLib errors related to nothing this codebase can name, and
+        #: it is read by the caller *outside* the `show` that converts failures.
+        self.measurement_explodes = False
 
     @property
-    def geometry(self) -> Surface:
+    def geometry(self) -> Geometry:
         return self._geometry
 
     @property
@@ -295,6 +320,8 @@ class FakeSurface(LabelSurface):
 
     def _measure(self, text: str, size_px: int, wrap_px: int) -> Extent:
         """Predictable metrics — a stand-in for a rasterizer, not a font."""
+        if self.measurement_explodes:
+            raise RuntimeError("the text stack could not build a font map")
         glyph = max(1, size_px // 2)
         per_row = max(1, wrap_px // glyph)
         rows = max(1, math.ceil(len(text) / per_row))

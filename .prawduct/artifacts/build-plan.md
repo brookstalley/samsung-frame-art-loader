@@ -523,6 +523,42 @@ is named rather than discovered — **13A ships a type size it cannot justify**,
 which is why the plan requires it to be marked provisional at its definition
 site rather than merely chosen carefully.
 
+**13A's code is complete as of 2026-08-07 and its box is still `[ ]`, because one
+Done-when step is not code.** Step 0b — confirming against the real television
+that both the selection confirmation and an observer receive `image_selected` —
+has never run: the fan-out has spoken to no set. The daemon is stopped at the
+operator's request, so that step waits on the operator rather than on the build.
+Everything else the chunk owed is built, swept and green.
+
+Three things were settled at build. **The rendering tier is two objects, not
+one** — a `Rasterizer` that measures and draws into flat greyscale, and a device
+that puts those bytes somewhere — because the two halves install on different
+machines, and that turned out to be the same seam the ratified norm wanted: the
+monitor-with-a-mat-area device reuses the typesetting and supplies its own
+delivery. **The driver is injected rather than opened**, so the three corrections
+this product makes at that seam (the greyscale read-back, the raise-don't-return
+failure, the mounting rotation) are tested on a laptop with no panel and no
+ability to install the library; only `open_panel` needs hardware. And **a panel
+that will not open is a third state that is reported**, not a second road to
+`surface=None` — that collapse made a broken panel indistinguishable from a
+device that has none on curation's health surface, which is the same
+two-meanings-in-one-value fault `has_label_surface` was split out to fix,
+reappearing one level up.
+
+**The IT8951 pin-or-vendor decision is taken: pinned, on both install paths, with
+the Cython that builds it pinned too** — pinning the driver alone leaves the
+compiler free to move, which is the half the trigger note warned about.
+`project-state.yaml` carries the reasoning; it was verified resolving on the Pi
+rather than assumed, which is what distinguishes it from the previous status
+where a fresh resolve landed on the right commit only because upstream's master
+still happened to be it.
+
+**The typesetter got a CI job of its own**, because PyGObject does not import on
+this project's development Mac and the alternative was leaving the product's most
+important accessibility surface tested by nobody. `tests/test_default_suite_ci_scope.py`
+grew the claim that no directory a leg ignores may go unrun by every other job —
+the failure mode an `--ignore` introduces and a green board hides.
+
 ## Scaffolding
 
 ### Project Initialization

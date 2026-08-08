@@ -20,7 +20,7 @@ from display import logs
 from display.config import ConfigError, Settings, load
 from display.daemon import Clock, Daemon
 from display.manifest import Watcher
-from display.panel import LabelSurface, Surface, SurfaceUnavailable
+from display.panel import Geometry, LabelSurface, SurfaceUnavailable
 from display.state import DisplayState, StateSchemaTooNew
 from display.tv.samsung import SamsungTv
 
@@ -59,7 +59,7 @@ def label_surface(settings: Settings) -> LabelSurface | None:
     return EpaperSurface(
         epd=open_panel(settings.epd_device),
         rasterizer=PangoRasterizer(),
-        geometry=Surface(
+        geometry=Geometry(
             width_px=settings.epd_panel_width_px,
             height_px=settings.epd_panel_height_px,
             margin_px=settings.epd_margin_px,

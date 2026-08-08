@@ -13,7 +13,7 @@ import math
 
 import pytest
 
-from display.panel import Surface, lay_out
+from display.panel import Geometry, lay_out
 from display.panel.layout import ARTIST_SIZE_PX, BODY_SIZE_PX, LEADING, TITLE_SIZE_PX, Extent
 
 
@@ -30,7 +30,7 @@ def measured(text: str, size_px: int, wrap_px: int) -> Extent:
     return Extent(width_px=min(len(text) * glyph, wrap_px), height_px=rows * size_px)
 
 
-PANEL = Surface(width_px=1448, height_px=1072, margin_px=40)
+PANEL = Geometry(width_px=1448, height_px=1072, margin_px=40)
 
 
 class TestTheHierarchy:
@@ -78,7 +78,7 @@ class TestPlacement:
 
     def test_a_wrapped_line_is_given_the_room_it_actually_takes(self):
         """The next block must clear a two-row title, not a one-row one."""
-        narrow = Surface(width_px=300, height_px=1072, margin_px=20)
+        narrow = Geometry(width_px=300, height_px=1072, margin_px=20)
         long_title = "Triptych Window from the Coonley Playhouse, Riverside, Illinois"
 
         layout = lay_out((long_title, "Frank Lloyd Wright"), narrow, measured)
@@ -111,7 +111,7 @@ class TestWhatComesOffWhenItWillNotFit:
         reordered at another would pass a single-height check.
         """
         lines = ("The Banquet", "Jan Steen", "Dutch", "1626–1679", "Oil on canvas")
-        short = Surface(width_px=1448, height_px=height, margin_px=20)
+        short = Geometry(width_px=1448, height_px=height, margin_px=20)
 
         layout = lay_out(lines, short, measured)
 
@@ -121,7 +121,7 @@ class TestWhatComesOffWhenItWillNotFit:
     def test_what_is_kept_stays_at_its_full_size(self):
         """The floor. Type that shrinks to fit has quietly stopped being an
         accessibility surface, and only the person who cannot read it finds out."""
-        short = Surface(width_px=1448, height_px=200, margin_px=20)
+        short = Geometry(width_px=1448, height_px=200, margin_px=20)
 
         layout = lay_out(("The Banquet", "Jan Steen", "Dutch", "Oil on canvas"), short, measured)
 
@@ -129,7 +129,7 @@ class TestWhatComesOffWhenItWillNotFit:
         assert layout.blocks[1].size_px == ARTIST_SIZE_PX
 
     def test_nothing_placed_runs_past_the_bottom_margin(self):
-        short = Surface(width_px=1448, height_px=300, margin_px=20)
+        short = Geometry(width_px=1448, height_px=300, margin_px=20)
 
         layout = lay_out(("The Banquet", "Jan Steen", "Dutch", "1626–1679", "Oil on canvas"), short, measured)
 
@@ -142,7 +142,7 @@ class TestWhatComesOffWhenItWillNotFit:
         Returning an empty label would present that as a work with no name, and
         hide a deployment error behind a blank panel.
         """
-        tiny = Surface(width_px=200, height_px=50, margin_px=5)
+        tiny = Geometry(width_px=200, height_px=50, margin_px=5)
 
         layout = lay_out(("Triptych Window from the Coonley Playhouse", "Frank Lloyd Wright"), tiny, measured)
 
@@ -154,12 +154,12 @@ class TestDegenerateSurfaces:
     @pytest.mark.parametrize(
         ("surface", "why"),
         [
-            (Surface(width_px=40, height_px=1072, margin_px=40), "margins consume the whole width"),
-            (Surface(width_px=1448, height_px=80, margin_px=40), "margins consume the whole height"),
-            (Surface(width_px=0, height_px=0, margin_px=0), "no surface at all"),
+            (Geometry(width_px=40, height_px=1072, margin_px=40), "margins consume the whole width"),
+            (Geometry(width_px=1448, height_px=80, margin_px=40), "margins consume the whole height"),
+            (Geometry(width_px=0, height_px=0, margin_px=0), "no surface at all"),
         ],
     )
-    def test_there_is_nowhere_to_put_anything_and_it_says_so(self, surface: Surface, why: str):
+    def test_there_is_nowhere_to_put_anything_and_it_says_so(self, surface: Geometry, why: str):
         layout = lay_out(("The Banquet", "Jan Steen"), surface, measured)
 
         assert layout.is_empty, why
@@ -175,8 +175,8 @@ class TestDegenerateSurfaces:
 class TestGeometryIsAParameter:
     def test_two_surfaces_of_different_size_get_different_layouts(self):
         """The norm, asserted: the deployment may hold panels of several sizes."""
-        wide = Surface(width_px=1448, height_px=1072, margin_px=40)
-        narrow = Surface(width_px=400, height_px=1072, margin_px=40)
+        wide = Geometry(width_px=1448, height_px=1072, margin_px=40)
+        narrow = Geometry(width_px=400, height_px=1072, margin_px=40)
         lines = ("Triptych Window from the Coonley Playhouse, Riverside, Illinois", "Frank Lloyd Wright")
 
         on_wide = lay_out(lines, wide, measured)
@@ -185,7 +185,7 @@ class TestGeometryIsAParameter:
         assert on_wide.blocks[1].y_px != on_narrow.blocks[1].y_px
 
     def test_the_usable_area_is_the_surface_less_its_margins(self):
-        surface = Surface(width_px=1448, height_px=1072, margin_px=40)
+        surface = Geometry(width_px=1448, height_px=1072, margin_px=40)
 
         assert surface.text_width_px == 1368
         assert surface.text_height_px == 992

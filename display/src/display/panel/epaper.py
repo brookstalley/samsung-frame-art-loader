@@ -34,7 +34,7 @@ from typing import Final, Protocol, runtime_checkable
 
 from PIL import Image
 
-from display.panel.layout import Layout, Measure, Surface
+from display.panel.layout import Geometry, Layout, Measure
 from display.panel.raster import Raster, Rasterizer
 from display.panel.surface import LabelSurface, SurfaceUnavailable
 
@@ -101,7 +101,7 @@ class EpaperSurface(LabelSurface):
         *,
         epd: Epd,
         rasterizer: Rasterizer,
-        geometry: Surface,
+        geometry: Geometry,
         rotate_degrees: int = DEFAULT_ROTATE_DEGREES,
     ) -> None:
         if rotate_degrees not in SUPPORTED_ROTATIONS:
@@ -164,7 +164,7 @@ class EpaperSurface(LabelSurface):
         )
 
     @property
-    def geometry(self) -> Surface:
+    def geometry(self) -> Geometry:
         """The configured panel, not the driver's report.
 
         Configuration wins because the layout has to be arranged before anything
@@ -184,8 +184,14 @@ class EpaperSurface(LabelSurface):
         **Blocks for seconds** — 1.5–1.9 s measured, and no partial refresh exists
         for this driver, so even a one-character change is a whole frame.
         """
-        image = _as_image(self._rasterizer.render(layout), self._rotate_degrees)
         try:
+            # **Typesetting is inside the guard, not before it.** The rasterizer
+            # is a text stack reached through C bindings, and a font map that
+            # cannot be built raises something with no relation to anything the
+            # driver throws. Leaving it outside would make this method's promise —
+            # a failure here is a `SurfaceUnavailable` — true only of the half of
+            # its work that touches hardware, and the caller catches that one type.
+            image = _as_image(self._rasterizer.render(layout), self._rotate_degrees)
             self._epd.prepare()
             # No return value is read. `display()` answers `None` whether it
             # worked or not, so the only thing that distinguishes the two is
@@ -193,8 +199,8 @@ class EpaperSurface(LabelSurface):
             self._epd.display(image)
             self._epd.sleep()
         # The driver stack raises SPI, GPIO and Cython errors that share no base
-        # class, and the caller answers all of them the same way: say so once,
-        # and keep rotating the wall.
+        # class, and the text stack above adds GLib's; the caller answers all of
+        # them the same way: say so once, and keep rotating the wall.
         except Exception as exc:  # prawduct:allow prawduct/broad-except -- see above
             raise SurfaceUnavailable(f"the panel refused a frame ({exc})") from exc
 

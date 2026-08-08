@@ -27,7 +27,7 @@ caller and reported, and the picture changes regardless — a panel that is brok
 missing, or slow leaves the wall rotating.
 """
 
-from display.panel.layout import Block, Extent, Layout, Measure, Surface, lay_out
+from display.panel.layout import Block, Extent, Geometry, Layout, Measure, lay_out
 from display.panel.metadata import LabelText, read_label
 from display.panel.raster import Raster, Rasterizer
 from display.panel.surface import LabelSurface, SurfaceUnavailable
@@ -47,7 +47,7 @@ __all__ = [
     "Measure",
     "Raster",
     "Rasterizer",
-    "Surface",
+    "Geometry",
     "SurfaceUnavailable",
     "lay_out",
     "read_label",

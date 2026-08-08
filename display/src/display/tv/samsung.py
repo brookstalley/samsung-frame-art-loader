@@ -236,8 +236,19 @@ class SamsungTv(TvClient):
         including the confirmations the rotation is waiting for. Anything
         expensive — drawing a panel, writing a file — belongs on the caller's own
         task, driven by what it learns here.
+
+        **Registering the same observer twice registers it once.** This list is
+        per client object and lives as long as the process, while the library
+        callbacks below are re-registered on every reconnection — so a caller that
+        reasonably re-subscribed after a drop would otherwise be told twice per
+        announcement for the rest of the daemon's life, and the drawing that
+        follows would redraw a panel it had just drawn. **There is deliberately no
+        way to unsubscribe**: nothing needs one, the list is bounded by the number
+        of distinct callers rather than by time, and an unused removal path is one
+        more thing to keep correct.
         """
-        self._selection_observers.append(observer)
+        if observer not in self._selection_observers:
+            self._selection_observers.append(observer)
 
     def _on_image_selected(self, _event: str, response: dict[str, Any]) -> None:
         """Resolve the selection this announcement is about, then tell everyone.

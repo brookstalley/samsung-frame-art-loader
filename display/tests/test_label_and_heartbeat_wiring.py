@@ -96,6 +96,38 @@ class TestTheLabelFollowsTheWall:
 
 class TestAPanelFailureNeverStopsTheWall:
     @pytest.mark.asyncio
+    async def test_a_failure_that_is_not_the_declared_one_still_leaves_the_wall_rotating(self, labelled, surface, tv, publish):
+        """**The half a declared exception type cannot cover.**
+
+        `show` converts its own failures, but the caller reads `geometry` and
+        `measure` outside it — and `measure` on the real surface reaches Pango
+        through C bindings, which raise GLib errors related to nothing this
+        codebase can name. A catch listing only the exceptions somebody thought of
+        would let one of those past, and the promise that nothing about a label
+        may stop the wall would be false in exactly the case nobody rehearsed: a
+        Pi with a font cache it cannot build.
+        """
+        surface.measurement_explodes = True
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter"}})
+
+        await labelled.tick()
+
+        assert tv.displaying is not None, "a text stack that could not measure took the wall down with it"
+        assert surface.shown == []
+
+    @pytest.mark.asyncio
+    async def test_that_failure_is_reported_rather_than_swallowed(self, labelled, surface, publish, caplog):
+        """Caught broadly is not the same as caught silently: this is a real fault
+        and the journal is where this plane says so."""
+        surface.measurement_explodes = True
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter"}})
+
+        with caplog.at_level("WARNING"):
+            await labelled.tick()
+
+        assert [r for r in caplog.records if getattr(r, "event", None) == "label.failed"]
+
+    @pytest.mark.asyncio
     async def test_a_refusing_surface_leaves_the_picture_selected(self, labelled, surface, tv, publish):
         surface.refuses = True
         publish(["work-a"], labels={"work-a": {"title": "Cat Litter"}})
