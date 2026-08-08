@@ -46,6 +46,24 @@ display suite drives a double behind the TV interface, which is why it runs on a
 GitHub runner; the hardware is exercised by `tv_api_check.py` and by the `live_*`
 markers below, all of them run by hand.
 
+**`display/tests/raster` needs one optional group and skips itself without it.**
+The label is typeset with Pango through PyGObject, which a default `uv sync` does
+not install — and which **does not work on this Mac at all** (it builds under
+Homebrew and fails at import; do not spend time on it). Run it where Pango works:
+
+```sh
+cd display && uv run --group raster pytest tests/raster
+```
+
+The display CI leg carries `--ignore=tests/raster` so the collection skip is not
+read as a provisioning failure, and a **separate `typesetting` job** installs the
+group and runs it, with `assert_tests_ran.py` behind it. Both halves of that are
+derived rather than trusted by `tests/test_default_suite_ci_scope.py`, which fails
+at home if a leg ignores a directory no other job runs. The panel *driver* group
+(`--group epaper`, `omni_epd`) installs on a Raspberry Pi and nowhere else;
+nothing in either suite needs it, because the driver is passed into
+`EpaperSurface` rather than opened by it.
+
 **`uv run` in every column, including the root.** pytest, ruff and black live in a
 `[dependency-groups] dev` group that only uv installs — `pip install -e .` does
 not. Dropping the prefix gets either command-not-found or, worse, a system-Python

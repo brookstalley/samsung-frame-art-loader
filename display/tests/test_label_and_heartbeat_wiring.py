@@ -190,6 +190,59 @@ class TestADeviceWithNoLabelSurface:
         assert document["label_surface_working"] is None
 
 
+class TestADeviceWhosePanelWouldNotOpen:
+    """The third deployment, and the one that used to be invisible.
+
+    A panel configured in `.env` that will not open leaves the daemon holding no
+    surface — which, reported as `has_label_surface: false`, is exactly what a
+    device with no panel reports. So curation's health surface showed a supported
+    deployment where there was a broken one, and the only account of it was a
+    warning in a journal on a Pi nobody was reading.
+    """
+
+    @pytest.fixture
+    def broken(self, settings, tv, state, clock) -> Daemon:
+        watcher = Watcher(settings.manifest_path, rotation_interval_fallback=180, shuffle_fallback=False)
+        return Daemon(
+            settings=settings,
+            tv=tv,
+            state=state,
+            watcher=watcher,
+            clock=clock.as_clock(),
+            surface=None,
+            surface_error="could not open the e-paper device 'waveshare_epd.it8951' (no SPI device)",
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_heartbeat_says_this_device_has_a_panel_and_it_is_not_working(self, broken, publish, art_root: Path):
+        publish(["work-a"])
+
+        await broken.tick()
+
+        document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        assert document["has_label_surface"] is True, "a broken panel reported as a device that has none"
+        assert document["label_surface_working"] is False, "a panel that never opened reported as one that has not been asked yet"
+
+    @pytest.mark.asyncio
+    async def test_curation_is_told_why(self, broken, publish, art_root: Path):
+        """The journal is on the Pi; the heartbeat is what crosses to curation."""
+        publish(["work-a"])
+
+        await broken.tick()
+
+        document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        assert "no SPI device" in (document["last_error"] or "")
+
+    @pytest.mark.asyncio
+    async def test_the_wall_rotates_anyway(self, broken, tv, publish):
+        """The whole posture in one assertion: a panel is never a precondition."""
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter"}})
+
+        await broken.tick()
+
+        assert tv.displaying is not None
+
+
 class TestShuttingDown:
     @pytest.mark.asyncio
     async def test_the_label_surface_is_released(self, labelled, surface):

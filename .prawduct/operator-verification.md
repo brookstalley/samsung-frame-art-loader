@@ -10,6 +10,41 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The label's type sizes, at the panel — added 2026-08-07
+
+**This is the whole of what Chunk 13A could not settle**, and it is deliberately
+not a defect: the sizes in `display/src/display/panel/layout.py` are marked
+provisional at their definition site, and only somebody standing in front of the
+real panel can replace them. The 2026-08-04 look narrowed the live range to the
+mid-20s through the low-40s px and killed the 2024 `"Sans 18"` — but that ladder
+was rendered with PIL/DejaVu and this product typesets with Pango, so the numbers
+do not transfer.
+
+**Narrow it at a desk first.** The whole chain now renders without a panel:
+
+```sh
+cd display && uv sync --group raster            # once; the Pi and CI have it, this Mac cannot
+cd display && uv run --group raster python tools/label_preview.py /tmp/label.png --title-px 34
+```
+
+`--title-px` scales artist and body in the same proportion, and the tool prints
+where each line landed and what the drop rule took off — which is the half that is
+invisible in the image.
+
+**One observation from the first real render** (1448×1072, margin 40, title 40 /
+artist 32 / body 26, a fully populated Hokusai record): the label occupies about
+the **top third** of the panel and nothing is dropped. There is a lot of headroom,
+so the honest question at the panel is not "does this fit" but "is this as large
+as it should be" — the sizes could go substantially up before the drop rule
+engages, and larger is the accessibility direction.
+
+**A PNG on a backlit monitor is not the answer**, which is why this entry stays
+open: sixteen greys of reflective e-paper read at standing distance in room light
+is a different medium, and the reason the numbers are provisional in the first
+place. What the preview can settle is layout — what fits, what drops, whether the
+hierarchy reads. Chunk 13B is where the trip to the panel happens, and **whoever
+settles the numbers should replace the provisional note as well as the numbers**.
+
 ### The display daemon against the wall — added 2026-08-06
 
 **Status: answered on 2026-08-07 — all three acceptance criteria met on the real

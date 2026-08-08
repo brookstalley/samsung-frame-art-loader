@@ -106,17 +106,56 @@ jobs:
           enable-cache: true
       - name: Run the display suite
         working-directory: display
-        # No `--ignore` set here, unlike the curation leg: this plane declares no
-        # opt-in dependency groups, so nothing in its tree `importorskip`s and
-        # nothing contributes the skip that the guard below reads as a
-        # provisioning failure. If that ever changes, this line grows the same
-        # treatment and `tests/test_default_suite_ci_scope.py` is what will say so.
+        # `--ignore=tests/raster` for the same reason the curation leg carries
+        # two: that directory `importorskip`s the `raster` group, a default
+        # `uv sync` does not install it, and the resulting collection skip is
+        # read by the guard below as a provisioning failure. The typesetting it
+        # holds is not skipped in CI — it has its own job, immediately below,
+        # which installs the group and asserts the tests really ran.
+        # `tests/test_default_suite_ci_scope.py` derives this list rather than
+        # trusting it, in both directions.
         #
         # Nothing here reaches a television. The set is behind an abstract base
         # and the suite drives a double, which is why this leg can run on a
         # GitHub runner at all.
-        run: uv run pytest tests -v --junitxml=results.xml
+        run: uv run pytest tests --ignore=tests/raster -v --junitxml=results.xml
       - name: Fail if nothing actually ran
+        if: always()
+        run: python3 .github/scripts/assert_tests_ran.py display/results.xml
+
+  typesetting:
+    name: "The display plane's typesetting"
+    # ITS OWN JOB BECAUSE IT NEEDS A TEXT STACK THE OTHER LEGS DO NOT. The label
+    # is typeset with Pango through PyGObject, which is an optional group: a
+    # device with a television and no e-paper panel installs neither, and the
+    # laptop this product is developed on cannot build PyGObject at all. Folding
+    # these into the display leg would mean either installing the group for every
+    # run or never running them, and the second is what "the accessibility surface
+    # is untested" looks like from the outside.
+    #
+    # Nothing here touches a panel — `omni_epd` is the *other* optional group and
+    # installs on a Raspberry Pi and nowhere else. This job renders into a memory
+    # buffer and reads the bytes back, which is why it can run on a GitHub runner.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install the fonts the typesetter resolves through
+        # Pango picks a face per glyph through fontconfig, and a runner with no
+        # font installed resolves every one of them to nothing — which does not
+        # fail, it renders blank. That would pass the shape assertions and fail
+        # the ink ones, blaming this code for a machine with no fonts on it.
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-dejavu-core
+      - name: Run the typesetting tests
+        working-directory: display
+        run: uv run --group raster pytest tests/raster -v --junitxml=results.xml
+      - name: Fail if nothing actually ran
+        # The guard matters more here than on any other leg. These tests skip
+        # themselves when the group is absent, so a mis-provisioned job reports a
+        # green run that executed no line of the typesetter.
         if: always()
         run: python3 .github/scripts/assert_tests_ran.py display/results.xml
 

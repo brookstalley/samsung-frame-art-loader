@@ -53,6 +53,15 @@ tzlocal==5.2
 # — the same git-dependency situation as `samsungtvws` above, and pinned to the
 # commit the wall runs.
 omni_epd @ git+https://github.com/robweber/omni-epd.git@1a3acf59522c1a01f64585798af8d98226de8822
+# **And its child, which it declares without a commit.** `omni_epd` names
+# `IT8951[rpi]` as a git dependency with no revision, so installing the parent
+# alone resolves roughly 1,500 lines of Cython to whatever that repository's
+# master is on the day — reproducible today only because it has not moved since
+# 2023. This is the commit the wall has run since 2024, and pip honours the
+# pinned line over the parent's unpinned one when both are on the install list.
+# Pinned rather than vendored, 2026-08-07: a vendor buys only survival if upstream
+# disappears, and costs the ability to take any fix from it.
+IT8951[rpi] @ git+https://github.com/GregDMeyer/IT8951.git@9f136139378f74e17d9972d7165dc6ae53a2568e
 
 # The label's text rendering: `art.py` imports `cairo` and `gi`. **These two need
 # system libraries before pip can build them** — on Raspberry Pi OS:

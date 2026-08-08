@@ -110,6 +110,7 @@ class Daemon:
         watcher: Watcher,
         clock: Clock,
         surface: LabelSurface | None = None,
+        surface_error: str | None = None,
         rng: random.Random | None = None,
     ) -> None:
         self._settings = settings
@@ -127,10 +128,19 @@ class Daemon:
         #: `false`.
         self._surface = surface
         self._label_failed = ReportOnce()
+        #: Why this device has no surface, when it was configured to have one.
+        #: **The third state, and the reason it is carried rather than logged and
+        #: dropped at the composition root**: without it a panel that failed to
+        #: open is a `surface` of None, which on the health surface is
+        #: indistinguishable from a device that never had a panel — the same
+        #: two-meanings-in-one-value fault `has_label_surface` was split out to
+        #: fix, arriving one level up.
+        self._surface_error = surface_error
         #: Whether the surface accepted the last label it was given. Stays None
         #: on a device with no surface, so "never tried" and "tried and failed"
-        #: cannot be confused.
-        self._label_working: bool | None = None
+        #: cannot be confused — but **False from the outset on a device whose
+        #: panel would not open**, because that one has already failed.
+        self._label_working: bool | None = False if surface is None and surface_error else None
 
         #: What the set last announced about its own wall, which is the only
         #: honest account of it this product has. Written from the television's
@@ -148,7 +158,11 @@ class Daemon:
         self._showing_art: bool | None = None
 
         self._heartbeat_at: float | None = None
-        self._last_error: str | None = None
+        #: Seeded with the panel's failure when there was one, because at startup
+        #: that *is* the last thing that went wrong. Anything later overwrites it,
+        #: which is right — a television that has since gone away is the more
+        #: urgent of the two.
+        self._last_error: str | None = surface_error
         self._heartbeat_failed = ReportOnce()
 
         #: Positions into the current manifest's entries, in the order they will
@@ -1082,7 +1096,12 @@ class Daemon:
             announced_content_id=self._announced_content_id,
             television_reachable=television_reachable,
             television_showing_art=self._showing_art,
-            has_label_surface=self._surface is not None,
+            # **Whether this device is meant to draw a label**, which is not the
+            # same question as whether it currently can. A panel that failed to
+            # open leaves no surface and is still a device with one, so reporting
+            # `false` here would tell curation this deployment has no panel — the
+            # one reading that makes a broken panel invisible.
+            has_label_surface=self._surface is not None or self._surface_error is not None,
             label_surface_working=self._label_working,
             last_error=self._last_error,
         )

@@ -29,8 +29,15 @@ missing, or slow leaves the wall rotating.
 
 from display.panel.layout import Block, Extent, Layout, Measure, Surface, lay_out
 from display.panel.metadata import LabelText, read_label
+from display.panel.raster import Raster, Rasterizer
 from display.panel.surface import LabelSurface, SurfaceUnavailable
 
+#: **The drivers are deliberately absent from this list.** `panel.pango` needs a
+#: text stack and `panel.epaper` needs a panel driver, neither of which installs
+#: on every machine this package is imported on; re-exporting them here would make
+#: `import display.panel` — which the daemon does on every device, panel or not —
+#: fail wherever those are missing. They are imported by name, from the one place
+#: that has decided this device has a panel.
 __all__ = [
     "Block",
     "Extent",
@@ -38,6 +45,8 @@ __all__ = [
     "LabelText",
     "Layout",
     "Measure",
+    "Raster",
+    "Rasterizer",
     "Surface",
     "SurfaceUnavailable",
     "lay_out",

@@ -26,6 +26,21 @@ it fails loudly and immediately at `systemctl start`, and the fix is either an
 absolute `ExecStart` or an `Environment=PATH=` line. Check it before enabling
 either unit.
 
+**The display plane's panel needs two optional dependency groups, and a default
+`uv sync` installs neither.** They are separate because they install on different
+machines: `raster` is the label's text stack (PyGObject and pycairo, which build
+or wheel on any modern Linux), and `epaper` is the panel driver (`omni_epd`, which
+compiles Cython against the Broadcom SPI and GPIO libraries and installs on a
+Raspberry Pi and nowhere else). On the Pi:
+
+    cd display && uv sync --group raster --group epaper
+
+**A device with a television and no panel installs neither, and that is a
+supported deployment** — leave `EPD_DEVICE` empty in `.env` and the wall rotates
+with no label. A device with a monitor rather than e-ink would install `raster`
+alone. Verified on the Pi 2026-08-07: PyGObject 3.56 and pycairo 1.29 resolve
+under uv on Trixie/aarch64 with no `apt install python3-gi` needed.
+
 **Before the unit is enabled, the checkout needs its environment file.** Since
 2026-07-27 `config.py` raises at import unless `ART_ROOT`, `TV_ADDRESS`,
 `LATITUDE`, `LONGITUDE` and `LOCATION_NAME` all resolve — deliberately, so that a
@@ -232,30 +247,40 @@ library versions carry: `available(category=...)` is unchanged between them, and
 one streams it. So pulling the checkout without reinstalling degrades to the old
 buffering behaviour and keeps working, rather than breaking.
 
-### Installing this file pulls one dependency that is not pinned
+### The e-paper driver is pinned rather than vendored, and here is why
 
-`omni_epd` is pinned to the commit the wall runs, but **it declares `IT8951[rpi]`
-as a git dependency with no commit**, so a `pip install -r requirements.txt` on a
-rebuilt Pi resolves the e-paper driver to whatever that repository's master is on
-the day you run it. Before `omni_epd` was declared here, this file installed
-neither package and the driver arrived out-of-band; declaring the parent is what
-put the unpinned child on the install path.
+`omni_epd` **declares `IT8951[rpi]` as a git dependency with no commit**, so
+installing the parent alone resolves roughly 1,500 lines of Cython — which the
+label panel depends on completely — to whatever that repository's master is on the
+day. Builds are reproducible today only because it has not moved since 2023: a
+fact about upstream inactivity, not a property of this project.
 
-The commit the wall actually ran is recorded in `pi-freeze-2024.txt`:
+**Decision taken 2026-08-07: pin it.** A vendor buys exactly one thing a pin does
+not — survival if the upstream repository disappears — and costs 1,500 lines of
+Cython nobody here can maintain plus the ability to take any fix from upstream.
+Vendoring stays available as the escape hatch if that repository ever goes away;
+`pi-freeze-2024.txt` records what to vendor.
 
-    IT8951 @ git+https://github.com/GregDMeyer/IT8951.git@9f136139378f74e17d9972d7165dc6ae53a2568e
+The pin is applied on both install paths, because they resolve independently:
 
-**If the label panel misbehaves after a rebuild, suspect this first** and install
-that line explicitly. *(Checked 2026-08-04: a fresh resolve does land on `9f13613`
-— but only because that commit still **is** the repository's master, unchanged
-since 2023. Nothing pins it, so the day upstream moves, a rebuild silently takes
-whatever master became. The build itself is verified on 3.13/aarch64.)* It was documented rather than pinned
-because pinning a transitive git URL alongside the parent's own unpinned
-declaration is resolver behaviour that wanted verifying on hardware first. **That
-verification has now happened**, so the reason for waiting is spent and the choice
-is open. Pinning or vendoring it is a
-recorded decision still owed — see `project-state.yaml` →
-`technical_decisions.operational`.
+- `requirements.txt` (the 2024 plane) carries an explicit `IT8951[rpi] @ …@9f13613`
+  line beside `omni_epd`.
+- `display/pyproject.toml` (the display plane) uses `[tool.uv] override-dependencies`,
+  which is the only mechanism that reaches a requirement written inside another
+  package's metadata. **Verified resolving on the Pi 2026-08-07** — `uv lock`
+  lands `it8951` on `9f13613` from the override rather than from upstream's
+  master happening to still be that commit.
+
+**The compiler was the other unpinned axis**, and pinning the driver alone would
+have left it open: `IT8951` builds its Cython extensions from 2023-era `.pyx`
+sources and its own build-requires names `Cython` with no bound, so a PEP 517
+isolated build takes whatever released most recently. `[tool.uv]
+build-constraint-dependencies` holds it at `>=3.0,<4`. `requirements.txt` has no
+equivalent mechanism, so that path remains exposed to a Cython 4 — one more reason
+the 2024 install path is retired rather than maintained.
+
+**If the label panel misbehaves after a rebuild, this is still the first thing to
+check**: confirm the installed `it8951` is `9f13613` before looking anywhere else.
 
 ## What `pi-freeze-2024.txt` is
 

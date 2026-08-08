@@ -271,9 +271,31 @@ Panel geometry was briefly listed as a second shared value; it is not, because
   reference panel's figures. Until then it was a number in prose, which is the
   same standing the TV's geometry had before it was hoisted — and the rule below
   that nothing may hardcode either panel's size applies to this one too. The
-  plane logs the resolved pair at startup beside its `ART_ROOT`. Nothing reads it
-  yet: the label renders with the chunk that drives the panel, and the value is
-  hoisted here because the plane that will read it is the plane that now exists.)*
+  plane logs the resolved pair at startup beside its `ART_ROOT`.)*
+
+  *(**Read for the first time on 2026-08-07**, when the label reached the panel.
+  Three values joined it, all display-only and all optional:*
+
+  - *`EPD_DEVICE` — omni-epd's identifier for this device's panel
+    (`waveshare_epd.it8951` on the reference wall, `omni_epd.mock` where the
+    driver is installed and no panel is attached). **Empty means this device
+    draws no label, which is a supported deployment rather than a broken one** —
+    most display devices are a television and nothing else. It is also what
+    decides whether the two optional dependency groups are needed at all, so it
+    is the one value that changes what has to be installed.*
+  - *`EPD_MARGIN_PX` (40) — the clear border. **Provisional**, and settled by the
+    same look at the real panel that settles the type sizes: it trades border
+    against how many lines fit before the label's drop rule takes one off.*
+  - *`EPD_ROTATE_DEGREES` (180) — how far the frame is turned before it reaches
+    the panel, the reference wall's panel being mounted ribbon-uppermost. Only 0
+    and 180 are accepted; a quarter turn exchanges the panel's width and height,
+    so the label would have to be laid out against the swapped geometry.*
+
+  *The panel's own reported size is compared against the configured pair at
+  startup and a disagreement is **warned about rather than refused**, the same
+  call `panel_check` makes about the television's diagonal and for the same
+  reason: a wrong size gives a label that looks wrong, a refusal gives no label at
+  all, and the label may never be a reason the wall stops.)*
 
 Because neither is shared, neither can drift between planes. A wrong TV size is
 still a real defect — the mat comes out the wrong width and the review grid's

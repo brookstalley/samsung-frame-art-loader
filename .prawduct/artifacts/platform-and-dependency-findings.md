@@ -207,6 +207,35 @@ confirmation.
 surface is `clear`, `close`, `display`, `prepare`, `sleep`. Every label change —
 even one changed character — is a full-frame redraw at the cost measured above.
 
+### The text stack installs under uv, and needs no distro packages
+
+Measured on the Pi 2026-08-07, in a scratch venv, because the answer decides
+whether the display plane's panel dependencies can be a uv dependency group at
+all or have to reach into system site-packages.
+
+**`uv pip install pygobject pycairo` resolves PyGObject 3.56.3 and pycairo 1.29.1
+on Trixie/aarch64 and both import cleanly** — `gi.require_version("PangoCairo",
+"1.0")` and the repository import succeed. PyGObject arrived as a wheel; only
+pycairo built, in 12 s. **No `apt install python3-gi` is involved**, which is the
+finding that matters: the 2024 requirements file documents a five-package apt
+prerequisite list for exactly this, and it is now needed only by that install
+path.
+
+The consequence is that the panel's dependencies split cleanly by *which machines
+can install them*, which turns out to be the same seam the code splits on:
+`raster` (the text stack, installable on any modern Linux including a CI runner)
+and `epaper` (`omni_epd`, which compiles Cython against the Broadcom SPI and GPIO
+libraries and installs on a Pi and nowhere else). **The typesetting is therefore
+tested by CI rather than only by whoever last had a Pi in front of them.**
+
+**PyGObject does not work on this project's development Mac** and no time should
+be spent on it: it builds under Homebrew and then fails at import inside
+`gi/overrides/__init__.py`. Reinstalling `gobject-introspection`, clearing a
+duplicate glib keg and setting `GI_TYPELIB_PATH` all failed. It is a Homebrew
+toolchain skew, not a product problem — and it is why the label's *judgement*
+(what it says, where it goes) is a separate tier from its rasterization, so only
+the latter needs a machine that can run Pango.
+
 ### Type sizing is NOT settled, and the probe's numbers must not be lifted
 
 The type ladder put in front of the operator was rendered with **PIL/DejaVu**.

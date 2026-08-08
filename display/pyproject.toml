@@ -40,15 +40,22 @@ dependencies = [
     # outcome for a declared-early entry and named the moment it would be due for
     # checking; this is that check, made rather than assumed.
     "python-dotenv",
+    # **The panel driver's interchange format, and the only reason this is here.**
+    # `panel/epaper.py` hands omni-epd a PIL image because that is what its
+    # `display()` takes; nothing else in this plane opens, decodes or composes an
+    # image, and the television is still handed a *path* it streams itself.
+    #
+    # It is a core dependency rather than a panel-only one on purpose, and the
+    # purpose is testability: with Pillow always present, the whole of
+    # `panel/epaper.py` except its one `open_panel` import runs on a laptop, so
+    # the greyscale-mode read-back, the rotation and the conversion of a silent
+    # driver failure into a raised one are exercised by the default suite instead
+    # of only on a Pi with a panel screwed to it.
+    "pillow",
 ]
 
 # Deliberately absent, and each for a reason worth stating rather than
 # rediscovering:
-#
-#   omni_epd, pycairo, PyGObject — the e-paper label panel and its text
-#     rendering. They arrive with the chunk that renders the label, because this
-#     plane drives the television before it drives the panel and a dependency
-#     declared ahead of the code that imports it is one nobody can check.
 #
 #     **That rule was suspended for `astral` and `tzlocal` when this manifest
 #     shipped ahead of the plane's first module, and the bill came due on
@@ -65,9 +72,10 @@ dependencies = [
 #     the importing code lands, and that check has to be somebody's, because
 #     nothing mechanical looks for a dependency that is merely unused.
 #
-#   pillow — nothing here decodes an image. The television is handed a *path*
-#     and streams the file itself; composing the canvas is the curation plane's
-#     job and its output crosses as a file, not as pixels.
+#   Nothing else. `pillow` was on this list until the label reached the panel,
+#     on the grounds that nothing here decoded an image — true then, and the note
+#     above records what changed and why it is now a core dependency rather than
+#     a panel-only one.
 #
 #   Any HTTP client. This is not an omission — it is the norm: the theme manifest
 #     file is the only channel from curation to display. The television websocket
@@ -95,12 +103,76 @@ dev = [
     "black>=24",
 ]
 
+# **Two groups rather than one, and the seam between them is which machines can
+# install them** — which turns out to be the same seam the code is split on.
+#
+# `raster` is the text stack. It installs on any modern Linux, including a
+# GitHub runner, so the typesetting that this product's accessibility rests on is
+# tested by CI rather than only by whoever last had a Pi in front of them.
+#
+# `epaper` is the panel driver, and it installs on a Raspberry Pi and nowhere
+# else: `omni_epd` pulls `IT8951[rpi]`, which compiles Cython against the
+# Broadcom SPI and GPIO libraries. Folding it in with `raster` would have made
+# the whole label untestable anywhere but on the hardware.
+#
+# Neither is installed by a default `uv sync`, so a laptop checkout gets the
+# television, the suite and no build failures. The Pi installs both; a device with
+# a monitor and no e-ink would install only `raster`.
+raster = [
+    # **3.50 is a floor set by what was verified, not by what is required.** The
+    # Pi resolves 3.56 from a wheel and imports Pango and PangoCairo cleanly
+    # (aarch64/Trixie, 2026-08-07). Older PyGObject builds against
+    # girepository-1.0 rather than 2.0, so a resolve that walks backwards past
+    # this floor changes which system libraries the machine needs.
+    "PyGObject>=3.50",
+    "pycairo>=1.26",
+]
+epaper = [
+    # Not on PyPI, and pinned to the commit the wall runs today. See
+    # `[tool.uv]` below for the transitive driver it declares without pinning,
+    # which is the half of this that a version string cannot express.
+    "omni_epd @ git+https://github.com/robweber/omni-epd.git@1a3acf59522c1a01f64585798af8d98226de8822",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/display"]
+
+[tool.uv]
+# **The pin that a `[dependency-groups]` entry cannot express, and the decision it
+# records.** `omni_epd` declares `IT8951[rpi]` as a git dependency with **no
+# commit**, so every rebuild resolves roughly 1,500 lines of Cython the wall
+# depends on completely to whatever that repository's master is on the day. It has
+# not moved since 2023, which is the only reason builds are reproducible today —
+# a fact about upstream inactivity, not a property of this project.
+#
+# **Pinned rather than vendored**, taken 2026-08-07. A vendor buys exactly one
+# thing a pin does not — survival if the upstream repository disappears — and
+# costs 1,500 lines of Cython nobody here can maintain, plus the loss of any
+# upstream fix. The pin is the commit the wall has run since 2024, recorded in
+# `deploy/pi-freeze-2024.txt`; vendoring stays available as the escape hatch if
+# that repository ever goes away.
+#
+# An override rather than a dependency entry, because the requirement being
+# corrected is not ours: it is inside `omni_epd`'s own metadata, and only an
+# override reaches it.
+override-dependencies = [
+    "IT8951[rpi] @ git+https://github.com/GregDMeyer/IT8951.git@9f136139378f74e17d9972d7165dc6ae53a2568e",
+]
+
+# **The other unpinned axis, and pinning the driver alone would have left it
+# open.** `IT8951` compiles its Cython extensions from `.pyx` sources at install
+# time and its own build-requires names `Cython` with no bound, so a build in PEP
+# 517 isolation resolves the compiler to whatever released most recently — which
+# is the one dependency in this project most likely to move, being the only
+# actively developed thing in the chain. 3.0 is the series the 2023 sources were
+# written against and the series that has built them on this hardware.
+build-constraint-dependencies = [
+    "Cython>=3.0,<4",
+]
 
 [tool.hatch.metadata]
 # **The line that lets this plane be a package at all.** Its television client is
@@ -142,6 +214,13 @@ ignore = ["TRY003"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["ANN"]
+# **`T201` is banned in `src/` for a reason that does not apply here.** The daemon
+# runs unattended under systemd, where a `print()` has no level and no timestamp
+# and a failure is invisible in the journal. `tools/` is the opposite case: these
+# are run by hand at a terminal by a person waiting for the answer, and routing
+# their output through the logging configuration would put a JSON envelope around
+# a sentence somebody is reading.
+"tools/*" = ["T201"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

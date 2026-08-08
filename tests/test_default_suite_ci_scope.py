@@ -53,19 +53,49 @@ def _directories_that_import_or_skip(tests_root: pathlib.Path) -> set[str]:
     return found
 
 
-def _ignored_by_the_curation_leg() -> set[str]:
-    """The directory names the workflow's curation invocation excludes."""
-    lines = [
-        line.strip()
-        for line in WORKFLOW.read_text(encoding="utf-8").splitlines()
-        if not line.strip().startswith("#") and "uv run pytest" in line and "--ignore=" in line
-    ]
-    assert len(lines) == 1, (
-        f"expected exactly one CI pytest invocation carrying --ignore, found {len(lines)}: {lines}. "
-        "This test identifies the curation default-suite leg by that flag; if another leg has grown "
-        "one, decide which invariant each should hold rather than widening the match."
+#: A line opening a job: two spaces, a name, a colon, nothing else. The workflow's
+#: only other two-space keys are inside a job's body, which are all deeper.
+_JOB = re.compile(r"^  ([A-Za-z][\w-]*):\s*$")
+
+
+def _pytest_invocations_by_job() -> dict[str, list[str]]:
+    """Every `uv run … pytest …` command in the workflow, under the job that runs it.
+
+    **Keyed by job rather than matched by shape**, which is the correction that
+    let a second ignore-carrying leg exist. This helper used to assert there was
+    exactly one such invocation in the whole file and identify the curation leg by
+    that uniqueness — fine while it was true, and a test that fails on the next
+    plane to grow an optional group rather than on anything being wrong. Naming
+    the job says which claim is about which suite.
+
+    Text rather than a YAML parse because the root project depends on no YAML
+    library, and a guard that added one to read four lines would cost more than it
+    protects.
+    """
+    invocations: dict[str, list[str]] = {}
+    job = None
+    for line in WORKFLOW.read_text(encoding="utf-8").splitlines():
+        opening = _JOB.match(line)
+        if opening:
+            job = opening.group(1)
+        elif job and not line.strip().startswith("#") and re.search(r"uv run .*\bpytest\b", line):
+            invocations.setdefault(job, []).append(line.strip())
+    return invocations
+
+
+def _ignored_by(job: str) -> set[str]:
+    """The directory names that job's pytest invocation excludes."""
+    invocations = _pytest_invocations_by_job()
+    assert job in invocations, (
+        f"no `uv run … pytest` step under a job named {job!r} in suites.yml — either the job was "
+        "renamed, or the suite it ran is no longer run in CI at all"
     )
-    return {match.removeprefix("tests/") for match in re.findall(r"--ignore=(\S+)", lines[0])}
+    assert len(invocations[job]) == 1, (
+        f"the {job!r} job runs pytest {len(invocations[job])} times: {invocations[job]}. This test "
+        "reads one invocation per job; a job that grew a second needs its own claim rather than a "
+        "union of both, or the two would cover for each other's gaps."
+    )
+    return {match.removeprefix("tests/") for match in re.findall(r"--ignore=(\S+)", invocations[job][0])}
 
 
 def check_ignores(ignored: set[str], needed: set[str]) -> None:
@@ -106,7 +136,7 @@ def test_the_curation_leg_ignores_exactly_the_directories_that_cannot_import():
     needed = _directories_that_import_or_skip(CURATION_TESTS)
     assert needed, "no module under curation/tests uses importorskip — the CI leg should carry no --ignore at all"
 
-    check_ignores(_ignored_by_the_curation_leg(), needed)
+    check_ignores(_ignored_by("curation"), needed)
 
 
 def test_a_missing_ignore_is_rejected():
@@ -140,7 +170,7 @@ def test_tests_live_is_collected_rather_than_ignored():
         "a module under curation/tests/live now uses importorskip, so it can no longer be collected "
         "in CI — add --ignore=tests/live to the curation leg in suites.yml"
     )
-    assert "live" not in _ignored_by_the_curation_leg()
+    assert "live" not in _ignored_by("curation")
 
 
 def test_the_root_leg_needs_no_ignores():
@@ -157,18 +187,49 @@ def test_the_root_leg_needs_no_ignores():
     )
 
 
-def test_the_display_leg_needs_no_ignores():
-    """The same claim about the third suite, which joined CI on 2026-08-06.
+def test_the_display_leg_ignores_exactly_the_directories_that_cannot_import():
+    """The same claim about the third suite, derived the same way on both sides.
 
-    That plane declares no opt-in dependency group, so nothing in its tree
-    `importorskip`s and its invocation is the plain one. Written as its own test
-    rather than folded into the root's, because the two are independent facts
-    about independent projects and one of them changing must not be masked by the
-    other still holding — and because the plane that will grow such a group first
-    is this one, the moment the e-paper panel arrives behind an optional install.
+    This test used to assert the display leg needed *no* ignores, and predicted
+    the moment that would stop being true: the e-paper panel arriving behind an
+    optional install. It has arrived. The typesetter needs Pango through
+    PyGObject, which a default `uv sync` does not install, so `tests/raster`
+    `importorskip`s the group and the leg excludes it.
+
+    **What excluding it must not mean is that the typesetter goes untested in
+    CI**, which is what the job asserted below exists to prevent — a directory
+    ignored by one leg and run by no other is coverage that has silently gone.
     """
-    assert _directories_that_import_or_skip(REPO / "display" / "tests") == set(), (
-        "a module under display/tests now uses importorskip, so the display CI leg needs the same "
-        "--ignore treatment the curation leg has — otherwise assert_tests_ran.py reads the import "
-        "skip as a provisioning failure and fails a job whose suite is fine"
+    needed = _directories_that_import_or_skip(REPO / "display" / "tests")
+    assert needed, "no module under display/tests uses importorskip — the display CI leg should carry no --ignore at all"
+
+    check_ignores(_ignored_by("display"), needed)
+
+
+def test_every_directory_the_display_leg_ignores_is_run_by_another_job():
+    """The half that `check_ignores` cannot see, and the one that actually bites.
+
+    Ignoring a directory keeps a green leg honest; it does not keep the code
+    tested. A `--ignore` added because a group is optional, with no job installing
+    that group, removes the tests from CI entirely — and a suite that does not run
+    reports exactly what a suite that passes reports.
+
+    So the ignored directories are checked against the paths other jobs name.
+    Here that is `tests/raster`, run by the typesetting job with the group
+    installed and `assert_tests_ran.py` behind it.
+    """
+    elsewhere = {
+        path
+        for job, invocations in _pytest_invocations_by_job().items()
+        if job != "display"
+        for invocation in invocations
+        # The `--ignore=` arguments come out first: a directory another job also
+        # excludes is not a directory another job runs, and counting it would let
+        # two legs cover for each other while neither collected a line of it.
+        for path in re.findall(r"(?<![=\w/])tests/\S+", re.sub(r"--ignore=\S+", "", invocation))
+    }
+    unrun = {f"tests/{name}" for name in _ignored_by("display")} - elsewhere
+    assert not unrun, (
+        f"the display leg ignores {sorted(unrun)} and no other job in suites.yml runs it, so those "
+        "tests do not execute in CI at all — which is indistinguishable from their passing"
     )

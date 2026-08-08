@@ -62,6 +62,11 @@ def settings(art_root: Path) -> Settings:
         tv_client_name="tvpi-test",
         epd_panel_width_px=1448,
         epd_panel_height_px=1072,
+        epd_margin_px=40,
+        epd_rotate_degrees=180,
+        # Empty, so the daemon fixtures below get the deployment most devices are:
+        # a television and no panel. The tests that want one attach a double.
+        epd_device="",
         latitude=45.68,
         longitude=-111.04,
         location_name="Bozeman",
