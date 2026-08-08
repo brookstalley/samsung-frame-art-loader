@@ -10,6 +10,7 @@ agreement.
 """
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -134,6 +135,29 @@ class TestWritingItSafely:
             write(tmp_path, Health(manifest_schema=f"1.{version}"), reported_at=WHEN)
             document = json.loads((tmp_path / HEARTBEAT_FILENAME).read_text())
             assert document["manifest_schema"] == f"1.{version}"
+
+    def test_the_bytes_reach_the_disk_before_the_rename_does(self, tmp_path: Path, monkeypatch):
+        """The durability half, which has no observable behaviour to assert on.
+
+        **A mechanism test, deliberately, and the only honest kind here.** On an
+        SD-card Pi with no UPS a rename can land before the bytes it renames do,
+        leaving a heartbeat that exists, is the right size, and is empty — a
+        failure that appears only after a power cut, which is exactly when
+        somebody reads this file to find out what happened. Nothing about that is
+        reproducible in a test process, so what is pinned is the *ordering* the
+        guarantee rests on: fsync happens, and it happens before the rename.
+
+        Written because a mutation sweep removed the fsync and every other test
+        still passed — the branch was defended by nobody.
+        """
+        events: list[str] = []
+        real_fsync, real_replace = os.fsync, os.replace
+        monkeypatch.setattr(os, "fsync", lambda fd: (events.append("fsync"), real_fsync(fd))[1])
+        monkeypatch.setattr(os, "replace", lambda src, dst: (events.append("replace"), real_replace(src, dst))[1])
+
+        write(tmp_path, Health(), reported_at=WHEN)
+
+        assert events == ["fsync", "replace"], "the heartbeat was renamed into place without being flushed to disk first"
 
     def test_a_failure_to_write_is_raised_rather_than_swallowed(self, tmp_path: Path):
         """The caller knows a heartbeat is an annotation; this module does not."""
