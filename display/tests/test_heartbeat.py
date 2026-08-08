@@ -52,7 +52,7 @@ class TestTheContractWithCuration:
 class TestWhatItSays:
     def test_the_state_it_is_given_reaches_the_document(self, tmp_path: Path):
         health = Health(
-            manifest_version=7,
+            manifest_schema="1.0",
             theme_id="0cee2750-7209-4ab2-92b0-c8c2ef0b9030",
             current_work_id="abe9fb42-c380-4d6b-aae6-4ef77deeb85c",
             announced_content_id="MY_F1201",
@@ -65,7 +65,7 @@ class TestWhatItSays:
         write(tmp_path, health, reported_at=WHEN)
         document = json.loads((tmp_path / HEARTBEAT_FILENAME).read_text())
 
-        assert document["manifest_version"] == 7
+        assert document["manifest_schema"] == "1.0"
         assert document["current_work_id"] == "abe9fb42-c380-4d6b-aae6-4ef77deeb85c"
         assert document["announced_content_id"] == "MY_F1201"
         assert document["television_showing_art"] is True
@@ -76,7 +76,7 @@ class TestWhatItSays:
 
         document = json.loads((tmp_path / HEARTBEAT_FILENAME).read_text())
 
-        assert document["manifest_version"] is None
+        assert document["manifest_schema"] is None
         assert document["television_reachable"] is None
         assert document["last_error"] is None
 
@@ -114,12 +114,12 @@ class TestWhatItSays:
 
 class TestWritingItSafely:
     def test_it_replaces_the_previous_one(self, tmp_path: Path):
-        write(tmp_path, Health(manifest_version=1), reported_at=WHEN)
-        write(tmp_path, Health(manifest_version=2), reported_at=WHEN)
+        write(tmp_path, Health(manifest_schema="1.0"), reported_at=WHEN)
+        write(tmp_path, Health(manifest_schema="2.0"), reported_at=WHEN)
 
         document = json.loads((tmp_path / HEARTBEAT_FILENAME).read_text())
 
-        assert document["manifest_version"] == 2
+        assert document["manifest_schema"] == "2.0"
 
     def test_no_temporary_file_is_left_behind(self, tmp_path: Path):
         write(tmp_path, Health(), reported_at=WHEN)
@@ -131,9 +131,9 @@ class TestWritingItSafely:
         show it half a file — which it correctly reports as this plane being
         broken. Asserted by reading between every write in a long run."""
         for version in range(25):
-            write(tmp_path, Health(manifest_version=version), reported_at=WHEN)
+            write(tmp_path, Health(manifest_schema=f"1.{version}"), reported_at=WHEN)
             document = json.loads((tmp_path / HEARTBEAT_FILENAME).read_text())
-            assert document["manifest_version"] == version
+            assert document["manifest_schema"] == f"1.{version}"
 
     def test_a_failure_to_write_is_raised_rather_than_swallowed(self, tmp_path: Path):
         """The caller knows a heartbeat is an annotation; this module does not."""

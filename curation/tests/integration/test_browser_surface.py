@@ -265,17 +265,29 @@ class TestHealth:
         settings.heartbeat_path.write_text(
             json.dumps(
                 {
+                    # The keys the display plane's writer actually emits. They were
+                    # invented here — `tv_connected` — while no writer existed, and
+                    # a fixture naming a field nothing produces is how a surface
+                    # gets built against a document that never arrives. The two
+                    # planes cannot import each other, so what holds them together
+                    # is `tests/preferences/test_heartbeat_contract.py`.
                     "reported_at": datetime.now(UTC).isoformat(),
-                    "tv_connected": False,
+                    "television_reachable": False,
                     "last_error": "the television refused the pairing token",
+                    # And one key no writer emits, because pass-through of the
+                    # unrecognised is the actual property under test: the reader
+                    # hands the whole object over rather than unpacking fields it
+                    # knows, so a writer may add one without a curation release.
+                    "some_future_field": 17,
                 }
             ),
             encoding="utf-8",
         )
         heartbeat = http.get("/api/health").json()["heartbeat"]
         assert heartbeat["absent"] is False
-        assert heartbeat["reported"]["tv_connected"] is False
+        assert heartbeat["reported"]["television_reachable"] is False
         assert heartbeat["reported"]["last_error"] == "the television refused the pairing token"
+        assert heartbeat["reported"]["some_future_field"] == 17
 
     def test_an_age_is_stated_in_the_unit_a_person_reads_it_in(self, http, settings):
         """ "345600 seconds ago" is a conversion the reader has to do themselves.

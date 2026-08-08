@@ -47,12 +47,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from display import brightness as brightness_module
+from display import heartbeat as heartbeat_module
 from display.config import Settings
 from display.episodes import Backoff, ReportOnce
 from display.logs import work_context
 from display.manifest import Entry, Manifest, Watcher
+from display.panel import LabelSurface, SurfaceUnavailable, lay_out, read_label
 from display.state import Binding, DisplayState, UploadStatus
-from display.tv import RemovalOutcome, TvClient, TvRemovalUnconfirmed, TvUnavailable, TvUploadFailed
+from display.tv import RemovalOutcome, SelectionAnnouncement, TvClient, TvRemovalUnconfirmed, TvUnavailable, TvUploadFailed
 
 log = logging.getLogger(__name__)
 
@@ -107,6 +109,7 @@ class Daemon:
         state: DisplayState,
         watcher: Watcher,
         clock: Clock,
+        surface: LabelSurface | None = None,
         rng: random.Random | None = None,
     ) -> None:
         self._settings = settings
@@ -115,6 +118,38 @@ class Daemon:
         self._watcher = watcher
         self._clock = clock
         self._rng = rng if rng is not None else random.Random()
+
+        #: Where this device draws its label, or None if it has none. **A device
+        #: with no label surface is a supported deployment, not a fault** — the
+        #: wall is a television, and the label is an annotation of it
+        #: (`architecture.md` § Direction). Nothing below may report its absence
+        #: as a problem, which is why the heartbeat says `null` rather than
+        #: `false`.
+        self._surface = surface
+        self._label_failed = ReportOnce()
+        #: Whether the surface accepted the last label it was given. Stays None
+        #: on a device with no surface, so "never tried" and "tried and failed"
+        #: cannot be confused.
+        self._label_working: bool | None = None
+
+        #: What the set last announced about its own wall, which is the only
+        #: honest account of it this product has. Written from the television's
+        #: reader task, read here — a plain assignment either way, so no lock:
+        #: it is one reference, and a reader that catches the previous value gets
+        #: a stale id rather than a torn one.
+        self._announced_content_id: str | None = None
+        tv.observe_selections(self._note_announcement)
+
+        #: Whether the set was showing art the last time it was actually asked.
+        #: **None until it has been**, rather than defaulting to either answer: the
+        #: gate is only consulted when something is about to happen, so a fresh
+        #: process genuinely does not know, and a heartbeat that guessed would be
+        #: reporting a read nobody performed.
+        self._showing_art: bool | None = None
+
+        self._heartbeat_at: float | None = None
+        self._last_error: str | None = None
+        self._heartbeat_failed = ReportOnce()
 
         #: Positions into the current manifest's entries, in the order they will
         #: be shown. Held apart from the entries themselves so that shuffling is
@@ -247,6 +282,12 @@ class Daemon:
 
         manifest = self._watcher.current
         if manifest is None:
+            # **Still beats.** A plane with no manifest is the state a fresh
+            # install sits in, and it is exactly when somebody wants to know this
+            # process is alive — returning here without a heartbeat would let
+            # curation's panel report a running plane as one that has never
+            # spoken.
+            self._beat(manifest=None)
             return self._settings.poll_interval_seconds
 
         try:
@@ -266,9 +307,18 @@ class Daemon:
                 await self._rotate_if_due(manifest)
             await self._upload_one_pending(manifest)
         except TvUnavailable as exc:
+            # **The heartbeat is written on this path too, and that is the whole
+            # point of it.** A television that has gone away is the condition an
+            # operator most wants reported, and a plane that only beat on good
+            # passes would fall silent exactly when it had something to say —
+            # leaving curation to report "has not reported" for a process that is
+            # running perfectly and telling the truth about a set that is not.
+            self._record_error(str(exc))
+            self._beat(manifest=manifest, television_reachable=False)
             return self._back_off(exc)
 
         self._recover()
+        self._beat(manifest=manifest, television_reachable=True)
         return self._settings.poll_interval_seconds
 
     # -- the manifest ------------------------------------------------------
@@ -583,7 +633,78 @@ class Daemon:
                     "theme_id": manifest.theme_id,
                 },
             )
+            self._caption(entry)
             return Shown.YES
+
+    def _caption(self, entry: Entry) -> None:
+        """Put this work's label on the device's own surface, if it has one.
+
+        **Driven from here rather than from the set's announcement**, though the
+        announcement is what confirms the selection that got us here. The two are
+        the same event; the difference is which task does the work. An e-paper
+        redraw is a full frame — 1.5–1.9 s measured, with no partial refresh — and
+        doing that inside the television client's callback would run it on the
+        websocket's reader task, delaying every message on that socket including
+        the confirmations the rotation is waiting for. So the reader task records
+        an id and this, on the daemon's own task, draws.
+
+        **Called only after the wall is confirmed changed**, which is what keeps
+        the label honest: captioning on the strength of a request would name a
+        picture the set accepted and never displayed, and a wrong label is worse
+        than a stale one because nobody can tell it is wrong.
+
+        **Nothing in here may stop the wall.** A surface that is broken, missing
+        or slow leaves the television rotating; that is the whole posture of this
+        loop applied to an annotation of it.
+        """
+        if self._surface is None:
+            return
+        try:
+            layout = lay_out(
+                read_label(entry.label).lines(),
+                self._surface.geometry,
+                self._surface.measure,
+            )
+            self._surface.show(layout)
+        except SurfaceUnavailable as exc:
+            self._label_working = False
+            self._record_error(f"the label surface refused a label ({exc})")
+            if self._label_failed.begin():
+                # Once per episode, like every other persistent condition here: a
+                # panel with a loose ribbon fails on every rotation, all night.
+                log.warning(
+                    "could not put the label on this device's surface (%s); the wall keeps rotating",
+                    exc,
+                    extra={"event": "label.failed"},
+                )
+            return
+
+        self._label_working = True
+        if self._label_failed.end():
+            log.info("the label surface is taking labels again", extra={"event": "label.recovered"})
+        if layout.dropped:
+            # Not a failure — the drop rule working — but it is the only place
+            # anyone would learn that this device's surface is too small for the
+            # corpus, so it is said rather than left to be noticed by eye.
+            log.info(
+                "the label surface had no room for %d line(s) of this label",
+                len(layout.dropped),
+                extra={"event": "label.truncated", "dropped": list(layout.dropped)},
+            )
+
+    def _note_announcement(self, announcement: SelectionAnnouncement) -> None:
+        """Remember what the set says is on its wall. Runs on the client's reader task.
+
+        Deliberately the cheapest thing that could work: one assignment, no I/O,
+        no lock, nothing that can raise. Everything expensive this could trigger
+        happens on the daemon's own task instead — see `_caption`.
+
+        **It records announcements this plane did not cause**, which is the point
+        of subscribing at all: somebody using the remote changes the wall, and
+        the heartbeat should say what is actually up rather than what we last put
+        there.
+        """
+        self._announced_content_id = announcement.content_id
 
     async def _the_wall_is_ours_to_change(self) -> bool:
         """Whether the set is showing art, and may therefore be asked to change it.
@@ -602,7 +723,9 @@ class Daemon:
         actually moved. A no then backs off on the shared ladder, so a whole
         evening of television costs a handful of reads rather than thousands.
         """
-        if await self._tv.showing_art():
+        showing = await self._tv.showing_art()
+        self._showing_art = showing
+        if showing:
             if self._not_our_wall.end():
                 log.info(
                     "the television is showing art again; resuming the rotation",
@@ -926,6 +1049,60 @@ class Daemon:
                 "solar_angle": round(state.solar_angle_degrees, 2),
             },
         )
+
+    # -- the heartbeat -----------------------------------------------------
+
+    def _beat(self, *, manifest: Manifest | None, television_reachable: bool | None = None) -> None:
+        """Write the heartbeat if it is due, and never let that stop the wall.
+
+        **Rate-limited here rather than by the caller**, so every path through
+        `tick` can call it unconditionally — including the two that return early.
+        A heartbeat gated behind the good path is one that goes quiet precisely
+        when it matters.
+
+        Its own failure is an episode like any other. The disk being full or
+        read-only is worth an operator's attention, and it is worth exactly one
+        line per episode rather than one a minute.
+        """
+        elapsed = self._clock.monotonic()
+        if self._heartbeat_at is not None and elapsed - self._heartbeat_at < heartbeat_module.INTERVAL_SECONDS:
+            return
+        self._heartbeat_at = elapsed
+
+        health = heartbeat_module.Health(
+            manifest_schema=f"{manifest.schema_major}.{manifest.schema_minor}" if manifest is not None else None,
+            theme_id=manifest.theme_id if manifest is not None else None,
+            current_work_id=self._state.last_selected_work_id,
+            announced_content_id=self._announced_content_id,
+            television_reachable=television_reachable,
+            television_showing_art=self._showing_art,
+            label_surface_working=self._label_working,
+            last_error=self._last_error,
+        )
+        try:
+            heartbeat_module.write(self._settings.art_root, health, reported_at=self._clock.now())
+        except OSError as exc:
+            if self._heartbeat_failed.begin():
+                log.warning(
+                    "could not write the heartbeat to %s (%s); the wall is unaffected",
+                    heartbeat_module.path_in(self._settings.art_root),
+                    exc,
+                    extra={"event": "heartbeat.failed"},
+                )
+            return
+        if self._heartbeat_failed.end():
+            log.info("the heartbeat is being written again", extra={"event": "heartbeat.recovered"})
+
+    def _record_error(self, message: str) -> None:
+        """Keep the last thing that went wrong, for the heartbeat to carry.
+
+        **Not cleared by a good pass.** A plane that dropped its error the moment
+        anything succeeded would report itself fine while failing every other
+        minute, which is the shape of failure this deployment is most likely to
+        have. It is overwritten by the next failure, so it is always the latest
+        rather than the first.
+        """
+        self._last_error = message
 
     def _back_off(self, exc: TvUnavailable) -> float:
         """Report the television going away once, then wait longer each time.

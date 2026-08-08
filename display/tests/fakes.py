@@ -13,10 +13,12 @@ fake that reproduced it here would be testing the correction twice and the
 daemon's behaviour not at all.
 """
 
+import math
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
+from display.panel import Extent, LabelSurface, Layout, Measure, Surface, SurfaceUnavailable
 from display.tv import (
     RemovalOutcome,
     SelectionAnnouncement,
@@ -262,3 +264,51 @@ class FakeTv(TvClient):
         was found accepting selections and displaying nothing.
         """
         return self.holding.get(self.displaying) if self.displaying else None
+
+
+class FakeSurface(LabelSurface):
+    """A label surface that records what it was given, and can fail like a real one.
+
+    **Its failure is a raise, not a falsy return**, because that is what the
+    driver seam guarantees: `omni-epd`'s `display()` returns None whether it
+    worked or not, so the real surface must convert that into an exception or the
+    panel's failure becomes a label silently months out of date. A fake that
+    reported failure by returning would let a caller pass every test against a
+    real one that cannot.
+    """
+
+    def __init__(self, *, width_px: int = 1448, height_px: int = 1072, margin_px: int = 40) -> None:
+        self._geometry = Surface(width_px=width_px, height_px=height_px, margin_px=margin_px)
+        #: Every layout this surface was asked to draw, in order.
+        self.shown: list[Layout] = []
+        self.closed = 0
+        #: Armed failure: the panel refuses whatever it is handed.
+        self.refuses = False
+
+    @property
+    def geometry(self) -> Surface:
+        return self._geometry
+
+    @property
+    def measure(self) -> Measure:
+        return self._measure
+
+    def _measure(self, text: str, size_px: int, wrap_px: int) -> Extent:
+        """Predictable metrics — a stand-in for a rasterizer, not a font."""
+        glyph = max(1, size_px // 2)
+        per_row = max(1, wrap_px // glyph)
+        rows = max(1, math.ceil(len(text) / per_row))
+        return Extent(width_px=min(len(text) * glyph, wrap_px), height_px=rows * size_px)
+
+    def show(self, layout: Layout) -> None:
+        if self.refuses:
+            raise SurfaceUnavailable("the panel is not responding")
+        self.shown.append(layout)
+
+    def close(self) -> None:
+        self.closed += 1
+
+    @property
+    def last_text(self) -> list[str]:
+        """The lines of the most recent label, for a test to read at a glance."""
+        return [block.text for block in self.shown[-1].blocks] if self.shown else []

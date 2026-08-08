@@ -67,8 +67,12 @@ class Health:
     failure this deployment is most likely to have.
     """
 
-    #: The manifest version currently loaded, or None before one has been adopted.
-    manifest_version: int | None = None
+    #: The schema version of the manifest currently loaded, as `major.minor`, or
+    #: None before one has been adopted. **The schema rather than a generation
+    #: counter**, because that is the version display acts on: it refuses a major
+    #: it does not know, so this is the number that explains a plane sitting on an
+    #: old manifest.
+    manifest_schema: str | None = None
     #: The theme whose manifest is loaded.
     theme_id: str | None = None
     #: The work the wall is showing, as this plane last confirmed it.
@@ -95,7 +99,7 @@ class Health:
         """
         return {
             REPORTED_AT_KEY: reported_at.isoformat(),
-            "manifest_version": self.manifest_version,
+            "manifest_schema": self.manifest_schema,
             "theme_id": self.theme_id,
             "current_work_id": self.current_work_id,
             "announced_content_id": self.announced_content_id,
@@ -144,7 +148,7 @@ def write(art_root: Path, health: Health, *, reported_at: datetime) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, destination)
-    except BaseException:
+    except BaseException:  # prawduct:allow prawduct/broad-except -- cleanup-and-reraise; nothing is swallowed
         # **`BaseException`, matching the manifest builder**: a `KeyboardInterrupt`
         # or a cancelled task between the write and the rename would otherwise
         # leave the temp file behind for ever. It is named `.tmp` so a reader can

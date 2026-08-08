@@ -6,9 +6,13 @@ and no panel at all, drawing its label into the mat area around the artwork
 (`architecture.md` § Direction). A seam called `EpaperPanel` would have made that
 device a rewrite; this one it can implement.
 
-**The interface is deliberately tiny.** Two verbs and a geometry. Everything
-about what a label says and how it is arranged is settled before anything here is
-called, so a new device implements drawing and nothing else.
+**The interface is deliberately tiny.** Two verbs, a geometry and a way to
+measure text. Everything about what a label *says* is settled before anything
+here is called; what a device contributes is its size, its metrics and its
+drawing. The measurer belongs here rather than beside it because only the thing
+that will draw knows how wide its own type runs — a caller forced to build one
+would be constructing the rasterizer outside this seam, which is the seam not
+existing.
 
 **Failure is always an exception here, never a return value.** That is not a
 style preference — it is a correction applied at the seam, in the same spirit as

@@ -3,6 +3,29 @@
 `samsung-frame-art-loader.service` runs the loader as a persistent daemon on the
 Raspberry Pi driving the Frame TV.
 
+## The two new units, and what still has to happen before they start
+
+`display.service` and `curation.service` are the planes this product is being
+rebuilt onto. **They are committed but not installed, and they will not start on
+the current Pi**, for the same reason the recovered 2024 unit will not: there is
+no `tvpi` user on the machine, and all three name absolute `/home/tvpi/…` paths.
+
+Creating that account, giving it the `spi` and `gpio` groups, settling where
+`ART_ROOT` actually lives, moving the tree under it, and enabling these two units
+are **one change, not five** — any of them landing alone leaves a machine that is
+neither the old arrangement nor the new one. `operational-spec.md` § The Service
+Account is the authority on the account; the build plan's Chunk 13B entry is the
+authority on the order.
+
+**One thing to settle at install rather than to assume.** Both units run
+`ExecStart=/usr/bin/env uv run …`, and systemd's default `PATH` does not include
+`~/.local/bin`, which is where `uv` normally installs. The recovered 2024 unit
+solves the same problem with a hand-written `PATH=`. Nothing here records where
+`uv` actually lives on this Pi, so this is an unknown rather than a known defect —
+it fails loudly and immediately at `systemctl start`, and the fix is either an
+absolute `ExecStart` or an `Environment=PATH=` line. Check it before enabling
+either unit.
+
 **Before the unit is enabled, the checkout needs its environment file.** Since
 2026-07-27 `config.py` raises at import unless `ART_ROOT`, `TV_ADDRESS`,
 `LATITUDE`, `LONGITUDE` and `LOCATION_NAME` all resolve — deliberately, so that a
