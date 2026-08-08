@@ -12,6 +12,7 @@ about pixels, and it is exercised where it can actually run.
 import math
 
 import pytest
+
 from display.panel import Surface, lay_out
 from display.panel.layout import ARTIST_SIZE_PX, BODY_SIZE_PX, LEADING, TITLE_SIZE_PX, Extent
 
