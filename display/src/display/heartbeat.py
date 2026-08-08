@@ -83,9 +83,15 @@ class Health:
     television_reachable: bool | None = None
     #: Whether the set is in art mode, as far as this plane last saw.
     television_showing_art: bool | None = None
-    #: Whether the label surface accepted the last label it was given. None when
-    #: this device has no label surface at all, which is a valid configuration
-    #: rather than a fault.
+    #: Whether this device has a label surface at all. **A separate fact from the
+    #: one below, because `null` there was carrying two meanings**: a device with
+    #: no panel, and a device whose panel is fine but has not been asked to draw
+    #: yet. A freshly started plane read on curation's panel as a device with no
+    #: panel, which is a different deployment.
+    has_label_surface: bool = False
+    #: Whether the label surface accepted the last label it was given. None until
+    #: it has been given one — including on a device that has no surface, which is
+    #: a valid configuration rather than a fault.
     label_surface_working: bool | None = None
     #: The last thing that went wrong, in the words the journal got.
     last_error: str | None = None
@@ -105,6 +111,7 @@ class Health:
             "announced_content_id": self.announced_content_id,
             "television_reachable": self.television_reachable,
             "television_showing_art": self.television_showing_art,
+            "has_label_surface": self.has_label_surface,
             "label_surface_working": self.label_surface_working,
             "last_error": self.last_error,
         }

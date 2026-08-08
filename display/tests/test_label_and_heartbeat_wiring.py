@@ -10,6 +10,7 @@ The governing rule throughout: **nothing about a label or a heartbeat may stop
 the wall.** The television is the product; both of these annotate it.
 """
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -172,6 +173,42 @@ class TestADeviceWithNoLabelSurface:
 
         document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
         assert document["label_surface_working"] is None
+        assert document["has_label_surface"] is False
+
+    @pytest.mark.asyncio
+    async def test_it_is_told_apart_from_a_panel_that_has_not_drawn_yet(self, labelled, publish, art_root: Path):
+        """Two different deployments that once reported identically.
+
+        `label_surface_working` is null both on a device with no panel and on one
+        whose panel is fine but has not been asked to draw. Read alone it made a
+        freshly started plane look like a device with no panel at all.
+        """
+        await labelled.tick()  # no manifest yet, so nothing has been captioned
+
+        document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        assert document["has_label_surface"] is True
+        assert document["label_surface_working"] is None
+
+
+class TestShuttingDown:
+    @pytest.mark.asyncio
+    async def test_the_label_surface_is_released(self, labelled, surface):
+        """On e-paper `close()` is the power-down, not bookkeeping."""
+        stop = asyncio.Event()
+        stop.set()
+
+        await labelled.run(stop)
+
+        assert surface.closed == 1
+
+    @pytest.mark.asyncio
+    async def test_a_device_with_no_surface_shuts_down_cleanly(self, daemon, tv):
+        stop = asyncio.Event()
+        stop.set()
+
+        await daemon.run(stop)
+
+        assert tv.closed == 1
 
 
 class TestTheHeartbeat:
@@ -195,13 +232,13 @@ class TestTheHeartbeat:
         assert document["television_showing_art"] is True
 
     @pytest.mark.asyncio
-    async def test_it_carries_the_sets_own_announcement_not_only_our_belief(self, daemon, tv, publish, art_root: Path):
+    async def test_it_carries_the_sets_own_announcement_not_only_our_belief(self, daemon, tv, publish, art_root: Path, clock):
         """Somebody used the remote. The heartbeat should say what is actually up."""
         publish(["work-a"])
         await daemon.tick()
 
         tv.announce("SAM-F0222", is_shown=True)
-        daemon._heartbeat_at = None
+        clock.advance(INTERVAL_SECONDS * 1.5)
         await daemon.tick()
 
         document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())

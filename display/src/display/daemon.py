@@ -256,6 +256,12 @@ class Daemon:
             # out. Under `Restart=always` that turns one crash into a daemon that
             # cannot reach its own television on the way back up.
             await self._tv.close()
+            # **The panel is released too, and on e-paper that is not bookkeeping**
+            # — `close()` is the sleep/power-down, and a panel left driven holds
+            # its rails energised. Closed after the television because the set is
+            # the one holding a network slot somebody else may want.
+            if self._surface is not None:
+                self._surface.close()
             if not crashed:
                 log.info("display plane stopped", extra={"event": "daemon.stopped"})
 
@@ -1076,6 +1082,7 @@ class Daemon:
             announced_content_id=self._announced_content_id,
             television_reachable=television_reachable,
             television_showing_art=self._showing_art,
+            has_label_surface=self._surface is not None,
             label_surface_working=self._label_working,
             last_error=self._last_error,
         )
