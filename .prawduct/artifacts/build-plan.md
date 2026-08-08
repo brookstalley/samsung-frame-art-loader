@@ -1346,7 +1346,8 @@ surface was reviewed on its own.
   what the active theme's manifest contains and **every exclusion with its reason**,
   which is Chunk 09's exclusion report reaching a human for the first time; and the
   health panel, stating heartbeat age in absolute terms and reporting honestly that
-  no heartbeat file exists yet, since the heartbeat writer arrives at Chunk 13A.
+  no heartbeat file exists yet, which is the honest answer before any display
+  device has run.
   Thumbnail serving is a deliverable, not an assumption: the seeded renditions are
   4K files, and a grid of 41 of them is not a page. WCAG 2.1 AA baseline; UI chrome
   never competes with artwork for contrast.

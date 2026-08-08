@@ -11,9 +11,13 @@ found and how old it is, in absolute terms. A green dot is a verdict, and a
 verdict computed from a file that may simply be young is how a health surface
 starts lying: the reader is told the age and decides.
 
-The writer is the display plane's, and does not exist yet. Until it does, this
-reports honestly that no heartbeat has ever been written — which is a true and
-useful answer, and a better one than a zero that reads like a reading.
+The writer is the display plane's — `display/src/display/heartbeat.py`, which
+declares the same two names and is held to them by
+`tests/preferences/test_heartbeat_contract.py`, since neither plane can import
+the other to check. A heartbeat that has never been written is still an ordinary
+answer and is reported as one: a fresh deployment has no writer running yet, and
+that is a true and useful thing to say rather than a zero that reads like a
+reading.
 
 The parse is `observations.observe`'s, shared with the backup receipt — the same
 document-with-an-instant, read for the same panel. Three things are this module's
