@@ -17,7 +17,15 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
-from display.tv import RemovalOutcome, TvClient, TvRemovalUnconfirmed, TvUnavailable, TvUploadFailed
+from display.tv import (
+    RemovalOutcome,
+    SelectionAnnouncement,
+    SelectionObserver,
+    TvClient,
+    TvRemovalUnconfirmed,
+    TvUnavailable,
+    TvUploadFailed,
+)
 
 #: A picture the set holds that this product did not put there — an art-store
 #: image, in the category the daemon neither uploads to nor removes from. The set
@@ -42,6 +50,14 @@ class FakeTv(TvClient):
         self.slideshow_disabled = 0
         self._next_id = 0
         self._connected = False
+
+        #: Everyone listening for what this set says about its wall, and every
+        #: announcement it has made. **Both survive `close()`**, matching the real
+        #: client, where observers belong to the object and the library callback
+        #: is re-registered per connection — a fake that dropped them on
+        #: reconnection would hide a subscriber lost to an overnight outage.
+        self.selection_observers: list[SelectionObserver] = []
+        self.announced: list[SelectionAnnouncement] = []
 
         #: Armed failures. Each is the real client's behaviour, named for what a
         #: test is trying to reproduce rather than for the exception it raises.
@@ -138,12 +154,30 @@ class FakeTv(TvClient):
         if content_id in self.refuse_selection_of:
             raise self._dropping(TvUnavailable(f"the television refused {content_id}"))
         self.selected.append(content_id)
-        if self.displays_nothing_selected or content_id in self.admits_not_showing:
-            # The wall is left where it was, which is the point: the request was
-            # taken and the picture did not change.
+        if self.displays_nothing_selected:
+            # Silence: the set took the request, emitted nothing, and the wall did
+            # not move. No announcement, because the real one made none.
+            return False
+        if content_id in self.admits_not_showing:
+            # The set answers "I took it and I am not showing it" — an
+            # announcement, unlike the silence above, so observers hear it.
+            self.announce(content_id, is_shown=False)
             return False
         self.displaying = content_id
+        self.announce(content_id, is_shown=True)
         return True
+
+    def announce(self, content_id: str, *, is_shown: bool) -> None:
+        """Emit what the real set emits, to everyone listening.
+
+        Public so a test can model the announcement this plane did **not** cause:
+        somebody picking up the remote makes the set announce a selection nobody
+        here asked for, and that is the case an observer exists to hear.
+        """
+        announcement = SelectionAnnouncement(content_id=content_id, is_shown=is_shown)
+        self.announced.append(announcement)
+        for observer in self.selection_observers:
+            observer(announcement)
 
     def _dropping(self, exc: TvUnavailable) -> TvUnavailable:
         """Mark the connection gone, the way the real client does on any failure.
@@ -166,6 +200,9 @@ class FakeTv(TvClient):
         # often it is asked, and nothing else here can express it.
         self.art_mode_reads += 1
         return self.art_mode == "on"
+
+    def observe_selections(self, observer: SelectionObserver) -> None:
+        self.selection_observers.append(observer)
 
     def art_mode_announcement_pending(self) -> bool:
         announced, self.art_mode_announced = self.art_mode_announced, False

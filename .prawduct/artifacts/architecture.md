@@ -41,6 +41,48 @@ database. Adding a second channel is a departure requiring a recorded decision.
 >
 > **Retroactivity:** No existing code has two planes. Nothing to migrate.
 
+<!-- Ratified by the owner 2026-08-07, in the words they stated it: "The display
+     device HAS to render the label. We may have multiple pi's with different
+     displays, we may have a pc or Mac with a monitor and no e-ink that renders
+     labels in the mat area." Raised mid-build while Chunk 13A was choosing where
+     to render, and written before the interface was designed to it. -->
+
+**A display device renders its own label, and the label travels as metadata.**
+What crosses from curation is the label *text* the manifest already carries. How
+that text is arranged, and what it is drawn onto, are decided by the device that
+owns the output surface — never upstream of it. The chain is **metadata →
+layout → rendering**, and only the first link is shared: layout and rendering
+both live on the display device.
+
+> **Why:** There is not one output surface and there will not be. Today's is a
+> 1448×1072 e-paper panel on a Raspberry Pi; the deployment may hold several Pis
+> with panels of different geometry, and a display device may have no e-ink at all
+> — a PC or Mac with a monitor, where the label is drawn into the mat area around
+> the artwork rather than onto a panel beside it. A label rendered upstream has to
+> be rendered once per surface by something that knows every surface, which is the
+> catalogue plane learning the geometry of every device on the wall. That is the
+> shape `data-model.md` names by example as its anti-pattern: the 2024 index's
+> `label_file` with `_w648_h480` baked into the filename.
+>
+> The alternative considered and rejected was pre-rendering label images in
+> curation and shipping them down. It fails three ways: it puts per-device
+> geometry in the catalogue plane, it makes the label a derived artifact with two
+> upstreams to invalidate — edit a title and every stale image must be found — and
+> it forecloses a label that says anything about *now*, since a pre-rendered image
+> can only say what was known when it was drawn. It does not even buy a leaner
+> display plane, because the e-paper driver takes a decoded image, so that plane
+> needs an imaging dependency either way.
+>
+> **Corollary — output surfaces are plural and the interface must not assume
+> e-ink.** The seam a device implements is "a surface a label can be put on",
+> with its geometry as configuration. "This device has no label surface" is a
+> valid configuration, not a fault.
+>
+> **Status:** steady-state.
+>
+> **Retroactivity:** The 2024 `ArtLabel` hardcodes one geometry and one panel and
+> is retired with the rest of the 2024 modules; nothing else renders a label yet.
+
 <!-- Ratified by the owner 2026-07-20. Enforcement row in project-preferences.md.
      Given a Direction home on 2026-07-20 after Critic review found it cited as
      binding in four artifacts with no recorded ratification anywhere. -->

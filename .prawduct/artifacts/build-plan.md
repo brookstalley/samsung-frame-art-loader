@@ -1741,11 +1741,24 @@ hardware.
   success or failure, and there is no partial refresh.
 - **Visual change:** no — 13A renders into a surface, never onto the panel. The
   operator's legibility look is 13B's, and it is what makes the type size real.
-- **Deliverables:** new `display/src/display/panel/` (driver behind an
-  interface + Pango label rendering), heartbeat writer, new
-  `deploy/curation.service` and new `deploy/display.service`, the report-once
-  shape collapsed, the `image_selected` fan-out, the IT8951 pin-or-vendor
-  decision taken and recorded
+- **Built to a norm ratified mid-build, 2026-08-07.** The owner raised, while this
+  chunk was choosing where to render, that **a display device renders its own
+  label** and that output surfaces are plural — several Pis with panels of
+  different geometry, or a device with no e-ink at all whose label is drawn into
+  the mat area around the artwork. `architecture.md` § Direction carries it. The
+  consequence here is structural rather than additional: the chain is **metadata →
+  layout → rendering**, geometry is a parameter rather than a constant, the seam
+  is "a surface a label can be put on" rather than "the e-paper panel", and a
+  device configured with no label surface is valid rather than broken. **No second
+  surface is built** — the monitor-with-a-mat-area device is a real future device
+  and not this chunk's; what this chunk owes it is an interface it can be written
+  against without one being reopened.
+- **Deliverables:** new `display/src/display/panel/` — the three tiers as three
+  modules (label metadata, geometry-parameterised layout, rendering behind a
+  surface interface) with the omni-epd e-paper surface as the first
+  implementation — heartbeat writer, new `deploy/curation.service` and new
+  `deploy/display.service`, the report-once shape collapsed, the `image_selected`
+  fan-out, the IT8951 pin-or-vendor decision taken and recorded
 - **Tests:** unit — label layout against fixed metadata (golden-image or
   measured-extent checks), heartbeat shape and atomicity, **the panel is put in
   `gray16` and the driver asserts on `mode` rather than `max_colors`** (which

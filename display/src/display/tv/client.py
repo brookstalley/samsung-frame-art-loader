@@ -23,7 +23,7 @@ here is the corrected form:
 """
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -75,6 +75,33 @@ class RemovalOutcome:
     @property
     def complete(self) -> bool:
         return not self.surviving
+
+
+@dataclass(frozen=True)
+class SelectionAnnouncement:
+    """The set's own word about what is on the wall now.
+
+    **The only honest account of the wall this product has.** The set reports the
+    picture it is displaying by emitting this; the read that looks like it should
+    answer the same question — `get_current_artwork` — reports the art-store slot
+    instead, and named one unchanging id across every observation ever made here
+    while the picture visibly changed (`samsung-tv-state-findings.md`).
+
+    Announcements arrive for selections nobody here made, because somebody using
+    the remote produces one too. A consumer must therefore treat the id as news
+    about the wall rather than as an echo of its own request.
+    """
+
+    content_id: str
+    #: The set's `is_shown` flag, already read off the wire, where it is the
+    #: string "Yes" rather than a boolean.
+    is_shown: bool
+
+
+#: What a selection observer is handed. Called on the television's reader task,
+#: so it must be cheap, must not block, and must not assume anything about which
+#: task it runs on.
+SelectionObserver = Callable[[SelectionAnnouncement], None]
 
 
 class TvClient(ABC):
@@ -180,3 +207,18 @@ class TvClient(ABC):
     @abstractmethod
     async def set_brightness(self, value: int) -> None:
         """Set the panel's brightness on the set's own scale."""
+
+    @abstractmethod
+    def observe_selections(self, observer: SelectionObserver) -> None:
+        """Be told, from now on, whatever the set says about the picture on the wall.
+
+        **A method rather than a callback anyone may register, because the library
+        underneath keeps one handler per event.** A second subscriber registered
+        directly does not join the selection confirmation, it *replaces* it — after
+        which every rotation falls to its timeout and reports a wall that will not
+        move, silently, while the new subscriber works perfectly. This fans out
+        instead, so adding a listener cannot break the one that was already there.
+
+        Observers run on the client's own reader task and must be cheap. Anything
+        expensive belongs on the observer's own task, driven by what it learns.
+        """

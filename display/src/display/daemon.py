@@ -48,6 +48,7 @@ from pathlib import Path
 
 from display import brightness as brightness_module
 from display.config import Settings
+from display.episodes import Backoff, ReportOnce
 from display.logs import work_context
 from display.manifest import Entry, Manifest, Watcher
 from display.state import Binding, DisplayState, UploadStatus
@@ -130,18 +131,15 @@ class Daemon:
         self._attempted_at: float | None = None
         self._has_shown = False
 
-        #: Whether the wall has already been reported as not accepting selections.
-        #: Held for the same reason `_reported_unavailable` is: a television whose
-        #: panel is dark stays dark for hours, and a line per rotation would be a
-        #: hundred a night saying the one thing that has not changed. Reported on
-        #: the way in and on the way out, never in between.
-        self._reported_wall_unchanged = False
+        #: The wall is taking selections and displaying none of them. A television
+        #: whose panel is dark stays dark for hours, and a line per rotation would
+        #: be a hundred a night saying the one thing that has not changed.
+        self._wall_unchanged = ReportOnce()
 
-        #: Held for the same reason, and reported at INFO rather than WARNING
-        #: because somebody watching their own television is not a fault. It is
-        #: still said, because "the wall stopped" otherwise has no explanation in
-        #: the journal at all.
-        self._reported_not_our_wall = False
+        #: Somebody is watching their own television. Reported at INFO rather than
+        #: WARNING because that is not a fault — but still reported, because "the
+        #: wall stopped" otherwise has no explanation in the journal at all.
+        self._not_our_wall = ReportOnce()
 
         #: When the wall may next be asked to change, once it has been found not
         #: changing. **Rotation has a timer and the directive path does not**, so
@@ -151,8 +149,11 @@ class Daemon:
         #: at a set that will ignore every one. It backs off on the same ladder as an unreachable
         #: television, because "the set is not doing what it is told" is that same
         #: situation arriving by a route that raises nothing.
-        self._wall_retry_not_before: float | None = None
-        self._wall_retry_seconds = settings.tv_retry_min_seconds
+        self._wall_retry = Backoff(
+            minimum=settings.tv_retry_min_seconds,
+            maximum=settings.tv_retry_max_seconds,
+            monotonic=clock.monotonic,
+        )
 
         #: Reconciling the binding table against the set is **owed until it is
         #: done**, not attempted once when a manifest lands. A new manifest is
@@ -169,8 +170,17 @@ class Daemon:
         self._reconcile_not_before: float | None = None
         self._brightness_at: float | None = None
         self._brightness_value: int | None = None
-        self._retry_seconds: float = settings.tv_retry_min_seconds
-        self._reported_unavailable = False
+
+        #: The set could not be reached at all. Its own ladder, separate from the
+        #: wall's: a television that is asleep and one that is awake and ignoring
+        #: selections are different conditions, and recovering from one says
+        #: nothing about the other.
+        self._connection_retry = Backoff(
+            minimum=settings.tv_retry_min_seconds,
+            maximum=settings.tv_retry_max_seconds,
+            monotonic=clock.monotonic,
+        )
+        self._unavailable = ReportOnce()
 
     async def run(self, stop: asyncio.Event) -> None:
         """Reconcile until asked to stop."""
@@ -559,12 +569,11 @@ class Daemon:
             self._state.set_last_selected_work_id(entry.work_id)
             self._attempted_at = self._clock.monotonic()
             self._has_shown = True
-            if self._reported_wall_unchanged:
+            if self._wall_unchanged.end():
                 log.info(
                     "the television is changing what it displays again",
                     extra={"event": "rotation.wall_recovered"},
                 )
-                self._reported_wall_unchanged = False
             log.info(
                 "showing %s",
                 entry.label.get("title") or entry.work_id,
@@ -594,19 +603,17 @@ class Daemon:
         evening of television costs a handful of reads rather than thousands.
         """
         if await self._tv.showing_art():
-            if self._reported_not_our_wall:
+            if self._not_our_wall.end():
                 log.info(
                     "the television is showing art again; resuming the rotation",
                     extra={"event": "rotation.wall_returned"},
                 )
-                self._reported_not_our_wall = False
             return True
 
-        if not self._reported_not_our_wall:
+        if self._not_our_wall.begin():
             # Said once for the same reason a dark wall is: somebody watches
             # television for hours, and a line per attempt would bury the ERRORs
             # that are this plane's only failure channel.
-            self._reported_not_our_wall = True
             log.info(
                 "the television is not in art mode; leaving the wall alone until it is",
                 extra={"event": "rotation.wall_not_ours"},
@@ -630,7 +637,7 @@ class Daemon:
         """
         if self._tv.art_mode_announcement_pending():
             self._wall_is_answering()
-        return self._wall_retry_not_before is None or self._clock.monotonic() >= self._wall_retry_not_before
+        return self._wall_retry.is_due()
 
     def _hold_off_the_wall(self) -> None:
         """Back off before asking again, and lengthen the wait each time.
@@ -639,13 +646,11 @@ class Daemon:
         off costs a handful of attempts rather than one a second — and the wall
         resumes within that ceiling of somebody switching the set back on.
         """
-        self._wall_retry_not_before = self._clock.monotonic() + self._wall_retry_seconds
-        self._wall_retry_seconds = min(self._wall_retry_seconds * 2, self._settings.tv_retry_max_seconds)
+        self._wall_retry.hold()
 
     def _wall_is_answering(self) -> None:
         """Forget the backoff, because the set is acting on what it is told."""
-        self._wall_retry_not_before = None
-        self._wall_retry_seconds = self._settings.tv_retry_min_seconds
+        self._wall_retry.clear()
 
     async def _report_wall_unchanged(self, content_id: str) -> None:
         """Say once that the set is taking selections and displaying none of them.
@@ -657,9 +662,8 @@ class Daemon:
         changing* for somebody reading the journal. This one costs a call on a
         rotation that has already failed, so it is free in the ordinary case.
         """
-        if self._reported_wall_unchanged:
+        if not self._wall_unchanged.begin():
             return
-        self._reported_wall_unchanged = True
         mode = await self._tv.reported_art_mode()
         log.warning(
             "the television accepted %s and is not displaying it; "
@@ -930,18 +934,14 @@ class Daemon:
         WARNING a second until morning buries every other line in the journal. The
         recovery is logged too, so the pair reads as an episode with a length.
         """
-        if not self._reported_unavailable:
+        if self._unavailable.begin():
             log.warning("%s; holding the wall where it is and retrying", exc, extra={"event": "tv.unavailable"})
-            self._reported_unavailable = True
-        wait = self._retry_seconds
-        self._retry_seconds = min(self._retry_seconds * 2, self._settings.tv_retry_max_seconds)
-        return wait
+        return self._connection_retry.hold()
 
     def _recover(self) -> None:
-        if self._reported_unavailable:
+        if self._unavailable.end():
             log.info("the television is answering again", extra={"event": "tv.recovered"})
-            self._reported_unavailable = False
-        self._retry_seconds = self._settings.tv_retry_min_seconds
+        self._connection_retry.clear()
 
     async def _wait(self, stop: asyncio.Event, seconds: float) -> None:
         """Sleep, but wake immediately when asked to stop.
