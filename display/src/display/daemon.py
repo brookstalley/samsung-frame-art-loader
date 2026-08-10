@@ -846,6 +846,12 @@ class Daemon:
         is only read when they differ — which is once per rotation, plus once per
         time somebody actually touches the remote.
         """
+        # The surface is checked here as well as inside `_caption`, which is not
+        # belt-and-braces: the lookup below is a read of the binding table, and a
+        # device with no panel would otherwise pay for one on every poll — a query
+        # a second, for ever, to decide what to draw on nothing.
+        if self._surface is None:
+            return
         announced = self._announced_content_id
         if announced is None or announced == self._captioned_content_id:
             return
