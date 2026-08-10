@@ -184,7 +184,7 @@ class TestTheRuleAtItsBoundary:
 
     def test_a_thumbnail_of_the_master_is_never_second_guessed_on_time(self):
         """The master's branch has no timestamp to compare, and must not invent one."""
-        source = ThumbnailSource(kind="original", path=Path("raw/a1.jpg"))
+        source = ThumbnailSource(kind="original", path=Path("raw/a1.jpg"), generated_at=None)
         ancient = datetime(1999, 1, 1, tzinfo=UTC)
         assert _drawn_from(self._rendition(ancient), source) is True
 
@@ -322,6 +322,52 @@ class TestGenerating:
             assert regenerated.convert("RGB").getpixel((4, 4)) == pytest.approx(
                 (200, 190, 170), abs=6
             ), "the curator's picture still shows the mat colour they replaced"
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "Known and filed: nothing records what a cached thumbnail was drawn from, so a "
+            "canvas-derived one keeps being served under an 'original' badge once the canvas "
+            "file goes. Closing it needs provenance on the row; strict, so this flips to a "
+            "failure the moment it is fixed rather than sitting green and forgotten."
+        ),
+    )
+    def test_a_canvas_derived_thumbnail_is_not_served_once_the_canvas_file_goes(
+        self, thumbnails, service, settings, decodable_jpeg, work
+    ):
+        """This defect with its two sides swapped, and the reason it is not closed here.
+
+        A `tv_display` row that is current by hash but whose file has gone is the
+        state `preparation.py` documents as what a restored catalogue or a cleared
+        `ready/` leaves — and `test_a_render_recorded_but_absent_from_disk...`
+        above already treats it as real. `source_for` falls back to the master and
+        reports `original`, while the cache still holds the matted 16:9 picture, so
+        the curator is shown the composed render under a badge denying it.
+
+        The timestamp cannot answer this: it says when the thumbnail was made, not
+        what it was made *from*. Regenerating whenever an absent-file canvas row
+        exists is the wrong closure — it spends a re-encode per page load forever
+        on a thumbnail legitimately drawn from the master.
+        """
+        artwork = work(width=1600, height=1200)
+        rendered = f"ready/{artwork.id}.jpg"
+        decodable_jpeg(settings.art_root / rendered, width=3840, height=2160)
+        service.record_rendition(
+            artwork_id=artwork.id,
+            kind=RenditionKind.TV_DISPLAY,
+            target_width=3840,
+            target_height=2160,
+            path=rendered,
+        )
+        thumbnails.thumbnail(artwork.id)
+
+        (settings.art_root / rendered).unlink()
+
+        assert thumbnails.source_for(artwork.id).kind == "original"
+        with Image.open(thumbnails.thumbnail(artwork.id)) as served:
+            assert served.size[0] / served.size[1] == pytest.approx(
+                1600 / 1200, abs=0.01
+            ), "the canvas is gone and its picture is still being served under a 'master image' badge"
 
     def test_a_deleted_cache_file_is_rebuilt_even_though_its_row_is_current(self, thumbnails, work):
         """A row is a promise about a file; the file is the answer."""

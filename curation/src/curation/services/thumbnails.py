@@ -80,7 +80,14 @@ class ThumbnailSource:
     #: one leaves the original untouched, so the hash says "current" for a
     #: thumbnail drawn from an image that no longer exists. Comparing against
     #: this is what closes it, and only the canvas branch needs it.
-    generated_at: datetime | None = None
+    #:
+    #: **Undefaulted on purpose**, though `None` is one of its two legitimate
+    #: values. `kind` already says which branch this is, so a default here would
+    #: make the two fields able to disagree silently — a future `tv_display`
+    #: construction that omitted the stamp would restore the defect this rule
+    #: exists to close, and no consumer would notice, because every other reader
+    #: of this type looks only at `kind`.
+    generated_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,15 +132,39 @@ def _drawn_from(thumbnail: Rendition, source: ThumbnailSource) -> bool:
     when the canvas is redrawn — the path does not (a recompose writes the same
     file) and the hash does not (it is the original's). `record_rendition` upserts
     the geometry row and stamps `generated_at` afresh, so a redrawn canvas is
-    always newer than a thumbnail taken before it.
+    newer than a thumbnail taken before it — for as long as the wall clock runs
+    forwards. `datetime.now(UTC)` is not monotonic, so a backwards correction
+    landing between the two writes reinstates the defect until the original
+    changes. Not engineered around: this is a single-operator local application,
+    and the alternative is carrying a monotonic counter on a row that has no other
+    use for one.
 
     An exact tie regenerates, which is the harmless direction: the two writes are
     separated by an image encode so it does not arise in practice, and paying one
     needless re-encode is the right side of a trade against serving a picture that
-    is not what the work looks like.
+    is not what the work looks like. The window the other way is knowingly
+    accepted and is the same shape: `thumbnail()` reads its source, encodes, and
+    only then stamps its own row, so a canvas recomposed *inside* that window
+    yields a thumbnail row postdating a canvas it was never drawn from. One image
+    encode wide, on a surface one person drives.
+
+    **What this deliberately does not answer, and cannot: what the cached
+    thumbnail was actually drawn from.** Nothing records it, so the master branch
+    below has to assume, and the assumption is wrong in one reachable state — a
+    `tv_display` row that is current by hash but whose file has gone, which
+    `preparation.py` documents as what a restored catalogue or a cleared `ready/`
+    leaves. `source_for` then falls back to the master while the cache still holds
+    the canvas-derived picture, and a curator is served a matted 16:9 thumbnail
+    under a badge reading "master image" — this defect with its two sides swapped.
+    It predates this rule rather than arriving with it, and closing it needs the
+    thumbnail's provenance modelled on the row rather than inferred from the
+    current source's timestamp. Filed; do not close it by regenerating whenever an
+    absent-file `tv_display` row exists, which spends a re-encode on every load for
+    a thumbnail legitimately drawn from the master.
     """
     if source.generated_at is None:
-        # Drawn from the master, whose currency `is_current` already carries.
+        # Drawn from the master *now* — see the docstring for why "now" is not the
+        # same claim as "when this thumbnail was made", and what that costs.
         return True
     return thumbnail.generated_at > source.generated_at
 
@@ -180,7 +211,7 @@ class ThumbnailService:
         master = self._settings.art_root / original.relative_path
         if not master.is_file():
             raise ThumbnailUnavailable(f"The master image is recorded at {original.relative_path} but no file is there.")
-        return ThumbnailSource(kind="original", path=master)
+        return ThumbnailSource(kind="original", path=master, generated_at=None)
 
     def thumbnail(self, artwork_id: str) -> Path:
         """An absolute path to a current thumbnail, generating one if needed."""
@@ -205,6 +236,28 @@ class ThumbnailService:
         # what this work looks like.
         if held is not None and not held.stale and cached.is_file() and _drawn_from(held.rendition, source):
             return cached
+
+        if held is not None and not held.stale and cached.is_file():
+            # Reached only when `_drawn_from` is the condition that failed, which
+            # is the one whose *wrong* answer costs work rather than a wrong
+            # picture: anything holding the comparison false — a canvas upsert
+            # that stopped restamping, a clock correction, a caller passing the
+            # wrong stamp — re-encodes a 4K canvas per card per page load and
+            # reaches the operator as "the grid got slow", against a journal with
+            # nothing in it. INFO rather than DEBUG for that reason: the
+            # deployment where this matters is the one running with DEBUG off.
+            log.info(
+                "regenerating the thumbnail for %s: it predates the %s it would be drawn from",
+                artwork_id,
+                source.kind,
+                extra={
+                    "event": "thumbnail.superseded",
+                    "work_id": artwork_id,
+                    "source_kind": source.kind,
+                    "thumbnail_generated_at": held.rendition.generated_at.isoformat(),
+                    "source_generated_at": None if source.generated_at is None else source.generated_at.isoformat(),
+                },
+            )
 
         self._write(source.path, cached)
         # Recorded after the file exists, so a row can never promise an image

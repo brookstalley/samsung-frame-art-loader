@@ -405,6 +405,9 @@ reader finding E alone would build the wrong thing.
   does not.
 - **Black and off-white become presets a curator presses**, so choosing one is a
   judgement someone made rather than something applied silently to forty works.
+  **Superseded 2026-08-10 — see the amendment below:** the values are `#222222`
+  and `#6b6b6b`, off-white is withdrawn a second time and pure black was never in
+  the corpus. Marked inline because this bullet reads as an instruction to build.
 - **The AI becomes an opt-in button that offers several candidate colours** shown
   against the work, with nothing applied until the curator picks one. The current
   choice stays current until then. This makes the spend buy options rather than a

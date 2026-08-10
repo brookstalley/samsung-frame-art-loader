@@ -533,6 +533,37 @@ class TestThumbnailRevalidation:
         assert response.status_code == 200
         assert response.content != b""
 
+    def test_a_recomposed_canvas_reaches_the_browser_rather_than_revalidating_clean(
+        self, http, hold, service, settings, decodable_jpeg
+    ):
+        """The trigger the mat controls will rest on, end to end.
+
+        The sibling above changes the *master*, which moves the content hash and
+        so is visible to the catalogue's inherited staleness rule. Setting a mat
+        colour moves nothing that rule can see: same original, same path, same
+        geometry. So this is the case where a validator a browser is holding must
+        stop matching because of the thumbnail's own rule and nothing else — and
+        `no-cache` means the browser asks every time, so a 304 here is a curator
+        looking at the colour they just replaced.
+        """
+        artwork = hold("Automat", rendered=True, mat=True)
+        rendered = f"ready/{artwork.id}.jpg"
+        stale_etag = http.get(f"/api/works/{artwork.id}/thumbnail").headers["etag"]
+
+        # What pressing a mat preset amounts to: recompose in place, re-record.
+        decodable_jpeg(settings.art_root / rendered, width=3840, height=2160, color=(200, 190, 170))
+        service.record_rendition(
+            artwork_id=artwork.id,
+            kind=RenditionKind.TV_DISPLAY,
+            target_width=3840,
+            target_height=2160,
+            path=rendered,
+        )
+
+        response = http.get(f"/api/works/{artwork.id}/thumbnail", headers={"If-None-Match": stale_etag})
+        assert response.status_code == 200, "the browser was told its picture of the old mat is still current"
+        assert response.headers["etag"] != stale_etag
+
     def test_a_wildcard_validator_matches_whatever_is_held(self, http, hold):
         """`*` matches any current representation, per RFC 9110.
 

@@ -724,12 +724,24 @@ is only read for its answers is not being used as a corpus**: the 41 colours wer
 checked against the bar, and the 40 images they were derived *from* never went
 through the producer being judged.
 
-**The masters are not in the repository and must not be**, so the standing check
-is split rather than skipped: the *clamp* is arithmetic and is asserted on any
-input, synthetic included, while the *comparison against the hand-tuned 40* is an
-operator-run measurement against `ART_ROOT`. Making the bar structural is what
-lets a cheap test carry it — a statistical claim over images CI cannot see is not
-a test, and writing one that passes on synthetic flats is how this was missed.
+**Neither half of the intended check exists yet, and this paragraph says so
+rather than describing it as in force.** Issue #115 owns building both. The
+design it should be built to: the masters are not in the repository and must not
+be, so the check splits — the *clamp* is arithmetic and can therefore be asserted
+on any input, synthetic included, while the *comparison against the hand-tuned
+40* is an operator-run measurement against `ART_ROOT`. Making the bar structural
+is what lets a cheap test carry it; a statistical claim over images CI cannot see
+is not a test, and writing one that passes on synthetic flats is how this was
+missed. As of 2026-08-10 `mat.py`'s `_fallback` only darkens by
+`_FALLBACK_LIGHTNESS`, and `CORPUS_MAX_LIGHTNESS` appears nowhere outside
+`test_mat_corpus.py`.
+
+**And the committed operator instrument does not measure this.**
+`tools/mat_corpus.py` states in its own docstring that its images come from each
+work's museum as a small IIIF derivative rather than from `ART_ROOT` — which is
+the very substitution the 2026-08-10 measurement found changes the derived colour
+visibly on 5 of 25 works. It is a sheet for judging *look*, and it cannot stand in
+for the master-based comparison above.
 
 **Two mat presets, and their values come from the corpus rather than from
 convention (decided 2026-08-10).** A curator's one-press neutrals are `#222222`

@@ -1416,9 +1416,15 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
    touches the Original, so this invariant reports "current" for a thumbnail of
    an image that has since been redrawn. A thumbnail is additionally stale when
    its `generated_at` does not postdate the `generated_at` of the rendition it
-   would be made from now. The two states that reached a curator before this was
+   would be made from now. **Enforced at `ThumbnailService._drawn_from`, not in
+   `list_renditions`/`view.stale`** — a reader implementing a second consumer will
+   not find it in the shared predicate, and that separation is deliberate
+   (`architecture.md`). The two states that reached a curator before this was
    added: a card badged "wall render" showing the unmatted master, and a mat
    colour they set that changed the wall and not the picture in front of them.
+   **Still open**: nothing records what a cached thumbnail was actually drawn
+   from, so the mirror — canvas-derived bytes served under an `original` badge
+   once the canvas file goes — is reachable and needs provenance on the row.
 5. **`Original.byte_size` must be greater than zero.** A zero-byte original is a
    known download failure — the 2024 code detected and deleted these inline; the
    constraint makes it impossible to record one as valid.
