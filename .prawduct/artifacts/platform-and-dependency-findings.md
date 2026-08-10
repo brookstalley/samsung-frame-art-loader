@@ -230,8 +230,10 @@ path.
 that is not what was measured.** What the Pi run shows is that no distro *Python*
 package is needed; it says nothing about C headers, and the difference cost a red
 CI job the first time the typesetting leg ever executed. `display/uv.lock` is the
-authority and it is unambiguous: **pycairo 1.29.1 publishes only `win32` and
-`win_amd64` wheels, and PyGObject 3.56.3 publishes no wheel at all** — sdist only.
+authority and it is unambiguous: **pycairo 1.29.1 publishes Windows wheels only
+(`win32`, `win_amd64` and `win_arm64`, across cp312–cp314), and PyGObject 3.56.3
+publishes no wheel at all** — sdist only. The load-bearing half is that **no Linux
+wheel exists for either**, on any architecture.
 Every Linux install therefore compiles both from source and needs cairo's and
 girepository's development headers present. The GitHub runner had neither and
 failed at `Run-time dependency cairo found: NO (tried pkg-config and cmake)`.
