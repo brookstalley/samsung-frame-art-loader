@@ -91,10 +91,14 @@ never doc-synced to match code that already shipped.
 schema, service, runner, HTTP model and MCP projection. `matched` is the
 collection's holdings and is **deliberately never capped** — the per-run bound is
 what a reader reconciles it against, so capping it at the source would collapse
-the very comparison the requirement exists for. This is the pattern the codebase
-already uses everywhere else (`UnresolvedReason` → `REASON_SENTENCES`, server
-ships a code and the client owns the words); offered rationale was the one place
-shipping prose.
+the very comparison the requirement exists for. This follows the pattern the codebase
+already uses for the parts that carry information (`UnresolvedReason` →
+`REASON_SENTENCES`, server ships a code and the client owns the words) — **for
+the two facts, which is what mattered.** The residue is honest: `rationale` still
+holds a server-authored sentence on every offered row. It is a constant carrying
+no data, `provenance` already says the same thing as a code, and moving it is a
+separate refactor this issue did not need; it is named here rather than implied
+away by the sentence above.
 
 **Every number on the page is now counted from something the reader can see, or
 named as what it is.** The client counts the cards it is actually rendering for
@@ -118,10 +122,19 @@ of them" would have been false for exactly those artists — a new
 false-on-the-page-that-shows-both claim, in the change removing one. It counts,
 or says nothing.
 
-**The run table lost the sentence, which the issue asked for.** That column
-carried per-group information on a per-card line four screens away from the
-group; offered rows now carry the short per-work line, and the query lives with
-its works on the review surface.
+**The run table lost the sentence, and its column heading stopped asserting
+something the row denies.** That column carried per-group information on a
+per-card line four screens away from the group; offered rows now carry the short
+per-work line, and the query lives with its works on the review surface. The
+heading was *"Why the run named it"* over a table that is deliberately every work
+the run holds, offered ones included — and their cell in that same column now
+says the model did not propose them. A heading contradicted one column across is
+this issue's defect at close range, so it reads *"Why it is here"*.
+
+**Both run-level sentences also stopped saying "1 more works".** A count of one
+took the plural on the run view and over MCP, and the first version of the test
+written for that sentence pinned the bug rather than the behaviour — a test holds
+a wrong string as firmly as a right one.
 
 **The same denial was living on two other surfaces, and both are fixed here.**
 The reported symptom was the review grid's, but `runSentence` composed *"more

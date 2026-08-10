@@ -573,5 +573,19 @@ def test_the_run_sentence_does_not_deny_the_works_listed_underneath_it(ui):
     ui.page.wait_for_selector("table")
 
     shown = ui.text()
-    assert "the collection offered 1 more works by artists this run found no image for" in shown
+    # Singular at a count of one. The first version of this assertion pinned
+    # "1 more works" — a test can hold a grammatical bug still just as firmly as
+    # it holds a behaviour, and this one did until a reviewer read the string.
+    assert "the collection offered 1 more work by artists this run found no image for" in shown
+    assert "1 more works" not in shown
     assert "could not confirm" not in shown, "the run view still denies work it lists directly below"
+
+    # The column heading, over the cell that answers it. The run named none of
+    # the offered works and that cell says so, so a heading asserting naming is
+    # contradicted one column across — the same defect this change removes.
+    # `all_text_contents`, not `all_inner_texts`: the header cells carry
+    # `text-transform: uppercase`, and inner_text returns what the transform
+    # renders rather than what the client wrote.
+    headings = ui.page.locator("table th").all_text_contents()
+    assert "Why it is here" in headings, headings
+    assert "Why the run named it" not in headings

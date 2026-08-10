@@ -837,7 +837,7 @@ function runSentence(view) {
       // is denied by the screen it is printed on. That was issue #95 on the
       // review grid, and it lived here too: the same claim, one surface over, on
       // the page a curator lands on first.
-      sentence += ` Separately, the collection offered ${tally.offered} more works by artists this run found no image for. They are labelled below and are not what was asked for.`;
+      sentence += ` Separately, the collection offered ${tally.offered} more ${tally.offered === 1 ? "work" : "works"} by artists this run found no image for. They are labelled below and are not what was asked for.`;
     }
     if (tally.unresolved) {
       sentence += ` ${tally.unresolved} could not be matched to any image and are reported rather than dropped — each says which kind of nothing below.`;
@@ -1231,7 +1231,13 @@ async function viewRun(runId, generation) {
             // adds per row is which *particular* work was offered, and nothing
             // on this screen is decided per work: the deciding happens on the
             // review card, where the badge stays.
-            ["Title", "Artist", "Image", "Why the run named it"],
+            // "Why it is here", not "Why the run named it". This table is
+            // deliberately every work the run holds, asked-for and offered
+            // together — and the run named none of the offered ones, whose cell
+            // in this very column now says so in as many words. A heading that
+            // asserts naming above a cell that denies it is the defect this whole
+            // change exists to remove, one column apart instead of one page.
+            ["Title", "Artist", "Image", "Why it is here"],
             view.works.map((work) => [
               work.title,
               work.artist || "—",

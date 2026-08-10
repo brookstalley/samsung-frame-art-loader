@@ -1441,8 +1441,9 @@ def _run_notice(view: RunView) -> str:
                 # grid; the same sentence lived here and on the run view, and one
                 # surface telling an agent something the other two do not is the
                 # failure `http/models.py` and this module exist to prevent.
+                works = "work" if view.offered_count == 1 else "works"
                 settled += (
-                    f" Separately, the collection offered {view.offered_count} more works by artists this run "
+                    f" Separately, the collection offered {view.offered_count} more {works} by artists this run "
                     "found no image for. They are labelled `offered` and are not what was asked for."
                 )
         if view.unresolved:
