@@ -161,6 +161,41 @@ class TestWhatIsNotAnAnnouncement:
 
         assert heard == [], f"{why} was passed on as though it were an announcement"
 
+    @pytest.mark.parametrize(
+        ("response", "why"),
+        [
+            ({}, "no data at all"),
+            ({"data": "not json"}, "data that will not parse"),
+            ({"data": json.dumps([1, 2, 3])}, "a list where an object belongs"),
+            ({"data": json.dumps({"is_shown": "Yes"})}, "no content id"),
+            ({"data": json.dumps({"content_id": "", "is_shown": "Yes"})}, "an empty content id"),
+            ({"data": json.dumps({"content_id": 17, "is_shown": "Yes"})}, "a content id that is not a string"),
+        ],
+    )
+    def test_the_journal_is_told(self, tv: SamsungTv, response: dict, why: str, caplog):
+        """**"Said nothing" and "said something unreadable" must not print alike.**
+
+        This is a foreign API on a television that takes firmware nobody here
+        approves, so the payload changing shape is a thing that happens. Silence
+        here delivers that as every rotation timing out and the wall parking on one
+        picture, with the one fact that explains it recorded nowhere — a
+        diagnostic whose all-clear and cannot-tell read the same has retired the
+        question it asks.
+        """
+        with caplog.at_level("WARNING"):
+            tv._on_image_selected("image_selected", response)
+
+        assert [
+            r for r in caplog.records if getattr(r, "event", None) == "tv.selection_unreadable"
+        ], f"{why} passed without a word in the journal"
+
+    def test_a_readable_announcement_says_nothing_about_being_unreadable(self, tv: SamsungTv, caplog):
+        """The other half: a warning on the ordinary path is its own kind of useless."""
+        with caplog.at_level("WARNING"):
+            tv._on_image_selected("image_selected", {"data": json.dumps({"content_id": "MY_F0007", "is_shown": "Yes"})})
+
+        assert not [r for r in caplog.records if getattr(r, "event", None) == "tv.selection_unreadable"]
+
     @pytest.mark.asyncio
     async def test_an_unreadable_message_leaves_the_selection_waiting(self, tv: SamsungTv):
         """It falls to its timeout, which reports the wall unchanged — the safe direction."""

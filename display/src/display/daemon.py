@@ -72,6 +72,17 @@ log = logging.getLogger(__name__)
 LABEL_DRAW_BUDGET_SECONDS: Final[float] = 15.0
 
 
+def _forget(draw: "asyncio.Future[Layout]") -> None:
+    """Collect an abandoned draw's outcome, so nothing warns about it later.
+
+    A draw left running past its budget is one nobody is waiting for any more, and
+    a future whose exception is never read prints a warning when it is collected —
+    on the one code path where the journal is already saying something truer.
+    """
+    if not draw.cancelled():
+        draw.exception()
+
+
 class Shown(enum.Enum):
     """What came of trying to put one work on the wall.
 
@@ -145,14 +156,14 @@ class Daemon:
         #: open.
         self._surface = surface
         self._label_failed = ReportOnce()
-        #: Whether a draw handed to a worker thread has yet come back. **A
-        #: one-at-a-time gate rather than a queue**: the timeout below stops
+        #: The draw handed to a worker thread, kept until it finishes. **A
+        #: one-at-a-time gate rather than a queue**: the budget stops the loop
         #: waiting on a hung panel, but it cannot stop the thread, and dispatching
         #: another every rotation would fill the shared executor with threads
         #: parked in a driver — at which point the television's own blocking calls,
         #: which use that same executor, would start waiting behind a panel. That
         #: is a panel stopping the wall by the back door.
-        self._label_drawing = False
+        self._label_draw: asyncio.Future[Layout] | None = None
         #: What the panel was last asked to name, as the television's own id for
         #: it. **Recorded on the attempt rather than the success**, which is what
         #: keeps a refusing panel from being re-asked on every one-second poll: a
@@ -741,18 +752,32 @@ class Daemon:
         if surface is None:
             return
         self._captioned_content_id = content_id
-        if self._label_drawing:
+        if self._label_draw is not None and not self._label_draw.done():
             self._label_would_not_take_it("the previous label is still being drawn")
             return
-        self._label_drawing = True
-        try:
-            layout = await asyncio.wait_for(
-                asyncio.to_thread(self._draw, surface, entry),
-                timeout=LABEL_DRAW_BUDGET_SECONDS,
-            )
-        except TimeoutError:
+
+        # **The gate is the draw's own state, not a flag somebody remembers to
+        # clear.** A boolean set here and cleared inside `_draw` is wrong in a case
+        # that leaves the panel dark for the life of the process: if the budget
+        # runs out while the work item is still *queued* rather than running, the
+        # thread never starts, so nothing in `_draw` ever executes to clear it —
+        # and every later label is turned away by a gate guarding a draw that
+        # happened. Asking the task whether it is finished is right for both the
+        # queued case and the running one.
+        draw = asyncio.ensure_future(asyncio.to_thread(self._draw, surface, entry))
+        self._label_draw = draw
+        finished, _ = await asyncio.wait({draw}, timeout=LABEL_DRAW_BUDGET_SECONDS)
+        if not finished:
+            # **Not cancelled, deliberately.** Cancelling would mark it done while
+            # the thread carried on — the gate would open onto a panel still being
+            # written to, which is what the gate exists to prevent. Left running,
+            # it opens the gate when the panel actually comes back, and its outcome
+            # is collected so nothing warns about an exception nobody read.
+            draw.add_done_callback(_forget)
             self._label_would_not_take_it(f"the draw ran past the {LABEL_DRAW_BUDGET_SECONDS:g}s label budget")
             return
+        try:
+            layout = draw.result()
         # **Widened from `SurfaceUnavailable` alone once a real surface existed,
         # and the docstring above is why.** `show` converts its own failures, but
         # `geometry` and `measure` are read outside it — and `measure` on the
@@ -803,18 +828,14 @@ class Daemon:
         text stack the drawing does, and splitting them would put half the cost
         back on the loop for no gain.
 
-        Nothing here touches this object's state beyond releasing the gate, which
-        is the one thing the loop cannot do for it: `wait_for` stops *waiting* for
-        a hung draw, but the thread runs on, and the gate has to be cleared by
-        whoever actually finishes.
+        Nothing here touches this object's state, which is what makes it safe to
+        run off the loop: the caller reads the outcome through the task it holds,
+        and that task finishing is also what opens the gate on the next draw.
         """
-        try:
-            lines = read_label(entry.label).lines() if entry is not None else []
-            layout = lay_out(lines, surface.geometry, surface.measure)
-            surface.show(layout)
-            return layout
-        finally:
-            self._label_drawing = False
+        lines = read_label(entry.label).lines() if entry is not None else ()
+        layout = lay_out(lines, surface.geometry, surface.measure)
+        surface.show(layout)
+        return layout
 
     def _note_announcement(self, announcement: SelectionAnnouncement) -> None:
         """Remember what the set says is on its wall. Runs on the client's reader task.

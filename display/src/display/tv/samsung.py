@@ -276,6 +276,25 @@ class SamsungTv(TvClient):
         """
         announcement = _announced(response)
         if announcement is None:
+            # **Said, because "the set announced nothing" and "the set announced
+            # something this code cannot read" are otherwise the same journal.** A
+            # diagnostic whose all-clear and cannot-tell print the same line has
+            # retired the question it asks — and this is a foreign API on a
+            # television that takes firmware updates nobody here approves, so the
+            # payload changing shape is a thing that happens rather than a thing
+            # that would be surprising. Without this, that arrives as every
+            # rotation timing out and the wall parking on one picture, with the one
+            # fact that explains it recorded nowhere.
+            #
+            # Truncated because the length is the library's to decide, and one
+            # unreadable frame should not be able to fill a journal that lives in
+            # this device's RAM.
+            log.warning(
+                "the television announced a selection this plane could not read (%.200r); "
+                "the wall may stop changing until it is understood",
+                response,
+                extra={"event": "tv.selection_unreadable"},
+            )
             return
         self._resolve_pending(announcement)
         self._tell_observers(announcement)

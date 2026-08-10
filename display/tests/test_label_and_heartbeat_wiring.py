@@ -15,6 +15,7 @@ import json
 import threading
 import time
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -306,6 +307,73 @@ class TestTheDrawIsNotOnTheEventLoop:
             # releasing would cost every run after it, not just this one.
             surface.release.set()
             assert await _comes_back(surface.left), "the draw thread never came back"
+
+    @pytest.mark.asyncio
+    async def test_a_draw_that_never_got_a_thread_does_not_close_the_gate_for_ever(
+        self, labelled, surface, publish, clock, monkeypatch
+    ):
+        """**The budget can expire before the work starts, not only while it runs.**
+
+        A draw is handed to a shared pool, and the television's own blocking calls
+        use that pool too — so a draw can still be sitting in the queue when its
+        budget runs out, never having touched the panel. Anything that releases the
+        gate from *inside* the draw is then never reached, and every label after it
+        is turned away by a gate guarding work that never happened: a device with a
+        working panel goes blank until the process restarts, reporting itself
+        broken the whole time. The pool is squeezed to one worker here and that
+        worker is occupied, which is that queue with the timing made certain.
+        """
+        monkeypatch.setattr(daemon_module, "LABEL_DRAW_BUDGET_SECONDS", 0.05)
+        publish(["work-a", "work-b"], shuffle=False, labels={"work-a": {}, "work-b": {}})
+        occupied, let_go = threading.Event(), threading.Event()
+
+        with ThreadPoolExecutor(max_workers=1) as only_one_thread:
+            asyncio.get_running_loop().set_default_executor(only_one_thread)
+            only_one_thread.submit(lambda: (occupied.set(), let_go.wait(30)))
+            assert await _comes_back(occupied), "the pool's one worker was never taken"
+
+            await asyncio.wait_for(labelled.tick(), timeout=10)
+            assert surface.draws_begun == 0, "the draw ran, so this is not the queued case"
+
+            # **The loop is let settle before the worker is freed**, because the
+            # two are unrelated in life: what occupies that pool is a television
+            # call taking seconds, and it finishes when it finishes. Freeing the
+            # worker in the same event-loop step that gave up waiting models a
+            # coincidence, and it hides anything the loop would have done to the
+            # queued draw in between — a cancellation, say, which is the one thing
+            # that must not happen to it.
+            await asyncio.sleep(0.05)
+            let_go.set()
+            assert await _comes_back(surface.left), "the queued draw never ran once a thread was free"
+
+            clock.advance(10_000)
+            await asyncio.wait_for(labelled.tick(), timeout=10)
+
+        assert surface.draws_begun == 2, "the panel was never drawn to again"
+
+    @pytest.mark.asyncio
+    async def test_a_panel_that_comes_back_is_drawn_to_again(self, labelled, surface, publish, clock, monkeypatch):
+        """**The gate has to open again, and only its own draw can open it.**
+
+        Whatever holds this closed is released by a draw nobody is waiting for any
+        more — so it cannot be a flag the waiting side clears, and it cannot be a
+        cancellation, which would mark the work finished while the panel was still
+        being written to. A gate that stayed shut would leave a working panel
+        permanently blank and reported broken, which is the failure this whole
+        subsystem is arranged to make impossible.
+        """
+        monkeypatch.setattr(daemon_module, "LABEL_DRAW_BUDGET_SECONDS", 0.05)
+        surface.blocks = True
+        publish(["work-a", "work-b"], shuffle=False, labels={"work-a": {}, "work-b": {}})
+        await asyncio.wait_for(labelled.tick(), timeout=10)
+
+        surface.release.set()
+        assert await _comes_back(surface.left), "the draw thread never came back"
+        surface.blocks = False
+        clock.advance(10_000)
+        await asyncio.wait_for(labelled.tick(), timeout=10)
+
+        assert surface.shown, "the panel recovered and was never drawn to again"
 
 
 class TestTheRemoteIsACuratorToo:

@@ -2938,10 +2938,14 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   the mutation sweep — are competing with reference material for a reader's
   attention. Deleting the 2024 modules takes the root column out of the dev-command
   table and the root suite out of three of the surrounding paragraphs, which is
-  most of the excess without anyone judging what matters. The rest is the
-  `display/tests/raster` paragraph and the live-suites catalogue, both of which
-  already exist in full in `platform-and-dependency-findings.md` and
-  `deploy/README.md` and need only their command and a pointer here.
+  most of the excess without anyone judging what matters. **The rest is a move
+  rather than a judgement call, which is the version to do** *(recipe improved
+  2026-08-10, by a second round raising this finding again)*: the "browser suite"
+  and "live suites" sections are runbook material — 92 lines nothing in a coding
+  session needs inline — and they go to a new `docs/testing.md`, leaving
+  `CLAUDE.md` the three-column table, the `uv run` rule, the per-plane commands
+  and a pointer. `README.md`'s claim that `CLAUDE.md` is the authority for running
+  the tests stays true, because the pointer resolves from there.
 - **Deliverables:** backup job + schedule in `deploy/`; the health panel's
   backup-age field going from "no backup recorded" to a real age — the field
   itself ships with 19B, so what lands here is the source behind it; the restore

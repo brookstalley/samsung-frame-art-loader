@@ -63,6 +63,41 @@ class TestWhatDefaults:
 
         assert (settings.epd_panel_width_px, settings.epd_panel_height_px) == (800, 600)
 
+    def test_the_three_values_that_decide_whether_this_device_has_a_panel(self, art_root: Path):
+        """**The names a misspelling makes invisible.**
+
+        These three are the whole of what `.env` says about the label surface, and
+        every other test in this plane builds a `Settings` directly — so a misspelt
+        key or a wrong default here would leave `epd_device` empty on a Pi that has
+        a panel, `label_surface` would return None, and the heartbeat would report
+        a device with no panel. That is the exact distinction this plane was built
+        to draw, collapsed by a typo nothing else would catch.
+        """
+        settings = load(
+            an_environment(
+                art_root,
+                EPD_DEVICE="waveshare_epd.it8951",
+                EPD_MARGIN_PX="64",
+                EPD_ROTATE_DEGREES="0",
+            )
+        )
+
+        assert settings.epd_device == "waveshare_epd.it8951"
+        assert settings.epd_margin_px == 64
+        assert settings.epd_rotate_degrees == 0
+
+    def test_a_deployment_that_says_nothing_about_a_panel_has_none(self, art_root: Path):
+        """The other half, and the supported deployment rather than the degraded one.
+
+        The margin and the rotation still take the reference deployment's defaults,
+        because they describe how a panel is used rather than whether there is one.
+        """
+        settings = load(an_environment(art_root))
+
+        assert settings.epd_device == ""
+        assert settings.epd_margin_px == 40
+        assert settings.epd_rotate_degrees == 180
+
     def test_the_two_paths_under_the_art_root_are_not_configurable(self, art_root: Path):
         """A setting is just a way for the writer and the reader to stop agreeing
         about where the channel between them is."""
