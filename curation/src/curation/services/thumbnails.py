@@ -7,10 +7,16 @@ catalogue as renditions**, which is what keeps them from becoming an
 untracked pile of files nothing owns. `RenditionKind.THUMBNAIL` has been in the
 data model since the catalogue was designed; this is its producer.
 
-**Staleness is the catalogue's rule, not a second one invented here.** A
-rendition carries the content hash of the master it was made from, so a thumbnail
-is stale exactly when the work's original changes — the same relation that
-governs the television render, applied by the same code.
+**Staleness is the catalogue's rule plus one this kind alone needs.** A rendition
+carries the content hash of the master it was made from, so it goes stale when
+the work's original changes — the same relation that governs the television
+render, applied by the same code. A thumbnail needs a second test because it is
+the one rendition drawn from *another rendition*: once a work has a canvas, the
+thumbnail is a copy of the canvas, and composing or recomposing one never touches
+the original the hash test asks about. `_drawn_from` is that second test, and it
+is deliberately not in `records.py` beside `is_current` — the shared rule is
+shared because three surfaces must not disagree about it, while this one has a
+single consumer and covers a relation only this kind has.
 
 **Which image gets downscaled is reported, never assumed.** The television
 rendition is preferred when it is current: it is already 4K rather than
@@ -26,12 +32,13 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Final
 
 from PIL import Image, UnidentifiedImageError
 
-from curation.persistence.records import RenditionKind, tv_renditions_newest_first
+from curation.persistence.records import Rendition, RenditionKind, tv_renditions_newest_first
 from curation.services.catalogue import CatalogueService
 from curation.services.errors import ServiceError
 from curation.services.imaging import encode_downscaled
@@ -64,6 +71,16 @@ class ThumbnailSource:
     #: `tv_display` or `original` — what the curator is actually looking at.
     kind: str
     path: Path
+    #: When this source image was itself produced, and `None` for the master.
+    #:
+    #: The asymmetry is the point rather than an omission. A thumbnail of the
+    #: master goes stale when the master changes, and the catalogue's own
+    #: staleness rule already answers that by hash. A thumbnail of a *canvas* has
+    #: no such cover: the canvas is a rendition too, and composing or recomposing
+    #: one leaves the original untouched, so the hash says "current" for a
+    #: thumbnail drawn from an image that no longer exists. Comparing against
+    #: this is what closes it, and only the canvas branch needs it.
+    generated_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +105,37 @@ class ThumbnailSettings:
         """
         if not self.directory.is_relative_to(self.art_root):
             raise ServiceError(f"The thumbnail cache at {self.directory} must sit inside ART_ROOT at {self.art_root}.")
+
+
+def _drawn_from(thumbnail: Rendition, source: ThumbnailSource) -> bool:
+    """Whether this cached thumbnail can have been made from `source`.
+
+    **The catalogue's staleness rule does not reach this question**, and the gap
+    is structural rather than an oversight. `is_current` compares a rendition
+    against the *original*, which is right for every rendition drawn from the
+    original — and a thumbnail is the one that is not: when a work has a canvas,
+    the thumbnail is drawn from the canvas, a rendition itself. Composing a
+    canvas, or recomposing one in a new mat colour, never touches the original,
+    so the hash test answers "current" about an image the thumbnail has never
+    seen. The two ways that surfaces: a card badged "wall render" over the bare
+    master, and a mat colour a curator sets that changes the wall and not the
+    picture in front of them.
+
+    Time is the comparison because it is the only fact both rows carry that moves
+    when the canvas is redrawn — the path does not (a recompose writes the same
+    file) and the hash does not (it is the original's). `record_rendition` upserts
+    the geometry row and stamps `generated_at` afresh, so a redrawn canvas is
+    always newer than a thumbnail taken before it.
+
+    An exact tie regenerates, which is the harmless direction: the two writes are
+    separated by an image encode so it does not arise in practice, and paying one
+    needless re-encode is the right side of a trade against serving a picture that
+    is not what the work looks like.
+    """
+    if source.generated_at is None:
+        # Drawn from the master, whose currency `is_current` already carries.
+        return True
+    return thumbnail.generated_at > source.generated_at
 
 
 class ThumbnailService:
@@ -123,7 +171,11 @@ class ThumbnailService:
             # render whose file has gone is not a reason to ignore an older one
             # that is still there and still current.
             if rendered.is_file():
-                return ThumbnailSource(kind=RenditionKind.TV_DISPLAY.value, path=rendered)
+                return ThumbnailSource(
+                    kind=RenditionKind.TV_DISPLAY.value,
+                    path=rendered,
+                    generated_at=rendition.generated_at,
+                )
 
         master = self._settings.art_root / original.relative_path
         if not master.is_file():
@@ -146,10 +198,12 @@ class ThumbnailService:
             (view for view in self._catalogue.list_renditions(artwork_id) if view.rendition.kind is RenditionKind.THUMBNAIL),
             None,
         )
-        # All three conditions, because each one alone is satisfiable while the
+        # All four conditions, because each one alone is satisfiable while the
         # cached file is wrong: a fresh row can point at a file someone deleted,
-        # and a present file can predate the master it claims to depict.
-        if held is not None and not held.stale and cached.is_file():
+        # a present file can predate the master it claims to depict, and a
+        # thumbnail of the master can outlive the moment a canvas replaced it as
+        # what this work looks like.
+        if held is not None and not held.stale and cached.is_file() and _drawn_from(held.rendition, source):
             return cached
 
         self._write(source.path, cached)

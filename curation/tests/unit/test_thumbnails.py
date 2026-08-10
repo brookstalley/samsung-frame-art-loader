@@ -4,16 +4,40 @@ The risk this covers is not "does Pillow resize". It is that a thumbnail is a
 *rendition*, so it inherits the catalogue's staleness rule, and a cache that
 answers from a file made before the master changed puts a superseded acquisition
 in front of the curator — the one thing the staleness rule exists to prevent.
+
+**And that inheritance is not sufficient, which is the harder half.** A thumbnail
+is the one rendition drawn from another rendition: once a work has a television
+canvas the thumbnail is a copy of *that*, and neither composing a canvas nor
+recomposing one in a new mat colour touches the original the inherited rule asks
+about. So the inherited rule alone answers "current" for a picture that has since
+been redrawn, and the two ways a curator meets it — a card badged "wall render"
+over the bare master, and a mat colour that changes the wall but not the picture
+in front of them — are what the tests below hold.
 """
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
-from curation.persistence.records import AcquisitionMethod, FetchStatus, MatMethod, RenditionKind, RightsStatus, SourceClass
+from curation.persistence.records import (
+    AcquisitionMethod,
+    FetchStatus,
+    MatMethod,
+    Rendition,
+    RenditionKind,
+    RightsStatus,
+    SourceClass,
+)
 from curation.services.errors import ServiceError
-from curation.services.thumbnails import THUMBNAIL_MAX_EDGE_PX, ThumbnailSettings, ThumbnailUnavailable
+from curation.services.thumbnails import (
+    THUMBNAIL_MAX_EDGE_PX,
+    ThumbnailSettings,
+    ThumbnailSource,
+    ThumbnailUnavailable,
+    _drawn_from,
+)
 
 
 @pytest.fixture
@@ -121,6 +145,50 @@ class TestWhichImageIsUsed:
             thumbnails.source_for(artwork.id)
 
 
+class TestTheRuleAtItsBoundary:
+    """The one case the service's own tests cannot reach.
+
+    Both writes stamp `datetime.now(UTC)` themselves and are separated by an
+    image encode, so no test driving the service can produce two rows of the same
+    instant — and there is no clock seam to fake, deliberately. The rule is a pure
+    function of two timestamps, so its boundary is pinned where it can be: an
+    exact tie means the thumbnail was recorded in the same instant as the canvas
+    and therefore cannot have been made *from* it, which is why the comparison is
+    strict. Relaxing it to `>=` serves a picture of the mat colour that was just
+    replaced, and nothing else in this file can tell.
+    """
+
+    @staticmethod
+    def _rendition(at):
+        return Rendition(
+            id="r1",
+            artwork_id="a1",
+            kind=RenditionKind.THUMBNAIL,
+            target_width=THUMBNAIL_MAX_EDGE_PX,
+            target_height=THUMBNAIL_MAX_EDGE_PX,
+            relative_path="thumbs/a1.jpg",
+            source_content_hash="hash-1",
+            generated_at=at,
+        )
+
+    def test_a_thumbnail_of_the_same_instant_is_not_treated_as_drawn_from_the_canvas(self):
+        instant = datetime(2026, 8, 10, 12, 0, 0, tzinfo=UTC)
+        source = ThumbnailSource(kind=RenditionKind.TV_DISPLAY.value, path=Path("ready/a1.jpg"), generated_at=instant)
+        assert _drawn_from(self._rendition(instant), source) is False
+
+    def test_a_thumbnail_taken_after_the_canvas_is_kept(self):
+        canvas = datetime(2026, 8, 10, 12, 0, 0, tzinfo=UTC)
+        source = ThumbnailSource(kind=RenditionKind.TV_DISPLAY.value, path=Path("ready/a1.jpg"), generated_at=canvas)
+        later = canvas + timedelta(microseconds=1)
+        assert _drawn_from(self._rendition(later), source) is True
+
+    def test_a_thumbnail_of_the_master_is_never_second_guessed_on_time(self):
+        """The master's branch has no timestamp to compare, and must not invent one."""
+        source = ThumbnailSource(kind="original", path=Path("raw/a1.jpg"))
+        ancient = datetime(1999, 1, 1, tzinfo=UTC)
+        assert _drawn_from(self._rendition(ancient), source) is True
+
+
 class TestGenerating:
     def test_the_thumbnail_fits_inside_the_box_and_keeps_its_shape(self, thumbnails, work):
         artwork = work(width=1600, height=1200)
@@ -184,6 +252,76 @@ class TestGenerating:
 
         with Image.open(thumbnails.thumbnail(artwork.id)) as regenerated:
             assert regenerated.size[1] > regenerated.size[0], "the cache still holds the previous acquisition"
+
+    def test_a_thumbnail_of_the_master_is_rebuilt_once_a_wall_render_exists(
+        self, thumbnails, service, settings, decodable_jpeg, work
+    ):
+        """The master's hash cannot answer this, which is why it went unnoticed.
+
+        A thumbnail is the one rendition made from *another rendition*, and the
+        staleness rule compares a rendition against the **original**. Composing a
+        canvas does not change the original, so a thumbnail built from the bare
+        master before the work was ever prepared stayed "current" for good — and
+        `source_for` reports `tv_display` over it, so the card badges "wall
+        render" above the unmatted picture. Two things a curator can see: the
+        aspect becomes the panel's, and the mat appears.
+        """
+        artwork = work(width=1600, height=1200)
+        with Image.open(thumbnails.thumbnail(artwork.id)) as first:
+            assert first.size[0] / first.size[1] == pytest.approx(1600 / 1200, abs=0.01), "the master's own shape"
+
+        rendered = f"ready/{artwork.id}.jpg"
+        decodable_jpeg(settings.art_root / rendered, width=3840, height=2160)
+        service.record_rendition(
+            artwork_id=artwork.id,
+            kind=RenditionKind.TV_DISPLAY,
+            target_width=3840,
+            target_height=2160,
+            path=rendered,
+        )
+
+        assert thumbnails.source_for(artwork.id).kind == RenditionKind.TV_DISPLAY.value
+        with Image.open(thumbnails.thumbnail(artwork.id)) as regenerated:
+            assert regenerated.size[0] / regenerated.size[1] == pytest.approx(
+                3840 / 2160, abs=0.01
+            ), "the cache still holds the bare master while the card says 'wall render'"
+
+    def test_a_recomposed_canvas_regenerates_so_a_new_mat_is_actually_seen(
+        self, thumbnails, service, settings, decodable_jpeg, work
+    ):
+        """The same defect on the path a curator drives deliberately.
+
+        Setting a mat colour re-renders the canvas to the *same* path and upserts
+        the same rendition row, so nothing about the original moves and no file
+        appears or disappears. Without this the curator presses a colour, the
+        catalogue records it, the wall shows it — and the picture in front of them
+        does not change, which reads as the control being broken.
+        """
+        artwork = work()
+        rendered = f"ready/{artwork.id}.jpg"
+
+        def compose(colour):
+            """What `prepare(force=True)` does: same path, same geometry, new paint."""
+            decodable_jpeg(settings.art_root / rendered, width=3840, height=2160, color=colour)
+            service.record_rendition(
+                artwork_id=artwork.id,
+                kind=RenditionKind.TV_DISPLAY,
+                target_width=3840,
+                target_height=2160,
+                path=rendered,
+            )
+
+        compose((20, 20, 20))
+        with Image.open(thumbnails.thumbnail(artwork.id)) as first:
+            assert first.convert("RGB").getpixel((4, 4)) == pytest.approx((20, 20, 20), abs=6)
+
+        # What pressing a mat preset amounts to.
+        compose((200, 190, 170))
+
+        with Image.open(thumbnails.thumbnail(artwork.id)) as regenerated:
+            assert regenerated.convert("RGB").getpixel((4, 4)) == pytest.approx(
+                (200, 190, 170), abs=6
+            ), "the curator's picture still shows the mat colour they replaced"
 
     def test_a_deleted_cache_file_is_rebuilt_even_though_its_row_is_current(self, thumbnails, work):
         """A row is a promise about a file; the file is the answer."""

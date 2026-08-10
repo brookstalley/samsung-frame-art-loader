@@ -320,8 +320,8 @@ A derived, device-specific output. **Regenerated, never transported.**
 | `target_width` | integer | required | e.g. 3840 for the TV canvas. |
 | `target_height` | integer | required | e.g. 2160. |
 | `relative_path` | string | required | Relative to `ART_ROOT`. |
-| `source_content_hash` | string | required | The `Original.content_hash` this was rendered from. Mismatch ⇒ stale ⇒ regenerate. |
-| `generated_at` | datetime | auto | |
+| `source_content_hash` | string | required | The `Original.content_hash` this was rendered from. Mismatch ⇒ stale ⇒ regenerate. Note it is the *Original's* hash on every row, including a `thumbnail` actually drawn from a `tv_display` canvas — see invariant 4. |
+| `generated_at` | datetime | auto | Refreshed on upsert, so a recomposed canvas is newer than it was. Load-bearing rather than bookkeeping: it is the only column that moves when a canvas is redrawn at the same path from the same Original, which is what makes a stale `thumbnail` of it detectable (invariant 4). |
 
 > **Q8.** Geometry is *columns*, not a filename suffix. The 2024 design encoded
 > it as `_w648_h480` in the filename, which is why the recovered catalogue points
@@ -1408,7 +1408,17 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
 3. **At most one Source per Artwork has `is_primary = true`.**
 4. **A Rendition is stale when its `source_content_hash` differs from its
    Artwork's Original `content_hash`.** Stale renditions are regenerated, never
-   served.
+   served. **This is necessary and, for `kind = 'thumbnail'`, not sufficient
+   (amended 2026-08-10).** Every other rendition is drawn from the Original, so
+   comparing against it answers the whole question. A thumbnail is drawn from the
+   *`tv_display` rendition* whenever one is current — it is the model's only
+   derived-from-derived row — and composing or recomposing that canvas never
+   touches the Original, so this invariant reports "current" for a thumbnail of
+   an image that has since been redrawn. A thumbnail is additionally stale when
+   its `generated_at` does not postdate the `generated_at` of the rendition it
+   would be made from now. The two states that reached a curator before this was
+   added: a card badged "wall render" showing the unmatted master, and a mat
+   colour they set that changed the wall and not the picture in front of them.
 5. **`Original.byte_size` must be greater than zero.** A zero-byte original is a
    known download failure — the 2024 code detected and deleted these inline; the
    constraint makes it impossible to record one as valid.
