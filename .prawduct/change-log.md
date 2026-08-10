@@ -4,16 +4,20 @@
      This file is separate from project-state.yaml to reduce merge conflicts
      when multiple branches add entries simultaneously.
 
-     # Tagged entries (enabled by default; set `views_enabled: false` in project-state.yaml to opt out)
+     # Tagged entries
 
-     With views enabled (the default), add a tag-line directly under each ##
-     header to mark which build-plan chunks the entry shipped and which
-     release it belongs to. `prawduct-hook regen-views` uses these tags to
-     regenerate three derived views:
-       * build-plan `## Status` block — checkboxes flip from `status=shipped`
-       * `.prawduct/release-notes.md` — sections grouped by `release=`
-       * `scope_rollups:` block in project-state.yaml — grouped by `scope=`
-     Untagged entries are ignored by all three views.
+     Add a tag-line directly under each ## header recording which build-plan
+     chunks the entry shipped, which release it belongs to, and its rollup
+     scope.
+
+     **The tags are a record, not a source. Nothing is generated from them.**
+     They were once inputs to `prawduct-hook regen-views`, which regenerated
+     the build-plan `## Status` block, a release-notes view and a
+     `scope_rollups:` block; prawduct v3.2.8 retired that command and the
+     `views_enabled` switch that governed it. The Status checkboxes are now
+     ticked by hand and believed by every reader — see the build plan. Written
+     out because this header told three releases' worth of readers to run a
+     command that no longer exists.
 
      Format:
 
@@ -40,13 +44,76 @@
                   release-notes groups by it) — either way the tag merges
                   atomically with the work it describes.
                   `merged` is a legacy stamp some logs carry; it is treated
-                  as statusless. Any other value (including a typo) is a
-                  fatal regen-views error — fix it, don't invent states.
-       scope    - rollup identifier (e.g., v1.4)
+                  as statusless. Don't invent states — the three above are
+                  the whole vocabulary.
+       scope    - rollup identifier (e.g., v1.4) -->
 
-     With `views_enabled: true`, the Status checkboxes in build-plan.md are a
-     derived view. Don't hand-edit them — add/update a tagged entry here and
-     run `prawduct-hook regen-views`. -->
+## 2026-08-10: The offer to look again describes the page it sits on, and spends on it
+
+<!-- prawduct: status=shipped | scope=v1-build -->
+
+<!-- No `chunks=`: this is issue #96, a defect in a surface the build plan had
+     already delivered, not a chunk's build. Naming a chunk here would tick a box
+     for work that is not this work. -->
+
+**Why:** issue #96, filed by a Critic round against the review grid, impact L.
+The re-search offer was derived once, at paint, from the page the grid was built
+from — and the grid repaints one card at a time, by design. So the screen held
+two answers to "which works are waiting for a better scan": the offer's, frozen
+at load, and the grid's, current. They diverged on a transition a curator reaches
+from that very screen.
+
+**The visible half is a panel that says nothing when it has the most to say.**
+The normal way into this state is a grid that opens with nothing waiting: the
+curator turns a scan down *because* they want a better one. The panel's whole job
+is to tell them that rejecting a scan records a judgement and starts no search —
+and it stayed absent exactly then, leaving them waiting for a search that was
+never coming.
+
+**The expensive half is invisible to anything that reads the page.** The "Look
+again for these" button posted the same frozen array to `/api/runs/resolve`,
+which spends real money. A curator who marked three more works and clicked it
+paid for a run covering fewer works than they had just marked, and got back a run
+that was not the one they asked for. No assertion about rendered text reaches
+that; the test that covers it reads the POST body off the wire.
+
+**One map, written at the one place every verdict passes through.** `viewReview`
+now seeds a `work_id → verdict` map from the page and hands the grid a callback;
+`candidateCard`'s `repaint` calls it before replacing its node. That is the only
+chokepoint needed, and finding it is what kept this small: both ways of settling
+a work — the card's own Accept and Reject, and choosing or turning down a scan in
+the alternates — already funnel through that one function. The offer is rebuilt
+from the map into a slot that is always on the page, because a panel constructed
+only when the first paint found something waiting can never appear.
+
+**The repaint-in-place design is untouched, which was the constraint.** The
+obvious fix — re-render the view on each verdict — is one `candidateCard` already
+argues against in prose: rebuilding the card closed collapses the list the curator
+is working in, on every click, and pays a second fetch to get back. The offer had
+to re-derive *without* re-rendering the grid, and that is why the issue sat at
+`stage:design` rather than `ready`.
+
+**The button reads its list at click time, and that line is a known sweep
+survivor.** Deliberately: the map is only ever written by the callback that
+repaints the panel in the same breath, so the captured list and the live read are
+equal on every path that exists and no test can tell them apart. It is kept
+because the two failures are not the same size — a stale count misinforms, a
+stale list bills — and the code says so where it lives, so the next sweep does not
+read the survivor as a gap.
+
+**Three browser tests, and seven of eight mutations caught.** The three cover the
+panel appearing after a scan is turned down, the spend covering a work marked
+after load (both ids, off the wire), and the offer withdrawing when the last
+waiting work is settled — that last one arriving through the card's buttons
+rather than the alternates, so both callers of the repaint are exercised. The
+eighth mutation is the survivor above.
+
+**This entry's own file lost a trap on the way past.** The header still
+instructed readers that the Status checkboxes were a derived view and to run
+`prawduct-hook regen-views` to regenerate them; v3.2.8 retired both, so the
+instruction named a command that does not exist. Fixed here because this commit
+was already in the file — flagged for a documentation trim two sessions ago and
+carried since.
 
 ## 2026-08-10: The label learns where it is being drawn, and the daemon says it is alive
 
@@ -58,9 +125,9 @@
      `image_selected` — needs a set nobody has had access to. The tag describes
      what merged; the checkbox describes whether the chunk's own conditions are
      met, and here those two are honestly different. The box is ticked when the
-     set says so. (Checkboxes stopped being a derived view when prawduct retired
-     `regen-views`, so the paragraph above this comment is stale framework prose,
-     not an instruction that still binds — nothing regenerates from this tag.) -->
+     set says so. (Nothing regenerates from this tag — checkboxes stopped being a
+     derived view when prawduct retired `regen-views`, which is why the tag and
+     the box are free to disagree here.) -->
 
 **Why:** Chunk 13A — everything the panel, the label, the heartbeat and the two
 systemd units need that can be built and proven away from the hardware. The

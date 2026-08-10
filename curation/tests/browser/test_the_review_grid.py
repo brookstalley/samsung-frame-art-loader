@@ -399,6 +399,111 @@ def test_the_re_search_asks_only_for_the_works_that_are_waiting(grid):
     assert sent[0].post_data_json == {"work_ids": ["wanting"]}
 
 
+# -- the offer tracks the verdicts recorded on the page it sits on ------------
+#
+# The three below are one defect seen from three sides: the panel used to be
+# derived once, at paint, from the page the grid was built from. Every verdict
+# after that reached one card and nothing else, so the panel went on describing
+# the run as it arrived rather than as the curator had left it.
+
+
+def test_the_offer_to_re_search_appears_when_a_scan_is_turned_down(grid):
+    """The state the curator reaches by working, not the one the page loaded in.
+
+    A grid that opens with nothing waiting is the normal way into this: the
+    curator turns a scan down *because* they want a better one. Deriving the
+    panel once meant the one screen that could tell them nothing is looking
+    stayed silent exactly when it had something to say.
+
+    The badge is waited for rather than the panel, for the reason the disclosure
+    test states: it is the signal that the replacement card has landed, so
+    asserting on it first keeps this from matching against the pre-repaint page.
+    """
+    wanting = a_candidate(verdict=Verdict.AWAITING_BETTER_IMAGE.value)
+    grid.serve("**/api/candidate-images/image-1/reject", wanting.model_dump(mode="json"))
+    grid.serve("**/api/candidates/work-1", a_card(work=wanting).model_dump(mode="json"))
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+    assert "Look again for these" not in grid.text()
+
+    grid.page.click("summary")
+    grid.page.wait_for_selector("li.alternate")
+    grid.page.click("button:has-text('Turn it down')")
+    grid.page.wait_for_selector(".badge:has-text('wants a better scan')")
+
+    shown = grid.text()
+    assert "1 work is waiting for a better scan" in shown
+    assert "Look again for these" in shown
+
+
+def test_the_re_search_spends_on_a_work_turned_down_after_the_page_loaded(grid):
+    """The half of this that costs money rather than credibility.
+
+    A stale panel under-*counts*, and the count is the visible symptom — but the
+    list the button posts is the same stale array, so the curator pays for a run
+    covering fewer works than they just marked and gets back a run that is not
+    the one they asked for. No assertion about rendered text reaches it.
+
+    Both works are asserted, in the order the page holds them: a fix that
+    re-derived the list from the newly-turned-down card alone would send one id
+    and satisfy every count on screen.
+    """
+    already = a_candidate(work_id="work-2", title="The Elephants", verdict=Verdict.AWAITING_BETTER_IMAGE.value)
+    turned_down = a_candidate(verdict=Verdict.AWAITING_BETTER_IMAGE.value)
+    grid.serve(f"**/api/runs/{RUN_ID}/candidates*", a_candidate_page([a_card(), a_card(work=already)]))
+    grid.serve("**/api/candidate-images/image-1/reject", turned_down.model_dump(mode="json"))
+    grid.serve("**/api/candidates/work-1", a_card(work=turned_down).model_dump(mode="json"))
+    grid.serve("**/api/runs/resolve", a_run(run_id="resolve-run", kind="resolve").model_dump(mode="json"))
+    grid.serve("**/api/runs/resolve-run", a_run_view(run=a_run(run_id="resolve-run", kind="resolve")))
+    grid.serve("**/api/estimate?*", an_estimate())
+    grid.serve("**/api/runs/resolve-run/spend", a_spend())
+
+    sent = []
+    grid.page.on("request", lambda request: sent.append(request) if request.url.endswith("/api/runs/resolve") else None)
+
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+    assert "1 work is waiting for a better scan" in grid.text()
+
+    grid.page.click("li.card[data-work='work-1'] summary")
+    grid.page.wait_for_selector("li.alternate")
+    grid.page.click("li.card[data-work='work-1'] button:has-text('Turn it down')")
+    grid.page.wait_for_selector("li.card[data-work='work-1'] .badge:has-text('wants a better scan')")
+
+    assert "2 works are waiting for a better scan" in grid.text()
+
+    grid.page.click("button:has-text('Look again for these')")
+    grid.page.wait_for_url("**/#run/resolve-run")
+
+    assert len(sent) == 1
+    assert sent[0].post_data_json == {"work_ids": ["work-1", "work-2"]}
+
+
+def test_the_offer_withdraws_when_the_last_waiting_work_is_settled(grid):
+    """The paired negative, and the other way a verdict reaches the panel.
+
+    A work leaves `awaiting_better_image` through the card's own buttons, not
+    through the alternates — so this covers the second caller of the repaint the
+    panel listens to. Leaving the offer standing would invite a curator to spend
+    on a work they had just settled, which is the same defect facing the other
+    way: a button that spends and would do nothing.
+    """
+    grid.serve(
+        f"**/api/runs/{RUN_ID}/candidates*",
+        a_candidate_page([a_card(work=a_candidate(verdict=Verdict.AWAITING_BETTER_IMAGE.value))]),
+    )
+    grid.serve("**/api/candidates/work-1/verdict", a_verdict())
+    grid.serve("**/api/candidates/work-1", a_card(work=a_candidate(verdict=Verdict.ACCEPTED.value)).model_dump(mode="json"))
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+    assert "Look again for these" in grid.text()
+
+    grid.page.click("button:has-text('Accept')")
+    grid.page.wait_for_selector(".badge:has-text('accepted')")
+
+    assert "Look again for these" not in grid.text()
+
+
 # -- paging through the run's works -------------------------------------------
 
 
