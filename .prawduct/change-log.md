@@ -130,10 +130,23 @@ page a curator reaches first, printed directly above the table listing those ver
 works with their `not held` badges — and the MCP run summary said it to agents
 word for word. Fixing only the reported surface would have left the defect
 standing where it is met first while three records said it was gone. All three
-now say the run **found no image for** those artists, and a browser test pins the
-run view's. Found by the PR reviewer; the MCP one was found by grepping for the
+now say the run **found no image for** those artists, and each is pinned: a
+browser test for the run view, an assertion on `_run_notice` for MCP. That second
+one was the Critic's blocking finding — the change shipped unpinned, and the only
+existing assertion over the clause (`"offered 3 more works" in notice`) is a
+substring the old sentence contains too, so a revert would have left the suite
+green on the one surface of three an agent reads. Both reverts now fail a
+mutation.
+
+**A guard was claimed before it existed, which is the same defect one level up.**
+A test docstring and a commit message both said `test_surface_parity.py` kept the
+MCP wording honest. It does not — it pins field *names* and `_verdict_notice`,
+says nothing about `_run_notice`, and cannot reach `app.js`, so no parity test
+can ever cover this trio. The docstring now says where the guard actually is.
+
+The run-view surface was found by the PR reviewer; the MCP one by grepping the
 phrase once the second was known, which is the cheap check that should have
-followed the first.
+followed the first rather than the second.
 
 **Ten browser tests and two unit tests**, plus new assertions inside an existing
 one. They cover the denial being gone, the

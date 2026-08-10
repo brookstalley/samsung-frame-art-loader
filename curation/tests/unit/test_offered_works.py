@@ -559,6 +559,17 @@ def test_the_run_notice_rates_resolution_over_proposed_works_only(services, engi
     assert "offered 3 more works" in notice
     assert "12 of 13" not in notice and "3 of 4" not in notice
 
+    # The wording, not only the counts. This clause used to say the collection
+    # offered works "by artists this run named but could not confirm" — which the
+    # rows beside it contradict, since the run did name works for that artist and
+    # each carries an `unresolved_reason`. Issue #95 fixed that on the review
+    # grid; the same sentence lived here and on the run view, and this is the only
+    # one of the three an agent reads. Asserted because the count assertion above
+    # passes word-for-word on the old sentence too, so nothing here would have
+    # noticed the surface drifting back.
+    assert "found no image for" in notice
+    assert "could not confirm" not in notice, "the MCP run notice denies work it reports beside"
+
 
 def test_the_run_payload_reports_the_two_kinds_apart(services, engine, runner, collection):
     """The counts have to reach the wire, not just exist on the view.

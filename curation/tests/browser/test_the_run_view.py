@@ -546,9 +546,13 @@ def test_the_run_sentence_does_not_deny_the_works_listed_underneath_it(ui):
     the defect standing exactly where a curator meets it first, while the records
     said it was gone.
 
-    "found no image for" is what all three surfaces say now; the third is the MCP
-    run summary, which `tests/unit/test_surface_parity.py`'s sibling concern keeps
-    honest.
+    "found no image for" is what all three surfaces say now. The third is the MCP
+    run summary, pinned by its own assertion in
+    `tests/unit/test_offered_works.py` — **not** by `test_surface_parity.py`,
+    which an earlier version of this docstring claimed: that module pins field
+    *names* and `_verdict_notice`, says nothing about `_run_notice`, and cannot
+    reach `app.js` at all, so no parity test can ever cover this particular
+    trio.
     """
     named = a_candidate(
         work_id="named",
