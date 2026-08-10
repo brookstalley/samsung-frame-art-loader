@@ -86,7 +86,13 @@ def _pairs(art_root: Path, corpus_path: Path) -> tuple[list[Pair], list[str]]:
     """
     # Both paths are checked before either is opened, so a run that is going to
     # fail says which argument is wrong before it does any work.
-    catalogue_path = art_root / CATALOGUE_FILENAME
+    #
+    # **Resolved, because `as_uri()` below refuses a relative path.** `--art-root`
+    # and `$ART_ROOT` are taken verbatim, and a relative one is the ordinary way to
+    # invoke this from the `curation` directory the usage line tells you to be in —
+    # so without this the tool clears both guards and dies on a bare ValueError
+    # one line later.
+    catalogue_path = (art_root / CATALOGUE_FILENAME).resolve()
     if not corpus_path.is_file():
         # `read_index` catches a bad *parse* and not a missing file, so without
         # this a mistyped corpus path is a bare traceback rather than the one line

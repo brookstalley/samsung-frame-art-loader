@@ -151,6 +151,33 @@ and writes nothing. `tools/mat_corpus.py` does not substitute for it: its images
 come from each museum as a small IIIF derivative, which is the very substitution
 that changes the derived colour visibly on 5 of 25 works.
 
+**The review rounds, and what they changed rather than that they happened.** One
+cumulative round (0 blocking, 15 warnings, 10 notes, three reviewers) and two
+`verify-resolutions` passes, each of which found something real:
+
+- The **gamut overshoot above** was raised independently by all three reviewers and
+  by a self-check at the same time — the strongest argument for the independence
+  being the point rather than the ceremony.
+- **Three rules these docstrings state were undefended.** Single-link grouping had
+  no fixture chaining more than two shades, where `any` and `all` are the same
+  sentence; the winner's tie-break had no test; and the vision model's exemption
+  from the clamp had none, because every model answer in the suite was already
+  under the ceiling. All three mutations survived a green suite. Writing a rule
+  down is not the same act as defending it, and the prose is what stopped the
+  looking.
+- **The ceiling's diagnostic defended nothing** — deleting the log block, inverting
+  its guard or swapping its two figures all left the suite green. The same shape
+  the #90 branch was blocked on, one branch later. It now has both tests: that the
+  line fires with both figures, and that a mat the ceiling did not touch stays
+  silent.
+- **The cube sweep is a test, not a sentence.** Three records asserted that no
+  derived colour exceeds the ceiling and nothing reproduced it.
+- **The hardening introduced its own regression.** `Path.as_uri()` refuses a
+  relative path, so `--art-root ../../../samsung-art` — the ordinary way to invoke
+  this from the directory the usage line names — cleared both new guards and died
+  on a bare `ValueError`. Caught by the second verify pass and fixed by resolving
+  the path.
+
 **One measurement correction worth recording.** The first stability harness
 downscaled each master to 1024px *and* re-encoded it, and reported 3 of 40. That
 number was about resampling, not about the vote: `dominant_color` decodes through
