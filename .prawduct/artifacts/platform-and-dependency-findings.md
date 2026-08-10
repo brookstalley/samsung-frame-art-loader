@@ -87,9 +87,12 @@ label's Cairo/Pango stack and `python3-dev` is absent from it; that file's own
 comment observes that a dependency nothing declares is one nobody installs until
 an import fails, which is what this is.
 
-**`Cython` is unpinned in that `build-requires`,** so the build is reproducible
-today and not over time: a future Cython that stops emitting compatible C would
-break it with nothing in this repository having changed.
+**`Cython` is unpinned in that `build-requires`,** so a future Cython that stops
+emitting compatible C would break the build with nothing in this repository
+having changed. **Closed for the display plane 2026-08-07** by
+`[tool.uv] build-constraint-dependencies` holding it at `>=3.0,<4`;
+`requirements.txt` has no equivalent mechanism and stays exposed, which is one
+more reason that install path is retired rather than maintained.
 
 **`Pins.POWER` is confirmed absent from the installed package** — checked by
 attribute on the built module, not inferred from reading the abandoned checkout
@@ -149,12 +152,14 @@ Two consequences:
    interface means a driver failure is a swap rather than a rewrite, and stops a
    frozen 2023 repository from dictating the project's Python version.
 
-2. **Builds are not reproducible.** omni-epd declares its dependency as
-   `IT8951[rpi] @ git+https://github.com/GregDMeyer/IT8951.git` with no commit
-   pin, so it resolves to whatever `master` currently is. This works today only
-   because the repository has not moved since 2023. Pin `9f13613` explicitly, or
-   vendor the package outright — it is roughly 1,500 lines of frozen code that
-   the project already depends on completely.
+2. **Builds were not reproducible, and now are.** omni-epd declares its
+   dependency as `IT8951[rpi] @ git+https://github.com/GregDMeyer/IT8951.git`
+   with no commit pin, so it resolved to whatever `master` currently was — which
+   worked only because the repository has not moved since 2023. **Pinned to
+   `9f13613` on both install paths 2026-08-07**, with vendoring rejected: it buys
+   only survival if the repository disappears, and costs 1,500 lines of Cython
+   nobody here can maintain plus the ability to take any upstream fix. It stays
+   the escape hatch, and `deploy/pi-freeze-2024.txt` records what to vendor.
 
 ## The e-paper panel, verified against the panel itself
 

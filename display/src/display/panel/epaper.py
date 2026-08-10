@@ -68,12 +68,19 @@ class Epd(Protocol):
 
     **A structural protocol rather than the library's own class**, because naming
     that class here would import it — which is the one thing this module is
-    arranged not to do. It is the whole of what omni-epd offers for this driver:
-    `clear` exists too and is unused, since every label replaces the last.
+    arranged not to do. These are the members this surface *requires*: `clear`
+    exists on the library's object too and is unused, since every label replaces
+    the last.
 
     `mode` is a read-write attribute and both directions matter: the driver comes
     up in one bit, and reading it back is the only honest check that it took the
     greyscale it was given.
+
+    **`width` and `height` are read off the object without being declared here**,
+    which is deliberate rather than an omission. Not every driver omni-epd wraps
+    reports its own geometry, and a panel that does not is a panel this product
+    still drives — it just cannot be told that `.env` disagrees with it. Requiring
+    them would turn a missing courtesy into a device that will not open.
     """
 
     mode: str

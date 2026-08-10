@@ -162,6 +162,13 @@ class SamsungTv(TvClient):
         #: handler per event and would let the second subscriber silently unseat
         #: the confirmation above. Survives reconnection because it belongs to this
         #: object, while the library callback is re-registered per connection.
+        #:
+        #: **What bounds it**: subscribers register at composition and are one per
+        #: distinct caller — today exactly one, the daemon — so this is bounded by
+        #: the program's structure rather than by anything that happens at runtime.
+        #: That is why it needs no cap and no removal verb, and why re-subscribing
+        #: is idempotent rather than additive: reconnection is the one event that
+        #: would otherwise grow it with time.
         self._selection_observers: list[SelectionObserver] = []
 
         #: Whether the set has said something about art mode that nobody has

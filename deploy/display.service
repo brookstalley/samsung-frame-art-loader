@@ -63,6 +63,15 @@ RestartSec=5
 # with ~45 s the worst case. A unit that SIGKILLs this process leaves the set
 # holding a half-open art channel until it times out on its own side, and the
 # next connection is refused for minutes.
+#
+# **One case runs past that ceiling and is deliberately left to SIGKILL**: a
+# panel driver wedged in an SPI transaction that never returns. Label drawing
+# happens on a worker thread, so the daemon itself carries on and gives up
+# waiting after its label budget — but Python joins that thread on the way out
+# and no code can kill a thread parked in C. The television is closed first, so
+# by the time this matters the set is already released and a SIGKILL costs
+# nothing. That ordering is why this is a bounded nuisance rather than the
+# refused-connection problem above.
 TimeoutStopSec=90
 KillSignal=SIGTERM
 

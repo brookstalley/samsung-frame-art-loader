@@ -14,6 +14,8 @@ daemon's behaviour not at all.
 """
 
 import math
+import threading
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
@@ -33,6 +35,11 @@ from display.tv import (
 #: image, in the category the daemon neither uploads to nor removes from. The set
 #: is displaying one of these before the daemon has shown anything.
 FOREIGN_IMAGE: Final[str] = "SAM-F0000"
+
+#: How long an armed-to-hang draw waits before giving up on being released. Long
+#: enough that no passing test reaches it, short enough that a failing one does
+#: not take the session with it.
+RELEASE_TIMEOUT_SECONDS: Final[float] = 30.0
 
 
 class FakeTv(TvClient):
@@ -309,6 +316,26 @@ class FakeSurface(LabelSurface):
         #: which raise GLib errors related to nothing this codebase can name, and
         #: it is read by the caller *outside* the `show` that converts failures.
         self.measurement_explodes = False
+        #: How long a draw takes, in real seconds. **The real one is not
+        #: instantaneous and no amount of arranging makes it so**: a full 16-level
+        #: frame was measured at 1.5–1.9 s with no partial refresh, so a fake that
+        #: returned immediately would let a caller drawing on the event loop pass
+        #: every test a caller drawing off it passes.
+        self.draw_takes_seconds = 0.0
+        #: Armed failure of the kind that raises nothing: the panel goes into a
+        #: transaction and does not come out. It waits for `release`, which the
+        #: fixture always sets — a thread parked in here outlives the test.
+        self.blocks = False
+        self.release = threading.Event()
+        #: Where a draw currently is, for a test that needs to look at the world
+        #: *during* one rather than after it.
+        self.entered = threading.Event()
+        self.left = threading.Event()
+        #: How many draws have been started — as against `shown`, which counts the
+        #: ones that finished. The two differ exactly when a draw is in flight or
+        #: was abandoned, which is the whole subject of the caller's one-at-a-time
+        #: gate.
+        self.draws_begun = 0
 
     @property
     def geometry(self) -> Geometry:
@@ -328,9 +355,25 @@ class FakeSurface(LabelSurface):
         return Extent(width_px=min(len(text) * glyph, wrap_px), height_px=rows * size_px)
 
     def show(self, layout: Layout) -> None:
-        if self.refuses:
-            raise SurfaceUnavailable("the panel is not responding")
-        self.shown.append(layout)
+        self.draws_begun += 1
+        self.left.clear()
+        self.entered.set()
+        try:
+            if self.refuses:
+                raise SurfaceUnavailable("the panel is not responding")
+            if self.blocks:
+                # **Bounded, though a real wedged panel is not.** A test that
+                # arranges a hang and then fails its own assertion would otherwise
+                # leave this thread parked for the rest of the session — and if the
+                # caller under test ever draws on the event loop, the thread parked
+                # here is the one that would have to set the flag releasing it.
+                self.release.wait(timeout=RELEASE_TIMEOUT_SECONDS)
+                raise SurfaceUnavailable("released without drawing")
+            if self.draw_takes_seconds:
+                time.sleep(self.draw_takes_seconds)
+            self.shown.append(layout)
+        finally:
+            self.left.set()
 
     def close(self) -> None:
         self.closed += 1

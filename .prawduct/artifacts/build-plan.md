@@ -2908,6 +2908,17 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   not exist, on behalf of a user that does not exist. Chunk 13B creates the
   account and installs the units 13A writes, so what reaches this chunk is whatever
   `deploy/` still carries afterwards.
+  **Added 2026-08-08 — `CLAUDE.md` is trimmed here, and this is the chunk that can
+  do it cheaply.** It is at ~171 lines of project-specific content against the
+  ~150 guidance, and the rules that actually stop a bad session — all three suites
+  pass, `uv run` in every column, `-n0` on the marker suites, prove coverage with
+  the mutation sweep — are competing with reference material for a reader's
+  attention. Deleting the 2024 modules takes the root column out of the dev-command
+  table and the root suite out of three of the surrounding paragraphs, which is
+  most of the excess without anyone judging what matters. The rest is the
+  `display/tests/raster` paragraph and the live-suites catalogue, both of which
+  already exist in full in `platform-and-dependency-findings.md` and
+  `deploy/README.md` and need only their command and a pointer here.
 - **Deliverables:** backup job + schedule in `deploy/`; the health panel's
   backup-age field going from "no backup recorded" to a real age — the field
   itself ships with 19B, so what lands here is the source behind it; the restore

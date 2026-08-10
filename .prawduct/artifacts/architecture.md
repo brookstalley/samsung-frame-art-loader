@@ -567,6 +567,12 @@ is no network between planes.
   **e-paper panel's** geometry (1448×1072) stays with the plane that owns that
   panel. Display does *not* render the mat — the mat is composed by curation into
   the `tv_display` rendition, so display never needs the TV's physical size.
+  **The label follows what the set says is on the wall, not what this plane put
+  there** — those differ whenever somebody picks a work with the remote, and a
+  label driven only from the rotation would then name the previous picture for up
+  to a full interval. It is the person standing in front of the wall who cannot
+  tell a confident wrong label from a right one, so a picture the manifest cannot
+  name gets an empty label rather than a stale one.
 - **Must never:** write the catalogue, write the manifest, call the curation
   process, or import curation code.
 

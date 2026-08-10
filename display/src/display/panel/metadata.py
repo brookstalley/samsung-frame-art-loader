@@ -20,7 +20,7 @@ so a title containing `<` produced either mangled type or a parse failure
 markup into the tier that is supposed to be renderer-agnostic.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from typing import Any
 
 
@@ -28,10 +28,10 @@ from typing import Any
 class LabelText:
     """One work's label, as words.
 
-    Ordered as a museum wall label is: who made it, what it is called, when, out
-    of what, how big. That order is the layout's default and not its obligation —
-    a surface too small for all of it drops from the bottom, which is why the
-    least identifying fields sit there.
+    Ordered as a museum wall label is: what it is called, who made it, where and
+    when they lived, when it was made, out of what, how big. **Field order here is
+    the label's order**, and load-bearing twice — the layout sizes type by position
+    and drops from the end — so this is the place to read before moving one.
     """
 
     title: str | None = None
@@ -47,9 +47,15 @@ class LabelText:
         """Whether there is nothing here worth drawing.
 
         A work with no label text at all is not an error — it is a work whose
-        institution published none. The caller shows an empty surface rather than
-        an apology, because a label reading "unknown" beside a picture is worse
-        than no label beside a picture.
+        institution published none, and what reaches the panel is a blank surface
+        rather than an apology, because a label reading "unknown" beside a picture
+        is worse than no label beside a picture.
+
+        **Nothing branches on this**, and that is the design rather than an
+        oversight: the empty case needs no special path, because laying out no
+        lines and drawing the result reaches the blank surface by the ordinary
+        road. This says the same thing about a `LabelText` that `lines()` does,
+        in the form a reader asking the question would reach for.
         """
         return not any(self.lines())
 
@@ -87,5 +93,9 @@ def read_label(label: dict[str, Any] | None) -> LabelText:
     """
     if not isinstance(label, dict):
         return LabelText()
-    known = {field: label.get(field) for field in LabelText.__slots__}
-    return LabelText(**{field: value for field, value in known.items() if isinstance(value, str)})
+    # `fields()` rather than `__slots__`, which happens to hold the same names and
+    # holds them only because the decorator was asked for slots — a size and
+    # immutability choice, not a declaration of what this reader accepts. Dropping
+    # that argument would turn a reader of the manifest into an `AttributeError`.
+    known = {field.name: label.get(field.name) for field in fields(LabelText)}
+    return LabelText(**{name: value for name, value in known.items() if isinstance(value, str)})

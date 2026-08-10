@@ -124,6 +124,8 @@ class Layout:
 
     @property
     def is_empty(self) -> bool:
+        """Whether this would put nothing on the surface. Nothing branches on it —
+        a blank frame is what drawing no blocks already produces."""
         return not self.blocks
 
 

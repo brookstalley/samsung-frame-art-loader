@@ -10,6 +10,40 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The announcement reaches both subscribers, at the set — added 2026-08-08
+
+**This is Chunk 13A's Done-when step 0b, and it is the one thing between that
+chunk and its `[x]`.** Everything else the chunk owed is built, swept and green.
+The step exists because Chunk 12 was the only Foreign-API chunk that shipped
+without a `verify-api`, and the seam this bundle touches is the one where getting
+it wrong is silent: the television library keeps **one handler per event**, so a
+label that subscribed by registering with the library would *replace* the
+selection-confirmation handler, and every rotation would then report a wall that
+would not move — while the label worked perfectly. The fan-out inside `SamsungTv`
+is written against that constraint, read from library source and pinned by unit
+tests over the handler. **No set has confirmed it.**
+
+Needs the television awake and in art mode, and the display plane running against
+it. Three things to see:
+
+1. **A rotation still completes.** The daemon logs `rotation.selected` and the
+   wall changes — that is the confirmation path resolving with a second subscriber
+   attached, which is the whole question.
+2. **The label follows.** The panel names the work the wall is showing. (With no
+   panel attached, `label.failed` absent from the journal and
+   `label_surface_working` in `display-heartbeat.json` are the proxy.)
+3. **The remote is a curator too — added with the behaviour, 2026-08-08.** In art
+   mode, pick a *different* work with the television's own remote, one the active
+   theme carries. The label should follow within a poll interval rather than
+   waiting for the next rotation. Then pick something from the set's own art store
+   that this product never uploaded: the label should go **blank**, not keep the
+   previous work's text. A confidently wrong label is worse than a stale one
+   because the person in front of the wall cannot tell.
+
+`samsung-tv-state-findings.md` is the record — it currently says in its own words
+that this is not verified against the set, and that sentence is what this entry
+retires.
+
 ### The label's type sizes, at the panel — added 2026-08-07
 
 **This is the whole of what Chunk 13A could not settle**, and it is deliberately

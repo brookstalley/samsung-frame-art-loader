@@ -12,19 +12,37 @@ the wall.** The television is the product; both of these annotate it.
 
 import asyncio
 import json
+import threading
+import time
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 from fakes import FakeSurface
 
+from display import daemon as daemon_module
 from display.daemon import Daemon
 from display.heartbeat import HEARTBEAT_FILENAME, INTERVAL_SECONDS
 from display.manifest import Watcher
 
 
+async def _comes_back(flag: threading.Event, *, within_seconds: float = 5.0) -> bool:
+    """Wait on a worker thread's flag without blocking the loop waiting for it."""
+    deadline = time.monotonic() + within_seconds
+    while time.monotonic() < deadline:
+        if flag.is_set():
+            return True
+        await asyncio.sleep(0.005)
+    return False
+
+
 @pytest.fixture
-def surface() -> FakeSurface:
-    return FakeSurface()
+def surface() -> Iterator[FakeSurface]:
+    made = FakeSurface()
+    yield made
+    # A draw runs on a worker thread now, and one armed to hang would otherwise
+    # still be sitting in the panel when the session tries to exit.
+    made.release.set()
 
 
 @pytest.fixture
@@ -163,6 +181,25 @@ class TestAPanelFailureNeverStopsTheWall:
         assert len(failures) == 1
 
     @pytest.mark.asyncio
+    async def test_a_refusing_surface_is_not_re_asked_on_every_poll(self, labelled, surface, publish):
+        """The poll is a second and a real draw is seconds. That ratio is the fault.
+
+        The label follows what the set says is on the wall, and a refusing panel
+        leaves that unreconciled — so a rule that re-drew until it succeeded would
+        put a fresh two-second frame into the panel every second, for as long as
+        the ribbon stays loose. A panel gets its next chance when the wall next
+        changes, which is also the first moment its label would be wrong.
+        """
+        surface.refuses = True
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter"}})
+
+        await labelled.tick()
+        await labelled.tick()
+        await labelled.tick()
+
+        assert surface.draws_begun == 1
+
+    @pytest.mark.asyncio
     async def test_a_recovered_surface_says_so(self, labelled, surface, publish, clock, caplog):
         surface.refuses = True
         publish(["work-a", "work-b"], shuffle=False, labels={"work-a": {}, "work-b": {}})
@@ -174,6 +211,158 @@ class TestAPanelFailureNeverStopsTheWall:
             await labelled.tick()
 
         assert [r for r in caplog.records if getattr(r, "event", None) == "label.recovered"]
+
+    @pytest.mark.asyncio
+    async def test_a_panel_that_fails_after_working_is_reported_as_failing(
+        self, labelled, surface, tv, publish, clock, caplog, art_root: Path
+    ):
+        """**The third failure point, and the only one with an edge in it.**
+
+        A panel that is broken from the outset never has to change its mind. This
+        one draws, and then stops — a ribbon that works cold and fails warm, which
+        is the failure an e-paper panel on a wall actually has. Everything the
+        other tests here assert is a latch away from being wrong: a `ReportOnce`
+        that stayed ended after a good draw would say nothing, and a
+        `label_surface_working` that stayed True would tell curation the panel is
+        fine while nobody in the room can read a label.
+        """
+        publish(["work-a", "work-b"], shuffle=False, labels={"work-a": {}, "work-b": {}})
+        await labelled.tick()
+        assert surface.shown, "the panel never worked, so this is not the mid-run case"
+        first = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        assert first["label_surface_working"] is True
+
+        surface.refuses = True
+        clock.advance(10_000)
+        with caplog.at_level("WARNING"):
+            await labelled.tick()
+
+        assert len(tv.selected) == 2, "the wall stopped when the panel did"
+        assert len([r for r in caplog.records if getattr(r, "event", None) == "label.failed"]) == 1
+        document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        assert document["label_surface_working"] is False
+
+
+class TestTheDrawIsNotOnTheEventLoop:
+    """A full frame is seconds, and the television client's reader shares this loop.
+
+    Moving the draw off the library's callback did not move it off the loop they
+    both run on: a coroutine that rasterises and clocks bytes out over SPI delays
+    every message on that socket — including the selection confirmations the
+    rotation is waiting on — exactly as much as doing it in the callback would.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_loop_keeps_running_while_the_panel_draws(self, labelled, surface, publish):
+        surface.draw_takes_seconds = 0.2
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter"}})
+
+        ticking = asyncio.create_task(labelled.tick())
+        turns_taken_mid_draw = 0
+        while not ticking.done():
+            if surface.entered.is_set() and not surface.left.is_set():
+                turns_taken_mid_draw += 1
+            await asyncio.sleep(0.001)
+        await ticking
+
+        assert surface.shown, "the label never drew, so this proves nothing"
+        # A draw on the loop enters and leaves inside one uninterrupted stretch,
+        # so this counter cannot come off zero however long the panel takes.
+        assert turns_taken_mid_draw > 0, "nothing else on the loop got a turn while the panel drew"
+
+    @pytest.mark.asyncio
+    async def test_a_panel_that_never_comes_back_does_not_take_the_wall_with_it(
+        self, labelled, surface, tv, publish, clock, caplog, monkeypatch
+    ):
+        """**The one way a panel can stop the wall that no `except` clause reaches.**
+
+        A driver wedged in a bad SPI transaction does not raise; it simply never
+        returns. Off the loop that is a parked thread, which is survivable. Waited
+        on without a bound it is the rotation, the poll timer and the SIGTERM path
+        all stopped behind an annotation of the wall.
+        """
+        monkeypatch.setattr(daemon_module, "LABEL_DRAW_BUDGET_SECONDS", 0.05)
+        surface.blocks = True
+        publish(["work-a", "work-b"], shuffle=False, labels={"work-a": {}, "work-b": {}})
+
+        try:
+            with caplog.at_level("WARNING"):
+                await asyncio.wait_for(labelled.tick(), timeout=10)
+                clock.advance(10_000)
+                await asyncio.wait_for(labelled.tick(), timeout=10)
+
+            assert len(tv.selected) == 2, "a panel that never answered stopped the rotation"
+            assert [r for r in caplog.records if getattr(r, "event", None) == "label.failed"]
+            # **The second rotation dispatched nothing, and that gate is not
+            # decoration.** The executor a draw goes to is the one the television
+            # client's own blocking calls use, so a hung draw left behind per
+            # rotation would end with the *set* waiting behind the panel — a panel
+            # stopping the wall by the back door, after being moved off it by the
+            # front.
+            assert surface.draws_begun == 1
+        finally:
+            # In a `finally` because the loop joins its executor on the way out and
+            # waits five minutes to do it — so a thread this test failed before
+            # releasing would cost every run after it, not just this one.
+            surface.release.set()
+            assert await _comes_back(surface.left), "the draw thread never came back"
+
+
+class TestTheRemoteIsACuratorToo:
+    """A selection this plane did not make still changes what the wall is showing.
+
+    Somebody picks a different work with the remote in art mode. Nothing in the
+    rotation path runs, so a label driven only from that path goes on naming the
+    previous picture for the rest of the interval — up to three minutes of a
+    confident, wrong label on the one surface the person in the room can read.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_work_chosen_from_the_remote_gets_its_own_label(self, labelled, surface, tv, state, publish):
+        publish(
+            ["work-a", "work-b"],
+            shuffle=False,
+            labels={"work-a": {"title": "Cat Litter"}, "work-b": {"title": "Silver Sun"}},
+        )
+        await labelled.tick()
+        assert surface.last_text[:1] == ["Cat Litter"]
+
+        binding = state.binding_for("work-b")
+        assert binding is not None and binding.tv_content_id, "work-b never reached the set to be chosen"
+        tv.announce(binding.tv_content_id, is_shown=True)
+        await labelled.tick()
+
+        assert surface.last_text[:1] == ["Silver Sun"]
+
+    @pytest.mark.asyncio
+    async def test_a_picture_this_device_cannot_name_gets_an_empty_label(self, labelled, surface, tv, publish):
+        """Choosing one of the set's own art-store images is a supported thing to do.
+
+        No label text for it exists anywhere on this device. Blank says "nothing is
+        known about what you are looking at"; leaving the last work's label up says
+        something false, and nobody standing in front of it can tell which.
+        """
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter"}})
+        await labelled.tick()
+
+        tv.announce("SAM-F0222", is_shown=True)
+        await labelled.tick()
+
+        assert surface.last_text == []
+
+    @pytest.mark.asyncio
+    async def test_this_planes_own_selection_is_not_drawn_twice(self, labelled, surface, publish):
+        """The set announces our own selections too — that is how they are confirmed.
+
+        A redraw rule that read the announcement without knowing what it had
+        already drawn would put every rotation on the panel twice, at seconds a
+        frame.
+        """
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter"}})
+
+        await labelled.tick()
+
+        assert len(surface.shown) == 1
 
 
 class TestADeviceWithNoLabelSurface:

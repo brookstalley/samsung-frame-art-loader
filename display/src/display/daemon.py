@@ -45,6 +45,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 
 from display import brightness as brightness_module
 from display import heartbeat as heartbeat_module
@@ -52,11 +53,23 @@ from display.config import Settings
 from display.episodes import Backoff, ReportOnce
 from display.logs import work_context
 from display.manifest import Entry, Manifest, Watcher
-from display.panel import LabelSurface, lay_out, read_label
+from display.panel import LabelSurface, Layout, lay_out, read_label
 from display.state import Binding, DisplayState, UploadStatus
 from display.tv import RemovalOutcome, SelectionAnnouncement, TvClient, TvRemovalUnconfirmed, TvUnavailable, TvUploadFailed
 
 log = logging.getLogger(__name__)
+
+#: How long a label may spend being drawn before this loop stops waiting for it.
+#:
+#: **The whole of the product's label budget rather than a fraction of it.** The
+#: label must match what the television is showing within 15 s of the picture
+#: changing (`nonfunctional-requirements.md` § Performance), and the panel's own
+#: refresh is most of that — so this is the loosest bound that still honours the
+#: requirement, and a draw that has passed it has already missed the thing it was
+#: for. A healthy 16-level frame measures 1.5–1.9 s and comes nowhere near it;
+#: what this catches is an SPI transaction that is never coming back, which is the
+#: one way a panel could stop the wall that no `except` clause can reach.
+LABEL_DRAW_BUDGET_SECONDS: Final[float] = 15.0
 
 
 class Shown(enum.Enum):
@@ -124,10 +137,28 @@ class Daemon:
         #: with no label surface is a supported deployment, not a fault** — the
         #: wall is a television, and the label is an annotation of it
         #: (`architecture.md` § Direction). Nothing below may report its absence
-        #: as a problem, which is why the heartbeat says `null` rather than
-        #: `false`.
+        #: as a problem. The heartbeat therefore reports such a device with
+        #: `has_label_surface` false and `label_surface_working` null — "there is
+        #: nothing here to ask", as against the `false` that means a panel is
+        #: broken. The two fields were one nullable field until that collapse made
+        #: a device with no panel indistinguishable from a panel that would not
+        #: open.
         self._surface = surface
         self._label_failed = ReportOnce()
+        #: Whether a draw handed to a worker thread has yet come back. **A
+        #: one-at-a-time gate rather than a queue**: the timeout below stops
+        #: waiting on a hung panel, but it cannot stop the thread, and dispatching
+        #: another every rotation would fill the shared executor with threads
+        #: parked in a driver — at which point the television's own blocking calls,
+        #: which use that same executor, would start waiting behind a panel. That
+        #: is a panel stopping the wall by the back door.
+        self._label_drawing = False
+        #: What the panel was last asked to name, as the television's own id for
+        #: it. **Recorded on the attempt rather than the success**, which is what
+        #: keeps a refusing panel from being re-asked on every one-second poll: a
+        #: surface that failed gets its next chance when the wall next changes,
+        #: which is also when a stale label would start being wrong.
+        self._captioned_content_id: str | None = None
         #: Why this device has no surface, when it was configured to have one.
         #: **The third state, and the reason it is carried rather than logged and
         #: dropped at the composition root**: without it a panel that failed to
@@ -339,6 +370,10 @@ class Daemon:
             if not acted:
                 await self._rotate_if_due(manifest)
             await self._upload_one_pending(manifest)
+            # Last, because it reconciles the label against whatever the pass
+            # above left on the wall — including the case where the pass did
+            # nothing and the wall changed anyway.
+            await self._caption_the_wall_the_set_reports(manifest)
         except TvUnavailable as exc:
             # **The heartbeat is written on this path too, and that is the whole
             # point of it.** A television that has gone away is the condition an
@@ -658,39 +693,59 @@ class Daemon:
                     "theme_id": manifest.theme_id,
                 },
             )
-            self._caption(entry)
+            await self._caption(entry, content_id)
             return Shown.YES
 
-    def _caption(self, entry: Entry) -> None:
-        """Put this work's label on the device's own surface, if it has one.
+    async def _caption(self, entry: Entry | None, content_id: str) -> None:
+        """Put a work's label on the device's own surface, if it has one.
 
-        **Driven from here rather than from the set's announcement**, though the
-        announcement is what confirms the selection that got us here. The two are
-        the same event; the difference is which task does the work. An e-paper
-        redraw is a full frame — 1.5–1.9 s measured, with no partial refresh — and
-        doing that inside the television client's callback would run it on the
-        websocket's reader task, delaying every message on that socket including
-        the confirmations the rotation is waiting for. So the reader task records
-        an id and this, on the daemon's own task, draws.
+        **Driven from the daemon's own task rather than from the set's callback**,
+        though the announcement is what says the wall changed. The two are the same
+        event; the difference is which task does the work. An e-paper redraw is a
+        full frame — 1.5–1.9 s measured, with no partial refresh — and doing that
+        inside the television client's callback would run it on the websocket's
+        reader task, delaying every message on that socket including the
+        confirmations the rotation is waiting for. So the reader task records an id
+        and this, later, draws.
 
-        **Called only after the wall is confirmed changed**, which is what keeps
-        the label honest: captioning on the strength of a request would name a
-        picture the set accepted and never displayed, and a wrong label is worse
-        than a stale one because nobody can tell it is wrong.
+        **And not on the event loop either, which is the same argument one level
+        down.** Moving the draw off the reader task does not move it off the loop
+        they share: seconds spent rasterising and clocking bytes out over SPI in a
+        coroutine delay that socket's messages exactly as much as doing it in the
+        callback would. It goes to a worker thread, as the television client's own
+        blocking construction does, and it is bounded — because a driver wedged in
+        a bad transaction never raises, and an unbounded wait is the one way a
+        panel can stop the wall that no `except` clause reaches.
+
+        **Called only for a picture the set says is up**, which is what keeps the
+        label honest: captioning on the strength of a request would name a picture
+        the set accepted and never displayed, and a wrong label is worse than a
+        stale one because nobody can tell it is wrong.
+
+        `entry` is None when the wall is showing something this manifest cannot
+        name — see `_caption_the_wall_the_set_reports`. That draws an empty label
+        rather than leaving the previous one up, for the same reason.
 
         **Nothing in here may stop the wall.** A surface that is broken, missing
         or slow leaves the television rotating; that is the whole posture of this
         loop applied to an annotation of it.
         """
-        if self._surface is None:
+        surface = self._surface
+        if surface is None:
             return
+        self._captioned_content_id = content_id
+        if self._label_drawing:
+            self._label_would_not_take_it("the previous label is still being drawn")
+            return
+        self._label_drawing = True
         try:
-            layout = lay_out(
-                read_label(entry.label).lines(),
-                self._surface.geometry,
-                self._surface.measure,
+            layout = await asyncio.wait_for(
+                asyncio.to_thread(self._draw, surface, entry),
+                timeout=LABEL_DRAW_BUDGET_SECONDS,
             )
-            self._surface.show(layout)
+        except TimeoutError:
+            self._label_would_not_take_it(f"the draw ran past the {LABEL_DRAW_BUDGET_SECONDS:g}s label budget")
+            return
         # **Widened from `SurfaceUnavailable` alone once a real surface existed,
         # and the docstring above is why.** `show` converts its own failures, but
         # `geometry` and `measure` are read outside it — and `measure` on the
@@ -699,16 +754,7 @@ class Daemon:
         # nothing in here may stop the wall cannot be kept by a catch that lists
         # the exceptions somebody thought of.
         except Exception as exc:  # prawduct:allow prawduct/broad-except -- see above
-            self._label_working = False
-            self._record_error(f"the label surface refused a label ({exc})")
-            if self._label_failed.begin():
-                # Once per episode, like every other persistent condition here: a
-                # panel with a loose ribbon fails on every rotation, all night.
-                log.warning(
-                    "could not put the label on this device's surface (%s); the wall keeps rotating",
-                    exc,
-                    extra={"event": "label.failed"},
-                )
+            self._label_would_not_take_it(str(exc))
             return
 
         self._label_working = True
@@ -724,6 +770,45 @@ class Daemon:
                 extra={"event": "label.truncated", "dropped": list(layout.dropped)},
             )
 
+    def _label_would_not_take_it(self, why: str) -> None:
+        """One place for every way a label fails to reach the surface.
+
+        They differ only in the sentence: the response is the same to all of them
+        — say so once, keep rotating — for the reason `SurfaceUnavailable` is one
+        type rather than a family.
+        """
+        self._label_working = False
+        self._record_error(f"the label surface refused a label ({why})")
+        if self._label_failed.begin():
+            # Once per episode, like every other persistent condition here: a
+            # panel with a loose ribbon fails on every rotation, all night.
+            log.warning(
+                "could not put the label on this device's surface (%s); the wall keeps rotating",
+                why,
+                extra={"event": "label.failed"},
+            )
+
+    def _draw(self, surface: LabelSurface, entry: Entry | None) -> Layout:
+        """Lay a label out and put it on the surface. **Runs on a worker thread.**
+
+        The measuring and the drawing are one unit of work here rather than two
+        because both are the same kind of expensive — `measure` reaches the same
+        text stack the drawing does, and splitting them would put half the cost
+        back on the loop for no gain.
+
+        Nothing here touches this object's state beyond releasing the gate, which
+        is the one thing the loop cannot do for it: `wait_for` stops *waiting* for
+        a hung draw, but the thread runs on, and the gate has to be cleared by
+        whoever actually finishes.
+        """
+        try:
+            lines = read_label(entry.label).lines() if entry is not None else []
+            layout = lay_out(lines, surface.geometry, surface.measure)
+            surface.show(layout)
+            return layout
+        finally:
+            self._label_drawing = False
+
     def _note_announcement(self, announcement: SelectionAnnouncement) -> None:
         """Remember what the set says is on its wall. Runs on the client's reader task.
 
@@ -733,10 +818,47 @@ class Daemon:
 
         **It records announcements this plane did not cause**, which is the point
         of subscribing at all: somebody using the remote changes the wall, and
-        the heartbeat should say what is actually up rather than what we last put
-        there.
+        both the heartbeat and the label should follow what is actually up rather
+        than what we last put there.
         """
         self._announced_content_id = announcement.content_id
+
+    async def _caption_the_wall_the_set_reports(self, manifest: Manifest) -> None:
+        """Re-label when the wall changed without this plane changing it.
+
+        **The remote is a curator too.** Somebody in the room picks a different
+        work in art mode, and nothing in the rotation path runs: the panel would go
+        on naming the previous picture until the interval came round, up to a full
+        rotation later. That is not a stale label, which is at least visibly old —
+        it is a confident one that is wrong, on the only surface the person
+        standing in front of the wall can read, and there is no way for them to
+        tell. The same rule that keeps this plane from captioning a selection the
+        set never displayed requires captioning one it displayed without being
+        asked.
+
+        **A picture this manifest cannot name gets an empty label, not the last
+        one.** Choosing an image out of the set's own art store is a supported
+        thing to do with a remote, and no label text exists for it anywhere on this
+        device. Blank says "nothing is known about what you are looking at"; the
+        previous work's label says something false.
+
+        Cheap on the ordinary pass: two references compared, and the binding table
+        is only read when they differ — which is once per rotation, plus once per
+        time somebody actually touches the remote.
+        """
+        announced = self._announced_content_id
+        if announced is None or announced == self._captioned_content_id:
+            return
+        await self._caption(self._entry_showing(announced, manifest), announced)
+
+    def _entry_showing(self, content_id: str, manifest: Manifest) -> Entry | None:
+        """The manifest entry for what the set says it is showing, if it carries one."""
+        for binding in self._state.bindings():
+            if binding.tv_content_id != content_id:
+                continue
+            position = manifest.index_of(binding.artwork_id)
+            return manifest.entries[position] if position is not None else None
+        return None
 
     async def _the_wall_is_ours_to_change(self) -> bool:
         """Whether the set is showing art, and may therefore be asked to change it.
