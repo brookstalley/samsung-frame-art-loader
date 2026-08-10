@@ -322,9 +322,13 @@ current design, by #C below. #2 and #3 went unremarked.
 - **H. A per-work preview of the e-paper card** would be welcome once that card
   exists. Depends on Chunk 13; recorded here so it is not rediscovered.
 
-- **I. The offered-work sentence contradicts the screen it is printed on.** Every
-  offered card reads *"…an artist this run named but could not confirm a work
-  for"*, while seven works the run named for that same artist sit on the same
+- **I. The offered-work sentence contradicted the screen it was printed on.**
+  *(Fixed 2026-08-10 — see the annotation at the end of this entry. What follows
+  is the observation as it was recorded on 2026-08-05, in the tense it was found
+  in, because it is the evidence rather than a description of the product.)*
+
+  Every offered card read *"…an artist this run named but could not confirm a work
+  for"*, while seven works the run named for that same artist sat on the same
   page. The Dali run holds 7 `proposed` and 12 `offered`; the seven are real
   proposals — *The Persistence of Memory*, *Lobster Telephone*, *Metamorphosis of
   Narcissus* and four more — and each is badged `not held`. So the sentence is
