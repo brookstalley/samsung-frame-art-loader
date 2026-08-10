@@ -142,6 +142,20 @@ enforcement site, since a reader looking in `list_renditions` finds nothing.
 as a standing check; neither exists, and in a requirements artifact that reads as
 a guard somebody already built — tensed, and pointed at #115.
 
+**The branch also closes the #90/#91 discovery, and four decisions stand from
+it.** They constrain later work and are recorded here because a maintainer reading
+for what this branch landed would otherwise meet them only in the artifacts: the
+two mat presets are `#222222` (L\* 13.2, the most common hand-tuned colour) and
+`#6b6b6b` (L\* 45.2, the corpus ceiling); **off-white is withdrawn a second time**,
+now on measurement rather than taste, since no mat in the corpus of 41 exceeds
+L\* 45.2 and pure black was never in the set either (the darkest is `#14141e`);
+the AI button offers **three** candidates, each composed against the work, because
+the judgement is how a colour reads *around* a picture and a 40px swatch is not
+that judgement; and the **review grid keeps the bare candidate scan** — finding D
+is answered *no* there deliberately, because nothing is acquired at review time, so
+an "as it will hang" preview would derive its mat from the 480px museum preview,
+which differs visibly from the master's answer on 5 of 25 works.
+
 **Verification:** 2438 passed, 0 failed, 4 skipped across all three suites; lint
 and format clean. Two mutation sweeps at 5/5 and 4/4. One cumulative Critic round
 (0 blocking, 7 warnings, 9 notes, three reviewers) with every finding

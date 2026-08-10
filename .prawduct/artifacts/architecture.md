@@ -486,6 +486,16 @@ is no network between planes.
   otherwise invite are both refused — do not move the term into `is_current`, and
   do not re-invent a second supplement at another surface. A kind whose parent is
   another rendition is the only thing that earns one.
+  `[DECISION: currency stays consolidated in `is_current`, with a bounded
+  kind-local supplement for renditions drawn from another rendition | this
+  paragraph argued for consolidation and the #90 fix departs from it, so the
+  departure is decided rather than asserted: the two alternatives are folding
+  `_drawn_from` into `is_current`, which hands the shared predicate a term two of
+  its three consumers cannot evaluate and so re-opens the disagreement
+  consolidation exists to close, and a second supplement at another surface, which
+  is the duplication the 2026-08-05 consolidation removed; the exception's bound is
+  the parent — only a kind whose parent is another rendition earns one, which today
+  is the thumbnail alone | user can veto/override]`
 
   `SurveyService` composes a work with the two derived facts a
   human-facing surface needs beside it — how large it would render on this
