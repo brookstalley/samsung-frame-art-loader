@@ -530,6 +530,29 @@ has never run: the fan-out has spoken to no set. The daemon is stopped at the
 operator's request, so that step waits on the operator rather than on the build.
 Everything else the chunk owed is built, swept and green.
 
+**The closing round's three real defects were taken on 2026-08-08**, and two of
+them were in the chunk's own acceptance surface rather than in its bookkeeping.
+*The panel draw was on the event loop* — which is the argument that moved it off
+the television's reader task, one level down, since a coroutine spending two
+seconds in Pango and SPI delays that socket's confirmations exactly as much as
+the callback would. It goes to a worker thread now, bounded by the label budget
+`nonfunctional-requirements.md` already states, with one draw dispatched at a
+time: a wedged driver never raises, and an unbounded wait is the one way a panel
+can stop the wall that no `except` reaches. *A selection this plane did not make
+never reached the label*, so picking a work with the remote left the panel
+confidently naming the previous picture for up to a full interval — the label
+now follows what the set says is on the wall, and a picture the manifest cannot
+name gets an empty label rather than a stale one. *And a panel that fails
+mid-run* — the third case the acceptance criteria enumerate, and the only one
+with an edge in it — had no test.
+
+**The IT8951 pin was taken in five places and denied in five others**, one of
+them the risk register a session briefing reads as current state. That is the
+correction worth carrying past this chunk: the decision was recorded carefully
+where it was made and the claims it retired were left standing everywhere else,
+which is the same shape as the two norm rows found naming enforcement that did
+not exist. A decision is not taken until what it contradicts is gone.
+
 Three things were settled at build. **The rendering tier is two objects, not
 one** — a `Rasterizer` that measures and draws into flat greyscale, and a device
 that puts those bytes somewhere — because the two halves install on different
