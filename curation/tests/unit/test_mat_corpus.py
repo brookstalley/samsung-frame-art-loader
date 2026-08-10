@@ -19,6 +19,7 @@ single failure that glares on an emissive panel.
 """
 
 import json
+from itertools import permutations
 from pathlib import Path
 
 import pytest
@@ -27,11 +28,21 @@ from PIL import Image
 from curation.acquisition.color import format_hex, hex_distance, parse_hex, rgb_to_lab
 from curation.acquisition.compose import compose
 
-# `_CORPUS_MAX_LIGHTNESS` is private to the engine and is imported anyway,
+# `_DERIVED_LIGHTNESS_CEILING` is private to the engine and is imported anyway,
 # deliberately: the whole point of the test below is that the clamp's number and
 # the corpus's own lightest mat are not two figures free to drift apart. Reaching
 # for a public copy would create the second home the check exists to prevent.
-from curation.acquisition.mat import _CORPUS_MAX_LIGHTNESS, _FALLBACK_LIGHTNESS, MatEngine, dominant_color
+# `CORPUS_MAX_LIGHTNESS` is public and is imported for the opposite reason — the
+# requirement's bar belongs to the product, and a copy declared here would be a bar
+# this file guards and the operator's tool does not.
+from curation.acquisition.mat import (
+    _DERIVED_LIGHTNESS_CEILING,
+    _FALLBACK_LIGHTNESS,
+    CORPUS_MAX_LIGHTNESS,
+    MatEngine,
+    _most_covered_colour,
+    dominant_color,
+)
 from curation.persistence.records import MatMethod
 from curation.seed.legacy import read_index
 from curation.services.display_fit import ArtworkBox
@@ -43,12 +54,6 @@ CORPUS_PATH = next(
     (parent / "all.json" for parent in Path(__file__).resolve().parents if (parent / "all.json").is_file()),
     None,
 )
-
-#: The lightness no mat in the corpus exceeds. Measured, not chosen: the 41 run
-#: from L* 6.7 to 45.2 with a median of 20.7, so 50 — mid-grey — sits above every
-#: one of them with room to spare, and is the round number that says "darker than
-#: the middle of the range a display can show".
-CORPUS_MAX_LIGHTNESS = 50.0
 
 
 @pytest.fixture(scope="module")
@@ -172,7 +177,12 @@ class TestTheMechanicalProducerAgainstTheBar:
         description of the requirement, and the gap is what let the producer put a
         mat over the bar on 7 of the operator's 40 real works while this stayed
         green. The clamp is what makes "every" sayable, so the palest cases — the
-        ones darkening alone cannot rescue — are now the ones under test."""
+        ones darkening alone cannot rescue — are now the ones under test.
+
+        **Asserted against the ceiling the engine enforces, not the requirement's
+        round bar.** Those are 45.2 and 50, and the 4.8 between them is enough room
+        for a clamp that overshoots to pass while looking correct — which is how
+        the gamut overshoot survived its first test."""
         palettes = [
             (255, 255, 255),
             (240, 235, 220),
@@ -189,7 +199,7 @@ class TestTheMechanicalProducerAgainstTheBar:
             Image.new("RGB", (400, 300), colour).save(source, format="JPEG", quality=95)
             choice = MatEngine(None, image_max_edge=256).choose(source)
             lightness = rgb_to_lab(parse_hex(choice.hex_rgb)).l
-            if lightness > CORPUS_MAX_LIGHTNESS:
+            if lightness > _DERIVED_LIGHTNESS_CEILING:
                 over_the_bar[colour] = round(lightness, 1)
 
         assert over_the_bar == {}
@@ -203,7 +213,7 @@ class TestTheMechanicalProducerAgainstTheBar:
         the corpus no longer sets."""
         lightest = max(rgb_to_lab(parse_hex(record.mat_hex)).l for record in corpus)
 
-        assert round(lightest, 1) == _CORPUS_MAX_LIGHTNESS
+        assert round(lightest, 1) == _DERIVED_LIGHTNESS_CEILING
 
     def test_the_clamp_darkens_a_pale_work_without_turning_it_grey(self, tmp_path):
         """A ceiling on lightness only. Clamping in RGB, or falling back to a
@@ -216,8 +226,25 @@ class TestTheMechanicalProducerAgainstTheBar:
 
         chosen = rgb_to_lab(parse_hex(MatEngine(None, image_max_edge=256).choose(source).hex_rgb))
 
-        assert chosen.l <= CORPUS_MAX_LIGHTNESS
+        assert chosen.l <= _DERIVED_LIGHTNESS_CEILING
         assert (chosen.a**2 + chosen.b**2) ** 0.5 > 5.0
+
+    def test_a_saturated_work_gets_a_darker_mat_rather_than_a_grey_one(self, tmp_path):
+        """**The case where asking for the ceiling does not get it.** sRGB cannot
+        show a vivid yellow at L\\* 45.2, so the naive clamp — hold lightness, keep
+        a\\* and b\\* — comes back *lighter* than it asked for, over the very bar it
+        was enforcing. Two ways out, and the corpus picks between them: hold the
+        lightness and desaturate, which answers a vivid work with a grey, or go
+        darker and keep the colour, which is what "when in doubt, go darker" says.
+        Asserting the chroma is what tells the two apart — a lightness-only
+        assertion passes for the grey."""
+        source = tmp_path / "vivid.jpg"
+        Image.new("RGB", (400, 300), (255, 220, 0)).save(source, format="JPEG", quality=95)
+
+        chosen = rgb_to_lab(parse_hex(MatEngine(None, image_max_edge=256).choose(source).hex_rgb))
+
+        assert chosen.l <= _DERIVED_LIGHTNESS_CEILING
+        assert (chosen.a**2 + chosen.b**2) ** 0.5 > 30.0
 
     def test_a_work_already_under_the_bar_is_left_exactly_where_it_was(self, tmp_path):
         """The clamp is a ceiling, not a second darkening pass applied to
@@ -295,6 +322,43 @@ class TestTheDominanceVoteCountsAColourOnce:
         )
 
         assert dominant_color(source) == self.ORANGE[0]
+
+    def test_a_gradient_of_three_shades_is_one_colour(self, tmp_path):
+        """**Single-link grouping, which two shades cannot distinguish.** With a
+        pair, "close to any member" and "close to every member" are the same
+        sentence; with a chain they are not. A\\B and B\\C sit under the threshold
+        while A\\C sits over it, so complete-link grouping splits this gradient back
+        into two and hands the vote to the teal. A gradient across three of the five
+        clusters is not exotic — it is what a painted sky is, and it is the case the
+        merge exists for."""
+        chain = [(248, 132, 30), (214, 108, 20), (180, 86, 12)]
+        far = hex_distance(format_hex(chain[0]), format_hex(chain[2]))
+        near = max(
+            hex_distance(format_hex(chain[0]), format_hex(chain[1])), hex_distance(format_hex(chain[1]), format_hex(chain[2]))
+        )
+        assert near < 10.0 < far, "the fixture must chain, or it is testing the two-shade case again"
+
+        source = self._banded(
+            tmp_path / "gradient.png",
+            [(0.17, chain[0]), (0.17, chain[1]), (0.17, chain[2]), (0.35, self.TEAL), (0.14, (24, 24, 28))],
+        )
+
+        assert dominant_color(source) in chain
+
+    def test_the_answer_does_not_depend_on_the_order_the_clusters_arrive_in(self):
+        """The tie the winner's key exists to break, put the only way it can be.
+
+        Two groups of exactly equal area is reachable, and with nothing but the area
+        in the key the winner is whichever the iteration reached first — stable for
+        one file and decided by the quantiser's reporting order, which is not a
+        property anybody chose. Asserting it through `dominant_color` cannot see
+        this: one image yields one cluster order, so every call agrees no matter how
+        the tie is resolved. Permuting the clusters is the whole test."""
+        clusters = [(100, (232, 120, 24)), (100, (26, 108, 116)), (60, (24, 24, 28))]
+
+        answers = {_most_covered_colour(list(permuted)) for permuted in permutations(clusters)}
+
+        assert len(answers) == 1
 
     def test_genuinely_different_colours_still_compete(self, tmp_path):
         """The other half of the threshold, and the one that would go unnoticed:

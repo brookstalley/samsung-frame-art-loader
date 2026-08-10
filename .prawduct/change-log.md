@@ -90,6 +90,14 @@ the standing answer for every work acquired without a vision call.
   machine lighter than the human chose      31 / 40  -> 31 / 40   median +14.2 L*
 ```
 
+**That last row's `+14.2` and issue #115's `+15.2` are the same 40 measurements.**
+Neither is wrong and nothing was re-measured: the sample is even, its two middle
+gaps are 13.3 and 15.2, and #115 quoted the upper middle where
+`tools/mat_masters.py` takes the mean that a median is defined as. The tool's
+figure is the one to quote from here on, because it is the one a reader can
+reproduce by running the command. The row carries one value across both columns
+because the clamp genuinely does not move it.
+
 **The two columns that did not move are the honest part of this entry.** The
 clamp is a ceiling, so it removes the tail above the bar and leaves the lightness
 *bias* exactly where it was; closing that is a question about which colour to
@@ -105,6 +113,26 @@ non-monotonically — 3, 5, 3, 3 — while every non-zero value delivers the sam
 5 → 2 improvement on plainly-different flips. Forty works cannot separate those,
 so picking the best-scoring value would have fitted the threshold to the sample.
 Ten is where CIEDE2000's own scale puts "plainly different colours".
+
+**The first clamp did not hold, and finding that out is the same check that found
+#115.** Holding L\* at the ceiling while keeping a\* and b\* asks for a colour sRGB
+often cannot show: `lab_to_rgb` clips into the gamut, and for a saturated hue the
+nearest displayable colour is *lighter* than the one requested — a pure magenta
+came back at L\* **49.6**, over the ceiling it was enforcing. It cleared the
+corpus's round-number bar of 50, so every test passed. Swept over the whole RGB
+cube the worst case is now L\* **45.2** exactly.
+
+**Lightness gives way, not chroma, and the corpus decides that.** The other repair
+— hold the ceiling and desaturate — was written first and rejected on its own
+output: it answered a vivid blue with a *pure grey*, when the prompt that produced
+the corpus asks for a low-chroma colour drawn from the artwork over a neutral.
+Going darker is that prompt's own instruction for this doubt, and L\* 6.7 is the
+corpus's floor, so there is room to move. Zero chromatic inputs across the cube
+now come back near-grey.
+
+**None of the 40 masters reaches this path** — their darkened dominant colours are
+all displayable at the ceiling — so this is a guard on a case the corpus does not
+contain rather than a change to any measured number above.
 
 **`_CORPUS_MAX_LIGHTNESS` is not a second copy of the corpus's ceiling.**
 `test_mat_corpus.py` derives the lightest mat from `all.json` and fails if the two

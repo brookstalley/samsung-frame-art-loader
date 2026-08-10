@@ -39,18 +39,13 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from curation.acquisition.color import format_hex, hex_distance, parse_hex, rgb_to_lab  # noqa: E402
-from curation.acquisition.mat import MatChoice, MatEngine, dominant_color  # noqa: E402
+from curation.acquisition.mat import CORPUS_MAX_LIGHTNESS, MatChoice, MatEngine, dominant_color  # noqa: E402
 from curation.config import CATALOGUE_FILENAME, DEFAULT_MAT_IMAGE_MAX_EDGE  # noqa: E402
 from curation.seed.legacy import read_index  # noqa: E402
 
 #: One work as this tool pairs it: its title, its master on disk, and the colour a
 #: human chose for it in 2024.
 Pair = tuple[str, Path, str]
-
-#: The lightness bar the corpus sets, named here as the test names it so the two
-#: reports describe one requirement. Imported rather than re-derived would be
-#: better; it lives in a test module, and a tool importing a test is worse.
-CORPUS_MAX_LIGHTNESS = 50.0
 
 #: How far two derived colours may sit apart before a re-encode is said to have
 #: moved the answer at all. CIEDE2000 puts a just-noticeable difference near 1; 5
@@ -77,9 +72,27 @@ def _say(line: str) -> None:
 
 
 def _pairs(art_root: Path, corpus_path: Path) -> tuple[list[Pair], list[str]]:
-    """Each master on disk beside the hand-tuned colour for the same painting."""
+    """Each master on disk beside the hand-tuned colour for the same painting.
+
+    **The SQL is written out here rather than taken from the repository, and that
+    is a decision.** `CatalogueRepository` owns these tables, so this duplicates
+    names it could import — but the repository opens the catalogue through the
+    plane's configuration, and this tool has to run against an `ART_ROOT` named on
+    the command line, including one that is not the configured deployment. The cost
+    is real and is stated so nobody has to guess it was considered: a column rename
+    passes both suites and breaks this tool, because nothing imports or exercises
+    it. `CLAUDE.md` sends an operator here straight after touching the mat engine,
+    which is exactly when that would bite.
+    """
     by_title = {record.title.strip().lower(): record.mat_hex for record in read_index(corpus_path)}
-    catalogue = sqlite3.connect(art_root / CATALOGUE_FILENAME)
+    catalogue_path = art_root / CATALOGUE_FILENAME
+    if not catalogue_path.is_file():
+        # **`sqlite3.connect` creates the file it cannot find.** On a mistyped
+        # `--art-root` that writes an empty database into a directory this tool
+        # promises to leave alone, and then dies on "no such table" — leaving the
+        # operator a stray file and a message about the wrong problem.
+        raise SystemExit(f"No catalogue at {catalogue_path}. Check --art-root or $ART_ROOT; nothing was written.")
+    catalogue = sqlite3.connect(f"file:{catalogue_path}?mode=ro", uri=True)
     catalogue.row_factory = sqlite3.Row
     try:
         rows = catalogue.execute(

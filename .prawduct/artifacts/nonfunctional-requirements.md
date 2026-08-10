@@ -729,6 +729,17 @@ the *comparison against the hand-tuned 40* is an operator-run measurement agains
 lets a cheap test carry it; a statistical claim over images CI cannot see is not a
 test, and writing one that passes on synthetic flats is how this was missed.
 
+**A clamp on L\* alone does not hold, which is worth recording because the naive
+version passes every test.** Holding lightness at the ceiling while keeping a\* and
+b\* asks for a colour sRGB often cannot show; the conversion clips into the gamut
+and returns something *lighter* than requested — a pure magenta at L\* 49.6, over
+the ceiling being enforced, and still under the round-number bar of 50 that the
+suite checks. The engine therefore trades **lightness, not chroma**: it goes
+darker until the colour is displayable at its own hue, which is what the prompt
+that produced the corpus says to do in doubt, and which avoids answering a vivid
+work with a grey. Swept over the whole RGB cube the worst realised lightness is
+L\* 45.2. No work among the operator's 40 reaches this path.
+
 `mat.py` clamps derived lightness to `_CORPUS_MAX_LIGHTNESS`, and that constant is
 **not a second copy of the corpus's ceiling** — `test_mat_corpus.py` derives the
 lightest mat from `all.json` and fails if the two disagree, so a corpus that gains
@@ -744,6 +755,12 @@ a lighter mat cannot leave the engine enforcing a bar the corpus no longer sets.
     worst single move                       ΔE 60.7      ΔE 45.6
   machine lighter than the human chose      31 / 40      31 / 40   median +14.2 L*
 ```
+
+The last row's `+14.2` and the `+15.2` recorded on 2026-08-10 are the same 40
+measurements under two conventions — the sample is even, its middle gaps are 13.3
+and 15.2, and the earlier record quoted the upper one. `tools/mat_masters.py`
+prints the mean of the two, which is the figure to quote, because it is the one a
+reader can reproduce.
 
 **Two of those columns did not move, and both are deliberate.** The lightness
 *bias* is untouched: the clamp is a ceiling, so it removes the tail above the bar

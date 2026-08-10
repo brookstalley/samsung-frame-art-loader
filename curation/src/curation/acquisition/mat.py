@@ -92,14 +92,31 @@ _FALLBACK_LIGHTNESS: Final[float] = 0.66
 #: subject, few enough that the largest cluster is a colour rather than a shade.
 _FALLBACK_CLUSTERS: Final[int] = 5
 
-#: The lightest mat in the hand-tuned corpus, in L*. A mechanically derived colour
-#: is clamped to it, because darkening by `_FALLBACK_LIGHTNESS` alone does not keep
-#: one under the bar the corpus sets: run over the operator's masters, the
-#: derivation put a mat above `test_mat_corpus.CORPUS_MAX_LIGHTNESS` on 7 of the 40
-#: works that also carry a hand-tuned colour, where the human breached it on none.
-#: A near-white mat over a Mondrian is the single failure that glares on an
-#: emissive panel, and two candidate models were rejected during probing for
-#: proposing exactly that.
+#: **The requirement's bar, and the looser of the two numbers here.** No mat in the
+#: hand-tuned corpus exceeds it, it is the round figure `nonfunctional-requirements.md`
+#: § Output Quality states, and it is what the suite and `tools/mat_masters.py` both
+#: report against. It lives in the product rather than in either of them because two
+#: hand-typed copies of one bar drift, and an operator reading a tool's "over
+#: CORPUS_MAX_LIGHTNESS" is entitled to the number the tests actually guard.
+#:
+#: Nothing in this module compares against it — the engine enforces the tighter
+#: ceiling below. It is exported because the requirement is the product's, not the
+#: test suite's.
+CORPUS_MAX_LIGHTNESS: Final[float] = 50.0
+
+#: **What the engine actually enforces: the lightest mat the corpus contains.** A
+#: mechanically derived colour is held at or under it, because darkening by
+#: `_FALLBACK_LIGHTNESS` alone does not keep one inside the corpus's region — run
+#: over the operator's masters, the derivation put a mat above the looser
+#: `CORPUS_MAX_LIGHTNESS` on 7 of the 40 works that also carry a hand-tuned colour,
+#: where the human breached it on none. A near-white mat over a Mondrian is the
+#: single failure that glares on an emissive panel, and two candidate models were
+#: rejected during probing for proposing exactly that.
+#:
+#: **Two ceilings, and the gap between them is deliberate.** 50 is what the
+#: requirement says out loud; 45.2 is what the corpus does. Enforcing the looser one
+#: would let the derivation sit 4.8 L* above anything a human ever chose while every
+#: test stayed green — which is exactly how the defect above survived.
 #:
 #: **The number is not typed twice.** `test_mat_corpus.py` derives the corpus's
 #: lightest mat from `all.json` and fails if it and this constant disagree, so a
@@ -107,12 +124,19 @@ _FALLBACK_CLUSTERS: Final[int] = 5
 #: nothing stands behind.
 #:
 #: **It fixes the breach, not the bias, and saying so is the point.** The same
-#: measurement puts the derivation lighter than the human on 31 of 40 with a median
-#: gap of +15.2 L*, and clamping does not move that median — it only removes the
-#: tail above the bar. Closing the rest is a question about which colour to choose,
-#: not about arithmetic on the one already chosen, and it belongs to the vision
-#: model rather than to a second multiplier tuned until a statistic looks better.
-_CORPUS_MAX_LIGHTNESS: Final[float] = 45.2
+#: measurement puts the derivation lighter than the human on 31 of 40, at a median
+#: gap of +14.2 L*, and clamping does not move that figure at all — it only removes
+#: the tail above the bar. Closing the rest is a question about which colour to
+#: choose, not about arithmetic on the one already chosen, and it belongs to the
+#: vision model rather than to a second multiplier tuned until a statistic looks
+#: better.
+#:
+#: (Issue #115 records +15.2 for the same 40 pairs. It is not a different
+#: measurement and neither number is wrong: the sample is even, the two middle gaps
+#: are 13.3 and 15.2, and the issue quoted the upper one where
+#: `tools/mat_masters.py` takes the mean the median is defined as. The tool's is the
+#: figure to quote, because it is the one a reader can reproduce.)
+_DERIVED_LIGHTNESS_CEILING: Final[float] = 45.2
 
 #: How close two of the quantiser's colours must be, in CIEDE2000, to be counted as
 #: one colour when the largest is chosen. Ten is where that metric's own scale puts
@@ -135,6 +159,12 @@ _CORPUS_MAX_LIGHTNESS: Final[float] = 45.2
 #: that a re-encode reorders them. No threshold fixes a real tie, and one wide
 #: enough to try would merge the picture into a single colour.
 _CLUSTER_MERGE_DISTANCE: Final[float] = 10.0
+
+#: How many halvings the gamut search takes to find the most saturated colour that
+#: fits under the ceiling. Twenty resolves the chroma scale to about one part in a
+#: million — far finer than the 8-bit channels the answer is rounded into, so the
+#: bound is the encoding rather than the search.
+_GAMUT_SEARCH_STEPS: Final[int] = 20
 
 #: The longest edge the fallback examines. Dominance is a property of the picture,
 #: not of its resolution, and quantising a gigapixel master would spend minutes
@@ -243,9 +273,25 @@ class MatEngine:
 
     def _fallback(self, image_path: Path, *, detail: str, cost_usd: Decimal = Decimal(0)) -> MatChoice:
         rgb = reading(image_path, lambda: dominant_color(image_path))
-        darkened = _under_the_corpus_bar(scale_lightness(rgb, _FALLBACK_LIGHTNESS))
+        scaled = scale_lightness(rgb, _FALLBACK_LIGHTNESS)
+        darkened = _under_the_corpus_bar(scaled)
         lab = rgb_to_lab(darkened)
         log.info("mat for %s fell back to the dominant colour: %s", image_path.name, detail)
+        if darkened != scaled:
+            # **The ceiling firing is the one thing about a derived colour that is
+            # otherwise unrecoverable.** `method` records that the colour was
+            # derived and not chosen, but not that it was then held back — so a
+            # curator asking "why is this mat not the colour of the picture?" has
+            # nowhere to look, and neither does the operator judging exactly these
+            # works. Logged rather than added to `MatChoice`, because the answer is
+            # still the mechanical derivation's; the ceiling is how it was computed,
+            # not a third producer beside the model and the fallback.
+            log.info(
+                "mat for %s was held at the corpus ceiling: derived L* %.1f, capped to L* %.1f",
+                image_path.name,
+                rgb_to_lab(scaled).l,
+                lab.l,
+            )
         return MatChoice(
             hex_rgb=format_hex(darkened),
             method=MatMethod.DOMINANT_COLOR_FALLBACK,
@@ -279,9 +325,45 @@ def _under_the_corpus_bar(rgb: tuple[int, int, int]) -> tuple[int, int, int]:
     evidence, and is not settled here.
     """
     lab = rgb_to_lab(rgb)
-    if lab.l <= _CORPUS_MAX_LIGHTNESS:
+    if lab.l <= _DERIVED_LIGHTNESS_CEILING:
         return rgb
-    return lab_to_rgb(Lab(l=_CORPUS_MAX_LIGHTNESS, a=lab.a, b=lab.b))
+    at_ceiling = lab_to_rgb(Lab(l=_DERIVED_LIGHTNESS_CEILING, a=lab.a, b=lab.b))
+    if rgb_to_lab(at_ceiling).l <= _DERIVED_LIGHTNESS_CEILING:
+        return at_ceiling
+    return _fitted_to_the_gamut(lab)
+
+
+def _fitted_to_the_gamut(lab: Lab) -> tuple[int, int, int]:
+    """The ceiling colour for a hue sRGB cannot show at the ceiling's lightness.
+
+    **Asking for L\\* 45.2 does not always get it.** `lab_to_rgb` clamps into the
+    displayable gamut, and for a saturated hue the nearest displayable colour is
+    *lighter* than the one asked for: a pure magenta comes back at L\\* 49.6. That
+    still clears the corpus's round-number bar of 50, which is why the arithmetic
+    looked right — and it is outside the region the corpus actually occupies, which
+    is the requirement. A ceiling a chromatic colour can step over is the same
+    unverified claim this whole fix exists to remove.
+
+    **Lightness gives way, not chroma, and the corpus is what decides that.** The
+    other way round is available — hold L\\* at the ceiling and desaturate until the
+    colour fits — and it is wrong here: it answers a vivid blue work with a pure
+    grey, when the prompt that produced the corpus says to prefer a low-chroma
+    colour *drawn from the artwork* over a neutral. Going darker is the corpus's own
+    instruction for exactly this doubt ("when in doubt, go darker"), it keeps the
+    mat the work's colour, and L\\* 6.7 is the corpus's floor, so there is room
+    beneath the ceiling to move in.
+
+    The search always has an answer — black is displayable at every hue — so it
+    terminates on a real colour rather than on a bound.
+    """
+    fits, exceeds = 0.0, _DERIVED_LIGHTNESS_CEILING
+    for _ in range(_GAMUT_SEARCH_STEPS):
+        middle = (fits + exceeds) / 2
+        if rgb_to_lab(lab_to_rgb(Lab(l=middle, a=lab.a, b=lab.b))).l <= _DERIVED_LIGHTNESS_CEILING:
+            fits = middle
+        else:
+            exceeds = middle
+    return lab_to_rgb(Lab(l=fits, a=lab.a, b=lab.b))
 
 
 def dominant_color(image_path: Path) -> tuple[int, int, int]:
@@ -294,11 +376,15 @@ def dominant_color(image_path: Path) -> tuple[int, int, int]:
     The two agree on what they are asked for. Both partition the image and return
     the most-populated partition's colour; median cut splits along the widest
     channel where k-means iterates towards cluster centres, so an individual
-    answer can differ by a shade. What neither does is matter much: this feeds a
-    fallback that then darkens the result by a third.
+    answer can differ by a shade.
 
-    **Shades of one colour are counted once**, which the partition alone does not
-    do — see `_most_covered_colour` for the failure that forces it.
+    **A shade's difference here is not the small thing it reads as**, and this
+    docstring said it was until the derivation was measured against real paintings.
+    Which partition wins decides the mat outright, so a re-encode that moved the
+    split moved a work's colour from a near-black navy to a near-white. Darkening
+    the result by a third does not absorb that; it darkens the wrong colour.
+    **Shades of one colour are therefore counted once** — see `_most_covered_colour`
+    for the failure that forces it.
     """
     with Image.open(image_path) as image:
         image.draft("RGB", (_FALLBACK_MAX_EDGE, _FALLBACK_MAX_EDGE))
@@ -424,4 +510,4 @@ def _number(value: object) -> float | None:
     return None
 
 
-__all__ = ["MAT_PROMPT", "MAT_SCHEMA", "MatChoice", "MatEngine", "dominant_color"]
+__all__ = ["CORPUS_MAX_LIGHTNESS", "MAT_PROMPT", "MAT_SCHEMA", "MatChoice", "MatEngine", "dominant_color"]
