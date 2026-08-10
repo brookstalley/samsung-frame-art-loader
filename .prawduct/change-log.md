@@ -123,7 +123,7 @@ carried per-group information on a per-card line four screens away from the
 group; offered rows now carry the short per-work line, and the query lives with
 its works on the review surface.
 
-**Nine browser tests and two unit tests.** They cover the denial being gone, the
+**Eight browser tests and two unit tests**, plus new assertions on a ninth behaviour inside an existing one. They cover the denial being gone, the
 query said once rather than per card, the holdings reconciled against what the
 run offered, a group holding everything the collection has not being described as
 a subset, two queries staying two groups with their own numbers *and their own

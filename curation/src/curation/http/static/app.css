@@ -544,7 +544,11 @@ th {
   margin-bottom: var(--space-5);
 }
 
-.offer-group h3 {
+/* `>` and not a descendant selector: a card inside this group carries an
+ * `h3.card-title`, which a bare `.offer-group h3` outranks and re-margins — so
+ * offered works' titles would sit further from their artist line than the named
+ * works' titles do, on the same page, for no reason a reader could find. */
+.offer-group > h3 {
   margin: 0 0 var(--space-1);
   font: 400 var(--text-md) / 1.3 var(--font-label);
   color: var(--text-strong);

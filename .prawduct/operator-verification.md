@@ -366,6 +366,14 @@ current design, by #C below. #2 and #3 went unremarked.
   found no *image* for the works it named), one sentence per artist rather than one
   per card, and the holdings total reconciled with what the run offered.
 
+  **A fourth check, and it is the only one here no test can make.** Each artist's
+  offers sit in their own block with a heading above them — look at whether the
+  groups are visually separated from the works the run named and from each other,
+  and whether the heading reads as a heading rather than as browser-default bold.
+  The browser suite asserts the heading's *text* and the group's attributes, and
+  both are correct whether or not a single line of that block's styling exists;
+  this bundle shipped with none of it until a reviewer read the page as a page.
+
 ## Decisions taken during the 2026-08-05 walkthrough
 
 **The mat policy, settled with the operator against the corpus rather than in the
