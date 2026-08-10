@@ -26,7 +26,7 @@ from payloads import (
     an_instance_listing,
 )
 
-from curation.persistence.discovery_records import ResolutionStatus, RunStatus, Verdict
+from curation.persistence.discovery_records import ResolutionStatus, RunStatus, Verdict, WorkProvenance
 
 # At import time, not in a fixture. A marker deselection still *collects* this
 # module, so the default run — which does not install the browser group — has to
@@ -862,3 +862,222 @@ def test_a_run_holding_no_works_offers_no_way_into_an_empty_grid(ui):
     ui.page.wait_for_selector("#view p.note")
 
     assert "Review these works" not in ui.text()
+
+
+# -- the collection's offers say why they are there, once per query ------------
+
+
+def _offer(work_id, title, *, artist="Salvador Dalí", matched=25):
+    """One offered work, as the supplement writes it: its query and that query's total."""
+    return a_card(
+        work=a_candidate(
+            work_id=work_id,
+            title=title,
+            provenance=WorkProvenance.OFFERED.value,
+            offered_for_artist=artist,
+            offered_artist_matched=matched,
+        )
+    )
+
+
+def test_the_offer_does_not_deny_the_works_the_same_page_shows_the_run_naming(grid):
+    """The sentence that read as false to the only person who could check it.
+
+    An artist reaches the supplement by having *any* named work come back without
+    an image, and the run's named works sit on this very page badged `not held`.
+    The old wording called them "an artist this run named but could not confirm a
+    work for", which is true only under a reading of *confirm* that the page
+    never teaches — so twelve cards denied the seven works above them.
+
+    What the run failed to do was find an **image**. The page says that now, in
+    those terms, and this test pins the words rather than the field: the defect
+    was entirely in the words.
+    """
+    grid.serve(
+        f"**/api/runs/{RUN_ID}/candidates*",
+        a_candidate_page(
+            [
+                a_card(
+                    work=a_candidate(
+                        work_id="named",
+                        title="The Persistence of Memory",
+                        resolution_status=ResolutionStatus.UNRESOLVED.value,
+                        unresolved_reason="not_held",
+                    )
+                ),
+                _offer("gift-1", "Lobster Telephone"),
+            ]
+        ),
+    )
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+
+    shown = grid.text()
+    assert "found no image for 1 work it named by this artist" in shown
+    assert "could not confirm a work for" not in shown, "the page still denies work it is showing"
+
+
+def test_the_offer_says_its_query_once_rather_than_on_every_card(grid):
+    """One thirty-word sentence, twelve times down a page, is what this replaced.
+
+    The fact is about the *query* — which artist, and how many works the
+    collection holds by them — so it belongs where that query's works are, said
+    once. `product-brief.md`'s offered-works bullet was amended to require
+    exactly that, and this is the assertion that the amendment is honoured.
+    """
+    grid.serve(
+        f"**/api/runs/{RUN_ID}/candidates*",
+        a_candidate_page([_offer(f"gift-{n}", f"Offered work {n}") for n in range(1, 5)]),
+    )
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+
+    assert grid.page.locator("li.card").count() == 4
+    assert grid.text().count("The collection holds") == 1, "the query's fact is repeated per card"
+
+
+def test_the_offer_reconciles_what_the_collection_holds_with_what_one_run_shows(grid):
+    """Twenty-five holdings beside twelve cards, with nothing explaining the gap.
+
+    Each number was honest alone and no view reconciled them, which invites a
+    curator to hunt for thirteen works that were never coming. The count of cards
+    is derived from the cards themselves, so it cannot drift from the page the way
+    a total composed on the server did.
+    """
+    grid.serve(
+        f"**/api/runs/{RUN_ID}/candidates*",
+        a_candidate_page([_offer(f"gift-{n}", f"Offered work {n}") for n in range(1, 4)]),
+    )
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+
+    assert "The collection holds 25 works by them, and these 3 are as many as one run offers" in grid.text()
+
+
+def test_an_offer_that_is_the_whole_of_what_is_held_claims_no_cap(grid):
+    """The paired negative: a bound that did not bite must not be described as one.
+
+    Saying "as many as one run offers" when every work the collection holds is on
+    the page tells a curator that more exist. Two of them do not.
+    """
+    grid.serve(
+        f"**/api/runs/{RUN_ID}/candidates*",
+        a_candidate_page([_offer("gift-1", "Lobster Telephone", matched=1)]),
+    )
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+
+    shown = grid.text()
+    assert "These are all 1 work the collection holds by them." in shown
+    assert "as many as one run offers" not in shown
+
+
+def test_two_queries_are_two_groups_rather_than_one_run_of_cards(grid):
+    """Each query's works sit under their own heading, with their own numbers.
+
+    A single offered block would put one artist's holdings total above another
+    artist's works — the per-group fact landing on the wrong group, which is the
+    same class of error as landing it on every card.
+    """
+    grid.serve(
+        f"**/api/runs/{RUN_ID}/candidates*",
+        a_candidate_page(
+            [
+                _offer("dali-1", "Lobster Telephone", artist="Salvador Dalí", matched=25),
+                _offer("kelly-1", "Spectrum IV", artist="Ellsworth Kelly", matched=400),
+            ]
+        ),
+    )
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+
+    shown = grid.text()
+    assert "Offered by the collection — Salvador Dalí" in shown
+    assert "Offered by the collection — Ellsworth Kelly" in shown
+    assert "holds 25 works" in shown
+    assert "holds 400 works" in shown
+
+
+def test_an_offer_whose_query_was_never_recorded_still_reaches_the_page(grid):
+    """Grouping must not become a filter.
+
+    Bucketing offers by their query invites the version that skips one with no
+    query recorded — and a review surface quietly showing fewer works than the run
+    holds is a worse defect than the mislabelling this grouping fixes, because
+    nothing on the page shows the absence. It gets the heading without a name and
+    a sentence that claims no total it does not have.
+    """
+    grid.serve(
+        f"**/api/runs/{RUN_ID}/candidates*",
+        a_candidate_page(
+            [
+                a_card(
+                    work=a_candidate(
+                        work_id="orphan",
+                        title="Lobster Telephone",
+                        provenance=WorkProvenance.OFFERED.value,
+                    )
+                )
+            ]
+        ),
+    )
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+
+    assert grid.page.locator("li.card[data-work='orphan']").count() == 1
+    shown = grid.text()
+    assert "The collection offered 1 work it holds by them." in shown
+    assert "The collection holds" not in shown, "a total was invented for a group that recorded none"
+
+
+def test_the_offer_counts_only_the_named_works_that_found_no_image(grid):
+    """An artist reaches the supplement without *all* their works having failed.
+
+    The selection is "any named work came back unresolved", so an artist may have
+    others that resolved perfectly well. Counting every named work — or saying
+    "none of them" — would be false for exactly those artists, which is the same
+    shape of claim, on the same page, that this whole change removes. The fixture
+    is the mixed case: two named works, one resolved, one not.
+    """
+    grid.serve(
+        f"**/api/runs/{RUN_ID}/candidates*",
+        a_candidate_page(
+            [
+                a_card(work=a_candidate(work_id="found", title="The Elephants")),
+                a_card(
+                    work=a_candidate(
+                        work_id="missing",
+                        title="The Persistence of Memory",
+                        resolution_status=ResolutionStatus.UNRESOLVED.value,
+                        unresolved_reason="not_held",
+                    )
+                ),
+                _offer("gift-1", "Lobster Telephone"),
+            ]
+        ),
+    )
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+
+    shown = grid.text()
+    assert "found no image for 1 work it named by this artist" in shown
+    assert "2 works it named" not in shown, "a work the run did find an image for was counted as a failure"
+
+
+def test_an_offer_with_nothing_named_beside_it_claims_no_failed_works(grid):
+    """The paired negative: the clause is omitted, not printed with a zero.
+
+    A re-search grid, or a page whose named works are not in view, leaves nothing
+    to count. "found no image for 0 works it named" is the sentence a guard that
+    fires on every group produces, and it is worse than silence.
+    """
+    grid.serve(
+        f"**/api/runs/{RUN_ID}/candidates*",
+        a_candidate_page([_offer("gift-1", "Lobster Telephone")]),
+    )
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+
+    shown = grid.text()
+    assert "found no image for" not in shown, "a failure clause was printed for works that are not there"
+    assert "The collection holds 25 works by them" in shown, "the holdings clause must still stand alone"

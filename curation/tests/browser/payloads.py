@@ -102,6 +102,12 @@ def a_candidate(**overrides) -> CandidateWorkOut:
         "artist": "Salvador Dalí",
         "rationale": "Named in the intent.",
         "provenance": WorkProvenance.PROPOSED.value,
+        # Null by default because the default is a work the run *asked for*, which
+        # no browse query produced. A test wanting an offer sets both, as the
+        # server does — leaving them null on an `offered` work is a state the
+        # service will not write.
+        "offered_for_artist": None,
+        "offered_artist_matched": None,
         "verdict": Verdict.PENDING.value,
         "resolution_status": ResolutionStatus.RESOLVED.value,
         "unresolved_reason": None,

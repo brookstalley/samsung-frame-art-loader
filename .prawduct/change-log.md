@@ -54,6 +54,77 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-10: An offered work carries its query, and the page says it once
+
+<!-- prawduct: status=shipped | scope=v1-build -->
+
+<!-- No `chunks=`: issue #95, a defect in a surface the build plan had already
+     delivered. -->
+
+**Why:** issue #95, from the operator's own 2026-08-05 walkthrough, impact M.
+Every offered card carried one sentence: *"Offered by the collection, not
+proposed by the model: one of 25 works it holds by Salvador Dalí, an artist this
+run named but could not confirm a work for."* On the same page sat seven works
+the run **did** name for that artist, each badged `not held`.
+
+**One root cause under all three symptoms: `rationale` was overloaded.** For a
+proposed work it holds opaque model prose; for an offered one it held a
+system-templated sentence, and the client rendered both identically because
+nothing distinguished them. So a *group* fact was written into a *per-work*
+field, and the rest follows. The sentence denied work the same page showed the
+run naming — true only under a reading of *confirm* meaning "resolved to a work
+the collection holds", which nothing on screen teaches. It advertised "one of 25
+works it holds" beside twelve cards, because it was composed at browse time and
+the per-run bound is applied afterwards, so no view could ever reconcile the two.
+And a per-group fact stored per work necessarily repeated twelve times.
+
+**The brief was amended before any code moved.** `product-brief.md`'s
+offered-works bullet asked the *rationale* to carry this. Its why is untouched
+and still binds — a curator must be able to tell one-of-four-hundred from
+one-of-one — but the bullet now asks the review *surface* to say it once where
+the query's works are, and to reconcile it with the bound. The decision is
+recorded in vetoable form at the bullet, because a norm is amended by decision,
+never doc-synced to match code that already shipped.
+
+**The work now stores two facts instead of a sentence about them.**
+`offered_for_artist` and `offered_artist_matched` run through record, SQLite
+schema, service, runner, HTTP model and MCP projection. `matched` is the
+collection's holdings and is **deliberately never capped** — the per-run bound is
+what a reader reconciles it against, so capping it at the source would collapse
+the very comparison the requirement exists for. This is the pattern the codebase
+already uses everywhere else (`UnresolvedReason` → `REASON_SENTENCES`, server
+ships a code and the client owns the words); offered rationale was the one place
+shipping prose.
+
+**Every number on the page is now counted from something the reader can see, or
+named as what it is.** The client counts the cards it is actually rendering for
+the "these 3", so it cannot drift from the page the way a server-composed total
+did. The holdings figure is stated as holdings, in the same breath as the bound
+that explains the gap — and when nothing was capped, the cap clause is not
+printed at all, because "as many as one run offers" tells a curator that more
+exist.
+
+**The first clause counts unresolved works only, and that is the whole lesson
+repeating.** An artist reaches the supplement by having *any* named work come
+back unresolved, so they may have others that resolved. "found an image for none
+of them" would have been false for exactly those artists — a new
+false-on-the-page-that-shows-both claim, in the change removing one. It counts,
+or says nothing.
+
+**The run table lost the sentence, which the issue asked for.** That column
+carried per-group information on a per-card line four screens away from the
+group; offered rows now carry the short per-work line, and the query lives with
+its works on the review surface.
+
+**Six browser tests and two unit tests.** They cover the denial being gone, the
+query said once rather than per card, the holdings reconciled against the bound,
+a bound that did not bite not being described as one, two queries staying two
+groups, and — the failure class this issue is about — an offer whose query was
+never recorded still reaching the page rather than being silently filtered out by
+its own grouping. The unit pair asserts the facts at their new home with exact
+values, since `"400" in rationale` also matches four thousand, and that a
+proposed work claims neither.
+
 ## 2026-08-10: The offer to look again describes the page it sits on, and spends on it
 
 <!-- prawduct: status=shipped | scope=v1-build -->
