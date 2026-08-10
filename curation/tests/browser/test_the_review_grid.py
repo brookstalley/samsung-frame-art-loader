@@ -1105,3 +1105,46 @@ def test_an_offer_with_nothing_named_beside_it_claims_no_failed_works(grid):
     shown = grid.text()
     assert "found no image for" not in shown, "a failure clause was printed for works that are not there"
     assert "The collection holds 25 works by them;" in shown, "the holdings clause must still stand alone"
+
+
+def test_the_group_heading_rule_does_not_reach_the_cards_inside_the_group(grid):
+    """A heading rule scoped with a descendant selector re-margins the works it heads.
+
+    `.offer-group h3` is more specific than `.card-title` and declared later, so
+    the descendant form silently won on every card title inside a group: offered
+    works' titles sat further from their artist line than the named works' did, on
+    the same page, for no reason a reader could find. It shipped that way and a
+    reviewer reading the selector caught it — `>` is the whole fix.
+
+    **Asserted on computed style because nothing else can see it.** Every other
+    check here reads text or attributes, and all of them are correct whichever
+    selector is written. The judgement half of the styling — does the heading read
+    as a heading, are the groups separated — is the operator's, and stays in
+    `operator-verification.md`; this is the half a machine can hold.
+    """
+    grid.serve(
+        f"**/api/runs/{RUN_ID}/candidates*",
+        a_candidate_page(
+            [
+                a_card(work=a_candidate(work_id="named", title="The Persistence of Memory")),
+                _offer("gift-1", "Lobster Telephone"),
+            ]
+        ),
+    )
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("section.offer-group li.card")
+
+    margins = grid.page.evaluate("""() => {
+             const titles = [...document.querySelectorAll('li.card h3.card-title')];
+             const of = (list) => list.map((n) => getComputedStyle(n).marginBottom);
+             return {
+               inside: of(titles.filter((n) => n.closest('.offer-group'))),
+               outside: of(titles.filter((n) => !n.closest('.offer-group'))),
+             };
+           }""")
+
+    assert margins["inside"], "the fixture must put a card inside an offer group"
+    assert margins["outside"], "and one outside, or there is nothing to compare against"
+    assert set(margins["inside"]) == set(
+        margins["outside"]
+    ), f"a card title is styled differently for sitting inside an offer group: {margins}"

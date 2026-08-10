@@ -123,7 +123,8 @@ carried per-group information on a per-card line four screens away from the
 group; offered rows now carry the short per-work line, and the query lives with
 its works on the review surface.
 
-**Eight browser tests and two unit tests**, plus new assertions on a ninth behaviour inside an existing one. They cover the denial being gone, the
+**Eight browser tests and two unit tests**, plus new assertions on a ninth
+behaviour inside an existing one. They cover the denial being gone, the
 query said once rather than per card, the holdings reconciled against what the
 run offered, a group holding everything the collection has not being described as
 a subset, two queries staying two groups with their own numbers *and their own
@@ -135,11 +136,13 @@ facts at their new home with exact values, since `"400" in rationale` also
 matches four thousand, and that a proposed work claims neither.
 
 **Two of those tests exist because the mutation sweep found the branches
-undefended after they had been described in prose**, and one because the PR
-reviewer found the heading assertion dropped when the group tests were rescoped
-to an attribute — at which point deleting the artist's name from the heading
-would have left the suite green while restoring this issue's symptom. Eleven of
-eleven mutations caught.
+undefended after they had been described in prose**, and the heading assertions
+inside the ninth because the PR reviewer found them dropped when the group tests
+were rescoped to an attribute — at which point deleting the artist's name from
+the heading would have left the suite green while restoring this issue's
+symptom. A tenth guards the group's heading rule against reaching the cards
+inside the group, which is a bug this branch shipped and a reviewer read out of
+the selector. Every mutation written against this work was caught.
 
 **No backfill, and the operator decided so** — old runs need not be preserved and
 the database may be zeroed (2026-08-10). Rows written before this change keep
@@ -154,6 +157,12 @@ root, where `app.css` had no `h3`, `section` or `.offer-group` rule — the head
 would have fallen back to browser defaults with nothing separating one group from
 the next, on the exact page the verification queue sends the operator to look at.
 The browser tests assert text and attributes, both correct either way.
+
+**Half of that is now machine-checked and half is still the operator's.** Whether
+a heading reads as a heading, and whether the groups look separated, is judgement
+and stays in the verification queue. Whether the group's rule silently re-styles
+the cards inside it is arithmetic, and a test compares the computed margin of a
+card title inside a group against one outside it.
 
 ## 2026-08-10: The offer to look again describes the page it sits on, and spends on it
 

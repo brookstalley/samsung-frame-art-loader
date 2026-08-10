@@ -366,7 +366,11 @@ current design, by #C below. #2 and #3 went unremarked.
   found no *image* for the works it named), one sentence per artist rather than one
   per card, and the holdings total reconciled with what the run offered.
 
-  **A fourth check, and it is the only one here no test can make.** Each artist's
+  **A fourth check, and it is the one here that needs eyes rather than a test.**
+  (Not "no test can make": the *scoping* half — that a card title inside a group
+  is styled the same as one outside it — is arithmetic, and a browser test now
+  compares the computed margins. What follows is the judgement half, which is
+  yours.) Each artist's
   offers sit in their own block with a heading above them — look at whether the
   groups are visually separated from the works the run named and from each other,
   and whether the heading reads as a heading rather than as browser-default bold.
