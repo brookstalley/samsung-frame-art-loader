@@ -15,6 +15,7 @@ over the bare master, and a mat colour that changes the wall but not the picture
 in front of them — are what the tests below hold.
 """
 
+import logging
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -143,6 +144,85 @@ class TestWhichImageIsUsed:
         (settings.art_root / f"raw/{artwork.id}.jpg").unlink()
         with pytest.raises(ThumbnailUnavailable, match=f"raw/{artwork.id}.jpg"):
             thumbnails.source_for(artwork.id)
+
+
+class TestTheSupersededSignal:
+    """The one line that says a thumbnail was regenerated for the new reason.
+
+    Its stated purpose is to make a *wrong* comparison legible: anything holding
+    `_drawn_from` false re-encodes a 4K canvas per card per page load and reaches
+    the operator as "the grid got slow", against a journal with nothing in it. A
+    signal whose failure mode is silence is exactly the kind that can be deleted
+    without a suite noticing, so both halves are asserted — that it fires here,
+    and that it does not fire on the regenerations that were always ordinary. A
+    line emitted on every regeneration would be noise rather than the diagnostic
+    its comment argues for.
+    """
+
+    @staticmethod
+    def _events(caplog):
+        return [r for r in caplog.records if r.__dict__.get("event") == "thumbnail.superseded"]
+
+    def test_a_regeneration_forced_by_the_new_rule_says_so(self, thumbnails, service, settings, decodable_jpeg, work, caplog):
+        artwork = work(width=1600, height=1200)
+        thumbnails.thumbnail(artwork.id)
+
+        rendered = f"ready/{artwork.id}.jpg"
+        decodable_jpeg(settings.art_root / rendered, width=3840, height=2160)
+        service.record_rendition(
+            artwork_id=artwork.id,
+            kind=RenditionKind.TV_DISPLAY,
+            target_width=3840,
+            target_height=2160,
+            path=rendered,
+        )
+
+        with caplog.at_level(logging.INFO, logger="curation.services.thumbnails"):
+            thumbnails.thumbnail(artwork.id)
+
+        records = self._events(caplog)
+        assert len(records) == 1
+        emitted = records[0].__dict__
+        assert emitted["work_id"] == artwork.id
+        assert emitted["source_kind"] == RenditionKind.TV_DISPLAY.value
+        # Both stamps, because the comparison between them is the whole claim —
+        # a line reporting only that it happened cannot tell an operator whether
+        # the clock or the upsert is what went wrong.
+        assert emitted["thumbnail_generated_at"] and emitted["source_generated_at"]
+
+    def test_a_deleted_cache_file_regenerates_quietly(self, thumbnails, work, caplog):
+        """Always-regenerated, long before this rule; a line here would be noise."""
+        artwork = work()
+        thumbnails.thumbnail(artwork.id).unlink()
+
+        with caplog.at_level(logging.INFO, logger="curation.services.thumbnails"):
+            thumbnails.thumbnail(artwork.id)
+
+        assert self._events(caplog) == []
+
+    def test_a_replaced_master_regenerates_quietly(self, thumbnails, service, settings, decodable_jpeg, work, caplog):
+        """The inherited staleness rule's own case, and not what this signal is about."""
+        artwork = work(content_hash="hash-1")
+        thumbnails.thumbnail(artwork.id)
+
+        source = service.list_sources(artwork.id)[0]
+        replacement = f"raw/{artwork.id}-2.jpg"
+        decodable_jpeg(settings.art_root / replacement, width=600, height=1500)
+        service.record_original(
+            artwork_id=artwork.id,
+            source_id=source.id,
+            path=replacement,
+            width=600,
+            height=1500,
+            byte_size=(settings.art_root / replacement).stat().st_size,
+            content_hash="hash-2",
+            fetch_status=FetchStatus.OK,
+        )
+
+        with caplog.at_level(logging.INFO, logger="curation.services.thumbnails"):
+            thumbnails.thumbnail(artwork.id)
+
+        assert self._events(caplog) == []
 
 
 class TestTheRuleAtItsBoundary:
@@ -326,7 +406,7 @@ class TestGenerating:
     @pytest.mark.xfail(
         strict=True,
         reason=(
-            "Known and filed: nothing records what a cached thumbnail was drawn from, so a "
+            "Known and filed as #116: nothing records what a cached thumbnail was drawn from, so a "
             "canvas-derived one keeps being served under an 'original' badge once the canvas "
             "file goes. Closing it needs provenance on the row; strict, so this flips to a "
             "failure the moment it is fixed rather than sitting green and forgotten."

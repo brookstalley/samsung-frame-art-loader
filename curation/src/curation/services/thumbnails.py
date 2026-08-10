@@ -158,7 +158,7 @@ def _drawn_from(thumbnail: Rendition, source: ThumbnailSource) -> bool:
     under a badge reading "master image" — this defect with its two sides swapped.
     It predates this rule rather than arriving with it, and closing it needs the
     thumbnail's provenance modelled on the row rather than inferred from the
-    current source's timestamp. Filed; do not close it by regenerating whenever an
+    current source's timestamp. Filed as #116; do not close it by regenerating whenever an
     absent-file `tv_display` row exists, which spends a re-encode on every load for
     a thumbnail legitimately drawn from the master.
     """

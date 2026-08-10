@@ -1422,7 +1422,7 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
    (`architecture.md`). The two states that reached a curator before this was
    added: a card badged "wall render" showing the unmatted master, and a mat
    colour they set that changed the wall and not the picture in front of them.
-   **Still open**: nothing records what a cached thumbnail was actually drawn
+   **Still open (#116)**: nothing records what a cached thumbnail was actually drawn
    from, so the mirror — canvas-derived bytes served under an `original` badge
    once the canvas file goes — is reachable and needs provenance on the row.
 5. **`Original.byte_size` must be greater than zero.** A zero-byte original is a
