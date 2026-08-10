@@ -377,6 +377,20 @@ class CandidateWorkOut(BaseModel):
     #: volunteered it on top of the list. Never merged into one count: the
     #: curator authorised a list of a stated size and the supplement adds to it.
     provenance: str
+    #: For an offered work, the browse query that produced it and how many works
+    #: that query matched in the collection; null on both for a proposed work.
+    #:
+    #: Sent as two facts rather than as a finished sentence so each surface can
+    #: say them where its own grouping puts them — `product-brief.md` requires a
+    #: curator to be able to tell one-of-four-hundred from one-of-one, and asks
+    #: that it be said once for the query rather than on every card. A composed
+    #: sentence could only ever be said per work, which is what it used to be.
+    #:
+    #: **`matched` is the collection's holdings, not the number offered.** The
+    #: per-run bound caps what is shown; this is what it is capped from, and the
+    #: two are meant to be read against each other.
+    offered_for_artist: str | None
+    offered_artist_matched: int | None
     verdict: str
     resolution_status: str
     #: Which kind of nothing an unresolved work came back with, or null. A bare

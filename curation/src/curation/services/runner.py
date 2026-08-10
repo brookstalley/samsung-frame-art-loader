@@ -393,20 +393,24 @@ def _round_robin(groups: Sequence[OfferedGroup]) -> Iterator[tuple[FoundImage, O
                 break
 
 
-def _offer_rationale(found: FoundImage, group: OfferedGroup) -> str:
-    """Why this work is on the card, in the terms `product-brief.md` requires.
-
-    Names the facet that produced it and how many works that facet matched,
-    because being offered one work out of four hundred reads differently from
-    being offered one out of one — and a curator cannot tell which from the work
-    alone. The artist named is the run's spelling, which is what they asked
-    about; the work carries the collection's own attribution separately.
-    """
-    held = "the only work" if group.matched == 1 else f"one of {group.matched} works"
-    return (
-        f"Offered by the collection, not proposed by the model: {held} it holds by "
-        f"{group.query.artist}, an artist this run named but could not confirm a work for."
-    )
+#: Why an offered work is on the card. One sentence, true of the single work it
+#: sits on, and deliberately carrying no number.
+#:
+#: **The facet and its match count are stored as fields now, not written into
+#: here.** They describe the *query*, not this work, and the surface says them
+#: once where that query's works are — `product-brief.md`'s offered-works bullet,
+#: as amended for issue #95. Composing them per work is what produced the defect:
+#: a 19-work run printed the same thirty-word sentence twelve times, and because
+#: the sentence was built before the per-run bound was applied, it advertised a
+#: holdings total that no view on the page could reconcile with the cards shown.
+#:
+#: **It also stopped denying what the page shows.** The old wording called the
+#: facet "an artist this run named but could not confirm a work for" — true only
+#: under a reading of *confirm* meaning "resolved to a work the collection
+#: holds", while the same page carried that artist's named works badged `not
+#: held`. What the run failed to do was find an *image*; it named the works. The
+#: surface says that now, in those terms, once.
+OFFER_RATIONALE = "Offered by the collection, not proposed by the model."
 
 
 def _daemon_thread(work: Callable[[], None]) -> None:
@@ -1088,8 +1092,14 @@ class DiscoveryRunner:
             run_id=run_id,
             title=found.title,
             artist=found.artist,
-            rationale=_offer_rationale(found, group),
+            rationale=OFFER_RATIONALE,
             work_dedup_key=work_dedup_key(title=found.title, artist=found.artist),
+            # The run's spelling of the artist, not the collection's: it is what
+            # the curator asked about and what groups the offer on the review
+            # surface. The work carries the collection's own attribution
+            # separately, verbatim, which `product-brief.md` requires.
+            offered_for_artist=group.query.artist,
+            offered_artist_matched=group.matched,
         )
         if work is None:
             return False

@@ -968,19 +968,21 @@ def _work_summary(work: CandidateWork) -> dict[str, Any]:
     a caller can obtain a work id at all: every count-only listing left the
     actions that take one with no reachable source for it.
 
-    **This is the one place the MCP surface writes these seven keys.** They were
+    **This is the one place the MCP surface writes this set of keys.** They were
     emitted with identical expressions at three sites in this module, so adding
     `provenance` took three coordinated edits and the next field added to
     `CandidateWork` would have reached some of them — one shape silently missing
     it, which is exactly the "an agent and a click disagree about the same
     catalogue" failure `http/models.py`'s docstring forbids. The richer shapes
-    spread this and add their own keys.
+    spread this and add their own keys. (Said as *the set* rather than as a
+    count: this docstring claimed seven through two later fields, and a number
+    kept in prose beside a dict is one that goes wrong on the edit that matters.)
 
-    The HTTP surface's `CandidateWorkOut` is these seven plus `rationale`, and
-    that pairing is pinned by `tests/unit/test_surface_parity.py` rather than
-    shared: the two surfaces format independently on purpose (`architecture.md`,
-    Decision Log 2026-07-27), and a test makes divergence a failure at the moment
-    of the edit without collapsing that independence.
+    The HTTP surface's `CandidateWorkOut` is this set plus `rationale`, and that
+    pairing is pinned by `tests/unit/test_surface_parity.py` rather than shared:
+    the two surfaces format independently on purpose (`architecture.md`, Decision
+    Log 2026-07-27), and a test makes divergence a failure at the moment of the
+    edit without collapsing that independence.
     """
     return {
         "work_id": work.id,
@@ -995,6 +997,19 @@ def _work_summary(work: CandidateWork) -> dict[str, Any]:
         # On every row rather than only where it differs, because a label that
         # appears only sometimes is one a reader learns to stop looking for.
         "provenance": str(work.provenance),
+        # Which browse query produced an offered work, and how many works it
+        # matched; null on both for a proposed work. Carried here and not left to
+        # the review surface because it is exactly the signal an agent choosing
+        # between offers needs — `product-brief.md` asks that one-of-four-hundred
+        # read differently from one-of-one, and that is a judgement an MCP caller
+        # makes as readily as a curator.
+        #
+        # These do not inherit `rationale`'s HTTP-only exemption, which exists
+        # because forty rows of the same prose blew the token budget this shape
+        # is measured against. Two short facts are the cheap form of what that
+        # prose was carrying, which is most of why they are facts now.
+        "offered_for_artist": work.offered_for_artist,
+        "offered_artist_matched": work.offered_artist_matched,
         "verdict": str(work.verdict),
         "resolution_status": str(work.resolution_status),
         "unresolved_reason": _reason(work),
@@ -1418,9 +1433,18 @@ def _run_notice(view: RunView) -> str:
             # recommends.
             settled = f"This run finished: {view.resolved_proposals} of {view.proposed_count} proposed works have an image."
             if view.offered_count:
+                # "found no image for", matching the two browser surfaces word for
+                # word. The run did name works for those artists — an agent
+                # reading this result can list them, each carrying an
+                # `unresolved_reason` — so "could not confirm" is contradicted by
+                # the very rows beside it. Issue #95 fixed that on the review
+                # grid; the same sentence lived here and on the run view, and one
+                # surface telling an agent something the other two do not is the
+                # failure `http/models.py` and this module exist to prevent.
+                works = "work" if view.offered_count == 1 else "works"
                 settled += (
-                    f" Separately, the collection offered {view.offered_count} more works by artists this run named "
-                    "but could not confirm. They are labelled `offered` and are not what was asked for."
+                    f" Separately, the collection offered {view.offered_count} more {works} by artists this run "
+                    "found no image for. They are labelled `offered` and are not what was asked for."
                 )
         if view.unresolved:
             settled += (

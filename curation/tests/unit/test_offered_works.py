@@ -118,8 +118,20 @@ def test_an_offered_work_is_never_presented_as_the_work_the_model_named(services
     assert gift.id != named.id
 
 
-def test_an_offered_work_says_which_query_produced_it_and_how_many_it_matched(services, engine, runner, collection):
-    """Being offered one work out of four hundred reads differently from one out of one."""
+def test_an_offered_work_carries_which_query_produced_it_and_how_many_it_matched(services, engine, runner, collection):
+    """Being offered one work out of four hundred reads differently from one out of one.
+
+    **The requirement is unchanged; where it is answered is.** `product-brief.md`
+    used to ask the *rationale* to say this, and the surface duly printed one
+    thirty-word sentence on every offered card. The brief was amended for issue
+    #95 to ask the review surface to say it once for the query's group, so the
+    work now carries the two facts and no view has to parse a sentence to group
+    or reconcile them.
+
+    Asserted as exact values rather than as substrings of prose, which is the
+    point of moving them: `"400" in rationale` also passes on a sentence that
+    says four thousand, and passes on a cap of 400 that happens to match.
+    """
     engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
     collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Train Landscape"]}).holdings
     collection.matched = {"Ellsworth Kelly": 400}
@@ -127,9 +139,30 @@ def test_an_offered_work_says_which_query_produced_it_and_how_many_it_matched(se
     run_id = start(runner).id
 
     (gift,) = offered(services, run_id)
-    assert "Ellsworth Kelly" in gift.rationale
-    assert "400" in gift.rationale
+    assert gift.offered_for_artist == "Ellsworth Kelly"
+    assert gift.offered_artist_matched == 400
+    # Still marked as the collection's doing on the work itself, because a card
+    # read out of its group must not read as something the model proposed.
     assert "collection" in gift.rationale.lower()
+
+
+def test_a_proposed_work_claims_no_query_and_no_holdings_count(services, engine, runner, collection):
+    """The paired negative: the two fields are what an *offer* carries.
+
+    A proposed work no query produced would, with a default of anything but null,
+    join a group on the review surface and be counted against a collection's
+    holdings it has nothing to do with.
+    """
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Train Landscape"]}).holdings
+
+    run_id = start(runner).id
+
+    named = [work for work in services.discovery.list_candidate_works(run_id) if work.provenance is WorkProvenance.PROPOSED]
+    assert named, "the run must have proposed something for this to be about anything"
+    for work in named:
+        assert work.offered_for_artist is None
+        assert work.offered_artist_matched is None
 
 
 def test_an_offered_work_arrives_reviewable_rather_than_as_a_bare_title(services, engine, runner, collection):
@@ -506,6 +539,31 @@ def test_a_re_search_offers_nothing_and_does_not_fail_trying(services, engine, r
     assert collection.asked == [], "a re-search should not browse the collection at all"
 
 
+def test_the_run_notice_counts_one_offered_work_in_the_singular(services, engine, runner, collection):
+    """The count-of-one branch of the sentence the browser test pins on its side.
+
+    Both producers of this sentence took the plural at a count of one, and the
+    fix landed on both — but only the client's singular case was pinned, so the
+    MCP arm could revert to "1 more works" with a green suite. That is the one
+    surface an agent reads, in the module whose own comment says a surface
+    telling an agent something the other two do not is the failure it exists to
+    prevent.
+
+    The three-work case above passes word for word against the unfixed string,
+    which is why it could not stand in for this.
+    """
+    from curation.mcp.bindings import _run_notice
+
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Train Landscape"]}).holdings
+
+    run_id = start(runner).id
+    notice = _run_notice(runner.run_status(run_id, wait=False))
+
+    assert "offered 1 more work by artists this run found no image for" in notice
+    assert "1 more works" not in notice
+
+
 def test_the_run_notice_rates_resolution_over_proposed_works_only(services, engine, runner, collection):
     """The sentence a curator reads must not claim a rate the run did not achieve.
 
@@ -525,6 +583,17 @@ def test_the_run_notice_rates_resolution_over_proposed_works_only(services, engi
     assert "0 of 1 proposed works have an image" in notice
     assert "offered 3 more works" in notice
     assert "12 of 13" not in notice and "3 of 4" not in notice
+
+    # The wording, not only the counts. This clause used to say the collection
+    # offered works "by artists this run named but could not confirm" — which the
+    # rows beside it contradict, since the run did name works for that artist and
+    # each carries an `unresolved_reason`. Issue #95 fixed that on the review
+    # grid; the same sentence lived here and on the run view, and this is the only
+    # one of the three an agent reads. Asserted because the count assertion above
+    # passes word-for-word on the old sentence too, so nothing here would have
+    # noticed the surface drifting back.
+    assert "found no image for" in notice
+    assert "could not confirm" not in notice, "the MCP run notice denies work it reports beside"
 
 
 def test_the_run_payload_reports_the_two_kinds_apart(services, engine, runner, collection):

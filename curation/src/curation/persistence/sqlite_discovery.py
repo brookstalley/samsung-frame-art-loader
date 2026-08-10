@@ -92,6 +92,17 @@ CREATE TABLE IF NOT EXISTS candidate_works (
     -- collections could be browsed. A null is `proposed`: nothing but phase 1
     -- could mint a candidate work then, so the absent value has one meaning.
     provenance         TEXT,
+    -- Which browse query produced an offered work, and how many works that query
+    -- matched in the collection. Both null for a proposed work, which no query
+    -- produced. They are stored as facts rather than composed into `rationale`
+    -- because the sentence they belong to is per-QUERY: `product-brief.md` asks
+    -- that a curator be able to tell one-of-four-hundred from one-of-one, and the
+    -- surface says that once for the group. `matched` is the collection's total
+    -- and is deliberately not capped by `offered_works_per_run` — the cap is what
+    -- the reader reconciles it against, so capping it here would destroy the
+    -- comparison the requirement exists for.
+    offered_for_artist     TEXT,
+    offered_artist_matched INTEGER,
     resolution_status  TEXT NOT NULL,
     unresolved_reason  TEXT,
     verdict            TEXT NOT NULL,
@@ -315,6 +326,8 @@ def _candidate_work_row(work: CandidateWork) -> dict[str, Any]:
         "rationale": work.rationale,
         "work_dedup_key": work.work_dedup_key,
         "provenance": str(work.provenance),
+        "offered_for_artist": work.offered_for_artist,
+        "offered_artist_matched": work.offered_artist_matched,
         "resolution_status": str(work.resolution_status),
         "unresolved_reason": str(work.unresolved_reason) if work.unresolved_reason else None,
         "verdict": str(work.verdict),
@@ -395,6 +408,11 @@ def _candidate_work(row: Mapping[str, Any]) -> CandidateWork:
         # nothing else could write one — so the absent value has a single honest
         # reading rather than being a third state.
         provenance=WorkProvenance(row["provenance"]) if row["provenance"] else WorkProvenance.PROPOSED,
+        # Absent on every row written before offered works carried their query,
+        # and absent for ever on proposed works. `None` is the honest reading in
+        # both cases — no query produced them — so no default is invented here.
+        offered_for_artist=row["offered_for_artist"],
+        offered_artist_matched=row["offered_artist_matched"],
         resolution_status=ResolutionStatus(row["resolution_status"]),
         unresolved_reason=UnresolvedReason(row["unresolved_reason"]) if row["unresolved_reason"] else None,
         verdict=Verdict(row["verdict"]),

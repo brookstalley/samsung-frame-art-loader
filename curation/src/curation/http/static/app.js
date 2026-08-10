@@ -831,7 +831,13 @@ function runSentence(view) {
         ? `This re-search finished: ${tally.resolved} of the ${tally.total} works it covers have an image.`
         : `This run finished: ${tally.resolved_proposals} of ${tally.proposed} works it was asked for have an image.`;
     if (run.kind !== "resolve" && tally.offered) {
-      sentence += ` Separately, the collection offered ${tally.offered} more works by artists this run named but could not confirm. They are labelled below and are not what was asked for.`;
+      // "found no image for" rather than "could not confirm". The run did name
+      // works for those artists — they are in the table directly below this
+      // sentence, badged `not held` — so a word that reads as "named nothing for"
+      // is denied by the screen it is printed on. That was issue #95 on the
+      // review grid, and it lived here too: the same claim, one surface over, on
+      // the page a curator lands on first.
+      sentence += ` Separately, the collection offered ${tally.offered} more ${tally.offered === 1 ? "work" : "works"} by artists this run found no image for. They are labelled below and are not what was asked for.`;
     }
     if (tally.unresolved) {
       sentence += ` ${tally.unresolved} could not be matched to any image and are reported rather than dropped — each says which kind of nothing below.`;
@@ -1225,7 +1231,13 @@ async function viewRun(runId, generation) {
             // adds per row is which *particular* work was offered, and nothing
             // on this screen is decided per work: the deciding happens on the
             // review card, where the badge stays.
-            ["Title", "Artist", "Image", "Why the run named it"],
+            // "Why it is here", not "Why the run named it". This table is
+            // deliberately every work the run holds, asked-for and offered
+            // together — and the run named none of the offered ones, whose cell
+            // in this very column now says so in as many words. A heading that
+            // asserts naming above a cell that denies it is the defect this whole
+            // change exists to remove, one column apart instead of one page.
+            ["Title", "Artist", "Image", "Why it is here"],
             view.works.map((work) => [
               work.title,
               work.artist || "—",
@@ -1631,6 +1643,84 @@ function reSearchOffer(waiting) {
   ]);
 }
 
+/* The offered works, bucketed by the browse query that produced each.
+ *
+ * Keyed on `offered_for_artist`, which is the *run's* spelling of the artist —
+ * the same string `proposed_artist` carries on the works the run named, so the
+ * two halves of a group can be counted against each other below. The work's own
+ * `artist` is the collection's attribution and is deliberately not used: it
+ * differs, verbatim and on purpose.
+ *
+ * A work whose query is unknown buckets under `null` rather than being skipped.
+ * Skipping would drop it off the page altogether — the review surface silently
+ * showing fewer works than the run holds, which is a worse defect than the one
+ * this grouping exists to fix. */
+function offeredGroups(cards) {
+  const groups = new Map();
+  for (const card of cards) {
+    const artist = card.work.offered_for_artist || null;
+    if (!groups.has(artist)) {
+      groups.set(artist, { artist, matched: card.work.offered_artist_matched, cards: [] });
+    }
+    groups.get(artist).cards.push(card);
+  }
+  return [...groups.values()];
+}
+
+/* What one offered group says, once, above its own works.
+ *
+ * `product-brief.md` requires a curator to be able to tell being offered one work
+ * out of four hundred from being offered one out of one, and — as amended for
+ * issue #95 — requires it said here rather than restated on every card.
+ *
+ * **Every number is counted from something the reader can see, or named as what
+ * it is.** `shown` counts the cards actually rendered, so it cannot disagree with
+ * the page the way a server-composed total did. `matched` is the collection's
+ * holdings, stated as holdings and reconciled against the per-run bound in the
+ * same breath — the old sentence put "one of 25 works it holds" beside twelve
+ * cards and left the gap unexplained.
+ *
+ * **The first clause counts the unresolved works only, and that is not
+ * pedantry.** An artist reaches this supplement by having *any* named work come
+ * back unresolved, so they may well have others that resolved perfectly well.
+ * "found an image for none of them" would be false for exactly those artists —
+ * the same shape of false-on-the-page-that-shows-both claim this issue exists to
+ * remove. When no such work is on the page the clause is omitted rather than
+ * printed with a zero. */
+function offeredGroupSentence(group, allCards) {
+  const named = group.artist
+    ? allCards.filter(
+        (card) =>
+          card.work.provenance !== "offered" &&
+          card.work.artist === group.artist &&
+          card.work.resolution_status === "unresolved",
+      ).length
+    : 0;
+  const shown = group.cards.length;
+  const matched = group.matched;
+  const works = (n) => `${n} ${n === 1 ? "work" : "works"}`;
+
+  const clauses = [];
+  if (named > 0) clauses.push(`This run found no image for ${works(named)} it named by this artist.`);
+  if (typeof matched !== "number") {
+    // No holdings count recorded — say nothing about a total rather than guess
+    // one, which is the failure this whole change is undoing.
+    clauses.push(`The collection offered ${works(shown)} it holds by them.`);
+  } else if (shown < matched) {
+    // Says that these are a subset and stops there. Naming the per-run bound as
+    // the *cause* of the gap is a claim this surface cannot support: a group also
+    // comes up short when works were declined for rendering below the display
+    // floor, and on a re-search page where the bound is never reached at all. The
+    // reconciliation the requirement asks for is that the two numbers not appear
+    // to disagree — which "what this run offered" delivers without inventing a
+    // reason for the difference.
+    clauses.push(`The collection holds ${works(matched)} by them; these ${shown} are what this run offered.`);
+  } else {
+    clauses.push(`These are all ${works(matched)} the collection holds by them.`);
+  }
+  return clauses.join(" ");
+}
+
 async function viewReview(runId, generation) {
   const page = await fetchAllCandidates(runId);
 
@@ -1679,7 +1769,21 @@ async function viewReview(runId, generation) {
     if (was !== isWaiting(verdict)) paintOffer();
   };
 
-  const grid = el("ul", { class: "grid" }, page.works.map((card) => candidateCard(card, null, false, noteVerdict)));
+  const gridOf = (cards) => el("ul", { class: "grid" }, cards.map((card) => candidateCard(card, null, false, noteVerdict)));
+
+  /* The works the run named, then the collection's offers under their own
+   * queries. Two sections rather than one list, because the sentence each offer
+   * group carries is about the group — putting it anywhere else is what this
+   * change is undoing.
+   *
+   * The offers are gathered here rather than left in arrival order, which
+   * interleaves artists: `_round_robin` takes one work per artist per pass so a
+   * bound of twelve reaches every artist rather than filling up on the first.
+   * That spread is a choice about *which* works are offered and survives being
+   * displayed in any order — its own docstring says the spread is the point, not
+   * the order within a facet. */
+  const offered = page.works.filter((card) => card.work.provenance === "offered");
+  const named = page.works.filter((card) => card.work.provenance !== "offered");
 
   const panels = [
     el("p", {}, [
@@ -1691,7 +1795,29 @@ async function viewReview(runId, generation) {
     // one grid comes to word truncation differently from the other.
     shortfallNote(page),
     offer,
-    page.works.length ? grid : el("p", { class: "muted", text: "This run settled on no works, so there is nothing to review." }),
+    page.works.length ? null : el("p", { class: "muted", text: "This run settled on no works, so there is nothing to review." }),
+    named.length ? gridOf(named) : null,
+    // Each group in its own element rather than as three loose siblings. The
+    // requirement is an *association* — this sentence belongs to these works —
+    // and flat siblings leave that expressible only by document order, which no
+    // assertion can hold and a screen reader does not convey. It also gives the
+    // browser tests something to scope to: page-wide text matching passes on two
+    // groups whose sentences have been swapped.
+    ...offeredGroups(offered).map((group) =>
+      el("section", {
+        class: "offer-group",
+        // The query, as an attribute rather than only as heading prose. A card's
+        // own artist is the collection's attribution and differs from the query
+        // on purpose, so matching a group by visible text finds the wrong one —
+        // which is exactly what happened to the test written that way.
+        "data-offer-artist": group.artist,
+        "aria-label": group.artist ? `Offered by the collection: ${group.artist}` : "Offered by the collection",
+      }, [
+        el("h3", { text: group.artist ? `Offered by the collection — ${group.artist}` : "Offered by the collection" }),
+        el("p", { class: "muted", text: offeredGroupSentence(group, page.works) }),
+        gridOf(group.cards),
+      ]),
+    ),
   ];
   render(generation, ...panels);
 }

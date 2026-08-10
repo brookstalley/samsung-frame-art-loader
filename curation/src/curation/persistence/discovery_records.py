@@ -316,6 +316,31 @@ class CandidateWork:
     verdict: Verdict = Verdict.PENDING
     artwork_id: str | None = None
     proposed_artist: str | None = None
+    #: The browse query that produced an offered work, and how many works that
+    #: query matched in the collection. `None` on a proposed work, which no query
+    #: produced — and a set value on a proposed row is a bug.
+    #:
+    #: **Null does not mean proposed. `provenance` is the only thing that says
+    #: which a work is.** An offered row written before these columns existed
+    #: carries nulls too, so `offered_for_artist is not None` reads as "offered"
+    #: for new rows and mislabels every older one. The reader below spells out the
+    #: same thing from the other side; both are here because this is precisely the
+    #: inference a reader makes on seeing two fields only one provenance ever
+    #: sets.
+    #:
+    #: **Held as facts rather than folded into `rationale`.** The sentence they
+    #: belong to is about the query, not the work: `product-brief.md` requires a
+    #: curator to be able to tell being offered one work out of four hundred from
+    #: one out of one, and asks that it be said once where the query's works are.
+    #: Composing it per work put a per-group fact on a per-work field, which is
+    #: how one run came to print the same thirty-word sentence twelve times.
+    #:
+    #: **`matched` is the collection's total and is never capped.** The per-run
+    #: bound is applied after the browse, so a capped value would silently become
+    #: the same number as the cards on screen and destroy the very comparison the
+    #: requirement exists for.
+    offered_for_artist: str | None = None
+    offered_artist_matched: int | None = None
     #: Which kind of nothing, when `resolution_status` is `UNRESOLVED`; `None`
     #: otherwise. The two travel together on every write, so a work can never
     #: report that it found nothing without saying what kind of nothing it was.

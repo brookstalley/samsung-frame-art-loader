@@ -322,9 +322,13 @@ current design, by #C below. #2 and #3 went unremarked.
 - **H. A per-work preview of the e-paper card** would be welcome once that card
   exists. Depends on Chunk 13; recorded here so it is not rediscovered.
 
-- **I. The offered-work sentence contradicts the screen it is printed on.** Every
-  offered card reads *"…an artist this run named but could not confirm a work
-  for"*, while seven works the run named for that same artist sit on the same
+- **I. The offered-work sentence contradicted the screen it was printed on.**
+  *(Fixed 2026-08-10 — see the annotation at the end of this entry. What follows
+  is the observation as it was recorded on 2026-08-05, in the tense it was found
+  in, because it is the evidence rather than a description of the product.)*
+
+  Every offered card read *"…an artist this run named but could not confirm a work
+  for"*, while seven works the run named for that same artist sat on the same
   page. The Dali run holds 7 `proposed` and 12 `offered`; the seven are real
   proposals — *The Persistence of Memory*, *Lobster Telephone*, *Metamorphosis of
   Narcissus* and four more — and each is badged `not held`. So the sentence is
@@ -349,6 +353,34 @@ current design, by #C below. #2 and #3 went unremarked.
   Repetition compounds all of it: this is one identical 30-word sentence printed
   twelve times down a single page, carrying per-*group* information on a per-card
   line.
+
+  **FIXED 2026-08-10 by issue #95 — and the fix is not visible on an old run.**
+  The paragraphs above are kept in the past tense they were written in, as the
+  record of what was seen; `_offer_rationale`, the function they reason from, no
+  longer exists. Offered works now store the query that produced them
+  (`offered_for_artist`, `offered_artist_matched`) and the review grid says it
+  once above that query's works, reconciled against what the run offered.
+
+  **To verify, start a fresh run — do not reopen the 2026-08-05 Dali run.** Rows
+  written before this change keep their old sentence in `rationale` and carry no
+  query, so that run renders the old wording and collapses into a single unnamed
+  group: the defect, apparently unchanged. There is no backfill, by the operator's
+  decision of 2026-08-10 that old runs need not be preserved and the database may
+  be zeroed. What to look for on a new run: the denial gone (the page says the run
+  found no *image* for the works it named), one sentence per artist rather than one
+  per card, and the holdings total reconciled with what the run offered.
+
+  **A fourth check, and it is the one here that needs eyes rather than a test.**
+  (Not "no test can make": the *scoping* half — that a card title inside a group
+  is styled the same as one outside it — is arithmetic, and a browser test now
+  compares the computed margins. What follows is the judgement half, which is
+  yours.) Each artist's
+  offers sit in their own block with a heading above them — look at whether the
+  groups are visually separated from the works the run named and from each other,
+  and whether the heading reads as a heading rather than as browser-default bold.
+  The browser suite asserts the heading's *text* and the group's attributes, and
+  both are correct whether or not a single line of that block's styling exists;
+  this bundle shipped with none of it until a reviewer read the page as a page.
 
 ## Decisions taken during the 2026-08-05 walkthrough
 

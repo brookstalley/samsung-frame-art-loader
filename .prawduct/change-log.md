@@ -54,6 +54,168 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-10: An offered work carries its query, and the page says it once
+
+<!-- prawduct: status=shipped | scope=v1-build -->
+
+<!-- No `chunks=`: issue #95, a defect in a surface the build plan had already
+     delivered. -->
+
+**Why:** issue #95, from the operator's own 2026-08-05 walkthrough, impact M.
+Every offered card carried one sentence: *"Offered by the collection, not
+proposed by the model: one of 25 works it holds by Salvador Dalí, an artist this
+run named but could not confirm a work for."* On the same page sat seven works
+the run **did** name for that artist, each badged `not held`.
+
+**One root cause under all three symptoms: `rationale` was overloaded.** For a
+proposed work it holds opaque model prose; for an offered one it held a
+system-templated sentence, and the client rendered both identically because
+nothing distinguished them. So a *group* fact was written into a *per-work*
+field, and the rest follows. The sentence denied work the same page showed the
+run naming — true only under a reading of *confirm* meaning "resolved to a work
+the collection holds", which nothing on screen teaches. It advertised "one of 25
+works it holds" beside twelve cards, because it was composed at browse time and
+the per-run bound is applied afterwards, so no view could ever reconcile the two.
+And a per-group fact stored per work necessarily repeated twelve times.
+
+**The brief was amended before any code moved.** `product-brief.md`'s
+offered-works bullet asked the *rationale* to carry this. Its why is untouched
+and still binds — a curator must be able to tell one-of-four-hundred from
+one-of-one — but the bullet now asks the review *surface* to say it once where
+the query's works are, and to reconcile it with the bound. The decision is
+recorded in vetoable form at the bullet, because a norm is amended by decision,
+never doc-synced to match code that already shipped.
+
+**The work now stores two facts instead of a sentence about them.**
+`offered_for_artist` and `offered_artist_matched` run through record, SQLite
+schema, service, runner, HTTP model and MCP projection. `matched` is the
+collection's holdings and is **deliberately never capped** — the per-run bound is
+what a reader reconciles it against, so capping it at the source would collapse
+the very comparison the requirement exists for. This follows the pattern the codebase
+already uses for the parts that carry information (`UnresolvedReason` →
+`REASON_SENTENCES`, server ships a code and the client owns the words) — **for
+the two facts, which is what mattered.** The residue is honest: `rationale` still
+holds a server-authored sentence on every offered row. It is a constant carrying
+no data, `provenance` already says the same thing as a code, and moving it is a
+separate refactor this issue did not need; it is named here rather than implied
+away by the sentence above.
+
+**Every number on the page is now counted from something the reader can see, or
+named as what it is.** The client counts the cards it is actually rendering for
+the "these 3", so it cannot drift from the page the way a server-composed total
+did. The holdings figure is stated as holdings, beside what the run offered, so
+the two cannot appear to disagree — and when every work the collection holds is
+on the page, the subset clause is not printed at all, because describing a subset
+tells a curator that more exist.
+
+**It stops short of saying *why* the two differ, and that is deliberate.** The
+first version named the per-run bound as the cause. The bound is not the only
+one: works are declined for rendering below the display floor, and a re-search
+page never reaches the bound at all. So the page would have confidently explained
+a gap it cannot diagnose — a new false claim inside the change that removes one,
+caught by the Critic rather than by the build.
+
+**The first clause counts unresolved works only, and that is the whole lesson
+repeating.** An artist reaches the supplement by having *any* named work come
+back unresolved, so they may have others that resolved. "found an image for none
+of them" would have been false for exactly those artists — a new
+false-on-the-page-that-shows-both claim, in the change removing one. It counts,
+or says nothing.
+
+**The run table lost the sentence, and its column heading stopped asserting
+something the row denies.** That column carried per-group information on a
+per-card line four screens away from the group; offered rows now carry the short
+per-work line, and the query lives with its works on the review surface. The
+heading was *"Why the run named it"* over a table that is deliberately every work
+the run holds, offered ones included — and their cell in that same column now
+says the model did not propose them. A heading contradicted one column across is
+this issue's defect at close range, so it reads *"Why it is here"*.
+
+**Both run-level sentences also stopped saying "1 more works", and both singular
+branches are pinned.** A count of one took the plural on the run view and over
+MCP. The first version of the test written for that sentence pinned the bug
+rather than the behaviour — a test holds a wrong string as firmly as a right one
+— and when that was fixed, only the client's branch got an assertion, so the MCP
+arm could have reverted with a green suite on the one surface an agent reads.
+Both are now covered and both reverts fail a mutation.
+
+**The same bug survives in sibling sentences, and it is filed rather than
+carried.** "This run proposed 1 works", "The work list of 1 works is settled" and
+their MCP twins are the identical defect in sentences this change never touched
+— and one of them is *pinned at a count of one* by an existing test, which is the
+shape named two paragraphs up. Fixing it properly means a shared pluraliser in
+two languages and rewriting that test, which is its own piece of work rather than
+a ride-along on a branch already ten commits deep: **issue #113**. Named here
+because a defect this entry's own reasoning identifies, left unfiled, is one this
+entry helped hide.
+
+**The same denial was living on two other surfaces, and both are fixed here.**
+The reported symptom was the review grid's, but `runSentence` composed *"more
+works by artists this run named but could not confirm"* on the **run view** — the
+page a curator reaches first, printed directly above the table listing those very
+works with their `not held` badges — and the MCP run summary said it to agents
+word for word. Fixing only the reported surface would have left the defect
+standing where it is met first while three records said it was gone. All three
+now say the run **found no image for** those artists, and each is pinned: a
+browser test for the run view, an assertion on `_run_notice` for MCP. That second
+one was the Critic's blocking finding — the change shipped unpinned, and the only
+existing assertion over the clause (`"offered 3 more works" in notice`) is a
+substring the old sentence contains too, so a revert would have left the suite
+green on the one surface of three an agent reads. Both reverts now fail a
+mutation.
+
+**A guard was claimed before it existed, which is the same defect one level up.**
+A test docstring and a commit message both said `test_surface_parity.py` kept the
+MCP wording honest. It does not — it pins field *names* and `_verdict_notice`,
+says nothing about `_run_notice`, and cannot reach `app.js`, so no parity test
+can ever cover this trio. The docstring now says where the guard actually is.
+
+The run-view surface was found by the PR reviewer; the MCP one by grepping the
+phrase once the second was known, which is the cheap check that should have
+followed the first rather than the second.
+
+**Ten browser tests and two unit tests**, plus new assertions inside an existing
+one. They cover the denial being gone, the
+query said once rather than per card, the holdings reconciled against what the
+run offered, a group holding everything the collection has not being described as
+a subset, two queries staying two groups with their own numbers *and their own
+headings*, an offer whose query was never recorded still reaching the page rather
+than being filtered out by its own grouping — the failure class this issue is
+about — the failure clause counting only works that found no image, and that
+clause being omitted rather than printed with a zero. The unit pair asserts the
+facts at their new home with exact values, since `"400" in rationale` also
+matches four thousand, and that a proposed work claims neither.
+
+**Two of those tests exist because the mutation sweep found the branches
+undefended after they had been described in prose**, and the heading assertions
+inside the ninth because the PR reviewer found them dropped when the group tests
+were rescoped to an attribute — at which point deleting the artist's name from
+the heading would have left the suite green while restoring this issue's
+symptom. One guards the group's heading rule against reaching the cards inside
+the group — a bug this branch shipped, which a reviewer read out of the selector
+rather than off the screen. Twelve of twelve mutations caught, across two
+sweeps.
+
+**No backfill, and the operator decided so** — old runs need not be preserved and
+the database may be zeroed (2026-08-10). Rows written before this change keep
+their old sentence and carry no query, so the 2026-08-05 Dali run that motivated
+the issue renders the old wording in one unnamed group.
+`operator-verification.md` item I says this at the point of verification, because
+a fix invisible on the run that prompted it is one a verifier reads as unfixed.
+
+**The group's own styling shipped in the same bundle, and nothing in the suite
+could have caught its absence.** The sections are direct children of the view
+root, where `app.css` had no `h3`, `section` or `.offer-group` rule — the heading
+would have fallen back to browser defaults with nothing separating one group from
+the next, on the exact page the verification queue sends the operator to look at.
+The browser tests assert text and attributes, both correct either way.
+
+**Half of that is now machine-checked and half is still the operator's.** Whether
+a heading reads as a heading, and whether the groups look separated, is judgement
+and stays in the verification queue. Whether the group's rule silently re-styles
+the cards inside it is arithmetic, and a test compares the computed margin of a
+card title inside a group against one outside it.
+
 ## 2026-08-10: The offer to look again describes the page it sits on, and spends on it
 
 <!-- prawduct: status=shipped | scope=v1-build -->

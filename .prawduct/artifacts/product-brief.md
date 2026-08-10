@@ -173,11 +173,25 @@ than by asking a model to recall it. Every such work is a separate candidate tha
 - is marked on every review surface as offered by the collection rather than
   proposed by the model, and is never merged with, or presented as, the work the
   curator asked about;
-- says in its rationale which query produced it and how many works that query
-  matched, so being offered one work out of four hundred reads differently from
-  being offered one out of one;
+- is reviewed on a surface that says which query produced it and how many works
+  that query matched, so being offered one work out of four hundred reads
+  differently from being offered one out of one — **said once where the query's
+  works are, not restated on every card**, and reconciled with the bound below so
+  the two numbers cannot appear to disagree;
 - counts against a per-run bound reported separately from the proposed count,
   because the curator approved a work list of a stated size and this adds to it.
+
+[DECISION: the query and its match count move from each offered work's *rationale*
+to the surface that presents that query's works, said once | The why is unchanged
+and still binds — a curator must be able to tell one-of-four-hundred from
+one-of-one, and nothing here weakens that. What changed is a fact about the
+*reading*, learned from a real page: "in its rationale" put a per-**group** fact on
+a per-**work** field, so a 19-work Dalí run printed one identical 30-word sentence
+twelve times, and the sentence had to be composed before the per-run bound was
+applied — leaving "one of 25 works it holds" beside twelve cards, with no view able
+to reconcile the two. Saying it once, where the group is, is the only placement
+that lets the match count and the bound be stated together. Issue #95; operator's
+call, 2026-08-10 | user can veto/override]
 
 **Adjacent, similar and derivative works are welcome — and the third of those is
 not a loophole in the rule above.** A print after a painting, a study, a variant:

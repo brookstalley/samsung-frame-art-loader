@@ -733,6 +733,8 @@ def _candidate_work(work: CandidateWork) -> CandidateWorkOut:
         artist=work.proposed_artist,
         rationale=work.rationale,
         provenance=str(work.provenance),
+        offered_for_artist=work.offered_for_artist,
+        offered_artist_matched=work.offered_artist_matched,
         verdict=str(work.verdict),
         resolution_status=str(work.resolution_status),
         unresolved_reason=None if work.unresolved_reason is None else str(work.unresolved_reason),

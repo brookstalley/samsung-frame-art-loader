@@ -549,6 +549,28 @@ from 2,067 tokens to 1,827 across these two, and roughly seven more fields of th
 size would exhaust it. The next addition should say what it displaces rather than
 assume there is room.
 
+**Two fields were added 2026-08-10, and they displace nothing because they were
+spent from the headroom — not because anything was deleted to pay for them.**
+`offered_for_artist` and `offered_artist_matched` (issue #95) are a **net add of
+two keys on every row**. An earlier draft of this paragraph claimed they were
+paid for by shortening `rationale`; that was wrong on its own terms, since
+`rationale` is not in this row at all (`_work_summary`'s docstring says so), so no
+deletion here funded anything.
+
+**What that costs, by the rate this section already establishes rather than by a
+fresh count.** The two additions above measured ~8 tokens a row each. These two
+are a null pair on every proposed row and an artist name plus a small integer on
+offered ones, so the same order applies. On the precedent rate the default 30-row
+page moves from **8,173** toward roughly **8,650**, against the 10,000 warning —
+still inside it, with headroom falling from 1,827 to something near 1,350.
+**Stated as an estimate, and it is not a measurement**: the runs that would
+produce one are the operator's, and the number above should be replaced with a
+counted one the next time a full page is measured.
+
+**The headroom sentence above still governs, and now bites sooner.** At this rate
+roughly four or five more fields of this size exhaust the default page's room,
+not seven. The next addition should say what it displaces and mean it.
+
 **Image content blocks correlate by position and by nothing else.** The protocol
 gives a block no identity, and a result's blocks are only the instances that had a
 local copy — so block *n* is not row *n* the moment one preview is missing. Every

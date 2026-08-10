@@ -528,6 +528,38 @@ th {
   color: var(--text-strong);
 }
 
+/* One query's offered works, under the sentence that describes that query.
+ *
+ * The heading takes `.panel h3`'s type rather than a new size, because it is the
+ * same rank of thing — a titled block within a view — and the client has exactly
+ * two heading treatments on purpose. It is repeated rather than shared with the
+ * rule above: a selector list would tie two blocks that are free to diverge, and
+ * `.panel h3` sits inside a bordered surface this one deliberately has not got.
+ *
+ * These sections are direct children of the view root, so without a rule here
+ * they fall back to browser defaults — the one failure in this bundle that no
+ * test could see, since the browser suite asserts text and attributes and both
+ * are correct either way. */
+.offer-group {
+  margin-bottom: var(--space-5);
+}
+
+/* `>` and not a descendant selector: a card inside this group carries an
+ * `h3.card-title`, which a bare `.offer-group h3` outranks and re-margins — so
+ * offered works' titles would sit further from their artist line than the named
+ * works' titles do, on the same page, for no reason a reader could find. */
+.offer-group > h3 {
+  margin: 0 0 var(--space-1);
+  font: 400 var(--text-md) / 1.3 var(--font-label);
+  color: var(--text-strong);
+}
+
+/* The sentence sits with its heading, not adrift above the works: the grid's own
+ * gap is what separates the group from the next one. */
+.offer-group > p {
+  margin: 0 0 var(--space-3);
+}
+
 .field {
   display: flex;
   flex-direction: column;
