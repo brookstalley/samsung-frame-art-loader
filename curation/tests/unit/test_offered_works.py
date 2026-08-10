@@ -539,6 +539,31 @@ def test_a_re_search_offers_nothing_and_does_not_fail_trying(services, engine, r
     assert collection.asked == [], "a re-search should not browse the collection at all"
 
 
+def test_the_run_notice_counts_one_offered_work_in_the_singular(services, engine, runner, collection):
+    """The count-of-one branch of the sentence the browser test pins on its side.
+
+    Both producers of this sentence took the plural at a count of one, and the
+    fix landed on both — but only the client's singular case was pinned, so the
+    MCP arm could revert to "1 more works" with a green suite. That is the one
+    surface an agent reads, in the module whose own comment says a surface
+    telling an agent something the other two do not is the failure it exists to
+    prevent.
+
+    The three-work case above passes word for word against the unfixed string,
+    which is why it could not stand in for this.
+    """
+    from curation.mcp.bindings import _run_notice
+
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Train Landscape"]}).holdings
+
+    run_id = start(runner).id
+    notice = _run_notice(runner.run_status(run_id, wait=False))
+
+    assert "offered 1 more work by artists this run found no image for" in notice
+    assert "1 more works" not in notice
+
+
 def test_the_run_notice_rates_resolution_over_proposed_works_only(services, engine, runner, collection):
     """The sentence a curator reads must not claim a rate the run did not achieve.
 

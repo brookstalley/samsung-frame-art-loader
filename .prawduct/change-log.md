@@ -131,10 +131,23 @@ the run holds, offered ones included — and their cell in that same column now
 says the model did not propose them. A heading contradicted one column across is
 this issue's defect at close range, so it reads *"Why it is here"*.
 
-**Both run-level sentences also stopped saying "1 more works".** A count of one
-took the plural on the run view and over MCP, and the first version of the test
-written for that sentence pinned the bug rather than the behaviour — a test holds
-a wrong string as firmly as a right one.
+**Both run-level sentences also stopped saying "1 more works", and both singular
+branches are pinned.** A count of one took the plural on the run view and over
+MCP. The first version of the test written for that sentence pinned the bug
+rather than the behaviour — a test holds a wrong string as firmly as a right one
+— and when that was fixed, only the client's branch got an assertion, so the MCP
+arm could have reverted with a green suite on the one surface an agent reads.
+Both are now covered and both reverts fail a mutation.
+
+**The same bug survives in sibling sentences, and it is filed rather than
+carried.** "This run proposed 1 works", "The work list of 1 works is settled" and
+their MCP twins are the identical defect in sentences this change never touched
+— and one of them is *pinned at a count of one* by an existing test, which is the
+shape named two paragraphs up. Fixing it properly means a shared pluraliser in
+two languages and rewriting that test, which is its own piece of work rather than
+a ride-along on a branch already ten commits deep: **issue #113**. Named here
+because a defect this entry's own reasoning identifies, left unfiled, is one this
+entry helped hide.
 
 **The same denial was living on two other surfaces, and both are fixed here.**
 The reported symptom was the review grid's, but `runSentence` composed *"more
