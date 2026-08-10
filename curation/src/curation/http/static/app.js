@@ -1453,19 +1453,30 @@ function absentScanReason(card) {
  * `notice` is carried across a repaint rather than shown from a fresh fetch,
  * because it describes what the verdict just *did* — minting an artist who may
  * duplicate one already held — and that is not a property of the work anybody
- * could read back off it afterwards. */
-function candidateCard(card, notice, alternatesOpen = false) {
+ * could read back off it afterwards.
+ *
+ * `onVerdict` is how anything outside this card learns that one was recorded,
+ * and it is deliberately required rather than defaulted to a no-op: a caller
+ * that forgets it gets a TypeError on the first verdict, where a silent default
+ * would leave the re-search offer quietly describing a page that had moved on —
+ * which is the defect this argument exists to close. */
+function candidateCard(card, notice, alternatesOpen = false, onVerdict) {
   const work = card.work;
   const node = el("li", { class: "card", "data-work": work.work_id });
 
   const repaint = async (message) => {
     const fresh = await api(`/api/candidates/${encodeURIComponent(work.work_id)}`);
+    // Announced on every repaint rather than from the verdict buttons alone,
+    // because this is the one path both ways of settling a work pass through:
+    // the card's own Accept and Reject, and choosing or turning down a scan in
+    // the alternates below, which reaches here as `after`.
+    onVerdict(work.work_id, fresh.work.verdict);
     // The disclosure's state is carried over, because choosing between scans is
     // a sequence rather than one act: a curator turning one down is usually
     // about to turn down or choose another. Rebuilding the card closed would
     // collapse the list they are working in, on every click, and cost a second
     // fetch to get back to where they were.
-    node.replaceWith(candidateCard(fresh, message, disclosure.open));
+    node.replaceWith(candidateCard(fresh, message, disclosure.open, onVerdict));
   };
 
   const reason = el("input", { type: "text", id: `reason-${work.work_id}` });
@@ -1572,11 +1583,103 @@ async function fetchAllCandidates(runId) {
   return { run, works, total };
 }
 
+/* The offer to look again, over the works currently waiting for a better scan.
+ *
+ * `waiting` is a function rather than the list itself, so the button reads the
+ * set again at the moment it is clicked rather than closing over the one this
+ * paint was built from. **A mutation sweep survives replacing that call with the
+ * captured list, and that is expected rather than a gap to close**: the map is
+ * only ever written by the callback that repaints this panel in the same breath,
+ * so the two are equal on every path that exists today and no test can tell them
+ * apart. It is kept because the failures either side of it are not the same
+ * size — a stale count misinforms a curator, a stale list *spends*, and
+ * `/api/runs/resolve` bills for exactly the ids in this body. Reading at click
+ * time is what keeps that spend correct without it resting on the panel's
+ * render bookkeeping being right, which is the coupling that produced the
+ * defect this function was extracted to fix. */
+function reSearchOffer(waiting) {
+  const works = waiting();
+  // Offered only when there is something to re-search. A button that spends
+  // and would do nothing is worse than no button: it invites a curator to pay
+  // for a run over an empty list.
+  if (works.length === 0) return null;
+  return el("div", { class: "panel" }, [
+    el("h3", { text: "Scans you turned down" }),
+    el("p", {
+      class: "muted",
+      // Says that nothing is looking, which is the fact a curator cannot
+      // see. Rejecting a scan records a judgement; it does not start a
+      // search, and a page that stayed silent would leave them waiting for
+      // one that is never coming.
+      text: `${works.length} ${works.length === 1 ? "work is" : "works are"} waiting for a better scan. Nothing is looking for one — a re-search is what looks, and it spends.`,
+    }),
+    el("div", { class: "row" }, [
+      el("button", {
+        class: "action",
+        type: "button",
+        text: "Look again for these",
+        onclick: () =>
+          guard(async () => {
+            const run = await api("/api/runs/resolve", {
+              method: "POST",
+              body: JSON.stringify({ work_ids: waiting() }),
+            });
+            go("run", run.run_id);
+          }),
+      }),
+    ]),
+  ]);
+}
+
 async function viewReview(runId, generation) {
   const page = await fetchAllCandidates(runId);
-  const wanting = page.works.filter((card) => card.work.verdict === "awaiting_better_image");
 
-  const grid = el("ul", { class: "grid" }, page.works.map((card) => candidateCard(card, null)));
+  /* One answer to "which works are waiting for a better scan", held for as long
+   * as this view is on screen.
+   *
+   * The grid repaints a card in place and leaves its neighbours alone — see
+   * `candidateCard`, where that choice is argued — so a verdict changes one node
+   * and nothing around it. Deriving the offer from `page.works` gave the screen
+   * two answers to this question: the offer's, fixed at paint, and the grid's,
+   * current. They diverge on a transition reachable from this very page, and the
+   * offer is the one that spends. */
+  const verdicts = new Map(page.works.map((card) => [card.work.work_id, card.work.verdict]));
+  const isWaiting = (verdict) => verdict === "awaiting_better_image";
+  const waiting = () => [...verdicts].filter(([, verdict]) => isWaiting(verdict)).map(([workId]) => workId);
+
+  /* Always on the page, whether or not it holds anything.
+   *
+   * Two things need that. A run can arrive with nothing waiting and reach a work
+   * waiting through the curator's own next click, so an offer built only when the
+   * first paint found one could never appear. And a live region has to exist
+   * *before* the content it announces is put into it — a `role="status"` element
+   * created and filled in the same breath announces nothing, which is the usual
+   * way this is got wrong. Empty, it is an empty div: measured at 0px high with
+   * no margins, so it costs no space either.
+   *
+   * `status` rather than the error banner's `alert` because an offer appearing is
+   * news, not an emergency: polite waits for a pause instead of interrupting. */
+  const offer = el("div", { role: "status" });
+  const paintOffer = () => {
+    const panel = reSearchOffer(waiting);
+    offer.replaceChildren(...(panel ? [panel] : []));
+  };
+  paintOffer();
+
+  const noteVerdict = (workId, verdict) => {
+    const was = isWaiting(verdicts.get(workId));
+    verdicts.set(workId, verdict);
+    // Repainted only when this work's *membership* moved — not merely when its
+    // verdict did. The offer depends on nothing else, so accepting a work that
+    // was never waiting leaves it word for word identical, and rewriting a live
+    // region re-announces it: a curator working by screen reader would hear the
+    // whole offer read out again for a verdict that did not concern it.
+    // Comparing verdicts instead of membership looks equivalent and is not; the
+    // test that accepts an unrelated work is what says so.
+    if (was !== isWaiting(verdict)) paintOffer();
+  };
+
+  const grid = el("ul", { class: "grid" }, page.works.map((card) => candidateCard(card, null, false, noteVerdict)));
 
   const panels = [
     el("p", {}, [
@@ -1587,37 +1690,7 @@ async function viewReview(runId, generation) {
     // `{works, total}` shape it takes, and a second copy of the sentence is how
     // one grid comes to word truncation differently from the other.
     shortfallNote(page),
-    // Offered only when there is something to re-search. A button that spends
-    // and would do nothing is worse than no button: it invites a curator to pay
-    // for a run over an empty list.
-    wanting.length
-      ? el("div", { class: "panel" }, [
-          el("h3", { text: "Scans you turned down" }),
-          el("p", {
-            class: "muted",
-            // Says that nothing is looking, which is the fact a curator cannot
-            // see. Rejecting a scan records a judgement; it does not start a
-            // search, and a page that stayed silent would leave them waiting for
-            // one that is never coming.
-            text: `${wanting.length} ${wanting.length === 1 ? "work is" : "works are"} waiting for a better scan. Nothing is looking for one — a re-search is what looks, and it spends.`,
-          }),
-          el("div", { class: "row" }, [
-            el("button", {
-              class: "action",
-              type: "button",
-              text: "Look again for these",
-              onclick: () =>
-                guard(async () => {
-                  const run = await api("/api/runs/resolve", {
-                    method: "POST",
-                    body: JSON.stringify({ work_ids: wanting.map((card) => card.work.work_id) }),
-                  });
-                  go("run", run.run_id);
-                }),
-            }),
-          ]),
-        ])
-      : null,
+    offer,
     page.works.length ? grid : el("p", { class: "muted", text: "This run settled on no works, so there is nothing to review." }),
   ];
   render(generation, ...panels);

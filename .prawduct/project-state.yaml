@@ -2853,8 +2853,8 @@ build_state:
 # `artifacts/build-plan.md` — scope-named plans (`artifacts/build-plan-<scope>.md`)
 # keep release-pending plans distinct under gitflow. The value is a path
 # relative to `.prawduct/` (a repo-relative `.prawduct/...` spelling is
-# tolerated). The Critic gate, plan-aware mode inference, regen-views, and
-# chunk-ref verification all resolve the plan through this pointer; unset →
+# tolerated). The Critic gate, plan-aware mode inference and chunk-ref
+# verification all resolve the plan through this pointer; unset →
 # `artifacts/build-plan.md`. A pointer to a file that doesn't exist means
 # governance sees NO active plan — the session briefing warns loudly until
 # it's fixed (STH-5P2W).
@@ -2862,26 +2862,28 @@ build_state:
 # active_build_plan: artifacts/build-plan-my-scope.md
 
 # =============================================================================
-# DERIVED VIEWS (enabled by default, v1.4+)
+# DERIVED VIEWS — RETIRED, and deliberately absent
 # =============================================================================
-# When true (default), three derived views are regenerated from change-log.md
-# tagged entries (see that file for the tag format):
-#   * build-plan `## Status` block (checkboxes from `status=shipped` tags)
-#   * `.prawduct/release-notes.md` (from `release=` tags)
-#   * `scope_rollups:` block below (from `scope=` tags)
-# Run `prawduct-hook regen-views` to apply.
-# Set to `false` to opt out — Status becomes hand-edited and the other views
-# are not produced.
-
-views_enabled: true
-
-# Scope rollups — derived view, populated by regen-views when views_enabled is
-# true. Lists chunks (and releases) shipped under each scope rollup tag.
-# Do not hand-edit — overwritten on next regen.
-scope_rollups:
-  v1-build:
-    chunks: ["01", "02", "03", "04", "05", "06", "07", "07B", "08A", "08B", "09", "10", "10B", "11", "12", "14A", "14B", "15", "16A", "16B", "17A", "17B", "18A", "18B", "19A", "19B", "21", "22", "23"]
-    releases: []
+# `views_enabled:` and the `scope_rollups:` block used to live here, with a
+# `prawduct-hook regen-views` that rebuilt the build-plan `## Status`
+# checkboxes, a release-notes view and the rollups from change-log tags.
+# Prawduct retired all of it on 2026-08-08; the command now exits 0 with a
+# notice, so following the old instruction looked exactly like success while
+# doing nothing.
+#
+# Both keys are removed rather than set false, which is prawduct's own target
+# state for retired repos. The rollup block is not archived either: it was a
+# derived list with no consumers, and this copy had already drifted — it was
+# missing chunks that had shipped. A stale list nothing regenerates is worse
+# than no list, because it reads as current.
+#
+# **What survives is the tag schema, and it is read rather than regenerated.**
+# `scope=` and the ABSENCE of `release=` are how release-readiness enumerates
+# unshipped work; only `status=` is inert. See change-log.md's header.
+#
+# The `## Status` checkboxes are hand-authored state now — the single reading
+# of chunk progress, ticked after a chunk's review and believed by the session
+# briefing, the handoff and the Stop gates.
 
 # =============================================================================
 # COVERAGE EVIDENCE (opt-in, v1.4+)
