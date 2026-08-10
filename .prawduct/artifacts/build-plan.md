@@ -131,7 +131,7 @@ re-created the same silence one line further down.
 - [x] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [x] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
-- [ ] Chunk 13A: The panel, the label, the heartbeat and the two units — no hardware *(built, reviewed and merged; the box waits on Done-when step 0b, which needs the set — see § The announcement reaches both subscribers in `operator-verification.md`)*
+- [ ] Chunk 13A: The panel, the label, the heartbeat and the two units — no hardware *(built and reviewed; the box waits on Done-when step 0b, which needs the set — see § The announcement reaches both subscribers in `operator-verification.md`)*
 - [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
@@ -1781,6 +1781,18 @@ hardware.
   range, names it provisional at its definition site with the reason, and 13B
   replaces it with what the operator's eyes settle. Shipping it unmarked is the
   failure to avoid: a number that looks measured because it is precise.
+- **Carries one deferred sentence into whichever commit ticks its box**, written
+  here because the only other record of it was a gitignored session file — which
+  is the silent-drop shape, caught by the PR reviewer rather than by its author.
+  **The girepository fallback in `.github/workflows/suites.yml` may not be a real
+  fallback.** The typesetting job probes for `libgirepository-2.0-dev` and falls
+  back to `libgirepository1.0-dev`, but PyGObject 3.56 builds against
+  girepository-2.0 — so the fallback branch would fail the build anyway, under a
+  job named "typesetting" about what is really a provisioning gap. That is the
+  exact failure the comment beside the probe claims it prevents, so that comment
+  currently contradicts itself. **Latent, not live:** `ubuntu-latest` carries the
+  2.0 package, which is why this is a sentence of prose rather than a fix. It
+  matters the day the job moves runners.
 - **Depends on:** Chunk 12; Chunk 04 (panel stack installs under uv)
 - **Carries a number the unit must not be written without.** `TimeoutStopSec`
   has to clear this daemon's worst-case pass, which is a television connection
