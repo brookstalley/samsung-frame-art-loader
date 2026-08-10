@@ -1433,9 +1433,17 @@ def _run_notice(view: RunView) -> str:
             # recommends.
             settled = f"This run finished: {view.resolved_proposals} of {view.proposed_count} proposed works have an image."
             if view.offered_count:
+                # "found no image for", matching the two browser surfaces word for
+                # word. The run did name works for those artists — an agent
+                # reading this result can list them, each carrying an
+                # `unresolved_reason` — so "could not confirm" is contradicted by
+                # the very rows beside it. Issue #95 fixed that on the review
+                # grid; the same sentence lived here and on the run view, and one
+                # surface telling an agent something the other two do not is the
+                # failure `http/models.py` and this module exist to prevent.
                 settled += (
-                    f" Separately, the collection offered {view.offered_count} more works by artists this run named "
-                    "but could not confirm. They are labelled `offered` and are not what was asked for."
+                    f" Separately, the collection offered {view.offered_count} more works by artists this run "
+                    "found no image for. They are labelled `offered` and are not what was asked for."
                 )
         if view.unresolved:
             settled += (

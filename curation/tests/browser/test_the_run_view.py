@@ -11,7 +11,7 @@ import pytest
 from payloads import a_candidate, a_candidate_page, a_card, a_run, a_run_view, a_spend, an_estimate
 
 from curation.http.models import RunListOut
-from curation.persistence.discovery_records import ResolutionStatus, RunStatus, UnresolvedReason
+from curation.persistence.discovery_records import ResolutionStatus, RunStatus, UnresolvedReason, WorkProvenance
 
 # At import time, not in a fixture. A marker deselection still *collects* this
 # module, so the default run — which does not install the browser group — has to
@@ -534,3 +534,40 @@ def test_the_review_card_still_says_which_works_were_offered(ui):
     ui.page.wait_for_selector(".card")
 
     assert "offered" in ui.text()
+
+
+def test_the_run_sentence_does_not_deny_the_works_listed_underneath_it(ui):
+    """Issue #95's denial lived on this page too, and this is the page seen first.
+
+    The review grid's version was the reported one, but the same claim — that the
+    run named nothing it could confirm for those artists — was composed here, in
+    the sentence printed directly above the table that lists those very works with
+    their `not held` badges. Fixing one surface and not the other would have left
+    the defect standing exactly where a curator meets it first, while the records
+    said it was gone.
+
+    "found no image for" is what all three surfaces say now; the third is the MCP
+    run summary, which `tests/unit/test_surface_parity.py`'s sibling concern keeps
+    honest.
+    """
+    named = a_candidate(
+        work_id="named",
+        title="The Persistence of Memory",
+        resolution_status=ResolutionStatus.UNRESOLVED.value,
+        unresolved_reason=UnresolvedReason.NOT_HELD.value,
+    )
+    offered = a_candidate(
+        work_id="gift",
+        title="Lobster Telephone",
+        provenance=WorkProvenance.OFFERED.value,
+        offered_for_artist="Salvador Dalí",
+        offered_artist_matched=25,
+    )
+    run = a_run(status=RunStatus.COMPLETED.value, is_terminal=True)
+    ui.serve(f"**/api/runs/{RUN_ID}", a_run_view(run=run, works=[named, offered]))
+    ui.open(f"#run/{RUN_ID}")
+    ui.page.wait_for_selector("table")
+
+    shown = ui.text()
+    assert "the collection offered 1 more works by artists this run found no image for" in shown
+    assert "could not confirm" not in shown, "the run view still denies work it lists directly below"

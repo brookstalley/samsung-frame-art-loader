@@ -831,7 +831,13 @@ function runSentence(view) {
         ? `This re-search finished: ${tally.resolved} of the ${tally.total} works it covers have an image.`
         : `This run finished: ${tally.resolved_proposals} of ${tally.proposed} works it was asked for have an image.`;
     if (run.kind !== "resolve" && tally.offered) {
-      sentence += ` Separately, the collection offered ${tally.offered} more works by artists this run named but could not confirm. They are labelled below and are not what was asked for.`;
+      // "found no image for" rather than "could not confirm". The run did name
+      // works for those artists — they are in the table directly below this
+      // sentence, badged `not held` — so a word that reads as "named nothing for"
+      // is denied by the screen it is printed on. That was issue #95 on the
+      // review grid, and it lived here too: the same claim, one surface over, on
+      // the page a curator lands on first.
+      sentence += ` Separately, the collection offered ${tally.offered} more works by artists this run found no image for. They are labelled below and are not what was asked for.`;
     }
     if (tally.unresolved) {
       sentence += ` ${tally.unresolved} could not be matched to any image and are reported rather than dropped — each says which kind of nothing below.`;

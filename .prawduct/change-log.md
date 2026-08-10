@@ -123,8 +123,20 @@ carried per-group information on a per-card line four screens away from the
 group; offered rows now carry the short per-work line, and the query lives with
 its works on the review surface.
 
-**Eight browser tests and two unit tests**, plus new assertions on a ninth
-behaviour inside an existing one. They cover the denial being gone, the
+**The same denial was living on two other surfaces, and both are fixed here.**
+The reported symptom was the review grid's, but `runSentence` composed *"more
+works by artists this run named but could not confirm"* on the **run view** — the
+page a curator reaches first, printed directly above the table listing those very
+works with their `not held` badges — and the MCP run summary said it to agents
+word for word. Fixing only the reported surface would have left the defect
+standing where it is met first while three records said it was gone. All three
+now say the run **found no image for** those artists, and a browser test pins the
+run view's. Found by the PR reviewer; the MCP one was found by grepping for the
+phrase once the second was known, which is the cheap check that should have
+followed the first.
+
+**Ten browser tests and two unit tests**, plus new assertions inside an existing
+one. They cover the denial being gone, the
 query said once rather than per card, the holdings reconciled against what the
 run offered, a group holding everything the collection has not being described as
 a subset, two queries staying two groups with their own numbers *and their own
@@ -140,9 +152,10 @@ undefended after they had been described in prose**, and the heading assertions
 inside the ninth because the PR reviewer found them dropped when the group tests
 were rescoped to an attribute — at which point deleting the artist's name from
 the heading would have left the suite green while restoring this issue's
-symptom. A tenth guards the group's heading rule against reaching the cards
-inside the group, which is a bug this branch shipped and a reviewer read out of
-the selector. Every mutation written against this work was caught.
+symptom. One guards the group's heading rule against reaching the cards inside
+the group — a bug this branch shipped, which a reviewer read out of the selector
+rather than off the screen. Twelve of twelve mutations caught, across two
+sweeps.
 
 **No backfill, and the operator decided so** — old runs need not be preserved and
 the database may be zeroed (2026-08-10). Rows written before this change keep
