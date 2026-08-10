@@ -397,8 +397,17 @@ reader finding E alone would build the wrong thing.
   failure mode — a pale work competing with a lighter mat — is the reason the bar
   exists. The mechanical fallback is free, deterministic, already built, and lands
   in the region the corpus occupies.
+
+  **The last clause was measured on 2026-08-10 and is false** — see the amendment
+  below. Kept in place rather than edited, because it is the belief the decision
+  was taken on, and a reader who finds only a corrected sentence cannot tell that
+  the premise was ever checked. The decision itself survives; its precondition
+  does not.
 - **Black and off-white become presets a curator presses**, so choosing one is a
   judgement someone made rather than something applied silently to forty works.
+  **Superseded 2026-08-10 — see the amendment below:** the values are `#222222`
+  and `#6b6b6b`, off-white is withdrawn a second time and pure black was never in
+  the corpus. Marked inline because this bullet reads as an instruction to build.
 - **The AI becomes an opt-in button that offers several candidate colours** shown
   against the work, with nothing applied until the curator picks one. The current
   choice stays current until then. This makes the spend buy options rather than a
@@ -409,6 +418,49 @@ reader finding E alone would build the wrong thing.
 - **Consequence to retire deliberately:** a guaranteed default means the
   `NO_MAT_COLOR` exclusion can never fire again, so that branch and its reason
   become dead and should be removed rather than left looking live.
+
+## Decisions taken 2026-08-10, on measurement rather than at a walkthrough
+
+**These amend the 2026-08-05 mat policy above and close the discovery items #90
+and #91 were filed to open.** They came out of measuring the claims the earlier
+session recorded, against the operator's own `ART_ROOT` — which is why they are
+dated separately rather than folded into the walkthrough that could not have
+known them.
+
+- **The mechanical derivation is fixed before it is promoted to the default.**
+  Paired against the hand-tuned mat for the same painting it is lighter on 31 of
+  40 works (median +15.2 L\*) and breaches `CORPUS_MAX_LIGHTNESS` on 7, where the
+  human breached it on none — full figures in `nonfunctional-requirements.md`
+  § Output Quality. Two changes, both measured: **clamp** the derived lightness to
+  the corpus ceiling (takes 7/40 over the bar to 0), and **merge perceptually
+  identical clusters** before taking the largest (takes a re-encode flipping the
+  answer from 5/25 works to 2/25 — median-cut splits one perceptual colour across
+  clusters and then loses the vote to a smaller rival, which is what puts teal on
+  an Albers whose orange covers more of it).
+- **The two presets are `#222222` and `#6b6b6b`, and off-white is withdrawn a
+  second time.** Both values are the corpus's own; the reasoning is in
+  `nonfunctional-requirements.md` § Output Quality, recorded there rather than
+  here because it is a standing quality rule and not a meeting outcome.
+- **The AI button offers three candidates, each composed against the work**, with
+  nothing recorded until one is picked. Swatches were rejected: a mat is judged by
+  how it reads *around* a picture, and a 40px square is not that judgement. Three
+  rather than five because the tail candidates would not be chosen and five
+  composed canvases is a lot of page for one decision.
+- **The review grid keeps the bare candidate scan** — finding **D** is answered
+  "no" for that surface, deliberately. At review time nothing is acquired and no
+  mat exists, so an "as it will hang" preview would have to derive a mat from the
+  480px museum preview; measured, that differs visibly from the master's answer on
+  5 of 25 works, one of them flipping orange to teal. The judgement the review
+  grid exists for is *which painting, and is this scan good enough* — the mat
+  judgement belongs on the work detail, after acceptance, where the real composed
+  canvas is.
+- **Finding D's actual cause is a caching defect, not a missing feature.** The
+  works grid and the work detail already ask for the composed canvas, and
+  `sourceBadge` already distinguishes it from the master. What breaks is that a
+  thumbnail's freshness is tested against the *original*'s hash, and composing a
+  canvas does not change the original — so a thumbnail made before the first
+  preparation is never regenerated, and the card serves the bare master under a
+  badge reading "wall render". That is issue #90 now.
 
 ### The run half of the browser surface — added 2026-08-05
 

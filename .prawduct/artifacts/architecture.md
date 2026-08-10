@@ -473,6 +473,30 @@ is no network between planes.
   one the store returned, and the unique index on `(artwork_id, kind,
   target_width, target_height)` makes two television renders reachable.
 
+  **One kind-local supplement joined it on 2026-08-10, and the shape of the
+  exception is the point.** `is_current` compares a rendition against the
+  *original*, which is the whole answer for every kind drawn from the original —
+  and the thumbnail is the one that is not: once a work has a canvas, the
+  thumbnail is a copy of *that*. Composing or recomposing a canvas never touches
+  the original, so the shared predicate answered "current" for a thumbnail of an
+  image that had since been redrawn. `ThumbnailService._drawn_from` supplies the
+  missing term, and it deliberately did **not** join `is_current`: the shared rule
+  is shared so three consumers cannot disagree, and folding in a term only one of
+  them can evaluate would break exactly that. The two actions this paragraph would
+  otherwise invite are both refused — do not move the term into `is_current`, and
+  do not re-invent a second supplement at another surface. A kind whose parent is
+  another rendition is the only thing that earns one.
+  `[DECISION: currency stays consolidated in `is_current`, with a bounded
+  kind-local supplement for renditions drawn from another rendition | this
+  paragraph argued for consolidation and the #90 fix departs from it, so the
+  departure is decided rather than asserted: the two alternatives are folding
+  `_drawn_from` into `is_current`, which hands the shared predicate a term two of
+  its three consumers cannot evaluate and so re-opens the disagreement
+  consolidation exists to close, and a second supplement at another surface, which
+  is the duplication the 2026-08-05 consolidation removed; the exception's bound is
+  the parent — only a kind whose parent is another rendition earns one, which today
+  is the thumbnail alone | user can veto/override]`
+
   `SurveyService` composes a work with the two derived facts a
   human-facing surface needs beside it — how large it would render on this
   deployment's wall, and which held image it would be shown — because

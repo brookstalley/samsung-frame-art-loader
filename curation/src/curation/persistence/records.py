@@ -249,6 +249,17 @@ def is_current(rendition: Rendition, original: Original | None) -> bool:
     dropped it, which is exactly the shortfall the exclusion report exists to
     make visible, arriving by the one path that did not consult the shared rule.
 
+    **What it deliberately does not answer: whether a rendition drawn from
+    another rendition is current.** This compares against the *original*, which
+    is the right parent for every kind but one — a thumbnail of a work that has a
+    television canvas is a copy of the canvas, and composing or recomposing that
+    canvas leaves the original untouched. So this rule says "current" about a
+    cached thumbnail of an image that has since been redrawn, and it is right to:
+    the question it is asked is about the master. `ThumbnailService._drawn_from`
+    asks the other one. Do not fold it in here — three surfaces share this rule
+    precisely so they cannot disagree, and a term only one of them can evaluate
+    would break that.
+
     A work holding no original at all has nothing that could vouch for any
     rendition, so none of them may be served on the strength of having once been
     generated. That is not the same as a mismatch and it is deliberately not

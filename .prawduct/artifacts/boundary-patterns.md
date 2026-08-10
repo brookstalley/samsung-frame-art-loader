@@ -246,8 +246,14 @@
   answer readable only by inference from code. A thumbnail rendition carries its
   master's content hash, so a changed master makes it stale and the next request
   rewrites it at the same path with an upserted row; a missing file does the
-  same. Nothing else ever deletes one, and archiving a work therefore leaves its
-  file and its `RenditionKind.THUMBNAIL` row where they are.
+  same. **A third trigger was added 2026-08-10 and this list was one short until
+  then**: a thumbnail is also invalid once it predates the `tv_display` rendition
+  it would now be drawn from — a work's first canvas, or a recompose in a new mat
+  colour, neither of which touches the master the first trigger watches.
+  Enforced at `ThumbnailService._drawn_from`, not in the shared currency
+  predicate; `architecture.md` says why. Nothing else ever deletes one, and
+  archiving a work therefore leaves its file and its `RenditionKind.THUMBNAIL`
+  row where they are.
   `[DECISION: thumbnails are never evicted — regenerated when stale or absent,
   retained otherwise, including for archived works | archiving is reversible and
   a thumbnail rebuilds from a master still on disk for one bounded decode, so a

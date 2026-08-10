@@ -7,10 +7,16 @@ catalogue as renditions**, which is what keeps them from becoming an
 untracked pile of files nothing owns. `RenditionKind.THUMBNAIL` has been in the
 data model since the catalogue was designed; this is its producer.
 
-**Staleness is the catalogue's rule, not a second one invented here.** A
-rendition carries the content hash of the master it was made from, so a thumbnail
-is stale exactly when the work's original changes — the same relation that
-governs the television render, applied by the same code.
+**Staleness is the catalogue's rule plus one this kind alone needs.** A rendition
+carries the content hash of the master it was made from, so it goes stale when
+the work's original changes — the same relation that governs the television
+render, applied by the same code. A thumbnail needs a second test because it is
+the one rendition drawn from *another rendition*: once a work has a canvas, the
+thumbnail is a copy of the canvas, and composing or recomposing one never touches
+the original the hash test asks about. `_drawn_from` is that second test, and it
+is deliberately not in `records.py` beside `is_current` — the shared rule is
+shared because three surfaces must not disagree about it, while this one has a
+single consumer and covers a relation only this kind has.
 
 **Which image gets downscaled is reported, never assumed.** The television
 rendition is preferred when it is current: it is already 4K rather than
@@ -26,12 +32,13 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Final
 
 from PIL import Image, UnidentifiedImageError
 
-from curation.persistence.records import RenditionKind, tv_renditions_newest_first
+from curation.persistence.records import Rendition, RenditionKind, tv_renditions_newest_first
 from curation.services.catalogue import CatalogueService
 from curation.services.errors import ServiceError
 from curation.services.imaging import encode_downscaled
@@ -64,6 +71,23 @@ class ThumbnailSource:
     #: `tv_display` or `original` — what the curator is actually looking at.
     kind: str
     path: Path
+    #: When this source image was itself produced, and `None` for the master.
+    #:
+    #: The asymmetry is the point rather than an omission. A thumbnail of the
+    #: master goes stale when the master changes, and the catalogue's own
+    #: staleness rule already answers that by hash. A thumbnail of a *canvas* has
+    #: no such cover: the canvas is a rendition too, and composing or recomposing
+    #: one leaves the original untouched, so the hash says "current" for a
+    #: thumbnail drawn from an image that no longer exists. Comparing against
+    #: this is what closes it, and only the canvas branch needs it.
+    #:
+    #: **Undefaulted on purpose**, though `None` is one of its two legitimate
+    #: values. `kind` already says which branch this is, so a default here would
+    #: make the two fields able to disagree silently — a future `tv_display`
+    #: construction that omitted the stamp would restore the defect this rule
+    #: exists to close, and no consumer would notice, because every other reader
+    #: of this type looks only at `kind`.
+    generated_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +112,61 @@ class ThumbnailSettings:
         """
         if not self.directory.is_relative_to(self.art_root):
             raise ServiceError(f"The thumbnail cache at {self.directory} must sit inside ART_ROOT at {self.art_root}.")
+
+
+def _drawn_from(thumbnail: Rendition, source: ThumbnailSource) -> bool:
+    """Whether this cached thumbnail can have been made from `source`.
+
+    **The catalogue's staleness rule does not reach this question**, and the gap
+    is structural rather than an oversight. `is_current` compares a rendition
+    against the *original*, which is right for every rendition drawn from the
+    original — and a thumbnail is the one that is not: when a work has a canvas,
+    the thumbnail is drawn from the canvas, a rendition itself. Composing a
+    canvas, or recomposing one in a new mat colour, never touches the original,
+    so the hash test answers "current" about an image the thumbnail has never
+    seen. The two ways that surfaces: a card badged "wall render" over the bare
+    master, and a mat colour a curator sets that changes the wall and not the
+    picture in front of them.
+
+    Time is the comparison because it is the only fact both rows carry that moves
+    when the canvas is redrawn — the path does not (a recompose writes the same
+    file) and the hash does not (it is the original's). `record_rendition` upserts
+    the geometry row and stamps `generated_at` afresh, so a redrawn canvas is
+    newer than a thumbnail taken before it — for as long as the wall clock runs
+    forwards. `datetime.now(UTC)` is not monotonic, so a backwards correction
+    landing between the two writes reinstates the defect until the original
+    changes. Not engineered around: this is a single-operator local application,
+    and the alternative is carrying a monotonic counter on a row that has no other
+    use for one.
+
+    An exact tie regenerates, which is the harmless direction: the two writes are
+    separated by an image encode so it does not arise in practice, and paying one
+    needless re-encode is the right side of a trade against serving a picture that
+    is not what the work looks like. The window the other way is knowingly
+    accepted and is the same shape: `thumbnail()` reads its source, encodes, and
+    only then stamps its own row, so a canvas recomposed *inside* that window
+    yields a thumbnail row postdating a canvas it was never drawn from. One image
+    encode wide, on a surface one person drives.
+
+    **What this deliberately does not answer, and cannot: what the cached
+    thumbnail was actually drawn from.** Nothing records it, so the master branch
+    below has to assume, and the assumption is wrong in one reachable state — a
+    `tv_display` row that is current by hash but whose file has gone, which
+    `preparation.py` documents as what a restored catalogue or a cleared `ready/`
+    leaves. `source_for` then falls back to the master while the cache still holds
+    the canvas-derived picture, and a curator is served a matted 16:9 thumbnail
+    under a badge reading "master image" — this defect with its two sides swapped.
+    It predates this rule rather than arriving with it, and closing it needs the
+    thumbnail's provenance modelled on the row rather than inferred from the
+    current source's timestamp. Filed as #116; do not close it by regenerating whenever an
+    absent-file `tv_display` row exists, which spends a re-encode on every load for
+    a thumbnail legitimately drawn from the master.
+    """
+    if source.generated_at is None:
+        # Drawn from the master *now* — see the docstring for why "now" is not the
+        # same claim as "when this thumbnail was made", and what that costs.
+        return True
+    return thumbnail.generated_at > source.generated_at
 
 
 class ThumbnailService:
@@ -123,12 +202,16 @@ class ThumbnailService:
             # render whose file has gone is not a reason to ignore an older one
             # that is still there and still current.
             if rendered.is_file():
-                return ThumbnailSource(kind=RenditionKind.TV_DISPLAY.value, path=rendered)
+                return ThumbnailSource(
+                    kind=RenditionKind.TV_DISPLAY.value,
+                    path=rendered,
+                    generated_at=rendition.generated_at,
+                )
 
         master = self._settings.art_root / original.relative_path
         if not master.is_file():
             raise ThumbnailUnavailable(f"The master image is recorded at {original.relative_path} but no file is there.")
-        return ThumbnailSource(kind="original", path=master)
+        return ThumbnailSource(kind="original", path=master, generated_at=None)
 
     def thumbnail(self, artwork_id: str) -> Path:
         """An absolute path to a current thumbnail, generating one if needed."""
@@ -146,11 +229,35 @@ class ThumbnailService:
             (view for view in self._catalogue.list_renditions(artwork_id) if view.rendition.kind is RenditionKind.THUMBNAIL),
             None,
         )
-        # All three conditions, because each one alone is satisfiable while the
+        # All four conditions, because each one alone is satisfiable while the
         # cached file is wrong: a fresh row can point at a file someone deleted,
-        # and a present file can predate the master it claims to depict.
-        if held is not None and not held.stale and cached.is_file():
+        # a present file can predate the master it claims to depict, and a
+        # thumbnail of the master can outlive the moment a canvas replaced it as
+        # what this work looks like.
+        if held is not None and not held.stale and cached.is_file() and _drawn_from(held.rendition, source):
             return cached
+
+        if held is not None and not held.stale and cached.is_file():
+            # Reached only when `_drawn_from` is the condition that failed, which
+            # is the one whose *wrong* answer costs work rather than a wrong
+            # picture: anything holding the comparison false — a canvas upsert
+            # that stopped restamping, a clock correction, a caller passing the
+            # wrong stamp — re-encodes a 4K canvas per card per page load and
+            # reaches the operator as "the grid got slow", against a journal with
+            # nothing in it. INFO rather than DEBUG for that reason: the
+            # deployment where this matters is the one running with DEBUG off.
+            log.info(
+                "regenerating the thumbnail for %s: it predates the %s it would be drawn from",
+                artwork_id,
+                source.kind,
+                extra={
+                    "event": "thumbnail.superseded",
+                    "work_id": artwork_id,
+                    "source_kind": source.kind,
+                    "thumbnail_generated_at": held.rendition.generated_at.isoformat(),
+                    "source_generated_at": None if source.generated_at is None else source.generated_at.isoformat(),
+                },
+            )
 
         self._write(source.path, cached)
         # Recorded after the file exists, so a row can never promise an image

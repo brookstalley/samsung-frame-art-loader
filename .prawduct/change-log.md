@@ -54,6 +54,116 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-10: A thumbnail stops outliving the canvas it was a copy of
+
+<!-- prawduct: status=shipped | scope=v1-build -->
+
+<!-- No `chunks=`: issue #90, a defect in a surface the build plan had already
+     delivered. -->
+
+**Why:** issue #90, from the operator's 2026-08-05 walkthrough, impact M. The
+grid showed the bare master under a badge reading `wall render`. Every one of the
+40 works in the operator's catalogue was in that state — thumbnails written
+2026-08-04, canvases rendered 2026-08-05 — so the walkthrough saw the wrong
+picture forty times.
+
+**The root cause is one comparison asking about the wrong thing.** The staleness
+rule measures a rendition against the *original*, which is right for every
+rendition drawn from the original — and a thumbnail, once the work has a
+television canvas, is the one that is not. It is a copy of the canvas. Composing
+a canvas does not touch the original, so a thumbnail built from the bare master
+before the work was ever prepared stayed "current" for good, while `source_for` —
+derived live — reported `tv_display` over it. It was filed as a missing feature;
+the surfaces already ask for the composed canvas and the badge already
+distinguishes the two, so nothing needed building and one comparison needed
+adding. The 40 regenerate lazily, one apiece, as the grid scrolls.
+
+**The second half would have been found the expensive way.** Setting a mat colour
+recomposes to the same path and upserts the same row: the original does not move,
+no file appears or disappears, and the cached thumbnail survived all three of the
+old conditions. A curator would have pressed a colour, watched the catalogue
+record it and the wall take it, and seen the picture in front of them not
+change — which reads as the control being broken, not the cache being stale.
+#91's presets and its three-candidate AI button both sit on this, so it is a
+prerequisite rather than an adjacent tidy-up.
+
+**`generated_at` is the comparison because it is the only fact both rows carry
+that moves when a canvas is redrawn** — the path does not, and the hash is the
+original's. The rule deliberately does **not** join `is_current` in `records.py`:
+that predicate is shared so three surfaces cannot disagree, and a term only the
+thumbnail service can evaluate would break it. The tie is strict — an exact tie
+means the thumbnail was recorded in the same instant as the canvas and so cannot
+have been made from it. Relaxing it to `>=` survives every test that drives the
+service, so the boundary is pinned directly rather than through the seam, which
+does not exist: both rows stamp their own clock either side of an image encode.
+
+**The mat derivation was measured, and it does not match the corpus it claimed
+to.** The 2026-08-05 walkthrough recorded that the mechanical dominant-colour
+derivation "lands in the region the corpus occupies", and that clause is what made
+promoting it from fallback to *default* acceptable. Nobody had run it. Against the
+operator's own `ART_ROOT`, paired with the hand-tuned mat for the same painting
+across the 40 works carrying both: lighter on 31, median +15.2 L\*, breaching
+`CORPUS_MAX_LIGHTNESS` on 7 where the humans breached it on none. The worst pair
+is a 40-point gap on one Demuth; one of the seven is a near-white mat on a
+Mondrian, verbatim the failure the bar was written to refuse. Filed as **#115**,
+which owns building the clamp.
+
+**What this branch cannot know, it now says.** `_drawn_from`'s master branch
+returned `True` on the reasoning that `is_current` covers it — the same gap this
+change exists to close, quoted back. Reproduced before believing it: give a work a
+canvas, let the thumbnail be drawn from it, delete the canvas file, and
+`source_for` falls back to the master while the cache still holds the matted 16:9
+picture. No timestamp can close that: the stamp says *when* a thumbnail was made,
+not *what it was made from*, and nothing records the latter. The fix is provenance
+on the row, a data-model change with its own design in it. Filed as **#116** and
+pinned with a **strict** xfail, so closing the issue turns the test red and
+whoever fixes it cannot leave the marker behind. The shortcut is written down as
+refused: regenerating whenever an absent-file canvas row exists spends a re-encode
+per page load on a thumbnail legitimately drawn from the master, *and* does not
+fix the reported case anyway.
+
+**The new branch also stopped being silent.** `thumbnails.py` bound a logger and
+never called it, and a wrong comparison here costs unbounded work rather than a
+wrong picture: anything holding it false re-encodes a 4K canvas per card per page
+load, and arrives as "the grid got slow" against an empty journal. One INFO line
+at the regeneration, structured as the plane's other events are — and it fires
+when `_drawn_from` is the condition that failed, not on the regenerations that
+were always ordinary, because a line emitted on every regeneration is noise rather
+than a diagnostic.
+
+**The artifacts that own the rule this departs from now say so.**
+`architecture.md` argues for consolidated currency and was written against exactly
+the per-surface logic added here, so it invited the two actions this change
+refused — fold the term into `is_current`, or grow a second supplement elsewhere;
+both are named and refused there. `boundary-patterns.md` enumerated thumbnail
+invalidation as two triggers and there are three. `data-model.md` names the
+enforcement site, since a reader looking in `list_renditions` finds nothing.
+`nonfunctional-requirements.md` described the clamp and an `ART_ROOT` comparison
+as a standing check; neither exists, and in a requirements artifact that reads as
+a guard somebody already built — tensed, and pointed at #115.
+
+**The branch also closes the #90/#91 discovery, and four decisions stand from
+it.** They constrain later work and are recorded here because a maintainer reading
+for what this branch landed would otherwise meet them only in the artifacts: the
+two mat presets are `#222222` (L\* 13.2, the most common hand-tuned colour) and
+`#6b6b6b` (L\* 45.2, the corpus ceiling); **off-white is withdrawn a second time**,
+now on measurement rather than taste, since no mat in the corpus of 41 exceeds
+L\* 45.2 and pure black was never in the set either (the darkest is `#14141e`);
+the AI button offers **three** candidates, each composed against the work, because
+the judgement is how a colour reads *around* a picture and a 40px swatch is not
+that judgement; and the **review grid keeps the bare candidate scan** — finding D
+is answered *no* there deliberately, because nothing is acquired at review time, so
+an "as it will hang" preview would derive its mat from the 480px museum preview,
+which differs visibly from the master's answer on 5 of 25 works.
+
+**Verification:** 2438 passed, 0 failed, 4 skipped across all three suites; lint
+and format clean. Two mutation sweeps at 5/5 and 4/4. One cumulative Critic round
+(0 blocking, 7 warnings, 9 notes, three reviewers) with every finding
+dispositioned — 11 fixed, 2 filed as #116, 3 accepted — then two
+`verify-resolutions` passes: the first raised a blocking finding (the log line had
+no test, and deleting the whole block left 2435 green), the second returned
+0/0/0.
+
 ## 2026-08-10: An offered work carries its query, and the page says it once
 
 <!-- prawduct: status=shipped | scope=v1-build -->
