@@ -50,6 +50,19 @@ DEFAULT_TV_CLIENT_NAME: Final[str] = "tvpi"
 DEFAULT_EPD_PANEL_WIDTH_PX: Final[int] = 1448
 DEFAULT_EPD_PANEL_HEIGHT_PX: Final[int] = 1072
 
+#: The clear border around the label, in pixels. **PROVISIONAL, and settled by the
+#: same look at the panel that settles the type sizes** — it is the other half of
+#: the same judgement, since a margin trades border against how many lines fit
+#: before the drop rule takes one off. It is here rather than beside those sizes
+#: because it is geometry, and geometry belongs to the device.
+DEFAULT_EPD_MARGIN_PX: Final[int] = 40
+
+#: How far the rendered label is turned before it reaches the panel. 180 is what
+#: the reference wall runs today — that panel is mounted with its ribbon uppermost
+#: — and it is configuration because the next device's mounting is the next
+#: device's business. Only half turns are made; `panel/epaper.py` says why.
+DEFAULT_EPD_ROTATE_DEGREES: Final[int] = 180
+
 #: How often the manifest's mtime is read. **Set by `next`, not by theme
 #: switching** — a theme change tolerates seconds of latency happily, while a
 #: human pressing "next" and waiting three seconds thinks the product is broken.
@@ -143,6 +156,16 @@ class Settings:
     #: the two panels' geometry came to be confused in the first place.
     epd_panel_width_px: int
     epd_panel_height_px: int
+    epd_margin_px: int
+    epd_rotate_degrees: int
+
+    #: omni-epd's identifier for this device's panel, or empty for a device that
+    #: has none. **Empty is a supported deployment, not a broken one**
+    #: (`architecture.md` § Direction): a wall whose device drives a television
+    #: and nothing else is exactly what most of them are, and it must not be
+    #: reported as a fault. `omni_epd.mock` drives the library's own no-op device
+    #: on a machine where the panel is absent but the driver is installed.
+    epd_device: str
 
     latitude: float
     longitude: float
@@ -191,6 +214,10 @@ class Settings:
             "manifest_path": str(self.manifest_path),
             "state_path": str(self.state_path),
             "epd_panel_px": f"{self.epd_panel_width_px}x{self.epd_panel_height_px}",
+            # Named even when empty, because "this device has no panel" and "this
+            # device's panel is broken" look identical in a journal otherwise, and
+            # only one of them is worth acting on.
+            "epd_device": self.epd_device or "(none — this device renders no label)",
             "tv_address": f"{self.tv_address}:{self.tv_port}",
             "tv_token_file": str(self.tv_token_file),
             "tv_client_name": self.tv_client_name,
@@ -228,6 +255,9 @@ def load(environ: dict[str, str] | None = None) -> Settings:
         tv_client_name=env.get("TV_CLIENT_NAME") or DEFAULT_TV_CLIENT_NAME,
         epd_panel_width_px=_int(env, "EPD_PANEL_WIDTH_PX", DEFAULT_EPD_PANEL_WIDTH_PX),
         epd_panel_height_px=_int(env, "EPD_PANEL_HEIGHT_PX", DEFAULT_EPD_PANEL_HEIGHT_PX),
+        epd_margin_px=_int(env, "EPD_MARGIN_PX", DEFAULT_EPD_MARGIN_PX),
+        epd_rotate_degrees=_int(env, "EPD_ROTATE_DEGREES", DEFAULT_EPD_ROTATE_DEGREES),
+        epd_device=(env.get("EPD_DEVICE") or "").strip(),
         latitude=_float(env, "LATITUDE", None),
         longitude=_float(env, "LONGITUDE", None),
         location_name=_require(env, "LOCATION_NAME"),

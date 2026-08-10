@@ -160,6 +160,33 @@ if it is ever re-run, record it in one place and link the other.
 anything on the art channel. What this section's two bullets establish is
 narrower and still holds: `set_artmode('on')` and Wake-on-LAN do not do it.
 
+## The library keeps ONE handler per event, not a list
+
+Read off `samsungtvws`' own source rather than measured: `set_callback` is a
+plain dict assignment. **A second subscriber to an event does not join the first,
+it replaces it.**
+
+This matters far more for `image_selected` than the sentence suggests, because
+that event is how a selection is confirmed and confirmation is the only honest
+account of the wall this product has. A newcomer registering for it silently
+unseats the confirmation handler; every rotation then falls to its timeout and is
+reported as a wall that would not move, while the newcomer works perfectly. There
+is no error, no log line, and the symptom points at the television rather than at
+the code that caused it.
+
+**Closed structurally on 2026-08-07** rather than left as a warning to remember.
+The television seam registers one handler and fans out through
+`TvClient.observe_selections`: the pending selection is resolved first, then each
+observer is called in isolation, so one that raises costs neither another
+observer nor the socket's reader task. Anything wanting this event subscribes
+there. A second *distinct* event is safe to register directly — that is another
+`set_callback` line and its own handler.
+
+**Not verified against the set.** The fan-out shipped with the constraint read
+from library source and its behaviour pinned by unit tests over the handler; no
+live television has confirmed that both a confirmation and an observer see the
+same announcement. Chunk 13A's Done-when step 0b owes exactly that.
+
 ## Two library semantics that will mislead you
 
 **`in_artmode()` and `on()` are not capability tests.** Both derive from REST

@@ -1,0 +1,85 @@
+# The display plane: drives the television and this device's label surface.
+#
+# Install to /etc/systemd/system/display.service. See deploy/README.md for the
+# cutover, which creates the `tvpi` account this unit runs as — the account does
+# NOT exist on a freshly rebuilt card, and this unit will refuse to start without
+# it rather than fall back to root.
+
+[Unit]
+Description=Samsung Frame art wall — display plane
+Documentation=file:///home/tvpi/source/samsung-frame-art-loader/deploy/README.md
+
+# **The stock start rate limit is disabled deliberately, and this is the
+# load-bearing line in the file.** systemd's default is five starts in ten
+# seconds; `Restart=always` against a fault that reproduces on every start
+# exhausts that in about half a second, leaving the unit permanently `failed`,
+# having logged five lines, with nothing still trying. That defeats the success
+# criterion requiring an unattended failure to be visible without inspecting the
+# wall — it produces a dark television AND a service that gave up. `0` is the
+# documented value for no rate limiting, and it belongs in [Unit], not [Service].
+# It is only safe because RestartSec= below gives the retry an interval; without
+# one, "retry forever" would mean retrying at 100 ms.
+StartLimitIntervalSec=0
+
+# No ordering dependency on the curation plane. Either may come up first, in any
+# order: the display plane reads a file, and a manifest that is absent or stale
+# is a state it is built to run in indefinitely.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tvpi
+Group=tvpi
+
+# The e-paper HAT is reached through both, over SPI and GPIO.
+SupplementaryGroups=spi gpio
+
+WorkingDirectory=/home/tvpi/source/samsung-frame-art-loader/display
+
+# **Un-prefixed on purpose.** systemd treats a missing un-prefixed
+# EnvironmentFile= as fatal and refuses to start the unit, naming the path it
+# wanted. A `-` prefix would make it optional, which restores exactly the silent
+# failure this removes: the process starts, raises at import against missing
+# variables, and dies for a reason nobody connects to a file that was never
+# placed. One .env at the repository root, read by both planes.
+EnvironmentFile=/home/tvpi/source/samsung-frame-art-loader/.env
+
+ExecStart=/usr/bin/env uv run python -m display
+
+Restart=always
+
+# At least five seconds, per the rule above. This is the plane whose downtime is
+# visible, so it should come back from anything without human action — but a
+# fault that reproduces every start must stay legible in `systemctl status` and
+# keep writing to the journal rather than going quiet.
+RestartSec=5
+
+# **A note against SHORTENING this, not an instruction to set it.** 90 s is
+# systemd's default and it clears what this daemon needs. The worst-case pass is
+# a television connection attempt — roughly 15 s of blocking construction plus
+# the 30 s art-channel ceiling — and a SIGTERM landing inside one is honoured
+# when that pass ends, not during it: measured at ~22 s against a sleeping set,
+# with ~45 s the worst case. A unit that SIGKILLs this process leaves the set
+# holding a half-open art channel until it times out on its own side, and the
+# next connection is refused for minutes.
+#
+# **One case runs past that ceiling and is deliberately left to SIGKILL**: a
+# panel driver wedged in an SPI transaction that never returns. Label drawing
+# happens on a worker thread, so the daemon itself carries on and gives up
+# waiting after its label budget — but Python joins that thread on the way out
+# and no code can kill a thread parked in C. The television is closed first, so
+# by the time this matters the set is already released and a SIGKILL costs
+# nothing. That ordering is why this is a bounded nuisance rather than the
+# refused-connection problem above.
+TimeoutStopSec=90
+KillSignal=SIGTERM
+
+# The journal is this plane's only failure channel. Raspberry Pi OS ships
+# Storage=volatile, so it lives in RAM — deploy/journald.conf.d bounds it.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=display
+
+[Install]
+WantedBy=multi-user.target

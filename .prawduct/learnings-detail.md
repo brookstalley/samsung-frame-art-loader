@@ -308,6 +308,39 @@ actually makes. A table keyed on the enum fails the day a sixth cause is added,
 which is the day the tip would otherwise have gone quietly stale. See
 `test_every_reason_show_now_can_refuse_for_is_named_in_its_tip`.
 
+## Pinning a parent does not pin what the parent resolves
+
+A pinned git dependency is only pinned to its own tree. Whatever *it* declares is
+resolved fresh on every build, and a package that names a git URL with no revision
+hands you a different child each time that repository moves. The build stays
+reproducible right up until upstream commits, and nothing in your repository
+changed.
+
+**Worked instance (2026-08-03 through 2026-08-07).** `requirements.txt` pinned
+`omni_epd` to a commit, and `omni_epd` declares
+`IT8951[rpi] @ git+https://github.com/GregDMeyer/IT8951.git` with no revision — so
+every rebuild resolved ~1,500 lines of Cython the label panel depends on
+completely to that repository's master on the day. It looked pinned for two
+months because master had not moved since 2023, which is a fact about upstream
+inactivity rather than a property of this project. Verified by resolving on the Pi
+rather than by reading: a fresh resolve landed on `9f13613`, and that could not be
+distinguished from a working pin until the pin was applied and the resolve
+repeated.
+
+The fix is per install path, because paths resolve independently:
+`requirements.txt` carries an explicit pinned line beside the parent, and the
+display plane uses `[tool.uv] override-dependencies`, which is the only mechanism
+that reaches a requirement written inside another package's metadata. **The same
+argument applies one level further down**: IT8951 compiles `.pyx` sources and its
+own `build-requires` names Cython with no bound, so the display plane holds that
+at `>=3.0,<4` with `[tool.uv] build-constraint-dependencies`. Pinning the driver
+and leaving the compiler free reproduces the same failure with a different actor.
+
+**And the record is half the work.** The decision was recorded carefully where it
+was taken and the claims it retired were left standing in six other places,
+including the risk register a session briefing reads as current state. A decision
+is not taken until what it contradicts is gone.
+
 ## A package's declared dependency floor is a claim; what it imports is the constraint
 
 `install_requires` (or its equivalent) is written by hand and nothing checks it

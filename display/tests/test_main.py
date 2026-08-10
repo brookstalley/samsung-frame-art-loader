@@ -1,15 +1,19 @@
-"""The composition root's two refusals to start.
+"""What the composition root refuses to start for, and what it starts anyway.
 
-Both say a *deployment value* is wrong — a missing setting, or a store written by
-a newer plane than this one — and both are read by a person who has just run the
-command at a terminal. So both owe the same three things: a non-zero exit so
-systemd and a shell agree something failed, a sentence on stderr rather than only
-a JSON log line, and no traceback, because a stack through `load()` points at this
-codebase, which is the one place the problem is not.
+**Two refusals.** A missing deployment value, and a store written by a newer plane
+than this one. Both are read by a person who has just run the command at a
+terminal, so both owe the same three things: a non-zero exit so systemd and a
+shell agree something failed, a sentence on stderr rather than only a JSON log
+line, and no traceback, because a stack through `load()` points at this codebase,
+which is the one place the problem is not. Those are driven through `main`, since
+what is under test is the handling rather than the work.
 
-Tested through `main` rather than through `_run`, because what is under test is
-the handling: which exceptions are caught, what they exit with, and what the
-operator is told.
+**And one thing that is emphatically not a refusal**: a label panel that will not
+open. The television is the product and the label annotates it, so that costs the
+label, says so in the journal, and reports itself on the heartbeat — driven
+through `_run`, because the claim is about the wiring between a raise and a
+constructor argument, and a test of either end alone leaves the line between them
+undefended.
 """
 
 import asyncio
@@ -18,6 +22,7 @@ import pytest
 
 from display import __main__ as entry
 from display.config import ConfigError
+from display.panel import SurfaceUnavailable
 from display.state import StateSchemaTooNew
 
 
@@ -68,6 +73,94 @@ def test_an_unexpected_failure_is_not_swallowed_into_a_tidy_exit(monkeypatch):
 
     with pytest.raises(RuntimeError):
         entry.main()
+
+
+class TestWhetherThisDeviceHasALabelSurface:
+    """Two roads to no label, and only one of them is a fault.
+
+    `architecture.md` § Direction: a device with no label surface is a supported
+    configuration, not a broken deployment. A device whose configured panel will
+    not open is broken — and still rotates the wall, because the label is an
+    annotation of the product and never a precondition for it.
+    """
+
+    def test_a_device_with_no_panel_configured_gets_no_surface_and_no_complaint(self, settings, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            assert entry.label_surface(settings) is None
+
+        assert caplog.records == [], "a supported deployment was reported as a fault"
+
+    def test_a_configured_panel_that_will_not_open_is_a_raise_and_not_a_second_none(self, settings):
+        """The panel is absent on every machine this suite runs on, which is what
+        makes this the real path rather than a simulated one.
+
+        A raise rather than `None` because the caller has to tell the two apart:
+        `None` is a deployment with no panel, and this is a deployment whose panel
+        is broken. Collapsing them is how a broken panel became invisible on the
+        health surface.
+        """
+        import dataclasses
+
+        configured = dataclasses.replace(settings, epd_device="no_such_vendor.no_such_panel")
+
+        with pytest.raises(SurfaceUnavailable) as raised:
+            entry.label_surface(configured)
+
+        # **Two roads and one type, which is the point.** A laptop has no text
+        # stack and stops at the import; a Pi has one and stops at the device. The
+        # caller must not have to tell them apart — but the operator must, so
+        # whichever road was taken has to name what is missing.
+        assert any(
+            named in str(raised.value) for named in ("no_such_vendor.no_such_panel", "--group raster")
+        ), f"the failure names neither the device nor the missing install: {raised.value}"
+
+    async def test_a_broken_panel_does_not_stop_the_daemon_starting(self, monkeypatch, settings, tv, caplog):
+        """**Driven through `_run` rather than around it**, because the claim is
+        about the wiring and not about either end of it.
+
+        `label_surface` raising and the daemon reporting `surface_error` were both
+        tested while the line joining them — the `except` in the composition root —
+        was covered by nothing; a mutation sweep changed it to catch
+        `ZeroDivisionError` and every test still passed. That mutation is a daemon
+        that refuses to start because a panel is unplugged, which inverts this
+        product's whole posture: the television is the product and the label
+        annotates it.
+        """
+        import dataclasses
+        import logging
+
+        from display import daemon as daemon_module
+
+        built: dict[str, object] = {}
+
+        class Recorder(daemon_module.Daemon):
+            def __init__(self, **kwargs) -> None:
+                built.update(kwargs)
+                super().__init__(**kwargs)
+
+            async def run(self, stop) -> None:
+                return None
+
+        def _no_panel(_settings):
+            # Stubbed rather than provoked, so the message is the same on a laptop
+            # with no text stack and on a Pi with one — this test is about the line
+            # that joins the two ends, not about either end.
+            raise SurfaceUnavailable("could not open the e-paper device 'waveshare_epd.it8951' (no SPI device)")
+
+        monkeypatch.setattr(entry, "load", lambda: dataclasses.replace(settings, epd_device="waveshare_epd.it8951"))
+        monkeypatch.setattr(entry, "SamsungTv", lambda **kwargs: tv)
+        monkeypatch.setattr(entry, "Daemon", Recorder)
+        monkeypatch.setattr(entry, "label_surface", _no_panel)
+
+        with caplog.at_level(logging.WARNING):
+            assert await entry._run() == 0, "a panel that would not open stopped a daemon whose television was fine"
+
+        assert built["surface"] is None
+        assert "no SPI device" in str(built["surface_error"]), "the reason was dropped on the way in"
+        assert any(record.__dict__.get("event") == "panel.unavailable" for record in caplog.records)
+        assert "waveshare_epd.it8951" in caplog.text, "the journal does not name which device could not be opened"
 
 
 async def test_a_crash_still_closes_the_art_channel_on_the_way_out(settings, tv, state, clock):

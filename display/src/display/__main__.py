@@ -17,13 +17,55 @@ import signal
 import sys
 
 from display import logs
-from display.config import ConfigError, load
+from display.config import ConfigError, Settings, load
 from display.daemon import Clock, Daemon
 from display.manifest import Watcher
+from display.panel import Geometry, LabelSurface, SurfaceUnavailable
 from display.state import DisplayState, StateSchemaTooNew
 from display.tv.samsung import SamsungTv
 
 log = logging.getLogger(__name__)
+
+
+def label_surface(settings: Settings) -> LabelSurface | None:
+    """This device's label surface, None when it has none, raising when it has a broken one.
+
+    **The three outcomes are three different things and the daemon reports them
+    differently.** No `EPD_DEVICE` means this device draws no label, which
+    `architecture.md` § Direction makes a supported deployment rather than a
+    fault — `None`, and nothing said. A configured panel that will not open is a
+    device that is *meant* to have a label and does not, which is worth saying
+    out loud — hence a raise rather than a second `None`, because two roads to
+    the same return value is how a broken panel came to look identical to a
+    deployment that never had one.
+
+    **The rasterizer is imported here rather than at the top of this module.** It
+    pulls in Pango through PyGObject, which is installed only where a label is
+    actually drawn, and importing it unconditionally would make a text stack a
+    requirement for every device including the ones with no panel at all.
+    """
+    if not settings.epd_device:
+        return None
+    try:
+        from display.panel.epaper import EpaperSurface, open_panel  # noqa: PLC0415 -- see the docstring
+        from display.panel.pango import PangoRasterizer  # noqa: PLC0415 -- see the docstring
+    except ImportError as exc:
+        # The text stack being absent lands in the same place as the panel being
+        # absent, and it is a provisioning mistake somebody can fix while the wall
+        # keeps working — so it is converted rather than allowed to crash a daemon
+        # whose television is perfectly healthy.
+        raise SurfaceUnavailable(f"the label's text stack is not installed ({exc}); try `uv sync --group raster`") from exc
+
+    return EpaperSurface(
+        epd=open_panel(settings.epd_device),
+        rasterizer=PangoRasterizer(),
+        geometry=Geometry(
+            width_px=settings.epd_panel_width_px,
+            height_px=settings.epd_panel_height_px,
+            margin_px=settings.epd_margin_px,
+        ),
+        rotate_degrees=settings.epd_rotate_degrees,
+    )
 
 
 async def _run() -> int:
@@ -52,9 +94,36 @@ async def _run() -> int:
     # against a timestamp the store wrote. Two sources here would be two answers
     # to the same question, and the store's is the one that has to survive a
     # restart.
+    # **A panel that will not open is reported, not fatal.** The television is the
+    # product and the label annotates it, so a broken panel costs the label and
+    # nothing else — but it is carried into the daemon rather than logged and
+    # dropped, because the journal is on the Pi and the heartbeat is what curation
+    # can see. Without it a configured-but-broken panel reads on the health surface
+    # exactly like a device that never had one.
+    surface: LabelSurface | None = None
+    surface_error: str | None = None
+    try:
+        surface = label_surface(settings)
+    except SurfaceUnavailable as exc:
+        surface_error = str(exc)
+        log.warning(
+            "this device has a panel configured (%s) and no label will be drawn (%s); the wall keeps rotating",
+            settings.epd_device,
+            exc,
+            extra={"event": "panel.unavailable"},
+        )
+
     clock = Clock.system()
     with DisplayState(settings.state_path, now=clock.now) as state:
-        daemon = Daemon(settings=settings, tv=tv, state=state, watcher=watcher, clock=clock)
+        daemon = Daemon(
+            settings=settings,
+            tv=tv,
+            state=state,
+            watcher=watcher,
+            clock=clock,
+            surface=surface,
+            surface_error=surface_error,
+        )
         await daemon.run(stop)
     return 0
 

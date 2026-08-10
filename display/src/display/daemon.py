@@ -45,15 +45,42 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 
 from display import brightness as brightness_module
+from display import heartbeat as heartbeat_module
 from display.config import Settings
+from display.episodes import Backoff, ReportOnce
 from display.logs import work_context
 from display.manifest import Entry, Manifest, Watcher
+from display.panel import LabelSurface, Layout, lay_out, read_label
 from display.state import Binding, DisplayState, UploadStatus
-from display.tv import RemovalOutcome, TvClient, TvRemovalUnconfirmed, TvUnavailable, TvUploadFailed
+from display.tv import RemovalOutcome, SelectionAnnouncement, TvClient, TvRemovalUnconfirmed, TvUnavailable, TvUploadFailed
 
 log = logging.getLogger(__name__)
+
+#: How long a label may spend being drawn before this loop stops waiting for it.
+#:
+#: **The whole of the product's label budget rather than a fraction of it.** The
+#: label must match what the television is showing within 15 s of the picture
+#: changing (`nonfunctional-requirements.md` § Performance), and the panel's own
+#: refresh is most of that — so this is the loosest bound that still honours the
+#: requirement, and a draw that has passed it has already missed the thing it was
+#: for. A healthy 16-level frame measures 1.5–1.9 s and comes nowhere near it;
+#: what this catches is an SPI transaction that is never coming back, which is the
+#: one way a panel could stop the wall that no `except` clause can reach.
+LABEL_DRAW_BUDGET_SECONDS: Final[float] = 15.0
+
+
+def _forget(draw: "asyncio.Future[Layout]") -> None:
+    """Collect an abandoned draw's outcome, so nothing warns about it later.
+
+    A draw left running past its budget is one nobody is waiting for any more, and
+    a future whose exception is never read prints a warning when it is collected —
+    on the one code path where the journal is already saying something truer.
+    """
+    if not draw.cancelled():
+        draw.exception()
 
 
 class Shown(enum.Enum):
@@ -106,6 +133,8 @@ class Daemon:
         state: DisplayState,
         watcher: Watcher,
         clock: Clock,
+        surface: LabelSurface | None = None,
+        surface_error: str | None = None,
         rng: random.Random | None = None,
     ) -> None:
         self._settings = settings
@@ -114,6 +143,76 @@ class Daemon:
         self._watcher = watcher
         self._clock = clock
         self._rng = rng if rng is not None else random.Random()
+
+        #: Where this device draws its label, or None if it has none. **A device
+        #: with no label surface is a supported deployment, not a fault** — the
+        #: wall is a television, and the label is an annotation of it
+        #: (`architecture.md` § Direction). Nothing below may report its absence
+        #: as a problem. The heartbeat therefore reports such a device with
+        #: `has_label_surface` false and `label_surface_working` null — "there is
+        #: nothing here to ask", as against the `false` that means a panel is
+        #: broken. The two fields were one nullable field until that collapse made
+        #: a device with no panel indistinguishable from a panel that would not
+        #: open.
+        self._surface = surface
+        self._label_failed = ReportOnce()
+        #: The draw handed to a worker thread, kept until it finishes. **A
+        #: one-at-a-time gate rather than a queue**: the budget stops the loop
+        #: waiting on a hung panel, but it cannot stop the thread, and dispatching
+        #: another every rotation would fill the shared executor with threads
+        #: parked in a driver — at which point the television's own blocking calls,
+        #: which use that same executor, would start waiting behind a panel. That
+        #: is a panel stopping the wall by the back door.
+        self._label_draw: asyncio.Future[Layout] | None = None
+        #: What the panel was last asked to name, as the television's own id for
+        #: it. **Recorded on the attempt rather than the success**, which is what
+        #: keeps a refusing panel from being re-asked on every one-second poll: a
+        #: surface that failed gets its next chance when the wall next changes,
+        #: which is also when a stale label would start being wrong.
+        #:
+        #: The cost of that rule, stated so nobody has to rediscover it: a draw the
+        #: one-at-a-time gate turns away counts as an attempt too, so the panel
+        #: keeps the older label until the wall next changes. That is reachable
+        #: only once a panel has already run past the label budget and been
+        #: reported broken, which is a state where one stale label is not the
+        #: problem.
+        self._captioned_content_id: str | None = None
+        #: Why this device has no surface, when it was configured to have one.
+        #: **The third state, and the reason it is carried rather than logged and
+        #: dropped at the composition root**: without it a panel that failed to
+        #: open is a `surface` of None, which on the health surface is
+        #: indistinguishable from a device that never had a panel — the same
+        #: two-meanings-in-one-value fault `has_label_surface` was split out to
+        #: fix, arriving one level up.
+        self._surface_error = surface_error
+        #: Whether the surface accepted the last label it was given. Stays None
+        #: on a device with no surface, so "never tried" and "tried and failed"
+        #: cannot be confused — but **False from the outset on a device whose
+        #: panel would not open**, because that one has already failed.
+        self._label_working: bool | None = False if surface is None and surface_error else None
+
+        #: What the set last announced about its own wall, which is the only
+        #: honest account of it this product has. Written from the television's
+        #: reader task, read here — a plain assignment either way, so no lock:
+        #: it is one reference, and a reader that catches the previous value gets
+        #: a stale id rather than a torn one.
+        self._announced_content_id: str | None = None
+        tv.observe_selections(self._note_announcement)
+
+        #: Whether the set was showing art the last time it was actually asked.
+        #: **None until it has been**, rather than defaulting to either answer: the
+        #: gate is only consulted when something is about to happen, so a fresh
+        #: process genuinely does not know, and a heartbeat that guessed would be
+        #: reporting a read nobody performed.
+        self._showing_art: bool | None = None
+
+        self._heartbeat_at: float | None = None
+        #: Seeded with the panel's failure when there was one, because at startup
+        #: that *is* the last thing that went wrong. Anything later overwrites it,
+        #: which is right — a television that has since gone away is the more
+        #: urgent of the two.
+        self._last_error: str | None = surface_error
+        self._heartbeat_failed = ReportOnce()
 
         #: Positions into the current manifest's entries, in the order they will
         #: be shown. Held apart from the entries themselves so that shuffling is
@@ -130,18 +229,15 @@ class Daemon:
         self._attempted_at: float | None = None
         self._has_shown = False
 
-        #: Whether the wall has already been reported as not accepting selections.
-        #: Held for the same reason `_reported_unavailable` is: a television whose
-        #: panel is dark stays dark for hours, and a line per rotation would be a
-        #: hundred a night saying the one thing that has not changed. Reported on
-        #: the way in and on the way out, never in between.
-        self._reported_wall_unchanged = False
+        #: The wall is taking selections and displaying none of them. A television
+        #: whose panel is dark stays dark for hours, and a line per rotation would
+        #: be a hundred a night saying the one thing that has not changed.
+        self._wall_unchanged = ReportOnce()
 
-        #: Held for the same reason, and reported at INFO rather than WARNING
-        #: because somebody watching their own television is not a fault. It is
-        #: still said, because "the wall stopped" otherwise has no explanation in
-        #: the journal at all.
-        self._reported_not_our_wall = False
+        #: Somebody is watching their own television. Reported at INFO rather than
+        #: WARNING because that is not a fault — but still reported, because "the
+        #: wall stopped" otherwise has no explanation in the journal at all.
+        self._not_our_wall = ReportOnce()
 
         #: When the wall may next be asked to change, once it has been found not
         #: changing. **Rotation has a timer and the directive path does not**, so
@@ -151,8 +247,11 @@ class Daemon:
         #: at a set that will ignore every one. It backs off on the same ladder as an unreachable
         #: television, because "the set is not doing what it is told" is that same
         #: situation arriving by a route that raises nothing.
-        self._wall_retry_not_before: float | None = None
-        self._wall_retry_seconds = settings.tv_retry_min_seconds
+        self._wall_retry = Backoff(
+            minimum=settings.tv_retry_min_seconds,
+            maximum=settings.tv_retry_max_seconds,
+            monotonic=clock.monotonic,
+        )
 
         #: Reconciling the binding table against the set is **owed until it is
         #: done**, not attempted once when a manifest lands. A new manifest is
@@ -166,11 +265,32 @@ class Daemon:
         #: then be retried at the poll rate — one listing, one removal request and
         #: one INFO line a second, which is the same unbounded cadence as the two
         #: this loop already guards against.
-        self._reconcile_not_before: float | None = None
+        #:
+        #: **The same `Backoff` the connection and the upload retry use**, at a
+        #: fixed wait rather than a doubling one — equal bounds make `hold`'s
+        #: ladder a constant. It was a hand-rolled pair of a nullable float and a
+        #: comparison until the shape it rhymed with was extracted; keeping the
+        #: last copy would have left one due-time gate whose reset, its
+        #: "immediately the first time" rule and its arithmetic all had to be read
+        #: rather than recognised.
+        self._reconcile_wait = Backoff(
+            minimum=settings.tv_retry_max_seconds,
+            maximum=settings.tv_retry_max_seconds,
+            monotonic=clock.monotonic,
+        )
         self._brightness_at: float | None = None
         self._brightness_value: int | None = None
-        self._retry_seconds: float = settings.tv_retry_min_seconds
-        self._reported_unavailable = False
+
+        #: The set could not be reached at all. Its own ladder, separate from the
+        #: wall's: a television that is asleep and one that is awake and ignoring
+        #: selections are different conditions, and recovering from one says
+        #: nothing about the other.
+        self._connection_retry = Backoff(
+            minimum=settings.tv_retry_min_seconds,
+            maximum=settings.tv_retry_max_seconds,
+            monotonic=clock.monotonic,
+        )
+        self._unavailable = ReportOnce()
 
     async def run(self, stop: asyncio.Event) -> None:
         """Reconcile until asked to stop."""
@@ -211,6 +331,12 @@ class Daemon:
             # out. Under `Restart=always` that turns one crash into a daemon that
             # cannot reach its own television on the way back up.
             await self._tv.close()
+            # **The panel is released too, and on e-paper that is not bookkeeping**
+            # — `close()` is the sleep/power-down, and a panel left driven holds
+            # its rails energised. Closed after the television because the set is
+            # the one holding a network slot somebody else may want.
+            if self._surface is not None:
+                self._surface.close()
             if not crashed:
                 log.info("display plane stopped", extra={"event": "daemon.stopped"})
 
@@ -233,32 +359,52 @@ class Daemon:
             # usually what arrives after somebody has fixed whatever the set was
             # unhappy about. The wait exists to stop a *retry* loop, not to make
             # the plane ignore news.
-            self._reconcile_not_before = None
+            self._reconcile_wait.clear()
 
         manifest = self._watcher.current
         if manifest is None:
+            # **Still beats.** A plane with no manifest is the state a fresh
+            # install sits in, and it is exactly when somebody wants to know this
+            # process is alive — returning here without a heartbeat would let
+            # curation's panel report a running plane as one that has never
+            # spoken.
+            self._beat(manifest=None)
             return self._settings.poll_interval_seconds
 
         try:
             await self._connected()
-            if self._reconciliation_owed and self._reconcile_is_due():
+            if self._reconciliation_owed and self._reconcile_wait.is_due():
                 # Cleared only when the work actually settled: a set that goes
                 # away halfway through raises, and one that cannot say what it
                 # removed reports so — both leave the work owed for a later pass
                 # rather than recorded as done.
                 self._reconciliation_owed = not await self._reconcile_with_the_set(manifest)
-                self._reconcile_not_before = (
-                    None if not self._reconciliation_owed else self._clock.monotonic() + self._settings.tv_retry_max_seconds
-                )
+                if self._reconciliation_owed:
+                    self._reconcile_wait.hold()
+                else:
+                    self._reconcile_wait.clear()
             await self._apply_brightness()
             acted = await self._act_on_directive(manifest)
             if not acted:
                 await self._rotate_if_due(manifest)
             await self._upload_one_pending(manifest)
+            # Last, because it reconciles the label against whatever the pass
+            # above left on the wall — including the case where the pass did
+            # nothing and the wall changed anyway.
+            await self._caption_the_wall_the_set_reports(manifest)
         except TvUnavailable as exc:
+            # **The heartbeat is written on this path too, and that is the whole
+            # point of it.** A television that has gone away is the condition an
+            # operator most wants reported, and a plane that only beat on good
+            # passes would fall silent exactly when it had something to say —
+            # leaving curation to report "has not reported" for a process that is
+            # running perfectly and telling the truth about a set that is not.
+            self._record_error(str(exc))
+            self._beat(manifest=manifest, television_reachable=False)
             return self._back_off(exc)
 
         self._recover()
+        self._beat(manifest=manifest, television_reachable=True)
         return self._settings.poll_interval_seconds
 
     # -- the manifest ------------------------------------------------------
@@ -309,14 +455,6 @@ class Daemon:
         # at the current work there would hand it a second full interval on every
         # catalogue edit, which on a busy afternoon is a wall that stops moving.
         self._cursor = found_at if not self._has_shown else (found_at + 1) % len(self._order)
-
-    def _reconcile_is_due(self) -> bool:
-        """Whether enough time has passed to bother the set about this again.
-
-        Only ever false after an attempt that left the work owed — the first one
-        happens immediately, which is what a fresh install needs.
-        """
-        return self._reconcile_not_before is None or self._clock.monotonic() >= self._reconcile_not_before
 
     # -- directives --------------------------------------------------------
 
@@ -559,12 +697,11 @@ class Daemon:
             self._state.set_last_selected_work_id(entry.work_id)
             self._attempted_at = self._clock.monotonic()
             self._has_shown = True
-            if self._reported_wall_unchanged:
+            if self._wall_unchanged.end():
                 log.info(
                     "the television is changing what it displays again",
                     extra={"event": "rotation.wall_recovered"},
                 )
-                self._reported_wall_unchanged = False
             log.info(
                 "showing %s",
                 entry.label.get("title") or entry.work_id,
@@ -574,7 +711,188 @@ class Daemon:
                     "theme_id": manifest.theme_id,
                 },
             )
+            await self._caption(entry, content_id)
             return Shown.YES
+
+    async def _caption(self, entry: Entry | None, content_id: str) -> None:
+        """Put a work's label on the device's own surface, if it has one.
+
+        **Driven from the daemon's own task rather than from the set's callback**,
+        though the announcement is what says the wall changed. The two are the same
+        event; the difference is which task does the work. An e-paper redraw is a
+        full frame — 1.5–1.9 s measured, with no partial refresh — and doing that
+        inside the television client's callback would run it on the websocket's
+        reader task, delaying every message on that socket including the
+        confirmations the rotation is waiting for. So the reader task records an id
+        and this, later, draws.
+
+        **And not on the event loop either, which is the same argument one level
+        down.** Moving the draw off the reader task does not move it off the loop
+        they share: seconds spent rasterising and clocking bytes out over SPI in a
+        coroutine delay that socket's messages exactly as much as doing it in the
+        callback would. It goes to a worker thread, as the television client's own
+        blocking construction does, and it is bounded — because a driver wedged in
+        a bad transaction never raises, and an unbounded wait is the one way a
+        panel can stop the wall that no `except` clause reaches.
+
+        **Called only for a picture the set says is up**, which is what keeps the
+        label honest: captioning on the strength of a request would name a picture
+        the set accepted and never displayed, and a wrong label is worse than a
+        stale one because nobody can tell it is wrong.
+
+        `entry` is None when the wall is showing something this manifest cannot
+        name — see `_caption_the_wall_the_set_reports`. That draws an empty label
+        rather than leaving the previous one up, for the same reason.
+
+        **Nothing in here may stop the wall.** A surface that is broken, missing
+        or slow leaves the television rotating; that is the whole posture of this
+        loop applied to an annotation of it.
+        """
+        surface = self._surface
+        if surface is None:
+            return
+        self._captioned_content_id = content_id
+        if self._label_draw is not None and not self._label_draw.done():
+            self._label_would_not_take_it("the previous label is still being drawn")
+            return
+
+        # **The gate is the draw's own state, not a flag somebody remembers to
+        # clear.** A boolean set here and cleared inside `_draw` is wrong in a case
+        # that leaves the panel dark for the life of the process: if the budget
+        # runs out while the work item is still *queued* rather than running, the
+        # thread never starts, so nothing in `_draw` ever executes to clear it —
+        # and every later label is turned away by a gate guarding a draw that
+        # happened. Asking the task whether it is finished is right for both the
+        # queued case and the running one.
+        draw = asyncio.ensure_future(asyncio.to_thread(self._draw, surface, entry))
+        self._label_draw = draw
+        finished, _ = await asyncio.wait({draw}, timeout=LABEL_DRAW_BUDGET_SECONDS)
+        if not finished:
+            # **Not cancelled, deliberately.** Cancelling would mark it done while
+            # the thread carried on — the gate would open onto a panel still being
+            # written to, which is what the gate exists to prevent. Left running,
+            # it opens the gate when the panel actually comes back, and its outcome
+            # is collected so nothing warns about an exception nobody read.
+            draw.add_done_callback(_forget)
+            self._label_would_not_take_it(f"the draw ran past the {LABEL_DRAW_BUDGET_SECONDS:g}s label budget")
+            return
+        try:
+            layout = draw.result()
+        # **Widened from `SurfaceUnavailable` alone once a real surface existed,
+        # and the docstring above is why.** `show` converts its own failures, but
+        # `geometry` and `measure` are read outside it — and `measure` on the
+        # e-paper surface reaches a text stack through C bindings, which raises
+        # GLib errors related to nothing this module can name. A promise that
+        # nothing in here may stop the wall cannot be kept by a catch that lists
+        # the exceptions somebody thought of.
+        except Exception as exc:  # prawduct:allow prawduct/broad-except -- see above
+            self._label_would_not_take_it(str(exc))
+            return
+
+        self._label_working = True
+        if self._label_failed.end():
+            log.info("the label surface is taking labels again", extra={"event": "label.recovered"})
+        if layout.dropped:
+            # Not a failure — the drop rule working — but it is the only place
+            # anyone would learn that this device's surface is too small for the
+            # corpus, so it is said rather than left to be noticed by eye.
+            log.info(
+                "the label surface had no room for %d line(s) of this label",
+                len(layout.dropped),
+                extra={"event": "label.truncated", "dropped": list(layout.dropped)},
+            )
+
+    def _label_would_not_take_it(self, why: str) -> None:
+        """One place for every way a label fails to reach the surface.
+
+        They differ only in the sentence: the response is the same to all of them
+        — say so once, keep rotating — for the reason `SurfaceUnavailable` is one
+        type rather than a family.
+        """
+        self._label_working = False
+        self._record_error(f"the label surface refused a label ({why})")
+        if self._label_failed.begin():
+            # Once per episode, like every other persistent condition here: a
+            # panel with a loose ribbon fails on every rotation, all night.
+            log.warning(
+                "could not put the label on this device's surface (%s); the wall keeps rotating",
+                why,
+                extra={"event": "label.failed"},
+            )
+
+    def _draw(self, surface: LabelSurface, entry: Entry | None) -> Layout:
+        """Lay a label out and put it on the surface. **Runs on a worker thread.**
+
+        The measuring and the drawing are one unit of work here rather than two
+        because both are the same kind of expensive — `measure` reaches the same
+        text stack the drawing does, and splitting them would put half the cost
+        back on the loop for no gain.
+
+        Nothing here touches this object's state, which is what makes it safe to
+        run off the loop: the caller reads the outcome through the task it holds,
+        and that task finishing is also what opens the gate on the next draw.
+        """
+        lines = read_label(entry.label).lines() if entry is not None else ()
+        layout = lay_out(lines, surface.geometry, surface.measure)
+        surface.show(layout)
+        return layout
+
+    def _note_announcement(self, announcement: SelectionAnnouncement) -> None:
+        """Remember what the set says is on its wall. Runs on the client's reader task.
+
+        Deliberately the cheapest thing that could work: one assignment, no I/O,
+        no lock, nothing that can raise. Everything expensive this could trigger
+        happens on the daemon's own task instead — see `_caption`.
+
+        **It records announcements this plane did not cause**, which is the point
+        of subscribing at all: somebody using the remote changes the wall, and
+        both the heartbeat and the label should follow what is actually up rather
+        than what we last put there.
+        """
+        self._announced_content_id = announcement.content_id
+
+    async def _caption_the_wall_the_set_reports(self, manifest: Manifest) -> None:
+        """Re-label when the wall changed without this plane changing it.
+
+        **The remote is a curator too.** Somebody in the room picks a different
+        work in art mode, and nothing in the rotation path runs: the panel would go
+        on naming the previous picture until the interval came round, up to a full
+        rotation later. That is not a stale label, which is at least visibly old —
+        it is a confident one that is wrong, on the only surface the person
+        standing in front of the wall can read, and there is no way for them to
+        tell. The same rule that keeps this plane from captioning a selection the
+        set never displayed requires captioning one it displayed without being
+        asked.
+
+        **A picture this manifest cannot name gets an empty label, not the last
+        one.** Choosing an image out of the set's own art store is a supported
+        thing to do with a remote, and no label text exists for it anywhere on this
+        device. Blank says "nothing is known about what you are looking at"; the
+        previous work's label says something false.
+
+        Cheap on the ordinary pass: two references compared, and the binding table
+        is only read when they differ — which is once per rotation, plus once per
+        time somebody actually touches the remote.
+        """
+        # The surface is checked here as well as inside `_caption`, which is not
+        # belt-and-braces: the lookup below is a read of the binding table, and a
+        # device with no panel would otherwise pay for one on every poll — a query
+        # a second, for ever, to decide what to draw on nothing.
+        if self._surface is None:
+            return
+        announced = self._announced_content_id
+        if announced is None or announced == self._captioned_content_id:
+            return
+        await self._caption(self._entry_showing(announced, manifest), announced)
+
+    def _entry_showing(self, content_id: str, manifest: Manifest) -> Entry | None:
+        """The manifest entry for what the set says it is showing, if it carries one."""
+        for binding in self._state.bindings():
+            if binding.tv_content_id != content_id:
+                continue
+            position = manifest.index_of(binding.artwork_id)
+            return manifest.entries[position] if position is not None else None
+        return None
 
     async def _the_wall_is_ours_to_change(self) -> bool:
         """Whether the set is showing art, and may therefore be asked to change it.
@@ -593,20 +911,20 @@ class Daemon:
         actually moved. A no then backs off on the shared ladder, so a whole
         evening of television costs a handful of reads rather than thousands.
         """
-        if await self._tv.showing_art():
-            if self._reported_not_our_wall:
+        showing = await self._tv.showing_art()
+        self._showing_art = showing
+        if showing:
+            if self._not_our_wall.end():
                 log.info(
                     "the television is showing art again; resuming the rotation",
                     extra={"event": "rotation.wall_returned"},
                 )
-                self._reported_not_our_wall = False
             return True
 
-        if not self._reported_not_our_wall:
+        if self._not_our_wall.begin():
             # Said once for the same reason a dark wall is: somebody watches
             # television for hours, and a line per attempt would bury the ERRORs
             # that are this plane's only failure channel.
-            self._reported_not_our_wall = True
             log.info(
                 "the television is not in art mode; leaving the wall alone until it is",
                 extra={"event": "rotation.wall_not_ours"},
@@ -630,7 +948,7 @@ class Daemon:
         """
         if self._tv.art_mode_announcement_pending():
             self._wall_is_answering()
-        return self._wall_retry_not_before is None or self._clock.monotonic() >= self._wall_retry_not_before
+        return self._wall_retry.is_due()
 
     def _hold_off_the_wall(self) -> None:
         """Back off before asking again, and lengthen the wait each time.
@@ -639,13 +957,11 @@ class Daemon:
         off costs a handful of attempts rather than one a second — and the wall
         resumes within that ceiling of somebody switching the set back on.
         """
-        self._wall_retry_not_before = self._clock.monotonic() + self._wall_retry_seconds
-        self._wall_retry_seconds = min(self._wall_retry_seconds * 2, self._settings.tv_retry_max_seconds)
+        self._wall_retry.hold()
 
     def _wall_is_answering(self) -> None:
         """Forget the backoff, because the set is acting on what it is told."""
-        self._wall_retry_not_before = None
-        self._wall_retry_seconds = self._settings.tv_retry_min_seconds
+        self._wall_retry.clear()
 
     async def _report_wall_unchanged(self, content_id: str) -> None:
         """Say once that the set is taking selections and displaying none of them.
@@ -657,9 +973,8 @@ class Daemon:
         changing* for somebody reading the journal. This one costs a call on a
         rotation that has already failed, so it is free in the ordinary case.
         """
-        if self._reported_wall_unchanged:
+        if not self._wall_unchanged.begin():
             return
-        self._reported_wall_unchanged = True
         mode = await self._tv.reported_art_mode()
         log.warning(
             "the television accepted %s and is not displaying it; "
@@ -923,6 +1238,66 @@ class Daemon:
             },
         )
 
+    # -- the heartbeat -----------------------------------------------------
+
+    def _beat(self, *, manifest: Manifest | None, television_reachable: bool | None = None) -> None:
+        """Write the heartbeat if it is due, and never let that stop the wall.
+
+        **Rate-limited here rather than by the caller**, so every path through
+        `tick` can call it unconditionally — including the two that return early.
+        A heartbeat gated behind the good path is one that goes quiet precisely
+        when it matters.
+
+        Its own failure is an episode like any other. The disk being full or
+        read-only is worth an operator's attention, and it is worth exactly one
+        line per episode rather than one a minute.
+        """
+        elapsed = self._clock.monotonic()
+        if self._heartbeat_at is not None and elapsed - self._heartbeat_at < heartbeat_module.INTERVAL_SECONDS:
+            return
+        self._heartbeat_at = elapsed
+
+        health = heartbeat_module.Health(
+            manifest_schema=f"{manifest.schema_major}.{manifest.schema_minor}" if manifest is not None else None,
+            theme_id=manifest.theme_id if manifest is not None else None,
+            current_work_id=self._state.last_selected_work_id,
+            announced_content_id=self._announced_content_id,
+            television_reachable=television_reachable,
+            television_showing_art=self._showing_art,
+            # **Whether this device is meant to draw a label**, which is not the
+            # same question as whether it currently can. A panel that failed to
+            # open leaves no surface and is still a device with one, so reporting
+            # `false` here would tell curation this deployment has no panel — the
+            # one reading that makes a broken panel invisible.
+            has_label_surface=self._surface is not None or self._surface_error is not None,
+            label_surface_working=self._label_working,
+            last_error=self._last_error,
+        )
+        try:
+            heartbeat_module.write(self._settings.art_root, health, reported_at=self._clock.now())
+        except OSError as exc:
+            if self._heartbeat_failed.begin():
+                log.warning(
+                    "could not write the heartbeat to %s (%s); the wall is unaffected",
+                    heartbeat_module.path_in(self._settings.art_root),
+                    exc,
+                    extra={"event": "heartbeat.failed"},
+                )
+            return
+        if self._heartbeat_failed.end():
+            log.info("the heartbeat is being written again", extra={"event": "heartbeat.recovered"})
+
+    def _record_error(self, message: str) -> None:
+        """Keep the last thing that went wrong, for the heartbeat to carry.
+
+        **Not cleared by a good pass.** A plane that dropped its error the moment
+        anything succeeded would report itself fine while failing every other
+        minute, which is the shape of failure this deployment is most likely to
+        have. It is overwritten by the next failure, so it is always the latest
+        rather than the first.
+        """
+        self._last_error = message
+
     def _back_off(self, exc: TvUnavailable) -> float:
         """Report the television going away once, then wait longer each time.
 
@@ -930,18 +1305,14 @@ class Daemon:
         WARNING a second until morning buries every other line in the journal. The
         recovery is logged too, so the pair reads as an episode with a length.
         """
-        if not self._reported_unavailable:
+        if self._unavailable.begin():
             log.warning("%s; holding the wall where it is and retrying", exc, extra={"event": "tv.unavailable"})
-            self._reported_unavailable = True
-        wait = self._retry_seconds
-        self._retry_seconds = min(self._retry_seconds * 2, self._settings.tv_retry_max_seconds)
-        return wait
+        return self._connection_retry.hold()
 
     def _recover(self) -> None:
-        if self._reported_unavailable:
+        if self._unavailable.end():
             log.info("the television is answering again", extra={"event": "tv.recovered"})
-            self._reported_unavailable = False
-        self._retry_seconds = self._settings.tv_retry_min_seconds
+        self._connection_retry.clear()
 
     async def _wait(self, stop: asyncio.Event, seconds: float) -> None:
         """Sleep, but wake immediately when asked to stop.

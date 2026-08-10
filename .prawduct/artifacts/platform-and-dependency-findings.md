@@ -87,9 +87,12 @@ label's Cairo/Pango stack and `python3-dev` is absent from it; that file's own
 comment observes that a dependency nothing declares is one nobody installs until
 an import fails, which is what this is.
 
-**`Cython` is unpinned in that `build-requires`,** so the build is reproducible
-today and not over time: a future Cython that stops emitting compatible C would
-break it with nothing in this repository having changed.
+**`Cython` is unpinned in that `build-requires`,** so a future Cython that stops
+emitting compatible C would break the build with nothing in this repository
+having changed. **Closed for the display plane 2026-08-07** by
+`[tool.uv] build-constraint-dependencies` holding it at `>=3.0,<4`;
+`requirements.txt` has no equivalent mechanism and stays exposed, which is one
+more reason that install path is retired rather than maintained.
 
 **`Pins.POWER` is confirmed absent from the installed package** — checked by
 attribute on the built module, not inferred from reading the abandoned checkout
@@ -149,12 +152,14 @@ Two consequences:
    interface means a driver failure is a swap rather than a rewrite, and stops a
    frozen 2023 repository from dictating the project's Python version.
 
-2. **Builds are not reproducible.** omni-epd declares its dependency as
-   `IT8951[rpi] @ git+https://github.com/GregDMeyer/IT8951.git` with no commit
-   pin, so it resolves to whatever `master` currently is. This works today only
-   because the repository has not moved since 2023. Pin `9f13613` explicitly, or
-   vendor the package outright — it is roughly 1,500 lines of frozen code that
-   the project already depends on completely.
+2. **Builds were not reproducible, and now are.** omni-epd declares its
+   dependency as `IT8951[rpi] @ git+https://github.com/GregDMeyer/IT8951.git`
+   with no commit pin, so it resolved to whatever `master` currently was — which
+   worked only because the repository has not moved since 2023. **Pinned to
+   `9f13613` on both install paths 2026-08-07**, with vendoring rejected: it buys
+   only survival if the repository disappears, and costs 1,500 lines of Cython
+   nobody here can maintain plus the ability to take any upstream fix. It stays
+   the escape hatch, and `deploy/pi-freeze-2024.txt` records what to vendor.
 
 ## The e-paper panel, verified against the panel itself
 
@@ -206,6 +211,55 @@ confirmation.
 **No partial refresh exists** on omni-epd's surface for this driver. The whole
 surface is `clear`, `close`, `display`, `prepare`, `sleep`. Every label change —
 even one changed character — is a full-frame redraw at the cost measured above.
+
+### The text stack installs under uv, and needs no distro *Python* packages
+
+Measured on the Pi 2026-08-07, in a scratch venv, because the answer decides
+whether the display plane's panel dependencies can be a uv dependency group at
+all or have to reach into system site-packages.
+
+**`uv pip install pygobject pycairo` resolves PyGObject 3.56.3 and pycairo 1.29.1
+on Trixie/aarch64 and both import cleanly** — `gi.require_version("PangoCairo",
+"1.0")` and the repository import succeed. PyGObject arrived as a wheel; only
+pycairo built, in 12 s. **No `apt install python3-gi` is involved**, which is the
+finding that matters: the 2024 requirements file documents a five-package apt
+prerequisite list for exactly this, and it is now needed only by that install
+path.
+
+**Corrected 2026-08-10 — this section was titled "needs no distro packages" and
+that is not what was measured.** What the Pi run shows is that no distro *Python*
+package is needed; it says nothing about C headers, and the difference cost a red
+CI job the first time the typesetting leg ever executed. `display/uv.lock` is the
+authority and it is unambiguous: **pycairo 1.29.1 publishes Windows wheels only
+(`win32`, `win_amd64` and `win_arm64`, across cp312–cp315), and PyGObject 3.56.3
+publishes no wheel at all** — sdist only. The load-bearing half is that **no Linux
+wheel exists for either**, on any architecture.
+Every Linux install therefore compiles both from source and needs cairo's and
+girepository's development headers present. The GitHub runner had neither and
+failed at `Run-time dependency cairo found: NO (tried pkg-config and cmake)`.
+
+Why the Pi got PyGObject prebuilt when PyPI carries no such wheel is **not settled
+here** — a Pi-local wheel index is the obvious candidate and was not checked. What
+is settled is that "it arrived as a wheel" was an observation about one machine
+and was read as a property of the package. The generalisable form: *a measurement
+of what installs on the machine in front of you bounds nothing about the machine
+in CI*, and the sentence recording it has to carry the architecture it was taken
+on or it will be read as universal.
+
+The consequence is that the panel's dependencies split cleanly by *which machines
+can install them*, which turns out to be the same seam the code splits on:
+`raster` (the text stack, installable on any modern Linux including a CI runner)
+and `epaper` (`omni_epd`, which compiles Cython against the Broadcom SPI and GPIO
+libraries and installs on a Pi and nowhere else). **The typesetting is therefore
+tested by CI rather than only by whoever last had a Pi in front of them.**
+
+**PyGObject does not work on this project's development Mac** and no time should
+be spent on it: it builds under Homebrew and then fails at import inside
+`gi/overrides/__init__.py`. Reinstalling `gobject-introspection`, clearing a
+duplicate glib keg and setting `GI_TYPELIB_PATH` all failed. It is a Homebrew
+toolchain skew, not a product problem — and it is why the label's *judgement*
+(what it says, where it goes) is a separate tier from its rasterization, so only
+the latter needs a machine that can run Pango.
 
 ### Type sizing is NOT settled, and the probe's numbers must not be lifted
 

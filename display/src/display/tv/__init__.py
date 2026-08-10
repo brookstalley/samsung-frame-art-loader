@@ -10,6 +10,8 @@ against `TvClient` and can be exercised without a television or its library.
 from display.tv.client import (
     UPLOADED_CATEGORY,
     RemovalOutcome,
+    SelectionAnnouncement,
+    SelectionObserver,
     TvClient,
     TvRemovalUnconfirmed,
     TvUnavailable,
@@ -19,6 +21,8 @@ from display.tv.client import (
 __all__ = [
     "UPLOADED_CATEGORY",
     "RemovalOutcome",
+    "SelectionAnnouncement",
+    "SelectionObserver",
     "TvClient",
     "TvRemovalUnconfirmed",
     "TvUnavailable",

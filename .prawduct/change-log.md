@@ -48,6 +48,126 @@
      derived view. Don't hand-edit them — add/update a tagged entry here and
      run `prawduct-hook regen-views`. -->
 
+## 2026-08-10: The label learns where it is being drawn, and the daemon says it is alive
+
+<!-- prawduct: chunks=13A | status=shipped | scope=v1-build -->
+
+<!-- `status=shipped` says this work merges to the release surface; it does not
+     say the chunk is finished. Chunk 13A's box stays `[ ]` because its Done-when
+     step 0b — the television confirming that both subscribers receive
+     `image_selected` — needs a set nobody has had access to. The tag describes
+     what merged; the checkbox describes whether the chunk's own conditions are
+     met, and here those two are honestly different. The box is ticked when the
+     set says so. (Checkboxes stopped being a derived view when prawduct retired
+     `regen-views`, so the paragraph above this comment is stale framework prose,
+     not an instruction that still binds — nothing regenerates from this tag.) -->
+
+**Why:** Chunk 13A — everything the panel, the label, the heartbeat and the two
+systemd units need that can be built and proven away from the hardware. The
+chunk exists as its own half because the original Chunk 13 mixed code that runs
+anywhere with a service account, a directory move and a machine cutover, and one
+Critic round over both would have read a refactor, a new subsystem, deploy
+configuration and a migration at once.
+
+**The label renders on the device that owns the surface, and that is a norm now,
+not a preference.** The owner raised mid-build that a display device HAS to
+render its own label — several Pis with panels of different geometry, or a
+machine with no e-ink at all drawing the label into the mat area around the
+artwork — and `architecture.md` § Direction carries it ratified. The consequence
+was structural rather than additional: the chain is **metadata → layout →
+rendering**, only the first link crosses from curation, geometry is a parameter
+instead of a constant, and the seam is "a surface a label can be put on" rather
+than "the e-paper panel". A device configured with **no** label surface is valid,
+not broken. No second surface was built — the monitor-with-a-mat-area device is
+real and future; what it got here is an interface it can be written against
+without one being reopened. The rejected alternative is recorded with it:
+pre-rendering label images in curation puts per-device geometry in the catalogue
+plane, gives the label two upstreams to invalidate, and forecloses a label that
+can ever say anything about *now*.
+
+**The television seam keeps one handler per event, which is why the fan-out was
+the risky part.** A label that subscribed by registering with the library would
+have *replaced* the selection-confirmation handler, and every rotation would then
+have reported a wall that would not move — silently, while the label worked
+perfectly. The fan-out lives inside `SamsungTv`, is written from library source,
+and is pinned by unit tests over the handler. **No set has confirmed it**, which
+is step 0b and the one thing between this chunk and its box.
+
+**The heartbeat file lands and nobody is asked to read it.** Atomic write,
+display → curation: timestamp, manifest version loaded, current work, TV and
+panel state, last error. Curation's reader — written before any writer existed —
+consumes it unmodified, which is now asserted by a contract test rather than
+hoped for.
+
+**A panel failure never stops the wall.** Init, draw and mid-run failures each
+leave rotation running, and the report-once shape the daemon had grown three
+times over (unavailable, wall-unchanged, wall-not-ours) was collapsed into one
+`episodes` module before the panel and the heartbeat became a fourth and fifth
+copy of it.
+
+**Two units, written here and installed in 13B.** Display `Restart=always` with
+the restart-loop guard the recovered 2024 unit lacked; curation
+`Restart=on-failure` plus `MemoryMax`, so a runaway acquisition cannot OOM-kill
+the plane driving the wall. The split is safe because `ART_ROOT` reaches both
+planes through the root `.env` the units point at, so the one fact that was still
+unsettled is not among the three (`User=`, `WorkingDirectory=`, `EnvironmentFile=`)
+the files name. `TimeoutStopSec` is left at systemd's 90 s default deliberately:
+the daemon's worst-case pass is a television connection attempt — ~22 s measured
+against a sleeping set, ~45 s worst case — and a unit that SIGKILLs the process
+leaves the set holding a half-open art channel until it times out on its own side.
+
+**The decision this chunk was named as the trigger for was taken.** IT8951 is
+pinned to `9f13613` on both install paths, and vendoring was rejected — it buys
+only survival if the repository disappears and costs 1,500 lines of Cython nobody
+here can maintain, plus the ability to take any upstream fix; `deploy/pi-freeze-2024.txt`
+records what to vendor if that day comes. `Cython` was the other half of the same
+irreproducibility and is held at `>=3.0,<4` by
+`[tool.uv] build-constraint-dependencies`. `requirements.txt` has no equivalent
+mechanism and stays exposed, which is one more reason that path is retired rather
+than maintained.
+
+**Measured on the Pi, and it changed the packaging:** `uv pip install pygobject
+pycairo` resolves PyGObject 3.56.3 and pycairo 1.29.1 on Trixie/aarch64 and both
+import cleanly, with no `apt install python3-gi` anywhere — so the text stack is a
+uv dependency group rather than something reaching into system site-packages. The
+`raster` group and its separate CI job exist because of that, and because this Mac
+cannot run Pango at all.
+
+**That CI job failed the first time it ever ran, which is the point of having
+opened the PR.** It was written in this chunk and no push had executed it, so
+"the typesetting is tested by CI" was a claim with nothing under it until
+2026-08-10. What it needed was cairo's and girepository's development headers:
+`display/uv.lock` records that **pycairo publishes only Windows wheels and
+PyGObject publishes none at all**, so every Linux install compiles both from
+source, and the job installed fonts and nothing else. The Pi measurement that
+said the text stack "needs no distro packages" was true about distro *Python*
+packages and was read as being about C headers — corrected in
+`platform-and-dependency-findings.md`, with the generalisable half recorded: a
+measurement of what installs on the machine in front of you bounds nothing about
+the machine in CI. The girepository dev package is now probed rather than named,
+because its name changed with PyGObject's move to girepository-2.0 and the runner
+image decides which one exists.
+
+**The type sizes ship provisional and say so at their definition site.** The
+2026-08-04 ladder narrowed the live range to the mid-20s through low-40s px and
+killed the 2024 `"Sans 18"`, but it was rendered with PIL/DejaVu against a product
+that typesets with Pango — different rasterizer, face and metrics, so the numbers
+do not transfer. `tools/label_preview.py` renders the whole chain without a panel
+to narrow it at a desk; only the operator in front of the real panel can settle
+it, and that is 13B's. Shipping the number unmarked was the failure to avoid: a
+value that looks measured because it is precise.
+
+**Reviewed to zero.** Seven Critic rounds carry `chunk: 13A` in the governance
+ledger — three `cumulative` at three independent reviewers each, four
+`verify-resolutions` deltas between them. The first cumulative returned 2
+blocking, 11 warning, 11 note; the last round (`verify-resolutions` at `3570500`)
+returned 0 blocking, 0 warning, 0 note. All three suites green: 159 root, 343
+display, 1925 curation.
+
+**Two entries stay pending in the operator-verification queue** — the
+announcement reaching both subscribers at the set (step 0b), and the type sizes
+at the panel. Neither blocks a build; both need hardware.
+
 ## 2026-08-07: The safety gate reopened the flood it was standing next to
 
 <!-- prawduct: chunks=12 | status=shipped | scope=v1-build -->

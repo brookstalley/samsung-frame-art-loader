@@ -61,6 +61,8 @@ from websockets.exceptions import WebSocketException
 from display.tv.client import (
     UPLOADED_CATEGORY,
     RemovalOutcome,
+    SelectionAnnouncement,
+    SelectionObserver,
     TvClient,
     TvRemovalUnconfirmed,
     TvUnavailable,
@@ -155,6 +157,20 @@ class SamsungTv(TvClient):
         #: loop, one image at a time, the same property `upload`'s marker relies on.
         self._awaiting: tuple[str, asyncio.Future[bool]] | None = None
 
+        #: Everyone else who wants to hear what the set says about the wall.
+        #: **Held here rather than registered with the library**, which keeps one
+        #: handler per event and would let the second subscriber silently unseat
+        #: the confirmation above. Survives reconnection because it belongs to this
+        #: object, while the library callback is re-registered per connection.
+        #:
+        #: **What bounds it**: subscribers register at composition and are one per
+        #: distinct caller — today exactly one, the daemon — so this is bounded by
+        #: the program's structure rather than by anything that happens at runtime.
+        #: That is why it needs no cap and no removal verb, and why re-subscribing
+        #: is idempotent rather than additive: reconnection is the one event that
+        #: would otherwise grow it with time.
+        self._selection_observers: list[SelectionObserver] = []
+
         #: Whether the set has said something about art mode that nobody has
         #: collected yet. An edge, not a state: it says "ask again", and the
         #: answer always comes from a fresh read.
@@ -212,8 +228,37 @@ class SamsungTv(TvClient):
         self._art_mode_announced = True
         self._art = art
 
+    def observe_selections(self, observer: SelectionObserver) -> None:
+        """Also hear what the set says about the picture on the wall.
+
+        **The reason this method exists rather than a second `set_callback`.** The
+        library keeps one handler per event, so registering directly would replace
+        the confirmation handler rather than join it, and every rotation would then
+        fall to its timeout and report a wall that would not move — silently, while
+        the newcomer worked perfectly. Subscribing here fans out instead, which is
+        the only safe way to add a listener.
+
+        Observers are called on the library's reader task, so an observer must be
+        cheap and must not block: a slow one delays every message on this socket,
+        including the confirmations the rotation is waiting for. Anything
+        expensive — drawing a panel, writing a file — belongs on the caller's own
+        task, driven by what it learns here.
+
+        **Registering the same observer twice registers it once.** This list is
+        per client object and lives as long as the process, while the library
+        callbacks below are re-registered on every reconnection — so a caller that
+        reasonably re-subscribed after a drop would otherwise be told twice per
+        announcement for the rest of the daemon's life, and the drawing that
+        follows would redraw a panel it had just drawn. **There is deliberately no
+        way to unsubscribe**: nothing needs one, the list is bounded by the number
+        of distinct callers rather than by time, and an unused removal path is one
+        more thing to keep correct.
+        """
+        if observer not in self._selection_observers:
+            self._selection_observers.append(observer)
+
     def _on_image_selected(self, _event: str, response: dict[str, Any]) -> None:
-        """Resolve the selection this announcement is about, if it is ours.
+        """Resolve the selection this announcement is about, then tell everyone.
 
         Deliberately synchronous and total: it runs on the library's reader task,
         where an exception is not delivered to anybody who could act on it and
@@ -222,24 +267,70 @@ class SamsungTv(TvClient):
         wall as unchanged, the safe direction, since claiming a picture is up when
         it is not is the defect this whole path exists to prevent.
 
+        **The announcement is parsed before the pending selection is consulted,
+        and that order is the point.** The set echoes selections nobody here made
+        — somebody using the remote — and those arrive with no pending selection
+        at all. Reading `_awaiting` first, as this did while confirmation was its
+        only job, discarded exactly the announcements an observer wants most: the
+        ones where the wall changed and this plane did not do it.
+        """
+        announcement = _announced(response)
+        if announcement is None:
+            # **Said, because "the set announced nothing" and "the set announced
+            # something this code cannot read" are otherwise the same journal.** A
+            # diagnostic whose all-clear and cannot-tell print the same line has
+            # retired the question it asks — and this is a foreign API on a
+            # television that takes firmware updates nobody here approves, so the
+            # payload changing shape is a thing that happens rather than a thing
+            # that would be surprising. Without this, that arrives as every
+            # rotation timing out and the wall parking on one picture, with the one
+            # fact that explains it recorded nowhere.
+            #
+            # Truncated because the length is the library's to decide, and one
+            # unreadable frame should not be able to fill a journal that lives in
+            # this device's RAM.
+            log.warning(
+                "the television announced a selection this plane could not read (%.200r); "
+                "the wall may stop changing until it is understood",
+                response,
+                extra={"event": "tv.selection_unreadable"},
+            )
+            return
+        self._resolve_pending(announcement)
+        self._tell_observers(announcement)
+
+    def _resolve_pending(self, announcement: "SelectionAnnouncement") -> None:
+        """Settle the selection now in flight, if this announcement is about it.
+
         An announcement for a *different* id is ignored rather than treated as a
-        refusal: the set echoes selections nobody here made when somebody uses the
-        remote, and letting one of those resolve this future would report the
-        wrong work as shown.
+        refusal: letting one of the set's echoes resolve this future would report
+        the wrong work as shown.
         """
         pending = self._awaiting
         if pending is None:
             return
         content_id, waiter = pending
-        if waiter.done():
+        if waiter.done() or announcement.content_id != content_id:
             return
-        try:
-            announced = json.loads(response["data"])
-        except (KeyError, TypeError, json.JSONDecodeError):
-            return
-        if not isinstance(announced, dict) or announced.get("content_id") != content_id:
-            return
-        waiter.set_result(announced.get("is_shown") == _IS_SHOWN_YES)
+        waiter.set_result(announcement.is_shown)
+
+    def _tell_observers(self, announcement: "SelectionAnnouncement") -> None:
+        """Hand the announcement to every observer, and let none of them break another.
+
+        **Each is isolated, because they are strangers to each other.** An observer
+        that raises must not cost a later one its notification, and — since this
+        runs on the reader task — must not take the socket down. The failure is
+        logged rather than swallowed: an observer raising on every announcement is
+        a real fault, and the journal is where this plane says so.
+        """
+        for observer in self._selection_observers:
+            try:
+                observer(announcement)
+            except Exception:  # prawduct:allow prawduct/broad-except -- reader task; observers are strangers
+                log.exception(
+                    "an observer of the television's selections raised; the others still ran",
+                    extra={"event": "tv.selection_observer_failed", "tv_content_id": announcement.content_id},
+                )
 
     def _construct(self) -> SamsungTVAsyncArt:
         """Blocking, and therefore called only from a worker thread.
@@ -521,3 +612,22 @@ class SamsungTv(TvClient):
 def _named(exc: Exception) -> str:
     """`TypeName: message`, because several of these carry an empty message."""
     return f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+
+
+def _announced(response: dict[str, Any]) -> "SelectionAnnouncement | None":
+    """Read the set's selection announcement, or None if it is not one we can read.
+
+    A `content_id` that is absent or is not a string is unreadable rather than
+    empty: this feeds both a confirmation and every observer, and a blank id would
+    match nothing while looking like an answer.
+    """
+    try:
+        announced = json.loads(response["data"])
+    except (KeyError, TypeError, json.JSONDecodeError):
+        return None
+    if not isinstance(announced, dict):
+        return None
+    content_id = announced.get("content_id")
+    if not isinstance(content_id, str) or not content_id:
+        return None
+    return SelectionAnnouncement(content_id=content_id, is_shown=announced.get("is_shown") == _IS_SHOWN_YES)

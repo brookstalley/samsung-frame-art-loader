@@ -266,7 +266,7 @@ loaded, the work currently displayed, TV connectivity state, e-paper state, and
 the last error if any.
 
 **Two names in it are a contract, not a suggestion, because the reader is already
-built** (`curation/manifest/heartbeat.py`): the file is `display-heartbeat.json`
+built** (`curation/src/curation/manifest/heartbeat.py`): the file is `display-heartbeat.json`
 under `ART_ROOT`, and the timestamp key is **`reported_at`**, an ISO-8601 instant.
 The reader treats any other spelling as an unreadable heartbeat and says so — so a
 writer that calls the field `timestamp` produces a plane that looks *down* to

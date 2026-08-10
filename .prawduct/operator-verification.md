@@ -10,6 +10,75 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The announcement reaches both subscribers, at the set — added 2026-08-08
+
+**This is Chunk 13A's Done-when step 0b, and it is the one thing between that
+chunk and its `[x]`.** Everything else the chunk owed is built, swept and green.
+The step exists because Chunk 12 was the only Foreign-API chunk that shipped
+without a `verify-api`, and the seam this bundle touches is the one where getting
+it wrong is silent: the television library keeps **one handler per event**, so a
+label that subscribed by registering with the library would *replace* the
+selection-confirmation handler, and every rotation would then report a wall that
+would not move — while the label worked perfectly. The fan-out inside `SamsungTv`
+is written against that constraint, read from library source and pinned by unit
+tests over the handler. **No set has confirmed it.**
+
+Needs the television awake and in art mode, and the display plane running against
+it. Three things to see:
+
+1. **A rotation still completes.** The daemon logs `rotation.selected` and the
+   wall changes — that is the confirmation path resolving with a second subscriber
+   attached, which is the whole question.
+2. **The label follows.** The panel names the work the wall is showing. (With no
+   panel attached, `label.failed` absent from the journal and
+   `label_surface_working` in `display-heartbeat.json` are the proxy.)
+3. **The remote is a curator too — added with the behaviour, 2026-08-08.** In art
+   mode, pick a *different* work with the television's own remote, one the active
+   theme carries. The label should follow within a poll interval rather than
+   waiting for the next rotation. Then pick something from the set's own art store
+   that this product never uploaded: the label should go **blank**, not keep the
+   previous work's text. A confidently wrong label is worse than a stale one
+   because the person in front of the wall cannot tell.
+
+`samsung-tv-state-findings.md` is the record — it currently says in its own words
+that this is not verified against the set, and that sentence is what this entry
+retires.
+
+### The label's type sizes, at the panel — added 2026-08-07
+
+**This is the whole of what Chunk 13A could not settle**, and it is deliberately
+not a defect: the sizes in `display/src/display/panel/layout.py` are marked
+provisional at their definition site, and only somebody standing in front of the
+real panel can replace them. The 2026-08-04 look narrowed the live range to the
+mid-20s through the low-40s px and killed the 2024 `"Sans 18"` — but that ladder
+was rendered with PIL/DejaVu and this product typesets with Pango, so the numbers
+do not transfer.
+
+**Narrow it at a desk first.** The whole chain now renders without a panel:
+
+```sh
+cd display && uv sync --group raster            # once; the Pi and CI have it, this Mac cannot
+cd display && uv run --group raster python tools/label_preview.py /tmp/label.png --title-px 34
+```
+
+`--title-px` scales artist and body in the same proportion, and the tool prints
+where each line landed and what the drop rule took off — which is the half that is
+invisible in the image.
+
+**One observation from the first real render** (1448×1072, margin 40, title 40 /
+artist 32 / body 26, a fully populated Hokusai record): the label occupies about
+the **top third** of the panel and nothing is dropped. There is a lot of headroom,
+so the honest question at the panel is not "does this fit" but "is this as large
+as it should be" — the sizes could go substantially up before the drop rule
+engages, and larger is the accessibility direction.
+
+**A PNG on a backlit monitor is not the answer**, which is why this entry stays
+open: sixteen greys of reflective e-paper read at standing distance in room light
+is a different medium, and the reason the numbers are provisional in the first
+place. What the preview can settle is layout — what fits, what drops, whether the
+hierarchy reads. Chunk 13B is where the trip to the panel happens, and **whoever
+settles the numbers should replace the provisional note as well as the numbers**.
+
 ### The display daemon against the wall — added 2026-08-06
 
 **Status: answered on 2026-08-07 — all three acceptance criteria met on the real

@@ -13,16 +13,33 @@ fake that reproduced it here would be testing the correction twice and the
 daemon's behaviour not at all.
 """
 
+import math
+import threading
+import time
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
-from display.tv import RemovalOutcome, TvClient, TvRemovalUnconfirmed, TvUnavailable, TvUploadFailed
+from display.panel import Extent, Geometry, LabelSurface, Layout, Measure, SurfaceUnavailable
+from display.tv import (
+    RemovalOutcome,
+    SelectionAnnouncement,
+    SelectionObserver,
+    TvClient,
+    TvRemovalUnconfirmed,
+    TvUnavailable,
+    TvUploadFailed,
+)
 
 #: A picture the set holds that this product did not put there — an art-store
 #: image, in the category the daemon neither uploads to nor removes from. The set
 #: is displaying one of these before the daemon has shown anything.
 FOREIGN_IMAGE: Final[str] = "SAM-F0000"
+
+#: How long an armed-to-hang draw waits before giving up on being released. Long
+#: enough that no passing test reaches it, short enough that a failing one does
+#: not take the session with it.
+RELEASE_TIMEOUT_SECONDS: Final[float] = 30.0
 
 
 class FakeTv(TvClient):
@@ -42,6 +59,18 @@ class FakeTv(TvClient):
         self.slideshow_disabled = 0
         self._next_id = 0
         self._connected = False
+
+        #: Everyone listening for what this set says about its wall, and every
+        #: announcement it has made. **Both survive `close()`**, matching the real
+        #: client, where observers belong to the object and the library callback
+        #: is re-registered per connection — a fake that dropped them on
+        #: reconnection would hide a subscriber lost to an overnight outage.
+        self.selection_observers: list[SelectionObserver] = []
+        #: How many observers raised while being told. Counted rather than
+        #: swallowed silently, so a test can assert the isolation happened rather
+        #: than merely that nothing exploded.
+        self.observer_failures = 0
+        self.announced: list[SelectionAnnouncement] = []
 
         #: Armed failures. Each is the real client's behaviour, named for what a
         #: test is trying to reproduce rather than for the exception it raises.
@@ -138,12 +167,41 @@ class FakeTv(TvClient):
         if content_id in self.refuse_selection_of:
             raise self._dropping(TvUnavailable(f"the television refused {content_id}"))
         self.selected.append(content_id)
-        if self.displays_nothing_selected or content_id in self.admits_not_showing:
-            # The wall is left where it was, which is the point: the request was
-            # taken and the picture did not change.
+        if self.displays_nothing_selected:
+            # Silence: the set took the request, emitted nothing, and the wall did
+            # not move. No announcement, because the real one made none.
+            return False
+        if content_id in self.admits_not_showing:
+            # The set answers "I took it and I am not showing it" — an
+            # announcement, unlike the silence above, so observers hear it.
+            self.announce(content_id, is_shown=False)
             return False
         self.displaying = content_id
+        self.announce(content_id, is_shown=True)
         return True
+
+    def announce(self, content_id: str, *, is_shown: bool) -> None:
+        """Emit what the real set emits, to everyone listening.
+
+        Public so a test can model the announcement this plane did **not** cause:
+        somebody picking up the remote makes the set announce a selection nobody
+        here asked for, and that is the case an observer exists to hear.
+        """
+        announcement = SelectionAnnouncement(content_id=content_id, is_shown=is_shown)
+        self.announced.append(announcement)
+        for observer in self.selection_observers:
+            try:
+                observer(announcement)
+            except Exception:  # prawduct:allow prawduct/broad-except -- mirrors the real client; see below
+                # **Isolated because the real client isolates**, and a fake that
+                # did not would be stricter than the thing it stands in for — the
+                # direction that hurts. `SamsungTv._tell_observers` catches per
+                # observer, on the grounds that observers are strangers to each
+                # other and this runs on the socket's reader task. A fake that let
+                # one raise through would fail a test describing behaviour the
+                # product actually has, and the fix would have been to weaken the
+                # test.
+                self.observer_failures += 1
 
     def _dropping(self, exc: TvUnavailable) -> TvUnavailable:
         """Mark the connection gone, the way the real client does on any failure.
@@ -166,6 +224,13 @@ class FakeTv(TvClient):
         # often it is asked, and nothing else here can express it.
         self.art_mode_reads += 1
         return self.art_mode == "on"
+
+    def observe_selections(self, observer: SelectionObserver) -> None:
+        # Idempotent, as the real client is: subscribing twice must not mean being
+        # told twice, or a double that tolerated it would let a caller ship a
+        # duplicate registration this suite could never see.
+        if observer not in self.selection_observers:
+            self.selection_observers.append(observer)
 
     def art_mode_announcement_pending(self) -> bool:
         announced, self.art_mode_announced = self.art_mode_announced, False
@@ -225,3 +290,95 @@ class FakeTv(TvClient):
         was found accepting selections and displaying nothing.
         """
         return self.holding.get(self.displaying) if self.displaying else None
+
+
+class FakeSurface(LabelSurface):
+    """A label surface that records what it was given, and can fail like a real one.
+
+    **Its failure is a raise, not a falsy return**, because that is what the
+    driver seam guarantees: `omni-epd`'s `display()` returns None whether it
+    worked or not, so the real surface must convert that into an exception or the
+    panel's failure becomes a label silently months out of date. A fake that
+    reported failure by returning would let a caller pass every test against a
+    real one that cannot.
+    """
+
+    def __init__(self, *, width_px: int = 1448, height_px: int = 1072, margin_px: int = 40) -> None:
+        self._geometry = Geometry(width_px=width_px, height_px=height_px, margin_px=margin_px)
+        #: Every layout this surface was asked to draw, in order.
+        self.shown: list[Layout] = []
+        self.closed = 0
+        #: Armed failure: the panel refuses whatever it is handed.
+        self.refuses = False
+        #: Armed failure of a different kind: **measuring** blows up, with
+        #: something that is not `SurfaceUnavailable`. That is not a hypothetical
+        #: shape — the real surface's `measure` reaches Pango through C bindings,
+        #: which raise GLib errors related to nothing this codebase can name, and
+        #: it is read by the caller *outside* the `show` that converts failures.
+        self.measurement_explodes = False
+        #: How long a draw takes, in real seconds. **The real one is not
+        #: instantaneous and no amount of arranging makes it so**: a full 16-level
+        #: frame was measured at 1.5–1.9 s with no partial refresh, so a fake that
+        #: returned immediately would let a caller drawing on the event loop pass
+        #: every test a caller drawing off it passes.
+        self.draw_takes_seconds = 0.0
+        #: Armed failure of the kind that raises nothing: the panel goes into a
+        #: transaction and does not come out. It waits for `release`, which the
+        #: fixture always sets — a thread parked in here outlives the test.
+        self.blocks = False
+        self.release = threading.Event()
+        #: Where a draw currently is, for a test that needs to look at the world
+        #: *during* one rather than after it.
+        self.entered = threading.Event()
+        self.left = threading.Event()
+        #: How many draws have been started — as against `shown`, which counts the
+        #: ones that finished. The two differ exactly when a draw is in flight or
+        #: was abandoned, which is the whole subject of the caller's one-at-a-time
+        #: gate.
+        self.draws_begun = 0
+
+    @property
+    def geometry(self) -> Geometry:
+        return self._geometry
+
+    @property
+    def measure(self) -> Measure:
+        return self._measure
+
+    def _measure(self, text: str, size_px: int, wrap_px: int) -> Extent:
+        """Predictable metrics — a stand-in for a rasterizer, not a font."""
+        if self.measurement_explodes:
+            raise RuntimeError("the text stack could not build a font map")
+        glyph = max(1, size_px // 2)
+        per_row = max(1, wrap_px // glyph)
+        rows = max(1, math.ceil(len(text) / per_row))
+        return Extent(width_px=min(len(text) * glyph, wrap_px), height_px=rows * size_px)
+
+    def show(self, layout: Layout) -> None:
+        self.draws_begun += 1
+        self.left.clear()
+        self.entered.set()
+        try:
+            if self.refuses:
+                raise SurfaceUnavailable("the panel is not responding")
+            if self.blocks:
+                # **Bounded, though a real wedged panel is not.** A test that
+                # arranges a hang and then fails its own assertion would otherwise
+                # leave this thread parked for the rest of the session — and if the
+                # caller under test ever draws on the event loop, the thread parked
+                # here is the one that would have to set the flag releasing it.
+                self.release.wait(timeout=RELEASE_TIMEOUT_SECONDS)
+                raise SurfaceUnavailable("released without drawing")
+            if self.draw_takes_seconds:
+                time.sleep(self.draw_takes_seconds)
+            self.shown.append(layout)
+        finally:
+            self.left.set()
+
+    def close(self) -> None:
+        self.closed += 1
+
+    @property
+    def last_text(self) -> list[str]:
+        """The lines of the most recent label, for a test to read at a glance."""
+        return [block.text for block in self.shown[-1].blocks] if self.shown else []

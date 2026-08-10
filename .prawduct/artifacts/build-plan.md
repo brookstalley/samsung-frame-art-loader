@@ -28,7 +28,7 @@ governed_by:
     dispositions:
       - "identity is never a source URL → conforms: Artwork identity is a UUID from Chunk 07 on; source URLs live on Source/CandidateImage rows only"
       - "a work is distinct from an image of it, at every stage → conforms: CandidateWork/CandidateImage land as separate entities in Chunk 08, before any discovery code exists; acceptance is promotion, not transformation (Chunk 17)"
-      - "per-device runtime state never lives in the catalogue → conforms: TvBinding and the last-acted-on sequence live in `display-state.sqlite` (Chunk 12); labels render display-side (Chunk 13); each plane's own panel geometry is configuration, stored in neither catalogue nor device state (Chunks 02, 09, 12) — the TV panel's physical size is curation's, the e-paper panel's is display's; corrected 2026-07-20, they are not one shared value"
+      - "per-device runtime state never lives in the catalogue → conforms: TvBinding and the last-acted-on sequence live in `display-state.sqlite` (Chunk 12); labels render display-side (Chunk 13A); each plane's own panel geometry is configuration, stored in neither catalogue nor device state (Chunks 02, 09, 12) — the TV panel's physical size is curation's, the e-paper panel's is display's; corrected 2026-07-20, they are not one shared value"
       - "derived artifacts are regenerated, never transported → conforms: renditions carry `source_content_hash` and regenerate on staleness (Chunk 18B); backup excludes the image tree (Chunk 20); candidate previews get their recorded disposable lifecycle in Chunk 17"
   - artifact: project-preferences
     dispositions:
@@ -55,7 +55,7 @@ attached. The spine is deliberately evidence-first for exactly this reason.
 
 - [RESOLVED 2026-08-04: the IT8951 stack builds AND imports under uv's PEP 517 isolation on 3.13/aarch64, from the pinned `9f13613`. The feared cause never existed — that commit declares Cython in `build-requires` — so no remediation was needed and the 3.12 fallback is discharged. The real blocker was undeclared `python3-dev`, which fails in `rpi-gpio` rather than in IT8951 and so points at the wrong package. `Cython` is unpinned in that `build-requires`, so the build is reproducible today but not over time]
 - [RESOLVED 2026-08-01, half each way: a target exists (fork master `fe95ef1`) and carries Frame-generation support as a model-year branch, but `delete_list` is **not** fixable by bumping — it is unchanged on master, so the fallback fired and confirmed deletion is `tv_delete.delete_list_confirmed` in this repo. Two things the assumption did not anticipate: the target needs `websockets>=13.0` (the pinned 12.0 cannot import it), and its constructor performs blocking network I/O. ~~Live on hardware is still unverified~~ — **verified 2026-08-04** against a 2024 `QN50LS03DAFXZA` on firmware 1310, art API 4.3.4.0. `delete_list_confirmed` returned `requested=1, deleted=1, surviving=()`. The pass also found what reading could not: **`upload()` reports failure on uploads that succeeded** (issue #73), and **only `image_selected` of the three registered callbacks fires**, the other two being slideshow-advance events host-driven rotation never triggers]
-- [ASSUMPTION: the 2024 code keeps running the wall throughout the build; cutover to the new display plane happens at Chunk 13, and the legacy modules are deleted only at Chunk 20 | MED impact | user can override with an earlier or later cutover]
+- [ASSUMPTION: the 2024 code keeps running the wall throughout the build; cutover to the new display plane happens at Chunk 13B, and the legacy modules are deleted only at Chunk 20 | MED impact | user can override with an earlier or later cutover]
 - [ASSUMPTION: the existing sun-position brightness behaviour (`local.py`) ports into the display daemon in v1 — it runs on the wall today, so dropping it would be a regression, but the v1 scope list does not name it | LOW impact | user can defer to Later]
 - [ASSUMPTION: rotation timing is per-theme with a global fallback | LOW impact | carried from `data-model.md`; user can collapse to global]
 - `work_dedup_key` derivation and the discovery search-engine default are **unknowns
@@ -98,7 +98,7 @@ chunks, which was correct until the discovery chunks finished — at which point
 became the first unchecked box and the hazard the rule exists to prevent arrived
 anyway. The count grew because 12 and 13 are gated by the same bench at one
 remove: Chunk 12 declares **"Depends on: Chunk 05 (verified library)"** and its
-acceptance criteria call for a live pass on the Pi, and Chunk 13 is the e-paper
+acceptance criteria call for a live pass on the Pi, and Chunks 13A and 13B are the e-paper
 panel and its systemd units. Ordering them ahead of the curation chunks would have
 re-created the same silence one line further down.
 
@@ -131,7 +131,8 @@ re-created the same silence one line further down.
 - [x] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [x] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
-- [ ] Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
+- [ ] Chunk 13A: The panel, the label, the heartbeat and the two units — no hardware *(built and reviewed; the box waits on Done-when step 0b, which needs the set — see § The announcement reaches both subscribers in `operator-verification.md`)*
+- [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
 Context: Plan authored 2026-07-20. Chunks 01, 02 and 06 landed 2026-07-27 in one
@@ -188,7 +189,7 @@ were the first change to a table that files on disk already carry.
 03, 04 and 05 move from the blocked list into build order. They keep their numbers
 and their specs; only their position changed. They sit after 10B because 09 and 10
 are on every path to anything visible, and before 11–13 because 05 verifies the
-library Chunk 12 is written against and 04 verifies the panel stack Chunk 13 needs
+library Chunk 12 is written against and 04 verifies the panel stack Chunk 13A needs
 — both are assumptions in Requirements Confidence above, and each converts to a
 recorded fact cheaply. **If bench access turns out to be time-limited, pull 04 and
 05 ahead of 09** — that is a live reordering, not a re-plan, and it is the
@@ -507,6 +508,80 @@ drift — `TvBinding.tv_content_id` could not be `required` while a `failed` row
 exists to have no id, and `display-state.sqlite` does not persist brightness
 because a stored copy could only ever be stale.
 
+**Chunk 12 shipped 2026-08-07** as PR #108, all three acceptance criteria met on
+the real television and the cumulative Critic returning no blocking findings.
+
+**Chunk 13 was split into 13A and 13B on 2026-08-07** at the operator's call, on
+a seam the single entry already contained: it recorded that Pango type sizing
+cannot be settled without the operator in front of the panel, while its
+deliverables mixed code that runs anywhere with a service account, a directory
+move and a machine cutover. 13A is the panel driver, the label renderer, the
+heartbeat writer, both unit files and the two refactors Chunk 12 deferred — all
+of it testable against doubles. 13B is the Pi: the `tvpi` account, the settled
+`ART_ROOT` path, the units installed, the legibility look, the cutover. The cost
+is named rather than discovered — **13A ships a type size it cannot justify**,
+which is why the plan requires it to be marked provisional at its definition
+site rather than merely chosen carefully.
+
+**13A's code is complete as of 2026-08-07 and its box is still `[ ]`, because one
+Done-when step is not code.** Step 0b — confirming against the real television
+that both the selection confirmation and an observer receive `image_selected` —
+has never run: the fan-out has spoken to no set. The daemon is stopped at the
+operator's request, so that step waits on the operator rather than on the build.
+Everything else the chunk owed is built, swept and green.
+
+**The closing round's three real defects were taken on 2026-08-08**, and two of
+them were in the chunk's own acceptance surface rather than in its bookkeeping.
+*The panel draw was on the event loop* — which is the argument that moved it off
+the television's reader task, one level down, since a coroutine spending two
+seconds in Pango and SPI delays that socket's confirmations exactly as much as
+the callback would. It goes to a worker thread now, bounded by the label budget
+`nonfunctional-requirements.md` already states, with one draw dispatched at a
+time: a wedged driver never raises, and an unbounded wait is the one way a panel
+can stop the wall that no `except` reaches. *A selection this plane did not make
+never reached the label*, so picking a work with the remote left the panel
+confidently naming the previous picture for up to a full interval — the label
+now follows what the set says is on the wall, and a picture the manifest cannot
+name gets an empty label rather than a stale one. *And a panel that fails
+mid-run* — the third case the acceptance criteria enumerate, and the only one
+with an edge in it — had no test.
+
+**The IT8951 pin was taken in five places and denied in five others**, one of
+them the risk register a session briefing reads as current state. That is the
+correction worth carrying past this chunk: the decision was recorded carefully
+where it was made and the claims it retired were left standing everywhere else,
+which is the same shape as the two norm rows found naming enforcement that did
+not exist. A decision is not taken until what it contradicts is gone.
+
+Three things were settled at build. **The rendering tier is two objects, not
+one** — a `Rasterizer` that measures and draws into flat greyscale, and a device
+that puts those bytes somewhere — because the two halves install on different
+machines, and that turned out to be the same seam the ratified norm wanted: the
+monitor-with-a-mat-area device reuses the typesetting and supplies its own
+delivery. **The driver is injected rather than opened**, so the three corrections
+this product makes at that seam (the greyscale read-back, the raise-don't-return
+failure, the mounting rotation) are tested on a laptop with no panel and no
+ability to install the library; only `open_panel` needs hardware. And **a panel
+that will not open is a third state that is reported**, not a second road to
+`surface=None` — that collapse made a broken panel indistinguishable from a
+device that has none on curation's health surface, which is the same
+two-meanings-in-one-value fault `has_label_surface` was split out to fix,
+reappearing one level up.
+
+**The IT8951 pin-or-vendor decision is taken: pinned, on both install paths, with
+the Cython that builds it pinned too** — pinning the driver alone leaves the
+compiler free to move, which is the half the trigger note warned about.
+`project-state.yaml` carries the reasoning; it was verified resolving on the Pi
+rather than assumed, which is what distinguishes it from the previous status
+where a fresh resolve landed on the right commit only because upstream's master
+still happened to be it.
+
+**The typesetter got a CI job of its own**, because PyGObject does not import on
+this project's development Mac and the alternative was leaving the product's most
+important accessibility surface tested by nobody. `tests/test_default_suite_ci_scope.py`
+grew the claim that no directory a leg ignores may go unrun by every other job —
+the failure mode an `--ignore` introduces and a green board hides.
+
 ## Scaffolding
 
 ### Project Initialization
@@ -519,7 +594,7 @@ bootstrapped at the root in Chunk 02). Chunk 06 restructures:
 - Two plane projects, `curation/` and `display/`, each with its own
   `pyproject.toml`, its own interpreter pin (3.14 / 3.13), and its own lockfile.
   The 2024 modules stay at the repo root, untouched and running production, until
-  Chunk 13's cutover; they are deleted in Chunk 20.
+  Chunk 13B's cutover; they are deleted in Chunk 20.
 
 ### Dependencies
 
@@ -603,7 +678,7 @@ samsung-frame-art-loader/
 │       └── state/             #   display-state.sqlite (TvBinding, sequence)
 ├── tests/                     # bootstrapped Chunk 02; split per-plane in 06
 ├── deploy/                    # systemd units, journald drop-in, README
-└── (2024 modules at root)     # production until Chunk 13; deleted in Chunk 20
+└── (2024 modules at root)     # production until Chunk 13B; deleted in Chunk 20
 ```
 
 ### Module Boundaries
@@ -1330,7 +1405,8 @@ surface was reviewed on its own.
   what the active theme's manifest contains and **every exclusion with its reason**,
   which is Chunk 09's exclusion report reaching a human for the first time; and the
   health panel, stating heartbeat age in absolute terms and reporting honestly that
-  no heartbeat file exists yet, since the display plane arrives at Chunk 13.
+  no heartbeat file exists yet, which is the honest answer before any display
+  device has run.
   Thumbnail serving is a deliverable, not an assumption: the seeded renditions are
   4K files, and a grid of 41 of them is not a page. WCAG 2.1 AA baseline; UI chrome
   never competes with artwork for contrast.
@@ -1640,7 +1716,17 @@ two missing deliverables.)*
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
 
-### Chunk 13: E-paper label, heartbeat, systemd units — cutover to the new planes
+### Chunk 13A: The panel, the label, the heartbeat and the two units — no hardware
+
+**Split from a single Chunk 13 on 2026-08-07** at the operator's call, on the
+seam the original entry already admitted: its own Visual-change line records that
+Pango type sizing cannot be settled without the operator in front of the panel,
+and its Deliverables mix code that runs anywhere with a service account, a
+directory move and a cutover that exist only on the Pi. One Critic round over
+both halves would read a refactor, a new subsystem, deploy configuration and a
+machine migration at once — the same reason 08 and 14 were split. 13A is
+everything that can be built and tested away from the hardware; 13B is the
+hardware.
 
 - **Inherits three things from the display plane's first chunk**, written here so
   a deferral does not quietly become a drop:
@@ -1658,7 +1744,8 @@ two missing deliverables.)*
   3. **Write the `verify-api` step this plan owes.** Chunk 12 is the only
      Foreign-API chunk whose Done-when never carried one — the substance was done
      and recorded in `samsung-tv-state-findings.md`, but the step was missing, and
-     this chunk is the next to touch that API.
+     this chunk is the next to touch that API. **Written as step 0b below**, and it
+     lands here rather than in 13B because the fan-out is what touches that seam.
 - **Carries a decision trigger.** The IT8951 pin-or-vendor decision
   (`project-state.yaml` → `technical_decisions.operational`) was unblocked on
   2026-08-04 and deliberately left un-taken, with this chunk named as when to take
@@ -1678,8 +1765,34 @@ two missing deliverables.)*
   anyone read it. Systemd units committed in `deploy/`: display `Restart=always`
   with the restart-loop guard the recovered unit lacked; curation
   `Restart=on-failure` + `MemoryMax` so a runaway acquisition cannot OOM-kill the
-  display plane. Cutover: the Pi runs the two new units; `tvart.py` stops being
-  the production entry point (legacy files remain until Chunk 20).
+  display plane.
+- **The units are written here and installed in 13B, which is safe for one
+  reason worth stating.** A unit names `User=`, `WorkingDirectory=` and
+  `EnvironmentFile=` — all three are facts about a machine 13B provisions. The
+  split works because `ART_ROOT` is *not* among them: it reaches both planes
+  through the root `.env` the units point at, so the path can stay unsettled
+  while the units are written and must be settled before they are enabled. The
+  three that ARE in the file are written against the intended target and are
+  13B's to confirm against the machine it actually creates.
+- **The type size this chunk ships is provisional, and says so in the code.** The
+  probe's ladder narrowed the range to mid-20s through low-40s px, but it was
+  rendered with PIL/DejaVu against a product that typesets with Pango — different
+  rasterizer, different face, different metrics. 13A picks a value inside that
+  range, names it provisional at its definition site with the reason, and 13B
+  replaces it with what the operator's eyes settle. Shipping it unmarked is the
+  failure to avoid: a number that looks measured because it is precise.
+- **Carries one deferred sentence into whichever commit ticks its box**, written
+  here because the only other record of it was a gitignored session file — which
+  is the silent-drop shape, caught by the PR reviewer rather than by its author.
+  **The girepository fallback in `.github/workflows/suites.yml` may not be a real
+  fallback.** The typesetting job probes for `libgirepository-2.0-dev` and falls
+  back to `libgirepository1.0-dev`, but PyGObject 3.56 builds against
+  girepository-2.0 — so the fallback branch would fail the build anyway, under a
+  job named "typesetting" about what is really a provisioning gap. That is the
+  exact failure the comment beside the probe claims it prevents, so that comment
+  currently contradicts itself. **Latent, not live:** `ubuntu-latest` carries the
+  2.0 package, which is why this is a sentence of prose rather than a fix. It
+  matters the day the job moves runners.
 - **Depends on:** Chunk 12; Chunk 04 (panel stack installs under uv)
 - **Carries a number the unit must not be written without.** `TimeoutStopSec`
   has to clear this daemon's worst-case pass, which is a television connection
@@ -1698,30 +1811,100 @@ two missing deliverables.)*
   `platform-and-dependency-findings.md` § The e-paper panel. Read them before
   writing the driver: the default mode is 1-bit, `display()` returns nothing on
   success or failure, and there is no partial refresh.
-- **Visual change:** yes — label legibility at standing distance on the real
-  panel needs the operator's eyes, not a test. The probe's type ladder narrowed
-  the range (mid-20s to low-40s px) but was rendered with PIL/DejaVu, so its
-  numbers do not transfer to Pango and the look has to be repeated.
-- **Deliverables:** new `display/src/display/panel/` (driver behind an
-  interface + Pango label rendering), heartbeat writer, new
-  `deploy/curation.service` and new `deploy/display.service`, the `tvpi` service
-  account created with its groups and `ART_ROOT` ownership
-  (`operational-spec.md` § The Service Account), cutover performed and recorded
+- **Visual change:** no — 13A renders into a surface, never onto the panel. The
+  operator's legibility look is 13B's, and it is what makes the type size real.
+- **Built to a norm ratified mid-build, 2026-08-07.** The owner raised, while this
+  chunk was choosing where to render, that **a display device renders its own
+  label** and that output surfaces are plural — several Pis with panels of
+  different geometry, or a device with no e-ink at all whose label is drawn into
+  the mat area around the artwork. `architecture.md` § Direction carries it. The
+  consequence here is structural rather than additional: the chain is **metadata →
+  layout → rendering**, geometry is a parameter rather than a constant, the seam
+  is "a surface a label can be put on" rather than "the e-paper panel", and a
+  device configured with no label surface is valid rather than broken. **No second
+  surface is built** — the monitor-with-a-mat-area device is a real future device
+  and not this chunk's; what this chunk owes it is an interface it can be written
+  against without one being reopened.
+- **Deliverables:** new `display/src/display/panel/` — the three tiers as three
+  modules (label metadata, geometry-parameterised layout, rendering behind a
+  surface interface) with the omni-epd e-paper surface as the first
+  implementation — heartbeat writer, new `deploy/curation.service` and new
+  `deploy/display.service`, the report-once shape collapsed, the `image_selected`
+  fan-out, the IT8951 pin-or-vendor decision taken and recorded,
+  `display/tools/label_preview.py` (renders the whole label chain to a PNG with no
+  panel, so the type size can be narrowed at a desk before 13B settles it at the
+  panel), and the `typesetting` CI job that installs the `raster` group and runs
+  the Pango tests the default display leg ignores
 - **Tests:** unit — label layout against fixed metadata (golden-image or
   measured-extent checks), heartbeat shape and atomicity, **the panel is put in
   `gray16` and the driver asserts on `mode` rather than `max_colors`** (which
   reports 16 in both modes, so the obvious check passes against a 1-bit panel);
-  hardware — label matches the artwork within the 15 s budget across several
-  rotations; killing the panel mid-run leaves rotation running
-- **Acceptance criteria:** wall + label run unattended from the two new units
-  through a TV power-cycle and a display restart with no human action; heartbeat
-  advances and carries honest state
+  a panel failure leaves TV rotation running; the fan-out delivers
+  `image_selected` to both the selection confirmation and the label, and a label
+  that raises does not cost the confirmation its event
+- **Acceptance criteria:** the daemon runs with a panel double attached and
+  rotates the wall while rendering a label per selection; a panel that fails at
+  init, at draw and mid-run each leave rotation running; the heartbeat file
+  appears under `ART_ROOT` as `display-heartbeat.json` with `reported_at`, and
+  curation's existing reader — `curation/src/curation/manifest/heartbeat.py`, built before any
+  writer existed — reads it without modification
 - **Done when:**
   0. ~~verify-api — probe omni-epd/IT8951's runtime display surface on the real
      panel (init, draw, partial vs full refresh, and what a failure returns)
      before writing the driver; Chunk 04 verified the build, not this~~
      **Done 2026-08-04** — findings recorded in
      `platform-and-dependency-findings.md` § The e-paper panel
+  0b. verify-api — the television seam, owed since Chunk 12 and written here
+     because the `image_selected` fan-out is what touches it: confirm against the
+     real set that both subscribers receive the announcement and that selection
+     confirmation still resolves. `samsung-tv-state-findings.md` is the record.
+  1. Acceptance criteria met and all three suites pass
+  2. `/prawduct:critic` run and blocking findings resolved
+  3. Committed and chunk marked `[x]` in Status
+
+### Chunk 13B: The Pi — service account, units installed, legibility, cutover
+
+- **Description:** The hardware half of the original Chunk 13. The `tvpi` service
+  account is created with its `spi` and `gpio` groups and given ownership of
+  `ART_ROOT` and the checkout; `ART_ROOT`'s path is settled off `/home/tvpi/art`
+  onto a neutral one (`operational-spec.md` § The Service Account records
+  `/srv/art` or `/var/lib/samsung-art` as the shape to prefer, and leaves the
+  choice to this cutover). 13A's two units are installed and enabled. The
+  operator looks at the real panel at standing distance and settles the Pango
+  type size, replacing 13A's provisional value. Cutover: the Pi runs the two new
+  units and `tvart.py` stops being the production entry point — legacy files
+  remain until Chunk 20.
+- **The account and the cutover are one change, not four.** `operational-spec.md`
+  § The Service Account is explicit: the account, its groups, moving `ART_ROOT`
+  under it and both unit files land together, because any of them arriving alone
+  leaves a machine that is neither the old arrangement nor the new one.
+- **Depends on:** Chunk 13A
+- **Carries a number the unit must not be written without.** `TimeoutStopSec`
+  has to clear this daemon's worst-case pass, which is a television connection
+  attempt: roughly 15 s of blocking construction plus the 30 s art-channel
+  ceiling. A SIGTERM landing inside one is honoured when that pass ends, not
+  during it — measured at ~22 s against a sleeping set on 2026-08-06, with ~45 s
+  the worst case. systemd's 90 s default clears it, so this is a note against
+  *shortening* it: a unit that SIGKILLs the process leaves the set holding a
+  half-open art channel until it times out on its own side.
+- **Artifacts consumed:** `operational-spec.md` § The Service Account and
+  § Process Management, `platform-and-dependency-findings.md` § The e-paper panel,
+  `design_decisions.accessibility_approach`
+- **Visual change:** yes — label legibility at standing distance on the real
+  panel needs the operator's eyes, not a test. The probe's type ladder narrowed
+  the range (mid-20s to low-40s px) but was rendered with PIL/DejaVu, so its
+  numbers do not transfer to Pango and the look has to be repeated.
+- **Deliverables:** the `tvpi` account with its groups and ownership, the settled
+  `ART_ROOT` path recorded in the root `.env` and in `operational-spec.md`, both
+  units installed and enabled on the Pi, the settled Pango type size replacing
+  13A's provisional one, cutover performed and recorded in `deploy/README.md`
+- **Tests:** hardware — label matches the artwork within the 15 s budget across
+  several rotations; killing the panel mid-run leaves rotation running; both
+  units come back from a reboot with no human action
+- **Acceptance criteria:** wall + label run unattended from the two new units
+  through a TV power-cycle and a display restart with no human action; heartbeat
+  advances and carries honest state
+- **Done when:**
   1. Acceptance criteria met on the Pi, including the operator's legibility look
   2. `/prawduct:critic` run and blocking findings resolved
   3. Committed and chunk marked `[x]` in Status
@@ -2761,9 +2944,24 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
   derivation their own prose shows. Both corrected here. **Amended 2026-08-04 —
   that pair is staler than this row says:** the Pi was rebuilt onto a fresh card
   and every `/home/tvpi/` path in both files now points at a directory that does
-  not exist, on behalf of a user that does not exist. Chunk 13 creates the
-  account and writes the new units, so what reaches this chunk is whatever
+  not exist, on behalf of a user that does not exist. Chunk 13B creates the
+  account and installs the units 13A writes, so what reaches this chunk is whatever
   `deploy/` still carries afterwards.
+  **Added 2026-08-08 — `CLAUDE.md` is trimmed here, and this is the chunk that can
+  do it cheaply.** It is at ~171 lines of project-specific content against the
+  ~150 guidance, and the rules that actually stop a bad session — all three suites
+  pass, `uv run` in every column, `-n0` on the marker suites, prove coverage with
+  the mutation sweep — are competing with reference material for a reader's
+  attention. Deleting the 2024 modules takes the root column out of the dev-command
+  table and the root suite out of three of the surrounding paragraphs, which is
+  most of the excess without anyone judging what matters. **The rest is a move
+  rather than a judgement call, which is the version to do** *(recipe improved
+  2026-08-10, by a second round raising this finding again)*: the "browser suite"
+  and "live suites" sections are runbook material — 92 lines nothing in a coding
+  session needs inline — and they go to a new `docs/testing.md`, leaving
+  `CLAUDE.md` the three-column table, the `uv run` rule, the per-plane commands
+  and a pointer. `README.md`'s claim that `CLAUDE.md` is the authority for running
+  the tests stays true, because the pointer resolves from there.
 - **Deliverables:** backup job + schedule in `deploy/`; the health panel's
   backup-age field going from "no backup recorded" to a real age — the field
   itself ships with 19B, so what lands here is the source behind it; the restore
@@ -2790,7 +2988,7 @@ listed "13 (heartbeat to display)", but heartbeat age shipped with 10B and
 and read the seeded catalogue through `art_catalogue` — the product's own worked
 interaction, three layers deep, before anything widens. (Chunks 01–05 already
 put the operator's hands on the hardware, but 07 is the first product
-interaction.) The wall runs on the new planes at Chunk 13.
+interaction.) The wall runs on the new planes at Chunk 13B.
 
 ## Governance Checkpoints
 
@@ -2803,7 +3001,7 @@ cumulative review is the release-readiness gate.
 - **After Chunk 07** — architecture validation: the registry/service/persistence
   shape, the ASGI+MCP mount, and the thin-binding norm, reviewed before ten
   chunks build on them. (The chunk's own `final`-mode review is this checkpoint.)
-- **After Chunk 13** — mid-build trajectory review: the wall runs on the new
+- **After Chunk 13B** — mid-build trajectory review: the wall runs on the new
   planes; verify the norms held under real hardware (plane isolation green,
   manifest the only channel, no false success anywhere in the journal), and that
   the cutover left nothing load-bearing in the legacy modules.

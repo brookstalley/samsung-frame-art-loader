@@ -147,17 +147,19 @@ Developer preferences for how code is written in this project. Captured during d
 
 ## Testing
 
-- **Framework**: pytest, one suite per plane *that has code* — `tests/` at the
-  root for the 2024 modules, `curation/tests/` for the curation plane, each on its
-  own interpreter.
-  Both are declared as `test_commands` in `project-state.yaml` so the evidence hook
-  runs the real invocations rather than a default that resolves neither.
-  **The display plane has a configured `testpaths` and no `tests/` directory yet**,
-  so it is deliberately *not* a third `test_commands` entry: an invocation that
-  collects nothing exits 5, and a declared command that cannot fail is worse than
-  an absent one. It is added by the commit that creates that directory — the same
-  commit `build-plan.md` requires to carry the plane-isolation test, since both
-  are the same claim about when a guard starts guarding.
+- **Framework**: pytest, one suite per plane — `tests/` at the root for the 2024
+  modules, `curation/tests/`, and `display/tests/`, each on its own interpreter.
+  All three are declared as `test_commands` in `project-state.yaml` so the evidence
+  hook runs the real invocations rather than a default that resolves none of them.
+  **The display plane became the third entry on 2026-08-06, with its first
+  modules** — until then it had a configured `testpaths` and no directory, so its
+  `pytest` collected nothing and exited 5, and a declared command that cannot fail
+  is worse than an absent one. That commit also carried the plane-isolation test,
+  since both are the same claim about when a guard starts guarding.
+  **`display/tests/raster` is the one part that needs an opt-in group**
+  (`--group raster`, for Pango through PyGObject) and skips itself without it, so
+  the display CI leg ignores that directory and a job of its own installs the group
+  and runs it.
 - **Style**: descriptive test names stating the behaviour under test.
 - **Coverage expectations**: _(target)_ happy path + error cases for pure logic
   (`image_utils`, `metadata` parsing, `source_utils`, the `all.json` catalogue round-trip).
@@ -248,10 +250,18 @@ Developer preferences for how code is written in this project. Captured during d
 - **Key libraries**:
   - `samsungtvws` — pinned to a **git SHA on a fork** (`NickWaterton/samsung-tv-ws-api`),
     not PyPI. This is the TV control surface.
-  - `omni-epd` (`display.py`) — e-paper driver, dormant upstream since 2024-11. Not in
-    `requirements.txt`; installed out-of-band on the Pi.
-  - `pycairo` + `PyGObject`/Pango (`art.py`) — label typesetting. System-level GTK
-    dependencies, not pure-Python wheels.
+  - `omni-epd` — e-paper driver, dormant upstream since 2024-11. Declared in
+    `requirements.txt` alongside a pinned `IT8951[rpi]`, and an optional `epaper` group of
+    the display plane, which installs on a Raspberry Pi and nowhere else. Neither suite
+    needs it: the driver is passed into `EpaperSurface` rather than opened by it.
+    *(Corrected 2026-08-08: this said "Not in `requirements.txt`; installed out-of-band on
+    the Pi", and named `display.py` — the 2024 module — as its only consumer.)*
+  - `pycairo` + `PyGObject`/Pango — label typesetting, and the display plane's `raster`
+    dependency group. **PyGObject 3.56 resolves as a wheel under uv** with no apt
+    prerequisites, measured on Trixie 2026-08-07; it does not import on this project's
+    development Mac, which is why its tests are a CI job of their own rather than part of
+    the display leg. *(Corrected 2026-08-08: this said "System-level GTK dependencies, not
+    pure-Python wheels", and attributed them to `art.py`.)*
   - `openai` (`ai.py`) — mat-colour selection, currently calling `gpt-4o`. Real per-call spend.
   - `dezoomify-rs` (external binary) — tiled high-res image fetch. **Not configured in
     `config.py`**: the binary name and its tuning flags are module-level literals in
@@ -263,8 +273,9 @@ Developer preferences for how code is written in this project. Captured during d
     would send someone looking for a setting that has never been there.)*
 - **Dev commands**: `python tvart.py [--flags]` is the entry point for the 2024 modules.
   **Established 2026-07-27** and current: `uv run pytest tests` / `uv run ruff check .` /
-  `uv run black .` at the root, and `uv run pytest` / `uv run ruff check .` /
-  `uv run black .` in `curation/`.
+  `uv run black .` at the root, and the same three in `curation/` and in `display/`.
+  `CLAUDE.md` carries the table and is the authority; `display/tests/raster` needs
+  `--group raster` and skips itself without it.
   _(This read "There is no test, lint, or format command wired up"; both departures were
   closed the same day. **Corrected 2026-08-03**: the root column had dropped `uv run`,
   contradicting `CLAUDE.md`, which is the authority README.md points at and which explains
@@ -274,9 +285,11 @@ Developer preferences for how code is written in this project. Captured during d
 - **`requirements.txt` vs `deploy/pi-freeze-2024.txt`**: `requirements.txt` is the
   hand-maintained direct-dependency list — the set installed on the Pi.
   `deploy/pi-freeze-2024.txt` is a **`pip freeze` capture from the Pi's venv**, the only
-  record of the full transitive set that actually ran, including four git-sourced packages
-  absent from `requirements.txt`: `IT8951` (pinned to `9f13613`), `omni_epd`,
-  `waveshare-epd`, and the `inky`/`spidev`/`RPi.GPIO` hardware stack. It is evidence, not
+  record of the full transitive set that actually ran, including the git-sourced packages
+  the hand-maintained list did not name at the time: `IT8951` at `9f13613`, `omni_epd`,
+  `waveshare-epd`, and the `inky`/`spidev`/`RPi.GPIO` hardware stack. **The first two are
+  declared in `requirements.txt` now** — `omni_epd` at a commit, and `IT8951[rpi]` at
+  `9f13613` beside it, because pinning the parent does not pin the child it resolves. It is evidence, not
   scratch: nothing installs from it, and it is the rollback target for the 2026-08-01
   `samsungtvws`/`websockets` move. Its own header says all of that, and `deploy/README.md`
   § What `pi-freeze-2024.txt` is says it again.
@@ -361,13 +374,15 @@ This per-preference table is the product's **norm index** (`/prawduct:methodolog
 | No hardcoded deployment values in source (IP, art root, coordinates) | Test | `tests/test_config.py::test_no_source_file_carries_a_deployment_value` | advisory | The same code runs on the Pi and on a dev Mac; a hardcoded `/home/tvpi/art` means the dev path is a source edit, which is how config drift starts. |
 | **The TV pairing token is never tracked** | Test | `tests/test_repo_hygiene.py::test_the_tv_token_is_not_tracked` | advisory | Ruled a stated norm by the owner 2026-08-06, resolving issue #40. It is the one of that file's three guards with a real incident behind it — the token was committed to a public repository once (issue #4) — and it is a secret in a public repo, which puts it in the same class as the "no secret ever reaches a log line" row above rather than in the tidy-up class. The guard has existed since 2026-07-27 and no row named it, which is precisely the under-claiming shape the 2026-08-01 Norm Health sweep produced a rule about: **an index that under-claims its enforcement is defective, not conservatively safe** — an enforcement artifact no row names is one a refactor can delete, rename or narrow with nothing noticing. Mechanically checkable by construction (a path either is tracked or is not), so Test rather than Critic; the failure is invisible until the repository is already public with the token in its history, which is why it is not left to vigilance. |
 | Async at the I/O boundary, synchronous core | Critic | — | janitor | `samsungtvws` forces async at the TV edge only. Letting it spread makes the image and metadata logic untestable without an event loop. |
-| Hardware + network access sits behind an interface | Critic | — | janitor | Both display drivers are dormant upstream and one is unpinned; an interface keeps a frozen 2023 driver from dictating the project's Python version (learnings § Platform and dependencies). |
+| Hardware + network access sits behind an interface | Critic | — | janitor | Both display drivers are dormant upstream (both are pinned since 2026-08-07, which fixes *which* frozen code arrives and not that it is frozen); an interface keeps a frozen 2023 driver from dictating the project's Python version (learnings § Platform and dependencies). |
 | No secret ever reaches a log line | Test (startup config path) + Critic (everywhere else) | `tests/test_config.py::test_startup_logging_never_emits_a_secret` and `tests/test_config.py::test_the_harness_clears_every_declared_secret` | advisory | Added 2026-07-27; it was stated in `security-model.md` and had no row here, so nothing assigned it a mechanism and nothing looked for it. The repository is public and the journal is read over someone's shoulder during a failure — which is exactly when logging is turned up. Judgment-required beyond the startup path: the violation is usually a whole object logged for context whose repr happens to include a token, not a literal secret in a format string. *(Corrected 2026-08-01 by the norm sweep, in the opposite direction to this table's other corrections: the row claimed Mechanism `Critic` and no artifact, while a real mechanical guard already existed — `ba007cd`, **2026-07-27**, byte-identical to the body it has today. This row's own opening dates the norm to 2026-07-27 as well, so **norm and guard shipped in the same bundle on the same day**: the index recorded `Critic` from the moment the mechanism existed, rather than being right when authored and drifting later. It covers the norm's highest-risk known path — configuration logged at startup — and it refuses the vacuous pass, asserting that logging emitted something at all and that presence is reported as `<set>`. Verified by mutation: making `redacted_config` return the raw value fails it. **Under-claiming is the milder error and not a harmless one** — an enforcement artifact no row points at is one a refactor can delete with nothing noticing, which is how a Test row becomes the next `test_plane_isolation.py`.)* *(Extended 2026-08-02 by the norm sweep: the guard asserted the one secret that existed when it was written, while `config._SECRET_KEYS` declares two and `redacted_config()` walks the whole frozenset — so the second was redacted by the code and checked by nothing. It now drives off that frozenset, and a sibling test fails if a declared secret is not also cleared from the test environment, which is what stops these assertions passing on a developer's own shell instead of on the code. Verified by mutation both ways: emitting the second secret's value fails the guard, and declaring a third secret without clearing it fails the sibling. A guard that grows with its declaration is the difference between a Test row and a Test claim.)* |
 | **Operation logic lives ONLY in the service layer; MCP tools and HTTP handlers are thin bindings** — norm lives in `architecture.md` § Direction | Critic | — | janitor | Ratified by the owner 2026-07-20. Judgment-required: a handler that validates, orders, or decides is the violation; one that unpacks arguments, calls a single service method, and formats the result is the norm. Rationale and retroactivity check live with the norm. |
 | **Spend ceilings are provider-enforced, never application-enforced** — norm lives in `nonfunctional-requirements.md` § Direction | Critic | — | janitor | An application meter that fails open is indistinguishable from one that works — no error, no alert, just a bill. This codebase has already shipped that exact defect shape (`upload_file` reports success on failure). Judgment-required: the violation is "this code path is the only thing stopping the bill", which no pattern match can see. |
 | **The display plane never requires the curation plane to be reachable** — norm lives in `nonfunctional-requirements.md` § Direction | Critic | — | janitor | The availability asymmetry is the entire structural justification for the two-plane split; a display plane that phones home has paid the split's costs and kept none of its benefit. Judgment-required: a new call to the curation host is only a violation depending on whether rotation can proceed without it. |
 | **WCAG 2.1 AA on the curation UI, and colour is never the sole carrier of state** — decision lives in `project-state.yaml` § `design_decisions.accessibility_approach` | Test | `curation/tests/unit/test_design_tokens.py` | advisory | Added 2026-08-01 with the first browser surface. The contrast half is fully mechanical: the test reads the real token values out of the served stylesheet, computes every text and control pair in both colour schemes, and refuses any colour written outside the token blocks — so "AA verified" cannot rot into a sentence with nothing under it. The non-colour half stays judgment-required: a test can see that a badge has a glyph, not that the glyph distinguishes anything. |
 | **The theme manifest file is the only channel from curation to display** — norm lives in `architecture.md` § Direction | Test | `tests/preferences/test_plane_isolation.py` | strict | The mechanical form of the availability norm above, and the one that *can* carry a real rail: an AST/import check that display-plane modules import no curation module and open no HTTP client to the curation host. The violations this guards against ("just fetch the label text live") work perfectly in development and in every test, because curation is up in development and in every test — so a green test suite is exactly what a violation looks like without this check. **Corrected 2026-08-01: this row named that path as an existing Test mechanism, and no such file had ever existed.** It could not have: the check's subject is the `display/` package, which the walking-skeleton work deferred and nothing had created since, so the only test writable then would have passed over an empty set — the "green test that cannot catch a real violation" this table's own guardrail rejects. **Restored to Test on 2026-08-06, when the display plane's first modules landed and the file was written in the same commit** — the sequencing this row's own correction demanded, and the reason it was demanded is that the window in which display code exists unguarded is exactly the window in which the shortcut gets written. What is there now is what the row always claimed: imports followed transitively through this repository's own files (a direct-only check is evaded by one shared helper), the television websocket exempt because talking to the set is that plane's job, and both halves proven able to fail against planted violations — a curation import and an HTTP client — rather than asserted. It also refuses its own vacuous pass: a test fails if the display package holds no modules to check. This row is this table's cautionary example and stays written that way; the lesson it carries is unchanged by its being true again. |
+| **A display device renders its own label, and the label travels as metadata** — norm lives in `architecture.md` § Direction | Critic | — | janitor | Ratified by the owner 2026-08-07, mid-build, when they raised that output surfaces are plural — several Pis with panels of different geometry, or a device with a monitor and no e-ink at all drawing the label into the mat area around the artwork. Judgment-required in both directions and that is why it is not a Test: the violation is *reasoning about a device's geometry somewhere other than on that device*, which has no import signature and no grep. A module constant of 1448×1072 is the obvious shape; the one that would actually get written is curation growing a field, a filename suffix or a rendered image — the anti-pattern `data-model.md` already names by example (`_w648_h480` baked into a 2024 filename). What a reviewer can check concretely: geometry arrives as a parameter rather than a constant, the seam is named for "a surface a label can be put on" rather than for e-ink, and **a device with no label surface is a configuration rather than a fault** — that last one being the reading most likely to be lost, since "no panel" is indistinguishable from "broken panel" to anything that is not looking for the difference. The rejected alternative (pre-render in curation, ship the image down) is recorded with the norm so it is not re-proposed. |
+| **The two planes agree on the heartbeat's filename and its instant's key by construction, not by memory** | Test | `tests/preferences/test_heartbeat_contract.py` | advisory | Added 2026-08-07 with the writer. The heartbeat is the only channel from display back to curation, and the plane-isolation norm above forbids the obvious fix — display cannot import curation's reader to share a constant, and curation cannot import display's writer. So `HEARTBEAT_FILENAME` and `REPORTED_AT_KEY` are declared twice in two projects that may not refer to each other, which is a duplicated literal with a norm *requiring* it to stay duplicated. The guard reads both planes' source with AST and compares the two values, then pins them literally against `observability-strategy.md` so that both sides moving together is still a break; it is the only mechanism available, since a claim about two files that cannot see each other is not something a linter can state and a runtime test would need both planes running. The failure it catches is silent in the worst way — a renamed file, or an instant spelled `timestamp`, makes curation report "the display plane has not reported" for a plane that is running perfectly. *(Corrected 2026-08-10: this row was titled "name **and interval**" and said "the filename and the staleness bound are declared twice". Neither is true — the guard compares two string constants, curation declares no interval or staleness bound at all, and `observability-strategy.md` § The Health Surface says outright that nothing downstream compares the age to a threshold. That is the over-claiming shape this table records a rule about, three rows down, in a row written by the same hand a day earlier: **an index that over-claims sends a reader away believing a divergence would be caught.** The guard is real and does exactly what it now says.)* |
 
 ### Deliberately uncovered (ruled, not overlooked)
 

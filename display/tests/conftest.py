@@ -62,6 +62,11 @@ def settings(art_root: Path) -> Settings:
         tv_client_name="tvpi-test",
         epd_panel_width_px=1448,
         epd_panel_height_px=1072,
+        epd_margin_px=40,
+        epd_rotate_degrees=180,
+        # Empty, so the daemon fixtures below get the deployment most devices are:
+        # a television and no panel. The tests that want one attach a double.
+        epd_device="",
         latitude=45.68,
         longitude=-111.04,
         location_name="Bozeman",
@@ -133,6 +138,7 @@ def publish(art_root: Path) -> Callable[..., dict]:
         shuffle: bool = False,
         renders: bool = True,
         theme_id: str = "theme-1",
+        labels: dict[str, dict] | None = None,
     ) -> dict:
         document = {
             "schema": {"major": major, "minor": 0},
@@ -141,7 +147,16 @@ def publish(art_root: Path) -> Callable[..., dict]:
             "rotation": {"interval_seconds": interval_seconds, "shuffle": shuffle},
             "directive": {"sequence": sequence, "pinned_work_id": pinned_work_id},
             "entries": [
-                {"work_id": work_id, "render_path": f"ready/{work_id}.jpg", "label": {"title": f"Work {work_id}"}}
+                {
+                    "work_id": work_id,
+                    "render_path": f"ready/{work_id}.jpg",
+                    # A plausible default so callers that do not care get real
+                    # label text rather than an empty block — an empty label is a
+                    # distinct behaviour with its own tests, and a fixture that
+                    # produced one by default would make every other test
+                    # exercise that path by accident.
+                    "label": (labels or {}).get(work_id, {"title": f"Work {work_id}"}),
+                }
                 for work_id in work_ids
             ],
         }
