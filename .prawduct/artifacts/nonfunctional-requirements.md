@@ -690,6 +690,58 @@ work (issue #4 untracks its *backups*) must not delete the file itself.
 > or untracking `all.json` destroys the corpus outright, with no successor to fall
 > back to, which is why `.gitignore` excludes only its backups and says so inline.
 
+**The mechanical derivation does not land in the corpus's region, and measurement
+is how that was established (2026-08-10).** The dominant-colour fallback
+(`acquisition/mat.py`, Pillow median-cut darkened by `_FALLBACK_LIGHTNESS`) was
+described during the 2026-08-05 walkthrough as landing where the corpus sits,
+which is what made it acceptable as a *default* rather than a fallback. Run over
+the operator's own masters and paired against the hand-tuned colour for the same
+painting, it does not:
+
+```
+40 works, each with a hand-tuned mat and a master on disk
+  machine lighter than the human chose ....... 31 / 40   median +15.2 L*
+  machine over CORPUS_MAX_LIGHTNESS = 50 ....   7 / 40   (human: 0 / 40)
+  worst pair ... Demuth, "...And the Home of the Brave"
+                 human #27285b L* 18.8  ->  machine L* 59.5
+  Mondrian, "Lozenge Composition" ... human #6b6b6b L* 45.2 -> machine L* 61.3
+```
+
+A near-white mat over a Mondrian is the exact failure `CORPUS_MAX_LIGHTNESS`
+exists to refuse: `test_mat_corpus.py`'s docstring records that two candidate
+models were rejected during probing for proposing one over a Rothko and a
+Mondrian. The bar was written to keep *models* out of that failure, and the
+mechanical producer — which the bar was never run against on real images — walks
+into it on the same painting.
+
+**Why no test caught this, which is the part worth carrying forward.**
+`test_the_fallback_stays_within_the_corpus_bar_for_most_works` feeds the engine
+six synthetic flat colours, the lightest of which is mid-grey, and asserts all six
+land under the bar. Its docstring says "most" while its assertion says "every",
+and both are true of *that* input — flat colours have no cluster competition and
+no pale regions. The corpus's real masters have both. **A regression corpus that
+is only read for its answers is not being used as a corpus**: the 41 colours were
+checked against the bar, and the 40 images they were derived *from* never went
+through the producer being judged.
+
+**The masters are not in the repository and must not be**, so the standing check
+is split rather than skipped: the *clamp* is arithmetic and is asserted on any
+input, synthetic included, while the *comparison against the hand-tuned 40* is an
+operator-run measurement against `ART_ROOT`. Making the bar structural is what
+lets a cheap test carry it — a statistical claim over images CI cannot see is not
+a test, and writing one that passes on synthetic flats is how this was missed.
+
+**Two mat presets, and their values come from the corpus rather than from
+convention (decided 2026-08-10).** A curator's one-press neutrals are `#222222`
+(L\* 13.2 — the most common hand-tuned colour, chosen three times) and `#6b6b6b`
+(L\* 45.2 — the lightest in the corpus, and the mat a human chose for the
+Mondrian). The operator's opening ask was black and off-white; **off-white was
+withdrawn on the same evidence that withdrew it as the default** — no mat in the
+41 exceeds L\* 45.2, so an off-white preset would sit roughly fifty L\* points
+above anything the corpus contains, on the emissive panel where that glares.
+Pure black was not chosen either, for the quieter reason that the corpus does not
+contain it: the darkest of the 41 is `#14141e` at L\* 6.7.
+
 **Rendered size must be adequate, and the current pipeline has no floor.**
 `resize_file_with_matte` uses PIL's `image.thumbnail()`, which **never upscales** —
 so the de facto 2024 policy is "accept any resolution, never upscale, let the mat
