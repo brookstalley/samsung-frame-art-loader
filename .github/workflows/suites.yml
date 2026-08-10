@@ -143,12 +143,39 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - name: Install the fonts the typesetter resolves through
-        # Pango picks a face per glyph through fontconfig, and a runner with no
-        # font installed resolves every one of them to nothing — which does not
-        # fail, it renders blank. That would pass the shape assertions and fail
-        # the ink ones, blaming this code for a machine with no fonts on it.
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-dejavu-core
+      - name: Install the text stack the typesetter builds and renders against
+        # Two unrelated needs, and missing either one fails in a way that blames
+        # this code for the machine it ran on.
+        #
+        # **The build half.** PyPI carries no PyGObject wheel at all, and only
+        # Windows wheels for pycairo — `display/uv.lock` is the record — so on
+        # this runner both compile from source and want cairo's and
+        # girepository's headers. The Pi measurement recorded in
+        # `platform-and-dependency-findings.md` saw PyGObject arrive prebuilt and
+        # needed no headers; that was aarch64 and it does not transfer here,
+        # which is precisely how this job failed the first time it ever ran.
+        #
+        # **The render half.** Pango picks a face per glyph through fontconfig,
+        # and a runner with no font installed resolves every one of them to
+        # nothing — which does not fail, it renders blank. That would pass the
+        # shape assertions and fail the ink ones.
+        #
+        # The girepository dev package was renamed when PyGObject moved to
+        # girepository-2.0, and the runner image decides which name exists. It is
+        # probed rather than guessed: a wrong literal here is a red job that says
+        # nothing about the typesetter, which is the failure this whole job
+        # exists to avoid.
+        run: |
+          sudo apt-get update
+          girepository=libgirepository-2.0-dev
+          apt-cache show "$girepository" > /dev/null 2>&1 || girepository=libgirepository1.0-dev
+          echo "girepository dev package: $girepository"
+          sudo apt-get install -y --no-install-recommends \
+            "$girepository" \
+            libcairo2-dev \
+            libpango1.0-dev \
+            pkg-config \
+            fonts-dejavu-core
       - name: Run the typesetting tests
         working-directory: display
         run: uv run --group raster pytest tests/raster -v --junitxml=results.xml

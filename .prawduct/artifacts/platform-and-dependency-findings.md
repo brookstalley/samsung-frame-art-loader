@@ -212,7 +212,7 @@ confirmation.
 surface is `clear`, `close`, `display`, `prepare`, `sleep`. Every label change —
 even one changed character — is a full-frame redraw at the cost measured above.
 
-### The text stack installs under uv, and needs no distro packages
+### The text stack installs under uv, and needs no distro *Python* packages
 
 Measured on the Pi 2026-08-07, in a scratch venv, because the answer decides
 whether the display plane's panel dependencies can be a uv dependency group at
@@ -225,6 +225,24 @@ pycairo built, in 12 s. **No `apt install python3-gi` is involved**, which is th
 finding that matters: the 2024 requirements file documents a five-package apt
 prerequisite list for exactly this, and it is now needed only by that install
 path.
+
+**Corrected 2026-08-10 — this section was titled "needs no distro packages" and
+that is not what was measured.** What the Pi run shows is that no distro *Python*
+package is needed; it says nothing about C headers, and the difference cost a red
+CI job the first time the typesetting leg ever executed. `display/uv.lock` is the
+authority and it is unambiguous: **pycairo 1.29.1 publishes only `win32` and
+`win_amd64` wheels, and PyGObject 3.56.3 publishes no wheel at all** — sdist only.
+Every Linux install therefore compiles both from source and needs cairo's and
+girepository's development headers present. The GitHub runner had neither and
+failed at `Run-time dependency cairo found: NO (tried pkg-config and cmake)`.
+
+Why the Pi got PyGObject prebuilt when PyPI carries no such wheel is **not settled
+here** — a Pi-local wheel index is the obvious candidate and was not checked. What
+is settled is that "it arrived as a wheel" was an observation about one machine
+and was read as a property of the package. The generalisable form: *a measurement
+of what installs on the machine in front of you bounds nothing about the machine
+in CI*, and the sentence recording it has to carry the architecture it was taken
+on or it will be read as universal.
 
 The consequence is that the panel's dependencies split cleanly by *which machines
 can install them*, which turns out to be the same seam the code splits on:

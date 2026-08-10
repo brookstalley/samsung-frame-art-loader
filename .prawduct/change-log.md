@@ -133,6 +133,21 @@ uv dependency group rather than something reaching into system site-packages. Th
 `raster` group and its separate CI job exist because of that, and because this Mac
 cannot run Pango at all.
 
+**That CI job failed the first time it ever ran, which is the point of having
+opened the PR.** It was written in this chunk and no push had executed it, so
+"the typesetting is tested by CI" was a claim with nothing under it until
+2026-08-10. What it needed was cairo's and girepository's development headers:
+`display/uv.lock` records that **pycairo publishes only Windows wheels and
+PyGObject publishes none at all**, so every Linux install compiles both from
+source, and the job installed fonts and nothing else. The Pi measurement that
+said the text stack "needs no distro packages" was true about distro *Python*
+packages and was read as being about C headers — corrected in
+`platform-and-dependency-findings.md`, with the generalisable half recorded: a
+measurement of what installs on the machine in front of you bounds nothing about
+the machine in CI. The girepository dev package is now probed rather than named,
+because its name changed with PyGObject's move to girepository-2.0 and the runner
+image decides which one exists.
+
 **The type sizes ship provisional and say so at their definition site.** The
 2026-08-04 ladder narrowed the live range to the mid-20s through low-40s px and
 killed the 2024 `"Sans 18"`, but it was rendered with PIL/DejaVu against a product
