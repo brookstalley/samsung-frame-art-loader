@@ -131,7 +131,7 @@ re-created the same silence one line further down.
 - [x] Chunk 04: Verify the IT8951 build under uv PEP 517 isolation (issue #9)
 - [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [x] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
-- [ ] Chunk 13A: The panel, the label, the heartbeat and the two units — no hardware
+- [ ] Chunk 13A: The panel, the label, the heartbeat and the two units — no hardware *(built, reviewed and merged; the box waits on Done-when step 0b, which needs the set — see § The announcement reaches both subscribers in `operator-verification.md`)*
 - [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
@@ -1818,7 +1818,11 @@ hardware.
   surface interface) with the omni-epd e-paper surface as the first
   implementation — heartbeat writer, new `deploy/curation.service` and new
   `deploy/display.service`, the report-once shape collapsed, the `image_selected`
-  fan-out, the IT8951 pin-or-vendor decision taken and recorded
+  fan-out, the IT8951 pin-or-vendor decision taken and recorded,
+  `display/tools/label_preview.py` (renders the whole label chain to a PNG with no
+  panel, so the type size can be narrowed at a desk before 13B settles it at the
+  panel), and the `typesetting` CI job that installs the `raster` group and runs
+  the Pango tests the default display leg ignores
 - **Tests:** unit — label layout against fixed metadata (golden-image or
   measured-extent checks), heartbeat shape and atomicity, **the panel is put in
   `gray16` and the driver asserts on `mode` rather than `max_colors`** (which
