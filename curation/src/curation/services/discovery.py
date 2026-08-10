@@ -623,6 +623,8 @@ class DiscoveryService:
         artist: str | None,
         rationale: str,
         work_dedup_key: str,
+        offered_for_artist: str,
+        offered_artist_matched: int,
     ) -> CandidateWork | None:
         """Record a work the collection offered, or `None` if it should not be shown.
 
@@ -671,6 +673,13 @@ class DiscoveryService:
                 work_dedup_key=key,
                 provenance=WorkProvenance.OFFERED,
                 proposed_artist=artist,
+                # Required rather than optional, because an offered work that
+                # cannot say which query produced it is one the review surface
+                # cannot place in a group — and `product-brief.md` requires it to
+                # be placed. Every caller has both to hand: they are what the
+                # browse returned.
+                offered_for_artist=require_text(offered_for_artist, field="offered_for_artist"),
+                offered_artist_matched=offered_artist_matched,
             )
             store_write(self._store.add_candidate_work, work)
         return work

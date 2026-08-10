@@ -58,6 +58,8 @@ _EXPECTED_SCHEMA = {
         "rationale",
         "work_dedup_key",
         "provenance",
+        "offered_for_artist",
+        "offered_artist_matched",
         "resolution_status",
         "unresolved_reason",
         "verdict",

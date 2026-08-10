@@ -118,8 +118,20 @@ def test_an_offered_work_is_never_presented_as_the_work_the_model_named(services
     assert gift.id != named.id
 
 
-def test_an_offered_work_says_which_query_produced_it_and_how_many_it_matched(services, engine, runner, collection):
-    """Being offered one work out of four hundred reads differently from one out of one."""
+def test_an_offered_work_carries_which_query_produced_it_and_how_many_it_matched(services, engine, runner, collection):
+    """Being offered one work out of four hundred reads differently from one out of one.
+
+    **The requirement is unchanged; where it is answered is.** `product-brief.md`
+    used to ask the *rationale* to say this, and the surface duly printed one
+    thirty-word sentence on every offered card. The brief was amended for issue
+    #95 to ask the review surface to say it once for the query's group, so the
+    work now carries the two facts and no view has to parse a sentence to group
+    or reconcile them.
+
+    Asserted as exact values rather than as substrings of prose, which is the
+    point of moving them: `"400" in rationale` also passes on a sentence that
+    says four thousand, and passes on a cap of 400 that happens to match.
+    """
     engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
     collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Train Landscape"]}).holdings
     collection.matched = {"Ellsworth Kelly": 400}
@@ -127,9 +139,30 @@ def test_an_offered_work_says_which_query_produced_it_and_how_many_it_matched(se
     run_id = start(runner).id
 
     (gift,) = offered(services, run_id)
-    assert "Ellsworth Kelly" in gift.rationale
-    assert "400" in gift.rationale
+    assert gift.offered_for_artist == "Ellsworth Kelly"
+    assert gift.offered_artist_matched == 400
+    # Still marked as the collection's doing on the work itself, because a card
+    # read out of its group must not read as something the model proposed.
     assert "collection" in gift.rationale.lower()
+
+
+def test_a_proposed_work_claims_no_query_and_no_holdings_count(services, engine, runner, collection):
+    """The paired negative: the two fields are what an *offer* carries.
+
+    A proposed work no query produced would, with a default of anything but null,
+    join a group on the review surface and be counted against a collection's
+    holdings it has nothing to do with.
+    """
+    engine.result = a_list(("Spectrum IV", "Ellsworth Kelly"))
+    collection.holdings = a_collection_holding(**{"Ellsworth Kelly": ["Train Landscape"]}).holdings
+
+    run_id = start(runner).id
+
+    named = [work for work in services.discovery.list_candidate_works(run_id) if work.provenance is WorkProvenance.PROPOSED]
+    assert named, "the run must have proposed something for this to be about anything"
+    for work in named:
+        assert work.offered_for_artist is None
+        assert work.offered_artist_matched is None
 
 
 def test_an_offered_work_arrives_reviewable_rather_than_as_a_bare_title(services, engine, runner, collection):
