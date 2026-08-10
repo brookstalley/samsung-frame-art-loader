@@ -44,10 +44,12 @@ cd curation && uv run python tools/mat_masters.py ../all.json
 ```
 
 **The specific question, and it is a real one.** The clamp puts a breaching work
-at exactly L\* 45.2 — the corpus's lightest mat, which a human chose *once*, for
-the Mondrian. On the Mondrian that is arguably right. On the Johns, whose human
-answer was L\* 10.3, a mat at 45.2 is still thirty-five points lighter than the
-choice it replaces. The clamp fixes "too light to be in the corpus at all"; it
+at L\* 45.2 or darker — the corpus's lightest mat, which a human chose *once*, for
+the Mondrian. (Darker, not exactly, when the work's own hue is one the panel cannot
+show at that lightness: the colour goes down until it can, rather than losing its
+hue and becoming a grey.) On the Mondrian 45.2 is arguably right. On the Johns,
+whose human answer was L\* 10.3, a mat at 45.2 is still thirty-five points lighter
+than the choice it replaces. The clamp fixes "too light to be in the corpus at all"; it
 does not make the derivation choose the way you would. **If those read badly, say
 so** — the answer is not a lower ceiling (that would be a number fitted to a
 feeling) but that the derivation should not be the default where a vision model
