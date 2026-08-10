@@ -690,58 +690,80 @@ work (issue #4 untracks its *backups*) must not delete the file itself.
 > or untracking `all.json` destroys the corpus outright, with no successor to fall
 > back to, which is why `.gitignore` excludes only its backups and says so inline.
 
-**The mechanical derivation does not land in the corpus's region, and measurement
+**The mechanical derivation did not land in the corpus's region, and measurement
 is how that was established (2026-08-10).** The dominant-colour fallback
 (`acquisition/mat.py`, Pillow median-cut darkened by `_FALLBACK_LIGHTNESS`) was
 described during the 2026-08-05 walkthrough as landing where the corpus sits,
 which is what made it acceptable as a *default* rather than a fallback. Run over
 the operator's own masters and paired against the hand-tuned colour for the same
-painting, it does not:
-
-```
-40 works, each with a hand-tuned mat and a master on disk
-  machine lighter than the human chose ....... 31 / 40   median +15.2 L*
-  machine over CORPUS_MAX_LIGHTNESS = 50 ....   7 / 40   (human: 0 / 40)
-  worst pair ... Demuth, "...And the Home of the Brave"
-                 human #27285b L* 18.8  ->  machine L* 59.5
-  Mondrian, "Lozenge Composition" ... human #6b6b6b L* 45.2 -> machine L* 61.3
-```
+painting, it did not — it put a mat above the bar on 7 of 40 works where the human
+breached it on none, the worst being Demuth's "...And the Home of the Brave" at
+L\* 59.5 against a hand-tuned L\* 18.8. The full before-and-after is the table
+below; it is not repeated here.
 
 A near-white mat over a Mondrian is the exact failure `CORPUS_MAX_LIGHTNESS`
 exists to refuse: `test_mat_corpus.py`'s docstring records that two candidate
 models were rejected during probing for proposing one over a Rothko and a
 Mondrian. The bar was written to keep *models* out of that failure, and the
-mechanical producer — which the bar was never run against on real images — walks
+mechanical producer — which the bar was never run against on real images — walked
 into it on the same painting.
 
-**Why no test caught this, which is the part worth carrying forward.**
-`test_the_fallback_stays_within_the_corpus_bar_for_most_works` feeds the engine
-six synthetic flat colours, the lightest of which is mid-grey, and asserts all six
-land under the bar. Its docstring says "most" while its assertion says "every",
-and both are true of *that* input — flat colours have no cluster competition and
-no pale regions. The corpus's real masters have both. **A regression corpus that
-is only read for its answers is not being used as a corpus**: the 41 colours were
-checked against the bar, and the 40 images they were derived *from* never went
-through the producer being judged.
+**Why no test caught this, which is the part worth carrying forward.** The test
+then named `..._for_most_works` fed the engine six synthetic flat colours, the
+lightest of which was mid-grey, and asserted all six landed under the bar. Its
+docstring said "most" while its assertion said "every", and both were true of
+*that* input — flat colours have no cluster competition and no pale regions. The
+corpus's real masters have both. **A regression corpus that is only read for its
+answers is not being used as a corpus**: the 41 colours were checked against the
+bar, and the 40 images they were derived *from* never went through the producer
+being judged. The test is now
+`test_the_fallback_stays_within_the_corpus_bar_for_every_work` and its palette
+leads with white and a pale wash — the cases darkening alone cannot rescue, and
+therefore the cases that prove the clamp is doing the work.
 
-**Neither half of the intended check exists yet, and this paragraph says so
-rather than describing it as in force.** Issue #115 owns building both. The
-design it should be built to: the masters are not in the repository and must not
-be, so the check splits — the *clamp* is arithmetic and can therefore be asserted
-on any input, synthetic included, while the *comparison against the hand-tuned
-40* is an operator-run measurement against `ART_ROOT`. Making the bar structural
-is what lets a cheap test carry it; a statistical claim over images CI cannot see
-is not a test, and writing one that passes on synthetic flats is how this was
-missed. As of 2026-08-10 `mat.py`'s `_fallback` only darkens by
-`_FALLBACK_LIGHTNESS`, and `CORPUS_MAX_LIGHTNESS` appears nowhere outside
-`test_mat_corpus.py`.
+**Both halves of the intended check exist as of 2026-08-11, and the split is the
+design above.** The masters are not in the repository and must not be, so the
+*clamp* is arithmetic asserted on synthetic input by `test_mat_corpus.py`, while
+the *comparison against the hand-tuned 40* is an operator-run measurement against
+`ART_ROOT` carried by `tools/mat_masters.py`. Making the bar structural is what
+lets a cheap test carry it; a statistical claim over images CI cannot see is not a
+test, and writing one that passes on synthetic flats is how this was missed.
 
-**And the committed operator instrument does not measure this.**
-`tools/mat_corpus.py` states in its own docstring that its images come from each
-work's museum as a small IIIF derivative rather than from `ART_ROOT` — which is
-the very substitution the 2026-08-10 measurement found changes the derived colour
-visibly on 5 of 25 works. It is a sheet for judging *look*, and it cannot stand in
-for the master-based comparison above.
+`mat.py` clamps derived lightness to `_CORPUS_MAX_LIGHTNESS`, and that constant is
+**not a second copy of the corpus's ceiling** — `test_mat_corpus.py` derives the
+lightest mat from `all.json` and fails if the two disagree, so a corpus that gains
+a lighter mat cannot leave the engine enforcing a bar the corpus no longer sets.
+
+**What the fix bought, measured over the operator's own 40 pairs on 2026-08-11:**
+
+```
+                                            before        after
+  machine over CORPUS_MAX_LIGHTNESS = 50     7 / 40       0 / 40
+  re-encode moved the derived colour at all  5 / 40       5 / 40   (ΔE > 5)
+    ... to a plainly different colour        5 / 40       2 / 40   (ΔE > 10)
+    worst single move                       ΔE 60.7      ΔE 45.6
+  machine lighter than the human chose      31 / 40      31 / 40   median +14.2 L*
+```
+
+**Two of those columns did not move, and both are deliberate.** The lightness
+*bias* is untouched: the clamp is a ceiling, so it removes the tail above the bar
+and leaves the median where it was. Closing that gap is a question about which
+colour to choose rather than arithmetic on the one already chosen, and it belongs
+to the vision model — which is why the mechanical derivation is the default only
+in the sense of "always present", not "preferred where a model can be asked". And
+the count of works that move *at all* under a re-encode is unchanged at 5: the
+residue is not a split colour losing a vote but two genuinely different regions of
+one painting close enough in area that a re-encode reorders them. No merge
+threshold fixes a real tie, and one wide enough to try would collapse the picture
+to a single colour.
+
+**The committed *look* instrument still does not measure this, and the two are
+not interchangeable.** `tools/mat_corpus.py` states in its own docstring that its
+images come from each work's museum as a small IIIF derivative rather than from
+`ART_ROOT` — the very substitution that changes the derived colour visibly on 5 of
+25 works. It is a sheet for judging look; `tools/mat_masters.py` is the numeric
+comparison against the masters. Run the second after any change to
+`acquisition/mat.py` or `acquisition/color.py`.
 
 **Two mat presets, and their values come from the corpus rather than from
 convention (decided 2026-08-10).** A curator's one-press neutrals are `#222222`

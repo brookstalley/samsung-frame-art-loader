@@ -54,6 +54,83 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-11: The derived mat cannot exceed the corpus, and the vote counts a colour once
+
+<!-- prawduct: status=shipped | scope=v1-build -->
+
+<!-- No `chunks=`: issue #115, a defect in the mat engine the build plan had
+     already delivered. -->
+
+**Why:** issue #115, impact L. It **blocks #91**, whose acceptance criterion
+promotes the mechanical derivation from fallback to *default* on the recorded
+claim that it lands where the hand-tuned corpus sits. That claim was measured on
+2026-08-10 and is false, so promoting it would have made a measured-wrong colour
+the standing answer for every work acquired without a vision call.
+
+**Two defects, one cause each.**
+
+- **The derivation had no ceiling.** `_fallback` darkened the dominant colour by
+  `_FALLBACK_LIGHTNESS` and stopped. Two thirds of a pale colour is still pale, so
+  on the operator's 40 paired works it put a mat above `CORPUS_MAX_LIGHTNESS = 50`
+  on 7, where the human breached it on 0 — including a near-white over a Mondrian,
+  which is verbatim the failure the bar was written to refuse and the failure two
+  candidate models were rejected during probing for.
+- **The dominance vote counted one colour twice.** Median cut splits along the
+  widest channel, so a colour spread over a gradient arrives as two clusters and
+  loses to a smaller undivided rival. A benign re-encode is enough to move where
+  the split falls, so the *answer* moved with it.
+
+**Measured over the operator's own 40 pairs, before and after:**
+
+```
+  machine over CORPUS_MAX_LIGHTNESS = 50     7 / 40  ->  0 / 40
+  re-encode moved the colour at all          5 / 40  ->  5 / 40   (ΔE > 5)
+    ... to a plainly different colour        5 / 40  ->  2 / 40   (ΔE > 10)
+    worst single move                       ΔE 60.7  ->  ΔE 45.6
+  machine lighter than the human chose      31 / 40  -> 31 / 40   median +14.2 L*
+```
+
+**The two columns that did not move are the honest part of this entry.** The
+clamp is a ceiling, so it removes the tail above the bar and leaves the lightness
+*bias* exactly where it was; closing that is a question about which colour to
+choose, not arithmetic on the one already chosen, and it belongs to the vision
+model. And the count of works whose colour moves *at all* is unchanged: what
+remains is not a split colour but two genuinely different regions close enough in
+area that a re-encode reorders them. **No threshold fixes a real tie**, and one
+wide enough to try would collapse the picture to one colour.
+
+**The merge threshold was chosen from the metric's meaning, not from a score.**
+Sweeping ΔE 5, 10, 15 and 20 over the 40 masters moves the survival count around
+non-monotonically — 3, 5, 3, 3 — while every non-zero value delivers the same
+5 → 2 improvement on plainly-different flips. Forty works cannot separate those,
+so picking the best-scoring value would have fitted the threshold to the sample.
+Ten is where CIEDE2000's own scale puts "plainly different colours".
+
+**`_CORPUS_MAX_LIGHTNESS` is not a second copy of the corpus's ceiling.**
+`test_mat_corpus.py` derives the lightest mat from `all.json` and fails if the two
+disagree, so a corpus that gains a lighter mat cannot leave the engine enforcing a
+bar the corpus no longer sets. The clamp is deliberately **not** applied to the
+vision model's answer: darkening a considered choice would make the recorded
+colour one nobody selected, which is the invisible-substitution failure
+`MatColor.method` exists to end.
+
+**`tools/mat_masters.py` is new, and it is the half of the check CI cannot hold.**
+The corpus's colours are in the repo and its *images* are the operator's masters,
+which are not and must not be — so the producer being judged had never been run
+over the corpus's own inputs. That is the whole reason a green suite hid this. The
+tool pairs each master with 2024's colour by title, reports the comparison above,
+and writes nothing. `tools/mat_corpus.py` does not substitute for it: its images
+come from each museum as a small IIIF derivative, which is the very substitution
+that changes the derived colour visibly on 5 of 25 works.
+
+**One measurement correction worth recording.** The first stability harness
+downscaled each master to 1024px *and* re-encoded it, and reported 3 of 40. That
+number was about resampling, not about the vote: `dominant_color` decodes through
+`draft()`, whose DCT scaling factor depends on the file's size, so a downscaled
+master reaches the quantiser as genuinely different pixels. Re-measured as the
+claim actually reads — same dimensions, saved again at a different quality — the
+figure is 5 of 40, which is what #115 recorded.
+
 ## 2026-08-10: A thumbnail stops outliving the canvas it was a copy of
 
 <!-- prawduct: status=shipped | scope=v1-build -->
