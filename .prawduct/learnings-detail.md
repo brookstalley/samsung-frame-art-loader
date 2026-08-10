@@ -8,6 +8,17 @@ Entries older than 2026-07-31 still keep their evidence inline in `learnings.md`
 That is the shape the record linter asks them to leave, and moving them is its own
 piece of work rather than a side effect of adding a rule — tracked as issue #26.
 
+**Entries here are dated evidence, so some of them describe machinery that has
+since been retired — read them as history, not as instructions.** The live
+instance: several entries below turn on `views_enabled: true` and
+`prawduct-hook regen-views` regenerating the build-plan `## Status` checkboxes.
+Prawduct retired that on 2026-08-08; the command now exits 0 with a notice, both
+keys are gone from `project-state.yaml`, and the checkboxes are hand-authored
+state. The entries are left standing because what they record — how the trap was
+found, and what it cost — is the part worth keeping, and editing them to match
+today would destroy the evidence while making the rule look like it had always
+been obvious. This note is here so nobody follows one of them as a procedure.
+
 ## A test double expresses what you already believe the dependency does, so it cannot catch "says yes, does nothing"
 
 **2026-08-07, Chunk 12.** The display plane was built, Critic-reviewed, green
