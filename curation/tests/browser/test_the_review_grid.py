@@ -951,7 +951,9 @@ def test_the_offer_reconciles_what_the_collection_holds_with_what_one_run_shows(
     grid.open(f"#review/{RUN_ID}")
     grid.page.wait_for_selector("li.card")
 
-    assert "The collection holds 25 works by them, and these 3 are as many as one run offers" in grid.text()
+    group = grid.page.locator("section.offer-group")
+    assert group.count() == 1
+    assert "The collection holds 25 works by them; these 3 are what this run offered." in group.inner_text()
 
 
 def test_an_offer_that_is_the_whole_of_what_is_held_claims_no_cap(grid):
@@ -969,7 +971,7 @@ def test_an_offer_that_is_the_whole_of_what_is_held_claims_no_cap(grid):
 
     shown = grid.text()
     assert "These are all 1 work the collection holds by them." in shown
-    assert "as many as one run offers" not in shown
+    assert "what this run offered" not in shown, "a subset was described where every held work is present"
 
 
 def test_two_queries_are_two_groups_rather_than_one_run_of_cards(grid):
@@ -991,11 +993,22 @@ def test_two_queries_are_two_groups_rather_than_one_run_of_cards(grid):
     grid.open(f"#review/{RUN_ID}")
     grid.page.wait_for_selector("li.card")
 
-    shown = grid.text()
-    assert "Offered by the collection — Salvador Dalí" in shown
-    assert "Offered by the collection — Ellsworth Kelly" in shown
-    assert "holds 25 works" in shown
-    assert "holds 400 works" in shown
+    # Scoped to each group rather than matched across the page: two groups whose
+    # sentences had been swapped would satisfy every page-wide assertion, and the
+    # association between a query and its numbers is the whole requirement.
+    # Selected by the QUERY, not by visible text. A card carries the collection's
+    # own attribution, which differs from the query the brief requires verbatim —
+    # so `has_text="Salvador Dalí"` matched both groups, the Kelly one through its
+    # card's artist line. The attribute is the only unambiguous handle.
+    dali = grid.page.locator("section.offer-group[data-offer-artist='Salvador Dalí']")
+    kelly = grid.page.locator("section.offer-group[data-offer-artist='Ellsworth Kelly']")
+    assert dali.count() == 1 and kelly.count() == 1
+
+    assert "holds 25 works" in dali.inner_text()
+    assert "holds 400 works" not in dali.inner_text(), "one query's holdings total sits above another's works"
+    assert "holds 400 works" in kelly.inner_text()
+    assert dali.locator("li.card[data-work='dali-1']").count() == 1
+    assert kelly.locator("li.card[data-work='kelly-1']").count() == 1
 
 
 def test_an_offer_whose_query_was_never_recorded_still_reaches_the_page(grid):
@@ -1080,4 +1093,4 @@ def test_an_offer_with_nothing_named_beside_it_claims_no_failed_works(grid):
 
     shown = grid.text()
     assert "found no image for" not in shown, "a failure clause was printed for works that are not there"
-    assert "The collection holds 25 works by them" in shown, "the holdings clause must still stand alone"
+    assert "The collection holds 25 works by them;" in shown, "the holdings clause must still stand alone"

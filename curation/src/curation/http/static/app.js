@@ -1695,7 +1695,14 @@ function offeredGroupSentence(group, allCards) {
     // one, which is the failure this whole change is undoing.
     clauses.push(`The collection offered ${works(shown)} it holds by them.`);
   } else if (shown < matched) {
-    clauses.push(`The collection holds ${works(matched)} by them, and these ${shown} are as many as one run offers.`);
+    // Says that these are a subset and stops there. Naming the per-run bound as
+    // the *cause* of the gap is a claim this surface cannot support: a group also
+    // comes up short when works were declined for rendering below the display
+    // floor, and on a re-search page where the bound is never reached at all. The
+    // reconciliation the requirement asks for is that the two numbers not appear
+    // to disagree — which "what this run offered" delivers without inventing a
+    // reason for the difference.
+    clauses.push(`The collection holds ${works(matched)} by them; these ${shown} are what this run offered.`);
   } else {
     clauses.push(`These are all ${works(matched)} the collection holds by them.`);
   }
@@ -1778,11 +1785,27 @@ async function viewReview(runId, generation) {
     offer,
     page.works.length ? null : el("p", { class: "muted", text: "This run settled on no works, so there is nothing to review." }),
     named.length ? gridOf(named) : null,
-    ...offeredGroups(offered).flatMap((group) => [
-      el("h3", { text: group.artist ? `Offered by the collection — ${group.artist}` : "Offered by the collection" }),
-      el("p", { class: "muted", text: offeredGroupSentence(group, page.works) }),
-      gridOf(group.cards),
-    ]),
+    // Each group in its own element rather than as three loose siblings. The
+    // requirement is an *association* — this sentence belongs to these works —
+    // and flat siblings leave that expressible only by document order, which no
+    // assertion can hold and a screen reader does not convey. It also gives the
+    // browser tests something to scope to: page-wide text matching passes on two
+    // groups whose sentences have been swapped.
+    ...offeredGroups(offered).map((group) =>
+      el("section", {
+        class: "offer-group",
+        // The query, as an attribute rather than only as heading prose. A card's
+        // own artist is the collection's attribution and differs from the query
+        // on purpose, so matching a group by visible text finds the wrong one —
+        // which is exactly what happened to the test written that way.
+        "data-offer-artist": group.artist,
+        "aria-label": group.artist ? `Offered by the collection: ${group.artist}` : "Offered by the collection",
+      }, [
+        el("h3", { text: group.artist ? `Offered by the collection — ${group.artist}` : "Offered by the collection" }),
+        el("p", { class: "muted", text: offeredGroupSentence(group, page.works) }),
+        gridOf(group.cards),
+      ]),
+    ),
   ];
   render(generation, ...panels);
 }

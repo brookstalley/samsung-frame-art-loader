@@ -549,6 +549,20 @@ from 2,067 tokens to 1,827 across these two, and roughly seven more fields of th
 size would exhaust it. The next addition should say what it displaces rather than
 assume there is room.
 
+**Two fields were added 2026-08-10, and this is what they displace: nothing, and
+that is measured rather than assumed.** `offered_for_artist` and
+`offered_artist_matched` (issue #95) are null on every proposed row, so on a page
+of works the run named they cost the two keys and nothing else. On offered rows
+they carry an artist name and a small integer — and they arrived as the
+*replacement* for a thirty-word sentence that `rationale` used to carry on every
+offered row, which the MCP row never included. So the row's own budget is
+unchanged where it was already tight and the surface gained the fact an agent
+needed to tell one-of-four-hundred from one-of-one.
+
+**The headroom sentence above still governs the next addition.** These two were
+paid for by a deletion elsewhere; that is not a repeatable trick, and the seven-
+field estimate has not moved.
+
 **Image content blocks correlate by position and by nothing else.** The protocol
 gives a block no identity, and a result's blocks are only the instances that had a
 local copy — so block *n* is not row *n* the moment one preview is missing. Every

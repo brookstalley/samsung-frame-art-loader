@@ -350,6 +350,22 @@ current design, by #C below. #2 and #3 went unremarked.
   twelve times down a single page, carrying per-*group* information on a per-card
   line.
 
+  **FIXED 2026-08-10 by issue #95 — and the fix is not visible on an old run.**
+  The paragraphs above are kept in the past tense they were written in, as the
+  record of what was seen; `_offer_rationale`, the function they reason from, no
+  longer exists. Offered works now store the query that produced them
+  (`offered_for_artist`, `offered_artist_matched`) and the review grid says it
+  once above that query's works, reconciled against what the run offered.
+
+  **To verify, start a fresh run — do not reopen the 2026-08-05 Dali run.** Rows
+  written before this change keep their old sentence in `rationale` and carry no
+  query, so that run renders the old wording and collapses into a single unnamed
+  group: the defect, apparently unchanged. There is no backfill, by the operator's
+  decision of 2026-08-10 that old runs need not be preserved and the database may
+  be zeroed. What to look for on a new run: the denial gone (the page says the run
+  found no *image* for the works it named), one sentence per artist rather than one
+  per card, and the holdings total reconciled with what the run offered.
+
 ## Decisions taken during the 2026-08-05 walkthrough
 
 **The mat policy, settled with the operator against the corpus rather than in the

@@ -318,8 +318,15 @@ class CandidateWork:
     proposed_artist: str | None = None
     #: The browse query that produced an offered work, and how many works that
     #: query matched in the collection. `None` on a proposed work, which no query
-    #: produced — so the pair also distinguishes the two provenances without
-    #: reading `provenance`, and a set value on a proposed row is a bug.
+    #: produced — and a set value on a proposed row is a bug.
+    #:
+    #: **Null does not mean proposed. `provenance` is the only thing that says
+    #: which a work is.** An offered row written before these columns existed
+    #: carries nulls too, so `offered_for_artist is not None` reads as "offered"
+    #: for new rows and mislabels every older one. The reader below spells out the
+    #: same thing from the other side; both are here because this is precisely the
+    #: inference a reader makes on seeing two fields only one provenance ever
+    #: sets.
     #:
     #: **Held as facts rather than folded into `rationale`.** The sentence they
     #: belong to is about the query, not the work: `product-brief.md` requires a
