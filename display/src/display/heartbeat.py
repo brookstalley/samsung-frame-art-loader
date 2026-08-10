@@ -142,6 +142,14 @@ def write(art_root: Path, health: Health, *, reported_at: datetime) -> None:
     leaving it out is the defect that only ever appears after an outage, which is
     exactly when somebody is reading this file to find out what happened.
 
+    **Blocking, and deliberately left on the caller's event loop** — the same
+    question the label draw answers the other way, at a scale that decides it. That
+    one is seconds of Pango and SPI per rotation and goes to a worker thread; this
+    is a few hundred bytes and one `fsync` once per heartbeat interval, so putting
+    it on a thread would buy a millisecond and cost this function the property that
+    makes it readable, that write-fsync-rename happens in that order with nothing
+    in between.
+
     Raises on failure rather than swallowing. The caller is the one that knows a
     heartbeat is an annotation and not the product, and it is the caller that
     holds the report-once machinery to say so at most once per episode.

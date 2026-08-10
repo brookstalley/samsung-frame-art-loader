@@ -790,12 +790,10 @@ for the full record established 2026-07-19. Summary:
   simultaneously-stale copies.)_
 - Hardware is a **Pi 4 Model B**, so `RPi.GPIO` works and none of the Pi 5 /
   RP1 / `rpi-lgpio` complications apply.
-- Both display drivers are **dormant** (omni-epd 2024-11, IT8951 2023-11). The
-  IT8951 dependency was **unpinned** — it arrives through omni-epd's own git
-  requirement, which names no commit — and was pinned to `9f13613` on both
-  install paths 2026-08-07, with the Cython that compiles it bounded on the path
-  that has a mechanism for it. Pinning a parent does not pin what the parent
-  resolves.
+- Both display drivers are **dormant** (omni-epd 2024-11, IT8951 2023-11), and
+  **pinning a parent does not pin what the parent resolves** — pin the child
+  yourself, and the compiler that builds it. IT8951 was pinned to `9f13613` on
+  both install paths 2026-08-07; detail in `learnings-detail.md`.
 - The hardware surface is only ~119 lines (`display.py`, `spi_test.py`), so it
   belongs behind an interface. That is what keeps a frozen 2023 driver from
   dictating the project's Python version.

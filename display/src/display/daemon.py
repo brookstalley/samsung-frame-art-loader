@@ -158,6 +158,13 @@ class Daemon:
         #: keeps a refusing panel from being re-asked on every one-second poll: a
         #: surface that failed gets its next chance when the wall next changes,
         #: which is also when a stale label would start being wrong.
+        #:
+        #: The cost of that rule, stated so nobody has to rediscover it: a draw the
+        #: one-at-a-time gate turns away counts as an attempt too, so the panel
+        #: keeps the older label until the wall next changes. That is reachable
+        #: only once a panel has already run past the label budget and been
+        #: reported broken, which is a state where one stale label is not the
+        #: problem.
         self._captioned_content_id: str | None = None
         #: Why this device has no surface, when it was configured to have one.
         #: **The third state, and the reason it is carried rather than logged and
