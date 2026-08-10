@@ -10,14 +10,20 @@
      chunks the entry shipped, which release it belongs to, and its rollup
      scope.
 
-     **The tags are a record, not a source. Nothing is generated from them.**
-     They were once inputs to `prawduct-hook regen-views`, which regenerated
-     the build-plan `## Status` block, a release-notes view and a
-     `scope_rollups:` block; prawduct v3.2.8 retired that command and the
-     `views_enabled` switch that governed it. The Status checkboxes are now
-     ticked by hand and believed by every reader — see the build plan. Written
-     out because this header told three releases' worth of readers to run a
-     command that no longer exists.
+     **Nothing is REGENERATED from these tags any more — but they are still
+     READ, and the difference matters when you write one.** `prawduct-hook
+     regen-views` once rebuilt the build-plan `## Status` block, a release-notes
+     view and a `scope_rollups:` block from them; prawduct v3.2.8 retired that
+     command and the `views_enabled` switch that governed it, so this header
+     spent three releases telling readers to run something that no longer
+     exists.
+
+     What survives is consumption, not generation. `scope=` and the *absence* of
+     `release=` are how release-readiness enumerates work that has not shipped —
+     which is why any value at all in `release=`, a placeholder included, drops
+     that entry's whole scope out of the pending set. The PR flow refuses a
+     branch whose entry carries no `scope=`. Only `status=` is inert now, and
+     the Status checkboxes are ticked by hand and believed by every reader.
 
      Format:
 
@@ -101,19 +107,46 @@ because the two failures are not the same size — a stale count misinforms, a
 stale list bills — and the code says so where it lives, so the next sweep does not
 read the survivor as a gap.
 
-**Three browser tests, and seven of eight mutations caught.** The three cover the
-panel appearing after a scan is turned down, the spend covering a work marked
-after load (both ids, off the wire), and the offer withdrawing when the last
-waiting work is settled — that last one arriving through the card's buttons
-rather than the alternates, so both callers of the repaint are exercised. The
-eighth mutation is the survivor above.
+**The offer announces itself, because appearing silently is the sighted-only
+half of this.** The panel exists to tell a curator that nothing is looking for a
+better scan; a curator working by screen reader turned a scan down and was told
+nothing at all — the same dead end, for the people least able to spot it. The
+slot carries `role="status"`, and the always-present slot the fix already needed
+is what makes that work: a live region created and filled in the same breath
+announces nothing. `status` rather than the error banner's `alert`, since an
+offer is news and not an emergency. Found by the Critic against the ratified
+accessibility norm, not by the build.
 
-**This entry's own file lost a trap on the way past.** The header still
-instructed readers that the Status checkboxes were a derived view and to run
-`prawduct-hook regen-views` to regenerate them; v3.2.8 retired both, so the
-instruction named a command that does not exist. Fixed here because this commit
-was already in the file — flagged for a documentation trim two sessions ago and
-carried since.
+**That fix then had to earn a second one: the offer repaints only when
+membership moved.** Every repaint reports its verdict, including the many that
+change none — picking between two scans of a work is the common one — and
+rewriting a live region re-announces it. The first guard compared verdicts,
+which looks equivalent and is not: accepting a work that was never waiting
+changes its verdict while leaving the offer word for word identical. The test
+that accepts an unrelated work is what caught it, and it is written down at the
+guard.
+
+**Five browser tests, and ten of eleven mutations caught.** They cover the panel
+appearing after a scan is turned down, the spend covering a work marked after
+load (both ids, read off the wire), the offer withdrawing when the last waiting
+work is settled, the live region existing before it is filled, and the region
+surviving a verdict that does not concern it. The withdrawal arrives through the
+card's own buttons rather than the alternates, so both callers of the repaint
+are exercised. The eleventh mutation is the survivor above.
+
+**Two records lost a trap on the way past, and one of them was this file's own
+header.** It instructed readers that the Status checkboxes were a derived view
+and to run `prawduct-hook regen-views` to regenerate them; prawduct retired that
+on 2026-08-08 and the command now exits 0 with a notice, so following the
+instruction looked exactly like success. The first correction here over-shot —
+it said nothing is generated from the tags, when what is true is that nothing is
+*regenerated* while `scope=` and the absence of `release=` are still *read* by
+release-readiness. `project-state.yaml` carried the same retirement twice more:
+a `views_enabled: true` switch governing nothing, and a `scope_rollups:` block
+captioned "overwritten on next regen" that nothing overwrites and that had
+already drifted past the chunks it listed. Both keys are removed rather than set
+false, which is prawduct's own target state — a derived list with no consumers,
+left stale, reads as current.
 
 ## 2026-08-10: The label learns where it is being drawn, and the daemon says it is alive
 

@@ -479,6 +479,78 @@ def test_the_re_search_spends_on_a_work_turned_down_after_the_page_loaded(grid):
     assert sent[0].post_data_json == {"work_ids": ["work-1", "work-2"]}
 
 
+def test_the_offer_is_announced_to_a_curator_who_cannot_see_it_appear(grid):
+    """Appearing silently is the sighted-only half of this binding.
+
+    The offer's whole job is to tell a curator that nothing is looking for a
+    better scan. A curator working by screen reader turns a scan down, the panel
+    appears below the heading they are nowhere near, and without a live region
+    they are told nothing at all — the same dead end this exists to close, for
+    the people least able to spot it.
+
+    The region is asserted to be on the page *before* the offer arrives, because
+    that is the part that is easy to get wrong and impossible to see: a
+    `role="status"` element created and filled in the same breath announces
+    nothing. `status` rather than `alert` — polite, since an offer is news
+    rather than an emergency.
+    """
+    wanting = a_candidate(verdict=Verdict.AWAITING_BETTER_IMAGE.value)
+    grid.serve("**/api/candidate-images/image-1/reject", wanting.model_dump(mode="json"))
+    grid.serve("**/api/candidates/work-1", a_card(work=wanting).model_dump(mode="json"))
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card")
+
+    region = grid.page.locator("[role='status']")
+    assert region.count() == 1, "the live region must already exist, empty, before anything is put in it"
+    assert region.inner_text().strip() == ""
+
+    grid.page.click("summary")
+    grid.page.wait_for_selector("li.alternate")
+    grid.page.click("button:has-text('Turn it down')")
+    grid.page.wait_for_selector(".badge:has-text('wants a better scan')")
+
+    assert "waiting for a better scan" in region.inner_text()
+
+
+def test_the_offer_is_not_re_announced_when_no_verdict_moved(grid):
+    """A live region rewritten for nothing reads itself out for nothing.
+
+    Every repaint reports its verdict, including the repaints that change none —
+    choosing between two scans of a work is the common one, and a curator doing
+    it by screen reader would hear the whole offer again on each pick. Node
+    identity is the assertion because it is what "not rewritten" means: equal
+    text rebuilt into a new element is exactly what re-announces.
+    """
+    grid.serve(
+        f"**/api/runs/{RUN_ID}/candidates*",
+        a_candidate_page(
+            [
+                a_card(work=a_candidate(work_id="waiting", verdict=Verdict.AWAITING_BETTER_IMAGE.value)),
+                a_card(work=a_candidate(work_id="other")),
+            ]
+        ),
+    )
+    grid.serve("**/api/candidates/other/images", an_instance_listing(work=a_candidate(work_id="other")))
+    grid.serve("**/api/candidates/other/verdict", a_verdict())
+    grid.serve(
+        "**/api/candidates/other",
+        a_card(work=a_candidate(work_id="other", verdict=Verdict.ACCEPTED.value)).model_dump(mode="json"),
+    )
+    grid.open(f"#review/{RUN_ID}")
+    grid.page.wait_for_selector("li.card[data-work='waiting']")
+
+    panel = grid.page.locator("[role='status'] .panel")
+    handle = panel.element_handle()
+
+    # A verdict on a work that was never waiting, and is not waiting now: the
+    # set the offer describes is identical either side of this click.
+    grid.page.click("li.card[data-work='other'] button:has-text('Accept')")
+    grid.page.wait_for_selector("li.card[data-work='other'] .badge:has-text('accepted')")
+
+    assert handle.evaluate("node => node.isConnected") is True, "the offer was rebuilt though nothing it describes changed"
+    assert "1 work is waiting for a better scan" in grid.text()
+
+
 def test_the_offer_withdraws_when_the_last_waiting_work_is_settled(grid):
     """The paired negative, and the other way a verdict reaches the panel.
 

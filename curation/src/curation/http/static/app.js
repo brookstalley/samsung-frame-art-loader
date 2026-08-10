@@ -1644,14 +1644,22 @@ async function viewReview(runId, generation) {
    * current. They diverge on a transition reachable from this very page, and the
    * offer is the one that spends. */
   const verdicts = new Map(page.works.map((card) => [card.work.work_id, card.work.verdict]));
-  const waiting = () =>
-    [...verdicts].filter(([, verdict]) => verdict === "awaiting_better_image").map(([workId]) => workId);
+  const isWaiting = (verdict) => verdict === "awaiting_better_image";
+  const waiting = () => [...verdicts].filter(([, verdict]) => isWaiting(verdict)).map(([workId]) => workId);
 
-  // Always on the page, whether or not it holds anything: a run can arrive with
-  // nothing waiting and reach a work waiting through the curator's own next
-  // click, and an offer built only when the first paint found one could never
-  // appear. Empty, it is an empty div and shows nothing.
-  const offer = el("div");
+  /* Always on the page, whether or not it holds anything.
+   *
+   * Two things need that. A run can arrive with nothing waiting and reach a work
+   * waiting through the curator's own next click, so an offer built only when the
+   * first paint found one could never appear. And a live region has to exist
+   * *before* the content it announces is put into it — a `role="status"` element
+   * created and filled in the same breath announces nothing, which is the usual
+   * way this is got wrong. Empty, it is an empty div: measured at 0px high with
+   * no margins, so it costs no space either.
+   *
+   * `status` rather than the error banner's `alert` because an offer appearing is
+   * news, not an emergency: polite waits for a pause instead of interrupting. */
+  const offer = el("div", { role: "status" });
   const paintOffer = () => {
     const panel = reSearchOffer(waiting);
     offer.replaceChildren(...(panel ? [panel] : []));
@@ -1659,8 +1667,16 @@ async function viewReview(runId, generation) {
   paintOffer();
 
   const noteVerdict = (workId, verdict) => {
+    const was = isWaiting(verdicts.get(workId));
     verdicts.set(workId, verdict);
-    paintOffer();
+    // Repainted only when this work's *membership* moved — not merely when its
+    // verdict did. The offer depends on nothing else, so accepting a work that
+    // was never waiting leaves it word for word identical, and rewriting a live
+    // region re-announces it: a curator working by screen reader would hear the
+    // whole offer read out again for a verdict that did not concern it.
+    // Comparing verdicts instead of membership looks equivalent and is not; the
+    // test that accepts an unrelated work is what says so.
+    if (was !== isWaiting(verdict)) paintOffer();
   };
 
   const grid = el("ul", { class: "grid" }, page.works.map((card) => candidateCard(card, null, false, noteVerdict)));
