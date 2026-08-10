@@ -549,19 +549,27 @@ from 2,067 tokens to 1,827 across these two, and roughly seven more fields of th
 size would exhaust it. The next addition should say what it displaces rather than
 assume there is room.
 
-**Two fields were added 2026-08-10, and this is what they displace: nothing, and
-that is measured rather than assumed.** `offered_for_artist` and
-`offered_artist_matched` (issue #95) are null on every proposed row, so on a page
-of works the run named they cost the two keys and nothing else. On offered rows
-they carry an artist name and a small integer — and they arrived as the
-*replacement* for a thirty-word sentence that `rationale` used to carry on every
-offered row, which the MCP row never included. So the row's own budget is
-unchanged where it was already tight and the surface gained the fact an agent
-needed to tell one-of-four-hundred from one-of-one.
+**Two fields were added 2026-08-10, and they displace nothing because they were
+spent from the headroom — not because anything was deleted to pay for them.**
+`offered_for_artist` and `offered_artist_matched` (issue #95) are a **net add of
+two keys on every row**. An earlier draft of this paragraph claimed they were
+paid for by shortening `rationale`; that was wrong on its own terms, since
+`rationale` is not in this row at all (`_work_summary`'s docstring says so), so no
+deletion here funded anything.
 
-**The headroom sentence above still governs the next addition.** These two were
-paid for by a deletion elsewhere; that is not a repeatable trick, and the seven-
-field estimate has not moved.
+**What that costs, by the rate this section already establishes rather than by a
+fresh count.** The two additions above measured ~8 tokens a row each. These two
+are a null pair on every proposed row and an artist name plus a small integer on
+offered ones, so the same order applies. On the precedent rate the default 30-row
+page moves from **8,173** toward roughly **8,650**, against the 10,000 warning —
+still inside it, with headroom falling from 1,827 to something near 1,350.
+**Stated as an estimate, and it is not a measurement**: the runs that would
+produce one are the operator's, and the number above should be replaced with a
+counted one the next time a full page is measured.
+
+**The headroom sentence above still governs, and now bites sooner.** At this rate
+roughly four or five more fields of this size exhaust the default page's room,
+not seven. The next addition should say what it displaces and mean it.
 
 **Image content blocks correlate by position and by nothing else.** The protocol
 gives a block no identity, and a result's blocks are only the instances that had a

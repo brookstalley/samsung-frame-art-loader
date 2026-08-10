@@ -99,10 +99,17 @@ shipping prose.
 **Every number on the page is now counted from something the reader can see, or
 named as what it is.** The client counts the cards it is actually rendering for
 the "these 3", so it cannot drift from the page the way a server-composed total
-did. The holdings figure is stated as holdings, in the same breath as the bound
-that explains the gap — and when nothing was capped, the cap clause is not
-printed at all, because "as many as one run offers" tells a curator that more
-exist.
+did. The holdings figure is stated as holdings, beside what the run offered, so
+the two cannot appear to disagree — and when every work the collection holds is
+on the page, the subset clause is not printed at all, because describing a subset
+tells a curator that more exist.
+
+**It stops short of saying *why* the two differ, and that is deliberate.** The
+first version named the per-run bound as the cause. The bound is not the only
+one: works are declined for rendering below the display floor, and a re-search
+page never reaches the bound at all. So the page would have confidently explained
+a gap it cannot diagnose — a new false claim inside the change that removes one,
+caught by the Critic rather than by the build.
 
 **The first clause counts unresolved works only, and that is the whole lesson
 repeating.** An artist reaches the supplement by having *any* named work come
@@ -116,14 +123,37 @@ carried per-group information on a per-card line four screens away from the
 group; offered rows now carry the short per-work line, and the query lives with
 its works on the review surface.
 
-**Six browser tests and two unit tests.** They cover the denial being gone, the
-query said once rather than per card, the holdings reconciled against the bound,
-a bound that did not bite not being described as one, two queries staying two
-groups, and — the failure class this issue is about — an offer whose query was
-never recorded still reaching the page rather than being silently filtered out by
-its own grouping. The unit pair asserts the facts at their new home with exact
-values, since `"400" in rationale` also matches four thousand, and that a
-proposed work claims neither.
+**Nine browser tests and two unit tests.** They cover the denial being gone, the
+query said once rather than per card, the holdings reconciled against what the
+run offered, a group holding everything the collection has not being described as
+a subset, two queries staying two groups with their own numbers *and their own
+headings*, an offer whose query was never recorded still reaching the page rather
+than being filtered out by its own grouping — the failure class this issue is
+about — the failure clause counting only works that found no image, and that
+clause being omitted rather than printed with a zero. The unit pair asserts the
+facts at their new home with exact values, since `"400" in rationale` also
+matches four thousand, and that a proposed work claims neither.
+
+**Two of those tests exist because the mutation sweep found the branches
+undefended after they had been described in prose**, and one because the PR
+reviewer found the heading assertion dropped when the group tests were rescoped
+to an attribute — at which point deleting the artist's name from the heading
+would have left the suite green while restoring this issue's symptom. Eleven of
+eleven mutations caught.
+
+**No backfill, and the operator decided so** — old runs need not be preserved and
+the database may be zeroed (2026-08-10). Rows written before this change keep
+their old sentence and carry no query, so the 2026-08-05 Dali run that motivated
+the issue renders the old wording in one unnamed group.
+`operator-verification.md` item I says this at the point of verification, because
+a fix invisible on the run that prompted it is one a verifier reads as unfixed.
+
+**The group's own styling shipped in the same bundle, and nothing in the suite
+could have caught its absence.** The sections are direct children of the view
+root, where `app.css` had no `h3`, `section` or `.offer-group` rule — the heading
+would have fallen back to browser defaults with nothing separating one group from
+the next, on the exact page the verification queue sends the operator to look at.
+The browser tests assert text and attributes, both correct either way.
 
 ## 2026-08-10: The offer to look again describes the page it sits on, and spends on it
 

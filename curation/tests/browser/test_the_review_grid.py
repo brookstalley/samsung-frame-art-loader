@@ -1004,6 +1004,17 @@ def test_two_queries_are_two_groups_rather_than_one_run_of_cards(grid):
     kelly = grid.page.locator("section.offer-group[data-offer-artist='Ellsworth Kelly']")
     assert dali.count() == 1 and kelly.count() == 1
 
+    # The visible heading, not only the attribute. Rescoping these assertions to
+    # `data-offer-artist` removed the last assertion on rendered heading text —
+    # after which deleting the artist's name from the h3 would leave the whole
+    # browser suite green while putting #95's symptom back, hidden behind an
+    # attribute nobody can see.
+    # `h3:not(.card-title)` because a card's own title is an h3 too — the group
+    # heading and the works it heads are the same rank in the markup, which is
+    # worth its own look and is recorded as such rather than changed in passing.
+    assert "Offered by the collection — Salvador Dalí" in dali.locator("h3:not(.card-title)").inner_text()
+    assert "Offered by the collection — Ellsworth Kelly" in kelly.locator("h3:not(.card-title)").inner_text()
+
     assert "holds 25 works" in dali.inner_text()
     assert "holds 400 works" not in dali.inner_text(), "one query's holdings total sits above another's works"
     assert "holds 400 works" in kelly.inner_text()
