@@ -134,7 +134,7 @@ surviving a verdict that does not concern it. The withdrawal arrives through the
 card's own buttons rather than the alternates, so both callers of the repaint
 are exercised. The eleventh mutation is the survivor above.
 
-**Two records lost a trap on the way past, and one of them was this file's own
+**Three records lost a trap on the way past, and one of them was this file's own
 header.** It instructed readers that the Status checkboxes were a derived view
 and to run `prawduct-hook regen-views` to regenerate them; prawduct retired that
 on 2026-08-08 and the command now exits 0 with a notice, so following the
@@ -147,6 +147,16 @@ captioned "overwritten on next regen" that nothing overwrites and that had
 already drifted past the chunks it listed. Both keys are removed rather than set
 false, which is prawduct's own target state — a derived list with no consumers,
 left stale, reads as current.
+
+The third is `learnings-detail.md`, where four dated entries still turn on
+`views_enabled` and `regen-views` in the present tense. **Those entries are left
+exactly as written**, because they are evidence rather than instructions: what
+they record is how the trap was found and what it cost, and editing them to match
+today would destroy that while making the rule read as though it had always been
+obvious. A dated note at the head of the file says the machinery is gone, which
+inoculates every one of them without falsifying any. The count in this paragraph
+was wrong on its first writing — it said two, and was corrected by the PR
+reviewer after the third landed in a later commit that never came back here.
 
 ## 2026-08-10: The label learns where it is being drawn, and the daemon says it is alive
 
