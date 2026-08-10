@@ -19,13 +19,14 @@ single failure that glares on an emissive panel.
 """
 
 import json
+import logging
 from itertools import permutations
 from pathlib import Path
 
 import pytest
 from PIL import Image
 
-from curation.acquisition.color import format_hex, hex_distance, parse_hex, rgb_to_lab
+from curation.acquisition.color import format_hex, hex_distance, parse_hex, rgb_to_lab, scale_lightness
 from curation.acquisition.compose import compose
 
 # `_DERIVED_LIGHTNESS_CEILING` is private to the engine and is imported anyway,
@@ -41,6 +42,7 @@ from curation.acquisition.mat import (
     CORPUS_MAX_LIGHTNESS,
     MatEngine,
     _most_covered_colour,
+    _under_the_corpus_bar,
     dominant_color,
 )
 from curation.persistence.records import MatMethod
@@ -239,12 +241,61 @@ class TestTheMechanicalProducerAgainstTheBar:
         Asserting the chroma is what tells the two apart — a lightness-only
         assertion passes for the grey."""
         source = tmp_path / "vivid.jpg"
-        Image.new("RGB", (400, 300), (255, 220, 0)).save(source, format="JPEG", quality=95)
+        Image.new("RGB", (400, 300), (0, 255, 0)).save(source, format="JPEG", quality=95)
 
         chosen = rgb_to_lab(parse_hex(MatEngine(None, image_max_edge=256).choose(source).hex_rgb))
 
         assert chosen.l <= _DERIVED_LIGHTNESS_CEILING
         assert (chosen.a**2 + chosen.b**2) ** 0.5 > 30.0
+
+    def test_the_ceiling_holds_for_every_colour_a_display_can_show(self):
+        """**The invariant, swept rather than asserted in prose.** Three records
+        claim no derived colour exceeds the ceiling; a claim about every colour is
+        only worth what reproduces it, and this project's own rule is that a
+        premise be checkable at the moment something is built on it. The grid is
+        coarse enough to run in a suite and fine enough to have caught the defect
+        it exists for: the naive clamp overshoots most on saturated hues, which a
+        lattice this size hits repeatedly."""
+        over = {
+            colour: round(rgb_to_lab(_under_the_corpus_bar(colour)).l, 2)
+            for colour in (
+                (red, green, blue) for red in range(0, 256, 15) for green in range(0, 256, 15) for blue in range(0, 256, 15)
+            )
+            if rgb_to_lab(_under_the_corpus_bar(colour)).l > _DERIVED_LIGHTNESS_CEILING
+        }
+
+        assert over == {}
+
+    def test_a_clamped_mat_says_so_where_someone_can_read_it(self, tmp_path, caplog):
+        """**The ceiling firing is otherwise unrecoverable after the fact.**
+        `method` records that a colour was derived rather than chosen, but not that
+        it was then held back, so "why is this mat not the colour of the picture?"
+        has nowhere to look — and the operator has been asked to judge exactly the
+        works this fires on. Both figures are asserted because a line naming the
+        wrong one is worse than no line: it would send a reader looking for a bug
+        in the derivation instead of at the ceiling."""
+        source = tmp_path / "vivid.jpg"
+        Image.new("RGB", (400, 300), (0, 255, 0)).save(source, format="JPEG", quality=95)
+
+        with caplog.at_level(logging.INFO, logger="curation.acquisition.mat"):
+            choice = MatEngine(None, image_max_edge=256).choose(source)
+
+        assert "held at the corpus ceiling" in caplog.text
+        assert f"capped to L* {rgb_to_lab(parse_hex(choice.hex_rgb)).l:.1f}" in caplog.text
+        assert f"derived L* {rgb_to_lab(scale_lightness(dominant_color(source), _FALLBACK_LIGHTNESS)).l:.1f}" in caplog.text
+
+    def test_a_mat_the_ceiling_did_not_touch_says_nothing(self, tmp_path, caplog):
+        """The half that defends the guard rather than the line. Without it the
+        block can be made unconditional and every assertion above still passes —
+        and then every mechanically derived mat in the catalogue reports having
+        been capped, which is a log that has stopped meaning anything."""
+        source = tmp_path / "deep-blue.jpg"
+        Image.new("RGB", (400, 300), (30, 60, 120)).save(source, format="JPEG", quality=95)
+
+        with caplog.at_level(logging.INFO, logger="curation.acquisition.mat"):
+            MatEngine(None, image_max_edge=256).choose(source)
+
+        assert "held at the corpus ceiling" not in caplog.text
 
     def test_a_work_already_under_the_bar_is_left_exactly_where_it_was(self, tmp_path):
         """The clamp is a ceiling, not a second darkening pass applied to

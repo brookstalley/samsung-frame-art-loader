@@ -84,15 +84,25 @@ def _pairs(art_root: Path, corpus_path: Path) -> tuple[list[Pair], list[str]]:
     it. `CLAUDE.md` sends an operator here straight after touching the mat engine,
     which is exactly when that would bite.
     """
-    by_title = {record.title.strip().lower(): record.mat_hex for record in read_index(corpus_path)}
+    # Both paths are checked before either is opened, so a run that is going to
+    # fail says which argument is wrong before it does any work.
     catalogue_path = art_root / CATALOGUE_FILENAME
+    if not corpus_path.is_file():
+        # `read_index` catches a bad *parse* and not a missing file, so without
+        # this a mistyped corpus path is a bare traceback rather than the one line
+        # that names the fix.
+        raise SystemExit(f"No corpus at {corpus_path}. It is the 2024 index, `all.json`, tracked at the repository root.")
     if not catalogue_path.is_file():
         # **`sqlite3.connect` creates the file it cannot find.** On a mistyped
         # `--art-root` that writes an empty database into a directory this tool
         # promises to leave alone, and then dies on "no such table" — leaving the
         # operator a stray file and a message about the wrong problem.
         raise SystemExit(f"No catalogue at {catalogue_path}. Check --art-root or $ART_ROOT; nothing was written.")
-    catalogue = sqlite3.connect(f"file:{catalogue_path}?mode=ro", uri=True)
+
+    by_title = {record.title.strip().lower(): record.mat_hex for record in read_index(corpus_path)}
+    # `as_uri()` rather than an f-string: a path holding `?` or `#` would otherwise
+    # be read as URI syntax and open something else, or nothing.
+    catalogue = sqlite3.connect(f"{catalogue_path.as_uri()}?mode=ro", uri=True)
     catalogue.row_factory = sqlite3.Row
     try:
         rows = catalogue.execute(
