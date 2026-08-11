@@ -3,28 +3,42 @@
 `samsung-frame-art-loader.service` runs the loader as a persistent daemon on the
 Raspberry Pi driving the Frame TV.
 
-## The two new units, and what still has to happen before they start
+## The two new units, and where everything they name now lives
 
 `display.service` and `curation.service` are the planes this product is being
-rebuilt onto. **They are committed but not installed, and they will not start on
-the current Pi**, for the same reason the recovered 2024 unit will not: there is
-no `tvpi` user on the machine, and all three name absolute `/home/tvpi/…` paths.
+rebuilt onto. Three paths they depend on were unsettled until the cutover and are
+settled now; `operational-spec.md` § Where the two trees live records why each one
+won, and this is the short form:
 
-Creating that account, giving it the `spi` and `gpio` groups, settling where
-`ART_ROOT` actually lives, moving the tree under it, and enabling these two units
-are **one change, not five** — any of them landing alone leaves a machine that is
+| | |
+|---|---|
+| `ART_ROOT` | `/srv/art` |
+| Checkout | `/opt/samsung-frame-art-loader` |
+| `uv` | `/usr/local/bin/uv`, named absolutely in both units |
+
+**All three are off any home directory, and that is the requirement rather than a
+preference.** `tvpi` is a `--system` account with `/usr/sbin/nologin`; the machine's
+existing checkout and its only `uv` both sat under a home directory at mode `0700`,
+which such an account cannot traverse at all. A path the service account cannot
+reach is not a detail to leave to whoever reads a unit file next.
+
+Creating that account, giving it the `spi` and `gpio` groups, moving the art tree
+to `/srv/art`, placing the checkout at `/opt`, and enabling these two units are
+**one change, not five** — any of them landing alone leaves a machine that is
 neither the old arrangement nor the new one. `operational-spec.md` § The Service
 Account is the authority on the account; the build plan's Chunk 13B entry is the
 authority on the order.
 
-**One thing to settle at install rather than to assume.** Both units run
-`ExecStart=/usr/bin/env uv run …`, and systemd's default `PATH` does not include
-`~/.local/bin`, which is where `uv` normally installs. The recovered 2024 unit
-solves the same problem with a hand-written `PATH=`. Nothing here records where
-`uv` actually lives on this Pi, so this is an unknown rather than a known defect —
-it fails loudly and immediately at `systemctl start`, and the fix is either an
-absolute `ExecStart` or an `Environment=PATH=` line. Check it before enabling
-either unit.
+> **What this cutover is not.** It has been described in the plan as the moment
+> `tvart.py` stops being the production entry point. On the machine as rebuilt
+> that describes a swap that does not exist: **no unit of this product is
+> installed on the Pi at all** — no `samsung-frame-art-loader.service`, no cron
+> entry, no user service. The 2024 loader has not run unattended since the card
+> was rebuilt on 2026-08-04, and the wall has been driven by hand since. So this
+> is a first install rather than a replacement, which removes the rollback
+> pressure a real cutover would carry and is worth knowing before anyone plans
+> around a maintenance window. The sentence is corrected here rather than
+> quietly, because it read as a statement about the machine and was one.
 
 **The display plane's panel needs two optional dependency groups, and a default
 `uv sync` installs neither.** They are separate because they install on different
@@ -53,15 +67,15 @@ different ones **the unit's `EnvironmentFile=` wins**: it is already in the
 process environment by the time the code runs, and `load_dotenv` fills only
 what the environment does not carry.
 
-> **This unit will not start on the current Pi, and the block below is not enough
-> to make it.** The card was rebuilt on 2026-08-04 and **there is no `tvpi` user
-> on the machine at all**, while the committed unit runs as `User=tvpi` with
-> absolute `/home/tvpi/…` paths that name a home directory which does not exist.
-> Creating the account, deciding where the art tree actually lives, and moving
-> both unit files onto it is one coherent change and it belongs to the cutover —
-> it has deliberately not been done piecemeal. Until then, treat the recipe below
-> as the shape of the install rather than a working one. The Provenance section
-> at the foot of this file records what else was assumed from the original card.
+> **The recipe below installs the *2024* unit, and it is kept as a record rather
+> than as an instruction — do not run it.** That unit is retired: it names
+> `/home/tvpi/…` paths on a machine that has no such user, it runs `tvart.py`
+> through a `.venv` that no longer exists, and its hand-written `PATH` carries
+> pyenv shims and a stray editor directory. It is committed exactly as recovered
+> because it had only ever existed on an SD card, and it is deleted with the rest
+> of the 2024 plane at the legacy retirement. The live procedure is
+> **§ The cutover** below. The Provenance section at the foot of this file records
+> what else was assumed from the original card.
 
     cp .env.example .env      # then fill it in
     sudo cp deploy/samsung-frame-art-loader.service /etc/systemd/system/

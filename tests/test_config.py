@@ -175,8 +175,24 @@ def test_no_source_file_carries_a_deployment_value(monkeypatch):
     import pathlib
     import re
 
-    # The previously-hardcoded values, plus the shape of any absolute home path.
-    forbidden = re.compile(r"10\.23\.17\.77|/home/tvpi|/Users/brookstalley|47\.606|-122\.332")
+    # Two generations of deployment path, and both halves earn their place.
+    # `/home/tvpi` is where the art tree and the checkout used to sit; `/srv/art`
+    # and `/opt/samsung-frame-art-loader` are where they sit now. **Retiring the
+    # dead path without adding the live one would have left a guard that passes
+    # for the wrong reason** — nothing can hardcode a directory that no longer
+    # exists, so the pattern would have gone on being green while the norm it
+    # enforces went unchecked. The old path stays because the way this norm
+    # actually breaks is somebody lifting a line out of the recovered 2024 unit,
+    # which still carries `/home/tvpi` in every path it names.
+    forbidden = re.compile(
+        r"10\.23\.17\.77"
+        r"|/home/tvpi"
+        r"|/srv/art"
+        r"|/opt/samsung-frame-art-loader"
+        r"|/Users/brookstalley"
+        r"|47\.606"
+        r"|-122\.332"
+    )
     # Anchored to this file rather than to the working directory: a glob rooted
     # at "." matches nothing when pytest is invoked from elsewhere, and a guard
     # whose whole value is that it cannot be quietly satisfied must not have a

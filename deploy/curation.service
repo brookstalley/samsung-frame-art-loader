@@ -5,7 +5,7 @@
 
 [Unit]
 Description=Samsung Frame art wall — curation plane
-Documentation=file:///home/tvpi/source/samsung-frame-art-loader/deploy/README.md
+Documentation=file:///opt/samsung-frame-art-loader/deploy/README.md
 
 # Same reasoning as the display unit: the stock five-starts-in-ten-seconds limit
 # turns a reproducible fault into a unit that gives up after five log lines.
@@ -22,13 +22,15 @@ Type=simple
 User=tvpi
 Group=tvpi
 
-WorkingDirectory=/home/tvpi/source/samsung-frame-art-loader/curation
+WorkingDirectory=/opt/samsung-frame-art-loader/curation
 
 # Un-prefixed, for the reason spelled out in display.service: a missing
 # environment file must refuse to start rather than fail at import.
-EnvironmentFile=/home/tvpi/source/samsung-frame-art-loader/.env
+EnvironmentFile=/opt/samsung-frame-art-loader/.env
 
-ExecStart=/usr/bin/env uv run python -m curation
+# Absolute for the reason spelled out in display.service: the account has no
+# home to hold a per-user uv, and a named binary fails where it is written.
+ExecStart=/usr/local/bin/uv run python -m curation
 
 # **`on-failure`, not `always`, and the difference is deliberate.** This plane's
 # downtime is not visible on the wall: the display plane goes on rotating the

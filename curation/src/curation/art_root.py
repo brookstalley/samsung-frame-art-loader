@@ -12,9 +12,12 @@ characteristic — the thing it exists to correct — so a plane that self-heals
 an empty install is the defect closest to home.
 
 **The fix is a marker, and the point of a marker is that a typo cannot have one.**
-An art root is a directory somebody deliberately made one. `ART_ROOT=/srv/atr`
-against a real `/srv/art` finds no marker and refuses, naming both the path it
-resolved and the way to say "yes, really, make this one".
+An art root is a directory somebody deliberately made one. `ART_ROOT=/mnt/phtoos`
+against a real `/mnt/photos` finds no marker and refuses, naming both the path it
+resolved and the way to say "yes, really, make this one". *(The illustration is
+deliberately not this deployment's own path: naming it here would both go stale
+the day the tree moves and trip the guard that keeps deployment values out of
+source, which is a norm this file has no business being the exception to.)*
 
 **A directory already holding a catalogue counts as marked**, and that is not a
 grandfather clause bolted on: a directory containing this product's catalogue file

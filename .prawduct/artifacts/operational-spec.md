@@ -41,7 +41,7 @@ card and `tvpi` did not survive it — see `platform-and-dependency-findings.md`
 | Login | None. `--system`, no password, shell `/usr/sbin/nologin` |
 | Privilege | No sudo. Nothing either plane does needs root |
 | Groups | `spi` and `gpio` — the e-paper HAT is reached through both |
-| Owns | `ART_ROOT`, and the checkout the units execute from |
+| Owns | `/srv/art` (`ART_ROOT`) and `/opt/samsung-frame-art-loader` (the checkout the units execute from) |
 
 **Create it as part of the systemd-unit cutover, not before.** The account, its
 group memberships, moving `ART_ROOT` under it, and both unit files are one
@@ -49,13 +49,40 @@ change: any of them landing alone leaves a machine that is neither the old
 arrangement nor the new one. That cutover is the work that installs the new
 systemd units, and this account is created as part of it.
 
-**`ART_ROOT` is not settled by this section.** The committed unit puts the art
-tree at `/home/tvpi/art`, inside a home directory that a service account with no
-login has no other use for. A neutral path — `/srv/art` or `/var/lib/samsung-art`
-— matches what the account actually is, and is the shape to prefer at cutover.
-Deciding it costs nothing today because every reader of that path is already
-configuration: `ART_ROOT` in the root `.env`, which is where the existing norm
-against deployment values in source put it.
+### Where the two trees live — settled at the cutover, 2026-08-11
+
+**`ART_ROOT` is `/srv/art`. The checkout is `/opt/samsung-frame-art-loader`.**
+Both are off any home directory, which is the whole point: a `--system` account
+with `/usr/sbin/nologin` has no use for one, and this section had already made
+that argument about the art tree without noticing it applied twice.
+
+| | | Why this one |
+|---|---|---|
+| `ART_ROOT` | `/srv/art` | FHS reads `/srv` as site-specific data this system serves, which is what 647 MB of the operator's masters are. `/var/lib/samsung-art` was the alternative and fits `catalogue.sqlite` better; it lost because the tree is overwhelmingly the operator's corpus rather than the product's private state, and a path they may want to browse or restore should not read as internals. |
+| Checkout | `/opt/samsung-frame-art-loader` | FHS reads `/opt` as software installed outside the package manager. Keeping code apart from data is the backup story in one line: **back up `/srv/art`, re-clone `/opt`.** `/srv/samsung-frame-art-loader` was the alternative and lost because it puts the thing you can always re-fetch beside the thing you can never lose. |
+
+**The checkout's path was a requirement nobody had written down.** This section
+said the account owns "the checkout the units execute from" and never said where
+it was; both unit files said `/home/tvpi/source/samsung-frame-art-loader`, which
+is not a location anyone chose so much as the path the 2024 card happened to
+have. It surfaced at the cutover as a hard blocker rather than a preference: the
+only checkout on the machine sat at `/home/brooks/source/…` under a home
+directory at mode `0700`, which `tvpi` cannot traverse at all. A path a service
+account cannot reach is not a configuration detail, so the answer is recorded
+here rather than left to whoever next reads a unit file.
+
+**`uv` lives at `/usr/local/bin/uv`, and both units name it absolutely.** Same
+failure, same shape: the machine's only `uv` was at `/home/brooks/.local/bin/uv`,
+behind the same `0700`. `deploy/README.md` had flagged the `PATH` question as
+settle-at-install and offered two fixes — an absolute `ExecStart=` or an
+`Environment=PATH=` line. The absolute path wins because the other one is how the
+recovered 2024 unit came to carry pyenv shims and a stray editor directory in its
+`PATH`, and because a missing interpreter should fail where it is named.
+
+Deciding all three cost nothing in code, because every reader of the art path is
+already configuration — `ART_ROOT` in the root `.env`, which is where the existing
+norm against deployment values in source put it. The unit files are the only
+things that carry the other two, and they are version-controlled.
 
 ## The Curation Interpreter — decided
 
