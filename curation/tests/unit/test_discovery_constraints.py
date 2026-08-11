@@ -478,7 +478,7 @@ def test_an_absolute_preview_path_is_refused(discovery, propose, add_image):
     work = propose()
 
     with pytest.raises(ServiceError, match="must be relative to ART_ROOT"):
-        add_image(work, preview_path="/srv/art/previews/nighthawks.jpg")
+        add_image(work, preview_path="/mnt/photos/previews/nighthawks.jpg")
 
 
 # -- money is money, not a float ----------------------------------------------

@@ -1737,29 +1737,33 @@ technical_decisions:
         - "Strictly LAN with no remote access — simpler still, but no access while away."
       date: 2026-07-19
   operational:
-    - decision: "The service account for both systemd units is `tvpi`; ART_ROOT's path is deliberately left open until the cutover."
-      date: 2026-08-04
+    - decision: "Both systemd units run as `tvpi`; at the 2026-08-11 cutover the deployment paths were settled — ART_ROOT=/srv/art, checkout=/opt/samsung-frame-art-loader, uv=/usr/local/bin/uv, account home=/var/lib/tvpi."
+      date: 2026-08-11
       rationale: >
         Decided 2026-08-04 by the operator. The name was the only part in
         question and it is kept: it is what the committed unit, deploy/README.md
         and this product's history already say, so renaming would have bought
         nothing but a diff across all of them.
 
-        The account does not exist on the machine. The Pi was rebuilt onto a
-        fresh card and `tvpi` did not survive it — only `brooks` (uid 1000, sudo,
-        already in spi and gpio). It is created as part of the systemd-unit
-        cutover rather than before it, because the account, its group
+        The account was CREATED at the cutover on 2026-08-11 (uid 102) and now
+        exists; it had not survived the Pi's rebuild onto a fresh card. It was
+        created as part of the systemd-unit cutover rather than before it,
+        because the account, its group
         memberships, moving ART_ROOT under it and both unit files are one change:
         any landing alone leaves a machine that is neither the old arrangement
         nor the new one.
 
-        ART_ROOT's path is NOT settled by this decision and that is deliberate.
-        The committed unit puts the art tree at /home/tvpi/art, inside a home
-        directory a no-login account has no other use for; a neutral path is the
-        shape to prefer at cutover. Deciding it costs nothing today because every
-        reader of that path is already configuration.
+        ART_ROOT is /srv/art, chosen over /var/lib/samsung-art because the tree
+        is the operator's masters rather than this product's private state. The
+        checkout is /opt/samsung-frame-art-loader — a path no artifact had ever
+        named, and the harder half of the question, because the existing checkout
+        and the machine's only uv both sat behind a 0700 home a nologin account
+        cannot traverse. uv is system-wide at /usr/local/bin/uv, named absolutely
+        in both units rather than resolved through PATH. The account has a home at
+        /var/lib/tvpi holding tool state only — not chosen but measured, since uv
+        fails on /nonexistent/.cache/uv before doing any work.
 
-        Full shape — no login, no sudo, groups spi and gpio, owning ART_ROOT and
+        Full shape — no login, no sudo, groups spi and gpio, owning /srv/art and
         the checkout — in operational-spec.md § The Service Account.
 
     - decision: "uv is the dependency manager for both planes, structured as two SIBLING uv projects (AMENDED 2026-07-20: not a uv workspace)."
@@ -2479,27 +2483,25 @@ open_questions:
       both — and ratifying it before the floor exists would be ratifying a rule
       about a number.
 
-  - question: "Where does ART_ROOT live on the Pi once the `tvpi` service account exists?"
-    context: >
-      Raised 2026-08-04, deliberately left open when the service-account NAME was
-      decided (see technical_decisions.operational). The committed unit puts the
-      art tree at /home/tvpi/art, inside a home directory that a no-login,
-      no-sudo account has no other use for. A neutral path — /srv/art or
-      /var/lib/samsung-art — matches what the account actually is.
-
-      Deciding it costs nothing today because every reader of that path is
-      already configuration: ART_ROOT in the root .env, which is where the norm
-      against deployment values in source put it. Deciding it LATE costs nothing
-      either, as long as it is decided at the cutover rather than defaulted into
-      by whoever writes the unit file.
-    decide_by: >
-      Chunk 13B, at the cutover. The account, its group memberships, the ART_ROOT
-      move and the installed unit files are one coherent change on the machine;
-      this question is the part of it that is still a choice. Chunk 13A writes the
-      unit files ahead of that, which does not settle this: the path lives in the
-      root .env that both units name through EnvironmentFile=, so a unit can be
-      written without knowing it and an install cannot.
-
+  # RESOLVED 2026-08-11 at the cutover: ART_ROOT is /srv/art, and the same trip
+  # settled two paths this question never thought to ask about.
+  #
+  # /srv/art beat /var/lib/samsung-art because the tree is overwhelmingly the
+  # operator's own masters — 647 MB of them — rather than state this product
+  # manages, and a path somebody may want to browse or restore should not read as
+  # internals. The catalogue living inside it is the one argument the other way,
+  # and it lost.
+  #
+  # The question was too narrow. The CHECKOUT's path had never been written down
+  # anywhere, and it turned out to be the harder half: the machine's only checkout
+  # and its only uv both sat under a home directory at mode 0700, which a nologin
+  # account cannot traverse at all, so this was a hard blocker rather than a
+  # preference. Settled to /opt/samsung-frame-art-loader, with uv installed
+  # system-wide at /usr/local/bin/uv and named absolutely in both units. A third
+  # path was forced by the machine rather than chosen: the account needs a home at
+  # /var/lib/tvpi, because uv fails on /nonexistent/.cache/uv before doing any
+  # work. All four are recorded in operational-spec.md § Where the two trees live
+  # and § The Service Account, and in deploy/README.md § The cutover.
   # RESOLVED 2026-08-04 by the operator: option (a) — the health panel does NOT
   # surface `limit_remaining`, in any form. Chunk 19's health-panel half is
   # unblocked and builds without it.

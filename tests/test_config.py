@@ -207,9 +207,15 @@ def test_no_source_file_carries_a_deployment_value(monkeypatch):
     for plane in ("curation/src", "display/src"):
         modules.extend(sorted((repository_root / plane).rglob("*.py")))
     assert modules, f"expected the 2024 modules at {repository_root}; has the layout moved?"
-    assert any(
-        "curation/src" in str(path) for path in modules
-    ), f"expected the curation plane under {repository_root}/curation/src; has the layout moved?"
+    # **One canary per plane, because `rglob` over a missing directory is silent.**
+    # A renamed or moved plane makes its loop contribute nothing and the guard goes
+    # on passing over the planes that remain — which is the same vacuous-green this
+    # test's own comment says a plane it never walks would produce. Asserting only
+    # curation left the display plane in exactly that position.
+    for plane in ("curation/src", "display/src"):
+        assert any(
+            plane in str(path) for path in modules
+        ), f"expected a plane under {repository_root}/{plane}; has the layout moved?"
 
     offenders = []
     for path in modules:

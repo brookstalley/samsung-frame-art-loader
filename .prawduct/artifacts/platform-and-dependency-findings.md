@@ -570,17 +570,22 @@ the findings recovered from the old one are now false *about the machine* while
 remaining true about the card they were read from. Recorded 2026-08-04, measured
 over SSH:
 
-- **Access is `brooks@pi4-tv.local`.** There is no `tvpi` user on the rebuilt
-  card at all — only `brooks` (uid 1000, sudo, already in `spi` and `gpio`). The
-  committed unit and `deploy/README.md` specify `User=tvpi` and paths under
-  `/home/tvpi/`, none of which exist. Creating that account is part of the
-  systemd-unit cutover; see `operational-spec.md` § The Service Account.
-- **The art tree is effectively empty.** `~/art` has the right shape, but `raw/`
-  holds nothing and `ready/` holds only a bench file from the same day. The 41
-  masters and every finished television rendition the 2024 pipeline produced were
-  on the old card.
-- **The checkout is behind.** It sits at `6003edc`, three merges back from
-  `main`.
+- **Access is `brooks@pi4-tv.local`** (uid 1000, sudo, already in `spi` and
+  `gpio`). ~~There is no `tvpi` user on the rebuilt card at all~~ — **resolved
+  2026-08-11 at the cutover**: `tvpi` was created (uid 102, `--system`, `nologin`,
+  groups `spi` and `gpio`, home `/var/lib/tvpi` for tool state), and the
+  `/home/tvpi/` paths both units named were retired to `/srv/art` and
+  `/opt/samsung-frame-art-loader` rather than created. See `operational-spec.md`
+  § The Service Account and `deploy/README.md` § The cutover.
+- ~~**The art tree is effectively empty.**~~ **Restored, and then moved.** It was
+  refilled after this was written, and the cutover moved it to `/srv/art` — 168
+  files, 677,652,949 bytes, counted on both sides of the move. `raw/` holds 46
+  files for 40 distinct works and `ready/` holds 41.
+- ~~**The checkout is behind.**~~ The deployment checkout is now
+  `/opt/samsung-frame-art-loader`, owned by `tvpi` and tracking the branch it was
+  deployed from. The old `/home/brooks/source/…` checkout is **left in place on
+  purpose**: nothing runs it, and it holds an uncommitted `all.json` whose
+  `tv_content_id`s the 2026-08-07 run wrote.
 
 **The masters survived; the renditions did not.** The masters are on the
 operator's Mac at `~/art/raw` — 46 files, 40 distinct works, 574 MB, the six

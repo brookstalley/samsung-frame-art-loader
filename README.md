@@ -17,16 +17,24 @@ exactly one file between them:
   reads. `deploy/curation.service` and `deploy/display.service` are written.
   The root `display.py` is a 2024 module and does none of this.
 
-**What runs the wall day to day is still the 2024 loader at the repository root.**
-The new display plane has driven the real television — on 2026-08-07 it rotated a
-theme unattended, confirmed every picture against the set, survived a restart
-without moving the wall, and kept going with the curation plane stopped. It did so
-**from a development Mac, not from the Pi**, so what is proven is the plane's
-behaviour against real hardware rather than the deployment. **What remains is the
-Pi itself**: the service account, the units installed and enabled, the panel wired
-up, and the type sizes settled by somebody standing in front of it — the label
-renders into a surface today and has never been drawn onto e-ink. That is the
-cutover. Take the plane as working and not yet deployed.
+**Both new planes now run on the Pi, from systemd, as of 2026-08-11.** The `tvpi`
+service account exists, `ART_ROOT` is `/srv/art`, the checkout is at
+`/opt/samsung-frame-art-loader`, and `display.service` and `curation.service` are
+installed and enabled. The catalogue was seeded there from the 2024 index — 40
+works — and the display plane reconciled the television against a manifest and
+re-uploaded the theme without a warning. `deploy/README.md` § The cutover is the
+record and the procedure.
+
+That was a **first install, not a swap**: nothing of this product was running
+unattended on that machine beforehand, so the 2024 loader at the repository root
+stopped being the answer to "what runs the wall" some time before this, not at the
+cutover. Those modules are still present and are deleted at the legacy retirement.
+
+**What remains is what only a person standing in front of the hardware can do**:
+the label's type sizes, its margin and a line-length bound, all three still marked
+provisional in source; the check that a rotation still completes with a second
+subscriber attached; and an unattended run across a television power-cycle. The
+label renders into a surface today and **has never been drawn onto e-ink**.
 
 ## Where things are written down
 

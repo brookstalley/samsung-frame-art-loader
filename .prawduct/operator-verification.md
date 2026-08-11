@@ -703,14 +703,20 @@ with the below-floor work pictured and marked `is_on_offer: false`.
 
 ### The loader unit starts clean with its declared `EnvironmentFile=` — added 2026-08-02
 
-> **Blocked as written, 2026-08-04.** The Pi was rebuilt onto a fresh card: there
-> is no `tvpi` user and no `/home/tvpi/...` tree, so every path below names
-> something that does not exist, and the checkout is three merges behind `main`.
-> **This item cannot be performed until the Chunk 13 cutover creates the account
-> and installs the new units**, at which point the unit under test is a different
-> file and this item should be rewritten rather than run. Left here rather than
-> deleted because the *question* — does the un-prefixed `EnvironmentFile=` start
-> clean on the real machine — is still owed.
+> **DISCHARGED 2026-08-11, by the cutover rather than by running this item.** The
+> question this was kept for — does an un-prefixed `EnvironmentFile=` start clean
+> on the real machine — is answered, on the units that matter. Both
+> `display.service` and `curation.service` declare it un-prefixed against
+> `/opt/samsung-frame-art-loader/.env` and both came up clean on the first
+> `systemctl enable --now`, curation logging its resolved configuration and
+> display its startup line. Neither refused to start, which was the risk.
+>
+> **The unit named below is not the unit that was tested.** As predicted, the file
+> under test became a different one: this item describes the 2024 loader, which is
+> retired and will never be installed again. What follows is left as the record of
+> a question that was owed and is not any more — do not run it. The properties it
+> was written to protect are now asserted mechanically for both live units in
+> `tests/test_repo_hygiene.py`, which is the durable form of this check.
 
 **Not visual — this needs the Pi, and it is quick.** The unit now declares
 `EnvironmentFile=/home/tvpi/source/samsung-frame-art-loader/.env` un-prefixed and

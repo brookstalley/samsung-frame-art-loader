@@ -46,12 +46,14 @@ WorkingDirectory=/opt/samsung-frame-art-loader/display
 EnvironmentFile=/opt/samsung-frame-art-loader/.env
 
 # **Absolute, not `/usr/bin/env uv`.** systemd's PATH does not include the
-# per-user directory uv installs itself into by default, and the account that
-# runs this has no login and no home to install one under. Naming the binary is
-# also the honest failure: a missing interpreter fails here, where the path is
-# written, rather than resolving to whatever a PATH= line happened to inherit —
-# which is how the recovered 2024 unit came to carry pyenv shims and a stray
-# editor directory it never needed.
+# per-user directory uv installs itself into by default, and this account has no
+# login to establish one. It does have a home — `/var/lib/tvpi` — but that holds
+# uv's cache and its managed interpreter, not uv itself, which is deliberately
+# shared and system-owned so the two planes cannot drift onto different copies.
+# Naming the binary is also the honest failure: a missing interpreter fails here,
+# where the path is written, rather than resolving to whatever a PATH= line
+# happened to inherit — which is how the recovered 2024 unit came to carry pyenv
+# shims and a stray editor directory it never needed.
 ExecStart=/usr/local/bin/uv run python -m display
 
 Restart=always

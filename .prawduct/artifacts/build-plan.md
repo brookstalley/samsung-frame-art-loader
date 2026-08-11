@@ -44,6 +44,14 @@ governed_by:
   - artifact: design-direction
     dispositions:
       - "the visual direction, and the chunk that owes each piece of it → inapplicable because: same scope as the row above. The one place it could bite this plan is the e-paper label's typesetting, and that is governed by `accessibility-spec.md` § Direction instead, which Chunk 13B carries"
+  # Added 2026-08-11 by Critic R-2. The row above named this artifact as the one
+  # that governs the label's typesetting and the walk still could not find it,
+  # because it was never listed — the artifact a plan defers TO is exactly the one
+  # that must appear here.
+  - artifact: accessibility-spec
+    dispositions:
+      - "the e-paper label is legible at standing distance → applies, and is the whole of Chunk 13B's legibility deliverable: 16 grey levels with the mode READ BACK rather than assumed (`max_colors` reports 16 in both `bw` and `gray16`, which is how the 2024 plane rendered 1-bit type unnoticed), and type that never shrinks below the floor — content drops instead. **Still PROPOSED, not ratified**, with `decide_by` Chunk 13B: the drop-rather-than-shrink clause awaits the owner, and it cannot be ratified before the type floor exists, because that would be ratifying a rule about a number nobody has measured. Enforced today by `display/tests/test_epaper.py` (a panel quietly staying 1-bit is refused) and `display/tests/test_label_layout.py` (the drop rule, over an injected measurer); the type SIZES themselves are open and closable only at the panel"
+      - "the accessibility surface is not a screen → conforms: the label is the surface, it renders display-side from metadata the manifest carries, and a device with no panel is a supported deployment rather than a degraded one (`EPD_DEVICE` empty, the wall rotates unlabelled)"
 last_validated: 2026-08-11
 ---
 
@@ -141,7 +149,7 @@ re-created the same silence one line further down.
 - [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [x] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13A: The panel, the label, the heartbeat and the two units — no hardware *(built and reviewed; the box waits on Done-when step 0b, which needs the set — see § The announcement reaches both subscribers in `operator-verification.md`)*
-- [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover
+- [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover *(the machine half is done and running: account, both trees, both units enabled, catalogue seeded, manifest published — 2026-08-11. The box waits on the three things only a person at the wall can do: the label's type sizes, margin and line-length bound; the unattended run across a television power-cycle; and ratifying the legibility norm, which could not be ratified before the type floor existed)*
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
 Context: Plan authored 2026-07-20. Chunks 01, 02 and 06 landed 2026-07-27 in one

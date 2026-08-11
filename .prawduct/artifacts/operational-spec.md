@@ -32,9 +32,11 @@ question and it is kept: it is what the committed unit, `deploy/README.md` and
 this product's own history already say, and renaming would have bought nothing
 but a diff across every one of them.
 
-The account itself does not exist on the machine. The Pi was rebuilt onto a fresh
-card and `tvpi` did not survive it — see `platform-and-dependency-findings.md`
-§ That card is gone. What has to be created:
+**The account was created at the cutover on 2026-08-11 and now exists** (uid 102).
+It had not survived the Pi's rebuild onto a fresh card — see
+`platform-and-dependency-findings.md` § That card is gone — so this table is the
+record of what was made, and the specification for making it again on the next
+machine:
 
 | | |
 |---|---|

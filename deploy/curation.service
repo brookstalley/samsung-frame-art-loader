@@ -28,8 +28,9 @@ WorkingDirectory=/opt/samsung-frame-art-loader/curation
 # environment file must refuse to start rather than fail at import.
 EnvironmentFile=/opt/samsung-frame-art-loader/.env
 
-# Absolute for the reason spelled out in display.service: the account has no
-# home to hold a per-user uv, and a named binary fails where it is written.
+# Absolute for the reason spelled out in display.service: uv is system-owned and
+# shared by both planes rather than installed per-account, and a named binary
+# fails where it is written instead of resolving off an inherited PATH.
 ExecStart=/usr/local/bin/uv run python -m curation
 
 # **`on-failure`, not `always`, and the difference is deliberate.** This plane's

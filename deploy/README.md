@@ -1,7 +1,12 @@
 # Deployment
 
-`samsung-frame-art-loader.service` runs the loader as a persistent daemon on the
-Raspberry Pi driving the Frame TV.
+**`display.service` and `curation.service` run the wall**, as the `tvpi` service
+account on the Raspberry Pi driving the Frame TV. They were installed and enabled
+on 2026-08-11; § The cutover below is what was run.
+
+`samsung-frame-art-loader.service` is the **2024** unit. It is retired, it is not
+installed, and it is kept here as recovered evidence until the legacy retirement —
+see the banner above its recipe further down before running anything from it.
 
 ## The two new units, and where everything they name now lives
 
@@ -45,7 +50,10 @@ authority on the order.
 Performed 2026-08-11 on `pi4-tv` (Debian 13 trixie, aarch64). This is the record
 of what was run, in order, and it is the procedure for doing it again.
 
-    # uv where any account can reach it, and the account itself
+    # uv where any account can reach it, and the account itself.
+    # Copying the operator's own binary takes whatever version that account holds
+    # — 0.12.1 on the day this was run, which is the fact worth recording, since
+    # nothing else in the tree pins it. `uv --version` after the copy is the check.
     sudo install -m 0755 -o root -g root ~/.local/bin/uv /usr/local/bin/uv
     sudo adduser --system --group --no-create-home --shell /usr/sbin/nologin tvpi
     sudo adduser tvpi spi && sudo adduser tvpi gpio
@@ -122,6 +130,50 @@ Read as evidence that the arrangement works, not as a promise about your machine
   `label_surface_working: null` — which is the honest reading of a device that has
   a panel and has not yet had anything to draw.
 
+### How to tell your own install worked
+
+**The two failures this arrangement deliberately makes loud both happen before the
+process runs**, which is why "read the journal" is not the answer to them: a
+missing `EnvironmentFile=` and a missing `/usr/local/bin/uv` are both refused by
+systemd, so there is no application log line to go looking for. `systemctl status`
+names them and `journalctl -u <unit>` does not. Run these in order; each one fails
+differently from the others, which is the point of having four rather than one.
+
+    # 1. Both units loaded, active, and enabled — enabled is the one people skip,
+    #    and its absence is invisible until a reboot leaves the wall dark.
+    systemctl is-active curation.service display.service
+    systemctl is-enabled curation.service display.service
+
+    # 2. The installed copies still match the checkout. They drift the moment
+    #    somebody edits /etc/systemd/system directly, and nothing else notices.
+    for u in display curation; do
+      diff -q /etc/systemd/system/$u.service /opt/samsung-frame-art-loader/deploy/$u.service
+    done
+
+    # 3. The account can actually reach what it needs. Run AS tvpi — running it as
+    #    yourself proves nothing, because your account is the one that already works.
+    sudo -u tvpi /usr/local/bin/uv --version
+    sudo -u tvpi test -r /opt/samsung-frame-art-loader/.env && echo ".env readable"
+    sudo -u tvpi test -w /srv/art && echo "/srv/art writable"
+
+    # 4. The display plane's own account of itself. This is the honest one: it
+    #    distinguishes a device with no panel from one whose panel will not open,
+    #    and a set that is unreachable from one that is simply not showing art.
+    sudo cat /srv/art/display-heartbeat.json
+
+**Read the heartbeat rather than the wall.** `television_reachable: false` is a
+network or pairing problem; `television_showing_art: false` with the set awake
+means somebody is watching television and the plane is correctly leaving it alone;
+`has_label_surface: true` with `label_surface_working: false` is a panel that was
+configured and would not open — which costs the label and nothing else, and is a
+different fault from `has_label_surface: false`, which is a device that never had
+one. `label_surface_working: null` means nothing has been drawn yet, not that
+something failed.
+
+**A `last_error` of `null` and a `reported_at` that is not advancing is worse than
+an error**, because it means the daemon is not looping. Read it twice, a minute
+apart, before believing a quiet heartbeat.
+
 Verify the journal bound while you are here — `systemd-analyze cat-config` proves
 only that the file parses:
 
@@ -162,8 +214,9 @@ what the environment does not carry.
 > pyenv shims and a stray editor directory. It is committed exactly as recovered
 > because it had only ever existed on an SD card, and it is deleted with the rest
 > of the 2024 plane at the legacy retirement. The live procedure is
-> **§ The cutover** below. The Provenance section at the foot of this file records
-> what else was assumed from the original card.
+> **§ The cutover, near the top of this file** — not below this banner, where the
+> only thing you will find is the retired recipe itself. The Provenance section at
+> the foot of this file records what else was assumed from the original card.
 
     cp .env.example .env      # then fill it in
     sudo cp deploy/samsung-frame-art-loader.service /etc/systemd/system/
