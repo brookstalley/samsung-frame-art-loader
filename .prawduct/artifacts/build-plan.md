@@ -51,7 +51,7 @@ governed_by:
   - artifact: accessibility-spec
     dispositions:
       - "the e-paper label is legible at standing distance → applies, and is the whole of Chunk 13B's legibility deliverable: 16 grey levels with the mode READ BACK rather than assumed (`max_colors` reports 16 in both `bw` and `gray16`, which is how the 2024 plane rendered 1-bit type unnoticed), and type that never shrinks below the floor — content drops instead. **Still PROPOSED, not ratified**, with `decide_by` Chunk 13B: the drop-rather-than-shrink clause awaits the owner, and it cannot be ratified before the type floor exists, because that would be ratifying a rule about a number nobody has measured. Enforced today by `display/tests/test_epaper.py` (a panel quietly staying 1-bit is refused) and `display/tests/test_label_layout.py` (the drop rule, over an injected measurer); the type SIZES themselves are open and closable only at the panel"
-      - "the accessibility surface is not a screen → conforms: the label is the surface, it renders display-side from metadata the manifest carries, and a device with no panel is a supported deployment rather than a degraded one (`EPD_DEVICE` empty, the wall rotates unlabelled)"
+      - "WCAG 2.1 AA on the curation browser, and colour is never the sole carrier of state → inapplicable because: this plan's remaining chunks are 13B and 20 — display-plane and operational work that renders no browser screen. Same scope as the `information-architecture` and `design-direction` rows above, and the norm binds the work that reshapes the surface, which has no plan yet"
 last_validated: 2026-08-11
 ---
 

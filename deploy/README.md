@@ -209,7 +209,8 @@ what the environment does not carry.
 
 > **The recipe below installs the *2024* unit, and it is kept as a record rather
 > than as an instruction — do not run it.** That unit is retired: it names
-> `/home/tvpi/…` paths on a machine that has no such user, it runs `tvart.py`
+> `/home/tvpi/…` paths that do not exist — the account does now, since the
+> cutover created it, but deliberately without that home — it runs `tvart.py`
 > through a `.venv` that no longer exists, and its hand-written `PATH` carries
 > pyenv shims and a stray editor directory. It is committed exactly as recovered
 > because it had only ever existed on an SD card, and it is deleted with the rest
