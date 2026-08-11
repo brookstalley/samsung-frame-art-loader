@@ -1041,32 +1041,110 @@ The service layer raises a single exception type by design, so a per-error statu
 table here would be this surface inventing a taxonomy the layer below it does not
 have — and the message is already written to be shown to whoever asked.
 
-> **Superseded as *direction* on 2026-08-10, though still accurate as a
-> *description* of what is built.** `information-architecture.md` designs over six
-> routes this paragraph calls deliberately absent — text search and facet counts
-> on the collection, theme rename and delete, work delete, and the whole
-> conversation surface — and its § Retrieval and flow 5 state why each is now
-> needed. **Read the paragraph below as "not built yet", never as "decided
-> against".** This artifact is not otherwise amended: the routes get their shapes
-> in the chunk that builds them, and `architecture.md` § Direction binds that work
-> — each is a thin binding over one service method, because MCP parity depends on
-> both surfaces being bindings over one implementation.
->
-> The note exists because of this project's own recorded learning: a document
-> saying there is no X reads as current guidance and sends the next builder to
-> rebuild the debt you just paid.
+### The routes the interface design requires — designed 2026-08-11, none built
 
-**Deliberately absent, so the omissions are not read as oversights:** no theme
-update or delete route — the first surface covers create, add, remove, reorder
-and activate, and renaming a theme was not among the things a curator needed to
-do from a browser before they could build one and hang it. Nothing here writes an
-artwork, a source, an original or a mat either. *(Corrected 2026-08-05: that
-absence used to be explained by "those belong to acquisition, which is not
-built". Acquisition **is** built — `art_catalogue` gained the fetch, retry and
-mat actions on 2026-08-03 — so the routes are absent because no browser screen
-has needed them yet, not because the capability is missing. The review half is
-where a curator first acts on an image, and it is the chunk that will decide
-which of these the browser needs.)*
+**Every route in this section is a design. None of it exists.** The three tables
+above are inventories of running code; this one is not, and the difference is the
+only thing a reader must not miss. It is set apart under its own heading for that
+reason rather than appended to them.
+
+This discharges the debt `information-architecture.md` § Status recorded against
+this artifact. The IA designs a curation surface over operations the HTTP API does
+not have, and the paragraph that used to sit here called several of them
+"deliberately absent" — which, once the IA was approved, was a document telling
+the next builder that a decision had been made against work that had in fact been
+decided *for*.
+
+> **The precedent that sets this section's rules is in this file.**
+> `art_display(show_now|next)` was specified before the manifest-only channel was
+> ratified, and was unimplementable as written the day the norm landed — corrected
+> 2026-07-20 under Critic R-17. So each row below names the entity or service
+> concept it stands on, and **a route standing on something unbuilt says so**. The
+> failure being avoided is not a wrong route; it is a route that reads as settled
+> and cannot be built.
+
+**Method follows the surface's own convention rather than REST orthodoxy:** the
+built routes write with `POST` and remove with `DELETE`, and there is no `PATCH`
+anywhere. Renaming a theme is therefore `POST`, not `PATCH` — one surface with two
+spellings for "change this" costs more than the orthodoxy is worth here.
+
+| Route | What it is | Stands on | MCP twin |
+|---|---|---|---|
+| `GET /api/works` — extended | Gains `q` for text search and one repeatable filter per facet `kind`. Additive to a built route. | `WorkFacet` — **unbuilt** | `art_catalogue(action='list')` gains the same filters |
+| `GET /api/works` — facet counts in the same response | The counts the IA's disabled-not-hidden rule needs. **Not a second route** — see below. | `WorkFacet` — **unbuilt** | as above |
+| `POST /api/works/{id}/archive`, `/restore` | Take a work out of circulation, and put it back. **Not a delete** — see below. | `Artwork.status`, built | `art_catalogue(action='archive'\|'restore')`, already designed |
+| `POST /api/themes/{id}` | Rename. | `Theme`, built | `art_theme(action='update')`, already designed |
+| `DELETE /api/themes/{id}` | Delete. Its rule against constraint 1 is open — see below. | `Theme`, built | `art_theme(action='delete')`, already designed |
+| `GET`/`POST /api/conversations` | The thread list, ordered by `last_turn_at`; and starting one. | `Conversation` — **unbuilt** | none proposed — see below |
+| `GET /api/conversations/{id}` | One thread with its turns. | `ConversationTurn` — **unbuilt** | none proposed |
+| `POST /api/conversations/{id}/turns` | One exchange. **Spends** — `SpendRecord` category `conversation_tokens`. | `ConversationTurn` — **unbuilt** | none proposed |
+| `POST /api/conversations/{id}/commit` | Commit a direction: starts a `DiscoveryRun` and sets the turn's `committed_run_id`. | `ConversationTurn` — **unbuilt** | none proposed |
+| `DELETE /api/conversations/{id}` | **Deliberately shapeless — blocked on issue #118.** | — | — |
+| `GET`/`POST /api/affinities`, `DELETE /api/affinities/{id}` | The Taste screen, and every sample reaction in a conversation. | `Affinity` — **unbuilt** | none proposed |
+
+**Facet counts ride on the works response rather than getting a route.** They are
+an answer to the same question the grid answers — *what does this filter set
+select?* — and two routes would give a curator two answers to it, which is the
+defect shape this codebase has already shipped once and argues against in the
+review view's own source. The cost is that counts are recomputed on page 2 of a
+grid that did not change them. That is accepted rather than optimised away, on a
+loopback service serving one household; **revisit trigger:** the recompute shows
+up in the collection's response time on the real thousands-scale corpus.
+
+**"Work delete" was the wrong word, and the route is archive.** The IA § Status
+row asked for one; `data-model.md` gives `Artwork.status` exactly two values,
+`accepted` and `archived`, with a state machine in which restoration is permitted.
+A hard delete would have been this artifact inventing a destructive operation the
+data model does not have — and it has a stated downstream consequence that a
+delete could not carry: archiving a pinned work makes a directive unsatisfiable,
+which `data-model.md` already settles by having `show_now` refuse an archived
+work. The IA row is corrected to match.
+
+**Deleting the active theme has no rule yet, and this route must not invent one.**
+`data-model.md` constraint 1 — "exactly one Theme has `is_active = true`" — makes
+the delete of an active theme either a refusal or a cascade that leaves the wall
+with nothing chosen, and the two are not equivalent for someone in the room.
+**Recommendation: refuse while active**, because deletion is never urgent and the
+alternative changes what the household is looking at as a side effect of a tidying
+action. Owed to the operator before the route is built, not to the builder.
+
+**No MCP twin is proposed for conversation or taste, and the reason is the tier
+table above.** Tool names are **Frozen** — never renamed or removed — so adding a
+sixth tool is cheap and retiring one is not, which argues for deciding late rather
+than early. Two further reasons to wait: the in-UI agent *is* an MCP client, so a
+model conducting a conversation would be reading its own thread back through a
+tool; and the operation a model would actually want is the taste, not the
+transcript. **Open question, not a decision against:** whether `Affinity` earns a
+tool once discovery weights it.
+
+**Sample reactions write through `/api/affinities`, not through a conversation
+route.** The IA's flow 1 gives each sample "more like this" / "not this" / "tell
+me more", and each writes an `Affinity` with `derivation='stated'` and
+`source_turn_id` set. That is the same operation the Taste screen performs when a
+curator corrects one, so it is one service method with one route and two callers —
+`architecture.md` § Direction reduced to its simplest case. A reaction route on
+the conversation would have been a second way to write one entity.
+
+**What each of these owes the chunk that builds it.** Field-level request and
+response shapes are deliberately not here. `architecture.md` § Direction binds
+that work — each route unpacks arguments, calls one service method, and formats
+the result — and a response shape written before the service method exists is a
+shape written against a guess. What this section fixes is the *set*: which
+operations exist, what they stand on, and the rules above that a shape must not
+violate. Everything else in this artifact still binds them, in particular the
+`limit`-and-report-the-total rule under § Conditional Patterns and the single
+`400` error shape.
+
+**Still deliberately absent, so these omissions are not read as oversights:**
+nothing here writes an artwork's own metadata, a source, an original or a mat.
+Title, artist and date come from the source and are the physical label's evidence
+(`information-architecture.md` § Boundaries), and re-deriving a mat is an
+operation `art_catalogue` already has. *(This paragraph carried the theme rename
+and delete until 2026-08-11, correctly, and stopped being true when the IA was
+approved. Its earlier correction of 2026-08-05 stands and is why the acquisition
+routes are not listed as absent-because-unbuilt: acquisition **is** built —
+`art_catalogue` gained the fetch, retry and mat actions on 2026-08-03 — and the
+routes are absent because no browser screen has needed them.)*
 
 **Annotations are mandatory on every tool**, because their defaults are worst-case:
 omit them and MCP assumes `destructiveHint: true` and `openWorldHint: true`, which

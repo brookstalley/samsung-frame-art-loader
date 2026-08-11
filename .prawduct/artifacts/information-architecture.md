@@ -368,6 +368,17 @@ follows applies it per screen.
 | Theme | Members in wall order | Name, count | Reorder, rename, hang, delete | Whether it is the active theme |
 | Health | The three observations | Spend history | — | The whole screen is status |
 
+**"Remove" is the wrong word on both rows above, and the control must not use
+it.** `Artwork.status` is `accepted` or `archived` and restoration is permitted —
+there is no delete in this product, and `api-contract.md` § The routes the
+interface design requires records why a delete route was not written. A button
+labelled *Remove* promises the work is gone; the work is in fact still catalogued,
+still restorable, and merely out of circulation. The label is **Archive**, its
+undo is **Restore**, and the confirmation says which of the two it is doing. This
+matters beyond wording: a curator who believes removal is destructive will
+hesitate over an action that is cheap and reversible, and one who discovers the
+work is still there will trust the next confirmation less.
+
 **A screen states a fact once.** The Work screen carried the movement twice — as an
 eyebrow above the title and as a row in the facts list three lines below — which
 is not merely redundant: two copies of one fact invite the reader to look for the
@@ -466,10 +477,9 @@ it, this list is the only durable record that the round left debts.
 
 | What | Owed to | State |
 |---|---|---|
-| Six routes: text search + facet counts, theme rename, theme delete, work delete, the conversation surface | `api-contract.md` | Not amended. Its "deliberately absent" paragraph carries a note pointing here, so it does not read as current direction |
-| `accessibility-spec.md` | the human-interface artifact set | Unwritten. Mostly a codification job — the token test, announced errors, and glyph+word+colour are already practised |
+| The routes this design needs: text search and facet counts, theme rename and delete, work **archive** (not delete), the conversation surface, the taste surface | `api-contract.md` | **Amended 2026-08-11** — § The routes the interface design requires. The set and the rules are fixed; field-level shapes belong to the chunk that builds each. Two decisions there are owed to the operator, not to the builder: whether deleting an active theme refuses or cascades, and whether taste earns an MCP tool |
+| `accessibility-spec.md` | the human-interface artifact set | **Written 2026-08-11.** It is *not* the browser-only codification this row used to describe — `design_decisions.accessibility_approach` records two surfaces with different profiles and says the important one is the physical label, so a spec scoped to this artifact's screens would have covered the lesser half |
 | The revised palettes | `app.css` and `test_design_tokens.py` | Proposed only. Live in the prototype and are ungoverned until they land |
-| Ratification of the two norms proposed here and in `design-direction.md` | the owner | Both recorded as `proposed` in `project-preferences.md` |
 | Conversation deletion's effect on derived affinities | `security-model.md` | Tracked as **issue #118** (`stage: requirements`) — the rule has to be written before anything builds deletion |
 | Multi-display: `TvBinding.artwork_id` uniqueness, and one-active-theme-per-wall | `data-model.md` | Named in § More than one wall. Blocks planning, not this design |
 

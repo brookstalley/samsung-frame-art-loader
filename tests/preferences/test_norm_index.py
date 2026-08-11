@@ -11,8 +11,11 @@ read the row — which is the definition of a rule with no mechanism.
 
 This is the narrow slice of that guard: **an artifact the index names as a test
 must resolve.** The wider check — that a named ruff rule is actually selected in
-the named `pyproject.toml` — needs to resolve rule codes and TOML keys across two
-projects and is deliberately not attempted here.
+the named `pyproject.toml` — needs to resolve rule codes and TOML keys across
+every plane's config and is deliberately not attempted here. *(This said "across
+two projects" until 2026-08-11, written when there were two; the display plane
+made it three on 2026-08-06, which is the same staleness the plane derivation
+below was added to repair, one paragraph away and unnoticed by the same edit.)*
 
 Scoped to the **Enforcement artifact column**, never the Why column. The Why
 column legitimately discusses artifacts that do not exist — the manifest-channel
@@ -30,8 +33,40 @@ import pytest
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 NORM_INDEX = REPOSITORY_ROOT / ".prawduct" / "artifacts" / "project-preferences.md"
 
-#: `tests/…` or `curation/tests/…`, optionally with a `::test_name` node id.
-TEST_REFERENCE = re.compile(r"(?:curation/)?tests/[\w/.\-]+\.py(?:::\w+)?")
+
+#: Every directory in this repository that holds a test tree, as the prefix a
+#: reference to one is written with — `""` for the root plane, `curation/`,
+#: `display/`.
+#:
+#: **Derived rather than listed, and that is a repair.** This was written as a
+#: literal `(?:curation/)?`, correct on the day it was typed and wrong from
+#: 2026-08-06, when the display plane landed with its own suite. The regex is
+#: unanchored, so `display/tests/test_epaper.py` did not fail to match — it
+#: matched the *tail*, `tests/test_epaper.py`, and resolved against the root
+#: plane where no such file exists. A row naming a real, passing display-plane
+#: guard therefore failed this file, and the diagnostic pointed at the row rather
+#: than at the scanner. That is the third time this index's own machinery has gone
+#: stale by carrying a count or a list of planes (see the `black` and `T20` rows
+#: in the artifact), which is why the plane set is now computed here instead: a
+#: fourth plane is picked up by existing.
+def _plane_prefixes() -> list[str]:
+    """`""` for the root plane, then one `name/` per plane that has a test tree."""
+    nested = sorted(path.parent.name + "/" for path in REPOSITORY_ROOT.glob("*/tests") if path.is_dir())
+    return ["", *nested]
+
+
+#: `tests/…`, or the same under any plane, optionally with a `::test_name` node id.
+#:
+#: The empty prefix sitting first in the alternation is harmless, and it is worth
+#: knowing why rather than reordering on a hunch: `findall` returns the *leftmost*
+#: match, and at the first character of `display/tests/x.py` the empty branch needs
+#: `tests/` where `display/` is and fails, so the only branch that can match there
+#: is the right one. The bug this replaced was the prefix being absent from the
+#: alternation altogether, which left no match at position 0 and let the scan walk
+#: forward to the tail.
+TEST_REFERENCE = re.compile(
+    "(?:" + "|".join(re.escape(prefix) for prefix in _plane_prefixes()) + r")tests/[\w/.\-]+\.py(?:::\w+)?"
+)
 
 #: The index named this many test artifacts when the guard was written. The
 #: assertion is `>=`, not `==`: adding a Test row must not fail this file, but a

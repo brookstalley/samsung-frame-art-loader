@@ -54,6 +54,96 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-11: The routes the interface needs, and the accessibility surface that is not a screen
+
+<!-- prawduct: scope=v1-build -->
+
+<!-- No `chunks=`: the two artifact debts `information-architecture.md` § Status
+     recorded against the design round, plus one guard repair they exposed. -->
+
+**Why:** the IA round closed with two obligations written into the artifact rather
+than into a session file, because a session file is consumed by the next `/clear`.
+Both are now discharged, and one of them was scoped wrongly by the row that
+recorded it.
+
+**`api-contract.md` gained § The routes the interface design requires.** The
+paragraph that used to sit there called several of these routes "deliberately
+absent", which stopped being true the day the IA was approved — a document saying
+there is no X reads as current guidance and sends the next builder to rebuild the
+debt just paid. Eleven route groups, every one of them marked as **designed and
+not built**, each naming the entity it stands on so that a route resting on
+something unbuilt says so. That marking is the section's whole discipline, and the
+precedent is in the same file: `art_display(show_now|next)` was specified before
+the manifest-only channel was ratified and was unimplementable the day the norm
+landed.
+
+**Three things were decided rather than transcribed:**
+
+- **"Work delete" was the wrong word and the route is archive.** `Artwork.status`
+  has exactly two values and restoration is permitted; a delete route would have
+  been this artifact inventing a destructive operation the data model does not
+  have, and it could not have carried the consequence archive already carries —
+  archiving a pinned work makes a directive unsatisfiable, which `show_now` already
+  refuses on. The IA is corrected, **and so is the interface**: a control labelled
+  *Remove* promises the work is gone. The label is **Archive**, its undo is
+  **Restore**.
+- **Facet counts ride on the works response instead of getting a route**, because
+  they answer the same question the grid answers and two routes would give a
+  curator two answers to it. The cost — recomputing counts on a page that did not
+  change them — is accepted with a revisit trigger rather than optimised away.
+- **Sample reactions write through `/api/affinities`**, not through a conversation
+  route. A reaction and a correction on the Taste screen are the same operation on
+  the same entity, so they are one service method with one route and two callers.
+
+**Two decisions are owed to the operator and were not made here:** whether deleting
+the active theme refuses or cascades (constraint 1 makes them genuinely different
+for someone in the room — the recommendation is refuse), and whether taste earns an
+MCP tool. Tool names are Frozen tier, so adding one is cheap and retiring one is
+not, which argues for deciding late. `DELETE /api/conversations/{id}` is
+deliberately left shapeless behind issue #118.
+
+**`accessibility-spec.md` was written, and it is not the artifact its own
+obligation described.** The IA row called it "mostly a codification job — the token
+test, announced errors, and glyph+word+colour are already practised", which is an
+accurate description of the browser work and would have produced a truthful
+document about the lesser half. `design_decisions.accessibility_approach` has said
+since discovery that this product has **two accessibility surfaces and the
+important one is physical**: the e-paper label, read by household members and
+guests at standing distance, on an unbacklit panel, with no interface to navigate
+and no brightness lever to compensate for getting the type wrong. The spec is
+ordered to say so, and every requirement in it is marked **practised** (with its
+mechanism), **owed** (with what closes it), or **open** (with who can settle it).
+
+**One requirement in it is open, and it is on the surface that matters most.** The
+label's type sizes and margin are provisional placeholders — the operator's
+2026-08-04 look killed the 2024 `"Sans 18"` but was rendered with PIL/DejaVu while
+the product typesets with Pango, so the numbers do not transfer. **Line length is
+worse than provisional: the accessibility decision names it as one of the three
+things carrying legibility and nothing states a bound at all.** All three close in
+the same act, at the panel — the bench visit Chunk 13A's Done-when step 0b is
+already waiting on.
+
+**The norm index was under-claiming the surface it says matters most.** Its only
+accessibility row named the browser. The label's two real mechanisms — the panel
+mode that is set and read back, and the drop-rather-than-shrink rule — had no row
+pointing at them, and an enforcement artifact no row names is one a refactor can
+delete with nothing noticing. A row was added, and the WCAG row now points at the
+new artifact instead of at a YAML field.
+
+**Adding it broke `test_norm_index.py`, which was the guard working and then not
+working.** The guard's path pattern knew the root and curation planes and not
+`display/`, and because the pattern is unanchored it did not fail to match — it
+matched the *tail*, `tests/test_epaper.py`, and resolved it against the root plane
+where no such file exists. So a row naming two real, passing display-plane guards
+failed, with a diagnostic pointing at the row rather than at the scanner. **The
+plane set is now derived from the repository rather than listed**, which is the
+third time this index's own machinery has gone stale by carrying a list or a count
+of planes; a fourth plane is picked up by existing. Proven by running the old
+pattern against the new rows and watching both resolve to files that are not there.
+
+**No behaviour changed.** The only executable edit is the guard above. Root 162
+passed, curation 1950 passed, display 343 passed.
+
 ## 2026-08-11: The derived mat cannot exceed the corpus, and the vote counts a colour once
 
 <!-- prawduct: status=shipped | scope=v1-build -->
