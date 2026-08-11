@@ -1041,6 +1041,21 @@ The service layer raises a single exception type by design, so a per-error statu
 table here would be this surface inventing a taxonomy the layer below it does not
 have — and the message is already written to be shown to whoever asked.
 
+> **Superseded as *direction* on 2026-08-10, though still accurate as a
+> *description* of what is built.** `information-architecture.md` designs over six
+> routes this paragraph calls deliberately absent — text search and facet counts
+> on the collection, theme rename and delete, work delete, and the whole
+> conversation surface — and its § Retrieval and flow 5 state why each is now
+> needed. **Read the paragraph below as "not built yet", never as "decided
+> against".** This artifact is not otherwise amended: the routes get their shapes
+> in the chunk that builds them, and `architecture.md` § Direction binds that work
+> — each is a thin binding over one service method, because MCP parity depends on
+> both surfaces being bindings over one implementation.
+>
+> The note exists because of this project's own recorded learning: a document
+> saying there is no X reads as current guidance and sends the next builder to
+> rebuild the debt you just paid.
+
 **Deliberately absent, so the omissions are not read as oversights:** no theme
 update or delete route — the first surface covers create, add, remove, reorder
 and activate, and renaming a theme was not among the things a curator needed to

@@ -130,6 +130,30 @@ to serve, elicited from the Product Brief's core flows:
 | Q10 | Which image instances were found for this work, which one was selected, and on what basis? | 2, 3 |
 | Q11 | Has this **image** been rejected for a work the curator still wants, so the re-search does not return it? | 3 |
 | Q12 | Which proposed works could not be resolved to any credible image, and which kind of nothing was it? | 2 |
+| Q13 | What has the curator reacted warmly or coolly to — by artist, movement, era or subject — so a later conversation opens knowing it and discovery can weight what it proposes? | 1, 2 |
+| Q14 | How was each of those judgments arrived at, so it can be revisited, corrected, or rebuilt if the way we derive them changes? | 1 |
+| Q15 | What is this work — its movement, period and subject — so a catalogue of thousands can be filtered down to the handful worth looking at, and so taste can be matched against it? | 5 |
+
+**Q15 is what makes the collection navigable at the amended scale**
+(`nonfunctional-requirements.md`, thousands of works). At 41 works a curator
+scrolls; at 4,000 an unfiltered grid is a wall of pictures with no way in. It is
+answered by `WorkFacet`, in the same vocabulary `Affinity` uses, because the second
+half of the question — matching taste against the catalogue — is impossible if the
+two sides name things differently.
+
+**Q13 and Q14 arrived together on 2026-08-10, with conversational intent-forming**
+(`product-brief.md` flow 1). They are one capability split across two questions on
+purpose: Q13 is what the *product* consults, Q14 is what makes Q13 **correctable**.
+A taste model that cannot say where a judgment came from is one the curator can
+only argue with, never fix — and it is the derivation, not the judgment, that this
+product will change its mind about as the eliciting prompt improves.
+
+**Q13 carries a distinction that looks like a nuance and is not.** "Meh on
+Magritte, but open to learning more" is *two* facts: low warmth, and continued
+willingness to be shown. Collapsing them into one scalar means a curator's honest
+lukewarm reaction silently blacklists an artist they explicitly asked to keep
+hearing about. This is Q3-versus-Q11 one level up — the same trap, at the level of
+taste rather than of a work — and it gets the same answer: two fields, never one.
 
 **Q3 is the one most easily missed.** Without persisted rejections, every
 discovery run re-proposes the same works the curator has already declined, and
@@ -456,6 +480,162 @@ to make it.
 > For the same reason, `show_now` **refuses an archived work** rather than pinning
 > one and relying on the manifest to filter it out later.
 
+### WorkFacet
+
+What a work *is*, in the same typed vocabulary the curator's taste is expressed in.
+Answers Q15. Added 2026-08-10 with the collection's retrieval surface
+(`information-architecture.md` § Retrieval).
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `artwork_id` | UUID | FK → Artwork, required | |
+| `kind` | enum | required | The same closed set as `Affinity.kind` — `artist` \| `movement` \| `era` \| `subject` \| `medium` \| `palette`. One vocabulary, two sides; see below. |
+| `value` | string | required | "Baroque", "Late 19th c.", "Seascape". |
+| `derivation` | enum | required | `sourced` (the institution published it) \| `inferred` (a model assigned it). Never absent — an unlabelled facet is a guess wearing a citation. |
+| `source_note` | string | nullable | For `sourced`, which field of which provider — e.g. `artic:classification_title`. For `inferred`, the model id. |
+| `created_at` | datetime | auto | |
+
+**Unique on (`artwork_id`, `kind`, `value`).** A work is Baroque once.
+
+> **`kind` is deliberately the same enum as `Affinity.kind`, and that is the
+> entity's reason to exist.** One vocabulary then serves three purposes: what a
+> work is (this), what the curator likes (`Affinity`), and what discovery weights
+> when it proposes. Two vocabularies for one idea is the drift being avoided —
+> "Post-Impressionism" as a taste and "post impressionist" as a catalogue value
+> cannot be matched, and nothing would report the mismatch.
+>
+> **The two enums must therefore move together.** Widening one without the other
+> silently breaks the join that makes taste useful.
+
+> **`derivation` is load-bearing, not bookkeeping, and a measurement says so.**
+> `curation/src/curation/discovery/browse.py` records that for the Art Institute
+> **"style, classification and period were measured missing on ordinary
+> spellings"** — which is why widening its browse facet past artist was gated. The
+> field inventory in `artic-api-findings.md` bears this out: there is
+> `classification_title`, and it holds a *medium* ("oil paintings (visual works)"),
+> not a movement. **There is no style field.**
+>
+> So the expected steady state is that **most facets are `inferred`**, not
+> `sourced`, at least for the wired collection. That is a fact about the providers
+> rather than a defect, and it is exactly why every row must say which it is: a
+> facet the museum published and a facet a model guessed carry different authority,
+> and a curator correcting the catalogue needs to know which one they are arguing
+> with.
+>
+> **The operator confirmed this direction on 2026-08-10 — lean on model
+> inference** rather than accept the patchy coverage the sources actually publish.
+> `derivation` is what keeps that honest, and it changes how the *interface* uses
+> the field: since inferred is the norm, marking every inferred row is wallpaper
+> that trains a reader to skip the one label that matters. **The default is stated
+> once per screen and only `sourced` is marked** — the exception carries the badge,
+> not the rule (`information-architecture.md` § Retrieval). The column is unchanged;
+> what inverted is which value is worth pointing at.
+
+> **The `era` facet is derived and sits BESIDE `Artwork.date_created`, never over
+> it.** `date_created` is deliberately free text — "1931", "c. 1650", "1888–89" —
+> because "normalising would destroy information", and that decision stands. An era
+> facet is an additional, coarser, *lossy* reading of the same fact, kept in this
+> table where its derivation is recorded, so the free text remains the evidence and
+> the facet remains the index.
+
+> **Inference must not become an unmetered paid path.** Where the assignment rides
+> on a model call discovery is already making, it costs nothing extra and writes no
+> row. Where it needs its own call, it spends, and it needs a `SpendRecord`
+> category in the same chunk that builds it — the rule this artifact already states
+> for `conversation_tokens`, for the reason `mat_color_vision` demonstrates.
+
+### Affinity
+
+What the curator has reacted to, and how. Answers Q13; retained across
+conversations, and the thing a new conversation opens knowing.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `kind` | enum | required | `artist` \| `movement` \| `era` \| `subject` \| `medium` \| `palette`. Closed, and widening it is a migration — see below. |
+| `value` | string | required | The thing itself, as named: "Kandinsky", "Surrealism", "1920s", "seascapes". **A string, never a foreign key** — see below. |
+| `sentiment` | enum | required | `loves` \| `likes` \| `cool` \| `declines`. |
+| `open_to_more` | boolean | required | Whether to keep offering this. **Independent of `sentiment`** — Q13's two-facts rule. |
+| `derivation` | enum | required | `stated` (the curator said it) \| `inferred` (the model read it from what they said) \| `observed` (read from accept/reject behaviour in review). Answers Q14. |
+| `rationale` | text | nullable | The model's own account of an `inferred` or `observed` judgment, in the curator's terms. Null is normal for `stated`. |
+| `source_turn_id` | UUID | FK → ConversationTurn, nullable | The turn this was derived from. Null for `observed`. |
+| `artist_id` | UUID | FK → Artist, nullable | Set only where `kind='artist'` **and** the name resolves to a catalogue artist. Derived and re-derivable; never the identity. |
+| `created_at`, `updated_at` | datetime | auto | |
+
+**Unique on (`kind`, `value`).** One live judgment per thing, corrected in place
+rather than accumulating a history of contradictions the product would then have
+to arbitrate between. The history that matters is the turns, which are retained.
+
+> **`value` is a string and not a foreign key, and this is the entity's central
+> decision.** The product exists to surface artists the curator could not have
+> named — which means the overwhelmingly common case at the moment an affinity is
+> recorded is an artist with **no row in this catalogue at all**. An FK would make
+> the taste model unable to hold exactly the judgments it exists to hold, and would
+> silently invert the flow: you could only love an artist you already owned.
+> `artist_id` therefore *follows* the name when a match happens to exist, and its
+> absence means nothing.
+>
+> It does mean two spellings of one artist can produce two rows. That is accepted
+> and is the cheap failure: the reconciliation is a name match a curator can see
+> and merge, whereas the FK version's failure is a judgment that could not be
+> written down.
+
+> **`kind` is a closed enum, and the operator's "perhaps more dimensions" is served
+> by migrating it rather than by making it free text.** A free-text kind turns a
+> typo into a new dimension of taste, silently, and nothing downstream can tell
+> `subject` from `subjcet`. Six named kinds cover what conversation elicits today;
+> a seventh is a schema change, which is the point — it is a decision about what
+> taste *is* in this product, and those should cost a commit.
+
+> **`sentiment` and `open_to_more` are two fields because one scalar is a bug.**
+> "Meh on Magritte, but open to learning more" is the operator's own example, and
+> a single warmth score renders it as a low number indistinguishable from "never
+> show me this again". The curator's lukewarm honesty would then quietly blacklist
+> an artist they explicitly asked to keep hearing about — the same shape as
+> Q3-versus-Q11, where rejecting an image must not suppress the work.
+
+### Conversation
+
+One intent-forming session. **Not a run, and never confused with one:** it
+acquires nothing, writes no `Artwork`, and reaches no museum API. It ends by
+seeding a `DiscoveryRun` or by ending.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `started_at` | datetime | auto | |
+| `last_turn_at` | datetime | auto, indexed | Orders the conversation list, which is the only place a curator finds an old thread. |
+| `summary` | text | nullable | A short model-written account of where the conversation got to. Written at rest, for the list — **never read back as taste**; `Affinity` is the only thing the product consults. |
+
+### ConversationTurn
+
+One exchange. Retained in full so affinities can be rebuilt when their derivation
+changes — the second half of Q14.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | UUID | PK | |
+| `conversation_id` | UUID | FK → Conversation, required | |
+| `ordinal` | integer | required, unique per conversation | Order within the thread. Not a timestamp: two turns can share a second. |
+| `role` | enum | required | `curator` \| `system`. |
+| `text` | text | required | Verbatim. |
+| `suggested` | JSON | nullable | What this turn offered, as `[{kind, value}]` — the artists, movements or subjects named. Denormalised on purpose: it is a record of *what was said*, not a live index, and normalising it would let a later edit rewrite history. |
+| `committed_run_id` | UUID | FK → DiscoveryRun, nullable | Set on the turn where the curator committed a direction. **This is the seam** — it is what lets a run say which conversation produced it, and a conversation show what came of it. |
+| `created_at` | datetime | auto | |
+
+> **Transcripts are retained by the operator's decision (2026-08-10), reversing
+> this artifact's own "agent conversation history is deliberately not modelled".**
+> The reason is Q14: affinities are *derived*, the derivation will improve, and
+> without the turns an improvement can only apply going forward while every
+> existing judgment stays frozen at the quality of the prompt that produced it.
+>
+> **This is the product's first retained free-text record of the operator's own
+> words**, and `security-model.md` does not currently speak to retention or
+> deletion of one. That is a real gap, flagged rather than closed here — the
+> interface owes a curator the ability to delete a conversation, and deleting one
+> must have a stated effect on the affinities derived from it.
+
 ### DiscoveryRun
 
 One invocation of the discovery flow. Exists to make cost visible and to give
@@ -503,6 +683,15 @@ candidates provenance.
 > a knowable scope to estimate, which an open-ended iterative conversation would
 > not. It also matches the "short curation sessions" constraint — the curator is
 > not held at the keyboard while discovery works.
+>
+> **Conversational intent-forming arrived on 2026-08-10 and this decision holds
+> unchanged, which is why it was built the way it was.** `Conversation` sits
+> *upstream* of the run: it answers from model knowledge, shows sample pictures,
+> acquires nothing, and starts nothing. So the thing being estimated is still a
+> batch with a knowable scope, and the curator is still not held at the keyboard —
+> the fast turns are fast precisely because they do no discovery. Had the
+> conversation been allowed to acquire per turn, this paragraph would have had to
+> be reversed rather than reaffirmed; that it did not is the reason for the split.
 >
 > **`target_candidate_count` is resolved, and it is not a column.** This artifact
 > previously deferred it, listing three options: the curator sets it per run, it is
@@ -1029,12 +1218,28 @@ path consults it before spending.
 | `id` | UUID | PK | |
 | `discovery_run_id` | UUID | FK → DiscoveryRun, nullable | Null for non-discovery spend, e.g. mat colour. |
 | `artwork_id` | UUID | FK → Artwork, nullable | Set for per-artwork spend. |
-| `category` | enum | required | `discovery_tokens` \| `web_search` \| `image_research` \| `mat_color_vision` — **the last of these has a producer but writes no row today; see the deferral below.** |
+| `conversation_turn_id` | UUID | FK → ConversationTurn, nullable | Set for intent-forming spend. Added 2026-08-10 — see below. |
+| `category` | enum | required | `discovery_tokens` \| `web_search` \| `image_research` \| `mat_color_vision` \| `conversation_tokens` — **`mat_color_vision` has a producer but writes no row today; see the deferral below.** |
 | `model_id` | string | nullable | |
 | `input_tokens`, `output_tokens` | integer | nullable | Null where the unit is not tokens. |
 | `units` | integer | nullable | e.g. number of web searches. |
 | `cost_usd` | decimal | required | What was actually billed. |
 | `occurred_at` | datetime | auto, indexed | Indexed for reporting windows. **Not** the basis of any ceiling — see below. |
+
+> **`conversation_tokens` ships with its producer or not at all (2026-08-10).**
+> The category and its FK exist because intent-forming spends real money — a model
+> call per turn, plus whatever the sample lookups cost — and Q4 asks what was spent
+> and on what. The rule is written here because this table already carries one
+> category that was declared before anything wrote it, and a month total that
+> silently omits a whole paid path is exactly the failure recorded below. Whichever
+> chunk builds the conversation writes the row in the same chunk, or declares in
+> the plan that it does not and why.
+>
+> Conversation spend is **not** attributed to the run the conversation eventually
+> seeds. The two are separate questions — "what did talking cost" and "what did
+> asking for Kandinsky cost" — and folding the first into the second would make
+> `estimated_cost_usd` unfalsifiable against the actuals, since the estimate never
+> covered the conversation.
 
 > **This table does not enforce the ceiling, and must never be made to.** The
 > ratified Direction norm (`nonfunctional-requirements.md`) is that *spend ceilings
@@ -1176,6 +1381,28 @@ the entity that enforces the second Direction norm.
   would destroy the provenance, and `parent_run_id` cannot serve either, because a
   resolve run covers a *subset* of the parent's works.
 - A **DiscoveryRun** accrues many **SpendRecords** (one-to-many).
+- A **Conversation** has many **ConversationTurns** (one-to-many, ordered by
+  `ordinal`). A turn accrues **SpendRecords** exactly as a run does, and on its own
+  account rather than the run's.
+- A **ConversationTurn** may **commit** at most one **DiscoveryRun**, and a run is
+  committed by at most one turn (one-to-one, optional both ways). A run started
+  from the Discovery screen has no committing turn, and a conversation that ends
+  without committing has no run — both are ordinary, which is why this is optional
+  in both directions rather than a required provenance field on the run.
+- An **Artwork** has many **WorkFacets** (one-to-many), unique per (`kind`,
+  `value`). A work with none is ordinary rather than broken — it means nothing was
+  published and nothing has been inferred yet.
+- **WorkFacet** and **Affinity** share the `kind` vocabulary and are joined on
+  (`kind`, `value`) rather than by a foreign key. **Deliberately a value join:** an
+  affinity may name a movement no work in the catalogue has yet, which is the
+  normal state for taste that runs ahead of the collection — and an FK would make
+  that judgment unwritable, the same reason `Affinity.value` is not an FK to
+  `Artist`.
+- An **Affinity** may cite one **ConversationTurn** as its source (many-to-one,
+  optional) and may resolve to one **Artist** (many-to-one, optional). **Neither
+  optionality is an edge case:** an `observed` affinity has no turn, and an
+  affinity naming an artist the catalogue has never heard of has no Artist — which
+  is the normal state for the artists this product exists to surface.
 - The **Directive** singleton may reference one **Artwork** as its pin. It belongs
   to the catalogue rather than to any Theme, so that switching themes carries the
   sequence forward instead of resetting it.
@@ -1667,8 +1894,18 @@ single interaction the product exists to make easy.
 - **Users, accounts, roles, sessions.** Single operator; `has_multiple_party_types`
   is false. Adding these later is accommodated by the fact that Theme and
   DiscoveryRun already have owners implicitly (there is one).
-- **Agent conversation history.** Agents are stateless across sessions by
-  decision; there is no memory to persist.
+- ~~**Agent conversation history.** Agents are stateless across sessions by
+  decision; there is no memory to persist.~~ **Amended 2026-08-10 — this is now
+  modelled**, as `Conversation`, `ConversationTurn` and `Affinity`. The exclusion
+  was written when the only conversational surface was an MCP client whose
+  transcript belonged to the client, not to us. Conversational intent-forming
+  (`product-brief.md` flow 1) made the transcript *ours*, and Q14 made it
+  load-bearing: affinities are derived, the derivation will improve, and rebuilding
+  them needs the words. Struck rather than deleted, so the reversal is visible to
+  anyone who remembers the rule.
+  **Still true within the amendment:** agents remain stateless *across* sessions —
+  what persists is the record, which a new session reads, not a session that stays
+  alive.
 - **TV favourites (`MY-C0004`).** A tagging primitive exists (`change_favorite`),
   but the library author notes that on 2022+ sets favourites can only be applied
   to Art Store artwork, not user uploads. Unconfirmed against real hardware, and

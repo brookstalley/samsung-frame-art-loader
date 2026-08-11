@@ -186,6 +186,60 @@ master reaches the quantiser as genuinely different pixels. Re-measured as the
 claim actually reads — same dimensions, saved again at a different quality — the
 figure is 5 of 40, which is what #115 recorded.
 
+## 2026-08-10: The curation surface is organised around the curator, not the pipeline
+
+<!-- prawduct: scope=v1-build -->
+
+**Why:** The built surface's five tabs — Works, Discovery, Themes, On the wall,
+Health — are the pipeline's internal stages in pipeline order. Each was correct as
+the chunk that produced it, and the sum was an interface organised around how the
+software works. That failure is invisible per-chunk and only visible in the sum,
+which is why it survived six chunks of review.
+
+**What changed.** Three new artifacts — `information-architecture.md`,
+`design-direction.md`, and a self-contained prototype at
+`artifacts/prototypes/curation-ia-prototype.html` carrying a synthetic 2,000-work
+corpus. Three destinations (the Walls, Collection, Discover); themes become a rail
+inside Collection because a theme is a saved selection over the collection; Health
+leaves the navigation for an always-present masthead indicator.
+
+**Two operator decisions reversed recorded ones**, each amended in the artifact
+that recorded the decision being reversed rather than designed past:
+
+- **Catalogue target: hundreds → thousands of works** (`nonfunctional-requirements.md`).
+  Surgical — load is unchanged, so every claim resting on load stands. Search stops
+  being optional and the client may no longer hold the whole catalogue. Retiring
+  that figure was a repo-wide sweep, not a local edit: `project-state.yaml`,
+  `architecture.md`, `app.js` and `test_browser_surface.py` all carried it, and in
+  `app.js` it was the *justification* for the behaviour the amendment calls
+  indefensible.
+- **Intent may be arrived at in conversation** (`product-brief.md` flow 1).
+  Conversation sits **upstream** of the run — answers from model knowledge,
+  acquires nothing, commits to an ordinary batch run — which is what preserves both
+  decisions it would otherwise reverse: a batch still has a knowable scope to
+  estimate, and the curator is still not held at the keyboard.
+
+**Four new entities** in `data-model.md`: `Affinity`, `Conversation`,
+`ConversationTurn`, and `WorkFacet`. `WorkFacet` shares `Affinity`'s closed `kind`
+enum and joins on (`kind`, `value`) rather than by key, so the catalogue and the
+taste model speak one language while taste stays free to name a movement the
+collection does not hold. **The two enums must move together.** `SpendRecord` gains
+`conversation_turn_id` and a `conversation_tokens` category, which ships with its
+producer or not at all.
+
+**Two norms proposed and recorded as unratified** in `project-preferences.md` —
+the token-source norm (`design-direction.md`) and the navigation norm
+(`information-architecture.md`). The owner approved the design; they were not asked
+to ratify binding norms, and neither artifact claims a signature it did not get.
+
+**No behaviour changed.** The only code edits are two comments and a docstring whose
+premise the scale amendment retired. Every route this design needs — search and
+facets, theme rename and delete, work delete, the conversation surface — is still
+absent; `api-contract.md` carries a note so its "deliberately absent" paragraph
+does not read as current direction, and is otherwise unamended. The revised
+palettes live only in the prototype and are ungoverned until they reach `app.css`.
+`information-architecture.md` § Status is the durable record of those debts.
+
 ## 2026-08-10: A thumbnail stops outliving the canvas it was a copy of
 
 <!-- prawduct: status=shipped | scope=v1-build -->

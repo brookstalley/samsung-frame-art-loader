@@ -94,7 +94,7 @@ Framed as a pipeline with a human gate in the middle, because the product both
 
 | # | Flow | Priority |
 |---|------|----------|
-| 1 | Express curatorial intent | must-have |
+| 1 | Express curatorial intent — stated outright, or arrived at in conversation | must-have |
 | 2 | LLM-assisted discovery — intent to works, then works to image instances | must-have |
 | 3 | Review and accept a work with its selected image | must-have |
 | 4 | Acquire and prepare | must-have |
@@ -108,6 +108,41 @@ style, a prize, a period — in the web UI or through an agent. The system
 interprets it into a discovery strategy. Cost visibility at the point of decision
 is what makes the spend ceiling feel like a guardrail rather than a surprise; flow
 2 explains where that estimate becomes a real number rather than a guess.
+
+> **Amended 2026-08-10: intent may be *arrived at* in conversation, not only
+> stated.** This flow assumed a curator who already knows what to ask for. The one
+> who says "I love Dalí and Delaunay — who else should I look at?" was not served
+> by it at all, and that curator is the product's own Vision: finding works, and
+> now artists, they could not have named.
+>
+> **Conversation forms intent; it does not perform discovery.** A turn answers
+> from the model's own knowledge and shows a few sample pictures — seconds, and
+> well under a cent. It acquires nothing, writes no artwork, and starts no run.
+> When the curator commits to a direction, that direction seeds an ordinary
+> discovery run, and **flow 2 is untouched from there**: the same two phases, the
+> same estimate against a real work list, the same grid review.
+>
+> This is what preserves the two decisions that would otherwise have to be
+> reversed. `data-model.md` chose one batch per run *because* a batch has a
+> knowable scope to estimate "which an open-ended iterative conversation would
+> not" — still true, and still why the estimate survives: the conversation is
+> upstream of the thing being estimated. It also chose not to hold the curator at
+> the keyboard while discovery works — also still true, because the turns that are
+> fast are the ones that do no discovery, and the run the curator commits to still
+> proceeds behind a handle.
+>
+> **What the conversation leaves behind is judgments, not just a transcript.** The
+> curator's reactions accumulate as affinities across several dimensions — artist,
+> movement, era, subject matter, and more as they earn their place — so a later
+> conversation opens knowing that Kandinsky landed and Magritte did not. Transcripts
+> are kept too, so the affinities can be rebuilt if their derivation changes.
+> `data-model.md` owns both, and its "agent conversation history is deliberately not
+> modelled" exclusion is amended there rather than contradicted here.
+>
+> **The known design risk is the seam.** A commitment that visibly ejects the
+> curator from a conversation into a progress bar makes the conversation a wizard
+> in costume. Continuity across the handoff is a stated requirement of the
+> interface work, not a polish item — `information-architecture.md` owns it.
 
 **2. LLM-assisted discovery, in two phases.** This is the flow with unbounded cost
 and runtime, and therefore the one the spend ceiling exists to bound.

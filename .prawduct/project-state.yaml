@@ -632,8 +632,14 @@ product_definition:
       The hard latency numbers in this product are INHERITED from the MCP client,
       not chosen — see artifacts/nonfunctional-requirements.md "Performance".
     scalability: >
-      Explicitly not a goal. Design target is one household, one TV, hundreds of
-      artworks. Anything that trades simplicity for scale is the wrong trade here.
+      Load is explicitly not a goal: one household, one TV, one curator, one
+      discovery run at a time, and anything that trades simplicity for that kind
+      of scale is the wrong trade. CATALOGUE SIZE is the exception, amended
+      2026-08-10 from "hundreds of artworks" to thousands — which makes search
+      mandatory rather than optional and means the browser client may no longer
+      hold the whole catalogue. See nonfunctional-requirements.md § Scalability;
+      the paging, virtualisation and server-side search that follow are required
+      work, not over-engineering.
     uptime: >
       Display plane: continuous, and must survive the curation plane being down —
       that independence is the main structural benefit of the two-plane split.

@@ -142,11 +142,45 @@ discovery run at a time. Anything that trades simplicity for scale is the wrong
 trade. What follows is therefore sizing, not scaling — the numbers exist to prove
 that no capacity problem exists, so that no capacity engineering happens.
 
+> **Amended 2026-08-10: the catalogue target moves from "hundreds" to thousands
+> of works, and nothing else in this section moves with it.** The operator set the
+> target while scoping the curation interface, and the amendment is deliberately
+> surgical: *load* is still one household, one curator, one run at a time, and
+> every claim below that rests on load — concurrency, run rate, image preparation,
+> the co-location decision — stands unchanged and unre-argued. What a bigger
+> catalogue changes is **how much a reader must be able to find their way through**,
+> and that is a human-interface problem before it is a capacity one.
+>
+> The consequences that do follow, recorded here because the interface work
+> depends on them rather than being free to rediscover them:
+>
+> - **Search stops being optional.** At hundreds of works a curator can scroll; at
+>   thousands they cannot, and a catalogue with no query is a catalogue with no
+>   retrieval. This is the one place the amendment creates a *requirement* rather
+>   than relaxing a bound, and it lands on the collection surface, not the store.
+> - **A client may no longer hold the whole catalogue.** `app.js` fetches every
+>   page of `/api/works` and renders a card each. That is correct at 41 and
+>   indefensible at 4,000 — the browser surface has to page, filter and virtualise
+>   against the server instead. The runaway guard that made whole-catalogue
+>   fetching safe is not a substitute for not doing it.
+> - **Thumbnail generation becomes a first-visit cost.** Thumbnails are made on
+>   first ask; a first view of a thousands-work catalogue asks for as many as it
+>   paints. Bounded by paging, which is another reason paging is not optional.
+> - **Storage stays comfortable but stops being unremarkable.** On the 15 MB/work
+>   all-in basis below, 2,000 works ≈ 30 GB and 5,000 ≈ 75 GB. A Pi with a USB SSD
+>   still carries that, so the co-location decision does not reopen — but "fits on
+>   anything" is no longer the reason, and a deployment now has a disk figure worth
+>   stating rather than waving past.
+>
+> **SQLite is still not the question.** Low thousands of rows was already a
+> non-issue at the old target and remains one at this one; the change is entirely
+> above the store.
+
 Measured against the real 41-work corpus (`all.json`, 2026-07-19):
 
 | Dimension | Today | Design target | Verdict |
 |---|---|---|---|
-| Works | 41 | "hundreds" | SQLite at low thousands of rows is a non-issue. Not discussed further |
+| Works | 41 | **thousands** *(was "hundreds"; amended 2026-08-10, above)* | SQLite at low thousands of rows is a non-issue. The pressure is on retrieval and on the browser client, not on the store |
 | Source image size | mean 17.6 MP, median 14.5 MP, max 49 MP (6220×7912) | unchanged | 39 of 41 are *downscaled* to reach a 4K canvas — source resolution is amply sufficient across the corpus |
 | Source image bytes | ~0.4 GB for 41 works (~10 MB/work) | ~15 MB/work all-in incl. renders, thumbs, labels | **500 works ≈ 10 GB** |
 | Concurrent discovery runs | — | 1 | One curator. Concurrency is a correctness question (two runs racing on the same work), not a throughput one |
@@ -740,10 +774,21 @@ that produced the corpus says to do in doubt, and which avoids answering a vivid
 work with a grey. Swept over the whole RGB cube the worst realised lightness is
 L\* 45.2. No work among the operator's 40 reaches this path.
 
-`mat.py` clamps derived lightness to `_CORPUS_MAX_LIGHTNESS`, and that constant is
-**not a second copy of the corpus's ceiling** — `test_mat_corpus.py` derives the
-lightest mat from `all.json` and fails if the two disagree, so a corpus that gains
-a lighter mat cannot leave the engine enforcing a bar the corpus no longer sets.
+`mat.py` clamps derived lightness to **`_DERIVED_LIGHTNESS_CEILING` (45.2)**, and
+that constant is **not a second copy of the corpus's ceiling** —
+`test_mat_corpus.py` derives the lightest mat from `all.json` and fails if the two
+disagree, so a corpus that gains a lighter mat cannot leave the engine enforcing a
+bar the corpus no longer sets.
+
+> **Corrected 2026-08-11: this sentence used to name `_CORPUS_MAX_LIGHTNESS`,
+> which exists nowhere in the tree.** The module has two ceilings and that name is
+> a hybrid of both: public `CORPUS_MAX_LIGHTNESS = 50.0` is the looser requirement
+> bar the engine deliberately never compares against, and private
+> `_DERIVED_LIGHTNESS_CEILING = 45.2` is what the clamp actually enforces. The
+> wrong name is worth a correction note rather than a silent edit because of where
+> it led: someone reconciling code to this artifact greps, finds only the public
+> 50.0, and concludes the clamp should be 50 — restoring exactly the 4.8 L\* of
+> slack that let issue #115 ship.
 
 **What the fix bought, measured over the operator's own 40 pairs on 2026-08-11:**
 

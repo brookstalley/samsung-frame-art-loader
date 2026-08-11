@@ -1,0 +1,1607 @@
+<title>Curation — IA prototype</title>
+
+<style>
+/* ============================================================================
+   TOKENS
+   The light palette is complete on bare :root. Dark redefines TOKENS ONLY,
+   twice: once behind prefers-color-scheme (guarded so an explicit light choice
+   wins) and once behind the explicit stamp. No component rule ever lives inside
+   a theme block.
+
+   WHAT IS AND IS NOT PROVEN HERE. This started as a copy of
+   curation/src/curation/http/static/app.css and is no longer one. Three groups:
+
+   - LIFTED, unchanged from app.css and covered by its contrast test:
+     the type scale, the spacing scale, the radii, and the two font stacks.
+   - REVISED PROPOSALS, not in app.css and not in any test: every colour. Both
+     schemes were re-cut here — light to warm plaster and bistre ink, dark to
+     walnut and gilt — and app.css still holds the ink blue and the pale blue.
+   - NEW, needed by this design and absent from app.css: the semantic status
+     trio, the scrim pair, --text-3xl, --rail, --masthead.
+
+   tests/unit/test_design_tokens.py READS app.css AND NOTHING ELSE, so no test
+   has scanned a single colour below. Every one was checked at AA by hand
+   against the same formula that test uses, and hand-checking is not the same
+   claim: it proves the values were right when they were written, not that they
+   stay right. They become governed when they land in app.css, and not before.
+   ========================================================================== */
+:root {
+  color-scheme: light dark;
+
+  /* The light scheme is a GALLERY WALL, not a page.
+     Two things made the first attempt read as software rather than as a room:
+     pure-white cards floating on an off-white ground, which is the shape of
+     every SaaS dashboard, and a blue accent. So: no pure white anywhere — the
+     ground is warm plaster and the raised surface is paper — and the accent is
+     a warm bistre ink, the colour of a printed label, not a hyperlink.
+     Every pair below is verified at AA; the dark scheme is deliberately
+     unchanged. */
+  --surface-0: #eae6de;   /* the wall */
+  --surface-1: #f6f3ed;   /* paper, label stock */
+  --surface-2: #dfdad0;   /* recessed */
+  --border: #ccc5b8;
+  --border-strong: #67604f;
+
+  --text-strong: #1e1b16;
+  --text: #3b362d;
+  --text-muted: #635c4f;
+
+  --accent: #3d3128;
+  --accent-text: #f6f3ed;
+  --focus: #1e1b16;
+
+  /* NEW — semantic status. Deliberately not the accent: status must be
+     distinguishable from "this is a control". Saturation kept low so a healthy
+     appliance never shouts on a page full of paintings. */
+  --good: #2f5940;
+  --warn: #6f4e14;
+  --crit: #7d322b;
+  --good-quiet: #dde5dc;
+  --warn-quiet: #ece2cd;
+  --crit-quiet: #f0dfdb;
+
+  /* NEW — the Walls screen lays type over artwork. */
+  --scrim: rgb(16 15 13 / 62%);
+  --scrim-text: #f7f5f1;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+
+  --shadow-1: 0 1px 2px rgb(28 26 23 / 6%);
+  --shadow-2: 0 2px 8px rgb(28 26 23 / 10%);
+
+  --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-label: ui-serif, Georgia, "Times New Roman", serif;
+
+  --rail: 13rem;
+  --masthead: 3.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    /* A WOOD-PANELLED STUDY UNDER WARM LAMPLIGHT, not a dark dashboard.
+       The previous dark scheme was near-neutral charcoal with a pale blue accent —
+       the default shape of every dark UI, and why it read as tech rather than as a
+       room. Two changes, both small and both structural: the neutrals carry walnut
+       instead of charcoal, and the interactive accent is GILT rather than blue.
+       Every pair verified at AA before it was applied. */
+    --surface-0: #191310;   /* the panelling */
+    --surface-1: #221a15;   /* a lit surface */
+    --surface-2: #2e241d;   /* recessed */
+    --border: #453830;
+    --border-strong: #8b7b6c;
+    --text-strong: #f4ece0;   /* lamplight on paper */
+    --text: #ded3c4;
+    --text-muted: #a99a88;
+    --accent: #ccad66;   /* gilt: a brass fitting, a frame */
+    --accent-text: #1a1410;
+    --focus: #dcc088;
+    --good: #8fbf9c;
+    --warn: #e0964a;   /* pushed orange, to separate from the gilt */
+    --crit: #e39a8f;
+    --good-quiet: #22302a;
+    --warn-quiet: #33251a;
+    --crit-quiet: #33211f;
+    --scrim: rgb(6 4 3 / 70%);
+    --scrim-text: #f6efe3;
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 45%);
+    --shadow-2: 0 2px 10px rgb(0 0 0 / 55%);
+  }
+}
+
+:root[data-theme="dark"] {
+  /* A WOOD-PANELLED STUDY UNDER WARM LAMPLIGHT, not a dark dashboard.
+     The previous dark scheme was near-neutral charcoal with a pale blue accent —
+     the default shape of every dark UI, and why it read as tech rather than as a
+     room. Two changes, both small and both structural: the neutrals carry walnut
+     instead of charcoal, and the interactive accent is GILT rather than blue.
+     Every pair verified at AA before it was applied. */
+  --surface-0: #191310;   /* the panelling */
+  --surface-1: #221a15;   /* a lit surface */
+  --surface-2: #2e241d;   /* recessed */
+  --border: #453830;
+  --border-strong: #8b7b6c;
+  --text-strong: #f4ece0;   /* lamplight on paper */
+  --text: #ded3c4;
+  --text-muted: #a99a88;
+  --accent: #ccad66;   /* gilt: a brass fitting, a frame */
+  --accent-text: #1a1410;
+  --focus: #dcc088;
+  --good: #8fbf9c;
+  --warn: #e0964a;   /* pushed orange, to separate from the gilt */
+  --crit: #e39a8f;
+  --good-quiet: #22302a;
+  --warn-quiet: #33251a;
+  --crit-quiet: #33211f;
+  --scrim: rgb(6 4 3 / 70%);
+  --scrim-text: #f6efe3;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 45%);
+  --shadow-2: 0 2px 10px rgb(0 0 0 / 55%);
+}
+
+/* ============================================================================
+   BASE
+   ========================================================================== */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--surface-0);
+  color: var(--text);
+  font: var(--text-md)/1.55 var(--font-ui);
+  -webkit-text-size-adjust: 100%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+button { font: inherit; color: inherit; cursor: pointer; }
+h1, h2, h3 { margin: 0; color: var(--text-strong); text-wrap: balance; }
+p { margin: 0; }
+ul { margin: 0; padding: 0; list-style: none; }
+
+.sr {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.skip {
+  position: absolute; left: -9999px; top: var(--space-2); z-index: 60;
+  background: var(--surface-1); color: var(--text-strong);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+}
+.skip:focus { left: var(--space-4); }
+
+/* ============================================================================
+   MASTHEAD — three destinations, a status indicator, persistent search
+   ========================================================================== */
+.masthead {
+  position: sticky; top: 0; z-index: 40;
+  height: var(--masthead);
+  display: flex; align-items: center; gap: var(--space-5);
+  padding: 0 var(--space-5);
+  background: color-mix(in srgb, var(--surface-1) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  font: 400 var(--text-lg)/1 var(--font-label);
+  color: var(--text-strong);
+  letter-spacing: 0.01em;
+  background: none; border: 0; padding: var(--space-2) 0;
+  white-space: nowrap;
+}
+.brand sup {
+  font-family: var(--font-ui);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-left: var(--space-2);
+  vertical-align: 0.5em;
+}
+
+.dests { display: flex; gap: var(--space-1); flex: none; }
+.dests button {
+  background: none; border: 1px solid transparent;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+}
+.dests button:hover { color: var(--text-strong); background: var(--surface-2); }
+/* Selected reads three ways — weight, a rule, and aria-current — so it survives
+   greyscale and a screen reader, not only the accent. */
+.dests button[aria-current="page"] {
+  color: var(--text-strong); font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* Everything after the destinations shares the remaining width and is allowed
+   to compress. A masthead whose items cannot shrink is the built surface's
+   phone defect — five non-wrapping tabs overflowing a 375px viewport — and it
+   reappears at tablet width the moment any label grows. */
+.masthead-end {
+  margin-left: auto; display: flex; align-items: center; gap: var(--space-3);
+  flex: 0 1 auto; min-width: 0;
+}
+
+.search {
+  display: flex; align-items: center; gap: var(--space-2);
+  background: var(--surface-0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0 var(--space-3);
+  height: 2.25rem;
+  flex: 0 1 18rem; min-width: 6rem;
+}
+.search:focus-within { border-color: var(--border-strong); }
+.search svg { flex: none; color: var(--text-muted); }
+.search input {
+  border: 0; background: none; color: var(--text);
+  font: var(--text-sm)/1 var(--font-ui);
+  padding: 0; width: 100%; min-width: 0;
+}
+.search input:focus { outline: none; }
+.search input::placeholder { color: var(--text-muted); }
+
+/* Health left the navigation and became this. The demotion is only safe
+   because the indicator is always present and says what is wrong. */
+.status {
+  display: flex; align-items: center; gap: var(--space-2);
+  background: none; border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm); color: var(--text-muted);
+  flex: 0 1 auto; min-width: 0;
+}
+/* The label ellipsizes rather than pushing the page sideways. It never
+   disappears above phone width — the whole Health demotion rests on this
+   indicator saying what is wrong. */
+.status .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status .label-short { display: none; white-space: nowrap; }
+.status:hover { background: var(--surface-2); }
+.status .dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; flex: none; background: var(--good); }
+.status[data-level="warn"] .dot { background: var(--warn); }
+.status[data-level="crit"] .dot { background: var(--crit); }
+.status[data-level="warn"] { color: var(--warn); }
+.status[data-level="crit"] { color: var(--crit); }
+
+.iconbtn {
+  background: none; border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  width: 2.25rem; height: 2.25rem;
+  display: grid; place-items: center; flex: none;
+}
+.iconbtn:hover { color: var(--text-strong); border-color: var(--border-strong); }
+
+/* Bottom nav is the phone form of the same three destinations. */
+.bottomnav { display: none; }
+
+/* ============================================================================
+   LAYOUT
+   ========================================================================== */
+main { min-height: calc(100dvh - var(--masthead)); }
+.wrap { max-width: 96rem; margin: 0 auto; padding: var(--space-6) var(--space-5); }
+
+.eyebrow {
+  font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-muted); margin-bottom: var(--space-2);
+}
+.h-screen { font: 400 var(--text-2xl)/1.2 var(--font-label); }
+.h-sec { font: 400 var(--text-lg)/1.3 var(--font-label); }
+.muted { color: var(--text-muted); }
+.small { font-size: var(--text-sm); }
+.xs { font-size: var(--text-xs); }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ============================================================================
+   THE WALLS
+   One wall is the degenerate case of many. This is one grid; with a single
+   display it holds one cell that fills the width.
+   ========================================================================== */
+.walls {
+  display: grid; gap: var(--space-5);
+  grid-template-columns: repeat(auto-fit, minmax(24rem, 1fr));
+}
+.wall {
+  position: relative; overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  aspect-ratio: 16 / 10;
+  display: block; width: 100%; padding: 0; text-align: left;
+}
+.walls[data-count="1"] .wall { aspect-ratio: 16 / 9; }
+.wall-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.wall-plate {
+  position: absolute; inset: auto 0 0 0;
+  padding: var(--space-5);
+  background: linear-gradient(to top, var(--scrim), transparent);
+  color: var(--scrim-text);
+  display: flex; align-items: flex-end; gap: var(--space-4);
+}
+.wall-plate .t { font: 400 var(--text-xl)/1.25 var(--font-label); }
+.wall-plate .a { font-size: var(--text-sm); opacity: 0.85; }
+.wall-where {
+  position: absolute; top: var(--space-4); left: var(--space-4);
+  background: var(--scrim); color: var(--scrim-text);
+  font-size: var(--text-xs); letter-spacing: 0.06em; text-transform: uppercase;
+  padding: var(--space-1) var(--space-3); border-radius: var(--radius-sm);
+  display: flex; align-items: center; gap: var(--space-2);
+}
+.wall-where .dot { width: 0.4rem; height: 0.4rem; border-radius: 50%; background: var(--good); }
+.wall-where[data-level="warn"] .dot { background: var(--warn); }
+.wall-actions {
+  display: flex; flex-wrap: wrap; gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.wall-empty {
+  position: absolute; inset: 0; display: grid; place-content: center;
+  text-align: center; gap: var(--space-3); padding: var(--space-5);
+  background: var(--surface-2);
+}
+
+/* ============================================================================
+   BUTTONS
+   ========================================================================== */
+.btn {
+  background: var(--surface-1); color: var(--text-strong);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  min-height: 2.25rem;
+  display: inline-flex; align-items: center; gap: var(--space-2);
+}
+.btn:hover { background: var(--surface-2); }
+.btn.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.quiet { border-color: transparent; background: none; color: var(--text-muted); }
+.btn.quiet:hover { background: var(--surface-2); color: var(--text-strong); }
+.btn.danger { color: var(--crit); border-color: var(--crit); }
+.btn.danger:hover { background: var(--crit-quiet); }
+.btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+.btn.on { background: var(--surface-2); border-color: var(--border-strong); color: var(--text-strong); }
+
+/* ============================================================================
+   COLLECTION — rail + toolbar + virtualized grid
+   ========================================================================== */
+.collection { display: grid; grid-template-columns: var(--rail) 1fr; gap: var(--space-6); align-items: start; }
+
+.rail { position: sticky; top: calc(var(--masthead) + var(--space-6)); display: grid; gap: var(--space-4); }
+.rail h2 { font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; font-family: var(--font-ui); }
+.rail-group { display: grid; gap: var(--space-1); }
+.rail button {
+  display: flex; align-items: center; gap: var(--space-2);
+  background: none; border: 0; border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm); color: var(--text); text-align: left; width: 100%;
+}
+.rail button:hover { background: var(--surface-2); }
+.rail button[aria-pressed="true"] { background: var(--surface-2); color: var(--text-strong); font-weight: 600; }
+.rail button .n { margin-left: auto; color: var(--text-muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.rail button .hang { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--accent); flex: none; }
+
+.toolbar {
+  display: flex; align-items: center; gap: var(--space-3);
+  flex-wrap: wrap; margin-bottom: var(--space-4);
+}
+.toolbar .count { font-size: var(--text-sm); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.toolbar .spacer { margin-left: auto; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+.seg button { background: var(--surface-1); border: 0; padding: var(--space-2) var(--space-3); font-size: var(--text-sm); color: var(--text-muted); min-height: 2.25rem; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--text-strong); font-weight: 600; }
+
+select.sel {
+  font: var(--text-sm)/1 var(--font-ui); color: var(--text);
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 0 var(--space-3); height: 2.25rem;
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-4); }
+.chip {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  font-size: var(--text-xs); color: var(--text);
+}
+.chip button { background: none; border: 0; color: var(--text-muted); line-height: 1; padding: 2px 4px; border-radius: var(--radius-sm); }
+.chip button:hover { color: var(--crit); background: var(--crit-quiet); }
+
+/* The virtualized surface. Height is set from the row count; only the visible
+   window is in the DOM. */
+.gridport { position: relative; }
+.gridport > .tile { position: absolute; }
+
+.tile {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  text-align: left; padding: 0;
+}
+.tile:hover { border-color: var(--border-strong); }
+.tile .shot { display: block; position: relative; width: 100%; background: var(--surface-2); flex: none; overflow: hidden; }
+.tile .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tile .meta { padding: var(--space-3); display: grid; gap: 2px; min-height: 0; }
+.tile .meta .t { font: 400 var(--text-sm)/1.3 var(--font-label); color: var(--text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile .meta .a { font-size: var(--text-xs); color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Contact sheet: image only. Metadata arrives on hover and on focus — the
+   default above a few hundred works, because per-tile chrome that reads as
+   informative at 41 is noise at 4,000. */
+.gridport[data-density="sheet"] .tile { border-color: transparent; background: none; }
+.gridport[data-density="sheet"] .tile .meta {
+  position: absolute; inset: auto 0 0 0;
+  background: linear-gradient(to top, var(--scrim), transparent);
+  color: var(--scrim-text); opacity: 0; transition: opacity 120ms ease;
+  padding: var(--space-4) var(--space-3) var(--space-2);
+}
+.gridport[data-density="sheet"] .tile .meta .t,
+.gridport[data-density="sheet"] .tile .meta .a { color: var(--scrim-text); }
+.gridport[data-density="sheet"] .tile:hover .meta,
+.gridport[data-density="sheet"] .tile:focus-visible .meta { opacity: 1; }
+
+.tile .pick {
+  position: absolute; top: var(--space-2); left: var(--space-2);
+  width: 1.4rem; height: 1.4rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--scrim-text); background: var(--scrim);
+  display: grid; place-items: center; opacity: 0; color: var(--scrim-text);
+}
+.tile:hover .pick, .tile:focus-visible .pick, .tile[aria-selected="true"] .pick { opacity: 1; }
+.tile[aria-selected="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tile[aria-selected="true"] .pick { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+
+.selbar {
+  position: sticky; bottom: var(--space-4); z-index: 30;
+  display: flex; align-items: center; gap: var(--space-3);
+  background: var(--surface-1); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-2);
+  padding: var(--space-3) var(--space-4); margin-top: var(--space-4);
+}
+
+/* Skeletons occupy the final geometry so nothing reflows. */
+.skel { background: var(--surface-2); border-radius: var(--radius-md); }
+@media (prefers-reduced-motion: no-preference) {
+  .skel { animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.55 } }
+}
+
+/* ============================================================================
+   PANELS, BADGES, EMPTY STATES
+   ========================================================================== */
+.panel {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: var(--space-5);
+}
+.panel + .panel { margin-top: var(--space-4); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  font-size: var(--text-xs); padding: 2px var(--space-2);
+  border-radius: var(--radius-sm); border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text);
+  white-space: nowrap;
+}
+/* Colour is never the sole carrier: every badge pairs a glyph and a word. */
+.badge.good { background: var(--good-quiet); border-color: var(--good); color: var(--good); }
+.badge.warn { background: var(--warn-quiet); border-color: var(--warn); color: var(--warn); }
+.badge.crit { background: var(--crit-quiet); border-color: var(--crit); color: var(--crit); }
+
+.empty {
+  display: grid; place-items: center; gap: var(--space-3);
+  text-align: center; padding: var(--space-8) var(--space-5);
+  border: 1px dashed var(--border); border-radius: var(--radius-md);
+  color: var(--text-muted);
+}
+.empty .h-sec { color: var(--text-strong); }
+
+.facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-2) var(--space-5); margin: 0; }
+.facts dt { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.facts dd { margin: 0; font-size: var(--text-sm); display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; }
+.prov { color: var(--text-muted); font-size: var(--text-sm); line-height: 1; }
+.swatch {
+  width: 0.85rem; height: 0.85rem; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong); display: inline-block;
+  align-self: center;
+}
+
+
+/* ============================================================================
+   DISCOVER — the thread, and the commit card that becomes a run in place
+   ========================================================================== */
+.thread { max-width: 46rem; margin: 0 auto; display: grid; gap: var(--space-5); }
+
+.turn { display: grid; gap: var(--space-3); }
+.turn .who {
+  font-size: var(--text-xs); letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.turn.curator .bubble {
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: var(--space-3) var(--space-4);
+  justify-self: end; max-width: 90%;
+}
+.turn.system .bubble { font-size: var(--text-md); line-height: 1.6; }
+
+.samples { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: var(--space-3); }
+.sample { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: var(--surface-1); }
+.sample .shot { display: block; aspect-ratio: 1; background: var(--surface-2); }
+.sample .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sample .cap { padding: var(--space-2) var(--space-3); }
+.sample .cap .t { font: 400 var(--text-xs)/1.3 var(--font-label); color: var(--text-strong); }
+.sample-acts { display: flex; gap: var(--space-1); padding: 0 var(--space-2) var(--space-2); }
+.sample-acts button {
+  flex: 1; background: none; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-size: var(--text-xs);
+  padding: var(--space-1); color: var(--text-muted); min-height: 1.9rem;
+}
+.sample-acts button:hover { border-color: var(--border-strong); color: var(--text-strong); }
+.sample-acts button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.sample-acts.go { padding-top: 0; }
+.sample-acts.go button { border-style: dashed; }
+
+/* The seam. One element, three states — it is never replaced and the thread
+   never scrolls away from it. */
+.commit {
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  background: var(--surface-1); padding: var(--space-4) var(--space-5);
+  display: grid; gap: var(--space-3);
+}
+.commit[data-state="running"] { border-color: var(--accent); }
+.commit[data-state="ready"] { border-color: var(--good); background: var(--good-quiet); }
+.commit .row { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.commit .est { font-variant-numeric: tabular-nums; }
+.bar { height: 3px; background: var(--surface-2); border-radius: 2px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width 400ms linear; }
+
+.composer {
+  position: sticky; bottom: 0;
+  background: linear-gradient(to top, var(--surface-0) 70%, transparent);
+  padding: var(--space-4) 0 var(--space-5);
+  display: grid; gap: var(--space-3);
+}
+.composer .box {
+  display: flex; gap: var(--space-2); align-items: flex-end;
+  background: var(--surface-1); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md); padding: var(--space-2);
+}
+.composer textarea {
+  flex: 1; border: 0; background: none; resize: none; color: var(--text);
+  font: var(--text-md)/1.5 var(--font-ui); padding: var(--space-2); min-height: 2.5rem;
+}
+.composer textarea:focus { outline: none; }
+.prompts { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.prompts button {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 999px; padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm); color: var(--text-muted);
+}
+.prompts button:hover { border-color: var(--border-strong); color: var(--text-strong); }
+
+/* ============================================================================
+   REVIEW — the picture is the evidence and gets the space
+   ========================================================================== */
+.cands { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: var(--space-5); }
+.cand { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-1); overflow: hidden; display: flex; flex-direction: column; }
+.cand .shot { aspect-ratio: 4/3; background: var(--surface-2); }
+.cand .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cand .body { padding: var(--space-3) var(--space-4); display: grid; gap: var(--space-2); flex: 1; }
+.cand .t { font: 400 var(--text-md)/1.3 var(--font-label); color: var(--text-strong); }
+.cand .acts { display: flex; gap: var(--space-2); padding: 0 var(--space-4) var(--space-4); flex-wrap: wrap; }
+.cand[data-verdict="accepted"] { border-color: var(--good); }
+.cand[data-verdict="rejected"] { opacity: 0.55; }
+
+/* ============================================================================
+   WORK DETAIL
+   ========================================================================== */
+.work { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(16rem, 1fr); gap: var(--space-6); align-items: start; }
+.work .plate { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-6); display: grid; place-items: center; }
+.work .plate img { width: 100%; max-width: 36rem; max-height: 70dvh; object-fit: contain; box-shadow: var(--shadow-2); display: block; }
+
+/* ============================================================================
+   RESPONSIVE
+   Three shapes. The phone form is where the built surface fails today: five
+   flex tabs that do not wrap overflow a 375px viewport.
+   ========================================================================== */
+@media (max-width: 64rem) {
+  :root { --rail: 11rem; }
+  .work { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 60rem) {
+  .collection { grid-template-columns: 1fr; }
+  .rail {
+    position: static;
+    grid-auto-flow: column; grid-auto-columns: max-content;
+    overflow-x: auto; gap: var(--space-2);
+    padding-bottom: var(--space-2);
+    scrollbar-width: thin;
+  }
+  .rail h2 { display: none; }
+  .rail .rail-group { grid-auto-flow: column; grid-auto-columns: max-content; }
+  .rail button { border: 1px solid var(--border); border-radius: 999px; white-space: nowrap; }
+}
+
+@media (max-width: 40rem) {
+  :root { --masthead: 3.25rem; }
+  .wrap { padding: var(--space-4) var(--space-4) var(--space-8); }
+  .masthead { gap: var(--space-3); padding: 0 var(--space-4); }
+  .dests { display: none; }
+  .search input { width: 100%; }
+  .search { flex: 1; }
+  .brand { display: none; }
+  /* Never down to a bare coloured dot: colour is never the sole carrier of
+     state, so the long label is replaced by a short one, not removed. */
+  .status .label { display: none; }
+  .status .label-short { display: inline; }
+  .status { padding: var(--space-2); font-size: var(--text-xs); }
+
+  .bottomnav {
+    display: flex; position: fixed; inset: auto 0 0 0; z-index: 45;
+    background: color-mix(in srgb, var(--surface-1) 94%, transparent);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .bottomnav button {
+    flex: 1; background: none; border: 0;
+    display: grid; justify-items: center; gap: 2px;
+    padding: var(--space-2) 0 var(--space-3);
+    font-size: var(--text-xs); color: var(--text-muted);
+    min-height: 3rem;
+  }
+  .bottomnav button[aria-current="page"] { color: var(--text-strong); font-weight: 600; }
+  .bottomnav button[aria-current="page"] svg { color: var(--accent); }
+  main { padding-bottom: 4rem; }
+  .composer { bottom: 3.75rem; }
+  .selbar { bottom: 4.25rem; }
+  .walls { grid-template-columns: 1fr; }
+  .h-screen { font-size: var(--text-xl); }
+  .toolbar { gap: var(--space-2); }
+  .toolbar .spacer { margin-left: 0; width: 100%; height: 0; }
+}
+
+/* Touch targets. 2.25rem (36px) clears WCAG 2.2 AA's 24px floor but misses the
+   44px convention every touch platform assumes, and this product is explicitly
+   meant to be used on a phone. Keyed on the pointer, not the viewport: a small
+   window on a desktop still has a mouse. */
+@media (pointer: coarse) {
+  .btn, .seg button, select.sel, .search, .sample-acts button { min-height: 2.75rem; }
+  .rail button { min-height: 2.75rem; }
+  .chip button { padding: var(--space-2); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+</style>
+
+<a class="skip" href="#view">Skip to content</a>
+
+<header class="masthead">
+  <button class="brand" data-go="walls">Curation<sup>prototype</sup></button>
+  <nav class="dests" aria-label="Sections">
+    <button data-go="walls">The Walls</button>
+    <button data-go="collection">Collection</button>
+    <button data-go="discover">Discover</button>
+  </nav>
+  <div class="masthead-end">
+    <label class="search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <span class="sr">Search the collection</span>
+      <input id="q" type="search" placeholder="Search 2,000 works" autocomplete="off">
+    </label>
+    <button class="status" id="status" data-level="warn"
+            aria-label="Health: 1 thing needs attention — study panel quiet since 09:14. Open health.">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="label">Study panel quiet since 09:14</span>
+      <span class="label-short" aria-hidden="true">1 issue</span>
+    </button>
+    <button class="iconbtn" id="theme-toggle" aria-label="Switch between light and dark">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <div id="view" tabindex="-1"></div>
+</main>
+
+<nav class="bottomnav" aria-label="Sections">
+  <button data-go="walls">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="1"/><path d="M3 15l5-4 4 3 3-2 6 4"/></svg>
+    The Walls
+  </button>
+  <button data-go="collection">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Collection
+  </button>
+  <button data-go="discover">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z"/></svg>
+    Discover
+  </button>
+</nav>
+
+<script>
+/* ==========================================================================
+   Deterministic synthetic corpus.
+   Artist names are invented on purpose: pairing generated titles with real
+   art-historical names would manufacture attributions that read as real
+   catalogue records. Real names appear only inside the Discover thread, where
+   they are being discussed rather than catalogued.
+   ========================================================================== */
+const rng = (seed) => () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+const pick = (r, a) => a[Math.floor(r() * a.length)];
+
+const SURNAMES = ["Aldery","Bhatt","Corvino","Dessane","Elmqvist","Faron","Grieve","Halloran","Iversen","Jannot","Kestrel","Lindqvist","Marchetti","Novak","Oyelaran","Pemberton","Quintana","Rasmussen","Sablon","Thorne","Ueda","Vasquez","Whitlock","Ximenes","Yarrow","Zeller","Ferreira","Okonkwo","Delacroix-Mbeki","Sandoval","Ravensworth","Ito","Lindgren","Achebe","Bergström","Cortez","Dumitrescu","Eriksen"];
+const FIRSTS = ["Ada","Bruno","Celeste","Dmitri","Elin","Fabien","Greta","Hugo","Ines","Jasper","Karin","Lucien","Mira","Nils","Odile","Piet","Quilla","Rune","Sanne","Tobias","Ulla","Viggo","Wren","Yusuf","Zofia","Amara","Emil","Noor"];
+const T1 = ["Study for","Interior with","Nocturne in","Approach to","Field of","Notes on","The Weight of","Passage,","Untitled (","Variations on","Evening at","Composition with","Ground and","After the","Small","Late","The Second","Toward"];
+const T2 = ["Red Ground","Still Water","Four Windows","the Quarry","Cold Light","a Folded Map","Salt","Blue Hour","Two Figures","the Harbour","Green Shade","Dry Grass","the Long Room","Snow","Iron","Paper","the North Wall","Amber"];
+/* A movement implies its period and constrains its subjects. Generating the
+   three independently is what produced "Colour Field + 1920s" — a combination
+   that cannot exist, offered by a control that promised it could. The vocabulary
+   is broad on purpose: a catalogue that only knows post-war abstraction is not a
+   collection.
+
+   NOTE the axis problem this list exposes and does not solve: Baroque is a
+   movement, Pointillism is a TECHNIQUE, and Architecture is a SUBJECT. They are
+   flattened here because the operator named them together; see
+   information-architecture.md for why one flat facet is the wrong shape. */
+const SCHOOLS = [
+  { name: "Baroque",                eras: ["17th century", "18th century"],       subjects: ["Portrait", "Interior", "Figure", "Architecture", "Still life"] },
+  { name: "Rococo",                 eras: ["18th century"],                        subjects: ["Portrait", "Interior", "Figure"] },
+  { name: "Romanticism",            eras: ["Early 19th c."],                       subjects: ["Landscape", "Seascape", "Figure"] },
+  { name: "Realism",                eras: ["Early 19th c.", "Late 19th c."],       subjects: ["Figure", "Interior", "Landscape"] },
+  { name: "Impressionism",          eras: ["Late 19th c."],                        subjects: ["Landscape", "Seascape", "Interior", "Figure"] },
+  { name: "Post-Impressionism",     eras: ["Late 19th c.", "1900–1925"],           subjects: ["Landscape", "Still life", "Portrait"] },
+  { name: "Pointillism",            eras: ["Late 19th c."],                        subjects: ["Landscape", "Seascape", "Figure"] },
+  { name: "Art Nouveau",            eras: ["Late 19th c.", "1900–1925"],           subjects: ["Portrait", "Architecture", "Figure"] },
+  { name: "Expressionism",          eras: ["1900–1925", "1925–1950"],              subjects: ["Figure", "Portrait", "Urban"] },
+  { name: "Cubism",                 eras: ["1900–1925", "1925–1950"],              subjects: ["Still life", "Figure", "Portrait"] },
+  { name: "Constructivism",         eras: ["1900–1925", "1925–1950"],              subjects: ["Non-objective", "Architecture"] },
+  { name: "Bauhaus",                eras: ["1925–1950"],                           subjects: ["Non-objective", "Architecture"] },
+  { name: "Surrealism",             eras: ["1925–1950", "1950–1975"],              subjects: ["Figure", "Landscape", "Interior"] },
+  { name: "Abstract Expressionism", eras: ["1950–1975"],                           subjects: ["Non-objective"] },
+  { name: "Colour Field",           eras: ["1950–1975"],                           subjects: ["Non-objective"] },
+  { name: "Hard-Edge",              eras: ["1950–1975"],                           subjects: ["Non-objective"] },
+  { name: "Pop Art",                eras: ["1950–1975", "1975–2000"],              subjects: ["Urban", "Still life", "Portrait"] },
+  { name: "Minimalism",             eras: ["1950–1975", "1975–2000"],              subjects: ["Non-objective", "Architecture"] },
+  { name: "Photorealism",           eras: ["1975–2000"],                           subjects: ["Urban", "Portrait", "Interior"] },
+  { name: "Street Art",             eras: ["1975–2000", "2000–"],                  subjects: ["Urban", "Figure"] },
+];
+const MOVEMENTS = SCHOOLS.map((s) => s.name);
+const ERAS = ["17th century", "18th century", "Early 19th c.", "Late 19th c.", "1900–1925", "1925–1950", "1950–1975", "1975–2000", "2000–"];
+const SUBJECTS = ["Landscape", "Seascape", "Interior", "Portrait", "Figure", "Still life", "Architecture", "Urban", "Non-objective"];
+const FITS = [["native","Native fit","good"],["matted_small","Matted","",],["below_floor","Below floor","warn"],["unknown","No size known",""]];
+
+const ARTISTS = Array.from({length: 64}, (_, i) => {
+  const r = rng(9000 + i * 77);
+  return `${pick(r, FIRSTS)} ${pick(r, SURNAMES)}`;
+});
+
+const TOTAL = 2000;
+const WORKS = Array.from({length: TOTAL}, (_, i) => {
+  const r = rng(1000 + i * 2654435761 % 100000);
+  const open = pick(r, T1);
+  let title = `${open} ${pick(r, T2)}`;
+  if (open.endsWith("(")) title = `${open}${pick(r, T2)})`;
+  const fit = pick(r, FITS);
+  const school = pick(r, SCHOOLS);
+  return {
+    id: i,
+    title,
+    artist: ARTISTS[Math.floor(r() * ARTISTS.length)],
+    movement: school.name,
+    era: pick(r, school.eras),
+    subject: pick(r, school.subjects),
+    fit: fit[0], fitWord: fit[1], fitTone: fit[2],
+    /* Most facets are inferred, because the wired collection was measured not
+       to publish style, classification or period. Medium is the exception. */
+    sourced: { movement: r() < 0.15, subject: r() < 0.12, era: false, medium: true },
+    art: Math.floor(r() * 144),
+    added: 1740000000000 - Math.floor(r() * 3.2e10),
+  };
+});
+
+const THEMES = [
+  { id: "t1", name: "American Modernists", ids: seedIds(0, 312), hangingOn: null },
+  { id: "t2", name: "Winter Light", ids: seedIds(1, 84), hangingOn: "Living room" },
+  { id: "t3", name: "Quiet Interiors", ids: seedIds(2, 156), hangingOn: null },
+  { id: "t4", name: "Blue Hour", ids: seedIds(3, 47), hangingOn: "Study" },
+  { id: "t5", name: "Paper & Iron", ids: seedIds(4, 203), hangingOn: null },
+];
+function seedIds(seed, n) {
+  const r = rng(500 + seed * 31), s = new Set();
+  while (s.size < n) s.add(Math.floor(r() * TOTAL));
+  return [...s];
+}
+
+const WALLS = [
+  { id: "w1", where: "Living room", theme: "t2", workId: THEMES[1].ids[3], level: "ok", note: "Panel reported 2 min ago" },
+  { id: "w2", where: "Study", theme: "t4", workId: THEMES[3].ids[1], level: "warn", note: "Panel quiet since 09:14" },
+];
+
+/* ==========================================================================
+   Procedural artwork. A pool of 144 compositions painted once on canvas, then
+   handed out across the corpus. Obviously synthetic — the point is mass,
+   colour variety and aspect behaviour, which is what the grid must survive.
+   ========================================================================== */
+const ART = [];
+function paint(i) {
+  if (ART[i]) return ART[i];
+  const r = rng(31 + i * 8191);
+  const c = document.createElement("canvas");
+  c.width = 360; c.height = 360;
+  const x = c.getContext("2d");
+  /* Hues are drawn from pigment anchors — ochre, umber, sage, slate, teal,
+     iron, a little rose and indigo — not from the full wheel, and saturation
+     stays low. A uniform random hue at high saturation produces the candy
+     palette that reads as a design demo; a collection reads as pigment. */
+  const ANCHORS = [30, 38, 22, 16, 92, 104, 76, 200, 212, 224, 188, 8, 350, 246, 268];
+  const baseHue = (ANCHORS[Math.floor(r() * ANCHORS.length)] + r() * 22 - 11 + 360) % 360;
+  const light = 24 + r() * 42;
+  x.fillStyle = `hsl(${baseHue} ${5 + r() * 16}% ${light}%)`;
+  x.fillRect(0, 0, 360, 360);
+  /* Offsets stay analogous so a composition holds together as one palette. */
+  const hue = (o) => `hsl(${(baseHue + o + 360) % 360} ${7 + r() * 27}% ${16 + r() * 62}%)`;
+  const mode = Math.floor(r() * 4);
+
+  if (mode === 0) {                                  // bands
+    let y = 0;
+    while (y < 360) {
+      const h = 30 + r() * 110;
+      x.fillStyle = hue(r() * 40 - 20);
+      x.globalAlpha = 0.55 + r() * 0.45;
+      x.fillRect(0, y, 360, h);
+      y += h;
+    }
+  } else if (mode === 1) {                           // geometric
+    for (let k = 0; k < 5 + r() * 7; k++) {
+      x.globalAlpha = 0.4 + r() * 0.5;
+      x.fillStyle = hue(r() * 70 - 35);
+      if (r() > 0.45) {
+        x.beginPath();
+        x.arc(r() * 360, r() * 360, 22 + r() * 95, 0, Math.PI * 2);
+        x.fill();
+      } else {
+        x.save(); x.translate(r() * 360, r() * 360); x.rotate(r() * Math.PI);
+        x.fillRect(-60, -8, 40 + r() * 150, 6 + r() * 40);
+        x.restore();
+      }
+    }
+  } else if (mode === 2) {                           // partitioned
+    const cut = (x0, y0, w, h, d) => {
+      if (d > 2 || w < 70 || h < 70) {
+        x.globalAlpha = 0.85;
+        x.fillStyle = hue(r() * 50 - 25);
+        x.fillRect(x0, y0, w, h);
+        x.globalAlpha = 1;
+        x.strokeStyle = `hsl(${baseHue} 10% ${light > 45 ? 14 : 88}%)`;
+        x.lineWidth = 3; x.strokeRect(x0, y0, w, h);
+        return;
+      }
+      if (w > h) { const s = w * (0.3 + r() * 0.4); cut(x0, y0, s, h, d + 1); cut(x0 + s, y0, w - s, h, d + 1); }
+      else { const s = h * (0.3 + r() * 0.4); cut(x0, y0, w, s, d + 1); cut(x0, y0 + s, w, h - s, d + 1); }
+    };
+    cut(0, 0, 360, 360, 0);
+  } else {                                           // tonal blooms
+    for (let k = 0; k < 4 + r() * 4; k++) {
+      const cx = r() * 360, cy = r() * 360, rad = 60 + r() * 170;
+      const g = x.createRadialGradient(cx, cy, 0, cx, cy, rad);
+      g.addColorStop(0, hue(r() * 44 - 22));
+      g.addColorStop(1, "transparent");
+      x.globalAlpha = 0.75;
+      x.fillStyle = g; x.fillRect(0, 0, 360, 360);
+    }
+  }
+  x.globalAlpha = 1;
+  return (ART[i] = c.toDataURL("image/jpeg", 0.72));
+}
+
+/* ==========================================================================
+   State + router
+   ========================================================================== */
+const S = {
+  view: "walls",
+  q: "",
+  theme: null,
+  facet: {},
+  density: "sheet",
+  sort: "added",
+  selected: new Set(),
+  workId: null,
+  wallId: null,
+  turns: [],
+  commit: null,
+  affinities: [],
+  verdicts: {},
+};
+
+const $ = (s, r = document) => r.querySelector(s);
+const view = $("#view");
+
+function el(tag, attrs = {}, kids = []) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "text") n.textContent = v;
+    else if (k === "html") n.innerHTML = v;
+    else if (k === "on") for (const [e, f] of Object.entries(v)) n.addEventListener(e, f);
+    else n.setAttribute(k, v === true ? "" : String(v));
+  }
+  for (const k of [].concat(kids)) if (k) n.append(k);
+  return n;
+}
+
+function go(v, opts = {}) {
+  S.view = v;
+  Object.assign(S, opts);
+  for (const b of document.querySelectorAll("[data-go]")) {
+    b.toggleAttribute("aria-current", false);
+    if (b.dataset.go === v) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  }
+  render();
+  window.scrollTo(0, 0);
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-go]");
+  if (b) go(b.dataset.go);
+});
+
+$("#theme-toggle").addEventListener("click", () => {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const sysDark = matchMedia("(prefers-color-scheme: dark)").matches;
+  const now = cur || (sysDark ? "dark" : "light");
+  document.documentElement.setAttribute("data-theme", now === "dark" ? "light" : "dark");
+});
+
+$("#status").addEventListener("click", () => go("health"));
+
+$("#q").addEventListener("input", (e) => {
+  S.q = e.target.value;
+  if (S.view !== "collection") go("collection");
+  else render();
+});
+
+/* ==========================================================================
+   Query
+   ========================================================================== */
+function filtered(facet) {
+  const q = S.q.trim().toLowerCase();
+  let list = WORKS;
+  if (S.theme) {
+    const set = new Set(THEMES.find((t) => t.id === S.theme).ids);
+    list = list.filter((w) => set.has(w.id));
+  }
+  for (const [k, v] of Object.entries(facet)) list = list.filter((w) => w[k] === v);
+  if (q) list = list.filter((w) => (w.title + " " + w.artist + " " + w.movement + " " + w.subject).toLowerCase().includes(q));
+  return list;
+}
+
+function results() {
+  const by = {
+    added: (a, b) => b.added - a.added,
+    artist: (a, b) => a.artist.localeCompare(b.artist),
+    title: (a, b) => a.title.localeCompare(b.title),
+    era: (a, b) => ERAS.indexOf(a.era) - ERAS.indexOf(b.era),
+  };
+  return [...filtered(S.facet)].sort(by[S.sort]);
+}
+
+/* Counts for one facet are computed over the results filtered by every OTHER
+   facet — never by its own. Including its own would collapse each dropdown to
+   the single value already chosen, so you could never change your mind without
+   first clearing. This is what makes a zero a real zero. */
+function facetCounts(key) {
+  const others = { ...S.facet };
+  delete others[key];
+  const counts = new Map();
+  for (const w of filtered(others)) counts.set(w[key], (counts.get(w[key]) || 0) + 1);
+  return counts;
+}
+
+/* ==========================================================================
+   Views
+   ========================================================================== */
+const RENDER = {};
+
+function render() {
+  view.replaceChildren();
+  (RENDER[S.view] || RENDER.walls)();
+}
+
+/* ---- The Walls ---------------------------------------------------------- */
+RENDER.walls = () => {
+  const wrap = el("div", { class: "wrap" });
+  wrap.append(
+    el("p", { class: "eyebrow", text: "Hanging now" }),
+    el("h1", { class: "h-screen", text: WALLS.length === 1 ? "The wall" : "The walls" })
+  );
+
+  const grid = el("div", { class: "walls", "data-count": WALLS.length });
+  for (const wall of WALLS) {
+    const theme = THEMES.find((t) => t.id === wall.theme);
+    const work = WORKS[wall.workId];
+    const card = el("button", { class: "wall", "aria-label": `${work.title} by ${work.artist}, hanging in the ${wall.where}`, on: { click: () => go("work", { workId: work.id }) } });
+    card.append(
+      el("img", { class: "wall-art", src: paint(work.art), alt: "" }),
+      el("span", { class: "wall-where", "data-level": wall.level === "warn" ? "warn" : "ok" }, [
+        el("span", { class: "dot", "aria-hidden": "true" }), el("span", { text: wall.where }),
+      ]),
+      el("span", { class: "wall-plate" }, [
+        el("span", {}, [
+          el("span", { class: "t", style: "display:block", text: work.title }),
+          el("span", { class: "a", text: `${work.artist} · from ${theme.name}` }),
+        ]),
+      ])
+    );
+    const cell = el("div");
+    cell.append(card);
+    /* Every act that changes a wall names which wall, even with one wall —
+       a confirmation that reads correctly only because there is one possible
+       target is a sentence that silently becomes wrong. */
+    cell.append(el("div", { class: "wall-actions" }, [
+      el("button", { class: "btn", text: `Change what hangs in the ${wall.where.toLowerCase()}`, on: { click: () => go("theme", { themeId: wall.theme }) } }),
+      el("button", { class: "btn quiet", text: "Next work", on: { click: () => { wall.workId = THEMES.find((t) => t.id === wall.theme).ids[Math.floor(Math.random() * 40)]; render(); } } }),
+    ]));
+    grid.append(cell);
+  }
+  wrap.append(grid);
+
+  wrap.append(el("div", { class: "panel", style: "margin-top:var(--space-6);display:flex;gap:var(--space-4);flex-wrap:wrap;align-items:center" }, [
+    el("p", { class: "small muted", style: "flex:1;min-width:14rem", text: "1,284 works in the collection · 5 themes · nothing waiting to be reviewed" }),
+    el("button", { class: "btn", text: "Browse the collection", "data-go": "collection" }),
+    el("button", { class: "btn primary", text: "Find something new", "data-go": "discover" }),
+  ]));
+
+  view.append(wrap);
+};
+
+/* ---- Collection --------------------------------------------------------- */
+RENDER.collection = () => {
+  const wrap = el("div", { class: "wrap" });
+  const list = results();
+
+  /* --- rail: themes are a view of the collection, not a separate place --- */
+  const rail = el("nav", { class: "rail", "aria-label": "Filter the collection" });
+  const g1 = el("div", { class: "rail-group" });
+  g1.append(el("h2", { text: "Collection" }));
+  g1.append(el("button", { "aria-pressed": !S.theme, on: { click: () => { S.theme = null; render(); } } }, [
+    el("span", { text: "All works" }), el("span", { class: "n num", text: TOTAL.toLocaleString() }),
+  ]));
+  const g2 = el("div", { class: "rail-group" });
+  g2.append(el("h2", { text: "Themes" }));
+  for (const t of THEMES) {
+    g2.append(el("button", { "aria-pressed": S.theme === t.id, on: { click: () => { S.theme = S.theme === t.id ? null : t.id; render(); } } }, [
+      t.hangingOn ? el("span", { class: "hang", title: `Hanging in the ${t.hangingOn}` }) : null,
+      el("span", { text: t.name }),
+      el("span", { class: "n num", text: t.ids.length }),
+    ]));
+  }
+  rail.append(g1, g2);
+
+  /* --- toolbar --- */
+  const main = el("div");
+  const bar = el("div", { class: "toolbar" });
+  bar.append(el("h1", { class: "h-sec", text: S.theme ? THEMES.find((t) => t.id === S.theme).name : "The collection" }));
+  bar.append(el("span", { class: "count", text: `${list.length.toLocaleString()}${list.length !== TOTAL ? ` of ${TOTAL.toLocaleString()}` : ""}` }));
+  bar.append(el("span", { class: "spacer" }));
+
+  /* A control must not offer a combination that yields nothing. Every option
+     carries its own count and a zero-count option is disabled rather than
+     hidden — hiding it would make the vocabulary appear to shrink, which reads
+     as data loss rather than as an empty intersection. */
+  for (const [key, label, opts] of [["movement", "Movement", MOVEMENTS], ["era", "Era", ERAS], ["subject", "Subject", SUBJECTS]]) {
+    const counts = facetCounts(key);
+    const sel = el("select", { class: "sel", "aria-label": label, on: { change: (e) => { if (e.target.value) S.facet[key] = e.target.value; else delete S.facet[key]; render(); } } });
+    sel.append(el("option", { value: "", text: `${label} — all` }));
+    for (const o of opts) {
+      const n = counts.get(o) || 0;
+      sel.append(el("option", {
+        value: o,
+        text: n ? `${o} (${n})` : `${o} — none here`,
+        selected: S.facet[key] === o,
+        disabled: n === 0 && S.facet[key] !== o,
+      }));
+    }
+    bar.append(sel);
+  }
+
+  const sort = el("select", { class: "sel", "aria-label": "Sort", on: { change: (e) => { S.sort = e.target.value; render(); } } });
+  for (const [v, t] of [["added", "Recently added"], ["artist", "Artist"], ["title", "Title"], ["era", "Era"]]) sort.append(el("option", { value: v, text: t, selected: S.sort === v }));
+  bar.append(sort);
+
+  const seg = el("div", { class: "seg", role: "group", "aria-label": "Density" });
+  seg.append(
+    el("button", { "aria-pressed": S.density === "sheet", text: "Contact sheet", on: { click: () => { S.density = "sheet"; render(); } } }),
+    el("button", { "aria-pressed": S.density === "catalogue", text: "Catalogue", on: { click: () => { S.density = "catalogue"; render(); } } })
+  );
+  bar.append(seg);
+  main.append(bar);
+
+  const active = Object.entries(S.facet);
+  if (active.length || S.q) {
+    const chips = el("div", { class: "chips" });
+    if (S.q) chips.append(el("span", { class: "chip" }, [el("span", { text: `“${S.q}”` }), el("button", { "aria-label": "Clear search", text: "✕", on: { click: () => { S.q = ""; $("#q").value = ""; render(); } } })]));
+    for (const [k, v] of active) chips.append(el("span", { class: "chip" }, [el("span", { text: v }), el("button", { "aria-label": `Remove ${v}`, text: "✕", on: { click: () => { delete S.facet[k]; render(); } } })]));
+    main.append(chips);
+    /* Said once, where the result set is — not repeated on every tile. */
+    const inferredKeys = active.filter(([k]) => ["movement", "subject", "era"].includes(k));
+    if (inferredKeys.length) {
+      main.append(el("p", { class: "xs muted", style: "margin:calc(-1 * var(--space-2)) 0 var(--space-4)",
+        text: `Matching on ${inferredKeys.length > 1 ? "values" : "a value"} a model assigned, except where a work is marked sourced.` }));
+    }
+  }
+
+  /* --- the two empties are different, and conflating them tells a curator
+         with 3,000 works that they own nothing --- */
+  if (!list.length) {
+    const filtered = S.q || active.length || S.theme;
+    /* Reaching this from "Go to <artist>'s work" is the ordinary outcome, not an
+       error: the whole point of discovery is artists the collection does not
+       hold yet. Telling that curator "nothing matches these filters" would be
+       technically true and useless. */
+    if (S.facet.artist && active.length === 1 && !S.q && !S.theme) {
+      main.append(el("div", { class: "empty" }, [
+        el("p", { class: "h-sec", text: `Nothing by ${S.facet.artist} yet` }),
+        el("p", { class: "small", style: "max-width:30rem", text: "This is the normal state for someone a conversation just suggested — the collection only holds what you have accepted." }),
+        el("div", { class: "row", style: "display:flex;gap:var(--space-3);flex-wrap:wrap;justify-content:center" }, [
+          el("button", { class: "btn primary", text: `Search for ${S.facet.artist}'s work`, on: { click: () => go("discover") } }),
+          el("button", { class: "btn quiet", text: "Back to the whole collection", on: { click: () => { S.facet = {}; render(); } } }),
+        ]),
+      ]));
+      wrap.append(el("div", { class: "collection" }, [rail, main]));
+      view.append(wrap);
+      return;
+    }
+    main.append(el("div", { class: "empty" }, filtered ? [
+      el("p", { class: "h-sec", text: "Nothing matches these filters" }),
+      el("p", { class: "small", text: "The collection still holds 2,000 works." }),
+      el("button", { class: "btn", text: "Clear the filters", on: { click: () => { S.q = ""; $("#q").value = ""; S.facet = {}; S.theme = null; render(); } } }),
+    ] : [
+      el("p", { class: "h-sec", text: "Nothing here yet" }),
+      el("p", { class: "small", text: "A conversation is the quickest way to find the first thing worth hanging." }),
+      el("button", { class: "btn primary", text: "Find something new", "data-go": "discover" }),
+    ]));
+    wrap.append(el("div", { class: "collection" }, [rail, main]));
+    view.append(wrap);
+    return;
+  }
+
+  main.append(virtualGrid(list));
+
+  if (S.selected.size) {
+    main.append(el("div", { class: "selbar" }, [
+      el("strong", { class: "num", text: `${S.selected.size} selected` }),
+      el("span", { class: "spacer", style: "margin-left:auto" }),
+      el("button", { class: "btn", text: "Add to a theme" }),
+      el("button", { class: "btn danger", text: "Remove" }),
+      el("button", { class: "btn quiet", text: "Clear", on: { click: () => { S.selected.clear(); render(); } } }),
+    ]));
+  }
+
+  wrap.append(el("div", { class: "collection" }, [rail, main]));
+  view.append(wrap);
+};
+
+/* --- Virtualization. Uniform row heights in both densities, which is also
+       the right design answer: a grid of art that reflows while it loads is
+       the opposite of the identity. --------------------------------------- */
+/* ONE scroll listener and ONE observer for the life of the page, retargeted at
+   whichever port is current. Attaching them per render leaks a listener per
+   navigation, and the stale ones go on measuring detached nodes. */
+let VG = null;
+const vgResize = new ResizeObserver(() => { if (VG) { VG.measure(); VG.lo = VG.hi = -1; VG.paint(); } });
+addEventListener("scroll", () => { if (VG) VG.paint(); }, { passive: true });
+
+function virtualGrid(list) {
+  const port = el("div", { class: "gridport", "data-density": S.density });
+  const MIN = S.density === "sheet" ? 150 : 220;
+  const GAP = S.density === "sheet" ? 8 : 20;
+
+  const vg = {
+    port, list, lo: -1, hi: -1, cols: 1, colW: 0, rowH: 0, rows: 0,
+    measure() {
+      const w = port.clientWidth || 900;
+      this.cols = Math.max(2, Math.floor((w + GAP) / (MIN + GAP)));
+      this.colW = (w - GAP * (this.cols - 1)) / this.cols;
+      this.rowH = S.density === "sheet" ? this.colW : this.colW * 0.75 + 58;
+      this.rows = Math.ceil(list.length / this.cols);
+      port.style.height = this.rows * this.rowH + (this.rows - 1) * GAP + "px";
+    },
+    paint() {
+      if (!port.isConnected || !this.rowH) return;
+      const top = port.getBoundingClientRect().top;
+      const first = Math.max(0, Math.floor((-top - 400) / (this.rowH + GAP)));
+      const last = Math.min(this.rows - 1, Math.ceil((-top + innerHeight + 400) / (this.rowH + GAP)));
+      if (first === this.lo && last === this.hi) return;
+      this.lo = first; this.hi = last;
+      port.replaceChildren();
+      for (let rIdx = first; rIdx <= last; rIdx++) {
+        for (let c = 0; c < this.cols; c++) {
+          const i = rIdx * this.cols + c;
+          if (i >= list.length) break;
+          port.append(tile(list[i], {
+            left: c * (this.colW + GAP), top: rIdx * (this.rowH + GAP),
+            w: this.colW, h: this.rowH,
+          }));
+        }
+      }
+    },
+  };
+
+  if (VG) vgResize.unobserve(VG.port);
+  VG = vg;
+  requestAnimationFrame(() => { if (VG !== vg || !port.isConnected) return; vg.measure(); vg.paint(); vgResize.observe(port); });
+  return port;
+}
+
+function tile(w, box) {
+  const t = el("button", {
+    class: "tile",
+    style: `left:${box.left}px;top:${box.top}px;width:${box.w}px;height:${box.h}px`,
+    "aria-selected": S.selected.has(w.id) ? "true" : null,
+    on: {
+      click: (e) => {
+        if (e.shiftKey || e.metaKey || e.target.closest(".pick")) {
+          S.selected.has(w.id) ? S.selected.delete(w.id) : S.selected.add(w.id);
+          render();
+        } else go("work", { workId: w.id });
+      },
+    },
+  });
+  const shot = el("span", { class: "shot", style: S.density === "sheet" ? `height:100%` : `height:${box.w * 0.75}px` });
+  shot.append(el("img", { src: paint(w.art), alt: "", loading: "lazy" }));
+  shot.append(el("span", { class: "pick", "aria-hidden": "true", text: "✓" }));
+  t.append(shot);
+  t.append(el("span", { class: "meta" }, [
+    el("span", { class: "t", text: w.title }),
+    el("span", { class: "a", text: `${w.artist} · ${w.era}` }),
+  ]));
+  return t;
+}
+
+/* ---- Work --------------------------------------------------------------- */
+RENDER.work = () => {
+  const w = WORKS[S.workId ?? 0];
+  const wrap = el("div", { class: "wrap" });
+  wrap.append(el("button", { class: "btn quiet", text: "← Back to the collection", "data-go": "collection", style: "margin-bottom:var(--space-4)" }));
+  const side = el("div");
+  side.append(el("h1", { class: "h-screen", text: w.title, style: "margin-bottom:var(--space-2)" }));
+  side.append(el("p", { class: "muted", text: w.artist, style: "margin-bottom:var(--space-5)" }));
+  const dl = el("dl", { class: "facts" });
+  /* The product leans on model inference, so INFERRED IS THE DEFAULT and saying
+     so on every row would be wallpaper that stops being read. The default is
+     stated once, above; only the exception is marked. This inverts the first
+     draft, which marked every inferred facet and would have trained the curator
+     to ignore the one label that matters. */
+  const facet = (label, value, key, note) => [
+    el("dt", { text: label }),
+    el("dd", {}, [
+      el("span", { text: value }),
+      key && w.sourced[key] ? el("span", {
+        class: "prov",
+        title: "Published by the source collection, not assigned by a model",
+      }, [
+        el("span", { "aria-hidden": "true", text: "✓" }),
+        el("span", { class: "sr", text: "— published by the source collection" }),
+      ]) : null,
+      note ? el("span", { class: "xs muted", style: "display:block", text: note }) : null,
+    ]),
+  ];
+  for (const args of [
+    ["Movement", w.movement, "movement"],
+    ["Period", w.era, "era", "Recorded date: c. 1888–89 — the free text stays the evidence"],
+    ["Subject", w.subject, "subject"],
+    ["Medium", "Oil on canvas", "medium"],
+  ]) dl.append(...facet(...args));
+  /* The mat's colour is the fact a curator acts on. Its method and the date it
+     was derived stay in the record — `MatColor` keeps them precisely so "the new
+     model picked a worse colour" is answerable — but that is a diagnostic
+     question, not something to put on the label.
+     Label geometry is absent for a stronger reason: it is not a property of the
+     work at all. Panel geometry is configuration both planes read, and the label
+     is rendered to whatever panel is asking. */
+  dl.append(el("dt", { text: "Mat" }), el("dd", {}, [
+    el("span", { class: "swatch", style: "background:#4a4640", "aria-hidden": "true" }),
+    el("span", { text: "#4a4640" }),
+  ]));
+  dl.append(el("dt", { text: "Rendition" }), el("dd", { text: "3840 × 2160" }));
+  side.append(dl);
+  side.append(el("p", { class: "xs muted", style: "margin-top:var(--space-3)",
+    text: "Movement, period and subject are assigned by a model. A ✓ marks a value the source collection published." }));
+  side.append(el("p", { style: "margin-top:var(--space-5)" }, [el("span", { class: `badge ${w.fitTone}`, text: `${w.fitTone === "warn" ? "△" : "◇"} ${w.fitWord}` })]));
+  side.append(el("div", { class: "wall-actions", style: "margin-top:var(--space-5)" }, [
+    el("button", { class: "btn", text: "Add to a theme" }),
+    el("button", { class: "btn", text: "Re-derive the mat" }),
+    el("button", { class: "btn danger", text: "Remove from collection" }),
+  ]));
+  wrap.append(el("div", { class: "work" }, [
+    el("div", { class: "plate" }, [el("img", { src: paint(w.art), alt: `${w.title} by ${w.artist}` })]),
+    side,
+  ]));
+  view.append(wrap);
+};
+
+/* ---- Discover ----------------------------------------------------------- */
+const SCRIPT = [
+  {
+    ask: "I love Dalí and Delaunay — who else should I look at?",
+    say: "Those two share less than it looks: Dalí is meticulous realism in service of the irrational, Delaunay is colour doing the structural work. What they have in common is vivid, saturated palettes and a refusal to be literal. Two directions from there —",
+    samples: [
+      { who: "Wassily Kandinsky", why: "Colour as structure, pushed further than Delaunay took it" },
+      { who: "René Magritte", why: "The irrational made ordinary, where Dalí made it operatic" },
+    ],
+  },
+  {
+    ask: "Love the Kandinsky. Meh on Magritte, but I'm open to learning more.",
+    say: "Recorded — warm on Kandinsky, cool on Magritte but still open, so I will keep offering him occasionally rather than dropping him. If it is the colour-as-structure thread you want, Sonia Delaunay's own work and the Orphists around her are the closest neighbours, and Hilma af Klint gets there a decade earlier by an unrelated route.",
+    samples: [
+      { who: "Sonia Delaunay", why: "The other half of Orphism, and under-collected" },
+      { who: "Hilma af Klint", why: "Arrives at abstraction first, from somewhere else entirely" },
+    ],
+  },
+];
+
+RENDER.discover = () => {
+  const wrap = el("div", { class: "wrap" });
+  const thread = el("div", { class: "thread" });
+
+  if (!S.turns.length) {
+    thread.append(el("div", { class: "empty" }, [
+      el("p", { class: "eyebrow", text: "Discover" }),
+      el("p", { class: "h-sec", text: "What are you in the mood for?" }),
+      el("p", { class: "small", style: "max-width:32rem", text: "Talking here costs a fraction of a cent and acquires nothing. Nothing is searched or bought until you commit to a direction — and then it becomes an ordinary run, right here in the thread." }),
+    ]));
+  }
+
+  for (const t of S.turns) {
+    const turn = el("div", { class: `turn ${t.role}` });
+    turn.append(el("p", { class: "who", text: t.role === "curator" ? "You" : "Curation" }));
+    turn.append(el("div", { class: "bubble", text: t.text }));
+    if (t.samples) {
+      const g = el("div", { class: "samples" });
+      for (const s of t.samples) {
+        const card = el("div", { class: "sample" });
+        const shot = el("span", { class: "shot" });
+        shot.append(el("img", { src: paint(s.art), alt: "" }));
+        card.append(shot);
+        card.append(el("div", { class: "cap" }, [
+          el("p", { class: "t", text: s.who }),
+          el("p", { class: "xs muted", text: s.why }),
+        ]));
+        /* Direct controls are what write an affinity with derivation='stated'
+           rather than making the model infer one from prose. */
+        const acts = el("div", { class: "sample-acts" });
+        for (const [v, label] of [["loves", "More"], ["cool", "Less"], ["more", "Tell me more"]]) {
+          acts.append(el("button", {
+            "aria-pressed": s.verdict === v, text: label,
+            on: { click: () => { s.verdict = s.verdict === v ? null : v; render(); } },
+          }));
+        }
+        card.append(acts);
+        /* Separated from the three reactions because it is a different kind of
+           act: those record taste and stay in the thread, this one leaves it. */
+        card.append(el("div", { class: "sample-acts go" }, [
+          el("button", {
+            text: `Go to ${s.who.split(" ").slice(-1)[0]}'s work`,
+            on: { click: () => go("collection", { facet: { artist: s.who }, q: "", theme: null }) },
+          }),
+        ]));
+        g.append(card);
+      }
+      turn.append(g);
+    }
+    thread.append(turn);
+  }
+
+  /* The seam: one element, three states, never replaced, never navigated
+     away from. */
+  if (S.commit) {
+    const c = S.commit;
+    const box = el("div", { class: "commit", "data-state": c.state });
+    if (c.state === "offer") {
+      box.append(
+        el("p", { class: "eyebrow", text: "Ready when you are" }),
+        el("p", { text: `Search museum collections for Kandinsky and the Orphists around him. Phase 1 resolves the work list first — you can trim it before anything is paid for.` }),
+        el("div", { class: "row" }, [
+          el("span", { class: "small muted est", text: "Estimated $0.014 · about 12 works · 2–4 minutes" }),
+          el("span", { style: "margin-left:auto" }),
+          el("button", { class: "btn quiet", text: "Not yet", on: { click: () => { S.commit = null; render(); } } }),
+          el("button", { class: "btn primary", text: "Start the search", on: { click: startRun } }),
+        ])
+      );
+    } else if (c.state === "running") {
+      box.append(
+        el("p", { class: "eyebrow", text: `Searching · phase ${c.phase} of 2` }),
+        el("p", { text: c.phase === 1 ? "Resolving the intent into a work list…" : `Finding images for ${c.found} works…` }),
+        el("div", { class: "bar" }, [el("i", { style: `width:${c.pct}%` })]),
+        el("div", { class: "row" }, [
+          el("span", { class: "small muted est", text: `Spent so far $${c.spent.toFixed(4)}` }),
+          el("span", { style: "margin-left:auto" }),
+          el("button", { class: "btn quiet", text: "Stop", on: { click: () => { S.commit = null; render(); } } }),
+        ])
+      );
+    } else {
+      box.append(
+        el("p", { class: "eyebrow", text: "Done" }),
+        el("p", { text: `${c.found} works ready to review. Nothing has been acquired yet — accepting is what spends.` }),
+        el("div", { class: "row" }, [
+          el("span", { class: "small muted est", text: "Cost $0.0138" }),
+          el("span", { style: "margin-left:auto" }),
+          el("button", { class: "btn primary", text: `Review ${c.found} works`, "data-go": "review" }),
+        ])
+      );
+    }
+    thread.append(box);
+  }
+
+  /* --- composer --- */
+  const comp = el("div", { class: "composer" });
+  const next = SCRIPT[S.turns.filter((t) => t.role === "curator").length];
+  if (next && !S.commit) {
+    comp.append(el("div", { class: "prompts" }, [
+      el("button", { text: next.ask, on: { click: () => advance(next) } }),
+    ]));
+  }
+  const box = el("div", { class: "box" });
+  const ta = el("textarea", { rows: 1, placeholder: "Say what you are in the mood for…", "aria-label": "Message" });
+  box.append(ta, el("button", { class: "btn primary", text: "Send", on: { click: () => { if (ta.value.trim()) advance({ ask: ta.value.trim(), say: "This prototype follows a scripted thread — use the suggestion above to see the full flow.", samples: [] }); } } }));
+  comp.append(box);
+  comp.append(el("p", { class: "xs muted", text: "Conversation runs on model knowledge and sample lookups. It searches nothing and buys nothing." }));
+  thread.append(comp);
+
+  wrap.append(thread);
+  view.append(wrap);
+};
+
+function advance(step) {
+  S.turns.push({ role: "curator", text: step.ask });
+  const samples = (step.samples || []).map((s, i) => ({ ...s, art: 40 + S.turns.length * 7 + i * 13, verdict: null }));
+  S.turns.push({ role: "system", text: step.say, samples });
+  if (S.turns.filter((t) => t.role === "curator").length >= SCRIPT.length) {
+    S.commit = { state: "offer", phase: 1, pct: 0, spent: 0, found: 12 };
+  }
+  render();
+}
+
+function startRun() {
+  const c = S.commit;
+  c.state = "running"; c.phase = 1; c.pct = 6; c.spent = 0.0009;
+  render();
+  const tick = setInterval(() => {
+    c.pct += 9 + Math.random() * 12;
+    c.spent += 0.0011;
+    if (c.pct > 46 && c.phase === 1) { c.phase = 2; }
+    if (c.pct >= 100) {
+      clearInterval(tick);
+      c.state = "ready";
+    }
+    if (S.view === "discover") render();
+  }, 620);
+}
+
+/* ---- Review ------------------------------------------------------------- */
+RENDER.review = () => {
+  const wrap = el("div", { class: "wrap" });
+  wrap.append(el("button", { class: "btn quiet", text: "← Back to the thread", "data-go": "discover", style: "margin-bottom:var(--space-4)" }));
+  wrap.append(el("p", { class: "eyebrow", text: "Run · 12 works · $0.0138" }));
+  wrap.append(el("h1", { class: "h-screen", text: "Ready to review", style: "margin-bottom:var(--space-2)" }));
+  wrap.append(el("p", { class: "muted small", style: "margin-bottom:var(--space-5);max-width:44rem", text: "Accepting acquires at gallery resolution and spends. Rejecting suppresses the work from future runs. Neither is a gesture — both are buttons, on every screen size." }));
+
+  const grid = el("div", { class: "cands" });
+  for (let i = 0; i < 12; i++) {
+    const w = WORKS[(i * 137 + 11) % TOTAL];
+    const v = S.verdicts[i];
+    const c = el("article", { class: "cand", "data-verdict": v || null });
+    const shot = el("div", { class: "shot" });
+    shot.append(el("img", { src: paint(w.art), alt: `${w.title}` }));
+    c.append(shot);
+    c.append(el("div", { class: "body" }, [
+      el("p", { class: "t", text: w.title }),
+      el("p", { class: "xs muted", text: `${w.artist} · ${w.era}` }),
+      el("p", {}, [
+        el("span", { class: `badge ${i % 5 === 0 ? "warn" : ""}`, text: i % 5 === 0 ? "△ 2,048 px — below floor" : "◇ 6,220 px — native fit" }),
+      ]),
+    ]));
+    c.append(el("div", { class: "acts" }, v ? [
+      el("span", { class: `badge ${v === "accepted" ? "good" : ""}`, text: v === "accepted" ? "✓ Accepted" : "✕ Rejected" }),
+      el("button", { class: "btn quiet", text: "Undo", on: { click: () => { delete S.verdicts[i]; render(); } } }),
+    ] : [
+      el("button", { class: "btn primary", text: "Accept", on: { click: () => { S.verdicts[i] = "accepted"; render(); } } }),
+      el("button", { class: "btn", text: "Reject", on: { click: () => { S.verdicts[i] = "rejected"; render(); } } }),
+      el("button", { class: "btn quiet", text: "Other scans", on: { click: () => {} } }),
+    ]));
+    grid.append(c);
+  }
+  wrap.append(grid);
+  view.append(wrap);
+};
+
+/* ---- Theme -------------------------------------------------------------- */
+RENDER.theme = () => {
+  const t = THEMES.find((x) => x.id === (S.themeId || "t2"));
+  const wrap = el("div", { class: "wrap" });
+  wrap.append(el("button", { class: "btn quiet", text: "← Back", "data-go": "walls", style: "margin-bottom:var(--space-4)" }));
+  wrap.append(el("p", { class: "eyebrow", text: "Theme" }));
+  wrap.append(el("h1", { class: "h-screen", text: t.name, style: "margin-bottom:var(--space-4)" }));
+  wrap.append(el("div", { class: "panel" }, [
+    el("p", { class: "small muted", style: "margin-bottom:var(--space-4)", text: `${t.ids.length} works, in wall order. Membership is edited in the collection, against the works themselves; order belongs here.` }),
+    el("div", { class: "wall-actions" }, WALLS.map((wall) =>
+      el("button", {
+        class: t.hangingOn === wall.where ? "btn on" : "btn primary",
+        text: t.hangingOn === wall.where ? `Hanging in the ${wall.where.toLowerCase()}` : `Hang in the ${wall.where.toLowerCase()}`,
+        disabled: t.hangingOn === wall.where,
+      })
+    ).concat([el("button", { class: "btn", text: "Rename" }), el("button", { class: "btn danger", text: "Delete theme" })])),
+  ]));
+  const grid = el("div", { class: "cands", style: "margin-top:var(--space-5)" });
+  for (const id of t.ids.slice(0, 8)) {
+    const w = WORKS[id];
+    const c = el("article", { class: "cand" });
+    const shot = el("div", { class: "shot" });
+    shot.append(el("img", { src: paint(w.art), alt: "" }));
+    c.append(shot, el("div", { class: "body" }, [el("p", { class: "t", text: w.title }), el("p", { class: "xs muted", text: w.artist })]));
+    grid.append(c);
+  }
+  wrap.append(grid);
+  view.append(wrap);
+};
+
+/* ---- Health ------------------------------------------------------------- */
+RENDER.health = () => {
+  const wrap = el("div", { class: "wrap" });
+  wrap.append(el("button", { class: "btn quiet", text: "← Back", "data-go": "walls", style: "margin-bottom:var(--space-4)" }));
+  wrap.append(el("p", { class: "eyebrow", text: "Health" }));
+  wrap.append(el("h1", { class: "h-screen", text: "The appliance", style: "margin-bottom:var(--space-5)" }));
+  const rows = [
+    ["Living room television", "good", "◇ Well", "Reported 2 minutes ago · showing Nocturne in Blue Hour"],
+    ["Study panel", "warn", "△ Quiet", "Last heartbeat 09:14. The label may be showing the previous work."],
+    ["Catalogue backup", "good", "◇ Well", "6 hours old"],
+    ["Artwork box", "good", "◇ Well", "3840 × 2160, resolved from this deployment"],
+  ];
+  for (const [name, tone, badge, note] of rows) {
+    wrap.append(el("div", { class: "panel", style: "display:flex;gap:var(--space-4);align-items:center;flex-wrap:wrap" }, [
+      el("div", { style: "flex:1;min-width:12rem" }, [
+        el("p", { class: "h-sec", style: "font-size:var(--text-md)", text: name }),
+        el("p", { class: "small muted", text: note }),
+      ]),
+      el("span", { class: `badge ${tone}`, text: badge }),
+    ]));
+  }
+  view.append(wrap);
+};
+
+go("walls");
+</script>
