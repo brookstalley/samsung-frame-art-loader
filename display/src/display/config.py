@@ -50,20 +50,6 @@ DEFAULT_TV_CLIENT_NAME: Final[str] = "tvpi"
 DEFAULT_EPD_PANEL_WIDTH_PX: Final[int] = 1448
 DEFAULT_EPD_PANEL_HEIGHT_PX: Final[int] = 1072
 
-#: The clear border around the label, in pixels. **PROVISIONAL — and no longer
-#: settled by eye at all.** It was the other half of a judgement the operator was
-#: going to make at the panel; that judgement was replaced on 2026-08-11 by a floor
-#: derived from viewing distance and panel PPI, so the margin derives with it
-#: rather than being chosen alongside it. The trade it makes is unchanged — border
-#: against how many lines survive the drop rule — which is exactly why it cannot be
-#: picked independently of a floor that decides how many lines there are.
-#:
-#: **The measurements recorded in `accessibility-spec.md` were taken at 60**, not
-#: at this value: the panel work used a wider border to keep the largest type off
-#: the bezel. Whoever lands the derivation reconciles the two and replaces this
-#: note. It is here rather than beside the type sizes because it is geometry, and
-#: geometry belongs to the device.
-DEFAULT_EPD_MARGIN_PX: Final[int] = 40
 
 #: How far the rendered label is turned before it reaches the panel. 180 is what
 #: the reference wall runs today — that panel is mounted with its ribbon uppermost
@@ -164,8 +150,34 @@ class Settings:
     #: the two panels' geometry came to be confused in the first place.
     epd_panel_width_px: int
     epd_panel_height_px: int
-    epd_margin_px: int
     epd_rotate_degrees: int
+
+    #: The two physical facts that decide how large the label's type has to be,
+    #: and **the only values in this class with no default**. Everything else
+    #: falls back to the reference wall's number; these two may not, because a
+    #: guessed viewing distance produces type that is silently illegible — the
+    #: failure that shipped here undetected through a hardware probe, a review and
+    #: a cutover, at half the size a letter must reach to be resolvable at all.
+    #:
+    #: Unset is `None` rather than an error: a device with a panel configured and
+    #: no stated viewing conditions loses its *label surface*, with a named
+    #: reason, while the television keeps rotating. Refusing to start would break
+    #: two rules this plane holds — nothing about the label may stop the wall, and
+    #: a device with no usable label surface is a configuration rather than a
+    #: fault. `panel/legibility.py` is where the arithmetic and the refusal live.
+    #:
+    #: Inches for both, so nobody has to remember which one is feet.
+    epd_panel_diagonal_inches: float | None
+    epd_viewing_distance_inches: float | None
+
+    #: The clear border, **when the deployment overrides the derived one**. It
+    #: normally derives from the type scale, because a border trades directly
+    #: against how many lines survive the drop rule and so cannot be picked
+    #: independently of the floor that decides how many lines there are. The
+    #: override exists for the surface whose border is a physical fact rather than
+    #: a typographic choice — a device drawing its label into the mat area around
+    #: an artwork does not get to choose where the picture ends.
+    epd_margin_px: int | None
 
     #: omni-epd's identifier for this device's panel, or empty for a device that
     #: has none. **Empty is a supported deployment, not a broken one**
@@ -205,6 +217,17 @@ class Settings:
         """This plane's own store. Display is its sole writer."""
         return self.art_root / STATE_FILENAME
 
+    def _viewing_conditions(self) -> str:
+        """The panel's diagonal and its reading distance, or what their absence costs.
+
+        Says the consequence rather than the word "unset", because "unset" reads
+        as a value nobody needed: a reader who has not met this pair cannot tell
+        from that whether their label is missing on purpose.
+        """
+        if self.epd_panel_diagonal_inches is None or self.epd_viewing_distance_inches is None:
+            return "(not stated — no label can be sized, so this device draws none)"
+        return f'{self.epd_panel_diagonal_inches}" panel read from {self.epd_viewing_distance_inches}"'
+
     def startup_lines(self) -> dict[str, object]:
         """What goes in the startup log line, so a misconfiguration is one line away.
 
@@ -222,6 +245,13 @@ class Settings:
             "manifest_path": str(self.manifest_path),
             "state_path": str(self.state_path),
             "epd_panel_px": f"{self.epd_panel_width_px}x{self.epd_panel_height_px}",
+            # **The line that would have caught the defect this pair exists for.**
+            # A wrong viewing distance is invisible everywhere else: the daemon
+            # starts, the panel draws, every test passes, and the only symptom is
+            # type nobody can read from where they stand. Naming both facts in the
+            # startup line puts them one `journalctl` away from the person who
+            # typed them.
+            "epd_viewing": self._viewing_conditions(),
             # Named even when empty, because "this device has no panel" and "this
             # device's panel is broken" look identical in a journal otherwise, and
             # only one of them is worth acting on.
@@ -263,7 +293,9 @@ def load(environ: dict[str, str] | None = None) -> Settings:
         tv_client_name=env.get("TV_CLIENT_NAME") or DEFAULT_TV_CLIENT_NAME,
         epd_panel_width_px=_int(env, "EPD_PANEL_WIDTH_PX", DEFAULT_EPD_PANEL_WIDTH_PX),
         epd_panel_height_px=_int(env, "EPD_PANEL_HEIGHT_PX", DEFAULT_EPD_PANEL_HEIGHT_PX),
-        epd_margin_px=_int(env, "EPD_MARGIN_PX", DEFAULT_EPD_MARGIN_PX),
+        epd_panel_diagonal_inches=_optional_float(env, "EPD_PANEL_DIAGONAL_INCHES"),
+        epd_viewing_distance_inches=_optional_float(env, "EPD_VIEWING_DISTANCE_INCHES"),
+        epd_margin_px=_optional_int(env, "EPD_MARGIN_PX"),
         epd_rotate_degrees=_int(env, "EPD_ROTATE_DEGREES", DEFAULT_EPD_ROTATE_DEGREES),
         epd_device=(env.get("EPD_DEVICE") or "").strip(),
         latitude=_float(env, "LATITUDE", None),
@@ -305,6 +337,21 @@ def _int(env: dict[str, str], name: str, default: int | None) -> int:
         # a different thing from one they never typed, and quietly substituting
         # the default hides the typo behind behaviour that looks deliberate.
         raise ConfigError(f"{name} is {raw!r}, which is not a whole number.") from exc
+
+
+def _optional_int(env: dict[str, str], name: str) -> int | None:
+    """A whole number the deployment may simply not have. Still refused if mistyped.
+
+    Absent and wrong stay different things here: not saying a value is a choice
+    with a defined meaning downstream, while typing one badly is a mistake that
+    must not be smoothed into `None`.
+    """
+    return None if not env.get(name) else _int(env, name, None)
+
+
+def _optional_float(env: dict[str, str], name: str) -> float | None:
+    """A measurement the deployment may not have taken. See `_optional_int`."""
+    return None if not env.get(name) else _float(env, name, None)
 
 
 def _float(env: dict[str, str], name: str, default: float | None) -> float:

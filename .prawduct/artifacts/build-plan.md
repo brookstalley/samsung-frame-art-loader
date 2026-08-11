@@ -50,7 +50,7 @@ governed_by:
   # that must appear here.
   - artifact: accessibility-spec
     dispositions:
-      - "the e-paper label is legible at standing distance → applies, and is the whole of Chunk 13B's legibility deliverable: 16 grey levels with the mode READ BACK rather than assumed (`max_colors` reports 16 in both `bw` and `gray16`, which is how the 2024 plane rendered 1-bit type unnoticed), and type that never shrinks below the floor — content drops instead. **Still PROPOSED, not ratified**, with `decide_by` Chunk 13B: the drop-rather-than-shrink clause awaits the owner, and it cannot be ratified before the type floor exists, because that would be ratifying a rule about a number nobody has measured. Enforced today by `display/tests/test_epaper.py` (a panel quietly staying 1-bit is refused) and `display/tests/test_label_layout.py` (the drop rule, over an injected measurer); the type SIZES themselves are open and closable only at the panel"
+      - "the e-paper label is legible at standing distance → applies, and is the whole of Chunk 13B's legibility deliverable: 16 grey levels with the mode READ BACK rather than assumed (`max_colors` reports 16 in both `bw` and `gray16`, which is how the 2024 plane rendered 1-bit type unnoticed), and type that never shrinks below the floor — content drops instead, except the facts that identify the work, which shrink rather than vanish. **RATIFIED 2026-08-11**, once the floor it refers to existed, and amended by the same ruling into two tiers — see `accessibility-spec.md` § Type never shrinks to fit; the mandatory tier is unbuilt and 13B-4 carries it. Enforced today by `display/tests/test_epaper.py` (a panel quietly staying 1-bit is refused), `display/tests/test_label_layout.py` (the drop rule, over an injected measurer) and — since 13B-1, 2026-08-11 — `display/tests/test_type_floor.py`, which is the guard the type sizes never had: it asserts in arcminutes rather than pixels, so it can say that a size is below the threshold of legibility, which is the thing every earlier check was structurally unable to notice. The sizes are no longer 'open and closable only at the panel': they derive from two stated deployment facts, and what the operator settles is one calibrated angle"
       - "WCAG 2.1 AA on the curation browser, and colour is never the sole carrier of state → inapplicable because: this plan's remaining chunks are 13B and 20 — display-plane and operational work that renders no browser screen. Same scope as the `information-architecture` and `design-direction` rows above, and the norm binds the work that reshapes the surface, which has no plan yet"
 last_validated: 2026-08-11
 ---
@@ -149,7 +149,7 @@ re-created the same silence one line further down.
 - [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [x] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13A: The panel, the label, the heartbeat and the two units — no hardware *(built and reviewed; the box waits on Done-when step 0b, which needs the set — see § The announcement reaches both subscribers in `operator-verification.md`)*
-- [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover *(the machine half is done and running: account, both trees, both units enabled, catalogue seeded, manifest published — 2026-08-11. The box waits on the three things only a person at the wall can do: the label's type sizes, margin and line-length bound; the unattended run across a television power-cycle; and ratifying the legibility norm, which could not be ratified before the type floor existed)*
+- [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover *(the machine half is done and running: account, both trees, both units enabled, catalogue seeded, manifest published — 2026-08-11. The legibility norm was ratified 2026-08-11 once the floor existed, and amended into two tiers by the same ruling — which is what 13B-4 builds against. **13B-1 landed 2026-08-11**: the floor, the margin and the line-length bound are all derived from two stated physical facts now, so the settlement that needed a panel visit is down to one calibrated angle the operator already gave. The box now waits on 13B-3, 13B-2, 13B-4 — that order, at the operator's call — and on the unattended run across a television power-cycle)*
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
 Context: Plan authored 2026-07-20. Chunks 01, 02 and 06 landed 2026-07-27 in one
@@ -1937,10 +1937,23 @@ hardware.
   bookkeeping so each piece takes its own Critic round, because the whole is a
   three-plane data-model change plus a new layout engine and one review over all of
   it would read badly. The box ticks when all four are done.
-  - **13B-1 — the derived floor.** Panel diagonal and viewing distance become
-    deployment values; the floor is computed; the three provisional size constants
-    and `DEFAULT_EPD_MARGIN_PX` derive from it. A deployment stating no viewing
-    distance fails rather than guessing one.
+  - **13B-1 — the derived floor. Built 2026-08-11** (`panel/legibility.py`).
+    Panel diagonal and viewing distance became deployment values with no
+    defaults; the floor is computed per device; the three provisional size
+    constants and `DEFAULT_EPD_MARGIN_PX` are gone, replaced by two derived tiers
+    and a margin at half the primary em. **Corrected as built, because this
+    bullet said the wrong thing**: "a deployment stating no viewing distance
+    fails" reads as a refusal to start, and `accessibility-spec.md` § The type
+    floor rules the opposite — such a device loses its *label surface* with a
+    named reason while the wall keeps rotating, because nothing about the label
+    may stop the television and a device with no usable label surface is a
+    supported configuration. It raises `SurfaceUnavailable`, the type the
+    composition root already catches, not `ConfigError`.
+    **Two judgements this sub-chunk had to make rather than inherit**, both now
+    recorded in the spec: the margin's ratio (half the primary tier — the
+    amendment said it derives and not by what rule), and three type sizes
+    collapsing to two, since the calibration settled only two readings and the
+    rung between them was recorded as the size that takes effort to read.
   - **13B-2 — styled runs.** `Block` carries runs with their own weight and case
     instead of one flat string, and the Pango renderer applies **attributes over
     byte ranges — never markup**, because `metadata.py` escapes nothing on purpose
@@ -1951,9 +1964,17 @@ hardware.
     read by `LabelText`. Includes the schema change and the backfill of the 31
     seeded artists; a work whose artist has neither name part falls back to `name`,
     unstyled.
-  - **13B-4 — the fill model.** Candidates with priority and role; nothing below
-    the floor; optional content admitted only if it fits; slack spent on content
-    before type; drops still reported.
+  - **13B-4 — the fill model.** Candidates with priority and role; optional
+    content admitted only if it fits at the floor and never set below it; slack
+    spent on content before type; drops still reported. **Carries the norm
+    amendment ratified 2026-08-11**, which is the half with no guard today: a
+    mandatory tier — family name, given name, and the title when there is one —
+    that shrinks below the floor rather than dropping, with the shrink journalled
+    exactly like a drop. That reporting is the condition the operator's ruling
+    rests on, not a nicety: the flat rule existed because illegible type fails
+    invisibly, and admitting a shrink re-opens that hole unless the journal names
+    it. Also the name ladder — one line, then two, then smaller — from
+    `accessibility-spec.md` § The label's content model.
 - **Depends on:** Chunk 13A
 - **Carries a number the unit must not be written without.** `TimeoutStopSec`
   has to clear this daemon's worst-case pass, which is a television connection

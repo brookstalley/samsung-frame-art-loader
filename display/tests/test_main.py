@@ -116,6 +116,93 @@ class TestWhetherThisDeviceHasALabelSurface:
             named in str(raised.value) for named in ("no_such_vendor.no_such_panel", "--group raster")
         ), f"the failure names neither the device nor the missing install: {raised.value}"
 
+    @pytest.mark.parametrize(
+        ("unstated", "named"),
+        [
+            ("epd_panel_diagonal_inches", "EPD_PANEL_DIAGONAL_INCHES"),
+            ("epd_viewing_distance_inches", "EPD_VIEWING_DISTANCE_INCHES"),
+        ],
+    )
+    def test_a_panel_whose_viewing_conditions_are_unstated_loses_the_label_and_not_the_wall(
+        self, settings, unstated: str, named: str
+    ):
+        """**The third road to no label, and it is a fault of the same shape.**
+
+        A device with a panel and no stated viewing distance cannot be told how
+        large its type has to be, and the one thing that must not happen is
+        guessing: a wrong distance gives silently illegible type, which looks like
+        success from every direction except standing in front of the panel.
+
+        But it is `SurfaceUnavailable` rather than `ConfigError` — the label
+        surface goes, the daemon does not. Refusing to start would break two rules
+        this plane holds: nothing about the label may stop the television, and a
+        device with no usable label surface is a configuration rather than a
+        fault. That distinction is the whole reason this raises the type the
+        caller already catches.
+        """
+        import dataclasses
+
+        configured = dataclasses.replace(settings, epd_device="omni_epd.mock", **{unstated: None})
+
+        with pytest.raises(SurfaceUnavailable) as raised:
+            entry.label_surface(configured)
+
+        assert named in str(raised.value), f"the operator is not told which key to set: {raised.value}"
+
+    def test_the_unstated_distance_is_reported_before_the_driver_is_even_looked_for(self, settings):
+        """Both are reasons this device draws no label; only one is a value
+        somebody typed. A deployment that has not stated its viewing distance must
+        be told *that* — not told its text stack is missing, which on a machine
+        with no panel it also is, and which names a fix that would not help.
+        """
+        import dataclasses
+
+        configured = dataclasses.replace(settings, epd_device="no_such_vendor.no_such_panel", epd_viewing_distance_inches=None)
+
+        with pytest.raises(SurfaceUnavailable) as raised:
+            entry.label_surface(configured)
+
+        assert "EPD_VIEWING_DISTANCE_INCHES" in str(raised.value)
+        assert "--group raster" not in str(raised.value), "the reader was sent to fix the wrong thing"
+
+    def test_the_border_derives_from_the_type_when_the_deployment_states_none(self, settings):
+        """**The shipped path**, and the one the old 40 px default occupied.
+
+        A border trades directly against how many lines survive the drop rule, so
+        it cannot be picked independently of the floor that decides how many lines
+        there are — which is now derived per device from the viewing distance.
+        Asserted against `margin_for` rather than against a number, because a
+        literal here would be this test re-stating the ratio instead of checking
+        that the ratio is what got used.
+        """
+        from display.panel.legibility import margin_for, type_scale_for
+
+        scale = type_scale_for(
+            width_px=settings.epd_panel_width_px,
+            height_px=settings.epd_panel_height_px,
+            diagonal_inches=settings.epd_panel_diagonal_inches,
+            viewing_distance_inches=settings.epd_viewing_distance_inches,
+        )
+
+        geometry = entry.label_geometry(settings, scale)
+
+        assert geometry.margin_px == margin_for(scale)
+        assert geometry.margin_px > 0, "the label was given no border at all"
+
+    def test_a_deployment_that_states_a_border_keeps_it(self, settings):
+        """The override, for the surface whose border is a physical fact: a device
+        drawing its label into the mat around an artwork does not choose where the
+        picture ends."""
+        import dataclasses
+
+        from display.panel.legibility import margin_for, type_scale_for
+
+        scale = type_scale_for(width_px=1448, height_px=1072, diagonal_inches=6.0, viewing_distance_inches=84.0)
+        stated = dataclasses.replace(settings, epd_margin_px=17)
+
+        assert entry.label_geometry(stated, scale).margin_px == 17
+        assert margin_for(scale) != 17, "the override happens to equal the derived value, so this proves nothing"
+
     async def test_a_broken_panel_does_not_stop_the_daemon_starting(self, monkeypatch, settings, tv, caplog):
         """**Driven through `_run` rather than around it**, because the claim is
         about the wiring and not about either end of it.

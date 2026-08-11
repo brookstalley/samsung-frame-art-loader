@@ -24,34 +24,24 @@ everything will not fit, the least identifying lines come off the bottom and the
 remaining type stays at its size. What was dropped is reported rather than
 discarded quietly, so the journal can say the surface is too small for the
 corpus rather than leaving somebody to notice missing dimensions by eye.
+
+**What the floor *is* comes from `legibility.py` and arrives as a parameter**,
+like the geometry and the measurer: it is derived from how far the reader stands
+from this particular panel, so it is a fact about a device rather than a constant
+this module could hold. A floor written down here would be a claim that every
+panel is read from the same distance, which is how the sizes this replaced came
+to be half the height at which a letter can be resolved at all.
 """
 
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final
 
-#: The type sizes, in pixels, largest first: title, then artist, then everything
-#: else. **PROVISIONAL, and now known to be wrong rather than merely unsettled.**
-#: Measured against the reference deployment on 2026-08-11 — a 6-inch, ~300 PPI
-#: panel read from 7 feet — `BODY_SIZE_PX` gives a cap height of **2.5 arcminutes**
-#: against the **5** that 20/20 vision needs to resolve a letter at all: **2× too
-#: small merely to be resolvable, and 5× against the 12.4′ the operator then
-#: settled as comfortable at that distance.** They survived every check the
-#: product had, because nothing here knew the viewing distance.
-#:
-#: **They are placeholders for a derivation, not for a judgement.**
-#: `accessibility-spec.md` § "The type floor is derived from viewing distance, not
-#: chosen for a panel" specifies what replaces them: a floor computed from the
-#: deployment's PPI and viewing distance against a stated minimum cap height in
-#: arcminutes, with these three becoming ratios above that floor. Whoever builds it
-#: replaces this note as well as the numbers.
-TITLE_SIZE_PX: Final[int] = 40
-ARTIST_SIZE_PX: Final[int] = 32
-BODY_SIZE_PX: Final[int] = 26
+from display.panel.legibility import TypeScale
 
 #: Space between one block and the next, as a fraction of the block's own size.
-#: Proportional rather than absolute so the whole label rescales coherently when
-#: the sizes above are settled.
+#: Proportional rather than absolute, so the whole label rescales coherently with
+#: the scale it is laid out against — which now varies per device.
 LEADING: Final[float] = 0.35
 
 #: The widest a line may run before it wraps, as a multiple of its own type size.
@@ -69,13 +59,16 @@ LEADING: Final[float] = 0.35
 #: of pinning one and distorting the other. At the ~0.5em average glyph width
 #: typical of text faces this lands near the middle of that range.
 #:
-#: **PROVISIONAL, and it currently binds — which it will stop doing.** At the
-#: placeholder sizes above, 30 em is 780–1200 px against 1368 px of usable width on
-#: the reference panel, so the bound is what wraps a long body line today. Once the
-#: sizes derive from the operator's 12.4′ floor (~130 px), 30 em is 3900 px and the
-#: panel edge always governs first: the bound goes inert on *this* wall while
-#: staying the mechanism that matters on a device drawing its label into the mat
-#: area around an artwork. Whoever lands that derivation replaces this note.
+#: **Inert on the reference wall, and deliberately kept anyway.** Now that the
+#: sizes derive from the viewing distance, 30 em at that panel's ~92 px floor is
+#: ~2760 px against 1318 px of usable width, so the panel's own edge always
+#: governs there and this bound narrows nothing. It stays because it is the
+#: mechanism that matters on the *other* surface the architecture norm names — a
+#: device drawing its label into the mat area around an artwork, where the
+#: available width is far larger than any measure a typographer would set — and
+#: because a rule deleted for being unexercised on one device is a rule the next
+#: device does not get. `TestTheMeasure` therefore exercises it on a surface wide
+#: enough for it to bite, rather than on this panel.
 MEASURE_EM: Final[float] = 30.0
 
 
@@ -167,13 +160,19 @@ class Layout:
         return not self.blocks
 
 
-def lay_out(lines: tuple[str, ...], surface: Geometry, measure: Measure) -> Layout:
+def lay_out(lines: tuple[str, ...], surface: Geometry, measure: Measure, scale: TypeScale) -> Layout:
     """Place the label's lines top-down, dropping from the bottom what will not fit.
 
     `lines` arrives in wall-label order — title, artist, nationality, dates,
     date, medium, dimensions — which is also least-droppable first. That ordering
     is `LabelText.lines`' responsibility and this function's assumption: it drops
     from the end, so the ordering *is* the priority.
+
+    `scale` is the device's, not this module's. **The sizes cannot be constants
+    here** because how large type has to be is a fact about the reader's distance
+    from a particular panel, and holding a pixel value in this file would be the
+    same defect that shipped a body size half the height at which a letter can be
+    resolved — see `legibility.py`.
 
     **The first line is never dropped**, even when it alone overflows. A surface
     too small for one title is a misconfigured device, and returning an empty
@@ -184,9 +183,9 @@ def lay_out(lines: tuple[str, ...], surface: Geometry, measure: Measure) -> Layo
     if surface.text_width_px <= 0 or surface.text_height_px <= 0:
         return Layout(surface=surface, blocks=(), dropped=lines)
 
-    placed = _place(lines, surface, measure)
+    placed = _place(lines, surface, measure, scale)
     while _overflows(placed, surface) and len(placed) > 1:
-        placed = _place(lines[: len(placed) - 1], surface, measure)
+        placed = _place(lines[: len(placed) - 1], surface, measure, scale)
 
     return Layout(
         surface=surface,
@@ -195,12 +194,12 @@ def lay_out(lines: tuple[str, ...], surface: Geometry, measure: Measure) -> Layo
     )
 
 
-def _place(lines: tuple[str, ...], surface: Geometry, measure: Measure) -> list[Block]:
+def _place(lines: tuple[str, ...], surface: Geometry, measure: Measure, scale: TypeScale) -> list[Block]:
     """Stack these lines from the top margin down, at the size each one earns."""
     blocks: list[Block] = []
     y = surface.margin_px
     for index, text in enumerate(lines):
-        size = _size_for(index)
+        size = _size_for(index, scale)
         wrap = _wrap_width_for(size, surface)
         extent = measure(text, size, wrap)
         blocks.append(
@@ -228,18 +227,21 @@ def _wrap_width_for(size_px: int, surface: Geometry) -> int:
     return min(surface.text_width_px, round(MEASURE_EM * size_px))
 
 
-def _size_for(index: int) -> int:
+def _size_for(index: int, scale: TypeScale) -> int:
     """The type size the line at this position gets.
 
     Position rather than field name, because this tier is handed text and not a
-    record: the hierarchy is "first line is the title, second is the artist, the
-    rest is supporting" and that holds however the caller assembled the list.
+    record: the hierarchy is "the leading line is the most identifying one, the
+    rest supports it" and that holds however the caller assembled the list.
+
+    **Two tiers rather than three, which is what the calibration supports.** The
+    sizes used to be title, artist, everything-else, three judged numbers with no
+    stated relationship. Reading them off a scale leaves exactly the two readings
+    the operator settled by eye; the rung between them is the size that was
+    reported as taking effort to read, so interpolating a middle tier would be
+    aiming type at the one reading recorded as a boundary rather than a target.
     """
-    if index == 0:
-        return TITLE_SIZE_PX
-    if index == 1:
-        return ARTIST_SIZE_PX
-    return BODY_SIZE_PX
+    return scale.primary_px if index == 0 else scale.floor_px
 
 
 def _overflows(blocks: list[Block], surface: Geometry) -> bool:

@@ -26,6 +26,7 @@ changing.
 from abc import ABC, abstractmethod
 
 from display.panel.layout import Geometry, Layout, Measure
+from display.panel.legibility import TypeScale
 
 
 class SurfaceUnavailable(Exception):
@@ -57,6 +58,23 @@ class LabelSurface(ABC):
 
     @property
     @abstractmethod
+    def type_scale(self) -> TypeScale:
+        """How large type has to be on this surface, for the layout tier to set it at.
+
+        **On the device for the reason geometry is**: how big a letter must be is
+        a fact about this panel's resolution and the distance somebody reads it
+        from, and both of those belong to the device. A layout tier holding sizes
+        of its own would be asserting that every surface is read from the same
+        place — which is precisely how this product came to set body type at half
+        the height a letter has to reach to be resolvable at all.
+
+        A surface that exists has one: a device whose viewing conditions are
+        unknown does not become a surface, because guessing a distance produces
+        illegible type with nothing reporting it (`legibility.py`).
+        """
+
+    @property
+    @abstractmethod
     def measure(self) -> Measure:
         """How this surface measures text, for the layout tier to arrange with.
 
@@ -66,8 +84,8 @@ class LabelSurface(ABC):
         build a measurer itself would be constructing the rasterizer outside this
         seam, which is the seam not existing.
 
-        A caller therefore needs nothing but this object: ask for `geometry`, lay
-        out against `measure`, hand the result to `show`.
+        A caller therefore needs nothing but this object: ask for `geometry` and
+        `type_scale`, lay out against `measure`, hand the result to `show`.
         """
 
     @abstractmethod

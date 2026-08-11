@@ -62,7 +62,16 @@ def settings(art_root: Path) -> Settings:
         tv_client_name="tvpi-test",
         epd_panel_width_px=1448,
         epd_panel_height_px=1072,
-        epd_margin_px=40,
+        # The reference wall: a 6-inch panel read from 7 feet. Stated even though
+        # the fixture below configures no panel, because a `Settings` that omitted
+        # them would let a test reach a code path no real deployment with a label
+        # can be in — the two are what a label surface is derived from.
+        epd_panel_diagonal_inches=6.0,
+        epd_viewing_distance_inches=84.0,
+        # None, which is the shipped shape: the border derives from the type
+        # rather than being chosen beside it. Tests wanting a specific one build
+        # their own `Geometry`.
+        epd_margin_px=None,
         epd_rotate_degrees=180,
         # Empty, so the daemon fixtures below get the deployment most devices are:
         # a television and no panel. The tests that want one attach a double.

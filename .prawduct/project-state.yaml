@@ -2453,35 +2453,50 @@ design_decisions:
 #   priority: high | medium | low
 
 open_questions:
-  - question: "Does the e-paper legibility norm stand as written — specifically, does type never shrink below the floor, with content dropping instead?"
-    context: >
-      The norm row is in `project-preferences.md` and is marked PROPOSED
-      2026-08-11, not ratified. Most of it is a correction rather than a birth:
-      the 16-grey requirement and the mode read-back come from
-      `nonfunctional-requirements.md` § Output Quality, and standing-distance
-      legibility from `design_decisions.accessibility_approach`.
-
-      The part that needs a sentence from the owner is the
-      drop-rather-than-shrink clause, which appears in no artifact earlier than
-      the row itself, and whose only prior record is the `layout.py` docstring
-      written by the very chunk whose tests the row names as its enforcement.
-      That is the laundering shape whatever the intent, which is why it is
-      carried as proposed rather than quietly ratified by use.
-
-      RAISED HERE 2026-08-11 by Critic R-2, and the reason it needed raising is
-      the interesting part: the mechanism that used to put a proposed norm in
-      front of the owner was a row in `information-architecture.md` § Status,
-      and that row was correctly removed in the same bundle — both norms it
-      tracked had been ratified. The replacement was nothing. A row with
-      Mechanism `Test`, two live enforcement artifacts and an audit home reads
-      as binding to the next Critic and to any builder, while the sentence that
-      would ratify or veto it is never solicited.
-    decide_by: >
-      Chunk 13B, the visit to the panel that settles the type sizes, the margin
-      and the line-length bound. The clause is about what happens when type
-      would go below a floor nobody has measured yet, so the same trip answers
-      both — and ratifying it before the floor exists would be ratifying a rule
-      about a number.
+  # RESOLVED 2026-08-11 by the operator: RATIFIED, with an amendment that is
+  # larger than the question asked. The answer was not yes or no — it was that
+  # the clause is right for the wrong half of the content, so the norm now has
+  # two tiers. Mandatory content (the artist's family name, the artist's given
+  # name, and the work's title when it has one) SHRINKS as far as it must,
+  # below the floor if that is what it takes, rather than dropping. Everything
+  # else — nationality, life dates, date, medium, dimensions, commentary — drops
+  # at full size rather than shrinking, and NOTHING else is mandatory.
+  #
+  # The amendment also closed a contradiction this question never spotted, and
+  # which the flat clause had carried since it was written: § Type never shrinks
+  # said the first line is never dropped even when the title alone overflows,
+  # while § The label's content model said nothing is ever set below the floor.
+  # A long title at the floor satisfies neither, and no artifact said which rule
+  # yielded. Splitting the content by mandate answers it without picking a
+  # winner between two rules that were both meant.
+  #
+  # Ratification carries one condition, recorded because the amendment is only
+  # sound with it: A SHRINK IS JOURNALLED EXACTLY LIKE A DROP. The flat rule
+  # existed because illegible type fails invisibly — a panel routinely setting
+  # names at 20 px is a misconfigured device, and nobody discovers that by eye at
+  # 7 feet. Admitting a shrink re-opens that hole unless the journal names it.
+  #
+  # The name block gained a ladder in the same ruling: `FAMILY, Given` on one
+  # line at the target size; two lines, sized independently, when one line would
+  # force a reduction; and a shrink only when a single name will not hold on its
+  # own line. Layout is spent before legibility — the same instinct as the drop
+  # rule it sits under.
+  #
+  # Where it now lives: `accessibility-spec.md` § Direction (the rule) and
+  # § Type never shrinks to fit (the tiers) and § The label's content model (the
+  # ladder); the norm row in `project-preferences.md`. Enforcement of the
+  # mandatory tier is OWED — `layout.py` still implements the flat rule — and
+  # Chunk 13B-4 builds it and owes it a guard. Until then the norm row's Test
+  # column covers the optional half only, and says so.
+  #
+  # The question was raised 2026-08-11 by Critic R-2, and the reason it needed
+  # raising is worth keeping: the mechanism that used to put a proposed norm in
+  # front of the owner was a row in `information-architecture.md` § Status, and
+  # that row was correctly removed in the same bundle once both norms it tracked
+  # were ratified. The replacement was nothing. A row with Mechanism `Test`, two
+  # live enforcement artifacts and an audit home reads as binding to the next
+  # Critic and to any builder, while the sentence that would ratify or veto it is
+  # never solicited — and this one, when finally solicited, came back amended.
 
   # RESOLVED 2026-08-11 at the cutover: ART_ROOT is /srv/art, and the same trip
   # settled two paths this question never thought to ask about.

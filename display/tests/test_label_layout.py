@@ -13,13 +13,10 @@ import math
 
 import pytest
 
-from display.panel import Geometry, lay_out
+from display.panel import Geometry, lay_out, type_scale_for
 from display.panel.layout import (
-    ARTIST_SIZE_PX,
-    BODY_SIZE_PX,
     LEADING,
     MEASURE_EM,
-    TITLE_SIZE_PX,
     Extent,
 )
 
@@ -39,106 +36,158 @@ def measured(text: str, size_px: int, wrap_px: int) -> Extent:
 
 PANEL = Geometry(width_px=1448, height_px=1072, margin_px=40)
 
+#: The reference wall's sizes — a 6-inch 1448×1072 panel read from 7 feet, giving
+#: a 130 px primary tier over a 92 px floor. **Derived here rather than written
+#: down**, because a literal pair would be this file quietly re-asserting a
+#: judgement that belongs to `legibility.py`; what these tests are about is what
+#: the layout does with a scale, not what the scale is.
+SCALE = type_scale_for(width_px=1448, height_px=1072, diagonal_inches=6.0, viewing_distance_inches=84.0)
+
 
 class TestTheHierarchy:
-    def test_the_first_line_is_the_largest_and_the_second_is_next(self):
-        layout = lay_out(("Chicago", "Georgia O'Keeffe", "American"), PANEL, measured)
+    """**Two tiers, where there were three judged numbers.**
 
-        assert [block.size_px for block in layout.blocks] == [TITLE_SIZE_PX, ARTIST_SIZE_PX, BODY_SIZE_PX]
+    The sizes used to be title / artist / everything-else, three constants with no
+    stated relationship to each other or to any reader. They now come off a scale
+    derived from how far away the panel is read, and that calibration settled
+    exactly two readings worth setting type at — the rung between them was
+    reported as the size that takes effort, so a middle tier would be aiming at a
+    boundary somebody recorded as one to avoid.
+    """
 
-    def test_everything_after_the_artist_shares_the_body_size(self):
-        layout = lay_out(("T", "A", "N", "D", "Y", "M", "X"), PANEL, measured)
+    def test_the_leading_line_gets_the_primary_tier(self):
+        layout = lay_out(("Chicago", "Georgia O'Keeffe", "American"), PANEL, measured, SCALE)
 
-        assert {block.size_px for block in layout.blocks[2:]} == {BODY_SIZE_PX}
+        assert layout.blocks[0].size_px == SCALE.primary_px
+
+    def test_everything_after_the_leading_line_sits_at_the_floor(self):
+        layout = lay_out(("T", "A", "N", "D", "Y", "M", "X"), PANEL, measured, SCALE)
+
+        assert {block.size_px for block in layout.blocks[1:]} == {SCALE.floor_px}
+
+    def test_nothing_is_ever_set_below_the_floor(self):
+        """The norm, asserted directly rather than inferred from the sizes above.
+
+        This is the claim the whole label rests on — type that shrinks to fit has
+        quietly converted an accessibility surface into a decorative one — and it
+        must hold over the awkward shapes as well as the tidy one.
+        """
+        for surface in (PANEL, Geometry(width_px=400, height_px=300, margin_px=10)):
+            layout = lay_out(("The Banquet", "Jan Steen", "Dutch", "Oil on canvas"), surface, measured, SCALE)
+
+            assert all(block.size_px >= SCALE.floor_px for block in layout.blocks), surface
+
+    def test_a_device_read_from_further_away_sets_larger_type(self):
+        """The scale is a parameter, like the geometry: a second device with a
+        different panel at a different distance gets its own answer, with nobody
+        visiting it."""
+        far = type_scale_for(width_px=1448, height_px=1072, diagonal_inches=6.0, viewing_distance_inches=168.0)
+
+        near_layout = lay_out(("Chicago", "Georgia O'Keeffe"), PANEL, measured, SCALE)
+        far_layout = lay_out(("Chicago", "Georgia O'Keeffe"), PANEL, measured, far)
+
+        assert far_layout.blocks[0].size_px > near_layout.blocks[0].size_px
 
     def test_the_text_is_carried_through_unchanged(self):
-        layout = lay_out(("Cow's Skull with Calico Roses", "Georgia O'Keeffe"), PANEL, measured)
+        layout = lay_out(("Cow's Skull with Calico Roses", "Georgia O'Keeffe"), PANEL, measured, SCALE)
 
         assert [block.text for block in layout.blocks] == ["Cow's Skull with Calico Roses", "Georgia O'Keeffe"]
 
 
 class TestPlacement:
     def test_it_starts_at_the_top_left_margin(self):
-        layout = lay_out(("Silver Sun",), PANEL, measured)
+        layout = lay_out(("Silver Sun",), PANEL, measured, SCALE)
 
         assert layout.blocks[0].x_px == PANEL.margin_px
         assert layout.blocks[0].y_px == PANEL.margin_px
 
     def test_every_block_sits_at_the_left_margin(self):
-        layout = lay_out(("The Banquet", "Jan Steen", "Dutch"), PANEL, measured)
+        layout = lay_out(("The Banquet", "Jan Steen", "Dutch"), PANEL, measured, SCALE)
 
         assert {block.x_px for block in layout.blocks} == {PANEL.margin_px}
 
     def test_each_block_sits_below_the_one_before_it(self):
-        layout = lay_out(("The Banquet", "Jan Steen", "Dutch"), PANEL, measured)
+        layout = lay_out(("The Banquet", "Jan Steen", "Dutch"), PANEL, measured, SCALE)
 
         tops = [block.y_px for block in layout.blocks]
         assert tops == sorted(tops)
         assert len(set(tops)) == 3, "two blocks were placed at the same height"
 
     def test_the_gap_between_blocks_is_proportional_to_the_upper_one(self):
-        layout = lay_out(("The Banquet", "Jan Steen"), PANEL, measured)
+        layout = lay_out(("The Banquet", "Jan Steen"), PANEL, measured, SCALE)
 
         first, second = layout.blocks
         gap = second.y_px - (first.y_px + first.height_px)
-        assert gap == round(TITLE_SIZE_PX * LEADING)
+        assert gap == round(SCALE.primary_px * LEADING)
 
     def test_a_wrapped_line_is_given_the_room_it_actually_takes(self):
-        """The next block must clear a two-row title, not a one-row one."""
-        narrow = Geometry(width_px=300, height_px=1072, margin_px=20)
+        """The next block must clear a multi-row title, not a one-row one.
+
+        On the reference panel rather than an artificially narrow one: at type
+        derived from a 7-foot viewing distance a long title wraps three ways
+        across the full panel, where the retired placeholder sizes needed a 300 px
+        surface to wrap at all — and that surface now drops the second line
+        instead of placing it, which would have tested the drop rule by accident.
+        """
         long_title = "Triptych Window from the Coonley Playhouse, Riverside, Illinois"
 
-        layout = lay_out((long_title, "Frank Lloyd Wright"), narrow, measured)
+        layout = lay_out((long_title, "Frank Lloyd Wright"), PANEL, measured, SCALE)
 
         title, artist = layout.blocks
-        assert title.height_px > TITLE_SIZE_PX, "the title was not measured as wrapping"
+        assert title.height_px > SCALE.primary_px, "the title was not measured as wrapping"
         assert artist.y_px >= title.y_px + title.height_px
 
 
 class TestWhatComesOffWhenItWillNotFit:
     def test_a_label_that_fits_drops_nothing(self):
-        layout = lay_out(("The Banquet", "Jan Steen", "Dutch"), PANEL, measured)
+        layout = lay_out(("The Banquet", "Jan Steen", "Dutch"), PANEL, measured, SCALE)
 
         assert layout.dropped == ()
 
-    @pytest.mark.parametrize(
-        ("height", "kept"),
-        [
-            (300, ["The Banquet", "Jan Steen", "Dutch", "1626–1679", "Oil on canvas"]),
-            (200, ["The Banquet", "Jan Steen", "Dutch", "1626–1679"]),
-            (150, ["The Banquet", "Jan Steen"]),
-            (120, ["The Banquet"]),
-        ],
-    )
-    def test_the_least_identifying_lines_come_off_the_bottom(self, height: int, kept: list[str]):
+    LINES = ("The Banquet", "Jan Steen", "Dutch", "1626–1679", "Oil on canvas")
+
+    @staticmethod
+    def tall_enough_for(count: int, *, margin_px: int = 20) -> Geometry:
+        """A surface exactly tall enough to hold the first `count` of `LINES`.
+
+        **Taken from where the blocks actually land, not recomputed here.** These
+        heights used to be four literals — 300, 200, 150, 120 — chosen against
+        type sizes that were provisional placeholders, so every one of them was
+        pinning a coincidence of constants nobody had measured. Now that the sizes
+        derive from a viewing distance the operator can recalibrate, a literal
+        height would break on the commit that changes a number it never named. A
+        test that re-derived the stack arithmetic instead would agree with a
+        broken implementation about where the bottom is, so the surface is sized
+        from an unbounded layout's own answer.
+        """
+        unbounded = Geometry(width_px=1448, height_px=100_000, margin_px=margin_px)
+        last = lay_out(TestWhatComesOffWhenItWillNotFit.LINES, unbounded, measured, SCALE).blocks[count - 1]
+        return Geometry(width_px=1448, height_px=last.y_px + last.height_px + margin_px, margin_px=margin_px)
+
+    @pytest.mark.parametrize("count", [5, 4, 3, 2, 1])
+    def test_the_least_identifying_lines_come_off_the_bottom(self, count: int):
         """Shrinking the surface peels lines off the end, never out of the middle.
 
-        Stepped through four heights rather than asserted at one, because the
+        Stepped through every count rather than asserted at one, because the
         property is the *ordering* — a rule that kept a prefix at one size and
         reordered at another would pass a single-height check.
         """
-        lines = ("The Banquet", "Jan Steen", "Dutch", "1626–1679", "Oil on canvas")
-        short = Geometry(width_px=1448, height_px=height, margin_px=20)
+        layout = lay_out(self.LINES, self.tall_enough_for(count), measured, SCALE)
 
-        layout = lay_out(lines, short, measured)
-
-        assert [block.text for block in layout.blocks] == kept
-        assert layout.dropped == lines[len(kept) :]
+        assert [block.text for block in layout.blocks] == list(self.LINES[:count])
+        assert layout.dropped == self.LINES[count:]
 
     def test_what_is_kept_stays_at_its_full_size(self):
         """The floor. Type that shrinks to fit has quietly stopped being an
         accessibility surface, and only the person who cannot read it finds out."""
-        short = Geometry(width_px=1448, height_px=200, margin_px=20)
+        layout = lay_out(self.LINES, self.tall_enough_for(2), measured, SCALE)
 
-        layout = lay_out(("The Banquet", "Jan Steen", "Dutch", "Oil on canvas"), short, measured)
-
-        assert layout.blocks[0].size_px == TITLE_SIZE_PX
-        assert layout.blocks[1].size_px == ARTIST_SIZE_PX
+        assert [block.size_px for block in layout.blocks] == [SCALE.primary_px, SCALE.floor_px]
 
     def test_nothing_placed_runs_past_the_bottom_margin(self):
         short = Geometry(width_px=1448, height_px=300, margin_px=20)
 
-        layout = lay_out(("The Banquet", "Jan Steen", "Dutch", "1626–1679", "Oil on canvas"), short, measured)
+        layout = lay_out(("The Banquet", "Jan Steen", "Dutch", "1626–1679", "Oil on canvas"), short, measured, SCALE)
 
         bottom = short.margin_px + short.text_height_px
         assert all(block.y_px + block.height_px <= bottom for block in layout.blocks)
@@ -151,7 +200,7 @@ class TestWhatComesOffWhenItWillNotFit:
         """
         tiny = Geometry(width_px=200, height_px=50, margin_px=5)
 
-        layout = lay_out(("Triptych Window from the Coonley Playhouse", "Frank Lloyd Wright"), tiny, measured)
+        layout = lay_out(("Triptych Window from the Coonley Playhouse", "Frank Lloyd Wright"), tiny, measured, SCALE)
 
         assert [block.text for block in layout.blocks] == ["Triptych Window from the Coonley Playhouse"]
         assert layout.dropped == ("Frank Lloyd Wright",)
@@ -167,13 +216,13 @@ class TestDegenerateSurfaces:
         ],
     )
     def test_there_is_nowhere_to_put_anything_and_it_says_so(self, surface: Geometry, why: str):
-        layout = lay_out(("The Banquet", "Jan Steen"), surface, measured)
+        layout = lay_out(("The Banquet", "Jan Steen"), surface, measured, SCALE)
 
         assert layout.is_empty, why
         assert layout.dropped == ("The Banquet", "Jan Steen"), "what could not be placed was not reported"
 
     def test_a_label_with_no_lines_lays_out_to_nothing(self):
-        layout = lay_out((), PANEL, measured)
+        layout = lay_out((), PANEL, measured, SCALE)
 
         assert layout.is_empty
         assert layout.dropped == ()
@@ -210,26 +259,32 @@ class TestTheMeasure:
 
     def test_a_line_wraps_at_the_measure_rather_than_at_the_surface_edge(self):
         seen: list[tuple[str, int, int]] = []
-        lay_out(("Chicago", "Georgia O'Keeffe", "American"), self.UNBOUNDED, self.recording(seen))
+        lay_out(("Chicago", "Georgia O'Keeffe", "American"), self.UNBOUNDED, self.recording(seen), SCALE)
 
         body_wrap = seen[2][2]
-        assert body_wrap == round(MEASURE_EM * BODY_SIZE_PX)
+        assert body_wrap == round(MEASURE_EM * SCALE.floor_px)
         assert body_wrap < self.UNBOUNDED.text_width_px, "the bound did not narrow anything"
 
     def test_the_measure_scales_with_the_type_size(self):
         """Ems, not pixels: a bound that did not scale would be one measure for
-        the title and a different one, in characters, for everything else."""
-        seen: list[tuple[str, int, int]] = []
-        lay_out(("Chicago", "Georgia O'Keeffe", "American"), self.UNBOUNDED, self.recording(seen))
+        the leading line and a different one, in characters, for everything else.
 
-        title_wrap, artist_wrap, body_wrap = (line[2] for line in seen)
-        assert title_wrap > artist_wrap > body_wrap
+        Asserted between the two tiers rather than across three lines, because the
+        supporting lines now share a size — the middle tier the old assertion
+        stepped through was one of the provisional constants this replaced.
+        """
+        seen: list[tuple[str, int, int]] = []
+        lay_out(("Chicago", "Georgia O'Keeffe", "American"), self.UNBOUNDED, self.recording(seen), SCALE)
+
+        leading_wrap, *supporting_wraps = (line[2] for line in seen)
+        assert leading_wrap > supporting_wraps[0]
+        assert len(set(supporting_wraps)) == 1, "lines at one size were bounded at two widths"
 
     def test_a_surface_narrower_than_the_measure_still_governs(self):
         """The bound narrows a line; it never widens one past the margins."""
         narrow = Geometry(width_px=400, height_px=1072, margin_px=40)
         seen: list[tuple[str, int, int]] = []
-        lay_out(("The Bedroom", "Vincent van Gogh"), narrow, self.recording(seen))
+        lay_out(("The Bedroom", "Vincent van Gogh"), narrow, self.recording(seen), SCALE)
 
         assert {line[2] for line in seen} == {narrow.text_width_px}
 
@@ -239,7 +294,7 @@ class TestTheMeasure:
         every block below it a row lower than the ink. The block carries the
         number so the two sides cannot disagree."""
         seen: list[tuple[str, int, int]] = []
-        layout = lay_out(("Chicago", "Georgia O'Keeffe", "American"), PANEL, self.recording(seen))
+        layout = lay_out(("Chicago", "Georgia O'Keeffe", "American"), PANEL, self.recording(seen), SCALE)
 
         assert [block.wrap_px for block in layout.blocks] == [line[2] for line in seen]
 
@@ -248,10 +303,10 @@ class TestTheMeasure:
         same surface occupies more rows with the bound than the panel alone
         would have given it."""
         long_line = "Colour woodblock print on paper, from the series Thirty-six Views of Mount Fuji"
-        layout = lay_out(("T", "A", long_line), self.UNBOUNDED, measured)
+        layout = lay_out(("T", "A", long_line), self.UNBOUNDED, measured, SCALE)
 
         bounded = layout.blocks[2]
-        unbounded = measured(long_line, BODY_SIZE_PX, self.UNBOUNDED.text_width_px)
+        unbounded = measured(long_line, SCALE.floor_px, self.UNBOUNDED.text_width_px)
         assert bounded.height_px > unbounded.height_px
 
 
@@ -262,10 +317,14 @@ class TestGeometryIsAParameter:
         narrow = Geometry(width_px=400, height_px=1072, margin_px=40)
         lines = ("Triptych Window from the Coonley Playhouse, Riverside, Illinois", "Frank Lloyd Wright")
 
-        on_wide = lay_out(lines, wide, measured)
-        on_narrow = lay_out(lines, narrow, measured)
+        on_wide = lay_out(lines, wide, measured, SCALE)
+        on_narrow = lay_out(lines, narrow, measured, SCALE)
 
-        assert on_wide.blocks[1].y_px != on_narrow.blocks[1].y_px
+        # The first block rather than the second, because the second may not exist:
+        # a narrow surface can wrap the title far enough to drop everything under
+        # it, and this test is about geometry reaching the layout at all — not
+        # about which lines survive, which is the drop rule's own test above.
+        assert on_wide.blocks[0].height_px < on_narrow.blocks[0].height_px
 
     def test_the_usable_area_is_the_surface_less_its_margins(self):
         surface = Geometry(width_px=1448, height_px=1072, margin_px=40)

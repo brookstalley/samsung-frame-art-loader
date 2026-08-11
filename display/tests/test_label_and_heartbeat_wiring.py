@@ -25,6 +25,7 @@ from display import daemon as daemon_module
 from display.daemon import Daemon
 from display.heartbeat import HEARTBEAT_FILENAME, INTERVAL_SECONDS
 from display.manifest import Watcher
+from display.panel import TypeScale
 
 
 async def _comes_back(flag: threading.Event, *, within_seconds: float = 5.0) -> bool:
@@ -73,6 +74,45 @@ class TestTheLabelFollowsTheWall:
 
         assert surface.shown, "the wall changed and no label was drawn"
         assert surface.last_text[:2] == ["Cat Litter", "Ed Ruscha"]
+
+    @pytest.mark.asyncio
+    async def test_the_label_is_set_at_the_surface_s_own_type_scale(self, settings, tv, state, clock, publish):
+        """**The seam between the device and the type, pinned on the drawn output.**
+
+        How large the label's type has to be is a fact about this panel's
+        resolution and how far away it is read, so the device supplies it and the
+        daemon must set the label at what it was given. A draw path that reached
+        for sizes of its own would be asserting that every surface is read from
+        the same place — which is how this product came to render body type at
+        half the height a letter must reach to be resolvable, undetected.
+
+        **The fake is given a scale no derivation would produce**, because a fixture
+        carrying the reference wall's own numbers cannot tell "used the surface's
+        scale" apart from "hardcoded the reference wall's" — both routes would
+        arrive at the same pixels and the test would pass either way.
+        """
+        absurd = TypeScale(primary_px=7, floor_px=3)
+        surface = FakeSurface(type_scale=absurd)
+        daemon = Daemon(
+            settings=settings,
+            tv=tv,
+            state=state,
+            watcher=Watcher(
+                settings.manifest_path,
+                rotation_interval_fallback=settings.rotation_interval_fallback_seconds,
+                shuffle_fallback=settings.rotation_shuffle_fallback,
+            ),
+            clock=clock.as_clock(),
+            surface=surface,
+        )
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter", "artist": "Ed Ruscha"}})
+
+        await daemon.tick()
+
+        surface.release.set()
+        sizes = {block.size_px for block in surface.shown[-1].blocks}
+        assert sizes <= {absurd.primary_px, absurd.floor_px}, f"the label was set at sizes the surface never gave it: {sizes}"
+        assert absurd.primary_px in sizes, "the leading line did not get the surface's primary tier"
 
     @pytest.mark.asyncio
     async def test_nothing_is_captioned_when_the_wall_did_not_change(self, labelled, surface, tv, publish):

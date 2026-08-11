@@ -833,7 +833,7 @@ class Daemon:
         and that task finishing is also what opens the gate on the next draw.
         """
         lines = read_label(entry.label).lines() if entry is not None else ()
-        layout = lay_out(lines, surface.geometry, surface.measure)
+        layout = lay_out(lines, surface.geometry, surface.measure, surface.type_scale)
         surface.show(layout)
         return layout
 

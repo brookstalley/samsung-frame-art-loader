@@ -25,10 +25,13 @@ decision to record rather than something to sync the prose to.
 
 1. **The e-paper label is legible at standing distance.** The panel is driven at
    16 grey levels with the mode read back rather than assumed, and **type never
-   shrinks below the floor — content is dropped instead.** *(PROPOSED 2026-08-11
-   and not ratified; the drop-rather-than-shrink clause is the half awaiting the
-   owner. Tracked in `project-state.yaml` `open_questions`, `decide_by` Chunk
-   13B, which is also the visit that settles the floor the clause refers to.)*
+   shrinks below the floor — content is dropped instead, except for the three
+   facts that identify the work, which shrink rather than vanish.** *(RATIFIED
+   2026-08-11 by the operator, and amended by the same ruling: the flat clause
+   became two tiers. § Type never shrinks to fit carries which content is in
+   which tier and what follows from it — this sentence is the rule, that section
+   is its detail. `open_questions` closed on the same date; the clause could not
+   be ratified before the floor it refers to existed, and by then it existed.)*
 2. **WCAG 2.1 AA on the curation browser, and colour is never the sole carrier of
    state.** Ratified; the decision it implements is
    `design_decisions.accessibility_approach`.
@@ -96,31 +99,52 @@ anywhere reporting it. **1-bit type on a non-emissive panel at standing distance
 the failure this whole section exists to prevent**, and it looks exactly like
 success from every direction except standing in front of it.
 
-### Type never shrinks to fit; content is dropped instead
+### Type never shrinks to fit, except for the facts that identify the work
 
-**Practised** — `display/src/display/panel/layout.py`.
+**Partly practised** — `display/src/display/panel/layout.py` implements the
+optional tier's drop rule today. **The mandatory tier is owed, and 13B-4 builds
+it**; `layout.py`'s docstring describes the flat rule because the flat rule is
+still what the code does.
 
 When the lines will not fit, the least identifying ones come off the bottom and the
 survivors keep their size. Type that shrinks to fit has silently converted an
 accessibility surface into a decorative one, and the failure is invisible to
 everyone except the person who cannot read it.
 
-Three properties of the rule, all of them load-bearing:
+**Ratified with an amendment 2026-08-11, and the amendment is a second tier.**
+The flat rule collided with itself: this section said the first line is never
+dropped even when the title alone overflows, and § The label's content model said
+nothing is ever set below the floor. A long title at the floor satisfies neither,
+and nothing said which rule yielded. The operator's ruling splits the content
+instead of picking a winner:
 
-- **The ordering is the priority.** Lines arrive in wall-label order — title,
-  artist, nationality, dates, date, medium, dimensions — which is also
-  least-droppable first, so dropping from the end needs no second ranking to go
-  stale against the first.
-- **The first line is never dropped**, even when the title alone overflows. A
-  surface too small for one title is a misconfigured device; returning an empty
-  label would present that as a work with no name.
+| Tier | What is in it | What happens when it will not fit |
+|---|---|---|
+| **Mandatory** | The artist's family name, the artist's given name, and the work's title when it has one | **Shrinks, as far as needed, below the floor if that is what it takes.** Never dropped, never wrapped where a size reduction can be avoided |
+| **Optional** | Nationality, life dates, the work's date, medium, dimensions, commentary — **and nothing here is mandatory** | **Dropped, at full size.** Never set below the floor |
+
+Four properties of the rule, all of them load-bearing:
+
+- **The ordering is the priority.** Lines arrive in wall-label order — which is
+  also least-droppable first, so dropping from the end needs no second ranking to
+  go stale against the first.
+- **The mandatory tier is what a label is for.** A label that cannot say who made
+  the work and what it is called identifies nothing, and an unreadably small name
+  is still a name somebody can walk closer to read. That is the trade the operator
+  took, and it is the opposite of the trade the optional tier takes.
+- **A shrink is reported exactly like a drop**, and this is the condition the
+  amendment rests on. The reason the flat rule existed is that illegible type
+  fails invisibly; admitting a shrink re-opens that hole unless the journal names
+  it. A panel routinely setting names at 20 px is a misconfigured device, and
+  nobody will ever discover that by eye at 7 feet.
 - **What was dropped is reported, not discarded.** The journal can then say the
   surface is too small for the corpus, rather than leaving somebody to notice
   missing dimensions by eye.
 
 ### The type floor is derived from viewing distance, not chosen for a panel
 
-**Owed, and it replaces the settlement below rather than answering it.** Settled
+**Practised** — `display/src/display/panel/legibility.py`, built 2026-08-11 as
+13B-1. It replaces the settlement below rather than answering it. Settled
 2026-08-11 with the operator, at the panel, once the two physical facts were
 known: the reference panel is **6 inches diagonal at 1448×1072**, which is
 **~300 PPI**, and it is read from **7 feet**.
@@ -188,7 +212,33 @@ little across the faces in scope, and because a floor that is 3% conservative is
 harmless in the direction that matters.
 
 **Deployment values, not constants:** panel diagonal and viewing distance are
-`.env` values like every other geometry fact.
+`.env` values like every other geometry fact — `EPD_PANEL_DIAGONAL_INCHES` and
+`EPD_VIEWING_DISTANCE_INCHES`, inches for both so that neither has to be
+remembered as feet. **They are the only two settings in the display plane with no
+default**, and that asymmetry is the rule rather than an oversight: everything
+else there falls back to the reference wall's number, which is right, because a
+wrong poll interval or brightness is visible.
+
+**The margin derives from the primary tier at half an em, and that ratio is a
+decision this build had to make rather than one it inherited.** The amendment
+above said the margin derives with the floor and did not say by what rule. Three
+things settle it: a border cannot be picked independently of the floor, since it
+trades directly against how many lines survive the drop rule; anchoring it to the
+primary tier is what makes it scale to the next device; and the one observation
+there is — the panel work ran a 60 px border to keep the largest rung of the type
+ladder off the bezel — puts the ratio at 0.46 against a 130 px tier, so 0.5 is the
+round number nearest it and lands at 65. **That reconciles the note below about
+the measurements having been taken at 60 while the code shipped 40**: neither
+number survives, and the one that replaces them is within a few pixels of the one
+the operator actually looked at. It is the one number here an operator might
+reasonably move, and moving it is one constant rather than another panel visit.
+
+**`EPD_MARGIN_PX` survives as an override, not as a default.** It is for the
+surface whose border is a physical fact rather than a typographic choice — the
+device drawing its label into the mat area around an artwork does not get to
+choose where the picture ends. `.env.example` leaves it commented, because a
+`.env` is copied once and lived in, and a value written there would override the
+derivation forever on every deployment that copied the file.
 
 **A deployment that states neither loses its label, not its wall.** Guessing a
 distance is the one thing that must not happen — a wrong distance gives silently
@@ -218,6 +268,24 @@ ordering, which is the reason to trust it.
 **The artist's name is set as `FAMILY, Given`** — family name in bold capitals,
 given name in normal weight and case, on one line: `ANDERS, Joseph`.
 
+**One line is the preference, not the requirement.** Ruled 2026-08-11: the name
+block gives up its line before it gives up its size, and gives up its size last of
+all. Three steps, taken in order, each only when the one before it fails:
+
+1. `FAMILY, Given` on **one line** at the target size.
+2. **Two lines** — family, then given — each at the target size, taken when one
+   line would have forced a reduction. Sizes are then independent, which is what
+   lets a long family name cost only itself.
+3. **Shrink**, below the floor if that is what it takes, when even a single name
+   on its own line will not hold at that size. Reported, per the tier table above.
+
+The ordering is the same instinct as the drop rule it sits under — spend layout
+before you spend legibility — and it is why the ladder is stated as a preference
+with fallbacks rather than as a fixed number of lines. A layout engine told "two
+lines" would break `ANDERS, Joseph` for every short name on the wall; one told
+"one line" would shrink Toulouse-Lautrec to fit a break it could have taken for
+free.
+
 - **This needs a real field, not a heuristic.** `Artist` carries `name` as one
   string; the surname heuristic in `discovery/artic.py` is documented there as
   unreliable, and it is wrong for "Titian (Tiziano Vecellio)", for "van Gogh", and
@@ -237,8 +305,16 @@ spent on content.** A fixed hierarchy handles the corpus badly — an anonymous
 untitled work leaves most of the panel empty while a long-titled attributed one
 overflows. So the engine is given candidates with a priority and a role, and:
 
-- **Nothing is set below the floor, ever.** The drop rule above is unchanged and
-  outranks everything here; the floor is now derived rather than provisional.
+- **Nothing optional is set below the floor, ever.** The tier table in § Type
+  never shrinks to fit outranks everything here: optional content drops at full
+  size, mandatory content shrinks rather than vanishing. The floor is derived
+  rather than provisional.
+- **The mandatory tier is admitted before the fill rule runs**, not by it. Family
+  name, given name and the title when there is one are not candidates competing
+  for room; they are the room the rest competes for what is left of. This is what
+  makes "nothing else is mandatory" affordable — with four of the six tombstone
+  facts droppable, the ~66 px slack below stops being a crisis and becomes a
+  per-work answer.
 - **Optional content is admitted only if it fits at the floor.** Commentary is the
   first thing to go and the last thing admitted, because it is the only line that
   identifies nothing.
@@ -251,11 +327,14 @@ overflows. So the engine is given candidates with a priority and a role, and:
   an engine that adapts silently is one whose omissions nobody can audit.
 
 > **Every panel measurement in this section was taken at a 60 px margin**, while
-> `DEFAULT_EPD_MARGIN_PX` ships 40 — a wider border was used to keep the largest
-> type clear of the bezel. The 952 px usable figure and the budgets built on it
-> therefore describe a margin the deployment does not currently run. Reconciling
-> the two belongs to the derivation that replaces both, and is noted here so the
-> numbers are not read as describing the committed default.
+> the code then shipped 40 — a wider border was used to keep the largest type
+> clear of the bezel, so the 952 px usable figure and the budgets built on it
+> described a margin the deployment did not run. **Reconciled 2026-08-11 by
+> 13B-1**, which retired both: the border now derives at half the primary tier,
+> which is 65 px on this panel and leaves 942 px usable. The figures in this
+> section are therefore within ~1% of what the deployment actually runs — close
+> enough that the reasoning built on them stands, and stated so that the 952 is
+> not later mistaken for a current measurement.
 
 **Museum tombstone conventions, checked rather than assumed** — the operator asked
 to be corrected on these 2026-08-11, and was on the first one:
@@ -287,25 +366,30 @@ than a tuning target.** With the identification block set at the floor there is
 makes that a per-work answer instead of a global one: the works with short names
 and no title will have room, and the ones that do not will drop it.
 
-### Type sizes and the margin are not settled, and only the panel can settle them
+### The four provisional numbers, and what became of them
 
-**Superseded 2026-08-11 by the two sections above** — kept because the reasoning
-about why they were provisional is still the reasoning, and because a settled
-number under a note calling it provisional is worse than either. The type sizes
-and margin are no longer settled by eye at all: they are derived from the floor,
-and what the operator settles is `min_cap_arcmin`.
+**Closed 2026-08-11 by 13B-1. Kept as a record of how they failed**, because the
+way they failed is the reason the sections above are written the way they are.
 
-`display/src/display/panel/layout.py` carries `TITLE_SIZE_PX = 40`, `ARTIST_SIZE_PX = 32`,
-`BODY_SIZE_PX = 26`, and `display/src/display/config.py` carries
-`DEFAULT_EPD_MARGIN_PX = 40`. **All four are provisional placeholders and must not
-be quoted as measurements.** The operator's 2026-08-04 look at the real panel
-killed the 2024 `"Sans 18"` and narrowed the live range to roughly the mid-20s
-through the low-40s — but it was rendered with PIL/DejaVu, and this product
-typesets with Pango. Different rasterizer, different face, different metrics: a
-size that looked right there does not transfer.
+`display/src/display/panel/layout.py` carried `TITLE_SIZE_PX = 40`,
+`ARTIST_SIZE_PX = 32` and `BODY_SIZE_PX = 26`; `display/src/display/config.py`
+carried `DEFAULT_EPD_MARGIN_PX = 40`. **None of the four exists any more**, and
+none of them was ever a measurement. The operator's 2026-08-04 look at the real
+panel killed the 2024 `"Sans 18"` and narrowed the live range to roughly the
+mid-20s through the low-40s — but it was rendered with PIL/DejaVu while this
+product typesets with Pango, so a size that looked right there did not transfer.
 
-The margin belongs to the same judgement rather than to a separate one, because a
-border trades directly against how many lines survive the drop rule.
+**Three sizes became two, and that is the part worth carrying forward.** The
+calibration settled exactly two readings worth setting type at; the rung between
+them is the one the operator reported as taking effort, so a middle tier would be
+type aimed at a boundary somebody had recorded in order to avoid it. The old
+title/artist/body split had no such reasoning under it — three numbers in
+descending order, chosen because a hierarchy wants three.
+
+**What replaces them is not four numbers but one calibrated angle**
+(`COMFORTABLE_CAP_ARCMIN`) with a floor below it, converted per device. The
+operator settles that angle once, by eye; every deployment after this one states
+its own geometry and gets its own pixels.
 
 **What closes it:** a second look at the panel, rendering through the product's own
 Pango path. **Chunk 13B owns it** — it carries `Visual change: yes` for exactly
@@ -341,17 +425,19 @@ one unit available there, and it scales the title and the body together instead 
 pinning one and distorting the other. The bound only ever narrows: a device
 smaller than the measure is a device whose margins still win.
 
-**Today it binds; after the floor lands it will not, and both halves need saying.**
-At the placeholder sizes still in source, 30 em is 780–1200 px against 1328 px of
-usable width, so the bound is what wraps a long body line right now. Once the
-sizes derive from the operator's 12.4′ floor (~130 px), 30 em is 3900 px, the panel
-edge always governs first, and the bound goes inert **on this wall**.
+**It is now inert on this wall, as 13B-1 predicted it would be.** At the derived
+sizes, 30 em is ~2760 px at the floor against 1318 px of usable width, so the
+panel's own edge always governs first and the bound narrows nothing here. Before
+the derivation it did bind, at the placeholder sizes, which is why this paragraph
+used to be written the other way round.
 
 That is not dead code and it is not a reason to drop it: the norm is
 device-independent, and a device drawing its label into the mat area around an
-artwork on a wide monitor is exactly where a measure has to exist. But once the
-derivation lands, nobody should read `MEASURE_EM` as a control doing something on
-the reference panel, because it will not be.
+artwork on a wide monitor is exactly where a measure has to exist. **A rule
+deleted for being unexercised on one device is a rule the next device does not
+get.** But nobody should read `MEASURE_EM` as a control doing something on the
+reference panel, because it is not — which is why its own tests exercise it on a
+surface wide enough for it to bite rather than on this one.
 
 ### Nothing may reason about a panel's geometry anywhere but on that panel
 
