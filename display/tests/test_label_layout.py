@@ -14,7 +14,14 @@ import math
 import pytest
 
 from display.panel import Geometry, lay_out
-from display.panel.layout import ARTIST_SIZE_PX, BODY_SIZE_PX, LEADING, TITLE_SIZE_PX, Extent
+from display.panel.layout import (
+    ARTIST_SIZE_PX,
+    BODY_SIZE_PX,
+    LEADING,
+    MEASURE_EM,
+    TITLE_SIZE_PX,
+    Extent,
+)
 
 
 def measured(text: str, size_px: int, wrap_px: int) -> Extent:
@@ -170,6 +177,62 @@ class TestDegenerateSurfaces:
 
         assert layout.is_empty
         assert layout.dropped == ()
+
+
+class TestTheMeasure:
+    """The bound on how far a line runs before it wraps.
+
+    A 1448px panel is far wider than continuous text stays comfortable to read
+    across, so the wrap width handed to the measurer is the *narrower* of the
+    surface and the measure — which is the only thing this tier can decide,
+    since how many characters that turns out to be depends on the face.
+    """
+
+    @staticmethod
+    def recording(seen: list[tuple[str, int, int]]):
+        """A measurer that records the wrap width it was asked for."""
+
+        def measure(text: str, size_px: int, wrap_px: int) -> Extent:
+            seen.append((text, size_px, wrap_px))
+            return measured(text, size_px, wrap_px)
+
+        return measure
+
+    def test_a_line_wraps_at_the_measure_rather_than_at_the_panel_edge(self):
+        seen: list[tuple[str, int, int]] = []
+        lay_out(("Chicago", "Georgia O'Keeffe", "American"), PANEL, self.recording(seen))
+
+        body_wrap = seen[2][2]
+        assert body_wrap == round(MEASURE_EM * BODY_SIZE_PX)
+        assert body_wrap < PANEL.text_width_px, "the bound did not bite on a panel this wide"
+
+    def test_the_measure_scales_with_the_type_size(self):
+        """Ems, not pixels: a bound that did not scale would be one measure for
+        the title and a different one, in characters, for everything else."""
+        seen: list[tuple[str, int, int]] = []
+        lay_out(("Chicago", "Georgia O'Keeffe", "American"), PANEL, self.recording(seen))
+
+        title_wrap, artist_wrap, body_wrap = (line[2] for line in seen)
+        assert title_wrap > artist_wrap > body_wrap
+
+    def test_a_surface_narrower_than_the_measure_still_governs(self):
+        """The bound narrows a line; it never widens one past the margins."""
+        narrow = Geometry(width_px=400, height_px=1072, margin_px=40)
+        seen: list[tuple[str, int, int]] = []
+        lay_out(("The Bedroom", "Vincent van Gogh"), narrow, self.recording(seen))
+
+        assert {line[2] for line in seen} == {narrow.text_width_px}
+
+    def test_the_bound_is_what_makes_a_long_line_wrap(self):
+        """Behavioural rather than about the wrap number: the same line on the
+        same surface occupies more rows with the bound than the panel alone
+        would have given it."""
+        long_line = "Colour woodblock print on paper, from the series Thirty-six Views of Mount Fuji"
+        layout = lay_out(("T", "A", long_line), PANEL, measured)
+
+        bounded = layout.blocks[2]
+        unbounded = measured(long_line, BODY_SIZE_PX, PANEL.text_width_px)
+        assert bounded.height_px > unbounded.height_px
 
 
 class TestGeometryIsAParameter:

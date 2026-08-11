@@ -49,6 +49,27 @@ BODY_SIZE_PX: Final[int] = 26
 #: the sizes above are settled.
 LEADING: Final[float] = 0.35
 
+#: The widest a line may run before it wraps, as a multiple of its own type size.
+#: The panel is far wider than continuous text stays comfortable to read across —
+#: at the body size a full-width line on the reference panel runs well past any
+#: measure a typographer would set — and line length is the third thing
+#: `design_decisions.accessibility_approach` names as carrying legibility,
+#: alongside type size and contrast.
+#:
+#: **In ems rather than characters**, though the readable range is conventionally
+#: quoted in characters (roughly 45–75). This tier is handed a measurer and never
+#: a face, so it cannot count characters without the approximation this module
+#: exists to refuse; a multiple of the type size is the same rule expressed in the
+#: one unit available here, and it scales the title and the body together instead
+#: of pinning one and distorting the other. At the ~0.5em average glyph width
+#: typical of text faces this lands near the middle of that range.
+#:
+#: **PROVISIONAL — no one has read this panel at standing distance yet.** It is
+#: the third of the three settlements that have to be made together, since a
+#: measure depends on the face and the size and a narrower one costs lines to the
+#: drop rule. Whoever settles it replaces this note as well as the number.
+MEASURE_EM: Final[float] = 30.0
+
 
 @dataclass(frozen=True, slots=True)
 class Geometry:
@@ -163,7 +184,7 @@ def _place(lines: tuple[str, ...], surface: Geometry, measure: Measure) -> list[
     y = surface.margin_px
     for index, text in enumerate(lines):
         size = _size_for(index)
-        extent = measure(text, size, surface.text_width_px)
+        extent = measure(text, size, _wrap_width_for(size, surface))
         blocks.append(
             Block(
                 text=text,
@@ -176,6 +197,16 @@ def _place(lines: tuple[str, ...], surface: Geometry, measure: Measure) -> list[
         )
         y += extent.height_px + round(size * LEADING)
     return blocks
+
+
+def _wrap_width_for(size_px: int, surface: Geometry) -> int:
+    """How far a line of this size may run before it wraps.
+
+    The narrower of the surface and the measure. **The bound only ever narrows** —
+    a device smaller than the measure is a device whose margins still win, and a
+    bound that widened a line past them would be drawing outside the surface.
+    """
+    return min(surface.text_width_px, round(MEASURE_EM * size_px))
 
 
 def _size_for(index: int) -> int:
