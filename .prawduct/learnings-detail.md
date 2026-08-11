@@ -1598,3 +1598,28 @@ recurred within the same chunk: a mutation sweep found the daemon could lay a la
 out against type sizes the surface never gave it, missed because the fake surface
 carried the reference wall's own numbers. Giving the fake a scale no derivation
 would produce is what made the two routes distinguishable.
+
+## A directory no suite imports is code with no tests, and a signature change breaks it silently — when you delete a constant or add a required parameter, grep `tools/` and `scripts/` for consumers, because the linter, the type checker and a green suite are all silent about a file nothing imports
+
+Here 13B-1 deleted three constants and added required parameters to `lay_out` and
+`EpaperSurface`. `display/tools/label_preview.py` used all of them and was dead in
+four ways. A green suite, clean ruff, clean black and a 14/14 mutation sweep all
+said nothing, because none of them loads that file — `tests/test_config.py` walks
+`display/tools/*.py` with a regex and never imports it. The discovery site would
+have been the operator at the panel with the service stopped, which is the most
+expensive place this product has to find anything. `display/tests/test_tools.py`
+now calls `main()` behaviourally; an import check alone would have caught two of
+the four breaks, since the other two only fail when reached.
+
+## A guard that is badly SHAPED is a reason to reshape it, not a licence to drop it quietly — when you delete a test because it asserts the wrong thing, replace it with one asserting the right thing in the same commit and record why, because reasoning that lives only in your head reads to every later reader as carelessness
+
+A first pass guarded "two type tiers, not three" with
+`set(vars(TypeScale)["__slots__"]) == {...}`. That checks the dataclass's shape
+rather than the decision, and it would have failed wrongly on the next chunk's
+mandatory tier — which is a *smaller* size, below the floor, not a middle one. The
+reasoning was right and was written down nowhere, so the Critic correctly read it
+as an unaccounted deletion: the claim then survived only in prose. The repair was
+the third option, not either of the two obvious ones — assert the decision
+behaviourally (no size ever lands *between* the two tiers), which survives the
+next chunk and fails against a planted middle tier, and put the reason in the
+change log.

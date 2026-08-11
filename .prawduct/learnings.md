@@ -1110,6 +1110,10 @@ filenames encode identity in at least three mutually inconsistent conventions
 
 ## A decision's stated PREMISE is checkable at the moment you build on it, and that moment is the last cheap one — before implementing a recorded decision, run the measurement its justifying clause asserts, because a premise written in prose during a walkthrough reads afterwards as an observation, and here "the mechanical derivation lands in the region the corpus occupies" was false by +15.2 L* on 31 of 40 works
 
+## A directory no suite imports is code with no tests, and a signature change breaks it silently — when you delete a constant or add a required parameter, grep `tools/` and `scripts/` for consumers, because the linter, the type checker and a green suite are all silent about a file nothing imports
+
+## A guard that is badly SHAPED is a reason to reshape it, not a licence to drop it quietly — when you delete a test because it asserts the wrong thing, replace it with one asserting the right thing in the same commit and record why, because reasoning that lives only in your head reads to every later reader as carelessness
+
 ## A requirement about human perception is under-specified until the artifact carries the PHYSICAL quantity it depends on — record viewing distance, angular size or luminance beside any rendered number (px, pt), because pixels are a fact about a panel while legibility is a fact about a person at a distance
 
 ## A test asserting that a producer STORED a value does not pin a producer-to-consumer seam — assert on the consumer's own output, because a fixture that feeds the consumer the same number by both routes cannot tell the two expressions apart
