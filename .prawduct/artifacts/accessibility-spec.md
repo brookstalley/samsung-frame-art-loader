@@ -101,9 +101,18 @@ The margin belongs to the same judgement rather than to a separate one, because 
 border trades directly against how many lines survive the drop rule.
 
 **What closes it:** a second look at the panel, rendering through the product's own
-Pango path. This is the same bench visit Chunk 13A's Done-when step 0b is waiting
-on. Whoever settles the numbers replaces the provisional notes as well as the
-values — a settled number under a note calling it provisional is worse than either.
+Pango path. **Chunk 13B owns it** — it carries `Visual change: yes` for exactly
+this reason, and its Done-when step 1 includes the operator's legibility look.
+Whoever settles the numbers replaces the provisional notes as well as the values —
+a settled number under a note calling it provisional is worse than either.
+
+> **13B's deliverables name the type size and not the other two.** They read "the
+> settled Pango type size replacing 13A's provisional one", while `config.py`'s own
+> note says the margin is settled by the same look — a border trades directly
+> against how many lines survive the drop rule — and nothing anywhere owns the
+> measure. **All three are one judgement and one visit.** Recorded here rather than
+> only in the plan because a chunk's deliverable list is what a builder ticks
+> against, and two of the three would otherwise be closed by nobody.
 
 ### Line length has no bound, and needs one
 
@@ -334,7 +343,7 @@ is the same reason `information-architecture.md` § Boundaries lists it.
 | Content drops rather than shrinking | Test, against an injected measurer so it runs without a font | `display/tests/test_label_layout.py` |
 | Glyph actually distinguishes state | **Critic judgment.** No test can see this | `/prawduct:critic` |
 | Focus lands where it should, and a poll does not steal it | **Browser suite**, `-m browser` — a real Chromium against a booted server | `curation/tests/browser/` |
-| Type size, margin and measure at reading distance | **The operator, at the panel.** Nothing else can | Chunk 13A Done-when step 0b |
+| Type size, margin and measure at reading distance | **The operator, at the panel.** Nothing else can | Chunk 13B, `Visual change: yes` |
 
 **The last row is the one to watch.** It is the only requirement in this artifact
 that no machine can close, on the surface this artifact says matters most.

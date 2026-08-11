@@ -119,9 +119,11 @@ label's type sizes and margin are provisional placeholders — the operator's
 2026-08-04 look killed the 2024 `"Sans 18"` but was rendered with PIL/DejaVu while
 the product typesets with Pango, so the numbers do not transfer. **Line length is
 worse than provisional: the accessibility decision names it as one of the three
-things carrying legibility and nothing states a bound at all.** All three close in
-the same act, at the panel — the bench visit Chunk 13A's Done-when step 0b is
-already waiting on.
+things carrying legibility and nothing states a bound at all.** All three are one
+judgement and close in one act, at the panel. **Chunk 13B owns it** — it already
+carries `Visual change: yes` and an operator legibility look in its Done-when — but
+its deliverables name only the type size, so the margin and the measure would
+otherwise have been closed by nobody. The spec records that.
 
 **The norm index was under-claiming the surface it says matters most.** Its only
 accessibility row named the browser. The label's two real mechanisms — the panel
