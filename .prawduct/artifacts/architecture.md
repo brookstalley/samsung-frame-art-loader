@@ -847,7 +847,14 @@ planes, because no data is shared — the manifest is regenerated, never migrate
 Every component is a singleton and will remain one. Nothing scales horizontally,
 nothing is replicated, and there is no load balancer, queue, or worker pool. This
 is a recorded decision, not an oversight: the targets in
-`nonfunctional-requirements.md` are one household, one TV, hundreds of works.
+`nonfunctional-requirements.md` are one household, one TV, thousands of works
+*(was "hundreds"; amended there 2026-08-10)*.
+
+**The amendment does not weaken this paragraph, and the distinction is the whole
+reason it survives unchanged.** Singletons are a decision about *load* — one
+curator, one run at a time — and the amendment moved only *catalogue size*, which
+no component's replication count answers. What a bigger catalogue does bite is
+retrieval and the browser client, both above this layer.
 
 **The known bottlenecks, in the order they will bite:**
 

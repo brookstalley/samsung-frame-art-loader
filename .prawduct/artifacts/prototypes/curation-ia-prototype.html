@@ -8,10 +8,22 @@
    wins) and once behind the explicit stamp. No component rule ever lives inside
    a theme block.
 
-   Everything from --surface-0 down to --font-label is lifted verbatim from
-   curation/src/curation/http/static/app.css, which is governed by a contrast
-   test. Tokens marked NEW are proposals this prototype needs and that file does
-   not yet have.
+   WHAT IS AND IS NOT PROVEN HERE. This started as a copy of
+   curation/src/curation/http/static/app.css and is no longer one. Three groups:
+
+   - LIFTED, unchanged from app.css and covered by its contrast test:
+     the type scale, the spacing scale, the radii, and the two font stacks.
+   - REVISED PROPOSALS, not in app.css and not in any test: every colour. Both
+     schemes were re-cut here — light to warm plaster and bistre ink, dark to
+     walnut and gilt — and app.css still holds the ink blue and the pale blue.
+   - NEW, needed by this design and absent from app.css: the semantic status
+     trio, the scrim pair, --text-3xl, --rail, --masthead.
+
+   tests/unit/test_design_tokens.py READS app.css AND NOTHING ELSE, so no test
+   has scanned a single colour below. Every one was checked at AA by hand
+   against the same formula that test uses, and hand-checking is not the same
+   claim: it proves the values were right when they were written, not that they
+   stay right. They become governed when they land in app.css, and not before.
    ========================================================================== */
 :root {
   color-scheme: light dark;

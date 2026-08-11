@@ -38,11 +38,20 @@ async function api(path, options) {
   return body;
 }
 
-/* The design target is hundreds of works, so both the grid and the theme picker
- * page through to the end rather than showing the first page. The picker is the
- * one that made this necessary: a truncated grid is a visible short list, but a
- * truncated picker means a curator simply cannot put work 101 in a theme, and is
- * told nothing about why.
+/* Both the grid and the theme picker page through to the end rather than showing
+ * the first page. The picker is the one that made this necessary: a truncated
+ * grid is a visible short list, but a truncated picker means a curator simply
+ * cannot put work 101 in a theme, and is told nothing about why.
+ *
+ * **THE JUSTIFICATION FOR THIS HAS BEEN RETIRED, AND THE BEHAVIOUR HAS NOT.**
+ * This paragraph used to open "the design target is hundreds of works, so…".
+ * `nonfunctional-requirements.md` moved that target to **thousands** on
+ * 2026-08-10, and its own amendment calls fetching the whole catalogue
+ * "indefensible at 4,000". So what is written below is a description of what this
+ * file does, no longer an argument that it is right: the grid owes server-side
+ * search, paging and virtualisation, which `information-architecture.md`
+ * specifies and no chunk has built. The picker's reason above is unaffected and
+ * still binds — whatever replaces this must still leave every work reachable.
  *
  * **No `limit` is sent**, which is the same rule `fetchAllCandidates` states
  * below and for the same reason. This asked for `limit=100` — a copy of the
@@ -55,8 +64,10 @@ async function api(path, options) {
  *
  * The cost is paid knowingly: the server's default page is smaller than its cap,
  * so this makes more round trips than asking for the maximum would. They are
- * against a loopback server on the same box, and `PAGE_CEILING` still admits far
- * more works than the design target.
+ * against a loopback server on the same box. `PAGE_CEILING` no longer admits
+ * "far more works than the design target" — at the amended target it is the
+ * thing that will bite first, and `shortfallNote` is what keeps that visible
+ * rather than silent until the paging work lands.
  *
  * `PAGE_CEILING` is a runaway guard, not a policy. If it is ever hit the caller
  * reports how many were left out, because a cap nobody mentions is the silent

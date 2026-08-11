@@ -1220,6 +1220,11 @@ path consults it before spending.
 | `artwork_id` | UUID | FK → Artwork, nullable | Set for per-artwork spend. |
 | `conversation_turn_id` | UUID | FK → ConversationTurn, nullable | Set for intent-forming spend. Added 2026-08-10 — see below. |
 | `category` | enum | required | `discovery_tokens` \| `web_search` \| `image_research` \| `mat_color_vision` \| `conversation_tokens` — **`mat_color_vision` has a producer but writes no row today; see the deferral below.** |
+| `model_id` | string | nullable | |
+| `input_tokens`, `output_tokens` | integer | nullable | Null where the unit is not tokens. |
+| `units` | integer | nullable | e.g. number of web searches. |
+| `cost_usd` | decimal | required | What was actually billed. |
+| `occurred_at` | datetime | auto, indexed | Indexed for reporting windows. **Not** the basis of any ceiling — see below. |
 
 > **`conversation_tokens` ships with its producer or not at all (2026-08-10).**
 > The category and its FK exist because intent-forming spends real money — a model
@@ -1235,11 +1240,6 @@ path consults it before spending.
 > asking for Kandinsky cost" — and folding the first into the second would make
 > `estimated_cost_usd` unfalsifiable against the actuals, since the estimate never
 > covered the conversation.
-| `model_id` | string | nullable | |
-| `input_tokens`, `output_tokens` | integer | nullable | Null where the unit is not tokens. |
-| `units` | integer | nullable | e.g. number of web searches. |
-| `cost_usd` | decimal | required | What was actually billed. |
-| `occurred_at` | datetime | auto, indexed | Indexed for reporting windows. **Not** the basis of any ceiling — see below. |
 
 > **This table does not enforce the ceiling, and must never be made to.** The
 > ratified Direction norm (`nonfunctional-requirements.md`) is that *spend ceilings

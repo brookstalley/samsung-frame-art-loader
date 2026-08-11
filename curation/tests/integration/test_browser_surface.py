@@ -645,11 +645,16 @@ class TestWhatTheWallSummaryClaims:
 
 
 class TestPagingPastTheCatalogueCap:
-    """The API caps a page at 100 and the design target is hundreds of works.
+    """The API caps a page at 100 and the catalogue target is thousands of works.
 
     The client pages to the end. These pin the server half of that contract —
     that `offset` is honoured and `truncated` is truthful — because the client's
     loop is only correct if those two are.
+
+    The target moved from hundreds to thousands on 2026-08-10, which makes both
+    assertions matter more rather than less: whatever replaces the client's
+    fetch-everything loop with real paging rests on the same two guarantees, and
+    a `truncated` that lies is worse the further the catalogue outruns one page.
     """
 
     def test_offset_returns_the_next_works_rather_than_the_same_ones(self, http, hold):

@@ -16,6 +16,12 @@ does, the stylesheet wins; where it states a rule, the rule binds.
 
 ## Direction
 
+<!-- NOT YET RATIFIED. Proposed 2026-08-10 with this artifact. Enforcement row in
+     project-preferences.md, which records it as proposed. The owner approved the
+     design this norm describes; they have not been asked to ratify it as binding,
+     and this artifact will not claim a signature it did not get. Ratifying it is
+     one sentence from the owner. -->
+
 **The stylesheet is the source of truth for token values, and this artifact is the
 source of truth for the rules about them.** `curation/src/curation/http/static/app.css`
 holds the values; `curation/tests/unit/test_design_tokens.py` reads that file,
@@ -57,7 +63,25 @@ it is that a state indicator with no word is a bug at every viewport.
 
 ## Colour
 
-### The light scheme is a gallery wall, not a page *(revised 2026-08-10)*
+> **BOTH REVISED PALETTES ARE PROPOSALS, AND NEITHER IS IN `app.css` YET
+> (2026-08-10).** The two sections below are written in the completed tense
+> because they describe finished design decisions — but the values live only in
+> `prototypes/curation-ia-prototype.html`. At the time of writing `app.css` still
+> holds `--surface-1: #ffffff`, the light `--accent: #2f5068`, the dark `--accent:
+> #9dc0da`, and no `--warn` at all.
+>
+> **So `var(--accent)` in the product today is blue, not bistre or gilt.** A
+> builder styling the next screen from these sections would reach for a token that
+> does not exist or get the colour the section says was replaced. They land, and
+> this notice comes out, in the chunk that touches the stylesheet — at which point
+> `test_design_tokens.py` covers them and this artifact's own Direction ("the
+> stylesheet is the source of truth for token values") holds again rather than
+> being contradicted by the paragraphs under it.
+>
+> Every value below was checked at AA by hand against the same formula the token
+> test uses. That is weaker than the test and is not a substitute for it.
+
+### The light scheme is a gallery wall, not a page *(revised 2026-08-10, proposed)*
 
 The first light palette read as software. The operator's verdict — "very tech,
 needs to be more museum; dark theme is good" — is recorded here with the diagnosis,
@@ -77,7 +101,7 @@ had:**
   printed label. Primary buttons read as letterpress rather than as calls to
   action.
 
-### The dark scheme is a wood-panelled study *(revised 2026-08-10, second pass)*
+### The dark scheme is a wood-panelled study *(revised 2026-08-10, second pass, proposed)*
 
 The dark scheme survived the first revision untouched and then failed the same
 test one round later: *"still a bit too trendy tech, suspiciously like Claude's

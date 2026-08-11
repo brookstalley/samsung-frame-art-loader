@@ -774,10 +774,21 @@ that produced the corpus says to do in doubt, and which avoids answering a vivid
 work with a grey. Swept over the whole RGB cube the worst realised lightness is
 L\* 45.2. No work among the operator's 40 reaches this path.
 
-`mat.py` clamps derived lightness to `_CORPUS_MAX_LIGHTNESS`, and that constant is
-**not a second copy of the corpus's ceiling** — `test_mat_corpus.py` derives the
-lightest mat from `all.json` and fails if the two disagree, so a corpus that gains
-a lighter mat cannot leave the engine enforcing a bar the corpus no longer sets.
+`mat.py` clamps derived lightness to **`_DERIVED_LIGHTNESS_CEILING` (45.2)**, and
+that constant is **not a second copy of the corpus's ceiling** —
+`test_mat_corpus.py` derives the lightest mat from `all.json` and fails if the two
+disagree, so a corpus that gains a lighter mat cannot leave the engine enforcing a
+bar the corpus no longer sets.
+
+> **Corrected 2026-08-11: this sentence used to name `_CORPUS_MAX_LIGHTNESS`,
+> which exists nowhere in the tree.** The module has two ceilings and that name is
+> a hybrid of both: public `CORPUS_MAX_LIGHTNESS = 50.0` is the looser requirement
+> bar the engine deliberately never compares against, and private
+> `_DERIVED_LIGHTNESS_CEILING = 45.2` is what the clamp actually enforces. The
+> wrong name is worth a correction note rather than a silent edit because of where
+> it led: someone reconciling code to this artifact greps, finds only the public
+> 50.0, and concludes the clamp should be 50 — restoring exactly the 4.8 L\* of
+> slack that let issue #115 ship.
 
 **What the fix bought, measured over the operator's own 40 pairs on 2026-08-11:**
 

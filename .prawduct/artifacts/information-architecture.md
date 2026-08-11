@@ -14,8 +14,34 @@ last_validated: null
 The curation plane's screen structure, navigation and flows. Authored 2026-08-10,
 after the surface had already been built across six chunks — so this artifact is
 partly a description of what exists and partly a redesign of it, and every place
-those differ is marked **CHANGE** with the reasoning. Nothing here is a
-description-that-tracks; the navigation model below binds.
+those differ is marked **CHANGE** with the reasoning.
+
+## Direction
+
+<!-- NOT YET RATIFIED. Proposed 2026-08-10 with this artifact. Enforcement row in
+     project-preferences.md, which records it as proposed. The owner approved this
+     navigation model across four review rounds but was never asked to ratify it as
+     a binding norm, and this artifact will not claim a signature it did not get. -->
+
+**The curation surface is organised around what a curator does, never around the
+pipeline's stages.** Three destinations — the Walls, Collection, Discover — and a
+new screen earns a place in that navigation only by being a thing a curator sets
+out to do, not by being a subsystem that acquired a UI.
+
+> **Why:** the built surface's five tabs were the pipeline's stages in pipeline
+> order, and each one was correct as the chunk that produced it. That is the
+> failure mode this norm exists to catch: it is invisible per-chunk and only
+> visible in the sum, so no per-chunk review would ever have caught it. A sixth
+> subsystem will want a sixth tab for exactly the same locally-good reasons.
+>
+> **Enforcement is judgment (Critic), not a test.** The violation is a
+> destination that names a stage rather than an intention, which has no import
+> signature and no grep.
+>
+> **Status:** proposed, unratified.
+>
+> **Retroactivity:** the built surface does not conform, and this artifact is the
+> plan for making it do so. No code changed on the commit that introduced this.
 
 **A working prototype of everything below is committed beside this file:**
 `prototypes/curation-ia-prototype.html` — one self-contained page, no build step,
@@ -399,11 +425,13 @@ almost no considered empty states.
 
 **The loading state's job is to not move.** Skeletons occupy the final geometry.
 The built client has already been bitten by layout that reflows as images arrive
-(`learnings.md` — every image tile taking the shape of its own picture), and a grid
+(`project-preferences.md`, the browser-suite row — every image tile taking the
+shape of its own picture), and a grid
 of art that jumps while it loads is the opposite of the identity.
 
 **One state rule that is not in the table:** a poll must never move focus. This is
-a recorded defect from the built surface — a two-second poll stole focus on the one
+a recorded defect from the built surface (`project-preferences.md`, the
+browser-suite row; also in `change-log.md`) — a two-second poll stole focus on the one
 screen with a decision on it — and it binds every live region here, of which this
 design adds several.
 
@@ -426,13 +454,33 @@ What this interface does **not** include, stated so the absences read as decisio
   states carry the work an onboarding flow would otherwise do.
 - **No offline mode.** The curation plane is a loopback service on the same Pi.
 
+## Status — what this artifact is waiting on
+
+Recorded here rather than only in a session handoff file, because a handoff file is
+session-scoped and these obligations are not. **No build plan references this
+artifact yet**, and that is deliberate: `build-plan.md` is live with Chunk 13A
+waiting on hardware, so the work here belongs in a scope-named
+`build-plan-curation-ux.md` that is written once 13A resolves. Until someone writes
+it, this list is the only durable record that the round left debts.
+
+| What | Owed to | State |
+|---|---|---|
+| Six routes: text search + facet counts, theme rename, theme delete, work delete, the conversation surface | `api-contract.md` | Not amended. Its "deliberately absent" paragraph carries a note pointing here, so it does not read as current direction |
+| `accessibility-spec.md` | the human-interface artifact set | Unwritten. Mostly a codification job — the token test, announced errors, and glyph+word+colour are already practised |
+| The revised palettes | `app.css` and `test_design_tokens.py` | Proposed only. Live in the prototype and are ungoverned until they land |
+| Ratification of the two norms proposed here and in `design-direction.md` | the owner | Both recorded as `proposed` in `project-preferences.md` |
+| Conversation deletion's effect on derived affinities | `security-model.md` | Tracked as **issue #118** (`stage: requirements`) — the rule has to be written before anything builds deletion |
+| Multi-display: `TvBinding.artwork_id` uniqueness, and one-active-theme-per-wall | `data-model.md` | Named in § More than one wall. Blocks planning, not this design |
+
 ## Open questions
 
 - **Deleting a conversation must have a stated effect on the affinities derived
   from it**, and neither this artifact nor `security-model.md` states it yet. Three
   candidate rules: orphan them (keep the judgment, lose the provenance), delete
-  them with the thread, or refuse the delete while they are cited. Owned by the
-  chunk that builds conversation deletion.
+  them with the thread, or refuse the delete while they are cited. **Tracked as
+  issue #118**, at `stage: requirements` — the rule is the work; building deletion
+  is a later chunk. The sharp half is `Affinity.source_turn_id`: deletion has an
+  unstated effect on judgments the product still consults.
 - **The threshold at which Collection defaults to contact sheet** is written above
   as "a few hundred" and is a guess. It should be set from the first real
   thousands-scale corpus, not now.
