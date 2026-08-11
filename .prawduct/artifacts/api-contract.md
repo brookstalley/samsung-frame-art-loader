@@ -1230,12 +1230,20 @@ of its own.
 > the same mistake and never reached them. Recorded rather than quietly corrected,
 > because the correction is the interesting part: a decision framed against an
 > artifact when the code was the authority.
+>
+> **The hidden case was then put to them separately and ratified** — see the
+> last-theme paragraph below. It is a ruling now, not a builder's reading of a
+> docstring, which matters because the two are worth different amounts to whoever
+> next proposes changing it.
 
 **The refusal is narrower than "while active", and the narrowing is the part worth
 reading.** `delete_theme` refuses the active theme **only while another theme
 exists**. Deleting the *last* theme is permitted even though it is active, because
 no themes at all is a normal empty state rather than the forbidden one — and it is
-what makes a theme deletable at all. Deleting it deliberately does not rewrite the
+what makes a theme deletable at all. **Ratified by the operator 2026-08-11**, put to
+them with the alternative stated: refusing unconditionally would make the last theme
+undeletable forever, since there is no deactivate operation, so a curator could never
+empty the catalogue. Deleting it deliberately does not rewrite the
 manifest: the wall keeps showing what it was showing, the same posture as curation
 being stopped entirely. Publishing an empty manifest would blank the wall as a side
 effect of tidying the catalogue.
