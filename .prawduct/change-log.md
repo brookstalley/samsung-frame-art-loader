@@ -190,6 +190,13 @@ picture off the wall.
 Machine-backed evidence over the resolved tree: **2466 passed, 0 failed, 4
 skipped** across the three planes. Ruff and black clean.
 
+**`verify-resolutions` (`rev-20260811T130809Z-50d0cbe6`): 0 blocking, 0 warnings,
+0 notes — the review is over.** All ten prior warnings verified `fixed` by opening
+the files rather than by reading the diff, and the reviewer independently confirmed
+the built code behind the three added rows exists (`("art_display", "next")`,
+`set_mat_color`, `SpendRecord`). All twenty findings are dispositioned: ten fixed,
+ten accepted with recorded reasons.
+
 ## 2026-08-11: The derived mat cannot exceed the corpus, and the vote counts a colour once
 
 <!-- prawduct: status=shipped | scope=v1-build -->

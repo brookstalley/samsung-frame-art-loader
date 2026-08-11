@@ -1898,7 +1898,7 @@ hardware.
   `ART_ROOT` path recorded in the root `.env` and in `operational-spec.md`, both
   units installed and enabled on the Pi, **all three of the label's legibility
   settlements** — the Pango type sizes replacing 13A's provisional ones, the
-  `EPD_MARGIN_PX` default replacing its provisional one, and a stated line-length
+  `DEFAULT_EPD_MARGIN_PX` value replacing its provisional one, and a stated line-length
   bound where none exists today — each with its "provisional" note replaced rather
   than left standing over a settled number, cutover performed and recorded in
   `deploy/README.md`
