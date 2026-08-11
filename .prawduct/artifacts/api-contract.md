@@ -108,11 +108,18 @@ artifact made, and it dissolves most of the supposed trade.
 
 ### The surface
 
-**Five tools, each a noun, each dispatching on a required `action` string.** This
-follows the pattern proven in the operator's two production servers: cordyceps
-exposes 7 tools with 5–30 actions each; hallucinote exposes 13. Both sit inside the
-1–15 range Anthropic's MCP-authoring guidance identifies as the point where one
-tool per action stops paying and consolidation starts.
+**Each tool is a noun, each dispatches on a required `action` string, and the
+table below is the whole set.** This follows the pattern proven in the operator's
+two production servers: cordyceps exposes 7 tools with 5–30 actions each;
+hallucinote exposes 13. Both sit inside the 1–15 range Anthropic's MCP-authoring
+guidance identifies as the point where one tool per action stops paying and
+consolidation starts, and so does this table.
+
+*That sentence opened with "Five tools" until 2026-08-11, when `art_taste` made it
+six and nothing but a reader would have noticed. The claim worth making is
+containment in the range, which the table can be read against; the tally was a copy
+of the table sitting four lines above it. The paragraph below records the same
+lesson from a different count, which is why this one is stated as a shape.*
 
 | Tool | Actions | Notes |
 |---|---|---|
@@ -121,6 +128,7 @@ tool per action stops paying and consolidation starts.
 | `art_catalogue` | `list`, `get`, `sources`, `archive`, `restore`, `retry_acquisition`, `set_mat_color`, `regenerate`, `help` | `sources` is the provenance read; see below. |
 | `art_theme` | `list`, `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`, `help` | `activate` changes the wall immediately. |
 | `art_display` | `status`, `sync`, `show_now`, `next`, `help` | Every action goes through the theme manifest — see below. |
+| `art_taste` | `list`, `set`, `delete`, `help` | The curator's standing judgments about artists, movements and subjects. Never spends. Added 2026-08-11 by operator decision — see below, and § The routes the interface design requires. |
 
 **This table is the surface as designed, and no row states what is built.** That
 is deliberate rather than an omission: while the build is in progress some tools
@@ -306,6 +314,69 @@ suppression failure **Q11** exists to prevent, reappearing on the instance scope
 instead of the work scope. One entry point makes it impossible rather than
 defended against, and it matches the boundary the tools already draw: `set_verdict`
 is work-scoped, and "this scan is not good enough" is a judgement about an instance.
+
+### `art_taste`, and the derivation a caller may not claim
+
+Placed beside `set_verdict` above because it carries the same shape of rule: a
+write action that accepts most of an enum and refuses one value, because that value
+is a claim only another path can honestly make.
+
+**Added 2026-08-11 by operator decision, against the recommendation recorded in
+§ The routes the interface design requires** — which argued for deferring the tool
+until discovery begins weighting `Affinity`. That section now records the decision
+and what the deferral would have bought; this one is the tool it obliges.
+
+**It stands on `Affinity`, which does not exist.** Nothing here is declared at
+runtime until the entity and its service method do — "unbuilt actions are never
+declared" governs it, and a tool serving none answers `action='help'` with its
+`unavailable_note`. The precedent is in this file: `art_display(show_now|next)` was
+specified before the manifest-only channel was ratified and was unimplementable as
+written the day the norm landed. So the paragraphs below fix meaning and rules, and
+leave field-level shapes to the chunk that builds the service method under them.
+
+**Three actions and no `get`.** `list` returns the taste, narrowed by `kind`,
+`sentiment` or `derivation`; `set` writes one judgment; `delete` forgets one. The
+single-affinity read is omitted rather than overlooked — `list` returns a
+household's entire taste, which is tens of rows, so a `get` would be a second way
+to read what one call already hands back whole. § Conditional Patterns' limit-and-
+report-the-total rule bounds the listing if that ever stops being true.
+
+**`set` is an upsert, and is named `set` for that reason.** `data-model.md` makes
+`Affinity` unique on (`kind`, `value`) — one live judgment per thing, corrected in
+place rather than accumulating contradictions. `create` would be a lie on the
+second call and `update` a lie on the first, so this takes the verb the surface
+already uses for "write this fact over whatever was there": `set_canonical`,
+`set_verdict`, `set_mat_color`. A correction therefore needs no id — `kind` plus
+`value` is the handle, and it is the handle a model has, since the thing being
+judged is a name in a sentence rather than a row it fetched. `delete` takes the id
+`list` returns, matching `DELETE /api/affinities/{id}` rather than giving one
+entity two identities.
+
+**`set` may not write `derivation='observed'`, and the refusal names the path that
+can.** The three derivations are claims about where a judgment came from: `stated`
+is the curator saying it, `inferred` is a model reading it out of what they said,
+`observed` is the product reading it out of accept-and-reject behaviour in review.
+Only the review path can assert the third truthfully, and an `observed` row written
+by a caller is a fabricated observation — indistinguishable afterwards from one the
+product earned. That matters beyond tidiness because `data-model.md` makes
+derivation load-bearing: affinities are rebuilt from the retained turns when the
+derivation improves (Q14), and a row claiming behaviour that never happened has
+nothing to rebuild from and cannot be audited. `stated` and `inferred` are both
+writable — the in-UI agent is an MCP client, so the tool is a path a model takes
+while the curator is talking to it, and both of those are honest from there.
+
+**Sentiment and openness are both required, because the pair is the entity's
+point.** `data-model.md` keeps `sentiment` and `open_to_more` apart so that "meh on
+Magritte, but open to learning more" is writable at all; a tool taking sentiment
+and defaulting openness would put a default in the way of the one sentence the two
+fields exist for, and the default that reads as safe — don't offer more — is the
+one that silently blacklists an artist the curator asked to keep hearing about.
+
+**Annotations:** `title` "Art taste", `readOnlyHint: false`, `destructiveHint:
+true`, `openWorldHint: false`. Destructive because `delete` drops a judgment and
+`set` overwrites one, and neither is recoverable — unlike `art_catalogue`'s
+`archive`, which is annotated non-destructive precisely because `restore` exists.
+Closed-world because nothing here leaves the machine.
 
 ### The arity of the three write actions (settled at build, 2026-08-03)
 
@@ -946,7 +1017,7 @@ exemption's reasoning and must not be cited for the manifest contract.)*
 
 | Element | Tier | Meaning |
 |---|---|---|
-| Tool names (the five above) | **Frozen** | Never renamed or removed. Pinned by test. |
+| Tool names (every row of § The surface) | **Frozen** | Never renamed or removed. Pinned by test. A name is claimed by appearing in that table, which is why `art_taste` is Frozen from 2026-08-11 while the entity under it is unbuilt — and why adding one is a decision and not a draft. |
 | `action` values | **Stable** | Additive; retirement is announced and annotated. |
 | Required parameters | **Stable** | New ones must be optional with a default. |
 | Optional parameters | **Additive** | May be added freely. |
@@ -1074,16 +1145,16 @@ spellings for "change this" costs more than the orthodoxy is worth here.
 | `GET /api/works` — facet counts in the same response | The counts the IA's disabled-not-hidden rule needs. **Not a second route** — see below. | `WorkFacet` — **unbuilt** | as above |
 | `POST /api/works/{id}/archive`, `/restore` | Take a work out of circulation, and put it back. **Not a delete** — see below. | `Artwork.status`, built | `art_catalogue(action='archive'\|'restore')`, already designed |
 | `POST /api/themes/{id}` | Rename. | `Theme`, built | `art_theme(action='update')`, already designed |
-| `DELETE /api/themes/{id}` | Delete. Its rule against constraint 1 is open — see below. | `Theme`, built | `art_theme(action='delete')`, already designed |
+| `DELETE /api/themes/{id}` | Delete. **Refuses while the theme is active** — see below. | `Theme`, built | `art_theme(action='delete')`, already designed |
 | `GET`/`POST /api/conversations` | The thread list, ordered by `last_turn_at`; and starting one. | `Conversation` — **unbuilt** | none proposed — see below |
 | `GET /api/conversations/{id}` | One thread with its turns. | `ConversationTurn` — **unbuilt** | none proposed |
 | `POST /api/conversations/{id}/turns` | One exchange. **Spends** — `SpendRecord` category `conversation_tokens`. | `ConversationTurn` — **unbuilt** | none proposed |
 | `POST /api/conversations/{id}/commit` | Commit a direction: starts a `DiscoveryRun` and sets the turn's `committed_run_id`. | `ConversationTurn` — **unbuilt** | none proposed |
 | `DELETE /api/conversations/{id}` | **Deliberately shapeless — blocked on issue #118.** | — | — |
-| `GET`/`POST /api/affinities`, `DELETE /api/affinities/{id}` | The Taste screen, and every sample reaction in a conversation. | `Affinity` — **unbuilt** | none proposed |
+| `GET`/`POST /api/affinities`, `DELETE /api/affinities/{id}` | The Taste screen, and every sample reaction in a conversation. | `Affinity` — **unbuilt** | `art_taste(action='list'\|'set'\|'delete')` — decided 2026-08-11, see below and § `art_taste` |
 | `POST /api/works/{id}/mat` | Re-derive a work's mat. **Owned by issue #91, not by this set** — see below. | `MatColor`, built | `art_catalogue(action='set_mat_color')`, built |
 | `POST /api/directives` (shape open) | The Walls screen's `next`. **The only screen action here with an MCP action and no HTTP route at all** — see below. | `Directive`, built | `art_display(action='next')`, built |
-| `GET /api/spend` | The Health screen's spend history, across runs. | `SpendRecord`, built | none proposed — same deferral as taste |
+| `GET /api/spend` | The Health screen's spend history, across runs. | `SpendRecord`, built | `art_discovery(action='spend')` already answers the cross-run question by calendar month — see below |
 
 **Facet counts ride on the works response rather than getting a route.** They are
 an answer to the same question the grid answers — *what does this filter set
@@ -1113,30 +1184,67 @@ wall consequence, not merely which of archive and restore it is doing** —
 writing, so the route can state the consequence rather than predict it. The IA
 carries this rule for flow 6's activation and now carries it here too.
 
-**Deleting the active theme has no rule yet, and this route must not invent one.**
-`data-model.md` constraint 1 — "exactly one Theme has `is_active = true`" — makes
-the delete of an active theme either a refusal or a cascade that leaves the wall
-with nothing chosen, and the two are not equivalent for someone in the room.
-**Recommendation: refuse while active**, because deletion is never urgent and the
-alternative changes what the household is looking at as a side effect of a tidying
-action. Owed to the operator before the route is built, not to the builder.
+**Deleting the active theme refuses — settled by the operator 2026-08-11.**
+`data-model.md` constraint 1 — "exactly one Theme has `is_active = true`" — left
+the delete of an active theme as either a refusal or a cascade leaving the wall
+with nothing chosen, and the two are not equivalent for someone in the room. The
+ruling is **refuse while active**: deletion is never urgent, and the alternatives
+change what the household is looking at as a side effect of a tidying action. The
+refusal is the surface's one `400` shape, and its message says what to do —
+activate another theme, or deactivate this one — because § Errors teach binds every
+refusal here.
 
-**No MCP twin is proposed for conversation, taste or spend history, and the
-requirement being deferred against is named rather than left implicit.**
-`product-brief.md` item 8 states as a must-have that **every content-management
-operation is available as an MCP tool, at parity with the web UI**, and
-`technical_decisions` records that parity as the reason the thin-binding norm binds
-at all. Whether an `Affinity` is a content-management operation is genuinely
-arguable — it is a record of taste, not of holdings — which is why this is a
-deferral with a trigger rather than a departure.
+> A third option was put alongside those two and declined: **promote another theme,
+> then delete**. It satisfies constraint 1 without blanking the wall, but it buys
+> that with a second decision nobody has made (which theme is promoted — newest?
+> first created?), it still changes the picture as a side effect of a delete, and
+> it collapses into a refusal anyway when the theme being deleted is the only one.
+> Recorded because "we only considered two" is the question a later reader asks.
 
-Tool names are **Frozen** — never renamed or removed — so adding a sixth tool is
-cheap and retiring one is not, which argues for deciding late. Two further reasons
-to wait: the in-UI agent *is* an MCP client, so a model conducting a conversation
-would be reading its own thread back through a tool; and the operation a model
-would actually want is the taste, not the transcript. **Revisit trigger:**
-discovery begins weighting `Affinity`. At that point taste is unambiguously
-operational and item 8 applies to it without argument.
+**The refusal is the route's, not the service layer's to invent.** `architecture.md`
+§ Direction has the handler call one service method, so the guard belongs with the
+theme service beside constraint 1 — where `art_theme(action='delete')`, the MCP
+twin, reaches it too. A rule enforced in the HTTP handler would be a rule a model
+does not have, on a surface whose whole parity claim is that an agent and a click
+cannot disagree.
+
+**Taste gets an MCP tool; conversation does not — settled by the operator
+2026-08-11, and the three cases came apart under the ruling.** `product-brief.md`
+item 8 states as a must-have that **every content-management operation is available
+as an MCP tool, at parity with the web UI**, and `technical_decisions` records that
+parity as the reason the thin-binding norm binds at all. The question these routes
+raised was whether an `Affinity` is a content-management operation — it is a record
+of taste, not of holdings.
+
+**The ruling is that it is: `art_taste` is designed in § `art_taste` above.** It
+was taken **against the recommendation recorded here**, which argued for deferring
+until discovery began weighting `Affinity`, on the grounds that tool names are
+**Frozen** — never renamed or removed — so adding is cheap and retiring is not,
+which argues for deciding late. That reasoning is left standing rather than deleted,
+because it is what the decision cost: a name is now frozen over an unbuilt entity,
+and if `Affinity` is reshaped before it is built, `art_taste` is the part that
+cannot be reshaped with it. Set against that, the deferral had its own cost — item
+8's parity claim would have read as met while the surface knowingly withheld an
+operation the web UI has, and a "revisit trigger" is a promise nothing enforces.
+
+**Conversation keeps its deferral, and the ruling strengthens it rather than
+weakening it.** The reasons were never the Frozen-tier argument: the in-UI agent
+*is* an MCP client, so a model conducting a conversation would be reading its own
+thread back through a tool; and the operation a model actually wants is the taste,
+not the transcript. Granting the first while withholding the second is precisely
+what that reasoning asked for. `DELETE /api/conversations/{id}` stays shapeless
+behind issue #118 on its own account.
+
+**Spend history needs no new tool, and its row no longer borrows taste's reasoning.**
+Item 8 reaches content management, and a read of what was spent is not that under
+any reading. It is also already answered: `art_discovery(action='spend')` reports a
+run's cost or a whole calendar month's, across runs, by arity — the same
+two-questions-by-arity shape § `estimate` describes. Whether the Health screen's
+history wants more than a month at a time is the builder's question against a
+service method that exists, not a sixth-tool question. *(That row read "same
+deferral as taste" until 2026-08-11, which was two claims stapled together: one
+died with this ruling and the other was never true, since the month report shipped
+with `art_discovery`.)*
 
 **Sample reactions write through `/api/affinities`, not through a conversation
 route.** The IA's flow 1 gives each sample "more like this" / "not this" / "tell

@@ -54,6 +54,63 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-11: The operator settled the two open route decisions, and one of them bought a sixth tool
+
+<!-- prawduct: scope=v1-build -->
+
+`api-contract.md` § The routes the interface design requires had deliberately left
+two questions to the operator rather than to whoever builds the routes. Both were
+answered, and only one went the way the artifact recommended.
+
+**Deleting the active theme refuses.** That was the recommendation, so the change is
+prose: the route's row and its paragraph state a rule instead of holding a fork. Two
+things were added that the fork had not carried — the refusal is the surface's one
+`400` shape and its message says what to do, per § Errors teach; and the guard sits
+with the theme service beside constraint 1 rather than in the HTTP handler, so
+`art_theme(action='delete')` reaches it too. A rule enforced in the handler is a rule
+the MCP surface does not have, on the surface whose parity claim is that an agent and
+a click cannot disagree. A third option was put up and declined on the record —
+promote another theme, then delete — because it needs a promotion rule nobody has
+written and collapses into a refusal when the theme is the only one.
+
+**Taste earns an MCP tool, against the recorded recommendation.** `art_taste` is
+designed in a new § of ## Operations, placed beside `set_verdict` because it carries
+the same shape of rule. Three actions and no `get` — `list` returns a household's
+whole taste, so a `get` would be a second way to read one call's answer. `set` is an
+upsert and named for it, because `Affinity` is unique on (`kind`, `value`) and
+corrected in place: `create` lies on the second call, `update` on the first. **`set`
+may not write `derivation='observed'`** — only the review path can truthfully claim a
+judgment was read out of accept-and-reject behaviour, and a fabricated observation is
+indistinguishable afterwards from an earned one, in an entity whose rebuild-from-turns
+property (Q14) depends on the provenance being real. Sentiment and openness are both
+required, because defaulting openness puts a default in the way of "meh on Magritte,
+but open to learning more", and the default that reads as safe is the one that
+blacklists an artist the curator asked to keep hearing about.
+
+**The recommendation that lost is left standing in the artifact rather than deleted**,
+because it is what the decision cost: a Frozen-tier name is now claimed over an entity
+that does not exist, and if `Affinity` is reshaped before it is built, the tool name is
+the part that cannot be reshaped with it. Against that, item 8's parity must-have was
+being reported as met while the surface knowingly withheld an operation the web UI has.
+
+**The ruling did not travel, and the other two deferrals came apart under it.**
+Conversation keeps its deferral and is *strengthened* by this one — its reasons were
+never the Frozen argument, and "the thing a model wants is the taste, not the
+transcript" is exactly what granting taste satisfies. Spend history's row had read
+"same deferral as taste", which turned out to be two claims stapled together: one died
+with the ruling, and the other was never true — `art_discovery(action='spend')` has
+reported across runs by calendar month since it shipped.
+
+**Two counts were removed rather than incremented.** § The surface opened with "Five
+tools" and the tiers table said "Tool names (the five above)"; both were copies of a
+table four lines away, and this is the second count in that section to go stale — the
+paragraph recording the first ("three of the five") is still there. The claim worth
+making is containment in the 1–15 range, which a reader can check against the table.
+
+Also recorded: `design_decisions.surface_parity` in `project-state.yaml`, and the
+`information-architecture.md` § Status row, which had named the two decisions as owed
+and now says nothing on it is open.
+
 ## 2026-08-11: The routes the interface needs, and the accessibility surface that is not a screen
 
 <!-- prawduct: scope=v1-build -->
