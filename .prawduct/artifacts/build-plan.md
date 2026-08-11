@@ -1909,6 +1909,51 @@ hardware.
   § The Service Account is explicit: the account, its groups, moving `ART_ROOT`
   under it and both unit files land together, because any of them arriving alone
   leaves a machine that is neither the old arrangement nor the new one.
+- **Amended 2026-08-11, at the panel, and this one changes the chunk's size.** The
+  machine half was already done when the operator supplied two physical facts
+  nobody had written down — **the panel is 6 inches diagonal (so ~300 PPI at
+  1448×1072) and it is read from 7 feet** — and they invalidate the settlement this
+  chunk was going to make. At that distance the provisional `BODY_SIZE_PX = 26`
+  gives a **2.5 arcminute** cap height against the **5 arcminutes** 20/20 vision
+  needs to resolve a letter, so the provisional type was below the threshold of
+  legibility rather than merely small. Drawn on the real panel the same day — the
+  first label this product has ever put on that panel, because rotation never runs
+  while the set is in standby, so the label path had never executed on hardware.
+  The operator then asked for a reorganised label with an adaptive fill model.
+  **Four decisions came out of it, all recorded in `accessibility-spec.md`:**
+  *(1)* the type floor is **derived** from viewing distance and PPI via a stated
+  `min_cap_arcmin`, not settled as pixels — so it transfers to any device and the
+  operator calibrates one number instead of three; *(2)* **the artist outranks the
+  work**, set as `FAMILY, Given` with the family name in bold capitals — which is
+  also what makes the content fit, since leading with a 44-character title consumed
+  502 px of 952 usable on the panel and dropped three lines; *(3)* a **fill rule**
+  that admits optional content in priority order and spends slack on content before
+  type, because the corpus ranges from anonymous untitled works to long-titled
+  attributed ones; *(4)* **commentary** becomes a field, and does not fit at 7 feet
+  on most works — which the fill rule makes a per-work answer rather than a global
+  one.
+- **It is built as 13B-1 … 13B-4, under this one box.** The operator chose to fold
+  the redesign into this chunk rather than open a new one; the sub-numbering is
+  bookkeeping so each piece takes its own Critic round, because the whole is a
+  three-plane data-model change plus a new layout engine and one review over all of
+  it would read badly. The box ticks when all four are done.
+  - **13B-1 — the derived floor.** Panel diagonal and viewing distance become
+    deployment values; the floor is computed; the three provisional size constants
+    and `DEFAULT_EPD_MARGIN_PX` derive from it. A deployment stating no viewing
+    distance fails rather than guessing one.
+  - **13B-2 — styled runs.** `Block` carries runs with their own weight and case
+    instead of one flat string, and the Pango renderer applies **attributes over
+    byte ranges — never markup**, because `metadata.py` escapes nothing on purpose
+    and `<b>`-wrapping would reintroduce the 2024 injection on the surface it was
+    fixed for.
+  - **13B-3 — the catalogue fields.** `family_name` and `given_name` on `Artist`,
+    `commentary` on the work, both carried by `entry_for` into the manifest and
+    read by `LabelText`. Includes the schema change and the backfill of the 31
+    seeded artists; a work whose artist has neither name part falls back to `name`,
+    unstyled.
+  - **13B-4 — the fill model.** Candidates with priority and role; nothing below
+    the floor; optional content admitted only if it fits; slack spent on content
+    before type; drops still reported.
 - **Depends on:** Chunk 13A
 - **Carries a number the unit must not be written without.** `TimeoutStopSec`
   has to clear this daemon's worst-case pass, which is a television connection
@@ -1927,12 +1972,13 @@ hardware.
   numbers do not transfer to Pango and the look has to be repeated.
 - **Deliverables:** the `tvpi` account with its groups and ownership, the settled
   `ART_ROOT` path recorded in the root `.env` and in `operational-spec.md`, both
-  units installed and enabled on the Pi, **all three of the label's legibility
-  settlements** — the Pango type sizes replacing 13A's provisional ones, the
-  `DEFAULT_EPD_MARGIN_PX` value replacing its provisional one, and a stated line-length
-  bound where none exists today — each with its "provisional" note replaced rather
-  than left standing over a settled number, cutover performed and recorded in
-  `deploy/README.md`
+  units installed and enabled on the Pi, **the label's legibility settled** — which
+  the 2026-08-11 amendment above turns from three judged pixel values into a
+  derived floor plus one calibrated `min_cap_arcmin`, with the line-length bound
+  built and honestly recorded as inert on this panel — plus the reorganised label,
+  its styled name, its catalogue fields and its fill model; each "provisional" note
+  replaced rather than left standing over a settled number; cutover performed and
+  recorded in `deploy/README.md`
 - **The three legibility settlements are one judgement and one visit, which is why
   they are one deliverable.** A margin trades directly against how many lines
   survive the drop rule, and a measure depends on the face and the size, so none of

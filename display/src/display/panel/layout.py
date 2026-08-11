@@ -31,15 +31,19 @@ from dataclasses import dataclass
 from typing import Final
 
 #: The type sizes, in pixels, largest first: title, then artist, then everything
-#: else. **PROVISIONAL — these are not measured numbers and must not be quoted as
-#: though they were.** The operator's 2026-08-04 look at the real panel narrowed
-#: the live range to the mid-20s through the low-40s and killed the 2024
-#: `"Sans 18"`, but it was rendered with PIL/DejaVu while this product typesets
-#: with Pango: different rasterizer, different face, different metrics, so a size
-#: that looked right there does not transfer. These sit inside that range and are
-#: placeholders for a second look at the panel, which is the only thing that can
-#: settle them. Whoever settles them should replace this note as well as the
-#: numbers.
+#: else. **PROVISIONAL, and now known to be wrong rather than merely unsettled.**
+#: Measured against the reference deployment on 2026-08-11 — a 6-inch, ~300 PPI
+#: panel read from 7 feet — `BODY_SIZE_PX` gives a cap height of **2.5 arcminutes**
+#: against the **5** that 20/20 vision needs to resolve a letter at all. These are
+#: roughly 4× too small for that wall, and they survived every check the product
+#: had because nothing here knew the viewing distance.
+#:
+#: **They are placeholders for a derivation, not for a judgement.**
+#: `accessibility-spec.md` § "The type floor is derived from viewing distance, not
+#: chosen for a panel" specifies what replaces them: a floor computed from the
+#: deployment's PPI and viewing distance against a stated minimum cap height in
+#: arcminutes, with these three becoming ratios above that floor. Whoever builds it
+#: replaces this note as well as the numbers.
 TITLE_SIZE_PX: Final[int] = 40
 ARTIST_SIZE_PX: Final[int] = 32
 BODY_SIZE_PX: Final[int] = 26
