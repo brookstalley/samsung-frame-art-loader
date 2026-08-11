@@ -19,6 +19,86 @@ found, and what it cost — is the part worth keeping, and editing them to match
 today would destroy the evidence while making the rule look like it had always
 been obvious. This note is here so nobody follows one of them as a procedure.
 
+## A list written to record a DEBT is not an inventory of a SURFACE
+
+**2026-08-11, the artifact-debt round.** `api-contract.md` was amended with the
+routes `information-architecture.md` designs over. The set was taken from that
+artifact's own § Status row, which named five things: text search and facet counts,
+theme rename, theme delete, work delete, the conversation surface.
+
+That row was written to record what the *design round still owed*. Read as a
+specification of the interface's operations it is short by three, and the Critic
+found all three by doing the thing that should have been done first — reading the
+screens' own **Actions** columns:
+
+- the **Work** screen's *re-mat*,
+- the **Walls** screen's *next* (which has an MCP action, `art_display(next)`, and
+  no HTTP route at all — so the design's home screen carries a control the browser
+  cannot perform),
+- the **Health** screen's *spend history*.
+
+**The re-mat one was the expensive kind.** Having missed it, the absence paragraph
+then *justified* it: "re-deriving a mat is an operation `art_catalogue` already
+has." That sentence is verbatim the reasoning open issue **#91** was filed against
+— *"an agent can change a mat colour and a curator cannot"* — restated as though it
+were a settled decision. So a builder opening the artifact for the Work screen
+would have found a designed control, no route, and a paragraph telling them the
+absence was deliberate. A missing row is a gap; a missing row with a rationale is a
+gap that argues back.
+
+The row also happened to be *wrong* in a fourth way — "work delete" named an
+operation `Artwork.status` does not have — which is what makes the general point:
+the list was not merely incomplete, it was a different kind of document than the
+one being read out of it.
+
+## A repair that fixes the instance can leave the failure class untouched
+
+**2026-08-11, same round.** `tests/preferences/test_norm_index.py` matched
+enforcement-artifact paths with `(?:curation/)?tests/…`, a literal that was correct
+when typed and wrong from 2026-08-06 when the display plane landed with its own
+suite. Because the pattern is **unanchored** it did not fail to match
+`display/tests/test_epaper.py` — it matched the *tail*, `tests/test_epaper.py`, and
+resolved that against the root plane, failing with "no such file" naming a plane
+the row never mentioned.
+
+The repair derived the plane set from `REPOSITORY_ROOT.glob("*/tests")`, so a
+fourth plane is picked up by existing. That is a good fix and it closed nothing:
+the pattern was still unanchored, so **any** prefix the derivation did not know —
+a typo, or a plane whose `tests/` directory does not exist yet, which this index
+has done before with the plane-isolation row — still tail-matched and still blamed
+the root. The Critic named it (R-8) and was right.
+
+What actually closed the class: match the prefix permissively
+(`(?<![\w/.\-])((?:[\w.\-]+/)*)tests/…`), then **check** it against the derived
+planes in a test of its own, so an unknown plane fails naming itself. Proven by
+mutation rather than asserted — a planted `dispaly/tests/test_epaper.py` now
+arrives intact and reports its own prefix, where before it arrived truncated.
+
+Note the shape of the near-miss: **a lookbehind alone would have been worse**, not
+better. It would have converted the misdirected failure into a silent non-match,
+which is the failure mode that file exists to refuse. "Fail differently" and "fail
+correctly" are not the same repair.
+
+## A rule about a control binds its styling and its label, not just its word
+
+**2026-08-11, same round.** The round ruled that a work's removal control must be
+labelled **Archive** rather than *Remove*, because `Artwork.status` is
+`accepted`/`archived` and restoration is permitted — *Remove* promises the work is
+gone. The reasoning written down was about hesitation: a curator who believes an
+act is destructive will hesitate over one that is cheap and reversible.
+
+The correction was applied to the artifact and not to
+`prototypes/curation-ia-prototype.html`, which the same artifact introduces as "a
+working prototype of everything below" and which is what a builder implements the
+screen from. That is this repo's most-recurred learning arriving one file from
+where it was being applied.
+
+**The part worth keeping is what fixing the label exposed.** Both controls were
+`class: "btn danger"` — destructive styling. Renaming them to *Archive* and leaving
+the red would have satisfied the rule's letter and defeated its stated purpose,
+because colour reaches the reader before the label does. The rule was about a
+promise, and styling makes the same promise the word did.
+
 ## A test double expresses what you already believe the dependency does, so it cannot catch "says yes, does nothing"
 
 **2026-08-07, Chunk 12.** The display plane was built, Critic-reviewed, green

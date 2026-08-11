@@ -14,6 +14,31 @@ inline, which the record linter flags; moving them is tracked as issue #26.
 
 **Reading a rule is not applying it.** The failure mode of a learnings file is not absence, it is assent: a rule arrives at the right moment, is read, is agreed with, and changes nothing, because nothing made you recognize the case in hand as an instance of it. So for any rule you read here, name the decision you are about to make and say what the rule changes about it — or say that it does not apply, which is also an answer.
 
+## A list written to record a DEBT is not an inventory of a SURFACE
+
+**When** you build a set of operations, routes or requirements from a list in a
+§ Status table, a handoff file or a backlog item, **derive it from the thing itself
+instead** — the screens' own action columns, the entities, the code — and use the
+debt list only to check what you found. **Because** a debt list was written to
+answer "what do we still owe?", which is a smaller question than "what is there?",
+and it is complete only about the moment it was written.
+
+## A repair that fixes the instance can leave the failure class untouched
+
+**When** you fix a stale constant, list or count by deriving it, **ask separately
+what happens to an input the derivation still does not know** — and make that input
+fail by name rather than by falling through to a default. **Because** derivation
+removes today's wrong value and usually leaves the mechanism that made a wrong
+value silent, so the next occurrence looks identical to the one you just paid for.
+
+## A rule about a control binds its styling and its label, not just its word
+
+**When** you rule that an action must be named for what it really does, **check how
+it is presented as well** — destructive styling on a reversible act makes the same
+false promise the wrong word did. **Because** the reason for the rule is the
+hesitation a false promise causes, and colour reaches the reader before the label
+does.
+
 ## A measured behaviour and an explanation of it are separate claims
 
 **Record what the system did and what you inferred about why as two things, and
