@@ -361,9 +361,33 @@ by a caller is a fabricated observation — indistinguishable afterwards from on
 product earned. That matters beyond tidiness because `data-model.md` makes
 derivation load-bearing: affinities are rebuilt from the retained turns when the
 derivation improves (Q14), and a row claiming behaviour that never happened has
-nothing to rebuild from and cannot be audited. `stated` and `inferred` are both
-writable — the in-UI agent is an MCP client, so the tool is a path a model takes
-while the curator is talking to it, and both of those are honest from there.
+nothing to rebuild from and cannot be audited.
+
+**`inferred` requires a `source_turn_id`; `stated` does not.** Both are writable —
+the in-UI agent is an MCP client, so the tool is a path a model takes while the
+curator is talking to it — but that justification is about *one* caller, and the
+tool cannot check which caller it has. Any other client (Claude Code at a terminal
+is the stated consumer) could otherwise write "the model read this out of what they
+said" citing nothing, which is the same unrebuildable, unauditable row the
+`observed` refusal exists to refuse, arriving through the door left open beside it.
+`stated` needs no turn because the curator saying a thing is the whole provenance —
+`data-model.md` already makes `rationale` normally null for it. *(Added 2026-08-11,
+Critic R-11: the first draft guarded one derivation and left its neighbour able to
+break the identical invariant.)*
+
+**An upsert may not overwrite a row's provenance with a weaker one.** `set` lands on
+(`kind`, `value`), and that row may already carry `derivation='observed'` and a
+`source_turn_id` — the sample-reaction path writes exactly that pair. So the rule the
+building chunk must not violate: a `set` **replaces the judgment** (`sentiment`,
+`open_to_more`, `rationale`) and **replaces the provenance with its own** —
+`derivation` becomes what the caller wrote, and `source_turn_id` becomes the turn the
+caller cited or null if it cited none. What it may never do is keep the old
+`source_turn_id` under the new judgment. That is the cheap default — write the fields
+given, leave the rest — and it produces a row whose turn did not produce the judgment
+stored on it, indistinguishable afterwards from real provenance, from which Q14's
+rebuild then either resurrects a superseded judgment or overwrites the curator's
+correction. A correction is a new judgment with its own provenance or it is not
+auditable at all. *(Added 2026-08-11, Critic R-17.)*
 
 **Sentiment and openness are both required, because the pair is the entity's
 point.** `data-model.md` keeps `sentiment` and `open_to_more` apart so that "meh on
@@ -844,7 +868,14 @@ them back to the model.
 > reading its source"* after it swallowed a graph interrupt.
 >
 > **What ships instead:** an error result naming the unknown tool and
-> enumerating the five real names — the same teach-don't-guess shape as every
+> enumerating every tool the server has registered — `[known.name for known in
+> TOOLS]`, so the list is whatever is declared on the day rather than a number
+> written here. *(This read "the five real names" until 2026-08-11 — Critic R-10 —
+> which was the third stale tool count in this artifact and the only one stating
+> what a shipped payload contains. Note that "registered" is not the same set as
+> § The surface: `art_taste` is designed and undeclared, so it is Frozen in the
+> tiers table and absent from this enumeration until it ships.)* The same
+> teach-don't-guess shape as every
 > other error here. The exception's own reasoning is what makes this cheap: a
 > client only calls names `list_tools` returned, so the case is defensive
 > rather than live. Stated as a retirement rather than quietly implemented
@@ -1017,7 +1048,7 @@ exemption's reasoning and must not be cited for the manifest contract.)*
 
 | Element | Tier | Meaning |
 |---|---|---|
-| Tool names (every row of § The surface) | **Frozen** | Never renamed or removed. Pinned by test. A name is claimed by appearing in that table, which is why `art_taste` is Frozen from 2026-08-11 while the entity under it is unbuilt — and why adding one is a decision and not a draft. |
+| Tool names (every row of § The surface) | **Frozen** | Never renamed or removed. **Pinned by test from the day the tool is declared, and frozen by decision until then** — `FROZEN_TOOL_NAMES` in `curation/tests/contract/test_mcp_surface.py` asserts set-equality against the live server, so it can only ever cover tools that exist. `art_taste` is Frozen from 2026-08-11 and is the one name nothing pins; its entry joins that set on the day it ships. *(The row said only "Pinned by test" until 2026-08-11 — Critic R-16 — while widening itself to cover exactly the name the pin cannot reach.)* |
 | `action` values | **Stable** | Additive; retirement is announced and annotated. |
 | Required parameters | **Stable** | New ones must be optional with a default. |
 | Optional parameters | **Additive** | May be added freely. |
@@ -1145,7 +1176,7 @@ spellings for "change this" costs more than the orthodoxy is worth here.
 | `GET /api/works` — facet counts in the same response | The counts the IA's disabled-not-hidden rule needs. **Not a second route** — see below. | `WorkFacet` — **unbuilt** | as above |
 | `POST /api/works/{id}/archive`, `/restore` | Take a work out of circulation, and put it back. **Not a delete** — see below. | `Artwork.status`, built | `art_catalogue(action='archive'\|'restore')`, already designed |
 | `POST /api/themes/{id}` | Rename. | `Theme`, built | `art_theme(action='update')`, already designed |
-| `DELETE /api/themes/{id}` | Delete. **Refuses while the theme is active** — see below. | `Theme`, built | `art_theme(action='delete')`, already designed |
+| `DELETE /api/themes/{id}` | Delete. **The refusal it must reuse is already built** — see below. | `Theme`, built, and `ThemeService.delete_theme`'s guard with it | `art_theme(action='delete')`, built and wired to that guard |
 | `GET`/`POST /api/conversations` | The thread list, ordered by `last_turn_at`; and starting one. | `Conversation` — **unbuilt** | none proposed — see below |
 | `GET /api/conversations/{id}` | One thread with its turns. | `ConversationTurn` — **unbuilt** | none proposed |
 | `POST /api/conversations/{id}/turns` | One exchange. **Spends** — `SpendRecord` category `conversation_tokens`. | `ConversationTurn` — **unbuilt** | none proposed |
@@ -1184,29 +1215,49 @@ wall consequence, not merely which of archive and restore it is doing** —
 writing, so the route can state the consequence rather than predict it. The IA
 carries this rule for flow 6's activation and now carries it here too.
 
-**Deleting the active theme refuses — settled by the operator 2026-08-11.**
-`data-model.md` constraint 1 — "exactly one Theme has `is_active = true`" — left
-the delete of an active theme as either a refusal or a cascade leaving the wall
-with nothing chosen, and the two are not equivalent for someone in the room. The
-ruling is **refuse while active**: deletion is never urgent, and the alternatives
-change what the household is looking at as a side effect of a tidying action. The
-refusal is the surface's one `400` shape, and its message says what to do —
-activate another theme, or deactivate this one — because § Errors teach binds every
-refusal here.
+**Deleting the active theme refuses — and this rule is built, not designed.** The
+operator settled the question on 2026-08-11, and the answer turned out to be what
+`ThemeService.delete_theme` has enforced all along, reached by
+`art_theme(action='delete')` today. **This paragraph therefore describes shipped
+behaviour**, and it is the one thing in this section that does: the HTTP route is
+still unbuilt, and what it owes is to call that method rather than to write a guard
+of its own.
 
-> A third option was put alongside those two and declined: **promote another theme,
-> then delete**. It satisfies constraint 1 without blanking the wall, but it buys
-> that with a second decision nobody has made (which theme is promoted — newest?
-> first created?), it still changes the picture as a side effect of a delete, and
-> it collapses into a refusal anyway when the theme being deleted is the only one.
-> Recorded because "we only considered two" is the question a later reader asks.
+> **The question was put to the operator as though nothing were built, and that
+> framing was wrong** — found by Critic review, R-8, on the commit that recorded the
+> decision. The ruling and the shipped behaviour agree on the case that was asked
+> about, so nothing was decided against the code; but the case below was hidden by
+> the same mistake and never reached them. Recorded rather than quietly corrected,
+> because the correction is the interesting part: a decision framed against an
+> artifact when the code was the authority.
 
-**The refusal is the route's, not the service layer's to invent.** `architecture.md`
-§ Direction has the handler call one service method, so the guard belongs with the
-theme service beside constraint 1 — where `art_theme(action='delete')`, the MCP
-twin, reaches it too. A rule enforced in the HTTP handler would be a rule a model
-does not have, on a surface whose whole parity claim is that an agent and a click
-cannot disagree.
+**The refusal is narrower than "while active", and the narrowing is the part worth
+reading.** `delete_theme` refuses the active theme **only while another theme
+exists**. Deleting the *last* theme is permitted even though it is active, because
+no themes at all is a normal empty state rather than the forbidden one — and it is
+what makes a theme deletable at all. Deleting it deliberately does not rewrite the
+manifest: the wall keeps showing what it was showing, the same posture as curation
+being stopped entirely. Publishing an empty manifest would blank the wall as a side
+effect of tidying the catalogue.
+
+**The message is normative and is already written.** "Theme *X* is the one the wall
+is showing. Activate another theme first, so that what replaces it on the wall is a
+choice rather than whichever is oldest." An earlier draft of this paragraph invented
+"or deactivate this one" — there is no deactivate action, no such route, and no
+state it could produce that the surface has a name for. § Errors teach is why a
+refusal must say what to do; the *principle* binds here, not the shape, because that
+section specifies the tool envelope's `valid_actions` / `example` / `hint` and the
+HTTP surface has one shape and one status — `{"error": "..."}` — which carries the
+sentence and nothing else.
+
+> **"Promote another theme, then delete" was the third option, and it is not
+> hypothetical — it is what happens by default if the guard is removed.**
+> `reconcile()` promotes the oldest remaining theme when none is active, so a
+> curator deleting what is on the wall would get *some* other theme on it without
+> having chosen one. That is the reason the built code refuses, and it is a better
+> reason than the one this document gave when it declined the option as a design
+> choice: the earlier draft argued it "collapses into a refusal anyway when the
+> theme being deleted is the only one", which is the opposite of what ships.
 
 **Taste gets an MCP tool; conversation does not — settled by the operator
 2026-08-11, and the three cases came apart under the ruling.** `product-brief.md`

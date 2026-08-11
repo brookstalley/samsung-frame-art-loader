@@ -411,7 +411,7 @@ naming and grouping concept, not an accounts concept.
 | `id` | UUID | PK | |
 | `name` | string | required, unique | e.g. "American Modernists". |
 | `description` | text | nullable | |
-| `is_active` | boolean | required | Exactly one theme is active; see Constraints. |
+| `is_active` | boolean | required | At most one theme is active, and exactly one whenever any theme exists; see Constraints. |
 | `created_at` | datetime | auto | |
 
 ### ThemeMembership
@@ -1629,8 +1629,22 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
 
 ## Constraints
 
-1. **Exactly one Theme has `is_active = true`.** The display plane's sync target
-   is unambiguous. Enforced at write time, not assumed.
+1. **At most one Theme has `is_active = true`, and exactly one whenever any theme
+   exists.** The display plane's sync target is unambiguous. Enforced rather than
+   assumed, and by two different things: `themes_one_active`, a *partial* unique
+   index over `is_active = 1`, makes two active themes impossible; `reconcile()`
+   promotes the oldest theme when none is active, which is what makes the second
+   half true rather than merely intended.
+
+   **Zero active themes is reachable and is not a violation** — it is the state of
+   an empty catalogue, and it is why the last theme can be deleted at all
+   (`ThemeService.delete_theme`; see `api-contract.md` § The routes the interface
+   design requires). *This constraint read "Exactly one Theme has `is_active =
+   true`" until 2026-08-11, which the index has never enforced and the empty
+   catalogue has always contradicted. It was found by Critic review (R-8) being
+   reasoned from — a decision about deleting the active theme argued from an
+   invariant the store does not have. An absolute here is not a stronger claim than
+   a bounded one; it is a claim a reader will act on.*
 2. **Exactly one MatColor per Artwork has `is_current = true`.**
 3. **At most one Source per Artwork has `is_primary = true`.**
 4. **A Rendition is stale when its `source_content_hash` differs from its

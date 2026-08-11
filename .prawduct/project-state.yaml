@@ -2351,8 +2351,14 @@ design_decisions:
       name is first seen. Verified twice independently: read from
       mcp/server/lowlevel/server.py at 1.28.1, and recorded in 3tears'
       changelog as confirmed against the live dispatch path rather than by
-      reading source. The substitute enumerates the five real tool names in the
-      error result. The carve-out's own reasoning survives it — the case is
+      reading source. The substitute enumerates every tool the server has
+      registered — `[known.name for known in TOOLS]` — in the error result;
+      that is the *declared* set, which from 2026-08-11 is not the same as the
+      set `api-contract.md` § The surface designs, since `art_taste` is frozen
+      and undeclared until the Affinity chunk ships. *(This said "the five real
+      tool names" until 2026-08-11, Critic R-7: the enumeration is real code, so
+      the count here is what would tell that chunk's builder the site exists.)*
+      The carve-out's own reasoning survives it — the case is
       unreachable in practice, because a client only calls names that
       list_tools returned.
     revisit_trigger: "RESOLVED — the MCP tool surface was designed 2026-07-19 and the envelope decided with it."
@@ -2426,6 +2432,36 @@ design_decisions:
 #   priority: high | medium | low
 
 open_questions:
+  - question: "Does the e-paper legibility norm stand as written — specifically, does type never shrink below the floor, with content dropping instead?"
+    context: >
+      The norm row is in `project-preferences.md` and is marked PROPOSED
+      2026-08-11, not ratified. Most of it is a correction rather than a birth:
+      the 16-grey requirement and the mode read-back come from
+      `nonfunctional-requirements.md` § Output Quality, and standing-distance
+      legibility from `design_decisions.accessibility_approach`.
+
+      The part that needs a sentence from the owner is the
+      drop-rather-than-shrink clause, which appears in no artifact earlier than
+      the row itself, and whose only prior record is the `layout.py` docstring
+      written by the very chunk whose tests the row names as its enforcement.
+      That is the laundering shape whatever the intent, which is why it is
+      carried as proposed rather than quietly ratified by use.
+
+      RAISED HERE 2026-08-11 by Critic R-2, and the reason it needed raising is
+      the interesting part: the mechanism that used to put a proposed norm in
+      front of the owner was a row in `information-architecture.md` § Status,
+      and that row was correctly removed in the same bundle — both norms it
+      tracked had been ratified. The replacement was nothing. A row with
+      Mechanism `Test`, two live enforcement artifacts and an audit home reads
+      as binding to the next Critic and to any builder, while the sentence that
+      would ratify or veto it is never solicited.
+    decide_by: >
+      Chunk 13B, the visit to the panel that settles the type sizes, the margin
+      and the line-length bound. The clause is about what happens when type
+      would go below a floor nobody has measured yet, so the same trip answers
+      both — and ratifying it before the floor exists would be ratifying a rule
+      about a number.
+
   - question: "Where does ART_ROOT live on the Pi once the `tvpi` service account exists?"
     context: >
       Raised 2026-08-04, deliberately left open when the service-account NAME was

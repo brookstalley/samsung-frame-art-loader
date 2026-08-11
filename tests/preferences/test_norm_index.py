@@ -77,6 +77,12 @@ def _plane_prefixes() -> list[str]:
 #: which fails by name.
 TEST_REFERENCE = re.compile(r"(?<![\w/.\-])((?:[\w.\-]+/)*)tests/[\w/.\-]+\.py(?:::\w+)?")
 
+#: The dumbest scan that could find a test reference: no prefix, no node id, no
+#: lookbehind. It exists only to be compared against `TEST_REFERENCE`, so that a
+#: narrowing of that pattern fails as a difference instead of shrinking quietly
+#: past the floor below — see `test_the_pattern_finds_every_reference_a_naive_scan_can_see`.
+_NAIVE_REFERENCE = re.compile(r"tests/[\w/.\-]+\.py")
+
 #: The index named this many test artifacts when the guard was written. The
 #: assertion is `>=`, not `==`: adding a Test row must not fail this file, but a
 #: refactor that empties the column must not leave it green either. A regex that
@@ -253,6 +259,40 @@ def test_the_index_still_names_test_artifacts_at_all():
         f"expected at least {MINIMUM_KNOWN_REFERENCES} test artifacts in the norm index's "
         f"Enforcement column, found {len(found)}: {found}. Either the column was emptied "
         "or the table's shape moved out from under this parser."
+    )
+
+
+def test_the_pattern_finds_every_reference_a_naive_scan_can_see():
+    """Guards the guard against scanning *less*, which the floor above cannot see.
+
+    `MINIMUM_KNOWN_REFERENCES` catches an extraction that collapses to nothing. It
+    cannot catch one that collapses partway: narrow `TEST_REFERENCE` so it stops
+    matching prefixed references and the curation and display rows vanish while the
+    root-plane ones still clear a floor of three — the suite green over exactly the
+    rows the 2026-08-11 plane repair was written to protect. That is the
+    `test_plane_isolation.py` incident (a row naming a file that never existed, live
+    for months) arriving by a second route.
+
+    So this compares the compiled pattern against the dumbest scan that could work.
+    `_NAIVE_REFERENCE` has no prefix group, no node-id tail and no lookbehind, and
+    every string it can find is one `TEST_REFERENCE` must also find — the compiled
+    match starts earlier and ends later over the same `tests/….py`. A count that
+    disagrees means the pattern was narrowed, and it fails by the difference rather
+    than by a number somebody has to maintain. Raising the floor by hand each time a
+    row is added is the maintained-count shape the plane derivation was written to
+    retire; this is the same reasoning applied to the other axis.
+    """
+    cells = [row[ENFORCEMENT_COLUMN] for row in _norm_index_rows() if len(row) > ENFORCEMENT_COLUMN]
+    naive = [match.group(0) for cell in cells for match in _NAIVE_REFERENCE.finditer(cell)]
+    found = _enforcement_artifacts()
+
+    missed = sorted(set(naive) - {reference[reference.index("tests/") :].split("::")[0] for reference in found})
+    assert not missed, (
+        f"a naive scan of the Enforcement column finds {len(naive)} test references and "
+        f"TEST_REFERENCE finds {len(found)}; these are visible to the dumb scan and not to the "
+        f"compiled one: {missed}. The pattern was narrowed and is now scanning less than the "
+        "index names — the failure this file exists to refuse, arriving as a shrink rather than "
+        "as a zero."
     )
 
 

@@ -16,6 +16,31 @@ of what is owed; every requirement here is either **practised** (with the mechan
 named), **owed** (with what would close it), or **open** (with what could settle
 it, and by whom).
 
+## Direction
+
+The two norms this artifact carries, stated where the convention says a norm
+lives. Everything below is the requirement detail they bind; **these two
+sentences are the part that leads the code**, and a departure from either is a
+decision to record rather than something to sync the prose to.
+
+1. **The e-paper label is legible at standing distance.** The panel is driven at
+   16 grey levels with the mode read back rather than assumed, and **type never
+   shrinks below the floor — content is dropped instead.** *(PROPOSED 2026-08-11
+   and not ratified; the drop-rather-than-shrink clause is the half awaiting the
+   owner. Tracked in `project-state.yaml` `open_questions`, `decide_by` Chunk
+   13B, which is also the visit that settles the floor the clause refers to.)*
+2. **WCAG 2.1 AA on the curation browser, and colour is never the sole carrier of
+   state.** Ratified; the decision it implements is
+   `design_decisions.accessibility_approach`.
+
+> **This section was added 2026-08-11 by Critic R-2, and its absence was a real
+> gap rather than a formatting one.** `project-preferences.md`'s norm index points
+> every other row at "`X` § Direction"; both accessibility rows pointed into this
+> artifact's body instead, because there was no Direction to point at. A
+> `governed_by` or jurisdiction walk therefore could not reach either norm — it
+> would find the artifact and no rule in it, which is indistinguishable from an
+> artifact that binds nothing.
+
 ## This product has three surfaces and the important one is not the browser
 
 `design_decisions.accessibility_approach` settles the scoping question before any

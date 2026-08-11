@@ -35,7 +35,16 @@ governed_by:
       - "norm-index rows (formatting, naming, imports, logging-not-print, type-annotate-on-touch, specific exceptions, no hardcoded deployment values, async-at-the-boundary, hardware behind an interface) → conforms: ruff lands in Chunk 06 and the mechanical rows migrate to lint rules as each row's Why already directs; until then the Critic carries them per the index"
       - "no test suite (known departure, blocking for medium+ work) → conforms: pytest is established in Chunk 02 alongside the first code that needs it, before any substantive build chunk, and every chunk ships tests alongside code"
       - "uv for both planes, each plane with its own interpreter and its own lock → conforms: Chunk 06, gated on Chunk 04's build verification. The mechanism was settled 2026-07-20 ahead of the chunk: two SIBLING uv projects, not a uv workspace — a workspace shares one lockfile and one resolved interpreter, and uv 0.11.8 refuses to lock members mixing >=3.14 and ==3.13.* at all. The decision's substance (per-plane interpreter + per-plane lock) is unchanged"
-last_validated: 2026-07-20
+  # Both artifacts gained owner-ratified `## Direction` sections on 2026-08-11 and
+  # are listed here so the walk finds them disposed rather than absent. Added by
+  # Critic R-6, which found applicability assumed rather than recorded.
+  - artifact: information-architecture
+    dispositions:
+      - "the curation surface's screens, flows and the routes they require → inapplicable because: this plan's remaining chunks are 13A, 13B and 20 — display-plane and operational work that renders no browser screen. The IA's Direction binds the work that reshapes the surface, and that work has no plan yet; seed its dispositions with `prawduct-hook jurisdiction` when it is written"
+  - artifact: design-direction
+    dispositions:
+      - "the visual direction, and the chunk that owes each piece of it → inapplicable because: same scope as the row above. The one place it could bite this plan is the e-paper label's typesetting, and that is governed by `accessibility-spec.md` § Direction instead, which Chunk 13B carries"
+last_validated: 2026-08-11
 ---
 
 # Build Plan — Samsung Frame Art Loader v1

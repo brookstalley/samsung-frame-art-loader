@@ -8,6 +8,13 @@ here with no body under it is not an entry that lost its evidence; it is one who
 evidence is in that file. Entries written before 2026-07-31 still carry theirs
 inline, which the record linter flags; moving them is tracked as issue #26.
 
+**Position in this file does not encode time — new rules go at the top, under the
+descent obligation.** Stated 2026-08-11 (Critic R-18) because both habits were
+alive in the same week: some rounds appended, this one inserted. A reviewer
+resolving two rules that genuinely conflict would otherwise reach for "later in
+the file is later in time", which would read the newest three as the oldest. Date
+a rule if its recency matters; never infer recency from where it sits.
+
 <!-- prawduct:descent-obligation — the statement below is the HOME of the
      descent rule; `/prawduct:learnings` points here rather than restating
      it. Reword the prose freely; keep this marker, above the first rule. -->
