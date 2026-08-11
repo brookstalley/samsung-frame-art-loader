@@ -320,13 +320,17 @@ def test_every_named_enforcement_artifact_resolves(reference):
 UNCOVERED_HEADER = "| Guard | Ruling (owner, 2026-08-06) | Reasoning |"
 
 
-def _deliberately_uncovered_artifacts() -> list[str]:
-    """Every test reference named in the deliberately-uncovered table's Guard column.
+def _uncovered_guard_cells() -> list[str]:
+    """The Guard column's raw text, one string per deliberately-uncovered row.
 
-    A separate parser rather than a widened one, because the two tables answer
-    opposite questions and must not be able to absorb each other's rows: the norm
-    index says "this guard enforces a stated norm", and this table says "this
-    guard exists and is deliberately not that".
+    **Owns the anchor assertion rather than trusting a caller to have made it.**
+    This was briefly split — the assertion in `_deliberately_uncovered_artifacts`
+    and the walk here — and the cross-check at the end of this file calls this one
+    directly, so a moved header would have reached it as a bare `ValueError` out of
+    `list.index` and lost the written diagnostic entirely. In the file whose stated
+    posture is "fix the anchor deliberately rather than letting this guard scan
+    nothing", a guard that dies without saying which anchor moved is the same
+    failure wearing a traceback.
     """
     lines = [line.rstrip() for line in NORM_INDEX.read_text(encoding="utf-8").splitlines()]
     assert UNCOVERED_HEADER in lines, (
@@ -334,16 +338,6 @@ def _deliberately_uncovered_artifacts() -> list[str]:
         "It moved or its columns were renamed. Fix the anchor deliberately rather than letting "
         "this guard scan nothing."
     )
-    # `finditer` and `group(0)` for the same reason as the sibling parser: the
-    # pattern captures the plane prefix, so `findall` returns that group and
-    # discards the reference it was found in.
-    return [match.group(0) for cell in _uncovered_guard_cells(lines) for match in TEST_REFERENCE.finditer(cell)]
-
-
-def _uncovered_guard_cells(lines: list[str] | None = None) -> list[str]:
-    """The Guard column's raw text, one string per uncovered-table row."""
-    if lines is None:
-        lines = [line.rstrip() for line in NORM_INDEX.read_text(encoding="utf-8").splitlines()]
     cells: list[str] = []
     for line in lines[lines.index(UNCOVERED_HEADER) + 1 :]:
         if not line.startswith("|"):
@@ -353,6 +347,20 @@ def _uncovered_guard_cells(lines: list[str] | None = None) -> list[str]:
             continue
         cells.append(body.split("|")[0])
     return cells
+
+
+def _deliberately_uncovered_artifacts() -> list[str]:
+    """Every test reference named in the deliberately-uncovered table's Guard column.
+
+    A separate parser rather than a widened one, because the two tables answer
+    opposite questions and must not be able to absorb each other's rows: the norm
+    index says "this guard enforces a stated norm", and this table says "this
+    guard exists and is deliberately not that".
+    """
+    # `finditer` and `group(0)` for the same reason as the sibling parser: the
+    # pattern captures the plane prefix, so `findall` returns that group and
+    # discards the reference it was found in.
+    return [match.group(0) for cell in _uncovered_guard_cells() for match in TEST_REFERENCE.finditer(cell)]
 
 
 @pytest.mark.parametrize("reference", _deliberately_uncovered_artifacts())
