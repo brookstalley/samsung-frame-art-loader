@@ -188,7 +188,7 @@ figure is 5 of 40, which is what #115 recorded.
 
 ## 2026-08-10: The curation surface is organised around the curator, not the pipeline
 
-<!-- prawduct: chunks= | release= | status= | scope=v1.4 -->
+<!-- prawduct: scope=v1-build -->
 
 **Why:** The built surface's five tabs — Works, Discovery, Themes, On the wall,
 Health — are the pipeline's internal stages in pipeline order. Each was correct as

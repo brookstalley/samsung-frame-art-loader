@@ -39,7 +39,13 @@ colour written outside the token blocks**.
 > scope. Any token added below must land inside that scope, or it is an unguarded
 > colour wearing a token's name.
 >
-> **Status:** steady-state.
+> **Status:** proposed, unratified. *(This read "steady-state" until 2026-08-11 —
+> a word left over from drafting the norm before the ratification question was
+> asked, and it contradicted the comment above it. A norm claiming to be settled
+> five lines under a notice saying it is not is worse than either reading alone.)*
+>
+> **Retroactivity:** the revised palettes are not in `app.css`, so the norm's own
+> subject does not yet conform. It binds the chunk that lands them.
 
 ## Visual Identity
 
