@@ -8,6 +8,12 @@ here with no body under it is not an entry that lost its evidence; it is one who
 evidence is in that file. Entries written before 2026-07-31 still carry theirs
 inline, which the record linter flags; moving them is tracked as issue #26.
 
+<!-- prawduct:descent-obligation — the statement below is the HOME of the
+     descent rule; `/prawduct:learnings` points here rather than restating
+     it. Reword the prose freely; keep this marker, above the first rule. -->
+
+**Reading a rule is not applying it.** The failure mode of a learnings file is not absence, it is assent: a rule arrives at the right moment, is read, is agreed with, and changes nothing, because nothing made you recognize the case in hand as an instance of it. So for any rule you read here, name the decision you are about to make and say what the rule changes about it — or say that it does not apply, which is also an answer.
+
 ## A measured behaviour and an explanation of it are separate claims
 
 **Record what the system did and what you inferred about why as two things, and
@@ -74,6 +80,33 @@ built on a remembered level protects nothing and looks exactly like protection.
 **When you void, amend, or supersede a factual claim, grep the whole repo for it
 before calling the correction done.** Prose has no compiler, so a claim that lives in
 four artifacts stays true in three of them until someone looks.
+
+> **Broken again 2026-08-10 by the author of an amendment who had read this rule.**
+> The catalogue target moved from "hundreds" to thousands in one artifact; the
+> figure survived in `project-state.yaml`, `architecture.md`, `app.js` and a test
+> docstring. The costly site was `app.js`, where the retired number was the stated
+> **justification** for the behaviour the amendment called indefensible — so the
+> repo told the next reader that whole-catalogue fetching was on target. This is
+> the assent failure the descent obligation at the top of this file names: the rule
+> was read, agreed with, and changed nothing.
+
+## A format example is not a template, and its placeholders are the trap
+
+**When a file documents its own format with a filled example, do not paste that
+example into a real entry** — write the minimum keys the entry actually needs.
+An example is written to demonstrate every key, which is exactly what makes it
+wrong to copy: its completeness is pedagogical and its values are illustrative.
+
+> **From a change-log entry (2026-08-11).** The tag line was pasted from the
+> header's format example, carrying `release=` empty and a `scope=` naming a rollup
+> that exists nowhere. An empty `release=` parses to `''` rather than `None`, which
+> is not a version, so the release gate errors — and the same header states, six
+> lines above the example, that "any value at all in `release=`, a placeholder
+> included, drops that entry's whole scope out of the pending set". The parser's
+> docstring names a precedent where exactly that hid a whole branch from a release.
+> **The prose that would have prevented it was adjacent to the thing copied**,
+> which is the generalisable part: an example is the part of a document that gets
+> read instead of the document.
 
 **Confirmed by recurrence, and the list below has only ever grown.** Nearly every
 entry was caught by a Critic round or a later verification pass rather than by the
