@@ -102,6 +102,33 @@ class TestTheModelAnswers:
         assert choice.model_id == "qwen/qwen3.7-flash"
         assert choice.fallback_detail is None
 
+    def test_a_pale_model_answer_is_recorded_as_the_model_gave_it(self, artwork):
+        """**The clamp binds the mechanical derivation and not this path**, and
+        that exemption is a decision rather than an oversight, so it needs a test
+        that fails if someone extends the ceiling across both.
+
+        The colour here is L\\* 89 — far above the ceiling a derived colour is held
+        to, and chosen for that. Darkening it would put a colour in the catalogue
+        that no one selected, under a `method` saying a model chose it, which is the
+        invisible substitution `MatColor.method` exists to end. Whether the model's
+        answers deserve a bar of their own is open; it is not open that the answer
+        may be edited on the way to being recorded without saying so."""
+        pale = json.dumps(
+            {
+                "hex_rgb": "#e8e2d0",
+                "lab_l": 89.4,
+                "lab_a": -0.6,
+                "lab_b": 8.2,
+                "reason": "A warm off-white.",
+            }
+        )
+        engine = MatEngine(_client(_answered(pale)), image_max_edge=768)
+
+        choice = engine.choose(artwork)
+
+        assert choice.hex_rgb == "#e8e2d0"
+        assert choice.method is MatMethod.VISION_MODEL
+
     def test_the_model_s_own_lab_is_kept_rather_than_recomputed(self, artwork):
         """They can disagree, and the disagreement is the evidence: a hex that
         does not match the LAB beside it is a model that converted badly, not a

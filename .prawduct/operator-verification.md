@@ -10,6 +10,51 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The clamped mats, on the seven works that were over the bar — added 2026-08-11
+
+**The numbers are settled; the look is not, and only you can settle it.** Issue
+#115 is fixed — the mechanical derivation can no longer produce a mat lighter than
+the corpus's own lightest, so the 7 of 40 works that breached the bar are now 0 of
+40. What that arithmetic cannot tell you is whether a mat pinned at the ceiling
+*reads* well around those particular paintings. `nonfunctional-requirements.md`
+§ Output Quality makes that bar explicitly subjective, so this is the same kind of
+judgement as the 2026-08-03 corpus entry below.
+
+**Nothing on your wall changed and nothing needs re-rendering.** Every one of the
+40 works already carries a recorded mat colour, and existing choices are never
+overwritten. This changes what a *newly acquired* work gets when no vision model
+is asked — so the seven below are the evidence, not a pending repair.
+
+The seven, with what the derivation used to answer and what a human chose in 2024:
+
+```
+  ...And the Home of the Brave   Demuth      human #27285b L* 18.8   was L* 59.5
+  Sky above Clouds IV            O'Keeffe    human #2a3a5e L* 24.7   was L* 58.4
+  Eggplant and Plums             Demuth      human #342547 L* 18.0   was L* 57.6
+  Seascape                                   human #22394b L* 22.9   was L* 51.6
+  Corpse and Mirror II           Johns       human #1c1c1c L* 10.3   was L* 50.8
+  Kaldor Public Art Project 10   Koons       human #303045 L* 20.7   was L* 50.2
+  Lozenge Composition            Mondrian    human #6b6b6b L* 45.2   was L* 61.3
+```
+
+Reproduce the measurement, which is free and touches nothing:
+
+```sh
+cd curation && uv run python tools/mat_masters.py ../all.json
+```
+
+**The specific question, and it is a real one.** The clamp puts a breaching work
+at L\* 45.2 or darker — the corpus's lightest mat, which a human chose *once*, for
+the Mondrian. (Darker, not exactly, when the work's own hue is one the panel cannot
+show at that lightness: the colour goes down until it can, rather than losing its
+hue and becoming a grey.) On the Mondrian 45.2 is arguably right. On the Johns,
+whose human answer was L\* 10.3, a mat at 45.2 is still thirty-five points lighter
+than the choice it replaces. The clamp fixes "too light to be in the corpus at all"; it
+does not make the derivation choose the way you would. **If those read badly, say
+so** — the answer is not a lower ceiling (that would be a number fitted to a
+feeling) but that the derivation should not be the default where a vision model
+can be asked, which is a live decision on #91.
+
 ### The announcement reaches both subscribers, at the set — added 2026-08-08
 
 **This is Chunk 13A's Done-when step 0b, and it is the one thing between that

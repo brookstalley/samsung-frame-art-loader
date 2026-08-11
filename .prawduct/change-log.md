@@ -54,6 +54,138 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-11: The derived mat cannot exceed the corpus, and the vote counts a colour once
+
+<!-- prawduct: status=shipped | scope=v1-build -->
+
+<!-- No `chunks=`: issue #115, a defect in the mat engine the build plan had
+     already delivered. -->
+
+**Why:** issue #115, impact L. It **blocks #91**, whose acceptance criterion
+promotes the mechanical derivation from fallback to *default* on the recorded
+claim that it lands where the hand-tuned corpus sits. That claim was measured on
+2026-08-10 and is false, so promoting it would have made a measured-wrong colour
+the standing answer for every work acquired without a vision call.
+
+**Two defects, one cause each.**
+
+- **The derivation had no ceiling.** `_fallback` darkened the dominant colour by
+  `_FALLBACK_LIGHTNESS` and stopped. Two thirds of a pale colour is still pale, so
+  on the operator's 40 paired works it put a mat above `CORPUS_MAX_LIGHTNESS = 50`
+  on 7, where the human breached it on 0 — including a near-white over a Mondrian,
+  which is verbatim the failure the bar was written to refuse and the failure two
+  candidate models were rejected during probing for.
+- **The dominance vote counted one colour twice.** Median cut splits along the
+  widest channel, so a colour spread over a gradient arrives as two clusters and
+  loses to a smaller undivided rival. A benign re-encode is enough to move where
+  the split falls, so the *answer* moved with it.
+
+**Measured over the operator's own 40 pairs, before and after:**
+
+```
+  machine over CORPUS_MAX_LIGHTNESS = 50     7 / 40  ->  0 / 40
+  re-encode moved the colour at all          5 / 40  ->  5 / 40   (ΔE > 5)
+    ... to a plainly different colour        5 / 40  ->  2 / 40   (ΔE > 10)
+    worst single move                       ΔE 60.7  ->  ΔE 45.6
+  machine lighter than the human chose      31 / 40  -> 31 / 40   median +14.2 L*
+```
+
+**That last row's `+14.2` and issue #115's `+15.2` are the same 40 measurements.**
+Neither is wrong and nothing was re-measured: the sample is even, its two middle
+gaps are 13.3 and 15.2, and #115 quoted the upper middle where
+`tools/mat_masters.py` takes the mean that a median is defined as. The tool's
+figure is the one to quote from here on, because it is the one a reader can
+reproduce by running the command. The row carries one value across both columns
+because the clamp genuinely does not move it.
+
+**The two columns that did not move are the honest part of this entry.** The
+clamp is a ceiling, so it removes the tail above the bar and leaves the lightness
+*bias* exactly where it was; closing that is a question about which colour to
+choose, not arithmetic on the one already chosen, and it belongs to the vision
+model. And the count of works whose colour moves *at all* is unchanged: what
+remains is not a split colour but two genuinely different regions close enough in
+area that a re-encode reorders them. **No threshold fixes a real tie**, and one
+wide enough to try would collapse the picture to one colour.
+
+**The merge threshold was chosen from the metric's meaning, not from a score.**
+Sweeping ΔE 5, 10, 15 and 20 over the 40 masters moves the survival count around
+non-monotonically — 3, 5, 3, 3 — while every non-zero value delivers the same
+5 → 2 improvement on plainly-different flips. Forty works cannot separate those,
+so picking the best-scoring value would have fitted the threshold to the sample.
+Ten is where CIEDE2000's own scale puts "plainly different colours".
+
+**The first clamp did not hold, and finding that out is the same check that found
+#115.** Holding L\* at the ceiling while keeping a\* and b\* asks for a colour sRGB
+often cannot show: `lab_to_rgb` clips into the gamut, and for a saturated hue the
+nearest displayable colour is *lighter* than the one requested — a pure magenta
+came back at L\* **49.6**, over the ceiling it was enforcing. It cleared the
+corpus's round-number bar of 50, so every test passed. Swept over the whole RGB
+cube the worst case is now L\* **45.2** exactly.
+
+**Lightness gives way, not chroma, and the corpus decides that.** The other repair
+— hold the ceiling and desaturate — was written first and rejected on its own
+output: it answered a vivid blue with a *pure grey*, when the prompt that produced
+the corpus asks for a low-chroma colour drawn from the artwork over a neutral.
+Going darker is that prompt's own instruction for this doubt, and L\* 6.7 is the
+corpus's floor, so there is room to move. Zero chromatic inputs across the cube
+now come back near-grey.
+
+**None of the 40 masters reaches this path** — their darkened dominant colours are
+all displayable at the ceiling — so this is a guard on a case the corpus does not
+contain rather than a change to any measured number above.
+
+**`_CORPUS_MAX_LIGHTNESS` is not a second copy of the corpus's ceiling.**
+`test_mat_corpus.py` derives the lightest mat from `all.json` and fails if the two
+disagree, so a corpus that gains a lighter mat cannot leave the engine enforcing a
+bar the corpus no longer sets. The clamp is deliberately **not** applied to the
+vision model's answer: darkening a considered choice would make the recorded
+colour one nobody selected, which is the invisible-substitution failure
+`MatColor.method` exists to end.
+
+**`tools/mat_masters.py` is new, and it is the half of the check CI cannot hold.**
+The corpus's colours are in the repo and its *images* are the operator's masters,
+which are not and must not be — so the producer being judged had never been run
+over the corpus's own inputs. That is the whole reason a green suite hid this. The
+tool pairs each master with 2024's colour by title, reports the comparison above,
+and writes nothing. `tools/mat_corpus.py` does not substitute for it: its images
+come from each museum as a small IIIF derivative, which is the very substitution
+that changes the derived colour visibly on 5 of 25 works.
+
+**The review rounds, and what they changed rather than that they happened.** One
+cumulative round (0 blocking, 15 warnings, 10 notes, three reviewers) and two
+`verify-resolutions` passes, each of which found something real:
+
+- The **gamut overshoot above** was raised independently by all three reviewers and
+  by a self-check at the same time — the strongest argument for the independence
+  being the point rather than the ceremony.
+- **Three rules these docstrings state were undefended.** Single-link grouping had
+  no fixture chaining more than two shades, where `any` and `all` are the same
+  sentence; the winner's tie-break had no test; and the vision model's exemption
+  from the clamp had none, because every model answer in the suite was already
+  under the ceiling. All three mutations survived a green suite. Writing a rule
+  down is not the same act as defending it, and the prose is what stopped the
+  looking.
+- **The ceiling's diagnostic defended nothing** — deleting the log block, inverting
+  its guard or swapping its two figures all left the suite green. The same shape
+  the #90 branch was blocked on, one branch later. It now has both tests: that the
+  line fires with both figures, and that a mat the ceiling did not touch stays
+  silent.
+- **The cube sweep is a test, not a sentence.** Three records asserted that no
+  derived colour exceeds the ceiling and nothing reproduced it.
+- **The hardening introduced its own regression.** `Path.as_uri()` refuses a
+  relative path, so `--art-root ../../../samsung-art` — the ordinary way to invoke
+  this from the directory the usage line names — cleared both new guards and died
+  on a bare `ValueError`. Caught by the second verify pass and fixed by resolving
+  the path.
+
+**One measurement correction worth recording.** The first stability harness
+downscaled each master to 1024px *and* re-encoded it, and reported 3 of 40. That
+number was about resampling, not about the vote: `dominant_color` decodes through
+`draft()`, whose DCT scaling factor depends on the file's size, so a downscaled
+master reaches the quantiser as genuinely different pixels. Re-measured as the
+claim actually reads — same dimensions, saved again at a different quality — the
+figure is 5 of 40, which is what #115 recorded.
+
 ## 2026-08-10: A thumbnail stops outliving the canvas it was a copy of
 
 <!-- prawduct: status=shipped | scope=v1-build -->

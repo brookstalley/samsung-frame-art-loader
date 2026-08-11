@@ -182,6 +182,13 @@ is right locally and a trap in CI, where a green run that made no request looks
 identical to a passing one. `.github/scripts/assert_tests_ran.py` is what closes
 that: it fails the job on any skip and names which dependency was absent.
 
+**Touching `acquisition/mat.py` or `acquisition/color.py`? Run the masters by
+hand** — `cd curation && uv run python tools/mat_masters.py ../all.json`. The
+corpus's colours are in the repo but the paintings are the operator's masters, so
+every test here uses synthetic flats, which have no cluster competition and no
+pale regions; a near-white mat over a Mondrian shipped green for exactly that.
+Needs `ART_ROOT`, spends nothing, writes nothing.
+
 **A green suite says nothing about a branch no test reaches.** Before believing
 new branches are covered, break them on purpose:
 `cd curation && uv run python tools/mutation_sweep.py <mutations.json> <test paths>`.
