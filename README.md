@@ -30,10 +30,16 @@ unattended on that machine beforehand, so the 2024 loader at the repository root
 stopped being the answer to "what runs the wall" some time before this, not at the
 cutover. Those modules are still present and are deleted at the legacy retirement.
 
-**What remains is what only a person standing in front of the hardware can do**:
-the check that a rotation still completes with a second subscriber attached, and
-an unattended run across a television power-cycle — both of which need the
-television, not the panel.
+**What remains at the hardware** — the check that a rotation still completes with
+a second subscriber attached, and an unattended run across a television
+power-cycle. Both need the television, not the panel.
+
+**What remains in software** is the label itself, which the panel visit turned
+from three numbers into a redesign: a type floor derived from viewing distance,
+the artist set above the work with a styled family name, `family_name`/
+`given_name` and a commentary field in the catalogue, and a fill model that
+admits optional content in priority order. It is specified in
+`accessibility-spec.md` and carried as 13B-1 … 13B-4 in the build plan.
 
 **The label reached e-ink on 2026-08-11**, which it never had before: rotation
 does not run while the set is in standby, so the label path had never executed on
