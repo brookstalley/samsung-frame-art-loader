@@ -250,6 +250,13 @@ overflows. So the engine is given candidates with a priority and a role, and:
 - **What was dropped is still reported.** Unchanged, and it matters more here:
   an engine that adapts silently is one whose omissions nobody can audit.
 
+> **Every panel measurement in this section was taken at a 60 px margin**, while
+> `DEFAULT_EPD_MARGIN_PX` ships 40 — a wider border was used to keep the largest
+> type clear of the bezel. The 952 px usable figure and the budgets built on it
+> therefore describe a margin the deployment does not currently run. Reconciling
+> the two belongs to the derivation that replaces both, and is noted here so the
+> numbers are not read as describing the committed default.
+
 **Museum tombstone conventions, checked rather than assumed** — the operator asked
 to be corrected on these 2026-08-11, and was on the first one:
 

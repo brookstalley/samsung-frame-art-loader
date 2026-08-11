@@ -188,6 +188,16 @@ class TestTheMeasure:
     since how many characters that turns out to be depends on the face.
     """
 
+    #: A surface far wider than any measure, so the bound is always the narrower of
+    #: the two. **Deliberately not `PANEL`**: whether the bound bites on the
+    #: reference panel depends on the type sizes, and those are about to be derived
+    #: from a viewing distance rather than fixed here. A test that asserted "the
+    #: bound bites at 1448px" would pass today and fail on the commit that raises
+    #: the sizes — pinning a coincidence of the current constants instead of the
+    #: rule. What is under test is that a measure exists and narrows; where it
+    #: happens to land on one device is that device's arithmetic.
+    UNBOUNDED = Geometry(width_px=100_000, height_px=100_000, margin_px=40)
+
     @staticmethod
     def recording(seen: list[tuple[str, int, int]]):
         """A measurer that records the wrap width it was asked for."""
@@ -198,19 +208,19 @@ class TestTheMeasure:
 
         return measure
 
-    def test_a_line_wraps_at_the_measure_rather_than_at_the_panel_edge(self):
+    def test_a_line_wraps_at_the_measure_rather_than_at_the_surface_edge(self):
         seen: list[tuple[str, int, int]] = []
-        lay_out(("Chicago", "Georgia O'Keeffe", "American"), PANEL, self.recording(seen))
+        lay_out(("Chicago", "Georgia O'Keeffe", "American"), self.UNBOUNDED, self.recording(seen))
 
         body_wrap = seen[2][2]
         assert body_wrap == round(MEASURE_EM * BODY_SIZE_PX)
-        assert body_wrap < PANEL.text_width_px, "the bound did not bite on a panel this wide"
+        assert body_wrap < self.UNBOUNDED.text_width_px, "the bound did not narrow anything"
 
     def test_the_measure_scales_with_the_type_size(self):
         """Ems, not pixels: a bound that did not scale would be one measure for
         the title and a different one, in characters, for everything else."""
         seen: list[tuple[str, int, int]] = []
-        lay_out(("Chicago", "Georgia O'Keeffe", "American"), PANEL, self.recording(seen))
+        lay_out(("Chicago", "Georgia O'Keeffe", "American"), self.UNBOUNDED, self.recording(seen))
 
         title_wrap, artist_wrap, body_wrap = (line[2] for line in seen)
         assert title_wrap > artist_wrap > body_wrap
@@ -238,10 +248,10 @@ class TestTheMeasure:
         same surface occupies more rows with the bound than the panel alone
         would have given it."""
         long_line = "Colour woodblock print on paper, from the series Thirty-six Views of Mount Fuji"
-        layout = lay_out(("T", "A", long_line), PANEL, measured)
+        layout = lay_out(("T", "A", long_line), self.UNBOUNDED, measured)
 
         bounded = layout.blocks[2]
-        unbounded = measured(long_line, BODY_SIZE_PX, PANEL.text_width_px)
+        unbounded = measured(long_line, BODY_SIZE_PX, self.UNBOUNDED.text_width_px)
         assert bounded.height_px > unbounded.height_px
 
 

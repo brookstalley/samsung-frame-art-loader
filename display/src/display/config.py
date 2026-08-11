@@ -50,11 +50,19 @@ DEFAULT_TV_CLIENT_NAME: Final[str] = "tvpi"
 DEFAULT_EPD_PANEL_WIDTH_PX: Final[int] = 1448
 DEFAULT_EPD_PANEL_HEIGHT_PX: Final[int] = 1072
 
-#: The clear border around the label, in pixels. **PROVISIONAL, and settled by the
-#: same look at the panel that settles the type sizes** — it is the other half of
-#: the same judgement, since a margin trades border against how many lines fit
-#: before the drop rule takes one off. It is here rather than beside those sizes
-#: because it is geometry, and geometry belongs to the device.
+#: The clear border around the label, in pixels. **PROVISIONAL — and no longer
+#: settled by eye at all.** It was the other half of a judgement the operator was
+#: going to make at the panel; that judgement was replaced on 2026-08-11 by a floor
+#: derived from viewing distance and panel PPI, so the margin derives with it
+#: rather than being chosen alongside it. The trade it makes is unchanged — border
+#: against how many lines survive the drop rule — which is exactly why it cannot be
+#: picked independently of a floor that decides how many lines there are.
+#:
+#: **The measurements recorded in `accessibility-spec.md` were taken at 60**, not
+#: at this value: the panel work used a wider border to keep the largest type off
+#: the bezel. Whoever lands the derivation reconciles the two and replaces this
+#: note. It is here rather than beside the type sizes because it is geometry, and
+#: geometry belongs to the device.
 DEFAULT_EPD_MARGIN_PX: Final[int] = 40
 
 #: How far the rendered label is turned before it reaches the panel. 180 is what
