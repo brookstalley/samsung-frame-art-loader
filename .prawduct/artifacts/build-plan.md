@@ -1883,6 +1883,20 @@ hardware.
   type size, replacing 13A's provisional value. Cutover: the Pi runs the two new
   units and `tvart.py` stops being the production entry point — legacy files
   remain until Chunk 20.
+- **Amended 2026-08-11, at the cutover, on three things the plan had wrong or
+  missing.** *First*, this is a **first install, not a swap**: no unit of this
+  product was installed on the Pi at all, so "`tvart.py` stops being the production
+  entry point" described a replacement that did not exist, and there is no
+  rollback window to plan around. *Second*, **the checkout's path was a
+  requirement nobody had written down** — settled to `/opt/samsung-frame-art-loader`
+  with `ART_ROOT` at `/srv/art`, because the machine's only checkout and its only
+  `uv` both sat under a home directory at mode `0700` that a `nologin` account
+  cannot traverse. *Third*, and the one that changes this chunk's size: **the Pi
+  had no catalogue**, so the acceptance criteria could not be met by installing
+  units alone. Seeding it from the 2024 index is a step this entry never named and
+  the operator chose to run here rather than copy state from a dev machine; it
+  spends nothing. All three are recorded in `operational-spec.md` § The Service
+  Account and `deploy/README.md` § The cutover.
 - **The account and the cutover are one change, not four.** `operational-spec.md`
   § The Service Account is explicit: the account, its groups, moving `ART_ROOT`
   under it and both unit files land together, because any of them arriving alone

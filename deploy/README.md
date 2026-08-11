@@ -40,6 +40,94 @@ authority on the order.
 > around a maintenance window. The sentence is corrected here rather than
 > quietly, because it read as a statement about the machine and was one.
 
+## The cutover
+
+Performed 2026-08-11 on `pi4-tv` (Debian 13 trixie, aarch64). This is the record
+of what was run, in order, and it is the procedure for doing it again.
+
+    # uv where any account can reach it, and the account itself
+    sudo install -m 0755 -o root -g root ~/.local/bin/uv /usr/local/bin/uv
+    sudo adduser --system --group --no-create-home --shell /usr/sbin/nologin tvpi
+    sudo adduser tvpi spi && sudo adduser tvpi gpio
+    sudo install -d -m 0750 -o tvpi -g tvpi /var/lib/tvpi
+    sudo usermod --home /var/lib/tvpi tvpi          # see the note below
+
+    # the checkout, owned by the account that executes it
+    sudo install -d -o "$USER" -g "$USER" /opt/samsung-frame-art-loader
+    git clone <this repo> /opt/samsung-frame-art-loader
+    sudo chown -R tvpi:tvpi /opt/samsung-frame-art-loader
+
+    # the art tree, moved rather than copied — same filesystem, so it is a rename
+    sudo mv <old ART_ROOT> /srv/art
+    sudo chown -R tvpi:tvpi /srv/art
+
+    # dependencies, as the account that will run them
+    cd /opt/samsung-frame-art-loader/display && sudo -u tvpi /usr/local/bin/uv sync --group raster --group epaper
+    cd /opt/samsung-frame-art-loader/curation && sudo -u tvpi /usr/local/bin/uv sync
+
+    # the environment file: 0640, owned by tvpi, because it carries API keys
+    sudo install -m 0640 -o tvpi -g tvpi <your .env> /opt/samsung-frame-art-loader/.env
+
+    # the units and the journal bound
+    sudo cp deploy/display.service deploy/curation.service /etc/systemd/system/
+    sudo mkdir -p /etc/systemd/journald.conf.d
+    sudo cp deploy/journald.conf.d/10-bound-the-journal.conf /etc/systemd/journald.conf.d/
+    sudo systemctl restart systemd-journald && sudo systemctl daemon-reload
+    sudo systemctl enable --now curation.service
+    sudo systemctl enable --now display.service
+
+**`--no-create-home` then `usermod --home` is not a detour, it is the finding.**
+An account with `HOME=/nonexistent` cannot run `uv` at all — it fails on its own
+cache directory before doing any work. `operational-spec.md` § The Service Account
+records why the answer is a home for tool state rather than a list of `UV_*`
+variables in both units. Create it directly with `--home /var/lib/tvpi` if you are
+doing this fresh; the two-step above is only what this machine's history looked
+like.
+
+**Moving the art tree is a rename when `/srv` and the old location share a
+filesystem**, which is worth checking (`stat -c %d`) before assuming the move is
+instant: across filesystems it is a 647 MB copy and the ownership change after it
+is not free either. Verify the count and the byte total on both sides rather than
+trusting `mv`'s silence — this move was checked at 168 files and 677,652,949
+bytes, identical before and after.
+
+**A machine that has never run this product needs a catalogue before the wall can
+do anything.** The units come up healthy against an art root with no catalogue and
+correctly do nothing, which looks like a fault and is not one. Seeding is a
+separate hand-run step and it neither spends nor renders — it carries the mat
+colour from the 2024 index and adopts the renders already in the tree:
+
+    sudo -u tvpi /usr/local/bin/uv run python -m curation.seed <path to all.json>
+
+Then create a theme and activate it, over the JSON API or the browser interface —
+**activation is what publishes the manifest**, and until one is published the
+display plane has nothing to rotate and says so.
+
+### What the first start actually did, and what to expect
+
+Read as evidence that the arrangement works, not as a promise about your machine:
+
+- The curation plane marked the art root on its own — it holds a catalogue but had
+  no marker, and a directory holding a catalogue is an art root by the only
+  evidence that matters.
+- The display plane adopted the 40-entry manifest, **disabled the television's own
+  slideshow**, and **removed 40 images the binding table could not account for**.
+  That last one is startup reconciliation working as designed: this device had no
+  prior state, so nothing on the set was accounted for, and it re-uploaded all 40.
+  **Expect a fresh device to re-upload the whole theme**, which took about three
+  and a half minutes for 40 works.
+- The set was in standby, and the plane logged *"the television is not in art
+  mode; leaving the wall alone until it is"* rather than acting. The heartbeat said
+  `television_reachable: true`, `television_showing_art: false`,
+  `label_surface_working: null` — which is the honest reading of a device that has
+  a panel and has not yet had anything to draw.
+
+Verify the journal bound while you are here — `systemd-analyze cat-config` proves
+only that the file parses:
+
+    sudo journalctl -b -u systemd-journald | grep -i 'Journal.*max'
+    # expect: "Runtime Journal (...) is 8M, max 256M, 248M free."
+
 **The display plane's panel needs two optional dependency groups, and a default
 `uv sync` installs neither.** They are separate because they install on different
 machines: `raster` is the label's text stack (PyGObject and pycairo, which build

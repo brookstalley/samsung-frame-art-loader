@@ -39,6 +39,7 @@ card and `tvpi` did not survive it — see `platform-and-dependency-findings.md`
 | | |
 |---|---|
 | Login | None. `--system`, no password, shell `/usr/sbin/nologin` |
+| Home | `/var/lib/tvpi`, for tool state only — see below |
 | Privilege | No sudo. Nothing either plane does needs root |
 | Groups | `spi` and `gpio` — the e-paper HAT is reached through both |
 | Owns | `/srv/art` (`ART_ROOT`) and `/opt/samsung-frame-art-loader` (the checkout the units execute from) |
@@ -70,6 +71,29 @@ only checkout on the machine sat at `/home/brooks/source/…` under a home
 directory at mode `0700`, which `tvpi` cannot traverse at all. A path a service
 account cannot reach is not a configuration detail, so the answer is recorded
 here rather than left to whoever next reads a unit file.
+
+**The account has a home at `/var/lib/tvpi`, and it holds tool state rather than
+data.** This was not planned; it was measured. Created with `--no-create-home`,
+the account's `HOME` is `/nonexistent`, and the first thing attempted under it
+failed outright:
+
+    error: Failed to initialize cache at `/nonexistent/.cache/uv`
+      Caused by: failed to create directory `/nonexistent/.cache/uv`: Permission denied
+
+uv needs a writable cache, and the curation plane additionally needs somewhere to
+put the managed CPython 3.14 that § The Curation Interpreter commits this
+deployment to — two directories, and the count is the argument. The alternative
+was naming each one through its own environment variable (`UV_CACHE_DIR`,
+`UV_PYTHON_INSTALL_DIR`, and whatever a later uv adds) in both unit files; a home
+directory covers all of them and anything either plane wants later, in one line
+at account creation, and `/var/lib` is where Debian puts system-account state.
+
+**This does not reopen the argument above.** What that argument objects to is the
+*art tree* living in a home directory — 647 MB of the operator's masters behind a
+path that exists only because an account does. Tool state is the case a home
+directory is actually for. The two are kept apart deliberately: `/var/lib/tvpi`
+is disposable and rebuilt by a sync, `/srv/art` is the thing that must never be
+lost, and no backup should ever have to tell them apart.
 
 **`uv` lives at `/usr/local/bin/uv`, and both units name it absolutely.** Same
 failure, same shape: the machine's only `uv` was at `/home/brooks/.local/bin/uv`,
