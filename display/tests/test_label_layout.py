@@ -65,6 +65,30 @@ class TestTheHierarchy:
 
         assert {block.size_px for block in layout.blocks[1:]} == {SCALE.floor_px}
 
+    def test_nothing_is_ever_set_between_the_two_tiers(self):
+        """**The squint boundary, guarded behaviourally.**
+
+        The operator's ladder settled two readings worth setting type at, and the
+        rung between them — 110 px, 10.5′ — was reported as the size that can be
+        *made out with effort*. It is recorded in `accessibility-spec.md` as a
+        boundary precisely so that nothing aims at it, so a hierarchy that grew a
+        middle tier would be putting type at the one size somebody measured and
+        rejected.
+
+        **Asserted on the sizes the layout actually emits, not on `TypeScale`'s
+        field list.** A structural check on the dataclass guards the shape rather
+        than the decision, and it would fail on 13B-4 adding a mandatory-tier
+        size — which is a *smaller* size, below the floor, not a middle one. This
+        assertion stays true through that change and false through the one it
+        exists to catch.
+        """
+        lines = ("The Banquet", "Jan Steen", "Dutch", "1626–1679", "Oil on canvas", "25 × 37 cm")
+        for surface in (PANEL, Geometry(width_px=900, height_px=800, margin_px=30)):
+            layout = lay_out(lines, surface, measured, SCALE)
+
+            between = [b.size_px for b in layout.blocks if SCALE.floor_px < b.size_px < SCALE.primary_px]
+            assert not between, f"type was set at the squint boundary on {surface}: {between}"
+
     def test_nothing_is_ever_set_below_the_floor(self):
         """The norm, asserted directly rather than inferred from the sizes above.
 

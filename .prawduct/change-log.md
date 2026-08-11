@@ -54,6 +54,65 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-11: The label's type is sized for the reader, not chosen for the panel (13B-1)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** the type sizes were four numbers nobody had measured, and they were not
+merely unsettled — they were wrong. `BODY_SIZE_PX = 26` gives a cap height of
+**2.5 arcminutes** at the reference wall's 7 feet, against the **5** that 20/20
+vision needs to resolve a letter at all. The shipped label was below the
+threshold of legibility and had passed a hardware probe, a Critic round and a
+cutover in that state, because nothing anywhere converted a pixel into the angle
+a person actually sees.
+
+**What replaces them is a derivation, not better numbers.**
+`display/src/display/panel/legibility.py` takes two physical facts a deployment
+states — the panel's diagonal and the distance it is read from — and produces the
+sizes, against a cap height in arcminutes calibrated once by eye. The arithmetic
+reproduces the operator's ladder exactly: 130 px and 92 px, to the pixel. A second
+device with a different panel at a different distance gets a correct answer with
+nobody visiting it.
+
+**Three sizes became two**, which is what the calibration supports: the rung
+between them was reported as the size that takes effort to read, so a middle tier
+would be type aimed at a boundary somebody recorded in order to avoid. **The
+margin derives at half the primary em** — 65 px here, against the 60 the panel
+work ran and the 40 the code shipped — because a border trades directly against
+how many lines survive the drop rule. That ratio was a judgement this build had to
+make rather than inherit; the amendment said the margin derives and not by what
+rule.
+
+**`EPD_PANEL_DIAGONAL_INCHES` and `EPD_VIEWING_DISTANCE_INCHES` have no defaults
+and must never acquire any.** A device with a panel that states neither loses its
+**label surface**, with the missing key named, while the television keeps
+rotating — `SurfaceUnavailable`, not `ConfigError`, because nothing about the
+label may stop the wall and a device with no usable label surface is a supported
+configuration. **An existing `.env` has neither key**, so the first restart after
+this deploys draws no label until they are added (`deploy/README.md`).
+
+**One test was retired and replaced, and the swap is the point.** A first pass
+guarded "two tiers, not three" by asserting `TypeScale.__slots__` — the dataclass's
+field list. That checks the *shape* rather than the decision, and it would have
+fired on 13B-4 adding a mandatory-tier size, which is a **smaller** size below the
+floor rather than a middle one. It was deleted during a self-scrub with the reason
+recorded nowhere, which the verify pass caught as a deletion with no account —
+correctly, since the claim then survived only in prose. What guards it now is
+behavioural: no block is ever set *between* the floor and the primary tier, over
+two surfaces, proven to fail against a planted middle tier. That assertion stays
+true through 13B-4 and false through the change it exists to catch.
+
+**What the review caught, and it is the durable lesson.** `tools/label_preview.py`
+— the instrument the operator uses at the panel — was dead: it drove all three
+deleted constants and both changed signatures. Nothing imports the tools
+directory, so a green suite, clean linters and a passing mutation sweep all said
+nothing about it, and the discovery site would have been a stopped service in
+front of a panel. `display/tests/test_tools.py` now runs it. The review also
+found `.env.example` pre-filling the two values whose entire design is that they
+are never guessed, and `min_cap_arcmin` naming the primary tier in the artifacts
+while `MINIMUM_CAP_ARCMIN` in code is the *floor* — a recalibration would have
+moved the wrong one with every test still green.
+
 ## 2026-08-11: The operator settled the two open route decisions, and one of them bought a sixth tool
 
 <!-- prawduct: scope=v1-build -->

@@ -165,6 +165,35 @@ class TestWhetherThisDeviceHasALabelSurface:
         assert "EPD_VIEWING_DISTANCE_INCHES" in str(raised.value)
         assert "--group raster" not in str(raised.value), "the reader was sent to fix the wrong thing"
 
+    @pytest.mark.parametrize(
+        ("margin", "named"),
+        [(None, "derived"), (17, "EPD_MARGIN_PX")],
+    )
+    def test_the_derived_numbers_reach_the_journal_even_with_no_text_stack(self, settings, caplog, margin, named):
+        """**What the wall actually computed, not just what it was told.**
+
+        The startup line carries the two inputs; without this an operator asking
+        "why is this label dropping three lines" has a formula in an artifact and
+        no way to see the numbers. Whether the border was derived or overridden is
+        named for the same reason — nothing else in the journal distinguishes them.
+
+        Driven on the path where the text stack is *missing*, which is this
+        machine's real state and the reason the line sits above the driver import:
+        a device that cannot draw still reports what it would have set, and that
+        is precisely when somebody is already reading the journal.
+        """
+        import dataclasses
+        import logging
+
+        configured = dataclasses.replace(settings, epd_device="no_such_vendor.no_such_panel", epd_margin_px=margin)
+
+        with caplog.at_level(logging.INFO), pytest.raises(SurfaceUnavailable):
+            entry.label_surface(configured)
+
+        derived = [r for r in caplog.records if getattr(r, "event", None) == "panel.type_scale"]
+        assert len(derived) == 1, "the derived type never reached the journal"
+        assert named in derived[0].getMessage()
+
     def test_the_border_derives_from_the_type_when_the_deployment_states_none(self, settings):
         """**The shipped path**, and the one the old 40 px default occupied.
 

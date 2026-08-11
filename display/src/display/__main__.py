@@ -71,6 +71,24 @@ def label_surface(settings: Settings) -> LabelSurface | None:
         # answers all of them by saying so once and rotating the wall anyway.
         raise SurfaceUnavailable(str(exc)) from exc
 
+    geometry = label_geometry(settings, scale)
+    # **The derived numbers, said out loud once, and before the imports below.**
+    # The startup line carries the two inputs; without these an operator asking
+    # "why is this label dropping three lines" has a formula in an artifact and no
+    # way to see what the wall actually computed. Whether the border was derived
+    # or overridden is named for the same reason — nothing else distinguishes the
+    # two. It sits above the driver import so that a device with a missing text
+    # stack still reports what it would have set, which is the case where somebody
+    # is already reading the journal.
+    log.info(
+        "label type derives to %d px over a %d px floor, with a %d px border (%s)",
+        scale.primary_px,
+        scale.floor_px,
+        geometry.margin_px,
+        "EPD_MARGIN_PX" if settings.epd_margin_px is not None else "derived",
+        extra={"event": "panel.type_scale"},
+    )
+
     try:
         from display.panel.epaper import EpaperSurface, open_panel  # noqa: PLC0415 -- see the docstring
         from display.panel.pango import PangoRasterizer  # noqa: PLC0415 -- see the docstring
@@ -80,22 +98,6 @@ def label_surface(settings: Settings) -> LabelSurface | None:
         # keeps working — so it is converted rather than allowed to crash a daemon
         # whose television is perfectly healthy.
         raise SurfaceUnavailable(f"the label's text stack is not installed ({exc}); try `uv sync --group raster`") from exc
-
-    geometry = label_geometry(settings, scale)
-    # **The derived numbers, said out loud once.** The startup line carries the two
-    # inputs; without these an operator asking "why is this label dropping three
-    # lines" has a formula in an artifact and no way to see what the wall actually
-    # computed. Whether the border was derived or overridden is named for the same
-    # reason — the two produce identical labels for identical reasons only when
-    # they agree, and nothing else distinguishes them.
-    log.info(
-        "label type derives to %d px over a %d px floor, with a %d px border (%s)",
-        scale.primary_px,
-        scale.floor_px,
-        geometry.margin_px,
-        "EPD_MARGIN_PX" if settings.epd_margin_px is not None else "derived",
-        extra={"event": "panel.type_scale"},
-    )
 
     return EpaperSurface(
         epd=open_panel(settings.epd_device),
