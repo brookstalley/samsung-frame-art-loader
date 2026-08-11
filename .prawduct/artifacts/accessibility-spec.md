@@ -44,6 +44,15 @@ The label is a physical reading surface with no controls, no zoom and no
 alternative rendering. Whatever it draws is what a person gets, so every
 requirement below is about the drawn result rather than about a mechanism.
 
+> **The requirement's origin is `nonfunctional-requirements.md` § Output Quality**,
+> which states the same thing in the same terms and is where it was first written.
+> This section is where it is *specified* — practised, owed or open, with the
+> mechanism named — and the two agree today. **Whoever settles the type sizes at
+> the panel has three files to sweep, not one:** that NFR paragraph,
+> `design_decisions.accessibility_approach` in `project-state.yaml`, and this
+> section. Named here because a requirement with three prose homes is one that goes
+> stale in two of them.
+
 ### The panel must be driven at 16 grey levels, and the mode must be read back
 
 **Practised** — `display/src/display/panel/epaper.py` sets `mode = "gray16"` and
@@ -88,7 +97,7 @@ Three properties of the rule, all of them load-bearing:
 
 **Open — and it is this artifact's one unmet requirement.**
 
-`layout.py` carries `TITLE_SIZE_PX = 40`, `ARTIST_SIZE_PX = 32`,
+`display/src/display/panel/layout.py` carries `TITLE_SIZE_PX = 40`, `ARTIST_SIZE_PX = 32`,
 `BODY_SIZE_PX = 26`, and `display/src/display/config.py` carries
 `DEFAULT_EPD_MARGIN_PX = 40`. **All four are provisional placeholders and must not
 be quoted as measurements.** The operator's 2026-08-04 look at the real panel
@@ -106,13 +115,17 @@ this reason, and its Done-when step 1 includes the operator's legibility look.
 Whoever settles the numbers replaces the provisional notes as well as the values —
 a settled number under a note calling it provisional is worse than either.
 
-> **13B's deliverables name the type size and not the other two.** They read "the
-> settled Pango type size replacing 13A's provisional one", while `config.py`'s own
-> note says the margin is settled by the same look — a border trades directly
-> against how many lines survive the drop rule — and nothing anywhere owns the
-> measure. **All three are one judgement and one visit.** Recorded here rather than
-> only in the plan because a chunk's deliverable list is what a builder ticks
-> against, and two of the three would otherwise be closed by nobody.
+> **All three are one judgement and one visit**, which is why 13B carries them as a
+> single deliverable. A margin trades directly against how many lines survive the
+> drop rule, and a measure depends on the face and the size — none of the three can
+> be settled without the other two in front of you.
+>
+> *13B's deliverable list named only the type size until 2026-08-11. That was the
+> real exposure and not a wording problem: the deliverable list is what a builder
+> ticks, so the chunk would have closed with `DEFAULT_EPD_MARGIN_PX = 40` and an
+> unbounded measure still carrying their provisional notes — and repeating the
+> panel visit is the expensive part. Recording the gap in this artifact was not
+> enough; it is now in the plan, where it gets ticked.*
 
 ### Line length has no bound, and needs one
 
@@ -135,7 +148,7 @@ label, and the label travels as metadata"* (`architecture.md` § Direction, rati
 
 Its accessibility content is easy to miss: several devices may carry panels of
 different sizes, and the 2024 plane's baked-in 648×480 is the anti-pattern being
-retired. Geometry arrives as a parameter; `config.py` defaults to the reference
+retired. Geometry arrives as a parameter; `display/src/display/config.py` defaults to the reference
 1448×1072 and every value is overridable. **A device with no label surface at all
 is a configuration, not a fault** — which matters here because a household adding a
 display without a panel must not read as a broken one.
@@ -199,12 +212,12 @@ caught or would catch:
 **Practised, and only half of it is mechanical.** This is the split to respect
 rather than paper over.
 
-The mechanism covers the part a machine can see. `test_design_tokens.py` derives
+The mechanism covers the part a machine can see. `curation/tests/unit/test_design_tokens.py` derives
 every state a badge can carry **from the enums rather than from a written-out
 list**, and asserts that each has a CSS block of its own and that no two states of
 one axis are pixel-identical — a block copy-pasted for a new verdict with only the
 selector changed would otherwise make a rejection look like an acceptance in
-greyscale. `test_client_vocabulary.py` asserts that every enum value the server can
+greyscale. `curation/tests/unit/test_client_vocabulary.py` asserts that every enum value the server can
 send has a sentence in the client, so no raw token leaks onto a screen.
 
 **What no test can see is whether the glyph actually distinguishes anything.** That
@@ -280,7 +293,7 @@ descriptions of it.
 
 **Owed, with the same status as the revised palettes.** `design-direction.md`
 requires control heights of 2.75rem (44px) under `@media (pointer: coarse)`, with a
-2.25rem default that clears WCAG 2.2 AA's 24px floor. **`app.css` contains no
+2.25rem default that clears WCAG 2.2 AA's 24px floor. **`curation/src/curation/http/static/app.css` contains no
 `pointer: coarse` block and no control height**, verified 2026-08-11 — so the rule
 is a proposal today and is recorded as one here rather than as a practice.
 
@@ -338,7 +351,7 @@ is the same reason `information-architecture.md` § Boundaries lists it.
 | Contrast, both schemes, both floors | Test — computed from the served stylesheet | `curation/tests/unit/test_design_tokens.py` |
 | No colour outside the token blocks | Test, with an asserted scan scope | same file |
 | Every badge state has a distinct block | Test, derived from the enums | same file |
-| Every server enum has a client sentence | Test, reads `app.js` | `curation/tests/unit/test_client_vocabulary.py` |
+| Every server enum has a client sentence | Test, reads the served `app.js` | `curation/tests/unit/test_client_vocabulary.py` |
 | The panel runs at 16 levels | Test — the mode is set, and a panel that quietly stays in one bit is refused | `display/tests/test_epaper.py` |
 | Content drops rather than shrinking | Test, against an injected measurer so it runs without a font | `display/tests/test_label_layout.py` |
 | Glyph actually distinguishes state | **Critic judgment.** No test can see this | `/prawduct:critic` |

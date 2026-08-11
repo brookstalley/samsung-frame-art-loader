@@ -1081,6 +1081,9 @@ spellings for "change this" costs more than the orthodoxy is worth here.
 | `POST /api/conversations/{id}/commit` | Commit a direction: starts a `DiscoveryRun` and sets the turn's `committed_run_id`. | `ConversationTurn` — **unbuilt** | none proposed |
 | `DELETE /api/conversations/{id}` | **Deliberately shapeless — blocked on issue #118.** | — | — |
 | `GET`/`POST /api/affinities`, `DELETE /api/affinities/{id}` | The Taste screen, and every sample reaction in a conversation. | `Affinity` — **unbuilt** | none proposed |
+| `POST /api/works/{id}/mat` | Re-derive a work's mat. **Owned by issue #91, not by this set** — see below. | `MatColor`, built | `art_catalogue(action='set_mat_color')`, built |
+| `POST /api/directives` (shape open) | The Walls screen's `next`. **The only screen action here with an MCP action and no HTTP route at all** — see below. | `Directive`, built | `art_display(action='next')`, built |
+| `GET /api/spend` | The Health screen's spend history, across runs. | `SpendRecord`, built | none proposed — same deferral as taste |
 
 **Facet counts ride on the works response rather than getting a route.** They are
 an answer to the same question the grid answers — *what does this filter set
@@ -1095,10 +1098,20 @@ up in the collection's response time on the real thousands-scale corpus.
 row asked for one; `data-model.md` gives `Artwork.status` exactly two values,
 `accepted` and `archived`, with a state machine in which restoration is permitted.
 A hard delete would have been this artifact inventing a destructive operation the
-data model does not have — and it has a stated downstream consequence that a
-delete could not carry: archiving a pinned work makes a directive unsatisfiable,
-which `data-model.md` already settles by having `show_now` refuse an archived
-work. The IA row is corrected to match.
+data model does not have — and it has downstream consequences a delete could not
+carry. The IA row is corrected to match.
+
+**Two of them, and the second is the one that reaches the room.** Archiving a
+pinned work makes a directive unsatisfiable, which `data-model.md` already settles
+by having `show_now` refuse an archived work. And archiving a work that is in the
+**active** theme takes a picture off the wall: `architecture.md` records that
+archive removes a work from the manifest and leaves it in the theme, with
+`archived` the first of the five exclusion causes, and calls that silence
+"precisely this product's characteristic failure". **So the confirmation names the
+wall consequence, not merely which of archive and restore it is doing** —
+`GET /api/manifest?theme_id=` already evaluates a theme's exclusions without
+writing, so the route can state the consequence rather than predict it. The IA
+carries this rule for flow 6's activation and now carries it here too.
 
 **Deleting the active theme has no rule yet, and this route must not invent one.**
 `data-model.md` constraint 1 — "exactly one Theme has `is_active = true`" — makes
@@ -1108,14 +1121,22 @@ with nothing chosen, and the two are not equivalent for someone in the room.
 alternative changes what the household is looking at as a side effect of a tidying
 action. Owed to the operator before the route is built, not to the builder.
 
-**No MCP twin is proposed for conversation or taste, and the reason is the tier
-table above.** Tool names are **Frozen** — never renamed or removed — so adding a
-sixth tool is cheap and retiring one is not, which argues for deciding late rather
-than early. Two further reasons to wait: the in-UI agent *is* an MCP client, so a
-model conducting a conversation would be reading its own thread back through a
-tool; and the operation a model would actually want is the taste, not the
-transcript. **Open question, not a decision against:** whether `Affinity` earns a
-tool once discovery weights it.
+**No MCP twin is proposed for conversation, taste or spend history, and the
+requirement being deferred against is named rather than left implicit.**
+`product-brief.md` item 8 states as a must-have that **every content-management
+operation is available as an MCP tool, at parity with the web UI**, and
+`technical_decisions` records that parity as the reason the thin-binding norm binds
+at all. Whether an `Affinity` is a content-management operation is genuinely
+arguable — it is a record of taste, not of holdings — which is why this is a
+deferral with a trigger rather than a departure.
+
+Tool names are **Frozen** — never renamed or removed — so adding a sixth tool is
+cheap and retiring one is not, which argues for deciding late. Two further reasons
+to wait: the in-UI agent *is* an MCP client, so a model conducting a conversation
+would be reading its own thread back through a tool; and the operation a model
+would actually want is the taste, not the transcript. **Revisit trigger:**
+discovery begins weighting `Affinity`. At that point taste is unambiguously
+operational and item 8 applies to it without argument.
 
 **Sample reactions write through `/api/affinities`, not through a conversation
 route.** The IA's flow 1 gives each sample "more like this" / "not this" / "tell
@@ -1135,11 +1156,38 @@ violate. Everything else in this artifact still binds them, in particular the
 `limit`-and-report-the-total rule under § Conditional Patterns and the single
 `400` error shape.
 
+**The last three rows came from the screens, not from the debt list, and that is a
+correction worth recording.** The set above was first taken from
+`information-architecture.md` § Status's five-item enumeration — and an enumeration
+is not an inventory. Reading the screens' own Actions columns instead turned up
+three designed controls with no route: the Work screen's **re-mat**, the Walls
+screen's **next**, and the Health screen's **spend history**. Two of the three were
+missed in the same way, by trusting a list that was written to record a debt rather
+than to bound a surface.
+
+> **`POST /api/works/{id}/mat` is listed here but is NOT this set's to decide.**
+> Issue **#91** (`curation-ui: mat colour has no control on any human surface`,
+> stage `design`) owns it, and its statement of the defect is *"an agent can change
+> a mat colour and a curator cannot"*. An earlier draft of the paragraph below
+> justified the route's absence with "re-deriving a mat is an operation
+> `art_catalogue` already has" — **which is the exact reasoning #91 was filed
+> against**, restated as though it were a settled decision. The row is here so the
+> Work screen's builder finds it rather than inventing a route outside this set;
+> its shape is #91's.
+
+> **`next` is the one screen action with an MCP action and no HTTP route.**
+> `art_display(action='next')` increments the directive sequence; the built HTTP
+> surface only ever *reports* `directive_sequence` in the manifest payload and has
+> no directive write. So the Walls screen — flow 6, and this design's home screen —
+> has a control the browser cannot perform today. The shape is left open because
+> the multi-display blockers in § More than one wall land on exactly this route: a
+> directive is per-wall the moment there is more than one, and writing the
+> installation-wide shape now would be writing the shape that has to change.
+
 **Still deliberately absent, so these omissions are not read as oversights:**
-nothing here writes an artwork's own metadata, a source, an original or a mat.
-Title, artist and date come from the source and are the physical label's evidence
-(`information-architecture.md` § Boundaries), and re-deriving a mat is an
-operation `art_catalogue` already has. *(This paragraph carried the theme rename
+nothing here writes an artwork's own metadata, a source or an original. Title,
+artist and date come from the source and are the physical label's evidence
+(`information-architecture.md` § Boundaries). *(This paragraph carried the theme rename
 and delete until 2026-08-11, correctly, and stopped being true when the IA was
 approved. Its earlier correction of 2026-08-05 stands and is why the acquisition
 routes are not listed as absent-because-unbuilt: acquisition **is** built —

@@ -2813,6 +2813,30 @@ artifact_manifest:
       file_path: .prawduct/artifacts/boundary-patterns.md
       version: 1
       depends_on: [api-contract, data-model]
+    # The three human-interface artifacts, REGISTERED 2026-08-11. The first two
+    # landed on 2026-08-10 and went unregistered; the third landed with this
+    # entry. Edges mirror each file's own `depends_on:` front matter.
+    #
+    # This was found by Critic review, and the consequence is dated rather than
+    # theoretical: when `design_decisions.accessibility_approach` is amended at
+    # Chunk 13B — the type sizes settle and four "provisional placeholder" notes
+    # are replaced — pass 2 of this repo's three-pass sweep lists every dependent
+    # artifact. With accessibility-spec unedged it would have listed none, and the
+    # spec's own open requirement would have gone stale silently. Which is the
+    # outcome the spec itself calls the worst one: a settled number sitting under
+    # a note that still calls it provisional.
+    - name: information-architecture
+      file_path: .prawduct/artifacts/information-architecture.md
+      version: 1
+      depends_on: [product-brief, data-model, nonfunctional-requirements, api-contract]
+    - name: design-direction
+      file_path: .prawduct/artifacts/design-direction.md
+      version: 1
+      depends_on: [product-brief, information-architecture]
+    - name: accessibility-spec
+      file_path: .prawduct/artifacts/accessibility-spec.md
+      version: 1
+      depends_on: [design-direction, information-architecture, nonfunctional-requirements]
     # Edges mirror build-plan.md's own `depends_on:` front matter. The plan is
     # the most decision-dense artifact here: leaving it unedged would make every
     # decision it rests on unreachable by a dependency walk — precisely the

@@ -1896,8 +1896,22 @@ hardware.
   numbers do not transfer to Pango and the look has to be repeated.
 - **Deliverables:** the `tvpi` account with its groups and ownership, the settled
   `ART_ROOT` path recorded in the root `.env` and in `operational-spec.md`, both
-  units installed and enabled on the Pi, the settled Pango type size replacing
-  13A's provisional one, cutover performed and recorded in `deploy/README.md`
+  units installed and enabled on the Pi, **all three of the label's legibility
+  settlements** — the Pango type sizes replacing 13A's provisional ones, the
+  `EPD_MARGIN_PX` default replacing its provisional one, and a stated line-length
+  bound where none exists today — each with its "provisional" note replaced rather
+  than left standing over a settled number, cutover performed and recorded in
+  `deploy/README.md`
+- **The three legibility settlements are one judgement and one visit, which is why
+  they are one deliverable.** A margin trades directly against how many lines
+  survive the drop rule, and a measure depends on the face and the size, so none of
+  the three can be settled without the other two in front of you. Only the type
+  size was named here until 2026-08-11; `accessibility-spec.md` § The e-paper label
+  states all three as its one open requirement, and the margin's own note in
+  `display/src/display/config.py` already said it is settled by this same look.
+  Leaving the other two off this list would have closed the chunk with them
+  unlooked-at, on the surface `design_decisions.accessibility_approach` calls the
+  important one — and repeating the panel visit is the expensive part.
 - **Tests:** hardware — label matches the artwork within the 15 s budget across
   several rotations; killing the panel mid-run leaves rotation running; both
   units come back from a reboot with no human action

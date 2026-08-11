@@ -51,6 +51,16 @@ every scale claim here is unfalsifiable against the real 41. It is a **design
 deliverable, not a component**: it shares the product's tokens deliberately, but
 nothing in `curation/` imports from it and it ships to no one.
 
+> **What the prototype does not demonstrate, so it is not mistaken for complete.**
+> It has no archived works, so the **Restore** half of the archive rule below has
+> nothing to render — the two Archive controls are there and their undo is not.
+> *(The controls read "Remove" and were styled `danger` until 2026-08-11. Both were
+> wrong for the same reason and the second was the sharper one: styling a cheap,
+> reversible act as destructive produces exactly the hesitation the rule exists to
+> prevent. A correction that reached this artifact and not the page it points at is
+> this repo's most-recurred learning arriving one file away from where it was
+> being applied.)*
+
 ## The problem this artifact was written to fix
 
 The built surface has five equal tabs — Works, Discovery, Themes, On the wall,
@@ -75,7 +85,7 @@ Priority is **core** (on a stated core flow) or **supporting**.
 | Screen | Purpose | Entry points | Priority |
 |---|---|---|---|
 | **The Walls** | What is hanging right now on each display, the theme it is drawn from, and what is next. The product's home. | Launch; masthead brand; after activating a theme | core (flow 6) |
-| **Collection** | Everything acquired. Find, sort, filter, group, organise into themes, remove. | Primary nav; search from anywhere; from a theme; after a run's accepted works land | core (flows 3, 5) |
+| **Collection** | Everything acquired. Find, sort, filter, group, organise into themes, archive. | Primary nav; search from anywhere; from a theme; after a run's accepted works land | core (flows 3, 5) |
 | **Work** | One work at full size, with its sources, renditions, mat history and theme membership. | A tile in Collection; a tile on a Wall; a row in Review | core (flows 4, 5) |
 | **Discover** | Conversation, the runs it seeds, and the review of what they return — one continuous place. | Primary nav; "find something new" on the Walls and on an empty Collection | core (flows 1, 2, 3) |
 | **Review** | Judging one run's candidates: accept, reject, choose a scan, ask for a better one. | A completed run in Discover; the run's own notification | core (flow 3) |
@@ -361,16 +371,16 @@ follows applies it per screen.
 | Screen | Primary | Secondary | Actions | Status |
 |---|---|---|---|---|
 | The Walls | Each wall's hanging work, large | Title, artist, theme, which wall | Change theme, next, open work | Panel + TV health, quietly |
-| Collection | The grid of images | Counts, active filters | Search, filter, select, add to theme, remove | Total, and what is filtered out |
-| Work | The image at full size | Artist, facets, mat colour, rendition size | Theme membership, re-mat, remove | Fit verdict, image state |
+| Collection | The grid of images | Counts, active filters | Search, filter, select, add to theme, archive | Total, and what is filtered out |
+| Work | The image at full size | Artist, facets, mat colour, rendition size | Theme membership, re-mat, archive | Fit verdict, image state |
 | Discover | The conversation, or the run list | Samples inline | Type, react, commit, start direct | Run progress, spend |
 | Review | The candidate picture | Title, artist, size on this wall | Accept, reject, choose scan, ask better | Verdict, provenance, resolution |
 | Theme | Members in wall order | Name, count | Reorder, rename, hang, delete | Whether it is the active theme |
 | Health | The three observations | Spend history | — | The whole screen is status |
 
-**"Remove" is the wrong word on both rows above, and the control must not use
-it.** `Artwork.status` is `accepted` or `archived` and restoration is permitted —
-there is no delete in this product, and `api-contract.md` § The routes the
+**"Remove" is the wrong word for a *work*, and that control must not use it.**
+`Artwork.status` is `accepted` or `archived` and restoration is permitted — **there
+is no delete of a work in this product**, and `api-contract.md` § The routes the
 interface design requires records why a delete route was not written. A button
 labelled *Remove* promises the work is gone; the work is in fact still catalogued,
 still restorable, and merely out of circulation. The label is **Archive**, its
@@ -378,6 +388,22 @@ undo is **Restore**, and the confirmation says which of the two it is doing. Thi
 matters beyond wording: a curator who believes removal is destructive will
 hesitate over an action that is cheap and reversible, and one who discovers the
 work is still there will trust the next confirmation less.
+
+> **Scoped to works deliberately, because this product does delete other things.**
+> The Theme row above carries a `delete` control and `api-contract.md` designs
+> `DELETE /api/themes/{id}`, `DELETE /api/conversations/{id}` and
+> `DELETE /api/affinities/{id}`. An unscoped "there is no delete in this product"
+> would read as forbidding all four — the over-claiming shape this repo keeps a
+> rule about, arrived at while fixing its mirror image.
+
+**Archiving a work that is in the active theme takes a picture off the wall**, and
+the confirmation says so. `architecture.md` records that archiving removes a work
+from the manifest and leaves it in the theme, with `archived` the first of the five
+exclusion causes — and calls that silence "precisely this product's characteristic
+failure". Flow 6 already requires activation to name its consequence in
+those terms; archive reaches the same room by a quieter route and inherits the same
+rule. `GET /api/manifest?theme_id=` evaluates a theme's exclusions without writing,
+so the confirmation can state the consequence rather than predict it.
 
 **A screen states a fact once.** The Work screen carried the movement twice — as an
 eyebrow above the title and as a row in the facts list three lines below — which

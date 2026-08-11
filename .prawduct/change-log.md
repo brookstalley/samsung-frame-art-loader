@@ -143,8 +143,52 @@ third time this index's own machinery has gone stale by carrying a list or a cou
 of planes; a fourth plane is picked up by existing. Proven by running the old
 pattern against the new rows and watching both resolve to files that are not there.
 
-**No behaviour changed.** The only executable edit is the guard above. Root 162
-passed, curation 1950 passed, display 343 passed.
+**No behaviour changed.** The only executable edit is the guard above.
+
+**Critic (`rev-20260811T124801Z-d86affcd`, cumulative, three reviewers): 0
+blocking, 10 warnings, 10 notes. Six accepted, fourteen fixed.** The four worth
+recording, because each one is a class of mistake rather than a slip:
+
+- **The route set was taken from a debt list, and a debt list is not an inventory.**
+  Reading the screens' own Actions columns instead turned up three designed
+  controls with no route — the Work screen's re-mat, the Walls screen's `next`, and
+  the Health screen's spend history. Worse, the absence paragraph justified the
+  missing mat route with *"re-deriving a mat is an operation `art_catalogue`
+  already has"* — **which is verbatim the reasoning open issue #91 was filed
+  against** ("an agent can change a mat colour and a curator cannot"), restated as
+  though it were a settled decision. #91 now owns that row.
+- **"There is no delete in this product" over-claimed**, four lines under a Theme
+  row carrying a `delete` control and in the same commit designing three DELETE
+  routes. True of works only. Scoped — and the same correction had failed to reach
+  the destinations table and the prototype, which still rendered *Remove*. Fixing
+  the prototype turned up a second-order error the rule itself implies: the control
+  was styled `danger`, and styling a cheap reversible act as destructive produces
+  exactly the hesitation the rule exists to prevent.
+- **The new norm row claimed no signature and was carried as ratified by silence.**
+  It is now **`proposed`**. The drop-rather-than-shrink clause appears in no
+  artifact before this round and its only prior record is the docstring of the
+  chunk whose tests the row names as enforcement — which is the laundering shape
+  whatever the intent, and an owner's sentence is what settles it.
+- **The scanner repair fixed the instance and not the class.** Deriving the plane
+  set from disk left the pattern unanchored, so any prefix not currently a plane —
+  a typo, or a plane whose `tests/` directory does not exist yet — still matched
+  its tail and blamed the root. The prefix is now matched permissively and
+  *checked*, so an unknown plane fails by name. Proven by mutation: `dispaly/`
+  arrives intact and fails naming itself, where before it arrived as
+  `tests/test_epaper.py`.
+
+Also fixed: the margin and a line-length bound are now Chunk 13B **deliverables**
+rather than a note in the spec — the deliverable list is what gets ticked, and two
+of the three settlements would have closed unlooked-at. The three human-interface
+artifacts are registered in `artifact_manifest.artifacts`, so the 13B amendment
+sweep can reach the spec's provisional notes. The MCP deferral now names
+`product-brief.md` item 8 as the parity must-have it defers against, with
+"discovery weights `Affinity`" as its trigger. And the archive rule now names the
+consequence that reaches the room: archiving a work in the *active* theme takes a
+picture off the wall.
+
+Machine-backed evidence over the resolved tree: **2466 passed, 0 failed, 4
+skipped** across the three planes. Ruff and black clean.
 
 ## 2026-08-11: The derived mat cannot exceed the corpus, and the vote counts a colour once
 

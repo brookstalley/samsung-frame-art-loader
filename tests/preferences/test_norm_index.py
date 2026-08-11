@@ -55,18 +55,27 @@ def _plane_prefixes() -> list[str]:
     return ["", *nested]
 
 
-#: `tests/…`, or the same under any plane, optionally with a `::test_name` node id.
+#: `tests/…` under any leading path, optionally with a `::test_name` node id, with
+#: whatever precedes `tests/` captured as group 1.
 #:
-#: The empty prefix sitting first in the alternation is harmless, and it is worth
-#: knowing why rather than reordering on a hunch: `findall` returns the *leftmost*
-#: match, and at the first character of `display/tests/x.py` the empty branch needs
-#: `tests/` where `display/` is and fails, so the only branch that can match there
-#: is the right one. The bug this replaced was the prefix being absent from the
-#: alternation altogether, which left no match at position 0 and let the scan walk
-#: forward to the tail.
-TEST_REFERENCE = re.compile(
-    "(?:" + "|".join(re.escape(prefix) for prefix in _plane_prefixes()) + r")tests/[\w/.\-]+\.py(?:::\w+)?"
-)
+#: **The prefix is matched permissively and *checked* separately, rather than being
+#: built from the derived plane set.** Deriving the alternation fixed the stale
+#: list and left the failure class untouched: the pattern is unanchored, so any
+#: prefix the alternation did not know still matched the *tail* and resolved
+#: against the root plane. A typo reproduces it exactly — `dispaly/tests/x.py`
+#: yields `tests/x.py` and fails with "no such file" naming a plane the row never
+#: mentioned, which is the misdirected diagnostic the derivation was written to
+#: stop. So does a row written for a plane before its `tests/` directory exists,
+#: which this index has done before (the plane-isolation row, named in the module
+#: docstring above).
+#:
+#: A left-boundary lookbehind alone would be the wrong repair on its own: it turns
+#: the misdirected failure into a *silent non-match*, and a guard that quietly
+#: scans nothing is the failure mode this whole file exists to refuse. So the
+#: prefix is allowed to be any number of segments and is then asserted against the
+#: derived planes by `test_every_named_enforcement_artifact_names_a_real_plane`,
+#: which fails by name.
+TEST_REFERENCE = re.compile(r"(?<![\w/.\-])((?:[\w.\-]+/)*)tests/[\w/.\-]+\.py(?:::\w+)?")
 
 #: The index named this many test artifacts when the guard was written. The
 #: assertion is `>=`, not `==`: adding a Test row must not fail this file, but a
@@ -136,12 +145,16 @@ def _norm_index_rows() -> list[list[str]]:
 
 
 def _enforcement_artifacts() -> list[str]:
-    """Every test path named in the norm index's Enforcement artifact column."""
+    """Every test path named in the norm index's Enforcement artifact column.
+
+    `finditer` rather than `findall` because the pattern captures the plane
+    prefix: `findall` would return the group and throw the reference away.
+    """
     return [
-        reference
+        match.group(0)
         for row in _norm_index_rows()
         if len(row) > ENFORCEMENT_COLUMN
-        for reference in TEST_REFERENCE.findall(row[ENFORCEMENT_COLUMN])
+        for match in TEST_REFERENCE.finditer(row[ENFORCEMENT_COLUMN])
     ]
 
 
@@ -244,6 +257,29 @@ def test_the_index_still_names_test_artifacts_at_all():
 
 
 @pytest.mark.parametrize("reference", _enforcement_artifacts())
+def test_every_named_enforcement_artifact_names_a_real_plane(reference):
+    """A reference under an unknown plane must fail by name, never by its tail.
+
+    This is the half of the 2026-08-11 repair that the derived plane set did not
+    buy on its own. `TEST_REFERENCE` matches the prefix permissively, so a typo
+    (`dispaly/tests/test_epaper.py`) or a plane whose `tests/` directory does not
+    exist yet arrives here intact instead of being silently truncated to
+    `tests/test_epaper.py` and reported as missing from the root plane — a
+    diagnostic that names a plane the row never mentioned and sends the reader to
+    the wrong file. The sibling test below then answers the different question of
+    whether the file is there.
+    """
+    prefix = reference[: reference.index("tests/")]
+    planes = _plane_prefixes()
+    assert prefix in planes, (
+        f"the norm index names {reference}, whose plane prefix {prefix!r} is not a test tree in "
+        f"this repository. Known planes: {planes}. Either the prefix is misspelled, or the plane "
+        "exists without a `tests/` directory — in which case the row is naming a mechanism that "
+        "cannot run yet."
+    )
+
+
+@pytest.mark.parametrize("reference", _enforcement_artifacts())
 def test_every_named_enforcement_artifact_resolves(reference):
     """A named file must exist, and a named `::test` must be defined in it."""
     path_text, _, test_name = reference.partition("::")
@@ -299,7 +335,10 @@ def _deliberately_uncovered_artifacts() -> list[str]:
         body = line.strip().strip("|")
         if set(body) <= set("-:| "):
             continue
-        found.extend(TEST_REFERENCE.findall(body.split("|")[0]))
+        # `finditer` and `group(0)` for the same reason as the sibling parser: the
+        # pattern captures the plane prefix, so `findall` returns that group and
+        # discards the reference it was found in.
+        found.extend(match.group(0) for match in TEST_REFERENCE.finditer(body.split("|")[0]))
     return found
 
 
