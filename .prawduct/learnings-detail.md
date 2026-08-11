@@ -19,6 +19,63 @@ found, and what it cost — is the part worth keeping, and editing them to match
 today would destroy the evidence while making the rule look like it had always
 been obvious. This note is here so nobody follows one of them as a procedure.
 
+## Before putting a decision to the owner, check whether the code already made it
+
+2026-08-11. `api-contract.md` § The routes the interface design requires recorded
+two questions as owed to the operator. One was "deleting the active theme — refuse,
+or cascade?", with a recommendation to refuse. It was put to them with a third
+option added (promote another theme, then delete) and a stress-test on the
+recommendation. They chose refuse.
+
+**`DisplayService.delete_theme` had been refusing it since it was written.** The
+guard was reached by `art_theme(action='delete')` on the live MCP surface. The
+section's own opening sentence — "Every route in this section is a design. None of
+it exists" — was true of the *routes* and false of the rule underneath them, and
+nothing in the round noticed the difference. Found by Critic R-8 on the commit that
+recorded the decision.
+
+Three separate things went wrong, and only the first is the obvious one:
+
+1. The question was posed from the artifact. One `grep -n "def delete_theme"` would
+   have answered it, and that grep was never run — the decision *felt* like a design
+   question because it was written down as one.
+2. **The declined third option was not hypothetical.** `reconcile()` promotes the
+   oldest theme when none is active, so "promote another theme, then delete" is
+   precisely what happens if the guard is removed. It was declined in the write-up
+   for a *worse* reason than the real one, and the real one was already in the
+   docstring.
+3. **The reasoning ran on an invariant the store does not have** — see the sibling
+   rule below. `data-model.md` constraint 1 said "exactly one Theme has
+   `is_active = true`"; `themes_one_active` is a partial unique index enforcing at
+   most one, and zero is the normal empty-catalogue state.
+
+The consequence that made it worth a rule rather than a fix: the built guard refuses
+the active theme **only while another theme exists**, and deliberately permits
+deleting the last one. That sub-case never reached the operator, because a question
+posed from the artifact cannot contain a distinction only the code makes. The ruling
+and the code agree on what was asked; the operator simply never saw the third
+behaviour shipping underneath the two options.
+
+## An invariant stated as an absolute is a claim someone will act on
+
+2026-08-11, found in the same Critic finding as the rule above and separated from it
+because it recurs on its own. `data-model.md` constraint 1 read "**Exactly one**
+Theme has `is_active = true`. … Enforced at write time, not assumed." Two of those
+three claims were wrong: the enforcement is a *partial* unique index
+(`CREATE UNIQUE INDEX … ON themes(is_active) WHERE is_active = 1`), which permits
+zero and forbids two; and `reconcile()`, not a write-time check, is what makes the
+"exactly" true whenever any theme exists.
+
+Zero active themes is not an edge case being tolerated — it is the empty catalogue,
+and it is the whole reason the last theme can be deleted at all. So the absolute had
+been contradicted by ordinary operation since the beginning, and survived because
+nothing reasons about an invariant until it needs one.
+
+What it cost: a decision about deleting the active theme was argued *from* that
+sentence, in two artifacts, and the argument inherited an invariant the system has
+never had. The constraint now states both halves — at most one always, exactly one
+whenever any theme exists — and names which mechanism carries which.
+
 ## A list written to record a DEBT is not an inventory of a SURFACE
 
 **2026-08-11, the artifact-debt round.** `api-contract.md` was amended with the

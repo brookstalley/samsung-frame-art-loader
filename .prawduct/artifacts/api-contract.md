@@ -1176,7 +1176,7 @@ spellings for "change this" costs more than the orthodoxy is worth here.
 | `GET /api/works` — facet counts in the same response | The counts the IA's disabled-not-hidden rule needs. **Not a second route** — see below. | `WorkFacet` — **unbuilt** | as above |
 | `POST /api/works/{id}/archive`, `/restore` | Take a work out of circulation, and put it back. **Not a delete** — see below. | `Artwork.status`, built | `art_catalogue(action='archive'\|'restore')`, already designed |
 | `POST /api/themes/{id}` | Rename. | `Theme`, built | `art_theme(action='update')`, already designed |
-| `DELETE /api/themes/{id}` | Delete. **The refusal it must reuse is already built** — see below. | `Theme`, built, and `ThemeService.delete_theme`'s guard with it | `art_theme(action='delete')`, built and wired to that guard |
+| `DELETE /api/themes/{id}` | Delete. **The refusal it must reuse is already built** — see below. | `Theme`, built, and `DisplayService.delete_theme`'s guard with it | `art_theme(action='delete')`, built and wired to that guard |
 | `GET`/`POST /api/conversations` | The thread list, ordered by `last_turn_at`; and starting one. | `Conversation` — **unbuilt** | none proposed — see below |
 | `GET /api/conversations/{id}` | One thread with its turns. | `ConversationTurn` — **unbuilt** | none proposed |
 | `POST /api/conversations/{id}/turns` | One exchange. **Spends** — `SpendRecord` category `conversation_tokens`. | `ConversationTurn` — **unbuilt** | none proposed |
@@ -1217,7 +1217,7 @@ carries this rule for flow 6's activation and now carries it here too.
 
 **Deleting the active theme refuses — and this rule is built, not designed.** The
 operator settled the question on 2026-08-11, and the answer turned out to be what
-`ThemeService.delete_theme` has enforced all along, reached by
+`DisplayService.delete_theme` has enforced all along, reached by
 `art_theme(action='delete')` today. **This paragraph therefore describes shipped
 behaviour**, and it is the one thing in this section that does: the HTTP route is
 still unbuilt, and what it owes is to call that method rather than to write a guard

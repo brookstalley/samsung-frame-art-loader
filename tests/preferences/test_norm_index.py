@@ -150,18 +150,18 @@ def _norm_index_rows() -> list[list[str]]:
     return rows
 
 
+def _enforcement_cells() -> list[str]:
+    """The Enforcement artifact column's raw text, one string per norm row."""
+    return [row[ENFORCEMENT_COLUMN] for row in _norm_index_rows() if len(row) > ENFORCEMENT_COLUMN]
+
+
 def _enforcement_artifacts() -> list[str]:
     """Every test path named in the norm index's Enforcement artifact column.
 
     `finditer` rather than `findall` because the pattern captures the plane
     prefix: `findall` would return the group and throw the reference away.
     """
-    return [
-        match.group(0)
-        for row in _norm_index_rows()
-        if len(row) > ENFORCEMENT_COLUMN
-        for match in TEST_REFERENCE.finditer(row[ENFORCEMENT_COLUMN])
-    ]
+    return [match.group(0) for cell in _enforcement_cells() for match in TEST_REFERENCE.finditer(cell)]
 
 
 def test_every_norm_index_row_has_the_shape_the_parser_assumes():
@@ -262,40 +262,6 @@ def test_the_index_still_names_test_artifacts_at_all():
     )
 
 
-def test_the_pattern_finds_every_reference_a_naive_scan_can_see():
-    """Guards the guard against scanning *less*, which the floor above cannot see.
-
-    `MINIMUM_KNOWN_REFERENCES` catches an extraction that collapses to nothing. It
-    cannot catch one that collapses partway: narrow `TEST_REFERENCE` so it stops
-    matching prefixed references and the curation and display rows vanish while the
-    root-plane ones still clear a floor of three — the suite green over exactly the
-    rows the 2026-08-11 plane repair was written to protect. That is the
-    `test_plane_isolation.py` incident (a row naming a file that never existed, live
-    for months) arriving by a second route.
-
-    So this compares the compiled pattern against the dumbest scan that could work.
-    `_NAIVE_REFERENCE` has no prefix group, no node-id tail and no lookbehind, and
-    every string it can find is one `TEST_REFERENCE` must also find — the compiled
-    match starts earlier and ends later over the same `tests/….py`. A count that
-    disagrees means the pattern was narrowed, and it fails by the difference rather
-    than by a number somebody has to maintain. Raising the floor by hand each time a
-    row is added is the maintained-count shape the plane derivation was written to
-    retire; this is the same reasoning applied to the other axis.
-    """
-    cells = [row[ENFORCEMENT_COLUMN] for row in _norm_index_rows() if len(row) > ENFORCEMENT_COLUMN]
-    naive = [match.group(0) for cell in cells for match in _NAIVE_REFERENCE.finditer(cell)]
-    found = _enforcement_artifacts()
-
-    missed = sorted(set(naive) - {reference[reference.index("tests/") :].split("::")[0] for reference in found})
-    assert not missed, (
-        f"a naive scan of the Enforcement column finds {len(naive)} test references and "
-        f"TEST_REFERENCE finds {len(found)}; these are visible to the dumb scan and not to the "
-        f"compiled one: {missed}. The pattern was narrowed and is now scanning less than the "
-        "index names — the failure this file exists to refuse, arriving as a shrink rather than "
-        "as a zero."
-    )
-
-
 @pytest.mark.parametrize("reference", _enforcement_artifacts())
 def test_every_named_enforcement_artifact_names_a_real_plane(reference):
     """A reference under an unknown plane must fail by name, never by its tail.
@@ -368,18 +334,25 @@ def _deliberately_uncovered_artifacts() -> list[str]:
         "It moved or its columns were renamed. Fix the anchor deliberately rather than letting "
         "this guard scan nothing."
     )
-    found: list[str] = []
+    # `finditer` and `group(0)` for the same reason as the sibling parser: the
+    # pattern captures the plane prefix, so `findall` returns that group and
+    # discards the reference it was found in.
+    return [match.group(0) for cell in _uncovered_guard_cells(lines) for match in TEST_REFERENCE.finditer(cell)]
+
+
+def _uncovered_guard_cells(lines: list[str] | None = None) -> list[str]:
+    """The Guard column's raw text, one string per uncovered-table row."""
+    if lines is None:
+        lines = [line.rstrip() for line in NORM_INDEX.read_text(encoding="utf-8").splitlines()]
+    cells: list[str] = []
     for line in lines[lines.index(UNCOVERED_HEADER) + 1 :]:
         if not line.startswith("|"):
             break
         body = line.strip().strip("|")
         if set(body) <= set("-:| "):
             continue
-        # `finditer` and `group(0)` for the same reason as the sibling parser: the
-        # pattern captures the plane prefix, so `findall` returns that group and
-        # discards the reference it was found in.
-        found.extend(match.group(0) for match in TEST_REFERENCE.finditer(body.split("|")[0]))
-    return found
+        cells.append(body.split("|")[0])
+    return cells
 
 
 @pytest.mark.parametrize("reference", _deliberately_uncovered_artifacts())
@@ -421,4 +394,57 @@ def test_the_deliberately_uncovered_table_is_not_empty():
     assert _deliberately_uncovered_artifacts(), (
         "no test references found in the deliberately-uncovered table — either its Guard column "
         "stopped naming files, or the parser above no longer finds the table it names"
+    )
+
+
+#: Both columns `TEST_REFERENCE` is run over, for the cross-check below. Listed as
+#: a pair rather than checked in one place because the two tables are parsed
+#: separately on purpose (see `_deliberately_uncovered_artifacts`) and a narrowing
+#: of the shared pattern hits both — covering only the norm index would be this
+#: file's own "a repair that fixes the instance leaves the class untouched".
+_SCANNED_COLUMNS = [
+    ("the norm index's Enforcement column", _enforcement_cells, _enforcement_artifacts),
+    ("the deliberately-uncovered table's Guard column", _uncovered_guard_cells, _deliberately_uncovered_artifacts),
+]
+
+
+@pytest.mark.parametrize(
+    ("column", "cells_of", "found_by"),
+    _SCANNED_COLUMNS,
+    ids=["norm-index-enforcement", "deliberately-uncovered-guard"],
+)
+def test_the_pattern_finds_every_reference_a_naive_scan_can_see(column, cells_of, found_by):
+    """Guards the guard against scanning *less*, which the floor above cannot see.
+
+    `MINIMUM_KNOWN_REFERENCES` catches an extraction that collapses to nothing. It
+    cannot catch one that collapses partway: narrow `TEST_REFERENCE` so it stops
+    matching prefixed references and the curation and display rows vanish while the
+    root-plane ones still clear a floor of three — the suite green over exactly the
+    rows the 2026-08-11 plane repair was written to protect. That is the
+    `test_plane_isolation.py` incident (a row naming a file that never existed, live
+    for months) arriving by a second route.
+
+    So this compares the compiled pattern against the dumbest scan that could work.
+    `_NAIVE_REFERENCE` has no prefix group, no node-id tail and no lookbehind, and
+    every string it can find is one `TEST_REFERENCE` must also find — the compiled
+    match starts earlier and ends later over the same `tests/….py`. A count that
+    disagrees means the pattern was narrowed, and it fails by the difference rather
+    than by a number somebody has to maintain. Raising the floor by hand each time a
+    row is added is the maintained-count shape the plane derivation was written to
+    retire; this is the same reasoning applied to the other axis.
+
+    Run over **both** columns the pattern is used on. The first version covered the
+    norm index only, which left the identical shrink silently passing one table
+    over — the failure this repo has a rule about, committed in the fix for its own
+    first instance.
+    """
+    naive = [match.group(0) for cell in cells_of() for match in _NAIVE_REFERENCE.finditer(cell)]
+    found = found_by()
+
+    missed = sorted(set(naive) - {reference[reference.index("tests/") :].split("::")[0] for reference in found})
+    assert not missed, (
+        f"a naive scan of {column} finds {len(naive)} test references and TEST_REFERENCE finds "
+        f"{len(found)}; these are visible to the dumb scan and not to the compiled one: {missed}. "
+        "The pattern was narrowed and is now scanning less than the table names — the failure "
+        "this file exists to refuse, arriving as a shrink rather than as a zero."
     )

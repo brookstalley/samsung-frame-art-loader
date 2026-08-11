@@ -21,6 +21,31 @@ a rule if its recency matters; never infer recency from where it sits.
 
 **Reading a rule is not applying it.** The failure mode of a learnings file is not absence, it is assent: a rule arrives at the right moment, is read, is agreed with, and changes nothing, because nothing made you recognize the case in hand as an instance of it. So for any rule you read here, name the decision you are about to make and say what the rule changes about it — or say that it does not apply, which is also an answer.
 
+## Before putting a decision to the owner, check whether the code already made it
+
+**When** an artifact records a question as open — a fork, a "recommendation:", a
+decision "owed to the operator" — **grep the implementation for the behaviour
+before you ask**, and put the built behaviour in the question if it exists.
+**Because** an artifact says what was designed and code says what runs; asking
+against the artifact alone can spend the owner's one decision on a question that
+was settled in a service method, and their answer then arrives with no way to tell
+whether it ratified the code, contradicted it, or never saw it.
+
+The sharper half: **the sub-cases the code handles are the ones the artifact's
+framing hides.** Here the built guard refused the active theme *only while another
+existed* — the last-theme case had a documented rationale and was invisible to a
+question posed from the artifact, so the owner ruled on two options while a third
+behaviour shipped underneath them.
+
+## An invariant stated as an absolute is a claim someone will act on
+
+**When** you write or cite a constraint as "exactly one" / "always" / "never",
+**check what the store or the guard actually enforces** and state that instead.
+**Because** an absolute is not a stronger version of a bounded claim, it is a
+different claim — a partial unique index enforcing *at most* one reads as "exactly
+one" to everyone downstream, and the reasoning built on top of it inherits an
+invariant the system has never had.
+
 ## A list written to record a DEBT is not an inventory of a SURFACE
 
 **When** you build a set of operations, routes or requirements from a list in a

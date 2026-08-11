@@ -1638,7 +1638,7 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
 
    **Zero active themes is reachable and is not a violation** — it is the state of
    an empty catalogue, and it is why the last theme can be deleted at all
-   (`ThemeService.delete_theme`; see `api-contract.md` § The routes the interface
+   (`DisplayService.delete_theme`; see `api-contract.md` § The routes the interface
    design requires). *This constraint read "Exactly one Theme has `is_active =
    true`" until 2026-08-11, which the index has never enforced and the empty
    catalogue has always contradicted. It was found by Critic review (R-8) being
