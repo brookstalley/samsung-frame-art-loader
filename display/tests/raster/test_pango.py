@@ -61,14 +61,9 @@ def a_layout(
     )
 
 
-def _columns_with_ink(raster, surface: Geometry) -> set[int]:
+def _columns_with_ink(raster) -> set[int]:
     """Which x positions carry any dark pixel."""
-    return {
-        x
-        for y in range(raster.height_px)
-        for x in range(raster.width_px)
-        if raster.pixels[y * raster.width_px + x] < 200
-    }
+    return {x for y in range(raster.height_px) for x in range(raster.width_px) if raster.pixels[y * raster.width_px + x] < 200}
 
 
 class TestTheBufferIsTheShapeItClaims:
@@ -158,7 +153,7 @@ class TestTheBlockIsDrawnAtTheWidthItWasMeasuredAt:
             a_layout("wrapping at the bound rather than the panel", size_px=8, y_px=2, wrap_px=self.NARROW)
         )
 
-        rightmost = max(_columns_with_ink(raster, AWKWARD))
+        rightmost = max(_columns_with_ink(raster))
         assert rightmost <= AWKWARD.margin_px + self.NARROW, (
             f"ink reached x={rightmost}, past the {self.NARROW}px bound this block was measured at — "
             "the renderer is wrapping at the surface width instead"
@@ -173,7 +168,7 @@ class TestTheBlockIsDrawnAtTheWidthItWasMeasuredAt:
         bounded = rasterizer.render(a_layout(text, size_px=size, y_px=2, wrap_px=self.NARROW))
         full = rasterizer.render(a_layout(text, size_px=size, y_px=2))
 
-        assert max(_columns_with_ink(full, AWKWARD)) > max(_columns_with_ink(bounded, AWKWARD))
+        assert max(_columns_with_ink(full)) > max(_columns_with_ink(bounded))
 
 
 class TestMeasuringMovesInTheDirectionsTheLayoutTierRelieson:
