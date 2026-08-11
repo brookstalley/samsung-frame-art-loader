@@ -31,8 +31,11 @@ Creating that account, giving it the `spi` and `gpio` groups, moving the art tre
 to `/srv/art`, placing the checkout at `/opt`, and enabling these two units are
 **one change, not five** — any of them landing alone leaves a machine that is
 neither the old arrangement nor the new one. `operational-spec.md` § The Service
-Account is the authority on the account; the build plan's Chunk 13B entry is the
-authority on the order.
+Account is the authority on the account and on why the five are one change; the
+steps below, in the order they are written, are the authority on the order.
+*(This used to point at a build-plan chunk for the ordering. A plan is archived
+when it finishes and its sub-numbering is bookkeeping, so a deployment document —
+which outlives every plan — cannot rest its procedure on one.)*
 
 > **What this cutover is not.** It has been described in the plan as the moment
 > `tvart.py` stops being the production entry point. On the machine as rebuilt
@@ -194,6 +197,25 @@ supported deployment** — leave `EPD_DEVICE` empty in `.env` and the wall rotat
 with no label. A device with a monitor rather than e-ink would install `raster`
 alone. Verified on the Pi 2026-08-07: PyGObject 3.56 and pycairo 1.29 resolve
 under uv on Trixie/aarch64 with no `apt install python3-gi` needed.
+
+**A device that names a panel owes two more values, and this is a step an
+existing deployment has to take by hand.** Since 2026-08-11 the label's type
+size is derived rather than fixed, from `EPD_PANEL_DIAGONAL_INCHES` and
+`EPD_VIEWING_DISTANCE_INCHES` — the panel's diagonal and the distance people
+actually stand at, inches for both. There is no default and there will not be
+one: a guessed distance gives type that is silently illegible, which is what
+this deployment shipped for as long as the sizes were fixed.
+
+So **a `.env` written before that date has neither key, and the first restart
+after deploying this draws no label** — the daemon logs which key is missing,
+reports it on the heartbeat, and goes on rotating the wall. Add both lines to
+`/opt/samsung-frame-art-loader/.env` before or with the deploy:
+
+    EPD_PANEL_DIAGONAL_INCHES=6
+    EPD_VIEWING_DISTANCE_INCHES=84
+
+Those are the reference wall's: a 6-inch panel read from 7 feet. Measure to
+where people stand, not to where you stand while installing it.
 
 **Before the unit is enabled, the checkout needs its environment file.** Since
 2026-07-27 `config.py` raises at import unless `ART_ROOT`, `TV_ADDRESS`,

@@ -185,9 +185,17 @@ def type_scale_for(
         ppi=pixels_per_inch(width_px=width_px, height_px=height_px, diagonal_inches=diagonal_inches),
         viewing_distance_inches=viewing_distance_inches,
     )
+    floor_px = _em_for(MINIMUM_CAP_ARCMIN, per_arcmin)
     return TypeScale(
-        primary_px=_em_for(COMFORTABLE_CAP_ARCMIN, per_arcmin),
-        floor_px=_em_for(MINIMUM_CAP_ARCMIN, per_arcmin),
+        # **The primary tier can never be below the floor**, which is not a
+        # tautology the two constants already guarantee. They are calibrated by
+        # eye and `label_preview.py` patches the comfortable one to try a
+        # candidate — so a recalibration that put it under the minimum would
+        # silently invert the hierarchy AND set the most identifying line below
+        # the one size this module exists to hold. Clamped rather than raised,
+        # because the answer is never in doubt: the floor is the floor.
+        primary_px=max(_em_for(COMFORTABLE_CAP_ARCMIN, per_arcmin), floor_px),
+        floor_px=floor_px,
     )
 
 

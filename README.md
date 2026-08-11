@@ -35,20 +35,28 @@ a second subscriber attached, and an unattended run across a television
 power-cycle. Both need the television, not the panel.
 
 **What remains in software** is the label itself, which the panel visit turned
-from three numbers into a redesign: a type floor derived from viewing distance,
-the artist set above the work with a styled family name, `family_name`/
-`given_name` and a commentary field in the catalogue, and a fill model that
-admits optional content in priority order. It is specified in
-`accessibility-spec.md` and carried as 13B-1 … 13B-4 in the build plan.
+from three numbers into a redesign: the artist set above the work with a styled
+family name, `family_name`/`given_name` and a commentary field in the catalogue,
+and a fill model that admits optional content in priority order. The type floor
+is done. All of it is specified in `accessibility-spec.md` — § Type never shrinks
+to fit for the two content tiers, § The label's content model for the ordering,
+the name ladder and the fill rule — which is where it stays after the build plan
+that schedules it is archived.
 
 **The label reached e-ink on 2026-08-11**, which it never had before: rotation
 does not run while the set is in standby, so the label path had never executed on
 hardware at all. The operator read a type ladder from the viewing position and
 settled the floor at **12.4 arcminutes** of cap height, with 8.8′ as the absolute
-minimum for content a reader steps closer for. The type sizes in source are still
-the provisional ones — they are now *known* wrong rather than unsettled, and what
-replaces them is a floor derived from viewing distance and panel PPI rather than
-three numbers judged by eye.
+minimum for content a reader steps closer for.
+
+**13B-1 landed the same day, and the provisional sizes are gone.** The label's
+type is now derived from two values a deployment states — the panel's diagonal
+and the distance it is read from — against that calibrated cap height, so a
+second device with a different panel at a different distance gets a correct
+answer with nobody visiting it. Those two have no defaults and never will: a
+guessed distance gives silently illegible type, which is what this product
+shipped for as long as the sizes were fixed. **An existing `.env` needs both keys
+added or its device draws no label** — see `deploy/README.md`.
 
 ## Where things are written down
 

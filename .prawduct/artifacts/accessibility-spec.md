@@ -154,8 +154,18 @@ arithmetic is exact:
 
 ```
 px_per_arcmin = ppi × distance_inches × tan(1′)
-floor_em_px   = (min_cap_arcmin ÷ cap_ratio) × px_per_arcmin
+size_px       = (cap_arcmin ÷ CAP_RATIO) × px_per_arcmin
 ```
+
+**The two cap heights are named here exactly as the code names them**, and that
+is a correction rather than a formality: this section used to call the calibrated
+angle `min_cap_arcmin`, while the code has **`COMFORTABLE_CAP_ARCMIN` (12.4′)**
+for the primary tier and a *separate* **`MINIMUM_CAP_ARCMIN` (8.8′)** for the
+floor. The whole recalibration story is that the operator settles one angle and
+every deployment inherits it — so the person doing that would read `min_cap`,
+grep for it, find `MINIMUM_CAP_ARCMIN`, and move the absolute floor instead of the
+tier they meant, with every test still green because each asserts a constant
+against itself.
 
 On the reference wall that is **7.34 px per arcminute** of visual angle. The
 consequence measured on 2026-08-11 is why this section exists: the provisional
@@ -174,7 +184,7 @@ and every check the product had passed while it was.
 - **The fill rule needs a floor to mean something.** An engine that spends slack
   on more content, or on larger type, has to know what "too small" *is*. Without
   a floor expressed in the reader's terms there is nothing to adapt against.
-- **It settles once and stays settled.** `min_cap_arcmin` is a fact about human
+- **It settles once and stays settled.** `COMFORTABLE_CAP_ARCMIN` is a fact about human
   vision, not about this wall, so it never needs re-judging. The operator
   calibrates it once by eye; every future deployment inherits it and supplies only
   its own distance.
@@ -185,7 +195,7 @@ in normal room light and reported three things:
 
 | Reading | px | Cap height | What it settles |
 |---|---|---|---|
-| Comfortable at a glance | 130 | **12.4′** | `min_cap_arcmin`, the primary tier |
+| Comfortable at a glance | 130 | **12.4′** | `COMFORTABLE_CAP_ARCMIN`, the primary tier |
 | Made out with effort | 110 | 10.5′ | Not a target — the squint boundary, recorded so nobody aims at it |
 | Acceptable if a reader steps closer | 92 | **8.8′** | The absolute floor; nothing is set below it, ever |
 
@@ -194,6 +204,13 @@ Museum practice sets the identification block for the approach and the extended
 text for whoever walks up; the operator reached the same split independently, by
 naming a size acceptable only when closer. The family name carries the primary
 tier at 12.4′ and everything else steps down to the 8.8′ floor.
+
+**Today the primary tier goes to the leading line, which is still the title.**
+`layout._size_for` assigns by position, and the artist-first ordering is owed
+rather than built (§ The label's content model, 13B-2/13B-3). So the family name
+carries the primary tier *once the artist leads* — stated here because this
+section is marked Practised, and a reader of it alone would otherwise conclude
+the reordering had already happened.
 
 **The measured number is larger than the derived one**, which is the argument for
 having measured it. A defensible 10′ taken from legibility literature would have
@@ -206,7 +223,7 @@ than resolution is the limit, and the family name is set bold. Bold may reach th
 same comfort a size step down — worth measuring before spending the panel's
 budget on size that weight could have bought.
 
-`cap_ratio` is the face's cap height as a fraction of its em — ~0.70 for the text
+`CAP_RATIO` is the face's cap height as a fraction of its em — ~0.70 for the text
 faces this product sets. It is stated rather than measured because it varies
 little across the faces in scope, and because a floor that is 3% conservative is
 harmless in the direction that matters.
@@ -391,11 +408,10 @@ descending order, chosen because a hierarchy wants three.
 operator settles that angle once, by eye; every deployment after this one states
 its own geometry and gets its own pixels.
 
-**What closes it:** a second look at the panel, rendering through the product's own
-Pango path. **Chunk 13B owns it** — it carries `Visual change: yes` for exactly
-this reason, and its Done-when step 1 includes the operator's legibility look.
-Whoever settles the numbers replaces the provisional notes as well as the values —
-a settled number under a note calling it provisional is worse than either.
+**Closed 2026-08-11 by the panel visit and 13B-1**, which is where the notes were
+replaced along with the values — a settled number left under a note calling it
+provisional is worse than either, and that is why this section was rewritten
+rather than deleted.
 
 > **All three are one judgement and one visit**, which is why 13B carries them as a
 > single deliverable. A margin trades directly against how many lines survive the

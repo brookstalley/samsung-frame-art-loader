@@ -1579,3 +1579,22 @@ The check that would have settled it was one `grep token` over the installed
 package. Sibling shape already in this log: `get_current_artwork` adopted as a
 confirming read on the strength of what it was assumed to report.
 
+## A requirement about human perception is under-specified until the artifact carries the PHYSICAL quantity it depends on — record viewing distance, angular size or luminance beside any rendered number (px, pt), because pixels are a fact about a panel while legibility is a fact about a person at a distance
+
+Three artifacts here reasoned carefully about WHICH pixel value while none asked how
+far away the reader stands. The answer was 2x below the acuity threshold — a 2.5
+arcminute cap height against the 5 that 20/20 vision needs to resolve a letter at
+all — and it had passed a hardware probe, a Critic round and a cutover. What closed
+it was deriving the size from a stated viewing distance rather than judging it:
+`display/src/display/panel/legibility.py`, with `display/tests/test_type_floor.py`
+asserting in arcminutes so the claim a pixel test structurally cannot make gets
+made.
+
+## A test asserting that a producer STORED a value does not pin a producer-to-consumer seam — assert on the consumer's own output, because a fixture that feeds the consumer the same number by both routes cannot tell the two expressions apart
+
+The fix here was *measured* at a new bound and *drawn* at the old one, and the only
+arrangement that shows it is a fixture where the two are strictly different. It
+recurred within the same chunk: a mutation sweep found the daemon could lay a label
+out against type sizes the surface never gave it, missed because the fake surface
+carried the reference wall's own numbers. Giving the fake a scale no derivation
+would produce is what made the two routes distinguishable.

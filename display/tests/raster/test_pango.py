@@ -175,9 +175,11 @@ class TestMeasuringMovesInTheDirectionsTheLayoutTierRelieson:
     def test_a_size_in_pixels_is_a_size_in_pixels(self, rasterizer):
         """**The units, which nothing else here would catch.**
 
-        Every size this product reasons about is in pixels: the layout tier's
-        constants, the panel's geometry, and the mid-20s-to-low-40s range the
-        operator's look at the real panel established. Pango's ordinary
+        Every size this product reasons about is in pixels: the panel's geometry,
+        and the type sizes the layout tier is handed — which are themselves derived
+        from a viewing distance in `panel/legibility.py`, so a units error here
+        would silently undo an arithmetic chain built to be right about exactly
+        this. Pango's ordinary
         `set_size` takes *points* and resolves them through an ambient
         resolution — 96 dpi by default — so the same number comes out a third
         larger, silently. Every relative assertion below passes either way, since

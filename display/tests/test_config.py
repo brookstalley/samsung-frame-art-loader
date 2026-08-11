@@ -159,6 +159,29 @@ class TestTheStartupLine:
         assert lines["art_root"] == str(art_root)
         assert lines["epd_panel_px"] == "1448x1072"
 
+    def test_it_names_the_viewing_conditions_the_type_was_sized_from(self, art_root: Path):
+        """**The line that would have caught the defect this pair exists for.**
+
+        A wrong viewing distance is invisible everywhere else — the daemon starts,
+        the panel draws, every suite passes, and the only symptom is type nobody
+        can read from where they stand. This puts both facts one `journalctl` away
+        from the person who typed them, so it is worth an assertion rather than
+        resting on a field a refactor can blank with nothing objecting.
+        """
+        lines = load(an_environment(art_root, EPD_PANEL_DIAGONAL_INCHES="6", EPD_VIEWING_DISTANCE_INCHES="84")).startup_lines()
+
+        assert "6.0" in str(lines["epd_viewing"])
+        assert "84.0" in str(lines["epd_viewing"])
+
+    def test_unstated_viewing_conditions_are_reported_as_what_they_cost(self, art_root: Path):
+        """The other branch, and it says the consequence rather than "unset" —
+        a reader who has not met this pair cannot tell from "unset" whether their
+        label is missing on purpose."""
+        line = str(load(an_environment(art_root)).startup_lines()["epd_viewing"])
+
+        assert "not stated" in line
+        assert "draws none" in line, f"the line does not say what the absence costs: {line}"
+
     def test_it_holds_no_fact_about_the_television_s_physical_size(self, art_root: Path):
         """Curation composes the mat into the render, so this plane never needs the
         TV's size — and holding a copy is how the two panels' geometry came to be

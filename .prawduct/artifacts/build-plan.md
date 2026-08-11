@@ -1883,23 +1883,30 @@ hardware.
 
 - **Description:** The hardware half of the original Chunk 13. The `tvpi` service
   account is created with its `spi` and `gpio` groups and given ownership of
-  `ART_ROOT` and the checkout; `ART_ROOT`'s path is settled off `/home/tvpi/art`
-  onto a neutral one (`operational-spec.md` § The Service Account records
-  `/srv/art` or `/var/lib/samsung-art` as the shape to prefer, and leaves the
-  choice to this cutover). 13A's two units are installed and enabled. The
-  operator looks at the real panel at standing distance and settles the Pango
-  type size, replacing 13A's provisional value. Cutover: the Pi runs the two new
-  units and `tvart.py` stops being the production entry point — legacy files
-  remain until Chunk 20.
+  `ART_ROOT` and the checkout; `ART_ROOT` is settled off the old home-directory
+  tree onto a neutral machine path (`operational-spec.md` § The Service Account
+  records the two shapes to prefer — srv or var/lib — and leaves the choice to
+  this cutover). 13A's two units are installed and enabled. The operator looks at
+  the real panel at standing distance and settles the label's legibility,
+  replacing 13A's provisional values. Cutover: the Pi runs the two new units and
+  `tvart.py` stops being the production entry point — legacy files remain until
+  Chunk 20.
+
+  *(**Paths in this entry are named without backticks on purpose.** They are
+  filesystem locations on the Pi, not files this repository contains, and the
+  deliverable check reads a backticked path as something it should be able to
+  resolve here — so writing them that way left five permanently unresolvable
+  deliverables that every review had to re-adjudicate.)*
 - **Amended 2026-08-11, at the cutover, on three things the plan had wrong or
   missing.** *First*, this is a **first install, not a swap**: no unit of this
   product was installed on the Pi at all, so "`tvart.py` stops being the production
   entry point" described a replacement that did not exist, and there is no
   rollback window to plan around. *Second*, **the checkout's path was a
-  requirement nobody had written down** — settled to `/opt/samsung-frame-art-loader`
-  with `ART_ROOT` at `/srv/art`, because the machine's only checkout and its only
-  `uv` both sat under a home directory at mode `0700` that a `nologin` account
-  cannot traverse. *Third*, and the one that changes this chunk's size: **the Pi
+  requirement nobody had written down** — settled to the opt tree, with `ART_ROOT`
+  under srv (both spelled out in `deploy/README.md` § The cutover, which is where
+  machine paths belong), because the machine's only checkout and its only `uv`
+  both sat under a home directory at mode `0700` that a `nologin` account cannot
+  traverse. *Third*, and the one that changes this chunk's size: **the Pi
   had no catalogue**, so the acceptance criteria could not be met by installing
   units alone. Seeding it from the 2024 index is a step this entry never named and
   the operator chose to run here rather than copy state from a dev machine; it
@@ -1922,7 +1929,7 @@ hardware.
   The operator then asked for a reorganised label with an adaptive fill model.
   **Four decisions came out of it, all recorded in `accessibility-spec.md`:**
   *(1)* the type floor is **derived** from viewing distance and PPI via a stated
-  `min_cap_arcmin`, not settled as pixels — so it transfers to any device and the
+  `COMFORTABLE_CAP_ARCMIN`, not settled as pixels — so it transfers to any device and the
   operator calibrates one number instead of three; *(2)* **the artist outranks the
   work**, set as `FAMILY, Given` with the family name in bold capitals — which is
   also what makes the content fit, since leading with a 44-character title consumed
@@ -1937,7 +1944,8 @@ hardware.
   bookkeeping so each piece takes its own Critic round, because the whole is a
   three-plane data-model change plus a new layout engine and one review over all of
   it would read badly. The box ticks when all four are done.
-  - **13B-1 — the derived floor. Built 2026-08-11** (`panel/legibility.py`).
+  - **13B-1 — the derived floor. Built 2026-08-11**
+    (`display/src/display/panel/legibility.py`).
     Panel diagonal and viewing distance became deployment values with no
     defaults; the floor is computed per device; the three provisional size
     constants and `DEFAULT_EPD_MARGIN_PX` are gone, replaced by two derived tiers
@@ -1995,7 +2003,7 @@ hardware.
   `ART_ROOT` path recorded in the root `.env` and in `operational-spec.md`, both
   units installed and enabled on the Pi, **the label's legibility settled** — which
   the 2026-08-11 amendment above turns from three judged pixel values into a
-  derived floor plus one calibrated `min_cap_arcmin`, with the line-length bound
+  derived floor plus one calibrated `COMFORTABLE_CAP_ARCMIN`, with the line-length bound
   built and honestly recorded as inert on this panel — plus the reorganised label,
   its styled name, its catalogue fields and its fill model; each "provisional" note
   replaced rather than left standing over a settled number; cutover performed and

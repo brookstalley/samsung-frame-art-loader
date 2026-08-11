@@ -2241,11 +2241,25 @@ design_decisions:
     so exceptions are the only failure signal, and no partial refresh exists on
     this driver's surface at all — every label change is a full frame.
 
-    Type sizing is still NOT settled. The operator's look narrowed it to roughly
-    mid-20s through low-40s px and killed "Sans 18", but that ladder was rendered
-    with PIL/DejaVu and the product renders with Pango — different rasterizer,
-    different metrics, so the numbers do not transfer. Full measurements in
-    platform-and-dependency-findings.md § The e-paper panel.
+    Type sizing was SETTLED 2026-08-11, and not as a pixel value. The 2026-08-04
+    look had narrowed it to roughly mid-20s through low-40s px and killed
+    "Sans 18" — but that ladder was rendered with PIL/DejaVu against Pango's
+    metrics, and worse, the whole range was wrong: at the viewing distance nobody
+    had recorded, the low end gives a 2.5 arcminute cap height against the 5 that
+    20/20 vision needs to resolve a letter at all. The range was below the
+    threshold of legibility and every check the product had passed while it was.
+
+    What settles it instead is a DERIVATION, built as 13B-1
+    (display/src/display/panel/legibility.py): the deployment states its panel
+    diagonal and its viewing distance, and the type sizes follow from a cap height
+    in arcminutes calibrated once by eye. The reference wall reads a 6-inch
+    1448x1072 panel from 7 feet, which gives a 130 px primary tier and a 92 px
+    floor. A second device with a different panel at a different distance gets a
+    correct answer with nobody visiting it, and a deployment that states neither
+    loses its label surface with a named reason rather than guessing. Full
+    reasoning in accessibility-spec.md § The type floor is derived from viewing
+    distance; panel measurements in platform-and-dependency-findings.md § The
+    e-paper panel.
 
     The TV surface has no accessibility affordances by deliberate design — it is
     artwork on a wall, and adding overlays would violate the product's core

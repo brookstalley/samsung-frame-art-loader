@@ -17,7 +17,6 @@ from display.panel.legibility import (
     CAP_RATIO,
     COMFORTABLE_CAP_ARCMIN,
     MINIMUM_CAP_ARCMIN,
-    TypeScale,
     ViewingConditionsUnknown,
     margin_for,
     pixels_per_arcminute,
@@ -102,16 +101,28 @@ class TestWhatTheTiersMean:
         assert seen["primary"] == pytest.approx(COMFORTABLE_CAP_ARCMIN, abs=0.05)
         assert seen["floor"] == pytest.approx(MINIMUM_CAP_ARCMIN, abs=0.05)
 
-    def test_the_floor_is_below_the_primary_tier_and_neither_is_below_acuity(self):
+    def test_the_floor_is_below_the_primary_tier(self):
         scale = type_scale_for(**REFERENCE)
 
         assert scale.floor_px < scale.primary_px
 
-    def test_there_is_no_tier_between_them(self):
-        """The rung the operator called "made out with effort" is the squint
-        boundary, recorded so nothing aims at it. A third size here would be type
-        set at the size that was reported as taking work to read."""
-        assert set(vars(TypeScale)["__slots__"]) == {"primary_px", "floor_px"}
+    def test_a_recalibration_below_the_floor_cannot_push_the_primary_tier_under_it(self, monkeypatch):
+        """**Both constants are set by eye, and one of them is patched by a tool.**
+
+        `label_preview.py` overrides the comfortable cap height so the operator can
+        try a candidate at the panel. Nothing stops a candidate below the minimum,
+        and without a clamp that inverts the hierarchy *and* sets the most
+        identifying line beneath the one size this module exists to hold — the
+        floor violated by the tier that is supposed to sit above it.
+        """
+        import display.panel.legibility as module
+
+        monkeypatch.setattr(module, "COMFORTABLE_CAP_ARCMIN", MINIMUM_CAP_ARCMIN / 2)
+
+        scale = module.type_scale_for(**REFERENCE)
+
+        assert scale.primary_px == scale.floor_px
+        assert scale.primary_px >= scale.floor_px, "the leading line was set below the floor"
 
 
 class TestGeometryIsAParameter:

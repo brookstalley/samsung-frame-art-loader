@@ -336,13 +336,31 @@ Panel geometry was briefly listed as a second shared value; it is not, because
     most display devices are a television and nothing else. It is also what
     decides whether the two optional dependency groups are needed at all, so it
     is the one value that changes what has to be installed.*
-  - *`EPD_MARGIN_PX` (40) — the clear border. **Provisional**, and settled by the
-    same look at the real panel that settles the type sizes: it trades border
-    against how many lines fit before the label's drop rule takes one off.*
+  - *`EPD_MARGIN_PX` (no default) — the clear border. **It derives from the type
+    since 13B-1**, at half the primary tier, because it trades directly against
+    how many lines survive the label's drop rule and so cannot be picked apart
+    from the floor that decides how many lines there are. Set it only for a
+    surface whose border is a physical fact rather than a typographic choice — a
+    device drawing its label into the mat area around an artwork does not choose
+    where the picture ends.*
   - *`EPD_ROTATE_DEGREES` (180) — how far the frame is turned before it reaches
     the panel, the reference wall's panel being mounted ribbon-uppermost. Only 0
     and 180 are accepted; a quarter turn exchanges the panel's width and height,
     so the label would have to be laid out against the swapped geometry.*
+
+  *(**Two more joined them on 2026-08-11 with the derived type floor, and they are
+  the only settings in this plane with no default and no fallback:**)*
+
+  - *`EPD_PANEL_DIAGONAL_INCHES` and `EPD_VIEWING_DISTANCE_INCHES` — the label
+    panel's diagonal and the distance it is read from, inches for both. Together
+    they decide every type size on the label. **A guess is the one thing that must
+    not happen here**: a wrong distance produces silently illegible type, which is
+    what this deployment ran for as long as the sizes were fixed constants, and it
+    looks like success from every direction except standing in front of the panel.
+    A device that names a panel and states neither loses its **label surface**,
+    with the missing key named, while the television goes on rotating — the same
+    path a missing driver takes. It is not a refusal to start, because nothing
+    about the label may stop the wall.*
 
   *The panel's own reported size is compared against the configured pair at
   startup and a disagreement is **warned about rather than refused**, the same

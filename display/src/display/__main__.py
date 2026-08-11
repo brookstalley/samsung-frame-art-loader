@@ -81,10 +81,26 @@ def label_surface(settings: Settings) -> LabelSurface | None:
         # whose television is perfectly healthy.
         raise SurfaceUnavailable(f"the label's text stack is not installed ({exc}); try `uv sync --group raster`") from exc
 
+    geometry = label_geometry(settings, scale)
+    # **The derived numbers, said out loud once.** The startup line carries the two
+    # inputs; without these an operator asking "why is this label dropping three
+    # lines" has a formula in an artifact and no way to see what the wall actually
+    # computed. Whether the border was derived or overridden is named for the same
+    # reason — the two produce identical labels for identical reasons only when
+    # they agree, and nothing else distinguishes them.
+    log.info(
+        "label type derives to %d px over a %d px floor, with a %d px border (%s)",
+        scale.primary_px,
+        scale.floor_px,
+        geometry.margin_px,
+        "EPD_MARGIN_PX" if settings.epd_margin_px is not None else "derived",
+        extra={"event": "panel.type_scale"},
+    )
+
     return EpaperSurface(
         epd=open_panel(settings.epd_device),
         rasterizer=PangoRasterizer(),
-        geometry=label_geometry(settings, scale),
+        geometry=geometry,
         type_scale=scale,
         rotate_degrees=settings.epd_rotate_degrees,
     )

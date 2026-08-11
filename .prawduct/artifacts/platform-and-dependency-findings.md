@@ -261,15 +261,27 @@ toolchain skew, not a product problem — and it is why the label's *judgement*
 (what it says, where it goes) is a separate tier from its rasterization, so only
 the latter needs a machine that can run Pango.
 
-### Type sizing is NOT settled, and the probe's numbers must not be lifted
+### Type sizing was settled 2026-08-11, and the probe's range was wrong
 
-The type ladder put in front of the operator was rendered with **PIL/DejaVu**.
-The product renders labels with **Pango**. Different rasterizer, different face,
-different metrics — a pixel size that looked right in one does not transfer.
+**Superseded, and kept because the correction is the finding.** The type ladder
+put in front of the operator on 2026-08-04 was rendered with **PIL/DejaVu** while
+the product renders with **Pango** — different rasterizer, different face,
+different metrics — so this section correctly said its pixel numbers did not
+transfer. It then recorded a surviving **range**, mid-20s through low-40s px, as
+the thing the look *had* established.
 
-What the operator's look did establish is a **range**: mid-20s through low-40s px
-is live, and the 2024 `"Sans 18"` is dead. Real numbers wait for the Pango
-renderer and a second look at the panel.
+**That range was not merely untransferable, it was below the threshold of
+legibility**, and nothing here could tell because this document recorded no
+viewing distance. Measured on 2026-08-11: the panel is 6 inches diagonal at
+1448×1072 (~300 PPI) and is read from 7 feet, which makes 26 px a cap height of
+**2.5 arcminutes** against the **5** that 20/20 vision needs to resolve a letter
+at all. The low end of the live range was half the resolvable size, and the high
+end barely reached it.
+
+The numbers are no longer judged. They derive from the two physical facts above
+against a calibrated cap height — `display/src/display/panel/legibility.py`, with
+the reasoning in `accessibility-spec.md` § The type floor is derived from viewing
+distance. On this panel that is a 130 px primary tier over a 92 px floor.
 
 ## The television, verified against the set itself
 
