@@ -62,16 +62,26 @@
 two questions to the operator rather than to whoever builds the routes. Both were
 answered, and only one went the way the artifact recommended.
 
-**Deleting the active theme refuses.** That was the recommendation, so the change is
-prose: the route's row and its paragraph state a rule instead of holding a fork. Two
-things were added that the fork had not carried — the refusal is the surface's one
-`400` shape and its message says what to do, per § Errors teach; and the guard sits
-with the theme service beside constraint 1 rather than in the HTTP handler, so
-`art_theme(action='delete')` reaches it too. A rule enforced in the handler is a rule
-the MCP surface does not have, on the surface whose parity claim is that an agent and
-a click cannot disagree. A third option was put up and declined on the record —
+**Deleting the active theme refuses — while another theme exists.** That matched the
+recommendation, so the intended change was prose: the route's row and its paragraph
+state a rule instead of holding a fork. What the round then discovered is that the
+rule **was already built** in `DisplayService.delete_theme`, and the question had been
+put to the operator against an artifact when the code was the authority (Critic R-8,
+resolved later in this same bundle). Two consequences, both recorded in the artifact:
+the refusal is narrower than "while active" — **deleting the last theme is permitted
+even though it is active**, ratified separately by the operator once the framing
+mistake surfaced it — and the guard sits with the service layer rather than the HTTP
+handler, so `art_theme(action='delete')` reaches it too. A rule enforced in the handler
+is a rule the MCP surface does not have, on the surface whose parity claim is that an
+agent and a click cannot disagree. The refusal is the surface's one `400` shape and its
+message says what to do, per § Errors teach — as a principle; the tool envelope's shape
+does not apply to an HTTP route. A third option was put up and declined on the record —
 promote another theme, then delete — because it needs a promotion rule nobody has
-written and collapses into a refusal when the theme is the only one.
+written. The reason first given for declining it (that it "collapses into a refusal
+when the theme is the only one") is the opposite of what ships and was corrected in
+the same bundle: `reconcile()` promotes the oldest when none is active, so the option
+is not hypothetical — it is the default if the guard is removed, which is the better
+reason and the one the built code already carried.
 
 **Taste earns an MCP tool, against the recorded recommendation.** `art_taste` is
 designed in a new § of ## Operations, placed beside `set_verdict` because it carries
@@ -110,6 +120,26 @@ making is containment in the 1–15 range, which a reader can check against the 
 Also recorded: `design_decisions.surface_parity` in `project-state.yaml`, and the
 `information-architecture.md` § Status row, which had named the two decisions as owed
 and now says nothing on it is open.
+
+**Three more Critic rounds followed this entry, and the entry is amended rather than
+left describing the state it was written in.** The cumulative round returned 0
+blocking / 9 warnings / 10 notes, all nineteen dispositioned — eleven fixed, six
+accepted, two filed (#123, #124). Two `verify-resolutions` passes then closed 0/0/0,
+the second verifying every warning fixed by reading the tree rather than the diff.
+What they changed beyond the delete rule above: `art_taste`'s `set` now requires a
+`source_turn_id` for `inferred` and may not overwrite a row's provenance with a weaker
+one (R-11, R-17); the Frozen tier no longer claims "Pinned by test" over a name no test
+can pin (R-16); `data-model.md` constraint 1 became "at most one, and exactly one
+whenever any theme exists" (R-8); the norm index gained a naive-versus-compiled
+cross-check so the scanner cannot shrink silently, proved by mutation and then widened
+to both tables it scans (R-1, R-12); a proposed unratified norm gained an
+`open_questions` entry and `accessibility-spec.md` gained the § Direction its norm rows
+already pointed at (R-2). One fix invented a class name — `ThemeService` — that does not
+exist, inside the document recording that the code was the authority; it is
+`DisplayService`, corrected in the round after.
+
+Suite at the close: **2468 passed, 0 failed, 4 skipped** across the three planes,
+recorded to the evidence store rather than only observed.
 
 ## 2026-08-11: The routes the interface needs, and the accessibility surface that is not a screen
 
