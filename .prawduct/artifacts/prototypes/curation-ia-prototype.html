@@ -1206,7 +1206,7 @@ RENDER.collection = () => {
       el("strong", { class: "num", text: `${S.selected.size} selected` }),
       el("span", { class: "spacer", style: "margin-left:auto" }),
       el("button", { class: "btn", text: "Add to a theme" }),
-      el("button", { class: "btn danger", text: "Remove" }),
+      el("button", { class: "btn", text: "Archive" }),
       el("button", { class: "btn quiet", text: "Clear", on: { click: () => { S.selected.clear(); render(); } } }),
     ]));
   }
@@ -1345,7 +1345,7 @@ RENDER.work = () => {
   side.append(el("div", { class: "wall-actions", style: "margin-top:var(--space-5)" }, [
     el("button", { class: "btn", text: "Add to a theme" }),
     el("button", { class: "btn", text: "Re-derive the mat" }),
-    el("button", { class: "btn danger", text: "Remove from collection" }),
+    el("button", { class: "btn", text: "Archive" }),
   ]));
   wrap.append(el("div", { class: "work" }, [
     el("div", { class: "plate" }, [el("img", { src: paint(w.art), alt: `${w.title} by ${w.artist}` })]),

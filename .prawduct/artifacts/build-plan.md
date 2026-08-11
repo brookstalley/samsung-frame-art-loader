@@ -35,7 +35,16 @@ governed_by:
       - "norm-index rows (formatting, naming, imports, logging-not-print, type-annotate-on-touch, specific exceptions, no hardcoded deployment values, async-at-the-boundary, hardware behind an interface) → conforms: ruff lands in Chunk 06 and the mechanical rows migrate to lint rules as each row's Why already directs; until then the Critic carries them per the index"
       - "no test suite (known departure, blocking for medium+ work) → conforms: pytest is established in Chunk 02 alongside the first code that needs it, before any substantive build chunk, and every chunk ships tests alongside code"
       - "uv for both planes, each plane with its own interpreter and its own lock → conforms: Chunk 06, gated on Chunk 04's build verification. The mechanism was settled 2026-07-20 ahead of the chunk: two SIBLING uv projects, not a uv workspace — a workspace shares one lockfile and one resolved interpreter, and uv 0.11.8 refuses to lock members mixing >=3.14 and ==3.13.* at all. The decision's substance (per-plane interpreter + per-plane lock) is unchanged"
-last_validated: 2026-07-20
+  # Both artifacts gained owner-ratified `## Direction` sections on 2026-08-11 and
+  # are listed here so the walk finds them disposed rather than absent. Added by
+  # Critic R-6, which found applicability assumed rather than recorded.
+  - artifact: information-architecture
+    dispositions:
+      - "the curation surface's screens, flows and the routes they require → inapplicable because: this plan's remaining chunks are 13A, 13B and 20 — display-plane and operational work that renders no browser screen. The IA's Direction binds the work that reshapes the surface, and that work has no plan yet; seed its dispositions with `prawduct-hook jurisdiction` when it is written"
+  - artifact: design-direction
+    dispositions:
+      - "the visual direction, and the chunk that owes each piece of it → inapplicable because: same scope as the row above. The one place it could bite this plan is the e-paper label's typesetting, and that is governed by `accessibility-spec.md` § Direction instead, which Chunk 13B carries"
+last_validated: 2026-08-11
 ---
 
 # Build Plan — Samsung Frame Art Loader v1
@@ -1896,8 +1905,22 @@ hardware.
   numbers do not transfer to Pango and the look has to be repeated.
 - **Deliverables:** the `tvpi` account with its groups and ownership, the settled
   `ART_ROOT` path recorded in the root `.env` and in `operational-spec.md`, both
-  units installed and enabled on the Pi, the settled Pango type size replacing
-  13A's provisional one, cutover performed and recorded in `deploy/README.md`
+  units installed and enabled on the Pi, **all three of the label's legibility
+  settlements** — the Pango type sizes replacing 13A's provisional ones, the
+  `DEFAULT_EPD_MARGIN_PX` value replacing its provisional one, and a stated line-length
+  bound where none exists today — each with its "provisional" note replaced rather
+  than left standing over a settled number, cutover performed and recorded in
+  `deploy/README.md`
+- **The three legibility settlements are one judgement and one visit, which is why
+  they are one deliverable.** A margin trades directly against how many lines
+  survive the drop rule, and a measure depends on the face and the size, so none of
+  the three can be settled without the other two in front of you. Only the type
+  size was named here until 2026-08-11; `accessibility-spec.md` § The e-paper label
+  states all three as its one open requirement, and the margin's own note in
+  `display/src/display/config.py` already said it is settled by this same look.
+  Leaving the other two off this list would have closed the chunk with them
+  unlooked-at, on the surface `design_decisions.accessibility_approach` calls the
+  important one — and repeating the panel visit is the expensive part.
 - **Tests:** hardware — label matches the artwork within the 15 s budget across
   several rotations; killing the panel mid-run leaves rotation running; both
   units come back from a reboot with no human action

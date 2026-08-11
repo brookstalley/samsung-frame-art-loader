@@ -54,6 +54,236 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-11: The operator settled the two open route decisions, and one of them bought a sixth tool
+
+<!-- prawduct: scope=v1-build -->
+
+`api-contract.md` § The routes the interface design requires had deliberately left
+two questions to the operator rather than to whoever builds the routes. Both were
+answered, and only one went the way the artifact recommended.
+
+**Deleting the active theme refuses — while another theme exists.** That matched the
+recommendation, so the intended change was prose: the route's row and its paragraph
+state a rule instead of holding a fork. What the round then discovered is that the
+rule **was already built** in `DisplayService.delete_theme`, and the question had been
+put to the operator against an artifact when the code was the authority (Critic R-8,
+resolved later in this same bundle). Two consequences, both recorded in the artifact:
+the refusal is narrower than "while active" — **deleting the last theme is permitted
+even though it is active**, ratified separately by the operator once the framing
+mistake surfaced it — and the guard sits with the service layer rather than the HTTP
+handler, so `art_theme(action='delete')` reaches it too. A rule enforced in the handler
+is a rule the MCP surface does not have, on the surface whose parity claim is that an
+agent and a click cannot disagree. The refusal is the surface's one `400` shape and its
+message says what to do, per § Errors teach — as a principle; the tool envelope's shape
+does not apply to an HTTP route. A third option was put up and declined on the record —
+promote another theme, then delete — because it needs a promotion rule nobody has
+written. The reason first given for declining it (that it "collapses into a refusal
+when the theme is the only one") is the opposite of what ships and was corrected in
+the same bundle: `reconcile()` promotes the oldest when none is active, so the option
+is not hypothetical — it is the default if the guard is removed, which is the better
+reason and the one the built code already carried.
+
+**Taste earns an MCP tool, against the recorded recommendation.** `art_taste` is
+designed in a new § of ## Operations, placed beside `set_verdict` because it carries
+the same shape of rule. Three actions and no `get` — `list` returns a household's
+whole taste, so a `get` would be a second way to read one call's answer. `set` is an
+upsert and named for it, because `Affinity` is unique on (`kind`, `value`) and
+corrected in place: `create` lies on the second call, `update` on the first. **`set`
+may not write `derivation='observed'`** — only the review path can truthfully claim a
+judgment was read out of accept-and-reject behaviour, and a fabricated observation is
+indistinguishable afterwards from an earned one, in an entity whose rebuild-from-turns
+property (Q14) depends on the provenance being real. Sentiment and openness are both
+required, because defaulting openness puts a default in the way of "meh on Magritte,
+but open to learning more", and the default that reads as safe is the one that
+blacklists an artist the curator asked to keep hearing about.
+
+**The recommendation that lost is left standing in the artifact rather than deleted**,
+because it is what the decision cost: a Frozen-tier name is now claimed over an entity
+that does not exist, and if `Affinity` is reshaped before it is built, the tool name is
+the part that cannot be reshaped with it. Against that, item 8's parity must-have was
+being reported as met while the surface knowingly withheld an operation the web UI has.
+
+**The ruling did not travel, and the other two deferrals came apart under it.**
+Conversation keeps its deferral and is *strengthened* by this one — its reasons were
+never the Frozen argument, and "the thing a model wants is the taste, not the
+transcript" is exactly what granting taste satisfies. Spend history's row had read
+"same deferral as taste", which turned out to be two claims stapled together: one died
+with the ruling, and the other was never true — `art_discovery(action='spend')` has
+reported across runs by calendar month since it shipped.
+
+**Two counts were removed rather than incremented.** § The surface opened with "Five
+tools" and the tiers table said "Tool names (the five above)"; both were copies of a
+table four lines away, and this is the second count in that section to go stale — the
+paragraph recording the first ("three of the five") is still there. The claim worth
+making is containment in the 1–15 range, which a reader can check against the table.
+
+Also recorded: `design_decisions.surface_parity` in `project-state.yaml`, and the
+`information-architecture.md` § Status row, which had named the two decisions as owed
+and now says nothing on it is open.
+
+**Three more Critic rounds followed this entry, and the entry is amended rather than
+left describing the state it was written in.** The cumulative round returned 0
+blocking / 9 warnings / 10 notes, all nineteen dispositioned — eleven fixed, six
+accepted, two filed (#123, #124). Two `verify-resolutions` passes then closed 0/0/0,
+the second verifying every warning fixed by reading the tree rather than the diff.
+What they changed beyond the delete rule above: `art_taste`'s `set` now requires a
+`source_turn_id` for `inferred` and may not overwrite a row's provenance with a weaker
+one (R-11, R-17); the Frozen tier no longer claims "Pinned by test" over a name no test
+can pin (R-16); `data-model.md` constraint 1 became "at most one, and exactly one
+whenever any theme exists" (R-8); the norm index gained a naive-versus-compiled
+cross-check so the scanner cannot shrink silently, proved by mutation and then widened
+to both tables it scans (R-1, R-12); a proposed unratified norm gained an
+`open_questions` entry and `accessibility-spec.md` gained the § Direction its norm rows
+already pointed at (R-2). One fix invented a class name — `ThemeService` — that does not
+exist, inside the document recording that the code was the authority; it is
+`DisplayService`, corrected in the round after.
+
+Suite at the close: **2468 passed, 0 failed, 4 skipped** across the three planes,
+recorded to the evidence store rather than only observed.
+
+## 2026-08-11: The routes the interface needs, and the accessibility surface that is not a screen
+
+<!-- prawduct: scope=v1-build -->
+
+<!-- No `chunks=`: the two artifact debts `information-architecture.md` § Status
+     recorded against the design round, plus one guard repair they exposed. -->
+
+**Why:** the IA round closed with two obligations written into the artifact rather
+than into a session file, because a session file is consumed by the next `/clear`.
+Both are now discharged, and one of them was scoped wrongly by the row that
+recorded it.
+
+**`api-contract.md` gained § The routes the interface design requires.** The
+paragraph that used to sit there called several of these routes "deliberately
+absent", which stopped being true the day the IA was approved — a document saying
+there is no X reads as current guidance and sends the next builder to rebuild the
+debt just paid. Eleven route groups, every one of them marked as **designed and
+not built**, each naming the entity it stands on so that a route resting on
+something unbuilt says so. That marking is the section's whole discipline, and the
+precedent is in the same file: `art_display(show_now|next)` was specified before
+the manifest-only channel was ratified and was unimplementable the day the norm
+landed.
+
+**Three things were decided rather than transcribed:**
+
+- **"Work delete" was the wrong word and the route is archive.** `Artwork.status`
+  has exactly two values and restoration is permitted; a delete route would have
+  been this artifact inventing a destructive operation the data model does not
+  have, and it could not have carried the consequence archive already carries —
+  archiving a pinned work makes a directive unsatisfiable, which `show_now` already
+  refuses on. The IA is corrected, **and so is the interface**: a control labelled
+  *Remove* promises the work is gone. The label is **Archive**, its undo is
+  **Restore**.
+- **Facet counts ride on the works response instead of getting a route**, because
+  they answer the same question the grid answers and two routes would give a
+  curator two answers to it. The cost — recomputing counts on a page that did not
+  change them — is accepted with a revisit trigger rather than optimised away.
+- **Sample reactions write through `/api/affinities`**, not through a conversation
+  route. A reaction and a correction on the Taste screen are the same operation on
+  the same entity, so they are one service method with one route and two callers.
+
+**Two decisions are owed to the operator and were not made here:** whether deleting
+the active theme refuses or cascades (constraint 1 makes them genuinely different
+for someone in the room — the recommendation is refuse), and whether taste earns an
+MCP tool. Tool names are Frozen tier, so adding one is cheap and retiring one is
+not, which argues for deciding late. `DELETE /api/conversations/{id}` is
+deliberately left shapeless behind issue #118.
+
+**`accessibility-spec.md` was written, and it is not the artifact its own
+obligation described.** The IA row called it "mostly a codification job — the token
+test, announced errors, and glyph+word+colour are already practised", which is an
+accurate description of the browser work and would have produced a truthful
+document about the lesser half. `design_decisions.accessibility_approach` has said
+since discovery that this product has **two accessibility surfaces and the
+important one is physical**: the e-paper label, read by household members and
+guests at standing distance, on an unbacklit panel, with no interface to navigate
+and no brightness lever to compensate for getting the type wrong. The spec is
+ordered to say so, and every requirement in it is marked **practised** (with its
+mechanism), **owed** (with what closes it), or **open** (with who can settle it).
+
+**One requirement in it is open, and it is on the surface that matters most.** The
+label's type sizes and margin are provisional placeholders — the operator's
+2026-08-04 look killed the 2024 `"Sans 18"` but was rendered with PIL/DejaVu while
+the product typesets with Pango, so the numbers do not transfer. **Line length is
+worse than provisional: the accessibility decision names it as one of the three
+things carrying legibility and nothing states a bound at all.** All three are one
+judgement and close in one act, at the panel. **Chunk 13B owns it** — it already
+carries `Visual change: yes` and an operator legibility look in its Done-when — but
+its deliverables name only the type size, so the margin and the measure would
+otherwise have been closed by nobody. The spec records that.
+
+**The norm index was under-claiming the surface it says matters most.** Its only
+accessibility row named the browser. The label's two real mechanisms — the panel
+mode that is set and read back, and the drop-rather-than-shrink rule — had no row
+pointing at them, and an enforcement artifact no row names is one a refactor can
+delete with nothing noticing. A row was added, and the WCAG row now points at the
+new artifact instead of at a YAML field.
+
+**Adding it broke `test_norm_index.py`, which was the guard working and then not
+working.** The guard's path pattern knew the root and curation planes and not
+`display/`, and because the pattern is unanchored it did not fail to match — it
+matched the *tail*, `tests/test_epaper.py`, and resolved it against the root plane
+where no such file exists. So a row naming two real, passing display-plane guards
+failed, with a diagnostic pointing at the row rather than at the scanner. **The
+plane set is now derived from the repository rather than listed**, which is the
+third time this index's own machinery has gone stale by carrying a list or a count
+of planes; a fourth plane is picked up by existing. Proven by running the old
+pattern against the new rows and watching both resolve to files that are not there.
+
+**No behaviour changed.** The only executable edit is the guard above.
+
+**Critic (`rev-20260811T124801Z-d86affcd`, cumulative, three reviewers): 0
+blocking, 10 warnings, 10 notes. Six accepted, fourteen fixed.** The four worth
+recording, because each one is a class of mistake rather than a slip:
+
+- **The route set was taken from a debt list, and a debt list is not an inventory.**
+  Reading the screens' own Actions columns instead turned up three designed
+  controls with no route — the Work screen's re-mat, the Walls screen's `next`, and
+  the Health screen's spend history. Worse, the absence paragraph justified the
+  missing mat route with *"re-deriving a mat is an operation `art_catalogue`
+  already has"* — **which is verbatim the reasoning open issue #91 was filed
+  against** ("an agent can change a mat colour and a curator cannot"), restated as
+  though it were a settled decision. #91 now owns that row.
+- **"There is no delete in this product" over-claimed**, four lines under a Theme
+  row carrying a `delete` control and in the same commit designing three DELETE
+  routes. True of works only. Scoped — and the same correction had failed to reach
+  the destinations table and the prototype, which still rendered *Remove*. Fixing
+  the prototype turned up a second-order error the rule itself implies: the control
+  was styled `danger`, and styling a cheap reversible act as destructive produces
+  exactly the hesitation the rule exists to prevent.
+- **The new norm row claimed no signature and was carried as ratified by silence.**
+  It is now **`proposed`**. The drop-rather-than-shrink clause appears in no
+  artifact before this round and its only prior record is the docstring of the
+  chunk whose tests the row names as enforcement — which is the laundering shape
+  whatever the intent, and an owner's sentence is what settles it.
+- **The scanner repair fixed the instance and not the class.** Deriving the plane
+  set from disk left the pattern unanchored, so any prefix not currently a plane —
+  a typo, or a plane whose `tests/` directory does not exist yet — still matched
+  its tail and blamed the root. The prefix is now matched permissively and
+  *checked*, so an unknown plane fails by name. Proven by mutation: `dispaly/`
+  arrives intact and fails naming itself, where before it arrived as
+  `tests/test_epaper.py`.
+
+Also fixed: the margin and a line-length bound are now Chunk 13B **deliverables**
+rather than a note in the spec — the deliverable list is what gets ticked, and two
+of the three settlements would have closed unlooked-at. The three human-interface
+artifacts are registered in `artifact_manifest.artifacts`, so the 13B amendment
+sweep can reach the spec's provisional notes. The MCP deferral now names
+`product-brief.md` item 8 as the parity must-have it defers against, with
+"discovery weights `Affinity`" as its trigger. And the archive rule now names the
+consequence that reaches the room: archiving a work in the *active* theme takes a
+picture off the wall.
+
+Machine-backed evidence over the resolved tree: **2466 passed, 0 failed, 4
+skipped** across the three planes. Ruff and black clean.
+
+**`verify-resolutions` (`rev-20260811T130809Z-50d0cbe6`): 0 blocking, 0 warnings,
+0 notes — the review is over.** All ten prior warnings verified `fixed` by opening
+the files rather than by reading the diff, and the reviewer independently confirmed
+the built code behind the three added rows exists (`("art_display", "next")`,
+`set_mat_color`, `SpendRecord`). All twenty findings are dispositioned: ten fixed,
+ten accepted with recorded reasons.
+
 ## 2026-08-11: The derived mat cannot exceed the corpus, and the vote counts a colour once
 
 <!-- prawduct: status=shipped | scope=v1-build -->

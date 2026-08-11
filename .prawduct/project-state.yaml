@@ -2145,6 +2145,65 @@ design_decisions:
         more than the case — a sentence in a UI is a claim about what the
         software can do, and it needs the same verification as any other claim.
       date: 2026-08-05
+  surface_parity:
+    - decision: >
+        Deleting a theme refuses while that theme is active. Taste (`Affinity`)
+        gets its own MCP tool, `art_taste`, rather than waiting for discovery to
+        weight it. Conversation still gets no MCP twin, and spend history needs
+        no new tool.
+      rationale: >
+        Both were taken by the operator on 2026-08-11, on the two questions
+        `api-contract.md` § The routes the interface design requires had
+        deliberately left open. Recorded here as well as in the artifact because
+        the artifact records what the surface IS, and one of these went against
+        the recommendation — a later reader finding `art_taste` frozen over an
+        unbuilt entity should find that it was chosen, not drifted into.
+
+        Theme delete refuses because the alternatives all change what the
+        household is looking at as a side effect of a tidying action. A third
+        option —
+        promote another theme, then delete — was offered and declined: it needs
+        a promotion rule nobody has written, and it degenerates to a refusal
+        when the theme is the only one. The guard belongs to the service layer,
+        not the HTTP handler, so the MCP twin reaches it too.
+
+        THE QUESTION WAS ASKED AGAINST THE WRONG AUTHORITY, and that is part of
+        this record rather than a footnote to it. `DisplayService.delete_theme`
+        had been enforcing the refusal since it was written; the fork was put to
+        the operator because an artifact described it as open. Critic R-8 caught
+        it. Nothing was decided against the code, but the framing hid a case:
+        the built guard refuses only WHILE ANOTHER THEME EXISTS, and permits
+        deleting the last theme even when it is active.
+
+        That case was put to the operator separately on 2026-08-11 and RATIFIED
+        AS SHIPPED — deleting the last theme stays permitted, and the manifest
+        is deliberately not rewritten, so the wall keeps showing what it was
+        showing rather than going blank as a side effect of tidying. The
+        alternative was stated when asking: refusing unconditionally makes the
+        last theme undeletable forever, because no deactivate operation exists,
+        so a curator could never empty the catalogue. It is a ruling now rather
+        than a builder's reading of a docstring.
+
+        Taste got its tool against the recorded recommendation, which had argued
+        for deferring because tool names are Frozen tier — adding is cheap,
+        retiring is not, so deciding late is the cheap direction. The operator
+        weighed that against the standing cost: `product-brief.md` item 8 makes
+        MCP parity with the web UI a must-have, and a deferral with a "revisit
+        trigger" is a promise nothing enforces. The accepted cost is a frozen
+        name over an entity that does not exist yet — if `Affinity` is reshaped
+        before it is built, the tool name is the part that cannot be reshaped
+        with it.
+
+        The ruling did not travel to the other two deferrals, and they came
+        apart under it. Conversation's deferral never rested on the Frozen
+        argument — the in-UI agent is itself an MCP client, so a model would be
+        reading its own thread back through a tool, and the thing it actually
+        wants is the taste rather than the transcript. Granting taste is what
+        that reasoning asked for. Spend history is not a content-management
+        operation under any reading of item 8, and
+        `art_discovery(action='spend')` already reports across runs by calendar
+        month.
+      date: 2026-08-11
   accessibility_approach: >
     Two surfaces with completely different accessibility profiles, and the
     important one is physical.
@@ -2309,8 +2368,14 @@ design_decisions:
       name is first seen. Verified twice independently: read from
       mcp/server/lowlevel/server.py at 1.28.1, and recorded in 3tears'
       changelog as confirmed against the live dispatch path rather than by
-      reading source. The substitute enumerates the five real tool names in the
-      error result. The carve-out's own reasoning survives it — the case is
+      reading source. The substitute enumerates every tool the server has
+      registered — `[known.name for known in TOOLS]` — in the error result;
+      that is the *declared* set, which from 2026-08-11 is not the same as the
+      set `api-contract.md` § The surface designs, since `art_taste` is frozen
+      and undeclared until the Affinity chunk ships. *(This said "the five real
+      tool names" until 2026-08-11, Critic R-7: the enumeration is real code, so
+      the count here is what would tell that chunk's builder the site exists.)*
+      The carve-out's own reasoning survives it — the case is
       unreachable in practice, because a client only calls names that
       list_tools returned.
     revisit_trigger: "RESOLVED — the MCP tool surface was designed 2026-07-19 and the envelope decided with it."
@@ -2384,6 +2449,36 @@ design_decisions:
 #   priority: high | medium | low
 
 open_questions:
+  - question: "Does the e-paper legibility norm stand as written — specifically, does type never shrink below the floor, with content dropping instead?"
+    context: >
+      The norm row is in `project-preferences.md` and is marked PROPOSED
+      2026-08-11, not ratified. Most of it is a correction rather than a birth:
+      the 16-grey requirement and the mode read-back come from
+      `nonfunctional-requirements.md` § Output Quality, and standing-distance
+      legibility from `design_decisions.accessibility_approach`.
+
+      The part that needs a sentence from the owner is the
+      drop-rather-than-shrink clause, which appears in no artifact earlier than
+      the row itself, and whose only prior record is the `layout.py` docstring
+      written by the very chunk whose tests the row names as its enforcement.
+      That is the laundering shape whatever the intent, which is why it is
+      carried as proposed rather than quietly ratified by use.
+
+      RAISED HERE 2026-08-11 by Critic R-2, and the reason it needed raising is
+      the interesting part: the mechanism that used to put a proposed norm in
+      front of the owner was a row in `information-architecture.md` § Status,
+      and that row was correctly removed in the same bundle — both norms it
+      tracked had been ratified. The replacement was nothing. A row with
+      Mechanism `Test`, two live enforcement artifacts and an audit home reads
+      as binding to the next Critic and to any builder, while the sentence that
+      would ratify or veto it is never solicited.
+    decide_by: >
+      Chunk 13B, the visit to the panel that settles the type sizes, the margin
+      and the line-length bound. The clause is about what happens when type
+      would go below a floor nobody has measured yet, so the same trip answers
+      both — and ratifying it before the floor exists would be ratifying a rule
+      about a number.
+
   - question: "Where does ART_ROOT live on the Pi once the `tvpi` service account exists?"
     context: >
       Raised 2026-08-04, deliberately left open when the service-account NAME was
@@ -2813,6 +2908,30 @@ artifact_manifest:
       file_path: .prawduct/artifacts/boundary-patterns.md
       version: 1
       depends_on: [api-contract, data-model]
+    # The three human-interface artifacts, REGISTERED 2026-08-11. The first two
+    # landed on 2026-08-10 and went unregistered; the third landed with this
+    # entry. Edges mirror each file's own `depends_on:` front matter.
+    #
+    # This was found by Critic review, and the consequence is dated rather than
+    # theoretical: when `design_decisions.accessibility_approach` is amended at
+    # Chunk 13B — the type sizes settle and four "provisional placeholder" notes
+    # are replaced — pass 2 of this repo's three-pass sweep lists every dependent
+    # artifact. With accessibility-spec unedged it would have listed none, and the
+    # spec's own open requirement would have gone stale silently. Which is the
+    # outcome the spec itself calls the worst one: a settled number sitting under
+    # a note that still calls it provisional.
+    - name: information-architecture
+      file_path: .prawduct/artifacts/information-architecture.md
+      version: 1
+      depends_on: [product-brief, data-model, nonfunctional-requirements, api-contract]
+    - name: design-direction
+      file_path: .prawduct/artifacts/design-direction.md
+      version: 1
+      depends_on: [product-brief, information-architecture]
+    - name: accessibility-spec
+      file_path: .prawduct/artifacts/accessibility-spec.md
+      version: 1
+      depends_on: [design-direction, information-architecture, nonfunctional-requirements]
     # Edges mirror build-plan.md's own `depends_on:` front matter. The plan is
     # the most decision-dense artifact here: leaving it unedged would make every
     # decision it rests on unreachable by a dependency walk — precisely the

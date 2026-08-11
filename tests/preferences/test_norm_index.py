@@ -11,8 +11,11 @@ read the row — which is the definition of a rule with no mechanism.
 
 This is the narrow slice of that guard: **an artifact the index names as a test
 must resolve.** The wider check — that a named ruff rule is actually selected in
-the named `pyproject.toml` — needs to resolve rule codes and TOML keys across two
-projects and is deliberately not attempted here.
+the named `pyproject.toml` — needs to resolve rule codes and TOML keys across
+every plane's config and is deliberately not attempted here. *(This said "across
+two projects" until 2026-08-11, written when there were two; the display plane
+made it three on 2026-08-06, which is the same staleness the plane derivation
+below was added to repair, one paragraph away and unnoticed by the same edit.)*
 
 Scoped to the **Enforcement artifact column**, never the Why column. The Why
 column legitimately discusses artifacts that do not exist — the manifest-channel
@@ -30,8 +33,55 @@ import pytest
 REPOSITORY_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 NORM_INDEX = REPOSITORY_ROOT / ".prawduct" / "artifacts" / "project-preferences.md"
 
-#: `tests/…` or `curation/tests/…`, optionally with a `::test_name` node id.
-TEST_REFERENCE = re.compile(r"(?:curation/)?tests/[\w/.\-]+\.py(?:::\w+)?")
+
+#: Every directory in this repository that holds a test tree, as the prefix a
+#: reference to one is written with — `""` for the root plane, `curation/`,
+#: `display/`.
+#:
+#: **Derived rather than listed, and that is a repair.** This was written as a
+#: literal `(?:curation/)?`, correct on the day it was typed and wrong from
+#: 2026-08-06, when the display plane landed with its own suite. The regex is
+#: unanchored, so `display/tests/test_epaper.py` did not fail to match — it
+#: matched the *tail*, `tests/test_epaper.py`, and resolved against the root
+#: plane where no such file exists. A row naming a real, passing display-plane
+#: guard therefore failed this file, and the diagnostic pointed at the row rather
+#: than at the scanner. That is the third time this index's own machinery has gone
+#: stale by carrying a count or a list of planes (see the `black` and `T20` rows
+#: in the artifact), which is why the plane set is now computed here instead: a
+#: fourth plane is picked up by existing.
+def _plane_prefixes() -> list[str]:
+    """`""` for the root plane, then one `name/` per plane that has a test tree."""
+    nested = sorted(path.parent.name + "/" for path in REPOSITORY_ROOT.glob("*/tests") if path.is_dir())
+    return ["", *nested]
+
+
+#: `tests/…` under any leading path, optionally with a `::test_name` node id, with
+#: whatever precedes `tests/` captured as group 1.
+#:
+#: **The prefix is matched permissively and *checked* separately, rather than being
+#: built from the derived plane set.** Deriving the alternation fixed the stale
+#: list and left the failure class untouched: the pattern is unanchored, so any
+#: prefix the alternation did not know still matched the *tail* and resolved
+#: against the root plane. A typo reproduces it exactly — `dispaly/tests/x.py`
+#: yields `tests/x.py` and fails with "no such file" naming a plane the row never
+#: mentioned, which is the misdirected diagnostic the derivation was written to
+#: stop. So does a row written for a plane before its `tests/` directory exists,
+#: which this index has done before (the plane-isolation row, named in the module
+#: docstring above).
+#:
+#: A left-boundary lookbehind alone would be the wrong repair on its own: it turns
+#: the misdirected failure into a *silent non-match*, and a guard that quietly
+#: scans nothing is the failure mode this whole file exists to refuse. So the
+#: prefix is allowed to be any number of segments and is then asserted against the
+#: derived planes by `test_every_named_enforcement_artifact_names_a_real_plane`,
+#: which fails by name.
+TEST_REFERENCE = re.compile(r"(?<![\w/.\-])((?:[\w.\-]+/)*)tests/[\w/.\-]+\.py(?:::\w+)?")
+
+#: The dumbest scan that could find a test reference: no prefix, no node id, no
+#: lookbehind. It exists only to be compared against `TEST_REFERENCE`, so that a
+#: narrowing of that pattern fails as a difference instead of shrinking quietly
+#: past the floor below — see `test_the_pattern_finds_every_reference_a_naive_scan_can_see`.
+_NAIVE_REFERENCE = re.compile(r"tests/[\w/.\-]+\.py")
 
 #: The index named this many test artifacts when the guard was written. The
 #: assertion is `>=`, not `==`: adding a Test row must not fail this file, but a
@@ -100,14 +150,18 @@ def _norm_index_rows() -> list[list[str]]:
     return rows
 
 
+def _enforcement_cells() -> list[str]:
+    """The Enforcement artifact column's raw text, one string per norm row."""
+    return [row[ENFORCEMENT_COLUMN] for row in _norm_index_rows() if len(row) > ENFORCEMENT_COLUMN]
+
+
 def _enforcement_artifacts() -> list[str]:
-    """Every test path named in the norm index's Enforcement artifact column."""
-    return [
-        reference
-        for row in _norm_index_rows()
-        if len(row) > ENFORCEMENT_COLUMN
-        for reference in TEST_REFERENCE.findall(row[ENFORCEMENT_COLUMN])
-    ]
+    """Every test path named in the norm index's Enforcement artifact column.
+
+    `finditer` rather than `findall` because the pattern captures the plane
+    prefix: `findall` would return the group and throw the reference away.
+    """
+    return [match.group(0) for cell in _enforcement_cells() for match in TEST_REFERENCE.finditer(cell)]
 
 
 def test_every_norm_index_row_has_the_shape_the_parser_assumes():
@@ -209,6 +263,29 @@ def test_the_index_still_names_test_artifacts_at_all():
 
 
 @pytest.mark.parametrize("reference", _enforcement_artifacts())
+def test_every_named_enforcement_artifact_names_a_real_plane(reference):
+    """A reference under an unknown plane must fail by name, never by its tail.
+
+    This is the half of the 2026-08-11 repair that the derived plane set did not
+    buy on its own. `TEST_REFERENCE` matches the prefix permissively, so a typo
+    (`dispaly/tests/test_epaper.py`) or a plane whose `tests/` directory does not
+    exist yet arrives here intact instead of being silently truncated to
+    `tests/test_epaper.py` and reported as missing from the root plane — a
+    diagnostic that names a plane the row never mentioned and sends the reader to
+    the wrong file. The sibling test below then answers the different question of
+    whether the file is there.
+    """
+    prefix = reference[: reference.index("tests/")]
+    planes = _plane_prefixes()
+    assert prefix in planes, (
+        f"the norm index names {reference}, whose plane prefix {prefix!r} is not a test tree in "
+        f"this repository. Known planes: {planes}. Either the prefix is misspelled, or the plane "
+        "exists without a `tests/` directory — in which case the row is naming a mechanism that "
+        "cannot run yet."
+    )
+
+
+@pytest.mark.parametrize("reference", _enforcement_artifacts())
 def test_every_named_enforcement_artifact_resolves(reference):
     """A named file must exist, and a named `::test` must be defined in it."""
     path_text, _, test_name = reference.partition("::")
@@ -243,6 +320,35 @@ def test_every_named_enforcement_artifact_resolves(reference):
 UNCOVERED_HEADER = "| Guard | Ruling (owner, 2026-08-06) | Reasoning |"
 
 
+def _uncovered_guard_cells() -> list[str]:
+    """The Guard column's raw text, one string per deliberately-uncovered row.
+
+    **Owns the anchor assertion rather than trusting a caller to have made it.**
+    This was briefly split — the assertion in `_deliberately_uncovered_artifacts`
+    and the walk here — and the cross-check at the end of this file calls this one
+    directly, so a moved header would have reached it as a bare `ValueError` out of
+    `list.index` and lost the written diagnostic entirely. In the file whose stated
+    posture is "fix the anchor deliberately rather than letting this guard scan
+    nothing", a guard that dies without saying which anchor moved is the same
+    failure wearing a traceback.
+    """
+    lines = [line.rstrip() for line in NORM_INDEX.read_text(encoding="utf-8").splitlines()]
+    assert UNCOVERED_HEADER in lines, (
+        f"{NORM_INDEX.name} has no deliberately-uncovered table matching:\n  {UNCOVERED_HEADER}\n"
+        "It moved or its columns were renamed. Fix the anchor deliberately rather than letting "
+        "this guard scan nothing."
+    )
+    cells: list[str] = []
+    for line in lines[lines.index(UNCOVERED_HEADER) + 1 :]:
+        if not line.startswith("|"):
+            break
+        body = line.strip().strip("|")
+        if set(body) <= set("-:| "):
+            continue
+        cells.append(body.split("|")[0])
+    return cells
+
+
 def _deliberately_uncovered_artifacts() -> list[str]:
     """Every test reference named in the deliberately-uncovered table's Guard column.
 
@@ -251,21 +357,10 @@ def _deliberately_uncovered_artifacts() -> list[str]:
     index says "this guard enforces a stated norm", and this table says "this
     guard exists and is deliberately not that".
     """
-    lines = [line.rstrip() for line in NORM_INDEX.read_text(encoding="utf-8").splitlines()]
-    assert UNCOVERED_HEADER in lines, (
-        f"{NORM_INDEX.name} has no deliberately-uncovered table matching:\n  {UNCOVERED_HEADER}\n"
-        "It moved or its columns were renamed. Fix the anchor deliberately rather than letting "
-        "this guard scan nothing."
-    )
-    found: list[str] = []
-    for line in lines[lines.index(UNCOVERED_HEADER) + 1 :]:
-        if not line.startswith("|"):
-            break
-        body = line.strip().strip("|")
-        if set(body) <= set("-:| "):
-            continue
-        found.extend(TEST_REFERENCE.findall(body.split("|")[0]))
-    return found
+    # `finditer` and `group(0)` for the same reason as the sibling parser: the
+    # pattern captures the plane prefix, so `findall` returns that group and
+    # discards the reference it was found in.
+    return [match.group(0) for cell in _uncovered_guard_cells() for match in TEST_REFERENCE.finditer(cell)]
 
 
 @pytest.mark.parametrize("reference", _deliberately_uncovered_artifacts())
@@ -307,4 +402,57 @@ def test_the_deliberately_uncovered_table_is_not_empty():
     assert _deliberately_uncovered_artifacts(), (
         "no test references found in the deliberately-uncovered table — either its Guard column "
         "stopped naming files, or the parser above no longer finds the table it names"
+    )
+
+
+#: Both columns `TEST_REFERENCE` is run over, for the cross-check below. Listed as
+#: a pair rather than checked in one place because the two tables are parsed
+#: separately on purpose (see `_deliberately_uncovered_artifacts`) and a narrowing
+#: of the shared pattern hits both — covering only the norm index would be this
+#: file's own "a repair that fixes the instance leaves the class untouched".
+_SCANNED_COLUMNS = [
+    ("the norm index's Enforcement column", _enforcement_cells, _enforcement_artifacts),
+    ("the deliberately-uncovered table's Guard column", _uncovered_guard_cells, _deliberately_uncovered_artifacts),
+]
+
+
+@pytest.mark.parametrize(
+    ("column", "cells_of", "found_by"),
+    _SCANNED_COLUMNS,
+    ids=["norm-index-enforcement", "deliberately-uncovered-guard"],
+)
+def test_the_pattern_finds_every_reference_a_naive_scan_can_see(column, cells_of, found_by):
+    """Guards the guard against scanning *less*, which the floor above cannot see.
+
+    `MINIMUM_KNOWN_REFERENCES` catches an extraction that collapses to nothing. It
+    cannot catch one that collapses partway: narrow `TEST_REFERENCE` so it stops
+    matching prefixed references and the curation and display rows vanish while the
+    root-plane ones still clear a floor of three — the suite green over exactly the
+    rows the 2026-08-11 plane repair was written to protect. That is the
+    `test_plane_isolation.py` incident (a row naming a file that never existed, live
+    for months) arriving by a second route.
+
+    So this compares the compiled pattern against the dumbest scan that could work.
+    `_NAIVE_REFERENCE` has no prefix group, no node-id tail and no lookbehind, and
+    every string it can find is one `TEST_REFERENCE` must also find — the compiled
+    match starts earlier and ends later over the same `tests/….py`. A count that
+    disagrees means the pattern was narrowed, and it fails by the difference rather
+    than by a number somebody has to maintain. Raising the floor by hand each time a
+    row is added is the maintained-count shape the plane derivation was written to
+    retire; this is the same reasoning applied to the other axis.
+
+    Run over **both** columns the pattern is used on. The first version covered the
+    norm index only, which left the identical shrink silently passing one table
+    over — the failure this repo has a rule about, committed in the fix for its own
+    first instance.
+    """
+    naive = [match.group(0) for cell in cells_of() for match in _NAIVE_REFERENCE.finditer(cell)]
+    found = found_by()
+
+    missed = sorted(set(naive) - {reference[reference.index("tests/") :].split("::")[0] for reference in found})
+    assert not missed, (
+        f"a naive scan of {column} finds {len(naive)} test references and TEST_REFERENCE finds "
+        f"{len(found)}; these are visible to the dumb scan and not to the compiled one: {missed}. "
+        "The pattern was narrowed and is now scanning less than the table names — the failure "
+        "this file exists to refuse, arriving as a shrink rather than as a zero."
     )

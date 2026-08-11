@@ -8,11 +8,68 @@ here with no body under it is not an entry that lost its evidence; it is one who
 evidence is in that file. Entries written before 2026-07-31 still carry theirs
 inline, which the record linter flags; moving them is tracked as issue #26.
 
+**Position in this file does not encode time — new rules go at the top, under the
+descent obligation.** Stated 2026-08-11 (Critic R-18) because both habits were
+alive in the same week: some rounds appended, this one inserted. A reviewer
+resolving two rules that genuinely conflict would otherwise reach for "later in
+the file is later in time", which would read the newest three as the oldest. Date
+a rule if its recency matters; never infer recency from where it sits.
+
 <!-- prawduct:descent-obligation — the statement below is the HOME of the
      descent rule; `/prawduct:learnings` points here rather than restating
      it. Reword the prose freely; keep this marker, above the first rule. -->
 
 **Reading a rule is not applying it.** The failure mode of a learnings file is not absence, it is assent: a rule arrives at the right moment, is read, is agreed with, and changes nothing, because nothing made you recognize the case in hand as an instance of it. So for any rule you read here, name the decision you are about to make and say what the rule changes about it — or say that it does not apply, which is also an answer.
+
+## Before putting a decision to the owner, check whether the code already made it
+
+**When** an artifact records a question as open — a fork, a "recommendation:", a
+decision "owed to the operator" — **grep the implementation for the behaviour
+before you ask**, and put the built behaviour in the question if it exists.
+**Because** an artifact says what was designed and code says what runs; asking
+against the artifact alone can spend the owner's one decision on a question that
+was settled in a service method, and their answer then arrives with no way to tell
+whether it ratified the code, contradicted it, or never saw it.
+
+The sharper half: **the sub-cases the code handles are the ones the artifact's
+framing hides.** Here the built guard refused the active theme *only while another
+existed* — the last-theme case had a documented rationale and was invisible to a
+question posed from the artifact, so the owner ruled on two options while a third
+behaviour shipped underneath them.
+
+## An invariant stated as an absolute is a claim someone will act on
+
+**When** you write or cite a constraint as "exactly one" / "always" / "never",
+**check what the store or the guard actually enforces** and state that instead.
+**Because** an absolute is not a stronger version of a bounded claim, it is a
+different claim — a partial unique index enforcing *at most* one reads as "exactly
+one" to everyone downstream, and the reasoning built on top of it inherits an
+invariant the system has never had.
+
+## A list written to record a DEBT is not an inventory of a SURFACE
+
+**When** you build a set of operations, routes or requirements from a list in a
+§ Status table, a handoff file or a backlog item, **derive it from the thing itself
+instead** — the screens' own action columns, the entities, the code — and use the
+debt list only to check what you found. **Because** a debt list was written to
+answer "what do we still owe?", which is a smaller question than "what is there?",
+and it is complete only about the moment it was written.
+
+## A repair that fixes the instance can leave the failure class untouched
+
+**When** you fix a stale constant, list or count by deriving it, **ask separately
+what happens to an input the derivation still does not know** — and make that input
+fail by name rather than by falling through to a default. **Because** derivation
+removes today's wrong value and usually leaves the mechanism that made a wrong
+value silent, so the next occurrence looks identical to the one you just paid for.
+
+## A rule about a control binds its styling and its label, not just its word
+
+**When** you rule that an action must be named for what it really does, **check how
+it is presented as well** — destructive styling on a reversible act makes the same
+false promise the wrong word did. **Because** the reason for the rule is the
+hesitation a false promise causes, and colour reaches the reader before the label
+does.
 
 ## A measured behaviour and an explanation of it are separate claims
 
