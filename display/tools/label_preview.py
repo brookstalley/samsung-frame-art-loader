@@ -25,10 +25,14 @@ Stop the unit for the pass and start it again afterwards, or the two contend for
 the same bus:
 
     sudo systemctl stop display.service
-    cd /opt/samsung-frame-art-loader/display && sudo -u tvpi env HOME=/var/lib/tvpi \\
-        /usr/local/bin/uv run --group raster --group epaper \\
+    cd <checkout>/display && sudo -u <service-user> env HOME=<service-home> \\
+        uv run --group raster --group epaper \\
         python tools/label_preview.py --panel --title-px 34 --measure-em 26
     sudo systemctl start display.service
+
+The reference deployment's actual paths for that invocation are in
+`deploy/README.md` § The cutover, which is where machine-specific values belong —
+this file must not name them, per the deployment-values norm.
 """
 
 import argparse

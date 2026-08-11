@@ -39,7 +39,17 @@ def rasterizer() -> PangoRasterizer:
 def a_layout(text: str = "Cat Litter", *, size_px: int = 12, y_px: int = 5, surface: Geometry = AWKWARD) -> Layout:
     return Layout(
         surface=surface,
-        blocks=(Block(text=text, size_px=size_px, x_px=surface.margin_px, y_px=y_px, width_px=0, height_px=0),),
+        blocks=(
+            Block(
+                text=text,
+                size_px=size_px,
+                x_px=surface.margin_px,
+                y_px=y_px,
+                width_px=0,
+                height_px=0,
+                wrap_px=surface.text_width_px,
+            ),
+        ),
         dropped=(),
     )
 

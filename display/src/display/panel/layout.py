@@ -34,9 +34,10 @@ from typing import Final
 #: else. **PROVISIONAL, and now known to be wrong rather than merely unsettled.**
 #: Measured against the reference deployment on 2026-08-11 — a 6-inch, ~300 PPI
 #: panel read from 7 feet — `BODY_SIZE_PX` gives a cap height of **2.5 arcminutes**
-#: against the **5** that 20/20 vision needs to resolve a letter at all. These are
-#: roughly 4× too small for that wall, and they survived every check the product
-#: had because nothing here knew the viewing distance.
+#: against the **5** that 20/20 vision needs to resolve a letter at all: **2× too
+#: small merely to be resolvable, and 5× against the 12.4′ the operator then
+#: settled as comfortable at that distance.** They survived every check the
+#: product had, because nothing here knew the viewing distance.
 #:
 #: **They are placeholders for a derivation, not for a judgement.**
 #: `accessibility-spec.md` § "The type floor is derived from viewing distance, not
@@ -68,10 +69,13 @@ LEADING: Final[float] = 0.35
 #: of pinning one and distorting the other. At the ~0.5em average glyph width
 #: typical of text faces this lands near the middle of that range.
 #:
-#: **PROVISIONAL — no one has read this panel at standing distance yet.** It is
-#: the third of the three settlements that have to be made together, since a
-#: measure depends on the face and the size and a narrower one costs lines to the
-#: drop rule. Whoever settles it replaces this note as well as the number.
+#: **PROVISIONAL, and it currently binds — which it will stop doing.** At the
+#: placeholder sizes above, 30 em is 780–1200 px against 1368 px of usable width on
+#: the reference panel, so the bound is what wraps a long body line today. Once the
+#: sizes derive from the operator's 12.4′ floor (~130 px), 30 em is 3900 px and the
+#: panel edge always governs first: the bound goes inert on *this* wall while
+#: staying the mechanism that matters on a device drawing its label into the mat
+#: area around an artwork. Whoever lands that derivation replaces this note.
 MEASURE_EM: Final[float] = 30.0
 
 
@@ -135,6 +139,15 @@ class Block:
     y_px: int
     width_px: int
     height_px: int
+    #: The width this block was measured at, and the width it must be drawn at.
+    #: **Carried rather than recomputed, because the two sides silently disagreed
+    #: once.** The measure bound narrows a line below the surface width, so a
+    #: renderer that wrapped at the surface width instead would draw one row where
+    #: two were measured: the drawn line runs past its bound, every block below it
+    #: sits a row lower than the ink, and the drop rule sheds a line the panel
+    #: would have held. Nothing about that is visible until somebody is standing
+    #: in front of the panel.
+    wrap_px: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,7 +201,8 @@ def _place(lines: tuple[str, ...], surface: Geometry, measure: Measure) -> list[
     y = surface.margin_px
     for index, text in enumerate(lines):
         size = _size_for(index)
-        extent = measure(text, size, _wrap_width_for(size, surface))
+        wrap = _wrap_width_for(size, surface)
+        extent = measure(text, size, wrap)
         blocks.append(
             Block(
                 text=text,
@@ -197,6 +211,7 @@ def _place(lines: tuple[str, ...], surface: Geometry, measure: Measure) -> list[
                 y_px=y,
                 width_px=extent.width_px,
                 height_px=extent.height_px,
+                wrap_px=wrap,
             )
         )
         y += extent.height_px + round(size * LEADING)

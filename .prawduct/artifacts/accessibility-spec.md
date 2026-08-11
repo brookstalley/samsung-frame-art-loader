@@ -155,6 +155,33 @@ and every check the product had passed while it was.
   calibrates it once by eye; every future deployment inherits it and supplies only
   its own distance.
 
+**Calibrated at the panel 2026-08-11, and these are the settled numbers.** The
+operator read a six-row ladder (160/130/110/92/76/64 px) from the viewing position
+in normal room light and reported three things:
+
+| Reading | px | Cap height | What it settles |
+|---|---|---|---|
+| Comfortable at a glance | 130 | **12.4′** | `min_cap_arcmin`, the primary tier |
+| Made out with effort | 110 | 10.5′ | Not a target — the squint boundary, recorded so nobody aims at it |
+| Acceptable if a reader steps closer | 92 | **8.8′** | The absolute floor; nothing is set below it, ever |
+
+**So there are two floors, and that is the two-distance label made numeric.**
+Museum practice sets the identification block for the approach and the extended
+text for whoever walks up; the operator reached the same split independently, by
+naming a size acceptable only when closer. The family name carries the primary
+tier at 12.4′ and everything else steps down to the 8.8′ floor.
+
+**The measured number is larger than the derived one**, which is the argument for
+having measured it. A defensible 10′ taken from legibility literature would have
+set the primary tier ~20% too small, and that error is invisible to everyone
+except the person who cannot read it.
+
+**The ladder was set in regular weight, so this floor is conservative.** Stroke
+weight matters disproportionately on a reflective panel, where contrast rather
+than resolution is the limit, and the family name is set bold. Bold may reach the
+same comfort a size step down — worth measuring before spending the panel's
+budget on size that weight could have bought.
+
 `cap_ratio` is the face's cap height as a fraction of its em — ~0.70 for the text
 faces this product sets. It is stated rather than measured because it varies
 little across the faces in scope, and because a floor that is 3% conservative is
@@ -291,7 +318,7 @@ a settled number under a note calling it provisional is worse than either.
 > panel visit is the expensive part. Recording the gap in this artifact was not
 > enough; it is now in the plan, where it gets ticked.*
 
-### Line length has a bound, and on this panel it does not bite
+### Line length has a bound, and this panel will stop reaching it
 
 **Practised** — `MEASURE_EM` in `display/src/display/panel/layout.py`, added
 2026-08-11. `design_decisions.accessibility_approach` names three things that
@@ -307,13 +334,17 @@ one unit available there, and it scales the title and the body together instead 
 pinning one and distorting the other. The bound only ever narrows: a device
 smaller than the measure is a device whose margins still win.
 
-**It is inert on the reference panel, and saying so is the point.** Once the type
-sizes are derived from the 7-foot floor, a line is 100+ px per em against 1328 px
-of usable width — the panel edge always governs first, and the em bound is never
-reached. It is not dead code: the norm is device-independent, and a device drawing
-its label into the mat area around an artwork on a wide monitor is exactly where a
-measure has to exist. But nobody should read `MEASURE_EM` as a control that is
-doing something on this wall, because it is not.
+**Today it binds; after the floor lands it will not, and both halves need saying.**
+At the placeholder sizes still in source, 30 em is 780–1200 px against 1328 px of
+usable width, so the bound is what wraps a long body line right now. Once the
+sizes derive from the operator's 12.4′ floor (~130 px), 30 em is 3900 px, the panel
+edge always governs first, and the bound goes inert **on this wall**.
+
+That is not dead code and it is not a reason to drop it: the norm is
+device-independent, and a device drawing its label into the mat area around an
+artwork on a wide monitor is exactly where a measure has to exist. But once the
+derivation lands, nobody should read `MEASURE_EM` as a control doing something on
+the reference panel, because it will not be.
 
 ### Nothing may reason about a panel's geometry anywhere but on that panel
 

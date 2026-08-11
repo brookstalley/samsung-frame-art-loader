@@ -550,8 +550,10 @@ carry rather than rediscover.** Post-reboot diagnosis has to come from somewhere
 other than the journal — the health surface's heartbeat age, or the catalogue —
 which is a constraint on how failures are made visible, not merely a missing
 convenience. And the top operational risk keeps its narrowest form: nothing this
-product does writes continuously to the card except the display heartbeat, whose
-writer is not built.
+product does writes continuously to the card except the display heartbeat. **That
+writer is built and has been running unattended since the 2026-08-11 cutover**,
+writing into `/srv/art` on the Pi — so this risk is live rather than pending, and
+the wear path it names is the one currently in use.
 
 The pre-acquisition free-space guard is unrelated to any of this: it is
 curation-side and checks before a fetch.

@@ -223,6 +223,16 @@ class TestTheMeasure:
 
         assert {line[2] for line in seen} == {narrow.text_width_px}
 
+    def test_a_block_carries_the_width_it_was_measured_at(self):
+        """**The seam between measuring and drawing.** A renderer that wrapped at
+        the surface width would draw one row where two were measured, putting
+        every block below it a row lower than the ink. The block carries the
+        number so the two sides cannot disagree."""
+        seen: list[tuple[str, int, int]] = []
+        layout = lay_out(("Chicago", "Georgia O'Keeffe", "American"), PANEL, self.recording(seen))
+
+        assert [block.wrap_px for block in layout.blocks] == [line[2] for line in seen]
+
     def test_the_bound_is_what_makes_a_long_line_wrap(self):
         """Behavioural rather than about the wrap number: the same line on the
         same surface occupies more rows with the bound than the panel alone

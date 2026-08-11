@@ -203,8 +203,14 @@ def test_no_source_file_carries_a_deployment_value(monkeypatch):
     # once the legacy modules are retired, and this test is the enforcement
     # artifact `project-preferences.md` names for that norm — so a plane it never
     # walks is a norm nobody is checking.
+    # **`tools` as well as `src`, because a tool is where a real machine path is
+    # most tempting.** Its docstring is the thing an operator copies, so naming the
+    # deployment's own checkout and service account there reads as helpful — and it
+    # puts a deployment value in source just as surely as a constant would. That is
+    # not hypothetical: `label_preview.py` acquired exactly those paths and this
+    # guard did not walk the directory it acquired them in.
     modules = sorted(repository_root.glob("*.py"))
-    for plane in ("curation/src", "display/src"):
+    for plane in ("curation/src", "display/src", "curation/tools", "display/tools"):
         modules.extend(sorted((repository_root / plane).rglob("*.py")))
     assert modules, f"expected the 2024 modules at {repository_root}; has the layout moved?"
     # **One canary per plane, because `rglob` over a missing directory is silent.**
@@ -212,7 +218,7 @@ def test_no_source_file_carries_a_deployment_value(monkeypatch):
     # on passing over the planes that remain — which is the same vacuous-green this
     # test's own comment says a plane it never walks would produce. Asserting only
     # curation left the display plane in exactly that position.
-    for plane in ("curation/src", "display/src"):
+    for plane in ("curation/src", "display/src", "curation/tools", "display/tools"):
         assert any(
             plane in str(path) for path in modules
         ), f"expected a plane under {repository_root}/{plane}; has the layout moved?"

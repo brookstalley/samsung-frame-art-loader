@@ -79,7 +79,7 @@ def a_surface(**kwargs) -> EpaperSurface:
 
 
 def a_layout() -> Layout:
-    block = Block(text="Cat Litter", size_px=4, x_px=1, y_px=1, width_px=6, height_px=2)
+    block = Block(text="Cat Litter", size_px=4, x_px=1, y_px=1, width_px=6, height_px=2, wrap_px=6)
     return Layout(surface=GEOMETRY, blocks=(block,), dropped=())
 
 

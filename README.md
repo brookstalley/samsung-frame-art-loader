@@ -31,10 +31,18 @@ stopped being the answer to "what runs the wall" some time before this, not at t
 cutover. Those modules are still present and are deleted at the legacy retirement.
 
 **What remains is what only a person standing in front of the hardware can do**:
-the label's type sizes, its margin and a line-length bound, all three still marked
-provisional in source; the check that a rotation still completes with a second
-subscriber attached; and an unattended run across a television power-cycle. The
-label renders into a surface today and **has never been drawn onto e-ink**.
+the check that a rotation still completes with a second subscriber attached, and
+an unattended run across a television power-cycle — both of which need the
+television, not the panel.
+
+**The label reached e-ink on 2026-08-11**, which it never had before: rotation
+does not run while the set is in standby, so the label path had never executed on
+hardware at all. The operator read a type ladder from the viewing position and
+settled the floor at **12.4 arcminutes** of cap height, with 8.8′ as the absolute
+minimum for content a reader steps closer for. The type sizes in source are still
+the provisional ones — they are now *known* wrong rather than unsettled, and what
+replaces them is a floor derived from viewing distance and panel PPI rather than
+three numbers judged by eye.
 
 ## Where things are written down
 
