@@ -18,10 +18,7 @@ those differ is marked **CHANGE** with the reasoning.
 
 ## Direction
 
-<!-- NOT YET RATIFIED. Proposed 2026-08-10 with this artifact. Enforcement row in
-     project-preferences.md, which records it as proposed. The owner approved this
-     navigation model across four review rounds but was never asked to ratify it as
-     a binding norm, and this artifact will not claim a signature it did not get. -->
+<!-- Ratified by the owner 2026-08-11. Enforcement row in project-preferences.md. -->
 
 **The curation surface is organised around what a curator does, never around the
 pipeline's stages.** Three destinations — the Walls, Collection, Discover — and a
@@ -38,10 +35,14 @@ out to do, not by being a subsystem that acquired a UI.
 > destination that names a stage rather than an intention, which has no import
 > signature and no grep.
 >
-> **Status:** proposed, unratified.
+> **Status:** steady-state. Ratified by the owner 2026-08-11, together with the
+> token norm in `design-direction.md`.
 >
-> **Retroactivity:** the built surface does not conform, and this artifact is the
-> plan for making it do so. No code changed on the commit that introduced this.
+> **Retroactivity:** the built surface does **not** conform — five tabs named for
+> pipeline stages — and this artifact is the plan for making it do so. The norm was
+> ratified in that state deliberately: it binds the work that reshapes the surface,
+> and a norm written only after the code already agreed with it would have bound
+> nothing. No code changed on the commit that introduced it.
 
 **A working prototype of everything below is committed beside this file:**
 `prototypes/curation-ia-prototype.html` — one self-contained page, no build step,

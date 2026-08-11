@@ -16,11 +16,7 @@ does, the stylesheet wins; where it states a rule, the rule binds.
 
 ## Direction
 
-<!-- NOT YET RATIFIED. Proposed 2026-08-10 with this artifact. Enforcement row in
-     project-preferences.md, which records it as proposed. The owner approved the
-     design this norm describes; they have not been asked to ratify it as binding,
-     and this artifact will not claim a signature it did not get. Ratifying it is
-     one sentence from the owner. -->
+<!-- Ratified by the owner 2026-08-11. Enforcement row in project-preferences.md. -->
 
 **The stylesheet is the source of truth for token values, and this artifact is the
 source of truth for the rules about them.** `curation/src/curation/http/static/app.css`
@@ -39,13 +35,14 @@ colour written outside the token blocks**.
 > scope. Any token added below must land inside that scope, or it is an unguarded
 > colour wearing a token's name.
 >
-> **Status:** proposed, unratified. *(This read "steady-state" until 2026-08-11 —
-> a word left over from drafting the norm before the ratification question was
-> asked, and it contradicted the comment above it. A norm claiming to be settled
-> five lines under a notice saying it is not is worse than either reading alone.)*
+> **Status:** steady-state. Ratified by the owner 2026-08-11, together with the
+> navigation norm in `information-architecture.md`.
 >
-> **Retroactivity:** the revised palettes are not in `app.css`, so the norm's own
-> subject does not yet conform. It binds the chunk that lands them.
+> **Retroactivity:** the revised palettes are **not** in `app.css`, so the norm's
+> own subject does not conform on the day it was ratified. That is deliberate and
+> is not a grace period — it names the chunk that owes the work. Until those values
+> land in the stylesheet they are hand-checked and ungoverned, and this norm is
+> what says so.
 
 ## Visual Identity
 
