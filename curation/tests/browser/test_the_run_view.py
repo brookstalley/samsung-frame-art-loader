@@ -170,7 +170,10 @@ def test_leaving_the_run_view_stops_its_polling(at_the_gate):
     ui.open(f"#run/{RUN_ID}")
     ui.page.wait_for_selector("button:has-text('Approve the list')")
 
-    ui.page.click("nav.tabs button[data-view='health']")
+    # Health left the navigation in the reshape, so the way to it is the
+    # masthead indicator that replaced the tab. What this test is about is
+    # unchanged: navigating away from a run must stop its watch.
+    ui.page.click("#status")
     ui.page.wait_for_selector("h2:has-text('Health')")
 
     settled = len(ui.requests_matching(f"/api/runs/{RUN_ID}"))
@@ -468,7 +471,7 @@ def test_a_truncated_search_list_says_how_much_history_it_is_not_showing(ui):
     """
     ui.serve("**/api/runs*", _a_run_list(count=50, total=407))
 
-    ui.open("#discovery")
+    ui.open("#discover")
     ui.page.wait_for_selector("h3:has-text('Searches')")
 
     text = ui.text()
@@ -480,7 +483,7 @@ def test_a_complete_search_list_says_nothing_about_truncation(ui):
     """Saying nothing is the honest answer when nothing was left behind."""
     ui.serve("**/api/runs*", _a_run_list(count=4, total=4))
 
-    ui.open("#discovery")
+    ui.open("#discover")
     ui.page.wait_for_selector("h3:has-text('Searches')")
 
     text = ui.text()

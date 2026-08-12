@@ -121,6 +121,41 @@ def test_every_control_boundary_clears_the_non_text_floor(scheme, token, surface
     assert ratio >= UI_CONTRAST_FLOOR, f"{scheme}: --{token} on --{surface} is {ratio:.2f}:1"
 
 
+#: The semantic status tokens, each with the quiet ground it is read on.
+#:
+#: These landed with the palette and were consumed by nothing, so the pair
+#: computation above — text tokens over surface tokens — never reached them and
+#: `project-preferences.md` recorded them as hand-checked and ungoverned. The
+#: masthead status indicator is the first component to read one, and this is what
+#: closes that residue: `--good` on `--good-quiet` is a phrase a curator reads,
+#: so it is held to the text floor like any other.
+#:
+#: `--crit` is here though nothing uses it yet, and deliberately. Its pair is a
+#: fact about the palette rather than about the component, and the moment to find
+#: out it does not clear is before something renders in it.
+STATUS_PAIRS = [(scheme, token) for scheme in SCHEMES for token in ("good", "warn", "crit")]
+
+
+@pytest.mark.parametrize(("scheme", "token"), STATUS_PAIRS)
+def test_every_status_colour_clears_aa_on_its_own_quiet_ground(scheme, token):
+    tokens = SCHEMES[scheme]
+    ratio = _ratio(tokens[token], tokens[f"{token}-quiet"])
+    assert ratio >= TEXT_CONTRAST_FLOOR, f"{scheme}: --{token} on --{token}-quiet is {ratio:.2f}:1"
+
+
+@pytest.mark.parametrize(("scheme", "token"), STATUS_PAIRS)
+def test_a_status_ground_keeps_its_control_boundary(scheme, token):
+    """The indicator is a button, and its border has to stay findable on it.
+
+    WCAG 1.4.11's floor, applied to the one control that changes its own
+    background: a boundary that disappears when the state goes wrong is a
+    boundary missing exactly when the control matters most.
+    """
+    tokens = SCHEMES[scheme]
+    ratio = _ratio(tokens["border-strong"], tokens[f"{token}-quiet"])
+    assert ratio >= UI_CONTRAST_FLOOR, f"{scheme}: --border-strong on --{token}-quiet is {ratio:.2f}:1"
+
+
 def test_the_accent_is_legible_both_as_text_and_beneath_its_own_label():
     """The accent is read two ways — as a link, and as a button someone reads text on."""
     for scheme, tokens in SCHEMES.items():
@@ -159,7 +194,7 @@ def test_the_rules_that_check_was_run_against_are_most_of_the_stylesheet():
     """
     css = (STATIC_DIR / "app.css").read_text(encoding="utf-8")
     assert len(COMPONENT_RULES) > len(css) * 0.5, "the token-block cut removed most of the stylesheet"
-    for selector in (".card-image", ".badge", "button.action", "nav.tabs button", ".skip-link", ":focus-visible"):
+    for selector in (".card-image", ".badge", "button.action", "nav.destinations button", ".skip-link", ":focus-visible"):
         assert selector in COMPONENT_RULES, f"{selector} is not in the text the colour check reads"
 
 

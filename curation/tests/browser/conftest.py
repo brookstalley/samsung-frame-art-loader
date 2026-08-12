@@ -98,6 +98,80 @@ def work_with_an_image(service, settings, decodable_jpeg):
     return _work
 
 
+@pytest.fixture
+def a_health_reading():
+    """`GET /api/health` as `api-contract.md` fixes it: one heartbeat per wall.
+
+    **Hand-written, which `payloads.py` beside this file forbids for good
+    reason** — every builder there is composed from the API's own response models
+    so that a model change breaks the test rather than the product. That rule is
+    departed from here deliberately and narrowly: the aggregate shape is owned by
+    the chunk that makes the manifest per-wall, `HealthOut` in this tree still
+    carries one top-level heartbeat, and a builder composed from it would encode
+    the shape the client is specifically no longer written against. Building from
+    the model here would pin the *old* contract with the authority of the new
+    one.
+
+    It stops being a departure the moment `HealthOut` carries `walls`: this
+    fixture is then one `model_dump` and should become one.
+
+    Every field is overridable, because what these tests vary is exactly which
+    observation is wrong.
+    """
+
+    def _reading(*, walls=None, backup=None, description="Every wall has reported.", artwork_box=None):
+        return {
+            "walls": [_a_wall()] if walls is None else walls,
+            "description": description,
+            "backup": _a_backup() if backup is None else backup,
+            "artwork_box": artwork_box or {"width": 3840, "height": 2160, "pixels_per_inch": 72.0, "floor_inches": 20.0},
+        }
+
+    return _reading
+
+
+def _a_wall(*, wall_id="wall-1", name="The living room", absent=False, problem=None, age_seconds=41.2):
+    return {
+        "wall_id": wall_id,
+        "wall_name": name,
+        "heartbeat": {
+            "path": f"/art/display-heartbeat-{wall_id}.json",
+            "reported_at": None if absent else "2026-08-12T09:14:02+00:00",
+            "age_seconds": None if absent else age_seconds,
+            "absent": absent,
+            "problem": problem,
+            "description": (
+                f"No heartbeat file exists for {name}; the display plane has not reported yet."
+                if absent
+                else f"The display plane last reported {age_seconds:.0f} seconds ago."
+            ),
+            "reported": None if absent else {"reported_at": "2026-08-12T09:14:02+00:00"},
+        },
+    }
+
+
+def _a_backup(*, absent=False, problem=None):
+    return {
+        "path": "/art/backup-receipt.json",
+        "completed_at": None if absent else "2026-08-12T03:00:00+00:00",
+        "age_seconds": None if absent else 22440.0,
+        "absent": absent,
+        "problem": problem,
+        "description": "No backup has been recorded." if absent else "The catalogue was last backed up 6 hours ago.",
+        "reported": None if absent else {"completed_at": "2026-08-12T03:00:00+00:00"},
+    }
+
+
+@pytest.fixture
+def a_wall_reading():
+    return _a_wall
+
+
+@pytest.fixture
+def a_backup_reading():
+    return _a_backup
+
+
 class Ui:
     """The page under test, with the few things every test here needs.
 
