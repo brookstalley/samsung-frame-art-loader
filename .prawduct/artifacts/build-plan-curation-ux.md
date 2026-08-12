@@ -161,6 +161,9 @@ waiting on chunks that never needed each other.
 | Wave | Runs concurrently | Model | Why they do not collide |
 |---|---|---|---|
 | 0 | **01** (keystone), **03** (palette), the **Chunk 10 `verify-api` probe**, the **Chunk 06 corpus seed** | 01 opus · 03 sonnet · probe opus · seed sonnet | 03 writes `app.css` and nothing else. The probe writes no product code at all — it captures request and response shapes. The seed builds a fixture. Only 01 touches the schema. |
+| 1 | **02** (per-wall manifest), **04** (navigation + the `app.js` split), **06** (`WorkFacet`, search) | opus | 02 owns `manifest/builder.py`, the display plane and `GET /api/health`; 04 owns `index.html` and the whole of `static/`; 06 owns the schema and `GET /api/works`. They meet only in `api.py`, in different route functions. |
+| 2 | **05** (Walls), **07** (Collection), **08** (Work), **10** (Conversation) | opus | Post-split, each owns one file under `screens/`. Only 10 carries a migration. |
+| 3 | **09** (Theme), **11** (Taste) | opus | Two more `screens/` modules. 11 lands last regardless — it is `cumulative-final`. |
 
 **The `verify-api` probe is the one wave-0 agent that does NOT get a worktree.** It
 needs `OPENROUTER_API_KEY`, which reaches the code through `.env` — a gitignored file,
@@ -169,9 +172,6 @@ therefore absent from every isolated worktree. `load_dotenv()` resolves upward f
 worktree's tree and finds nothing; the probe would report the API unreachable when the
 credential was simply not there. It runs in the main checkout instead, which costs
 nothing: it writes no product code, so there is nothing for isolation to protect.
-| 1 | **02** (per-wall manifest), **04** (navigation + the `app.js` split), **06** (`WorkFacet`, search) | opus | 02 owns `manifest/builder.py`, the display plane and `GET /api/health`; 04 owns `index.html` and the whole of `static/`; 06 owns the schema and `GET /api/works`. They meet only in `api.py`, in different route functions. |
-| 2 | **05** (Walls), **07** (Collection), **08** (Work), **10** (Conversation) | opus | Post-split, each owns one file under `screens/`. Only 10 carries a migration. |
-| 3 | **09** (Theme), **11** (Taste) | opus | Two more `screens/` modules. 11 lands last regardless — it is `cumulative-final`. |
 
 **Wave 0 pulls two things forward that the list order buries.** The `verify-api`
 probe is Chunk 10's step 0 and depends on nothing but the OpenRouter client that

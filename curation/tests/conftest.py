@@ -651,8 +651,12 @@ def build_large_catalogue(
     or more works apiece and leaves a long tail attributed once or twice —
     "some shared artists, some rare ones", not the flat distribution a
     uniform draw would give every one of them equal weight towards. (Checked
-    at the defaults on 2026-08-12: the busiest artist holds 173 of 3,926
-    attributed works, 21 artists hold 20 or more, and 13 hold exactly one.)
+    at the defaults on 2026-08-12: the busiest artist holds 168 of 3,917
+    attributed works, 28 artists hold 20 or more, and 10 hold exactly one.
+    These are illustrations of the shape, not a contract — the test below
+    pins the shape with loose bars, and any change to the draws made before
+    the artist draw shifts the random stream and moves every one of these
+    figures without changing what they illustrate.)
     About one work in fifty is left unattributed, matching the real corpus's
     own one-unattributed-among-few shape (see `seeded_service` above).
 

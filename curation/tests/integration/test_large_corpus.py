@@ -100,6 +100,13 @@ class TestTheSeededCorpus:
         share = hits / large_corpus_size
         assert share < 0.01, f"{commonest!r} is {share:.1%} of the corpus — titles collapse too far"
 
+        # Descriptions carry the movement, subject, place and provenance text a
+        # curator would search across, so they are a searchable field in their
+        # own right and collapse the same way titles did if left uncrossed.
+        descriptions = [work.description for work in large_catalogue_works]
+        distinct_descriptions = len(set(descriptions)) / large_corpus_size
+        assert distinct_descriptions > 0.5, f"only {distinct_descriptions:.1%} of descriptions are distinct"
+
     def test_artists_are_shared_by_some_works_and_rare_for_others(self, large_catalogue_works):
         """Some artists hold many works, some hold one — not a flat distribution."""
         artist_ids = [work.artist_id for work in large_catalogue_works if work.artist_id is not None]
