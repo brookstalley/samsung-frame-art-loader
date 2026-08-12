@@ -161,6 +161,14 @@ waiting on chunks that never needed each other.
 | Wave | Runs concurrently | Model | Why they do not collide |
 |---|---|---|---|
 | 0 | **01** (keystone), **03** (palette), the **Chunk 10 `verify-api` probe**, the **Chunk 06 corpus seed** | 01 opus · 03 sonnet · probe opus · seed sonnet | 03 writes `app.css` and nothing else. The probe writes no product code at all — it captures request and response shapes. The seed builds a fixture. Only 01 touches the schema. |
+
+**The `verify-api` probe is the one wave-0 agent that does NOT get a worktree.** It
+needs `OPENROUTER_API_KEY`, which reaches the code through `.env` — a gitignored file,
+therefore absent from every isolated worktree. `load_dotenv()` resolves upward from
+`config.py`'s own directory and never from the cwd, so inside a worktree it walks that
+worktree's tree and finds nothing; the probe would report the API unreachable when the
+credential was simply not there. It runs in the main checkout instead, which costs
+nothing: it writes no product code, so there is nothing for isolation to protect.
 | 1 | **02** (per-wall manifest), **04** (navigation + the `app.js` split), **06** (`WorkFacet`, search) | opus | 02 owns `manifest/builder.py`, the display plane and `GET /api/health`; 04 owns `index.html` and the whole of `static/`; 06 owns the schema and `GET /api/works`. They meet only in `api.py`, in different route functions. |
 | 2 | **05** (Walls), **07** (Collection), **08** (Work), **10** (Conversation) | opus | Post-split, each owns one file under `screens/`. Only 10 carries a migration. |
 | 3 | **09** (Theme), **11** (Taste) | opus | Two more `screens/` modules. 11 lands last regardless — it is `cumulative-final`. |
@@ -291,7 +299,7 @@ condition and no design judgment in them:
 
 ### What must not run in parallel
 
-- **Two mutation sweeps in one tree.** `tools/mutation_sweep.py` rewrites the source
+- **Two mutation sweeps in one tree.** `curation/tools/mutation_sweep.py` rewrites the source
   file in place and keeps a `.sweepbak` sibling while it runs; two sweeps over the
   same file corrupt each other's backup, and the second one's restore writes the
   first one's mutation back as if it were the original. **Every sweep gets its own
@@ -333,7 +341,7 @@ cd curation && uv run black .
   `app.js`, and this plan rewrites `app.js`. **Every screen chunk ships browser
   tests**, not as a bonus but because neither Python suite runs a line of the
   client. `-n0` matters: these tests time real poll intervals.
-- **`tools/mutation_sweep.py` on every chunk that claims a new branch is covered.**
+- **`curation/tools/mutation_sweep.py` on every chunk that claims a new branch is covered.**
   A green suite says nothing about a branch no test reaches, and this plan adds
   branch-heavy code — facet counts that exclude their own facet, three distinct
   empty states, a disabled-not-hidden option. The sweep drives `app.js` as happily
@@ -457,7 +465,7 @@ split was made to end, and it will not announce itself as having done so.
        it. -->
 - **Done when:**
   1. Acceptance criteria met and tests pass
-  2. `tools/mutation_sweep.py` run over the assignment key, the migration and the
+  2. `curation/tools/mutation_sweep.py` run over the assignment key, the migration and the
      generalised refusal — the three places where a passing test could be passing
      for the wrong reason
   3. `/prawduct:critic` run and blocking findings resolved
@@ -597,7 +605,7 @@ split was made to end, and it will not announce itself as having done so.
 - **Visual change:** yes
 - **Done when:**
   1. Acceptance criteria met and tests pass
-  2. `tools/mutation_sweep.py` over the routing and the indicator's degraded branch
+  2. `curation/tools/mutation_sweep.py` over the routing and the indicator's degraded branch
      (`-- -m browser`)
   3. `/prawduct:critic` run and blocking findings resolved
   4. Committed and chunk marked `[x]` in Status
@@ -628,7 +636,7 @@ split was made to end, and it will not announce itself as having done so.
 - **Visual change:** yes
 - **Done when:**
   1. Acceptance criteria met and tests pass
-  2. `tools/mutation_sweep.py` over the four empty branches — the exact shape where
+  2. `curation/tools/mutation_sweep.py` over the four empty branches — the exact shape where
      one test passing for all four looks like coverage
   3. `/prawduct:critic` run and blocking findings resolved
   4. Committed and chunk marked `[x]` in Status
@@ -663,7 +671,7 @@ split was made to end, and it will not announce itself as having done so.
   FTS5-vs-`LIKE` assumption settled with the number recorded.
 - **Done when:**
   1. Acceptance criteria met and tests pass
-  2. `tools/mutation_sweep.py` over the count-exclusion logic — the branch whose
+  2. `curation/tools/mutation_sweep.py` over the count-exclusion logic — the branch whose
      absence is invisible at 41 works and ruinous at 4,000
   3. `/prawduct:critic` run and blocking findings resolved
   4. Committed and chunk marked `[x]` in Status
@@ -700,7 +708,7 @@ split was made to end, and it will not announce itself as having done so.
 - **Visual change:** yes
 - **Done when:**
   1. Acceptance criteria met and tests pass
-  2. `tools/mutation_sweep.py` over the three empty branches and the density default
+  2. `curation/tools/mutation_sweep.py` over the three empty branches and the density default
   3. `/prawduct:critic` run and blocking findings resolved
   4. Committed and chunk marked `[x]` in Status
 
@@ -732,7 +740,7 @@ split was made to end, and it will not announce itself as having done so.
 - **Visual change:** yes
 - **Done when:**
   1. Acceptance criteria met and tests pass
-  2. `tools/mutation_sweep.py` over the wall-consequence branch
+  2. `curation/tools/mutation_sweep.py` over the wall-consequence branch
   3. `/prawduct:critic` run and blocking findings resolved
   4. Committed and chunk marked `[x]` in Status
 
@@ -844,7 +852,7 @@ split was made to end, and it will not announce itself as having done so.
 - **Visual change:** yes
 - **Done when:**
   1. Acceptance criteria met and tests pass
-  2. `tools/mutation_sweep.py` over the detach logic — nulling versus cascading is
+  2. `curation/tools/mutation_sweep.py` over the detach logic — nulling versus cascading is
      one line and both look correct in a diff
   3. Committed, then `/prawduct:critic cumulative` run and blocking findings resolved
   4. Chunk marked `[x]` in Status
