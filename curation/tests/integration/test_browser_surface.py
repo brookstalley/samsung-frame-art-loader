@@ -14,11 +14,13 @@ without failing it.
 """
 
 import json
+import pathlib
 from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
 
+from curation.http.pages import STATIC_DIR
 from curation.persistence.backup import BACKUP_RECEIPT_FILENAME
 from curation.persistence.records import (
     AcquisitionMethod,
@@ -118,15 +120,36 @@ class TestTheClientIsServed:
 
     def test_a_deep_link_survives_a_reload(self, http):
         """In-page navigation writes a fragment, but a bookmark is a real path."""
-        for path in ("/works", "/themes", "/manifest", "/health"):
+        for path in ("/walls", "/collection", "/discover", "/theme", "/health"):
             assert http.get(path).status_code == 200, path
 
-    def test_the_stylesheet_and_script_are_served(self, http):
+    def test_the_addresses_the_surface_used_to_answer_to_still_answer(self, http):
+        """The three destinations renamed four paths, and the old ones were bookmarkable.
+
+        They have been real, reloadable URLs since the client was built, and the
+        client maps each onto the screen that took over its job. A 404 here is a
+        curator told their bookmark is gone when in fact the screen moved.
+        """
+        for path in ("/works", "/discovery", "/themes", "/manifest"):
+            assert http.get(path).status_code == 200, path
+
+    def test_the_stylesheet_and_every_client_module_are_served(self, http):
+        """The client is a tree of ES modules, and the browser fetches each by URL.
+
+        `app.js` alone passing means nothing now: it is an import list, and a
+        `core/` or `screens/` module the static mount does not serve is a page
+        that loads and renders nothing — the silent failure this suite exists to
+        catch, one directory lower than it used to live.
+        """
         css = http.get("/static/app.css")
-        script = http.get("/static/app.js")
         assert css.status_code == 200
-        assert script.status_code == 200
         assert "--surface-0" in css.text
+
+        static = pathlib.Path(STATIC_DIR)
+        modules = sorted(path.relative_to(static).as_posix() for path in static.rglob("*.js"))
+        assert len(modules) > 1, "the client was read as one file; this check would prove nothing"
+        for module in modules:
+            assert http.get(f"/static/{module}").status_code == 200, module
 
     def test_an_unknown_api_path_is_not_answered_with_the_shell(self, http):
         """A catch-all that returned HTML here would reach a client as unparseable JSON."""

@@ -164,10 +164,19 @@ a {
 
 /* -- chrome ---------------------------------------------------------------- */
 
+/* The masthead carries four things and has to keep carrying them on a narrow
+   window: the brand, three destinations, a search box and a status indicator.
+   Wrapping rather than a fixed row, because the indicator is the one element
+   that must never be pushed off the page — it is the whole contract that makes
+   Health safe to demote. */
 header.masthead {
   border-bottom: 1px solid var(--border);
   background: var(--surface-1);
   padding: var(--space-4) var(--space-5) 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
 }
 
 .masthead h1 {
@@ -177,13 +186,73 @@ header.masthead {
   color: var(--text-strong);
 }
 
-nav.tabs {
-  display: flex;
-  gap: var(--space-1);
-  margin-top: var(--space-4);
+/* Available to a screen reader and to nobody else. Clipped rather than
+   `display: none`, which removes it from the accessibility tree as well and
+   would leave the search field with no label at all. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
-nav.tabs button {
+.masthead .search {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  /* Takes the slack, so the destinations stay left and the indicator right. */
+  margin-left: auto;
+}
+
+.masthead .search input {
+  font: var(--text-sm) / 1.4 var(--font-ui);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-0);
+  color: var(--text);
+  min-width: 12rem;
+}
+
+/* Glyph, words and colour — three carriers, of which colour is the last. The
+   `data-state` attribute is what this selects on rather than a class, so the
+   state is legible in the DOM to a reader who cannot see the hue. */
+.status-indicator {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font: var(--text-sm) / 1.2 var(--font-ui);
+  cursor: pointer;
+  background: var(--surface-0);
+  color: var(--text);
+  text-align: left;
+}
+
+.status-indicator[data-state="well"] {
+  background: var(--good-quiet);
+  color: var(--good);
+}
+
+.status-indicator[data-state="unwell"] {
+  background: var(--warn-quiet);
+  color: var(--warn);
+}
+
+nav.destinations {
+  display: flex;
+  gap: var(--space-1);
+  align-self: flex-end;
+}
+
+nav.destinations button {
   appearance: none;
   border: 1px solid transparent;
   border-bottom: none;
@@ -195,14 +264,14 @@ nav.tabs button {
   cursor: pointer;
 }
 
-nav.tabs button:hover {
+nav.destinations button:hover {
   color: var(--text-strong);
 }
 
-/* The selected tab is marked three ways — weight, an underline rule, and
-   aria-current — so the tab bar reads correctly in greyscale and to a screen
-   reader, not only to someone who can see the accent. */
-nav.tabs button[aria-current="page"] {
+/* The destination you are in is marked three ways — weight, an underline
+   rule, and aria-current — so the navigation reads correctly in greyscale and
+   to a screen reader, not only to someone who can see the accent. */
+nav.destinations button[aria-current="page"] {
   color: var(--text-strong);
   font-weight: 600;
   border-color: var(--border);

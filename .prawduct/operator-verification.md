@@ -10,6 +10,56 @@ each entry, which is the durable form.
 
 ## Pending
 
+### Three destinations, and the whole client rebuilt as modules — added 2026-08-12
+
+**The largest visual change since the surface was built, and none of it is a
+thing a test can approve.** Five pipeline-stage tabs became three destinations —
+**The Walls · Collection · Discover** — with Health demoted out of the navigation
+into a masthead indicator, and Review and Theme becoming contextual screens you
+open from somewhere and come back to. The product now opens on **The Walls**
+rather than on Works: the thing it exists to produce was the fourth item, behind
+three tabs about producing it.
+
+The browser suite holds what a test can hold — the navigation is those three and
+no more, every screen has a URL, a Work opened from Collection returns to
+Collection, the indicator announces a degraded state without colour being the sole
+carrier. **What it cannot hold is whether the reshape reads as one product**, and
+that is the question.
+
+```sh
+cd curation && uv run python -m curation
+```
+
+**Four things worth an opinion, each a judgement call the plan did not settle:**
+
+1. **Landing on The Walls.** It is the strongest claim this reshape makes about
+   what the product is for. If the first thing you want on opening is the
+   collection, that is worth saying now rather than after four more screens are
+   built on top of it.
+2. **The masthead status indicator.** It replaced a tab, and the demotion is only
+   safe because the indicator speaks — it names *which wall* has gone quiet rather
+   than reporting that a wall has. It is also the first consumer of the
+   `--good`/`--warn`/`--crit` tokens the palette entry above flagged as the
+   least-proven values in the scheme. This is the look they were waiting for.
+3. **The persistent search box is a stopgap and is written as one.** It navigates
+   to Collection and filters title and artist over what that screen already
+   fetched. Real search — `q` against the catalogue, with facet counts — landed in
+   the same wave but the two chunks could not see each other; wiring the box to it
+   is the next screen chunk's. A dead control would have taught you the collection
+   cannot be searched, which is worse than a partial one.
+4. **Contextual screens and browser Back.** A Work opened from the Walls returns
+   to the Walls, one opened from Collection returns to Collection, and the address
+   bar carries `?from=` only when it differs from the default. Try Back and
+   Forward, and try copying a URL into a fresh tab — that second one is what the
+   addressability criterion is actually for.
+
+**Not a visual question but worth knowing while you look:** `app.js` was 2,033
+lines and is now 16 modules — `app.js` boots and holds the route table, `core/`
+holds the plumbing, `screens/` holds one module per screen, and no module under
+`screens/` may import another. That split is what lets the next two waves build
+four screens at once. The move was mechanical by design: the review grid's
+1,150-line browser test passes byte-for-byte across it.
+
 ### The revised palette, now that it is in the stylesheet — added 2026-08-12
 
 **Every pair passes AA in both schemes and that settles nothing you care about.**

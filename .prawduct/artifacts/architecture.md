@@ -222,6 +222,26 @@ is no network between planes.
   cleanly. It takes the catalogue service alone rather than the container: it
   writes no discovery state and no directive, so it needs neither the services
   that own them nor the startup reconciliation that repairs them.
+- **Inside the browser client, one structural rule: no module under `screens/`
+  imports another** (established 2026-08-12, when `app.js` was split). The client
+  is `app.js` — boot and the route table — over `core/`, which holds the fetch
+  plumbing, the render/generation guard and the shared badges, over `screens/`,
+  one module per screen. Screens meet in `core/` and in the route table, and
+  nowhere else. `core/` knows no screen; the dependency runs one way.
+
+  **The reason is not tidiness.** One file is one writer, and the surface's build
+  plan has six separate pieces of work rewriting the client — a screen that
+  reaches sideways into another makes the second author a reader of the first's
+  unfinished work, which is the single-writer file the split exists to end. It
+  recurs on every screen added after this, which is why it is recorded here
+  rather than in the plan that produced it: a structural rule that lives only in
+  a build plan dies when the plan is archived.
+
+  A screen needing something another screen has is the signal that the thing is
+  shared, and the move is to `core/` — not an import across the boundary.
+  `curation/tests/unit/test_client_module_boundaries.py` enforces it, which it
+  can because — unlike the Direction norm the same work implements — this
+  violation is exactly an import and therefore greppable.
 - **Internal layering, inside that plane** (established 2026-07-27; `acquisition/`
   added 2026-08-03 — the fetch paths, the guards and the URL policy, sitting beside
   `discovery/` as the other package that reaches outside the machine, and extended

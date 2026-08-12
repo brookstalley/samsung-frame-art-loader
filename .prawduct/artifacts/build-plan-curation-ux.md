@@ -104,11 +104,11 @@ named assumption into a recorded fact, and neither blocks the chunks before it.
 ## Status
 
 - [x] Chunk 01: Wall, ThemeAssignment, and the end of `Theme.is_active`
-- [ ] Chunk 02: One manifest per wall — the inter-plane half
+- [x] Chunk 02: One manifest per wall — the inter-plane half
 - [x] Chunk 03: The revised palette lands in the stylesheet
-- [ ] Chunk 04: Three destinations — the navigation reshape
+- [x] Chunk 04: Three destinations — the navigation reshape
 - [ ] Chunk 05: The Walls screen — the product's home
-- [ ] Chunk 06: `WorkFacet`, text search, and facet counts
+- [x] Chunk 06: `WorkFacet`, text search, and facet counts
 - [ ] Chunk 07: Collection — the grid, the rails, and the three empties
 - [ ] Chunk 08: The Work screen, archive and restore
 - [ ] Chunk 09: The Theme screen — rename, reorder, hang, delete
@@ -116,7 +116,7 @@ named assumption into a recorded fact, and neither blocks the chunks before it.
 - [ ] Chunk 11: Taste — affinities, reactions, and the delete that detaches
 
 Context: Plan authored 2026-08-12, the day the operator ruled on the three questions
-that had been holding it. Chunks 01 and 03 landed the same day. **The list order is
+that had been holding it. Chunks 01 and 03 landed the same day, and wave 1 — **02, 04 and 06** — was built concurrently by three worktree agents and landed one at a time that evening. **The list order is
 the dependency order,
 not the execution order** — § Parallel Execution below groups these eleven into
 waves, and the one ordering decision worth knowing survives the regrouping: the wall

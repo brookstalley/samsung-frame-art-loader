@@ -54,7 +54,17 @@ def test_the_panel_names_every_wall_it_is_reporting_on(ui, settings, two_walls):
     ui.open("#health")
     ui.page.wait_for_selector("h2:has-text('Health')")
 
-    headings = ui.page.locator(".wall-reading h4")
+    # `.wall-reading h3` since the client was split into modules: each wall's
+    # reading became a panel of its own with its name as the heading, where it had
+    # been an `h4` inside a shared "The walls" panel.
+    #
+    # **Set equality, not a subset.** This assertion was briefly relaxed to `<=`
+    # while moving it to `.panel h3` — which selects the backup and geometry
+    # panels too, so exactness was impossible there and the `==` half went with
+    # it. That half is the one that catches a wall panel which should not exist:
+    # a subset check passes against a screen naming a room that is not in the
+    # catalogue. The selector, not the assertion, was what needed to change.
+    headings = ui.page.locator(".wall-reading h3")
     assert set(headings.all_inner_texts()) == {living_room.name, study.name}
 
 
@@ -68,7 +78,7 @@ def test_the_summary_names_the_wall_that_has_gone_quiet(ui, settings, two_walls)
     _reported(settings, living_room)
 
     ui.open("#health")
-    ui.page.wait_for_selector(".wall-reading")
+    ui.page.wait_for_selector(f".panel h3:has-text('{study.name}')")
 
     assert f"{study.name!r} has not reported" in ui.text()
 
@@ -80,11 +90,13 @@ def test_a_wall_that_has_never_reported_says_so_without_a_verdict(ui, settings, 
     between recording it and configuring the device, and it must read as that
     rather than as something broken.
     """
-    living_room, _ = two_walls
+    living_room, study = two_walls
     _reported(settings, living_room, ago_seconds=4 * 24 * 60 * 60)
 
     ui.open("#health")
-    ui.page.wait_for_selector(".wall-reading")
+    # Wait on the wall that never reported: it is the one this test is about, and
+    # waiting on the other would let the assertions run before its panel painted.
+    ui.page.wait_for_selector(f".panel h3:has-text('{study.name}')")
 
     page = ui.text()
     assert "Nothing has ever written a heartbeat for this wall." in page

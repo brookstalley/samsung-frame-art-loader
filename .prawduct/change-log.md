@@ -54,6 +54,63 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-12: Wave 1 — the manifest goes per wall, the surface gets three destinations, and the collection gets search
+
+<!-- prawduct: chunks=02,04,06 | scope=curation-ux -->
+
+**Why:** three chunks that needed each other only through artifacts, built at the
+same time in three worktrees and landed one at a time. The plan's own § Parallel
+Execution designed the wave; this is it running.
+
+**Chunk 02 — one manifest per wall.** `theme-manifest-{wall_id}.json` and
+`display-heartbeat-{wall_id}.json`, with the wall carried by the *filename* and
+by nothing inside either document — which is what makes "a display cannot open a
+room it does not serve" structural rather than defended. The display plane takes
+`WALL_ID` beside `TV_ADDRESS`; `GET /api/health` aggregates across walls;
+`WallSettings` became `DisplaySettings`. This closes the hazard Chunk 01 shipped
+documented and unguarded: hanging a theme on a second wall no longer overwrites
+the manifest the first wall's display is reading.
+
+**Chunk 04 — three destinations, and the client becomes modules.** Five
+pipeline-stage tabs became The Walls, Collection and Discover; Health left the
+navigation for a masthead indicator that names *which* wall went quiet; Review
+and Theme became contextual screens that return where they were opened from, on
+real URLs. `app.js` went from 1,954 lines to 94 over sixteen modules, with no
+module under `screens/` importing another — the split that converts the
+remaining screen chunks from a queue into two waves. The move was mechanical by
+design, and the review grid's 1,150-line browser test passing byte-for-byte is
+the evidence.
+
+**Chunk 06 — `WorkFacet`, search, and facet counts.** Counts computed over the
+results filtered by every *other* facet, so a curator can change their mind about
+Baroque without first clearing Baroque. **The plan's FTS5 assumption was settled
+against the corpus and the simpler option won**: `LIKE`, because FTS5 matches
+whole tokens — `harb` stops finding "harbour" — so it changes the search's
+semantics rather than its cost, and because the clause is 1.5 ms of a 30 ms
+answer. The measurement's real finding was elsewhere: the counts were 57 ms
+unfiltered and 101 ms with a term, fixed to 6 ms and 31 ms by asking the
+catalogue fewer questions rather than by moving counts to a second route.
+
+**What the wave cost, and it is worth recording.** Two chunks reworded the same
+sentence — "nothing has ever written a heartbeat *here*" versus *"for this
+wall"* — and each pinned its own wording in its own test, so the merge failed
+until one was chosen (the per-wall one: with a panel per room, "here" names
+nothing). Chunk 02's health tests selected markup Chunk 04 restructured. And
+Chunk 04, forked before Chunk 06 landed, justified a client-side search with "the
+retrieval layer is `GET /api/works`'s to grow" — a sentence that was true when
+written and false by the time it merged. **The contract seam held where it was
+written down and leaked where it was not**: `api-contract.md` was silent on the
+health shape, Chunk 02 filled it in, and the fix was to re-brief Chunk 04
+mid-build rather than to reconcile two implementations afterwards.
+
+**Review residue, fixed at landing:** a `ValueError` on an unknown facet kind
+that reached the surface as a 500; a listing whose page, total and counts were
+read under four separate locks while three artifacts cited their consistency;
+`work_facets.value` made COLLATE NOCASE while it is still free rather than a
+migration; a module-boundary guard blind to `../app.js`, the one import that
+couples a screen to every other screen at once; and an assertion this agent
+weakened while writing a comment claiming it had not.
+
 ## 2026-08-12: A theme stops being active and starts hanging somewhere
 
 <!-- prawduct: chunks=01 | scope=curation-ux -->

@@ -9,7 +9,7 @@ whether to re-search.
 So the maps are checked against the enums rather than trusted. This is the same
 bargain `test_design_tokens.py` strikes with the stylesheet: the client is not a
 Python module and nothing else would notice the day a sixth reason is added, so
-the check reads the real file. A member added without a sentence fails here,
+the check reads the real files — every module the client is built from. A member added without a sentence fails here,
 which is the point at which it is cheap to write one.
 """
 
@@ -28,12 +28,38 @@ from curation.persistence.discovery_records import (
     WorkProvenance,
 )
 
-CLIENT_PATH = STATIC_DIR / "app.js"
-CLIENT = CLIENT_PATH.read_text(encoding="utf-8")
+#: Every module the client is made of, boot and `core/` and `screens/` alike.
+#:
+#: Sorted so the concatenation below is stable, and gathered by glob rather than
+#: listed: the client became a tree of ES modules when the navigation was
+#: reshaped, and a hand-written list is a list that stops including the newest
+#: screen — silently, since every check here would go on passing against the
+#: modules it still knew about.
+CLIENT_PATHS = sorted(STATIC_DIR.rglob("*.js"))
+
+#: The whole client as one text. Every check below asks "does the client say
+#: this", which was one file's question and is now the tree's; concatenating is
+#: what keeps the question the same one after the split.
+CLIENT = "\n".join(path.read_text(encoding="utf-8") for path in CLIENT_PATHS)
+
+
+def test_the_client_is_more_than_one_module():
+    """The glob found a tree, so every check below reads the whole client.
+
+    A `rglob` that matched one file — or none — would leave these checks passing
+    against whatever it happened to find, which is the failure mode that made the
+    hand-written list unacceptable in the first place. This is the assertion that
+    the gathering worked.
+    """
+    names = {path.relative_to(STATIC_DIR).as_posix() for path in CLIENT_PATHS}
+    assert "app.js" in names, "the client's boot module is missing from what these checks read"
+    assert any(name.startswith("core/") for name in names), "no core module was gathered"
+    assert any(name.startswith("screens/") for name in names), "no screen module was gathered"
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed; this check is opportunistic")
-def test_the_client_parses():
+@pytest.mark.parametrize("path", CLIENT_PATHS, ids=lambda path: path.name)
+def test_the_client_parses(path):
     """A syntax error here kills the entire browser surface and no other test notices.
 
     Every Python test asserts what the *server* sends and that the script is
@@ -42,21 +68,25 @@ def test_the_client_parses():
     forever, against a fully green suite — the shape of failure this product
     exists to refuse.
 
+    **Per module, not over the concatenation.** Two files joined end to end parse
+    as neither of them — an unbalanced brace in the first would be closed by the
+    second and the check would pass on a client that cannot load.
+
     **This is a check, not a toolchain.** It shells out to whatever `node`
     happens to be on the machine and skips when there is none, so it adds no
     dependency and no build step, and the deliberate decision against a Node
-    toolchain on a Pi (Chunk 10B) is untouched. It cannot say the client is
-    *correct* — only that it is parseable, which is the cheapest fact worth
-    having about a file nothing else executes.
+    toolchain on a Pi is untouched. It cannot say the client is *correct* — only
+    that it is parseable, which is the cheapest fact worth having about a file
+    nothing else executes.
     """
     result = subprocess.run(
-        ["node", "--check", str(CLIENT_PATH)],
+        ["node", "--check", str(path)],
         capture_output=True,
         text=True,
         check=False,
     )
 
-    assert result.returncode == 0, f"the browser client does not parse:\n{result.stderr}"
+    assert result.returncode == 0, f"{path.name} does not parse:\n{result.stderr}"
 
 
 def _object_keys(name: str) -> set[str]:
@@ -67,7 +97,7 @@ def _object_keys(name: str) -> set[str]:
     silently reads a truncated object, and a check that reads half its input
     passes for the wrong reason.
     """
-    opening = re.search(rf"^const {re.escape(name)} = (?={{)", CLIENT, re.MULTILINE)
+    opening = re.search(rf"^(?:export )?const {re.escape(name)} = (?={{)", CLIENT, re.MULTILINE)
     assert opening, f"the client has no top-level `const {name} = {{`"
     start = opening.end()
     depth = 0
@@ -95,7 +125,7 @@ def _object_values(name: str) -> dict[str, str]:
     set and an empty value renders a badge with nothing in it, and every keys
     test stays green.
     """
-    opening = re.search(rf"^const {re.escape(name)} = (?={{)", CLIENT, re.MULTILINE)
+    opening = re.search(rf"^(?:export )?const {re.escape(name)} = (?={{)", CLIENT, re.MULTILINE)
     assert opening, f"the client has no top-level `const {name} = {{`"
     start = opening.end()
     depth = 0

@@ -49,7 +49,7 @@ def test_the_grid_pages_through_a_catalogue_larger_than_one_page(ui, a_catalogue
     2026-08-05. What the loop owes is that it starts at the beginning, makes
     progress every time, and stops having collected everything.
     """
-    ui.open("#works")
+    ui.open("#collection")
     ui.page.wait_for_selector("h2")
 
     assert ui.page.inner_text("h2") == f"{a_catalogue_past_one_page} works"
@@ -92,7 +92,7 @@ def test_the_grid_says_nothing_is_missing_when_nothing_is(ui, a_catalogue_past_o
     The paired negative: a note that always renders would report a catalogue as
     truncated whenever it is not, and the test above would pass regardless.
     """
-    ui.open("#works")
+    ui.open("#collection")
     ui.page.wait_for_selector("ul.grid")
 
     assert "are held and are not on this page" not in ui.text()
@@ -112,7 +112,7 @@ def test_the_grid_stops_when_a_page_comes_back_empty(ui):
             a_listing([], total=50, truncated=True, offset=1),
         ],
     )
-    ui.open("#works")
+    ui.open("#collection")
     ui.page.wait_for_selector("ul.grid")
 
     # Two requests and no more: the second answered empty, and that ended it.
@@ -130,7 +130,7 @@ def test_the_grid_reports_what_the_runaway_guard_left_out(ui):
         "**/api/works?*",
         a_listing([a_catalogue_work(artwork_id="a", title="Endless")], total=999, truncated=True),
     )
-    ui.open("#works")
+    ui.open("#collection")
     # Scoped to the view: the shell carries a permanently-present `p.note` of its
     # own for errors, so an unscoped match waits on the wrong element and times
     # out against a page that painted correctly.
@@ -154,7 +154,7 @@ def test_a_tile_whose_image_cannot_be_loaded_says_so(ui, work_with_an_image):
     work_with_an_image(title="Nighthawks")
     ui.page.route("**/thumbnail", lambda route: route.fulfill(status=404, body="gone"))
 
-    ui.open("#works")
+    ui.open("#collection")
     ui.page.wait_for_selector(".card-image-absent")
 
     assert "Its image could not be loaded just now." in ui.text()
@@ -167,7 +167,7 @@ def test_a_tile_whose_image_loads_keeps_its_picture(ui, work_with_an_image):
     """The paired negative — the fallback fires on error and not otherwise."""
     work_with_an_image(title="Nighthawks")
 
-    ui.open("#works")
+    ui.open("#collection")
     ui.page.wait_for_selector("ul.grid img")
 
     assert "Its image could not be loaded just now." not in ui.text()
@@ -183,11 +183,11 @@ def test_navigating_moves_focus_into_the_view(ui, seeded_service):
     leaving focus on <body> — so the next Tab starts again from the top of the
     page, above the navigation the user just used.
     """
-    ui.open("#works")
+    ui.open("#collection")
     ui.page.wait_for_selector("ul.grid")
 
-    ui.page.click("nav.tabs button[data-view='themes']")
-    ui.page.wait_for_selector("#new-theme-name")
+    ui.page.click("nav.destinations button[data-view='walls']")
+    ui.page.wait_for_selector("h2:has-text('The Walls')")
 
     assert ui.focused() == "view"
 
@@ -198,7 +198,7 @@ def test_the_first_paint_does_not_steal_focus(ui, seeded_service):
     A focus move written to fire unconditionally would pass the test above and
     fail a reader who has just arrived, so this asserts what must be absent.
     """
-    ui.open("#works")
+    ui.open("#collection")
     ui.page.wait_for_selector("ul.grid")
 
     assert ui.focused() != "view"
@@ -226,8 +226,8 @@ def test_a_slow_view_does_not_paint_over_the_one_navigated_to(ui):
     ui.open("#health")
     ui.page.wait_for_selector("h2:has-text('Health')")
 
-    # The works grid starts loading, and is left before its request answers.
-    ui.page.evaluate("() => go('works')")
+    # The collection grid starts loading, and is left before its request answers.
+    ui.page.evaluate("() => go('collection')")
     ui.page.wait_for_timeout(300)
     ui.page.evaluate("() => go('health')")
     ui.page.wait_for_selector("h2:has-text('Health')")
@@ -252,7 +252,7 @@ def test_the_view_a_curator_is_actually_on_still_paints(ui):
     at all, and the test above asserts an absence — so it would pass against a
     client that had stopped rendering entirely.
     """
-    ui.open("#works")
+    ui.open("#collection")
     ui.page.wait_for_selector("ul.grid")
 
     assert "works" in ui.text()

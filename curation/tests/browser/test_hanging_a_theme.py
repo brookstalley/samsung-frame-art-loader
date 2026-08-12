@@ -34,7 +34,7 @@ def test_the_control_names_the_wall_it_would_hang_on(ui, a_theme):
     is a sentence that silently becomes wrong, and the label is the last place a
     curator can catch a mistake before the room changes.
     """
-    ui.open("#themes")
+    ui.open("#theme")
     ui.page.wait_for_selector(".panel")
 
     walls = ui.page.locator("button", has_text="Hang on ")
@@ -50,7 +50,7 @@ def test_a_second_wall_becomes_a_second_choice_rather_than_a_different_screen(ui
     """
     services.display.add_wall(name="Study")
 
-    ui.open("#themes")
+    ui.open("#theme")
     ui.page.wait_for_selector(".panel")
 
     offered = ui.page.locator("button", has_text="Hang on ")
@@ -65,13 +65,13 @@ def test_hanging_reports_back_by_naming_the_wall_rather_than_a_colour(ui, a_them
     than one.
     """
     services.display.add_wall(name="Study")
-    ui.open("#themes")
+    ui.open("#theme")
     ui.page.wait_for_selector(".panel")
 
     ui.page.click("text=Hang on Study")
     ui.page.wait_for_selector("h2")
 
-    ui.open("#themes")
+    ui.open("#theme")
     ui.page.wait_for_selector(".badge")
     badge = ui.page.locator(".badge").first
     assert "on Study" in badge.inner_text()
@@ -90,7 +90,7 @@ def test_a_hung_theme_can_be_taken_down_from_the_wall_it_is_on(ui, a_theme, serv
     wall = services.display.survey_walls()[0].wall
     services.display.activate_theme(a_theme.id, wall_id=wall.id)
 
-    ui.open("#themes")
+    ui.open("#theme")
     ui.page.wait_for_selector(".badge")
 
     ui.page.click(f"text=Take down from {wall.name}")
@@ -106,7 +106,7 @@ def test_a_wall_with_nothing_hanging_says_so_instead_of_showing_an_empty_manifes
     An empty table under a heading reads as "the theme is empty"; this state is
     "no theme has been chosen", and the two lead to different actions.
     """
-    ui.open("#manifest")
+    ui.open("#walls")
     ui.page.wait_for_selector("h2")
 
     assert "Nothing is hanging on The wall" in ui.text()
@@ -128,7 +128,7 @@ def test_the_take_down_note_is_said_once_however_many_walls_are_empty(ui, servic
     """
     services.display.add_wall(name="Study")
 
-    ui.open("#manifest")
+    ui.open("#walls")
     ui.page.wait_for_selector("h2")
 
     assert ui.page.locator("p", has_text="goes on showing what it was showing").count() == 1
@@ -158,7 +158,7 @@ def test_each_walls_panels_nest_under_that_wall_rather_than_beside_it(ui, a_them
     services.display.activate_theme(a_theme.id, wall_id=the_wall.id)
     services.display.activate_theme(a_theme.id, wall_id=study.id)
 
-    ui.open("#manifest")
+    ui.open("#walls")
     ui.page.wait_for_selector("h3")
 
     # One h3 per wall, and every panel heading a rank below it.
