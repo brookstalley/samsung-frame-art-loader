@@ -54,6 +54,59 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-12: Three rulings close the curation surface's open questions, and it gets a plan
+
+<!-- prawduct: scope=curation-ux -->
+<!-- No `chunks=`: nothing was built. This entry records three operator rulings,
+     the artifact amendments they forced, and the authoring of a second live build
+     plan. The first chunk it describes is unstarted. -->
+
+**Why.** `information-architecture.md` had been complete and unbuilt since
+2026-08-11, held by three open questions and by a gate that queued the work behind
+Chunk 13A. The operator answered all three on 2026-08-12 and lifted the gate.
+
+**The three rulings.**
+
+1. **Conversation deletion does not flow to what was derived from it** — the first
+   of issue #118's three candidate rules. The turns go; `Affinity.source_turn_id`
+   and `SpendRecord.conversation_turn_id` are nulled. Written into
+   `security-model.md` § Deleting a conversation, which is the authority. Two
+   consequences a builder could not have derived: the `inferred ⇒ source_turn_id`
+   rule is an invariant on the **write path**, not a stored constraint — built as
+   the latter it makes the delete impossible — and `Affinity.rationale` becomes
+   **required** for `inferred` and `observed`, since after a delete it is the only
+   surviving evidence.
+2. **Artwork identity is independent of any per-renderer id, and themes are global
+   while assignment is per wall.** `tv_content_id` is a per-set cache key, not an
+   identity, so `TvBinding.artwork_id`'s global `unique` becomes a
+   (`wall_id`, `artwork_id`) key. New **Wall** and **ThemeAssignment** entities;
+   `Theme.is_active` retires; `Directive` stops being a singleton. Constraint 1 is
+   restated as what the key does rather than as an absolute — the same correction
+   this artifact already had to make once.
+3. **The gate on Chunk 13A is lifted** and the curation work is independent of the
+   display-plane chunks.
+
+**What the second ruling reached that the ruling did not mention.** The inter-plane
+contract: `architecture.md` § One manifest per wall records the manifest and the
+heartbeat becoming one file per wall, with the alternative (one file, sections per
+wall) rejected and the reason kept — mtime polling at ~1 s makes a shared file wake
+every display on every other wall's change, and makes "the manifest's sequence"
+ambiguous exactly where the coalescing and regression rules need it singular.
+
+**A `Wall` in the catalogue is a ruling against a `## Direction` norm**, not an
+oversight, and it is recorded at the entity: per-device runtime state stays
+forbidden there, permanently and by list. A wall is a place with a name; which
+device serves it is display-plane configuration.
+
+**New: `build-plan-curation-ux.md`** — eleven chunks, the wall structure first
+because it is underneath every screen and is the expensive retrofit.
+`build-plan.md` stays the `active_build_plan` pointer until its own chunks close,
+so chunk-close here runs `/prawduct:critic` explicitly rather than relying on the
+Stop gate.
+
+**Nothing built. All three suites green as a check that the amendments broke
+nothing** — 184 root, 1957 curation, 402 display.
+
 ## 2026-08-11: The label leads with the name it can actually set (13B-3)
 
 <!-- prawduct: chunks=13B | scope=v1-build -->

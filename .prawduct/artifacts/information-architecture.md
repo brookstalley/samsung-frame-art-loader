@@ -174,25 +174,33 @@ Three consequences, all cheap to honour now and expensive to retrofit:
   the per-wall act. Two walls may hang the same theme, and that must not require
   duplicating it.
 
-### Two structural blockers, found 2026-08-10 and not fixed here
+### Two structural blockers, found 2026-08-10 — both ruled on 2026-08-12
 
-Both are in `data-model.md` and both need a decision before multi-display is
-planned. Recorded here because an interface designed against them unknowingly is
-the expensive kind of wrong.
+Both were in `data-model.md`, both needed a decision before multi-display could be
+planned, and both were answered by the operator on 2026-08-12. Recorded here
+because an interface designed against them unknowingly is the expensive kind of
+wrong — and kept rather than deleted, because the shape of this design was chosen
+while they were open.
 
-- **`TvBinding.artwork_id` is `required, unique`** — one row per artwork across the
-  whole installation. Two televisions showing the same work each need their own
-  `tv_content_id`, which the uniqueness constraint forbids. The entity is
-  per-television by its own docstring but carries no device identifier; the key
-  almost certainly becomes (`device_id`, `artwork_id`).
-- **Constraint 1 — "Exactly one Theme has `is_active = true`."** This is the
-  single-wall assumption stated as an invariant. It becomes one active theme *per
-  wall*, which moves activation off `Theme` and onto the binding between a theme
-  and a device.
+- **`TvBinding.artwork_id` was `required, unique`** — one row per artwork across
+  the whole installation, so two televisions showing the same work was a state the
+  model forbade. **Ruled:** our artwork id is the identity and is independent of
+  any per-renderer id; `tv_content_id` is a per-set cache key, not an identity, so
+  the same work legitimately carries a different one per wall. The key becomes
+  (`wall_id`, `artwork_id`).
+- **Constraint 1 — the single-wall assumption stated as an invariant.** **Ruled:**
+  themes are created globally and assigned per wall. Activation moves off
+  `Theme.is_active` onto a new **ThemeAssignment**, whose primary key *is* the wall
+  — so "one theme per wall" is a key rather than a claim, and two walls may hang
+  the same theme with no duplication. A new **Wall** entity holds the identity and
+  the name and nothing device-shaped.
 
-Neither changes anything in this artifact's layouts. Both change the routes beneath
-them: `POST /api/themes/{id}/activate` and `GET /api/manifest` are today
-installation-wide and become per-wall.
+**Neither changed anything in this artifact's layouts**, which is the evidence that
+fixing the shape early was worth it. What they changed is underneath: the routes
+(`POST /api/themes/{id}/activate` and `GET /api/manifest` become per-wall), the
+`Directive` singleton (one row per wall, so a `next` in the living room does not
+step the study), and the inter-plane contract (`architecture.md` § One manifest per
+wall). **None of it is built** — `build-plan-curation-ux.md` carries it.
 
 ## Retrieval: search and facets
 
@@ -495,29 +503,34 @@ What this interface does **not** include, stated so the absences read as decisio
 ## Status — what this artifact is waiting on
 
 Recorded here rather than only in a session handoff file, because a handoff file is
-session-scoped and these obligations are not. **No build plan references this
-artifact yet**, and that is deliberate: `build-plan.md` is live with Chunk 13A
-waiting on hardware, so the work here belongs in a scope-named
-`build-plan-curation-ux.md` that is written once 13A resolves. Until someone writes
-it, this list is the only durable record that the round left debts.
+session-scoped and these obligations are not.
+
+**The plan exists: `build-plan-curation-ux.md`, written 2026-08-12.** This row
+used to say no build plan referenced this artifact, and that the work waited on
+Chunk 13A resolving. **The operator lifted that gate on 2026-08-12** and directed
+that the plan be independent of the display-plane chunks. It is: 13A and 13B are
+blocked on a television and a panel, this work is blocked on neither, and queuing
+it behind hardware bought nothing but delay. `build-plan.md` stays the
+`active_build_plan` pointer until its own remaining chunks close.
 
 | What | Owed to | State |
 |---|---|---|
 | The routes this design needs: text search and facet counts, theme rename and delete, work **archive** (not delete), the conversation surface, the taste surface | `api-contract.md` | **Amended 2026-08-11** — § The routes the interface design requires. The set and the rules are fixed; field-level shapes belong to the chunk that builds each. The two decisions that section held open for the operator were both taken the same day: deleting an active theme **refuses**, and taste **does** earn an MCP tool — `art_taste`, designed in that artifact's § `art_taste`. Nothing on this row is open |
 | `accessibility-spec.md` | the human-interface artifact set | **Written 2026-08-11.** It is *not* the browser-only codification this row used to describe — `design_decisions.accessibility_approach` records two surfaces with different profiles and says the important one is the physical label, so a spec scoped to this artifact's screens would have covered the lesser half |
 | The revised palettes | `app.css` and `test_design_tokens.py` | Proposed only. Live in the prototype and are ungoverned until they land |
-| Conversation deletion's effect on derived affinities | `security-model.md` | Tracked as **issue #118** (`stage: requirements`) — the rule has to be written before anything builds deletion |
-| Multi-display: `TvBinding.artwork_id` uniqueness, and one-active-theme-per-wall | `data-model.md` | Named in § More than one wall. Blocks planning, not this design |
+| Conversation deletion's effect on derived affinities | `security-model.md` | **Closed 2026-08-12** (issue #118). Ruled: deletion does not flow to what was derived — the turns go, the affinities and the spend rows keep their judgment and lose their citation. Written in `security-model.md` § Deleting a conversation, which is the authority; two derived consequences landed in `data-model.md` and `api-contract.md` |
+| Multi-display: `TvBinding.artwork_id` uniqueness, and one-active-theme-per-wall | `data-model.md` | **Closed 2026-08-12.** Both ruled — see § More than one wall for the answers and what they changed underneath. New **Wall** and **ThemeAssignment** entities; `Directive` stops being a singleton |
 
 ## Open questions
 
-- **Deleting a conversation must have a stated effect on the affinities derived
-  from it**, and neither this artifact nor `security-model.md` states it yet. Three
-  candidate rules: orphan them (keep the judgment, lose the provenance), delete
-  them with the thread, or refuse the delete while they are cited. **Tracked as
-  issue #118**, at `stage: requirements` — the rule is the work; building deletion
-  is a later chunk. The sharp half is `Affinity.source_turn_id`: deletion has an
-  unstated effect on judgments the product still consults.
+- ~~**Deleting a conversation must have a stated effect on the affinities derived
+  from it.**~~ **Closed 2026-08-12 — the first of the three candidates.** The
+  affinities are orphaned: they keep the judgment and lose the provenance. The rule
+  is in `security-model.md` § Deleting a conversation. Kept rather than deleted
+  because the *second* sharp half was found while answering the first and is not
+  obvious from the outcome: `SpendRecord.conversation_turn_id` is the same
+  question asked about money, where the reason to orphan is not "the judgment is
+  worth keeping" but "a ledger must not change retroactively".
 - **The threshold at which Collection defaults to contact sheet** is written above
   as "a few hundred" and is a guess. It should be set from the first real
   thousands-scale corpus, not now.

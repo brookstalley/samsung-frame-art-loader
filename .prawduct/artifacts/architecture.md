@@ -700,6 +700,38 @@ read by display.
 - **Versioned, despite the co-location exemption.** See Deployment & Version Skew
   — this is where a recorded contradiction gets resolved rather than inherited.
 
+### One manifest per wall — designed 2026-08-12, not built
+
+The operator's ruling that **themes are global and assigned per wall**
+(`data-model.md` § ThemeAssignment) reaches the inter-plane contract, because
+everything above is written in the singular: *the* active theme's identity, *the*
+sequence, *the* file. With more than one wall each of those is a per-wall fact.
+
+**The manifest becomes one file per wall**, named by wall id, and each display
+instance reads only the manifest for the wall it is configured to serve. The
+directive semantics above are unchanged — they simply become per wall, which is
+what the ruling already did to the counter itself.
+
+`[DECISION: one manifest file per wall, rather than one file carrying a section
+per wall | change detection is an mtime poll at ~1 s, and a shared file makes
+every wall's display wake on every other wall's change while making "the
+manifest's sequence" ambiguous exactly where the coalescing and
+sequence-regression rules need it to be singular; per-file also keeps a display
+plane unable to read a wall it does not serve | user can veto/override]`
+
+**Two consequences, both cheap now:**
+
+- **`display-heartbeat.json` takes the same treatment**, for the same reason and
+  in the other direction — `information-architecture.md` requires health to name
+  which wall is silent, and one shared heartbeat file has no way to say it.
+- **The single-writer table below generalises rather than growing rows.** One
+  writer per file still holds; the file set is now indexed by wall.
+
+**What is built today is the single-file form**, `theme-manifest.json` in
+`ART_ROOT` (`curation/src/curation/manifest/builder.py`), and it stays that way
+until `build-plan-curation-ux.md` migrates it. The one-wall installation is the
+degenerate case: one wall, one manifest, byte-identical behaviour.
+
 ## Data Ownership & Consistency
 
 **Single writer per store, with no exceptions and no shared tables.**
@@ -707,10 +739,10 @@ read by display.
 | Store | Sole writer | Readers |
 |---|---|---|
 | `catalogue.sqlite` | curation | curation |
-| `theme-manifest.json` | curation | display |
+| `theme-manifest.json` — **one per wall once § One manifest per wall lands** | curation | display |
 | image tree (`raw/`, `ready/`, …) | curation | display |
 | `display-state.sqlite` | display | display |
-| `display-heartbeat.json` (heartbeat) | display | curation |
+| `display-heartbeat.json` (heartbeat) — **likewise one per wall** | display | curation |
 
 There is no entity written by both planes, so there is no coordination protocol,
 no conflict resolution, and no distributed-transaction problem. That is the payoff

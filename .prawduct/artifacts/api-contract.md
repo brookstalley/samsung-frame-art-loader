@@ -1181,7 +1181,7 @@ spellings for "change this" costs more than the orthodoxy is worth here.
 | `GET /api/conversations/{id}` | One thread with its turns. | `ConversationTurn` — **unbuilt** | none proposed |
 | `POST /api/conversations/{id}/turns` | One exchange. **Spends** — `SpendRecord` category `conversation_tokens`. | `ConversationTurn` — **unbuilt** | none proposed |
 | `POST /api/conversations/{id}/commit` | Commit a direction: starts a `DiscoveryRun` and sets the turn's `committed_run_id`. | `ConversationTurn` — **unbuilt** | none proposed |
-| `DELETE /api/conversations/{id}` | **Deliberately shapeless — blocked on issue #118.** | — | — |
+| `DELETE /api/conversations/{id}` | Deletes the thread and its turns. **Detaches rather than cascades** — see below. | `ConversationTurn` — **unbuilt** | none proposed |
 | `GET`/`POST /api/affinities`, `DELETE /api/affinities/{id}` | The Taste screen, and every sample reaction in a conversation. | `Affinity` — **unbuilt** | `art_taste(action='list'\|'set'\|'delete')` — decided 2026-08-11, see below and § `art_taste` |
 | `POST /api/works/{id}/mat` | Re-derive a work's mat. **Owned by issue #91, not by this set** — see below. | `MatColor`, built | `art_catalogue(action='set_mat_color')`, built |
 | `POST /api/directives` (shape open) | The Walls screen's `next`. **The only screen action here with an MCP action and no HTTP route at all** — see below. | `Directive`, built | `art_display(action='next')`, built |
@@ -1195,6 +1195,28 @@ review view's own source. The cost is that counts are recomputed on page 2 of a
 grid that did not change them. That is accepted rather than optimised away, on a
 loopback service serving one household; **revisit trigger:** the recompute shows
 up in the collection's response time on the real thousands-scale corpus.
+
+**Three built routes gain a wall, and this is the only change in this section to
+something that already ships.** The operator ruled on 2026-08-12 that themes are
+created globally and assigned per wall (`data-model.md` § ThemeAssignment), which
+makes three of the routes above singular where the product is not:
+
+| Route | Today | Becomes |
+|---|---|---|
+| `POST /api/themes/{id}/activate` | Changes *the* wall | Names which wall it hangs on. The wall is a required part of the request, **even while there is one and the answer is obvious** — the IA's rule that every act naming a wall keeps a confirmation from silently becoming wrong. |
+| `GET /api/manifest` | What a theme would put on *the* wall | Takes the wall as well as the theme: exclusions are per-wall once two walls can hang different themes, and this route's whole job is to state a consequence before it happens. |
+| `POST /api/directives` (designed above) | An advance | Names the wall. `Directive` stops being a singleton and becomes one row per wall, so a `next` in the living room does not step the study. |
+
+**`art_theme(action='activate')` and `art_display` take the same parameter**, by
+the parity requirement in `product-brief.md` item 8 — a model that can hang a
+theme must be able to say where, and an action that guesses the wall is worse on
+the tool surface than on the web one, because there is no confirmation dialog to
+catch it.
+
+**None of this is built**, and the one-wall installation is the degenerate case
+throughout: one wall, one assignment, identical behaviour. The migration and the
+inter-plane half (`architecture.md` § One manifest per wall) belong to
+`build-plan-curation-ux.md`.
 
 **"Work delete" was the wrong word, and the route is archive.** The IA § Status
 row asked for one; `data-model.md` gives `Artwork.status` exactly two values,
@@ -1267,6 +1289,19 @@ sentence and nothing else.
 > choice: the earlier draft argued it "collapses into a refusal anyway when the
 > theme being deleted is the only one", which is the opposite of what ships.
 
+> **Both rules generalise once themes are assigned per wall, and neither survives
+> translation unexamined.** "Refuses the active theme while another exists" becomes
+> **refuses a theme hung on any wall** — a theme on two walls is two rooms that go
+> dark, so the count that matters is assignments and not themes. And the
+> reconcile-promotion this refusal was built to prevent is being **dropped**
+> rather than made per-wall (`data-model.md` § ThemeAssignment), which removes the
+> guard's original motivation while leaving the guard correct for a better reason:
+> a curator deleting what is hanging should choose the replacement, and with the
+> promotion gone the alternative is not a surprise theme but a blank wall. The
+> archive confirmation's wall consequence generalises the same way — it names
+> *which* walls lose the picture. Neither is built; both belong to the chunk that
+> builds the assignment.
+
 **Taste gets an MCP tool; conversation does not — settled by the operator
 2026-08-11, and the three cases came apart under the ruling.** `product-brief.md`
 item 8 states as a must-have that **every content-management operation is available
@@ -1291,8 +1326,29 @@ weakening it.** The reasons were never the Frozen-tier argument: the in-UI agent
 *is* an MCP client, so a model conducting a conversation would be reading its own
 thread back through a tool; and the operation a model actually wants is the taste,
 not the transcript. Granting the first while withholding the second is precisely
-what that reasoning asked for. `DELETE /api/conversations/{id}` stays shapeless
-behind issue #118 on its own account.
+what that reasoning asked for. `DELETE /api/conversations/{id}` keeps its
+deferral on the *tool* side for the same reasons; what it no longer lacks is a
+shape.
+
+**`DELETE /api/conversations/{id}` has one now — ruled by the operator 2026-08-12,
+closing issue #118.** The rule and its reasoning live in `security-model.md`
+§ Deleting a conversation, which is the authority; what this section owes is the
+route's own obligations:
+
+- **It deletes the thread and its turns, and detaches everything derived from
+  them.** `Affinity.source_turn_id` and `SpendRecord.conversation_turn_id` are
+  nulled. Nothing else is touched.
+- **The response names what was detached**, because the confirmation has to state
+  a consequence rather than a row count: how many affinities keep their judgment
+  and lose their derivation, and that those can no longer be rebuilt when the
+  derivation improves. The IA's rule for archive and for activation — a
+  confirmation names the consequence in the curator's terms — binds here, and this
+  is the one operation in the product that genuinely destroys a record.
+- **It must not enforce `inferred ⇒ source_turn_id` as a stored constraint.** That
+  rule, stated in § `art_taste` above, is an invariant on the write path only;
+  built into the schema it makes this route impossible. This is the sentence a
+  builder needs, and it is why the constraint's *site* is named rather than left
+  to reading.
 
 **Spend history needs no new tool, and its row no longer borrows taste's reasoning.**
 Item 8 reaches content management, and a read of what was spent is not that under
