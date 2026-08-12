@@ -15,6 +15,17 @@
  * `params` is the fragment's `?key=value` state — a search query, an active
  * filter set, and the destination a contextual screen was opened from. It is
  * always an object, never null, so every reader can index it without a guard.
+ *
+ * **`watch` belongs to the run view alone, and it is the exception rather than
+ * the precedent.** Everything else here is read by more than one module, which
+ * is what earns a field a place in shared state; `watch` holds one screen's
+ * poll bookkeeping and is written and read only by `screens/run.js`. It is here
+ * because `test_the_run_view.py` reads `state.watch.failures` through the
+ * published object, which is the one thing a screen-local variable could not
+ * offer. The counter-example is deliberate and one directory along:
+ * `screens/collection.js` keeps its `selected` set at module scope and says why
+ * — it is not addressable, so nothing else can want it. A new screen's private
+ * field goes there, not here, unless a test needs to see it.
  */
 export const state = {
   view: "walls",

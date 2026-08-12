@@ -126,8 +126,8 @@ lesson from a different count, which is why this one is stated as a shape.*
 | `art_discovery` | `estimate`, `start`, `status`, `approve`, `decline`, `cancel`, `resolve_images`, `list_runs`, `spend`, `help` | **The only tool that spends money in amounts worth authorising** — see the correction below. |
 | `art_review` | `list_works`, `get_work`, `list_images`, `set_canonical`, `set_verdict`, `reject_image`, `help` | Returns thumbnails; see Inputs & Outputs. Never spends. |
 | `art_catalogue` | `list`, `get`, `sources`, `archive`, `restore`, `retry_acquisition`, `set_mat_color`, `regenerate`, `help` | `sources` is the provenance read; see below. |
-| `art_theme` | `list`, `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`, `help` | `activate` changes the wall immediately. |
-| `art_display` | `status`, `sync`, `show_now`, `next`, `help` | Every action goes through the theme manifest — see below. |
+| `art_theme` | `list`, `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`, `unhang`, `help` | `activate` changes the wall immediately; `unhang` leaves the wall showing what it was showing. |
+| `art_display` | `walls`, `add_wall`, `status`, `sync`, `show_now`, `next`, `help` | Every action goes through the theme manifest — see below. `walls` is where every other action's `wall_id` comes from. |
 | `art_taste` | `list`, `set`, `delete`, `help` | The curator's standing judgments about artists, movements and subjects. Never spends. Added 2026-08-11 by operator decision — see below, and § The routes the interface design requires. |
 
 **This table is the surface as designed, and no row states what is built.** That
@@ -200,7 +200,7 @@ display plane a command; it writes desired state, and display converges on it.**
 | Action | What curation does | What display does |
 |---|---|---|
 | `status` | Reads the display plane's heartbeat file | Nothing — it wrote the heartbeat already |
-| `sync` | Rebuilds and rewrites the manifest from the theme hanging on the named wall | Picks up the new manifest on its next poll and reconciles. **Still one file for the installation** — the per-wall split is its own chunk, so a second wall's `sync` overwrites the first wall's manifest |
+| `sync` | Rebuilds and rewrites **that wall's** manifest from the theme hanging on it — `theme-manifest-{wall_id}.json` | Picks up the new manifest on its next poll and reconciles. Each display plane reads the one file its `WALL_ID` names, so syncing one wall cannot disturb another |
 | `show_now(wall_id, artwork_id)` | Increments **that wall's** directive `sequence` and sets its `pinned_work_id` | Jumps to that work, then continues rotating from there |
 | `next(wall_id)` | Increments **that wall's** directive `sequence` with no pin | Steps to the next work in the list |
 
@@ -208,9 +208,19 @@ display plane a command; it writes desired state, and display converges on it.**
 directive is a row per wall rather than a singleton, so a `next` in the living
 room does not step the study — which is the whole point of naming a wall, and
 which the earlier form of this table could not express. `status` is the exception
-and stays one for a stated reason: the heartbeat is still one file for the
-installation, so a wall parameter there would be a lie the surface told to look
-consistent. It gains one when there is something per-wall for it to report.
+and takes none, but for the opposite reason to the one it used to give: the
+heartbeat is per wall now, and `status` answers with `walls[]` — every wall's
+reading in one call — so a `wall_id` would narrow an answer that is cheap whole
+and is read by a screen showing all of them.
+
+> **Both this row and that paragraph described the pre-per-wall behaviour until
+> 2026-08-12**, when Critic review found them — after the split had landed, and
+> with the correction already written 1,150 lines further down this file. The
+> `sync` cell was the expensive one: it told an external consumer that a second
+> wall's sync overwrites the first wall's manifest, which is a data-loss
+> behaviour that no longer exists, in the table that is this tool's canonical
+> description. A correction placed after the claim does not reach a reader who
+> stopped at the claim.
 
 `show_now` **refuses any work that could not reach the wall**, rather than pinning
 one, and archiving the pinned work withdraws the pin without advancing the
@@ -1355,14 +1365,21 @@ had designed:
 | — | — | `GET /api/themes` reshaped to `{theme, hanging_on[]}` per entry, because `ThemeOut.is_active` had nothing to become: "is it active" is now "which walls is it on". The MCP listing stays flat with a `hanging_on` key added, since a model reads a list better than a nesting. |
 
 **`art_display(action='status')` still takes no wall, and the reason changed
-underneath it on 2026-08-12.** It said a wall parameter would be a lie while the
-heartbeat was one file, and that the action would gain one when the inter-plane
-chunk landed. That chunk landed: the heartbeat *is* per wall now. The action
-takes no wall anyway, because what it answers is "has every wall reported" —
-it returns `walls[]` with a count and one observation sentence, which is the
-aggregate question and not a per-wall one. A caller wanting one room reads the
-entry it wants out of that list. See § `GET /api/health` aggregates across walls
-above, which this paragraph must not be read as contradicting.
+underneath it on 2026-08-12.** § `art_display` above once said a wall parameter
+would be a lie while the heartbeat was one file, and that the action would gain
+one when the inter-plane chunk landed. That chunk landed and the heartbeat *is*
+per wall now — so the old reason expired, and the action takes no wall anyway for
+a new one: what it answers is "has every wall reported". It returns `walls[]`
+with a count and one observation sentence, which is the aggregate question and
+not a per-wall one, and a caller wanting one room reads the entry it wants out of
+that list. See § `GET /api/health` aggregates across walls above, which this
+paragraph must not be read as contradicting.
+
+> **The reason above is now stated where the action is described, not only
+> here.** It was written only here for a day, 1,150 lines below the table that
+> still carried the expired claim — so the artifact contradicted itself in
+> reading order and the first statement won. Recorded because the lesson is about
+> placement rather than about heartbeats: a correction belongs at the claim.
 
 **"Work delete" was the wrong word, and the route is archive.** The IA § Status
 row asked for one; `data-model.md` gives `Artwork.status` exactly two values,
@@ -1605,6 +1622,26 @@ operations exist, what they stand on, and the rules above that a shape must not
 violate. Everything else in this artifact still binds them, in particular the
 `limit`-and-report-the-total rule under § Conditional Patterns and the single
 `400` error shape.
+
+**The two conversation reads are unpaged, and by the same reasoning `art_taste`
+gives.** `GET /api/conversations` returns every thread and `GET
+/api/conversations/{id}` returns every turn with its frozen samples, with no
+`limit` and no total — because a household's threads and one thread's exchanges
+are tens of rows, on the same scale as its taste, and a page control over ten
+items is a control with nothing behind it. Recorded 2026-08-12 after Critic
+review observed that every other collection in the surface names what bounds it —
+`history_turns`, `SAMPLES_PER_SUGGESTION`, `PAGE_CEILING` with its shortfall note
+— and these two named nothing, which reads as an oversight rather than as the
+judgement it is.
+
+**What would change it, so the next reader can check rather than re-argue.** The
+threads accumulate on the curator's own rate and are deleted by hand, which is
+the ruled lifecycle rather than a retention policy; the turns within one thread
+are bounded by the conversation ending. If either stops being tens — a thread
+that runs for months, or a household that never deletes — the
+`limit`-and-report-the-total rule under § Conditional Patterns is what they take,
+and `POST /turns` answering with the whole thread is the call that will feel it
+first, since each exchange re-sends everything said before it.
 
 **The last three rows came from the screens, not from the debt list, and that is a
 correction worth recording.** The set above was first taken from

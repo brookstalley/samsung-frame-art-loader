@@ -208,9 +208,19 @@ landed the same day**: one manifest and one heartbeat per wall, and each display
 plane serves the one wall its `WALL_ID` names (`architecture.md` § One manifest per
 wall). That is what lets the health panel meet this artifact's requirement to name
 *which* wall is silent, which one shared heartbeat file could never have done.
-**The screens are not**: every layout described here still renders the pre-wall
-surface apart from the health panel, and `build-plan-curation-ux.md` carries the
-rest.
+**The screens followed, and landed by 2026-08-12**: the Walls screen renders one
+section per wall with no single-wall layout underneath it, the Theme screen hangs
+on named walls and takes down from them, and Collection, Discover, Work, Review,
+Conversation and Taste all ship — with the navigation being the three
+destinations this section's Direction asks for rather than a list of screens.
+Every layout described in this artifact is built.
+
+**What is not built is named where it is described, not here.** A blanket "the
+screens are not" outlived its truth by a day and was still being read a chunk
+later, which is the failure this replacement is shaped to avoid: a claim about
+the whole surface goes stale the moment any part of it moves, so the remaining
+gaps belong beside the thing that has them. `build-plan-curation-ux.md` is the
+record of which chunk delivered what.
 
 ## Retrieval: search and facets
 
@@ -399,12 +409,23 @@ The governing rule, inherited from `product-brief.md` § Identity: **the artwork
 the primary content on every screen that shows one, and chrome yields to it.** What
 follows applies it per screen.
 
+**One row here per screen in § Screen Inventory, and the agreement is the check.**
+Stated as a rule rather than as a count on purpose: a number written here would
+have to be edited by whoever adds the tenth screen, which is exactly the person
+who did not edit this table. Read the two lists against each other and a screen
+with no row shows up in the reading. That is how the gap was eventually found —
+Conversation and Taste shipped into § Screen Inventory and this table stayed at
+seven rows until Critic review put the two side by side, a chunk later than the
+screens (#123, closed 2026-08-12).
+
 | Screen | Primary | Secondary | Actions | Status |
 |---|---|---|---|---|
 | The Walls | Each wall's hanging work, large | Title, artist, theme, which wall | Change theme, next, open work | Panel + TV health, quietly |
 | Collection | The grid of images | Counts, active filters | Search, filter, select, add to theme, archive | Total, and what is filtered out |
 | Work | The image at full size | Artist, facets, mat colour, rendition size | Theme membership, re-mat, archive | Fit verdict, image state |
 | Discover | The conversation, or the run list | Samples inline | Type, react, commit, start direct | Run progress, spend |
+| Conversation | The thread, newest exchange last | Each turn's suggestions, with their samples | Type, react to a sample, commit a direction, delete the thread | Whether a turn is in flight, and what the exchange cost |
+| Taste | The judgments, grouped by kind | Sentiment, openness, and how the claim was derived | React, correct, forget, follow a claim back to its turn | Which claims the product inferred rather than was told |
 | Review | The candidate picture | Title, artist, size on this wall | Accept, reject, choose scan, ask better | Verdict, provenance, resolution |
 | Theme | Members in wall order | Name, count | Reorder, rename, hang, delete | Whether it is the active theme |
 | Health | The three observations | Spend history | — | The whole screen is status |

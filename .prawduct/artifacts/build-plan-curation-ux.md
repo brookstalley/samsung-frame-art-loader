@@ -120,12 +120,19 @@ early.)*
 - [x] Chunk 06: `WorkFacet`, text search, and facet counts
 - [x] Chunk 07: Collection — the grid, the rails, and the three empties
 - [x] Chunk 08: The Work screen, archive and restore
-- [ ] Chunk 09: The Theme screen — rename, reorder, hang, delete
+- [x] Chunk 09: The Theme screen — rename, reorder, hang, delete
 - [x] Chunk 10: Conversation — the thread, the turns, and the commit seam
-- [ ] Chunk 11: Taste — affinities, reactions, and the delete that detaches
+- [x] Chunk 11: Taste — affinities, reactions, and the delete that detaches
 
-Context: Plan authored 2026-08-12, the day the operator ruled on the three questions
-that had been holding it. Chunks 01 and 03 landed the same day, and wave 1 — **02, 04 and 06** — was built concurrently by three worktree agents and landed one at a time that evening. **The list order is
+Context: **All eleven chunks are built and landed, 2026-08-12**, closed by the
+cumulative review `rev-20260812T225514Z-8696d792` at zero blocking. Plan authored
+the same day, the day the operator ruled on the three questions that had been
+holding it. Chunks 01 and 03 landed first; wave 1 — **02, 04 and 06** — was built
+concurrently by three worktree agents and landed one at a time that evening; wave
+2 was **05, 07, 08 and 10**; wave 3 was **09 and 11**. Chunk 09 came back once,
+because its own headline fix — a reorder that had never worked downward — was
+still wrong for every theme the product could actually build, which the operator
+settled by ruling #132. **The list order is
 the dependency order,
 not the execution order** — § Parallel Execution below groups these eleven into
 waves, and the one ordering decision worth knowing survives the regrouping: the wall

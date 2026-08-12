@@ -15,6 +15,7 @@ without failing it.
 
 import json
 import pathlib
+import re
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -30,6 +31,21 @@ from curation.persistence.records import (
     RightsStatus,
     SourceClass,
 )
+
+
+def _contextual_and_destination_screens() -> set[str]:
+    """The screens whose address is a bare path, read off `app.js`'s route table.
+
+    Parsed rather than imported, because the table is JavaScript and nothing in
+    this suite executes it. The shape relied on is one screen per line —
+    `name: { … }` — with `detail: true` on exactly the screens keyed by an id,
+    which is the same key `core/route.js` branches on when it resolves a deep
+    link. A screen added to that table without a path fails here.
+    """
+    table = (STATIC_DIR / "app.js").read_text()
+    body = table.split("const ROUTES = {", 1)[1].split("\n};", 1)[0]
+    entries = re.findall(r"^  (\w+): \{(.*)\},$", body, flags=re.M)
+    return {name for name, fields in entries if "detail: true" not in fields}
 
 
 @pytest.fixture
@@ -119,8 +135,20 @@ class TestTheClientIsServed:
         assert "<title>Curation</title>" in response.text
 
     def test_a_deep_link_survives_a_reload(self, http):
-        """In-page navigation writes a fragment, but a bookmark is a real path."""
-        for path in ("/walls", "/collection", "/discover", "/theme", "/health"):
+        """In-page navigation writes a fragment, but a bookmark is a real path.
+
+        **Read off the client's route table rather than listed here**, because a
+        list restated in two files is a list that agrees until somebody adds a
+        screen — and `/taste` shipped without a path for exactly that reason,
+        with this test enumerating the same five names `pages.py` did and
+        therefore agreeing with the bug. The screens with a `detail` are excluded
+        on purpose: their address carries an id, which is not a path the server
+        answers to.
+        """
+        served = {f"/{name}" for name in _contextual_and_destination_screens()}
+        assert served, "no screens were parsed out of the route table — this guard would pass vacuously"
+
+        for path in sorted(served):
             assert http.get(path).status_code == 200, path
 
     def test_the_addresses_the_surface_used_to_answer_to_still_answer(self, http):

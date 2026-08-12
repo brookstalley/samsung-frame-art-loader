@@ -24,6 +24,7 @@
 import { api, fetchAllWorks } from "../core/api.js";
 import { fitBadge, shortfallNote, table } from "../core/badges.js";
 import { confirmAct } from "../core/confirm.js";
+import { hangTheme } from "../core/hanging.js";
 import { el, guard, render } from "../core/render.js";
 import { backLink, go, refresh } from "../core/router.js";
 
@@ -278,22 +279,11 @@ function themePanel(placement, walls, allWorks, repaintThemes) {
  * The wall view is where this lands, and it repaints from the manifest the
  * activation published rather than from the preview above it: the preview said
  * what *would* happen, and what did is a different question. */
-async function hang(themeId, themeName, wall) {
-  const preview = await api(
-    `/api/manifest?wall_id=${encodeURIComponent(wall.wall_id)}&theme_id=${encodeURIComponent(themeId)}`,
-  );
-  const confirmed = await confirmAct({
-    title: `Hang ${themeName} on ${wall.name}?`,
-    consequence: `${preview.summary} Everyone in the house sees ${wall.name} change.`,
-    confirmLabel: "Hang",
-  });
-  if (!confirmed) return;
-  await api(`/api/themes/${encodeURIComponent(themeId)}/activate`, {
-    method: "POST",
-    body: JSON.stringify({ wall_id: wall.wall_id }),
-  });
-  go("walls");
-}
+/* Leaves for the Walls screen, which is where the result of this act is. The
+ * question, the preview and the request are `core/hanging.js`'s — the Walls
+ * screen asks the same one, and one act must not have two wordings. */
+const hang = (themeId, themeName, wall) =>
+  hangTheme({ themeId, themeName, wall, then: async () => go("walls") });
 
 /* Deleting a theme — the one act on this screen that destroys something.
  *

@@ -43,7 +43,7 @@
 
 import { api } from "../core/api.js";
 import { absentImage, facts, table } from "../core/badges.js";
-import { confirmAct } from "../core/confirm.js";
+import { hangTheme } from "../core/hanging.js";
 import { el, guard, render } from "../core/render.js";
 import { go, refresh } from "../core/router.js";
 
@@ -370,24 +370,12 @@ function controls(wall, themes, reason, manifest) {
  * **The wall repaints from the published manifest rather than from optimism.**
  * The refresh after the write re-reads everything; nothing here assumes the
  * activation put up what the preview said it would. */
-async function hang(wall, themes, themeId) {
+/* Repaints in place, because the result of this act is on this screen. The
+ * question, the preview and the request are `core/hanging.js`'s — the Theme
+ * screen asks the same one, and one act must not have two wordings. */
+function hang(wall, themes, themeId) {
   const chosen = themes.find((placement) => placement.theme.theme_id === themeId);
-  const preview = await api(
-    `/api/manifest?wall_id=${encodeURIComponent(wall.wall_id)}&theme_id=${encodeURIComponent(themeId)}`,
-  );
-  const confirmed = await confirmAct({
-    // Names the theme and the wall, even while there is one wall and the answer
-    // is obvious — the rule this whole screen is written to.
-    title: `Hang ${chosen.theme.name} on ${wall.name}?`,
-    consequence: `${preview.summary} Everyone in the house sees ${wall.name} change.`,
-    confirmLabel: "Hang",
-  });
-  if (!confirmed) return;
-  await api(`/api/themes/${encodeURIComponent(themeId)}/activate`, {
-    method: "POST",
-    body: JSON.stringify({ wall_id: wall.wall_id }),
-  });
-  await refresh();
+  return hangTheme({ themeId, themeName: chosen.theme.name, wall, then: refresh });
 }
 
 /* Moving one wall on, and only that wall.

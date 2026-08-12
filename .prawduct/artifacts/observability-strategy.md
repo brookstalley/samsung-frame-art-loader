@@ -510,9 +510,32 @@ repository is **public** and log excerpts are exactly what gets pasted into a
 GitHub issue. Concretely: no OpenRouter API key, no TV pairing token, no full
 `Authorization` header, no `.env` dump on startup.
 
-Beyond credentials there is very little to filter — no PII, no accounts, no user
+Beyond credentials there is very little to filter — no accounts and no user
 records. Prompts and model responses may be logged freely; they contain artwork
-metadata and curatorial intent, nothing personal.
+metadata and curatorial intent.
+
+> **"No PII" stopped being true on 2026-08-12 and this paragraph did not notice**
+> — found by Critic review, and corrected here rather than argued with.
+> `security-model.md` § The one exception designates `ConversationTurn.text` as
+> **the product's only retained free-text record of a person**, and rules that
+> deleting a conversation destroys it. That is a classification this section owns
+> the log-filtering consequences of, and the path is live: `ConversationService`
+> hands the curator's own words to `DiscoveryRunner.start(intent_text=...)`, and
+> § Correlation's stated reason for structured logging is that "an intent is the
+> curator's own words and goes in a log line".
+>
+> **So the delete does not reach the journal, and that is a limit rather than a
+> gap to close.** A log line is written once and shipped; a retraction mechanism
+> over journald would be a second, weaker copy of a deletion guarantee this
+> product does not otherwise make. What follows instead is that **the words are
+> the one thing here whose logging is a decision rather than a freedom**: an
+> intent is logged because a run cannot be explained without the sentence that
+> started it, and a turn's full text is not. That is the built shape rather than
+> an aspiration: `run.started` carries `intent_text`, and every line
+> `ConversationService` writes — `conversation.started`, `.failed`, `.committed`,
+> `.deleted` — carries ids and counts and no text at all. If that ever changes,
+> it changes here first. `security-model.md` is the authority on what the record is; this
+> section is the authority on where it may be repeated.
 
 ## What Each Failure Looks Like
 
