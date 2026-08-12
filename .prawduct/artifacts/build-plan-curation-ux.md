@@ -118,7 +118,7 @@ early.)*
 - [x] Chunk 04: Three destinations — the navigation reshape
 - [x] Chunk 05: The Walls screen — the product's home
 - [x] Chunk 06: `WorkFacet`, text search, and facet counts
-- [ ] Chunk 07: Collection — the grid, the rails, and the three empties
+- [x] Chunk 07: Collection — the grid, the rails, and the three empties
 - [x] Chunk 08: The Work screen, archive and restore
 - [ ] Chunk 09: The Theme screen — rename, reorder, hang, delete
 - [x] Chunk 10: Conversation — the thread, the turns, and the commit seam
@@ -790,6 +790,18 @@ split was made to end, and it will not announce itself as having done so.
 - **Acceptance criteria:** at the prototype's 2,000-work scale the default is contact
   sheet and the grid stays legible; membership can be edited without leaving the
   screen.
+  - **Met as written, and here is the qualifier it needs.** The grid is legible at
+    that scale and the density default is right — but it does not *hold* 2,000
+    works: the client's runaway guard is `PAGE_CEILING × DEFAULT_LIST_LIMIT`,
+    which is 1,250, so a 2,003-work catalogue shows 1,250 of them. The criterion
+    asked about legibility and got a true answer; nobody asked whether the whole
+    collection was reachable, and it is not. It fails audibly — the heading reads
+    "1250 of 2003 works" and a note says how many are held and absent — which is
+    the difference between a declared limit and a silent one. Filed for a ruling
+    on server-side paging versus a raised ceiling with virtualised rendering;
+    neither is any chunk's deliverable here. **Found only because the chunk
+    replaced a stubbed total with two thousand real works**, which is the whole
+    argument for that rework.
 - **Visual change:** yes
 - **Done when:**
   1. Acceptance criteria met and tests pass
