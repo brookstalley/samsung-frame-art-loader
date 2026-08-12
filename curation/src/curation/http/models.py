@@ -851,6 +851,20 @@ class CreateTheme(BaseModel):
     description: str | None = None
 
 
+class RenameTheme(BaseModel):
+    """The new name, and deliberately nothing else.
+
+    `update_theme` can also change a description and a theme's pace, and this
+    body cannot reach either. That is the route's scope rather than an oversight:
+    the service distinguishes "leave this alone" from "clear it" with a sentinel,
+    and a request model whose optional fields default to `None` would erase a
+    theme's rotation settings every time a curator corrected a typo in its name.
+    A body that can only say one thing cannot say that one by accident.
+    """
+
+    name: str
+
+
 class CreateWall(BaseModel):
     """Everything needed to record a wall: a name, and nothing device-shaped."""
 

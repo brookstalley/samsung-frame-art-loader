@@ -37,11 +37,18 @@ had.** Run `cd curation && uv run python -m curation` and open The Walls.
    as *too* quiet for an act that takes a picture off the wall.
 5. **The archive confirmation names which walls lose the picture**, computed from
    each wall's real manifest rather than predicted — and it says the room "loses
-   it at the next manifest build", which is the honest sentence. **Worth your
-   ruling:** archiving does not itself republish, so the work you just archived
-   stays on the television until something rebuilds. Closing that gap means
-   deciding a catalogue edit may drive a display, which is bigger than this
-   screen. See `information-architecture.md` § the archive correction.
+   it at the next manifest build", which is the honest sentence. ~~**Worth your
+   ruling:** archiving does not itself republish.~~ **RULED 2026-08-12: the
+   picture may stay up, provided a path exists to force a rebuild.** It does, and
+   it is re-hanging a wall's current theme — `activate_theme` syncs
+   unconditionally and the Walls picker lists the theme already up, so hanging
+   what is hanging republishes. The catalogue still does not drive the display.
+   **What changed as a result, and is what to look at:** both confirmations now
+   name the remedy as well as the timing — "Re-hanging a wall's current theme
+   builds one" — because a curator told only *when* holds a fact they cannot act
+   on. Judge whether that reads as helpful or as a second sentence in a dialog
+   that was already long. See `information-architecture.md` § the archive
+   correction.
 6. **A work's facets are listed with the rare `sourced` ones marked by a tick**,
    under one footnote saying everything else is inferred. `artist` appears both
    as its own fact row above and in the facet list, which duplicates it — the

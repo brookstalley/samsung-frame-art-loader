@@ -34,6 +34,8 @@ from curation.http.models import (
     SearchUsageOut,
     SpendOut,
     SuggestionOut,
+    ThemeDetailOut,
+    ThemeOut,
     VerdictOut,
     WorkOut,
     WorkPageOut,
@@ -295,6 +297,30 @@ def an_artist(**overrides) -> ArtistOut:
         "given_name": None,
     }
     return ArtistOut(**(fields | overrides))
+
+
+def a_theme(**overrides) -> ThemeOut:
+    fields = {
+        "theme_id": "theme-1",
+        "name": "Winter",
+        "description": None,
+        "rotation_interval_seconds": None,
+        "shuffle": None,
+        "created_at": "2026-08-12T09:00:00+00:00",
+    }
+    return ThemeOut(**(fields | overrides))
+
+
+def a_theme_detail(works, *, theme: ThemeOut | None = None) -> dict:
+    """A theme and its works in curated order, as every membership write answers.
+
+    The order in this body is the whole point of the shape: `POST`/`DELETE` on a
+    theme's works and the position route all answer with it, so the screen
+    repaints from what the write returned rather than reading the order back.
+    Which means a test can hand the client an order no catalogue would produce
+    and see whether the table shows it.
+    """
+    return ThemeDetailOut(theme=theme or a_theme(), works=list(works)).model_dump(mode="json")
 
 
 def an_estimate(**overrides) -> dict:

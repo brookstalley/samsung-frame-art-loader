@@ -1183,8 +1183,8 @@ spellings for "change this" costs more than the orthodoxy is worth here.
 | `GET /api/works` — extended | Gains `q` for text search and one repeatable filter per facet `kind`. Additive to a built route. **Built 2026-08-12** — see below for the parameter shapes. | `WorkFacet`, built | `art_catalogue(action='list')` takes the same filters |
 | `GET /api/works` — facet counts in the same response | The counts the IA's disabled-not-hidden rule needs. **Not a second route** — see below. **Built 2026-08-12**, with the latency measured. | `WorkFacet`, built | as above |
 | `POST /api/works/{id}/archive`, `/restore` | Take a work out of circulation, and put it back. **Not a delete** — see below. **Built 2026-08-12**; both read back the full `WorkDetailOut` dossier, because the screen that archives is the screen that shows the work and a slimmer body would only send it straight back for the rest. | `Artwork.status`, built | `art_catalogue(action='archive'\|'restore')`, already designed |
-| `POST /api/themes/{id}` | Rename. | `Theme`, built | `art_theme(action='update')`, already designed |
-| `DELETE /api/themes/{id}` | Delete. **The refusal it must reuse is already built** — see below. | `Theme`, built, and `DisplayService.delete_theme`'s guard with it | `art_theme(action='delete')`, built and wired to that guard |
+| `POST /api/themes/{id}` | Rename. **Built 2026-08-12**; answers with `ThemeOut`, so the screen repaints the name the service *normalised* rather than the one it typed. Its body carries a name and **nothing else** — see below. | `Theme`, built | `art_theme(action='update')`, already designed |
+| `DELETE /api/themes/{id}` | Delete. **The refusal it must reuse is already built** — see below. **Built 2026-08-12**; answers with `ThemeListOut`, the themes that remain, so the list repaints from the response like every other membership act. | `Theme`, built, and `DisplayService.delete_theme`'s guard with it | `art_theme(action='delete')`, built and wired to that guard |
 | `GET`/`POST /api/conversations` | The thread list, ordered by `last_turn_at`; and starting one. | `Conversation` — **unbuilt** | none proposed — see below |
 | `GET /api/conversations/{id}` | One thread with its turns. | `ConversationTurn` — **unbuilt** | none proposed |
 | `POST /api/conversations/{id}/turns` | One exchange. **Spends** — `SpendRecord` category `conversation_tokens`. | `ConversationTurn` — **unbuilt** | none proposed |
@@ -1386,9 +1386,36 @@ operator settled the question on 2026-08-11, and the answer turned out to be wha
 `DisplayService.delete_theme` had enforced all along, reached by
 `art_theme(action='delete')`. It was generalised from "the active theme" to "hanging on
 any wall" on 2026-08-12, when a theme stopped being active and started hanging somewhere. **This paragraph therefore describes shipped
-behaviour**, and it is the one thing in this section that does: the HTTP route is
-still unbuilt, and what it owes is to call that method rather than to write a guard
-of its own.
+behaviour**, and the HTTP route now shares it: `DELETE /api/themes/{id}` calls that
+method and writes no guard of its own, which is what keeps one refusal sentence
+reaching a curator and an agent alike.
+
+**The rename body carries a name and nothing else, and that is a decision.**
+`update_theme` distinguishes "leave this alone" from "clear this" with a sentinel, so
+a request model whose other fields defaulted to `None` would reset a theme's rotation
+pace every time somebody fixed a typo in its name — silently, and on the surface
+least likely to be looking at pace. A route that can only rename cannot do that. The
+day a screen genuinely edits pace, it earns a model that says so explicitly rather
+than inheriting one that can.
+
+**`POST .../position` takes an index, not a sort key — settled 2026-08-12, and it
+was a defect until then.** The work lands *at* that place and the placed works
+renumber densely around it. What it replaced wrote the number into the column and
+stopped, which sounds equivalent and is not: `list_memberships` breaks a tie on
+`added_at`, so a work sent from 0 to 1 landed level with the work already there and
+sorted ahead of it again, being the older row. Moving a work **up** worked; moving it
+**down** did nothing at all, and the Theme screen's ↓ button had never once
+reordered anything. An index past the end lands at the end rather than refusing —
+there is no wrong answer to "put this last" worth an error — and `null` still means
+unplaced, which is a real destination and is not the same as last.
+
+> **`add` has not been changed to match, and the inconsistency is real.**
+> `add_to_theme(position=N)` still writes a sort key, so one parameter now means two
+> things on two actions and `_POSITION`'s single wire description covers both. Making
+> them agree would change what `test_q1_which_works_belong_to_a_theme…` asserts, and
+> a test is a contract — so this is a ruling to take, not a tidy-up to perform. It
+> also decides insert-before versus insert-after for `add`, which no artifact
+> states. Filed rather than folded into the chunk that found it.
 
 > **The question was put to the operator as though nothing were built, and that
 > framing was wrong** — found by Critic review, R-8, on the commit that recorded the

@@ -93,6 +93,105 @@ def test_q1_a_work_can_be_moved_and_removed_without_touching_the_work_itself(ser
     assert service.get_artwork(second.id).artwork.title == "Chop Suey"
 
 
+def _placed(service, display, *titles):
+    """A theme holding these works, in this order, densely numbered from zero."""
+    theme = display.add_theme(name="Hopper")
+    for position, title in enumerate(titles):
+        display.add_to_theme(theme_id=theme.id, artwork_id=service.add_artwork(title=title).id, position=position)
+    return theme
+
+
+def _order(display, theme):
+    return [entry.artwork.title for entry in display.theme_works(theme.id)]
+
+
+def test_q1_a_position_is_an_index_into_the_order_rather_than_a_number_in_a_column(service, display):
+    """Moving a work *down* one place, which is the move that used to do nothing.
+
+    `list_memberships` breaks a tie on `added_at`, so writing the number and
+    stopping there put the moved work level with the work already at that
+    position and sorted it ahead again, being the older row. Moving up worked and
+    moving down did not — and the Theme screen's ↓ button had therefore never
+    reordered anything, in a way no assertion about the write could see.
+
+    Asserted downwards *and* upwards, because the defect was asymmetric: a test
+    that only moved a work up passes against both implementations.
+    """
+    theme = _placed(service, display, "Autumn Rhythm", "Blue Poles", "Convergence")
+
+    display.move_in_theme(
+        theme_id=theme.id,
+        artwork_id=display.theme_works(theme.id)[0].artwork.id,
+        position=1,
+    )
+    assert _order(display, theme) == ["Blue Poles", "Autumn Rhythm", "Convergence"]
+
+    display.move_in_theme(
+        theme_id=theme.id,
+        artwork_id=display.theme_works(theme.id)[2].artwork.id,
+        position=0,
+    )
+    assert _order(display, theme) == ["Convergence", "Blue Poles", "Autumn Rhythm"]
+
+
+def test_q1_the_order_is_renumbered_densely_so_the_index_sent_back_is_the_index_read(service, display, store):
+    """What makes the round trip work: the surface reads a place off the list it was given.
+
+    A move that left gaps or duplicates in the stored positions would keep
+    answering correctly for one move and drift, and the drift is invisible — the
+    order still reads sensibly right up until two rows tie and the wrong one
+    wins.
+    """
+    theme = _placed(service, display, "Autumn Rhythm", "Blue Poles", "Convergence")
+
+    display.move_in_theme(
+        theme_id=theme.id,
+        artwork_id=display.theme_works(theme.id)[0].artwork.id,
+        position=2,
+    )
+
+    assert [membership.position for membership in store.list_memberships(theme.id)] == [0, 1, 2]
+    assert _order(display, theme) == ["Blue Poles", "Convergence", "Autumn Rhythm"]
+
+
+def test_q1_a_position_past_the_end_puts_the_work_last_rather_than_refusing(service, display):
+    """The list a curator is moving within is the one they are looking at.
+
+    There is no wrong answer to "put this last" worth a refusal, and a surface
+    that had to know the length before it could ask would be holding a count it
+    could only have got from the same list.
+    """
+    theme = _placed(service, display, "Autumn Rhythm", "Blue Poles")
+
+    moved = display.move_in_theme(
+        theme_id=theme.id,
+        artwork_id=display.theme_works(theme.id)[0].artwork.id,
+        position=99,
+    )
+
+    assert moved.position == 1
+    assert _order(display, theme) == ["Blue Poles", "Autumn Rhythm"]
+
+
+def test_q1_returning_a_work_to_unplaced_closes_the_gap_it_left(service, display, store):
+    """Unplaced is a destination, not the end of the order, and the rest renumbers.
+
+    Both halves matter. The work goes after everything placed because nobody has
+    said where it belongs; and the works that stay keep a dense sequence, so the
+    next move made against the list is made against the numbers actually stored.
+    """
+    theme = _placed(service, display, "Autumn Rhythm", "Blue Poles", "Convergence")
+
+    display.move_in_theme(
+        theme_id=theme.id,
+        artwork_id=display.theme_works(theme.id)[0].artwork.id,
+        position=None,
+    )
+
+    assert _order(display, theme) == ["Blue Poles", "Convergence", "Autumn Rhythm"]
+    assert [membership.position for membership in store.list_memberships(theme.id)] == [0, 1, None]
+
+
 def test_q2_which_work_the_wall_is_on_so_the_label_can_match_it(service, display, wall_id):
     """The catalogue's half of the answer: what hangs on the wall, its order, and the pin.
 

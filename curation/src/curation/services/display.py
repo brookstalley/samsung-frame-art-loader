@@ -455,12 +455,56 @@ class DisplayService:
         return membership
 
     def move_in_theme(self, *, theme_id: str, artwork_id: str, position: int | None) -> ThemeMembership:
-        """Change where a work sits in a theme, or return it to unplaced."""
+        """Move a work to a place in the curated order, or return it to unplaced.
+
+        **`position` is an index into the order, not a value written to a
+        column** — the work ends up *at* that place and the works around it are
+        renumbered to make room. Writing the number and stopping there is what
+        this replaced, and it made the ordinary move silently do nothing:
+        `list_memberships` breaks a tie on `added_at`, so a work sent from
+        position 0 to position 1 landed level with the work already there and
+        sorted ahead of it again, being the older row. Moving a work *up* worked
+        and moving it *down* did not, which is the shape a defect takes when
+        nothing renumbers — and the Theme screen's ↓ button had never once
+        reordered anything.
+
+        The renumber leaves the placed works dense from zero, so the index a
+        surface reads off the list it was given is the index it can send back.
+        An index past the end lands at the end rather than being refused: the
+        list a curator is looking at is the one they are moving within, and there
+        is no wrong answer to "put this last" worth a refusal.
+
+        **Unplaced is still a real destination**, and it is not the same as last.
+        `None` means the curator has said nothing about where this work goes;
+        `theme_works` puts those after the placed ones, and returning a work to
+        it renumbers what is left rather than leaving a hole in the sequence.
+
+        One transaction, because a partial renumber is an order no curator asked
+        for and no error message would describe.
+        """
         membership = self._store.get_membership(theme_id, artwork_id)
         if membership is None:
             raise ServiceError(f"Artwork {artwork_id!r} is not in theme {theme_id!r}.")
-        moved = replace(membership, position=self._require_position(position))
-        store_write(self._store.update_membership, moved)
+        target = self._require_position(position)
+        # Everything else that has been placed, in the order it is read in.
+        others = [
+            entry
+            for entry in self._store.list_memberships(theme_id)
+            if entry.artwork_id != artwork_id and entry.position is not None
+        ]
+        if target is None:
+            placed, moved = others, replace(membership, position=None)
+        else:
+            index = min(target, len(others))
+            placed, moved = others[:index] + [membership] + others[index:], replace(membership, position=index)
+        with self._store.transaction():
+            for place, entry in enumerate(placed):
+                if entry.position != place:
+                    store_write(self._store.update_membership, replace(entry, position=place))
+            # The moved row is in `placed` unless it is on its way to unplaced,
+            # where nothing above would write it.
+            if target is None:
+                store_write(self._store.update_membership, moved)
         return moved
 
     def remove_from_theme(self, *, theme_id: str, artwork_id: str) -> None:

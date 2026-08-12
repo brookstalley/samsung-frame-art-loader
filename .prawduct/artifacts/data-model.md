@@ -464,6 +464,21 @@ Join entity. Explicit rather than implicit so ordering can be curated.
 
 > **Q1.**
 
+> **The column is a sort key; a *move* is an index — and the two being different is
+> now a contract rather than an implementation detail.** Recorded 2026-08-12, when
+> the Theme screen's reorder was built and the existing one turned out never to have
+> worked downward. `move_in_theme` renumbers the placed works densely so the index a
+> surface reads off the list it was handed is the index it can send back, which is
+> what makes a ↓ button possible at all: writing the number and stopping left the
+> moved row tied with its neighbour, and `list_memberships` breaks a tie on
+> `added_at`, so the older row won and nothing appeared to happen.
+>
+> The row above stays accurate — this is about who computes the number, not what the
+> column holds. **`add_to_theme` has not been brought into line and is a filed
+> question**, so until it is ruled on, `position` means an index on `reorder` and a
+> sort key on `add`. Reasoning and the test that pins the old semantics are in
+> `api-contract.md` § the theme routes.
+
 ### Wall
 
 A place where art hangs. One display serves one wall. *(Added 2026-08-12, on the
