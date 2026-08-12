@@ -116,13 +116,154 @@ named assumption into a recorded fact, and neither blocks the chunks before it.
 - [ ] Chunk 11: Taste — affinities, reactions, and the delete that detaches
 
 Context: Plan authored 2026-08-12, the day the operator ruled on the three questions
-that had been holding it. Nothing built. **Build order is the list order**, and the
-one ordering decision worth knowing is that the wall chunks come first: they are
-underneath every screen, they are the expensive retrofit, and `information-architecture.md`
-§ More than one wall argues that fixing the *shape* while it is free is the whole
-point. Chunk 03 is out of dependency order deliberately — it is small, it is an
-existing debt, and every screen chunk after it is easier to look at once the palette
-is right.
+that had been holding it. Nothing built. **The list order is the dependency order,
+not the execution order** — § Parallel Execution below groups these eleven into
+waves, and the one ordering decision worth knowing survives the regrouping: the wall
+chunks come first: they are underneath every screen, they are the expensive retrofit,
+and `information-architecture.md` § More than one wall argues that fixing the *shape*
+while it is free is the whole point. Chunk 03 is out of dependency order deliberately
+— it is small, it is an existing debt, and every screen chunk after it is easier to
+look at once the palette is right.
+
+## Parallel Execution
+
+**The dependency graph permits far more concurrency than the file layout does, and
+the file layout is what actually binds.** Every `Depends on:` line in this plan is
+honest, but two shared files decide the schedule:
+
+- **`app.js`** — one script, no modules, and six chunks here rewrite it. Two agents
+  in that file produce a merge conflict, not a build. **Chunk 04 splits it**, which
+  is why the split is a deliverable there and not a nicety; every wave after 04
+  depends on it having happened.
+- **The persistence schema.** Two migrations authored blind to each other have no
+  defined order and no way to acquire one after the fact. The waves below never run
+  two migration-carrying chunks at the same time — that is a scheduling constraint,
+  not a coincidence, and a new chunk that adds a migration inherits it.
+
+**Build in parallel, land in series.** Concurrency buys wall-clock on the building;
+it buys nothing on the reviewing, and trying to make it would cost the per-chunk
+scoping this plan's governance rests on. Chunks are built by worktree-isolated
+subagents and land one at a time through the protocol below.
+
+### The waves
+
+Each row is one barrier: everything in it launches together, and the next wave waits
+for all of it to land. The build critical path is **01 → 04 → 07 → 09** — four builds
+deep rather than eleven long.
+
+**That is a claim about building, not about the whole plan.** Landing stays eleven
+reviews and eleven commits, because "land in series" means exactly that; what the
+waves compress is the coding, which is the part that was serial for no reason. A wave
+whose chunks all finish at once still queues at the land gate, so the realistic saving
+is smaller than four-versus-eleven suggests — the honest version is that the plan stops
+waiting on chunks that never needed each other.
+
+| Wave | Runs concurrently | Model | Why they do not collide |
+|---|---|---|---|
+| 0 | **01** (keystone), **03** (palette), the **Chunk 10 `verify-api` probe**, the **Chunk 06 corpus seed** | 01 opus · 03 sonnet · probe opus · seed sonnet | 03 writes `app.css` and nothing else. The probe writes no product code at all — it captures request and response shapes. The seed builds a fixture. Only 01 touches the schema. |
+| 1 | **02** (per-wall manifest), **04** (navigation + the `app.js` split), **06** (`WorkFacet`, search) | opus | 02 owns `manifest/builder.py`, the display plane and `GET /api/health`; 04 owns `index.html` and the whole of `static/`; 06 owns the schema and `GET /api/works`. They meet only in `api.py`, in different route functions. |
+| 2 | **05** (Walls), **07** (Collection), **08** (Work), **10** (Conversation) | opus | Post-split, each owns one file under `screens/`. Only 10 carries a migration. |
+| 3 | **09** (Theme), **11** (Taste) | opus | Two more `screens/` modules. 11 lands last regardless — it is `cumulative-final`. |
+
+**Wave 0 pulls two things forward that the list order buries.** The `verify-api`
+probe is Chunk 10's step 0 and depends on nothing but the OpenRouter client that
+already exists — running it in wave 0 settles the plan's least-confident assumption
+on the first day instead of after four landings, and if the multi-turn-with-images
+shape is not what Chunk 10 assumes, that is a fact worth holding while 04 is still
+being designed rather than after. The corpus seed is the fixture Chunk 06's
+measurement needs and nothing about it waits on 01.
+
+**Wave 1's one real seam is a contract, not a file.** Chunk 02 changes what
+`GET /api/health` returns; Chunk 04 builds the masthead indicator that reads it.
+Neither agent may ask the other — **both build to `api-contract.md`**, which already
+fixes the shape. If that shape turns out to be wrong, it is the artifact that gets
+corrected and both agents that get re-briefed; an agent that quietly invents a field
+to unblock itself has broken the seam that lets them run at all.
+
+### The land protocol
+
+Each chunk lands alone, into the main checkout, by the main agent:
+
+```sh
+git merge --no-ff --no-commit curation-ux/chunk-NN-<slug>
+cd curation && uv run pytest && uv run ruff check . && uv run black .
+```
+
+then `/prawduct:critic` for that chunk, blocking findings resolved, then the commit.
+
+**`--no-commit` is the whole point.** `chunk`-mode reviews read HEAD's tree against
+the working tree — the uncommitted diff — so a merge that commits itself presents the
+reviewer with an empty diff and a green grade for work nobody read. Leaving the merge
+staged puts exactly this chunk's delta where the reviewer looks, which is the same
+place a serially-built chunk would have put it. The per-chunk commit that
+§ Governance Checkpoints requires is the commit that closes this sequence.
+
+**Branch names carry the scope.** `critic-begin` derives `--scope` by matching the
+branch name against the scopes build plans declare, and this plan declares
+`curation-ux`. A chunk branch named outside that prefix gets attributed to the wrong
+plan; a branch named `curation-ux/chunk-NN-<slug>` needs no `--scope` override.
+`--chunk NN` is still passed by hand, for the reason recorded at the head of this
+plan.
+
+### What stays in the main agent
+
+**Critic, reflection, and every `.prawduct/` write.** Subagents are told not to write
+`.prawduct/` at all: a worktree-isolated agent returns only its code commit, so a
+state update written there is lost, and `project-state.yaml` and `change-log.md` are
+tracked files that every concurrent agent would conflict on at every close. Ticking
+the `## Status` box, appending the change log, updating the norm-index rows Chunks 03
+and 04 owe, and appending `.prawduct/operator-verification.md` are all land-time acts
+by the main agent.
+
+**The corollary is that a worktree agent cannot read its own briefing.**
+`.prawduct/.subagent-briefing.md` is gitignored, so it does not exist in an isolated
+worktree. What the agent needs is **inlined in its prompt** — which is what the brief
+described under § Model tiers produces — and the prompt outranks any file it finds.
+
+### Model tiers
+
+**opus builds every chunk.** Each one writes product code against ratified norms,
+authors the tests that are this plan's contracts, and makes calls a smaller model
+would make plausibly and wrongly. The exceptions below are jobs with a crisp exit
+condition and no design judgment in them:
+
+- **sonnet — Chunk 03.** With the token row's update reserved for the main agent, the
+  chunk's remaining work is transcribing the prototype's palette into `app.css`'s
+  token blocks and running `test_design_tokens.py` until it passes. The test computes
+  every contrast pair and refuses any colour outside a token block, so the gate is
+  mechanical and the agent cannot pass it by being persuasive.
+- **sonnet — the Chunk 06 corpus seed**, and any fixture build like it. Volume, not
+  judgment.
+- **sonnet — the chunk brief.** The artifacts this plan consumes run past half a
+  megabyte, and each chunk needs a few sections of them. A reader that extracts the
+  binding constraints for one chunk into a self-contained brief is doing extraction
+  with light judgment, and it is what makes the inlined prompt above affordable.
+- **fable — sweep execution and suite runs.** Authoring `mutations.json` is design
+  work and belongs to the chunk's opus agent; *running* the sweep is
+  `(mutations + 1) × suite time` of waiting followed by tabulating survivors. Same
+  for running the three commands across three interpreters and reporting what failed.
+
+### What must not run in parallel
+
+- **Two mutation sweeps in one tree.** `tools/mutation_sweep.py` rewrites the source
+  file in place and keeps a `.sweepbak` sibling while it runs; two sweeps over the
+  same file corrupt each other's backup, and the second one's restore writes the
+  first one's mutation back as if it were the original. **Every sweep gets its own
+  worktree** — which also means a sweep can run alongside the chunk agent that
+  ordered it rather than after it.
+- **Two Critic reviews.** `critic-begin` refuses (exit 1) while a review is live, and
+  it is right to: dispatch archives leftover partials, so a concurrent second review
+  sweeps away findings the first one's reviewers are still writing. Reviews are
+  serial by the protocol's own design, which is one more reason landing is.
+- **Two browser suites.** They time real two-second poll intervals and need `-n0`;
+  `CLAUDE.md` records that core contention turns those windows into flakes. One
+  browser suite at a time, and the agent running it says so.
+- **Concurrent `-n auto` suites.** The curation plane's `addopts` claims every core
+  for one run, so a wave of agents oversubscribes the machine by its own width and
+  every agent in it gets slower. **Each concurrent chunk agent passes an explicit
+  small `-n`** — roughly cores-over-agents, `-n 2` for a four-agent wave — while it
+  iterates. The full `-n auto` suite is run once, by the main agent, at the land gate,
+  which is the run that has to be believed anyway.
 
 ## Scaffolding
 
@@ -151,7 +292,10 @@ cd curation && uv run black .
   branch-heavy code — facet counts that exclude their own facet, three distinct
   empty states, a disabled-not-hidden option. The sweep drives `app.js` as happily
   as a Python file; the browser-suite invocation needs the marker passed through
-  (`-- -m browser`).
+  (`-- -m browser`). **Each sweep runs as its own agent in its own worktree** — the
+  chunk's agent authors the mutations, a **fable** agent runs and tabulates them, and
+  the separate tree is a correctness requirement rather than a speed one: the tool
+  rewrites the source in place. See § Parallel Execution.
 
 **Beyond tests:** run the plane (`cd curation && uv run python -m curation`) and use
 it as a curator would. `.prawduct/artifacts/prototypes/curation-ia-prototype.html`
@@ -169,11 +313,20 @@ curation/src/curation/
 ├── http/
 │   ├── api.py            # routes — extended, not restructured
 │   ├── models.py         # response shapes
-│   └── static/           # index.html, app.css, app.js — the redesign
+│   └── static/
+│       ├── index.html
+│       ├── app.css       # the revised palette, Chunk 03
+│       ├── app.js        # boot and the router table, after Chunk 04's split
+│       ├── core/         # fetch plumbing, render/generation guard, badges
+│       └── screens/      # one module per screen — one owner per module
 ├── services/             # display.py, and the new conversation/taste services
 ├── catalogue/            # entities and the durable-store adapter
 └── manifest/builder.py   # per-wall in Chunk 02
 ```
+
+**`core/` and `screens/` do not exist yet** — Chunk 04 creates them, and the
+one-module-per-screen rule is what lets the chunks after it be built concurrently
+(§ Parallel Execution). Every other directory here is as built.
 
 ### Module Boundaries
 
@@ -181,6 +334,13 @@ Unchanged and binding: **operation logic lives in the service layer**; routes an
 MCP tools are thin bindings over it. A rule that appears in both surfaces —
 the delete-theme refusal, the archive wall-consequence — is written once in a
 service and called twice.
+
+**New from Chunk 04, on the client side: a `screens/` module never imports another.**
+Shared code moves down into `core/`; the router table is the only place a screen is
+named from outside itself. This is a boundary before it is a convenience — it is what
+makes one screen one owner, and one owner is what lets the screen chunks be built
+concurrently at all. A screen that reaches sideways rebuilds the single writer the
+split was made to end, and it will not announce itself as having done so.
 
 ## Build Chunks
 
@@ -191,6 +351,8 @@ service and called twice.
   it is what `information-architecture.md` § More than one wall calls the expensive
   retrofit, and it engages a `## Direction` norm head-on.
 - **Depends on:** none
+- **Parallelism:** wave 0, worktree agent, opus. The only wave-0 chunk that touches
+  the schema, and everything in wave 1 waits on it landing.
 - **Artifacts consumed:** `data-model.md` §§ Wall, ThemeAssignment, Directive,
   Constraint 1; `api-contract.md` § Three built routes gain a wall
 - **Deliverables:**
@@ -234,6 +396,9 @@ service and called twice.
   display plane reads the wall it is configured to serve. The chunk that could most
   easily break the architecture norm it is governed by.
 - **Depends on:** Chunk 01
+- **Parallelism:** wave 1, worktree agent, opus. Owns `GET /api/health`'s new
+  aggregate shape; Chunk 04 consumes it from `api-contract.md` in the same wave and
+  the two agents never speak.
 - **Artifacts consumed:** `architecture.md` § One manifest per wall, § Data Ownership
   & Consistency; `boundary-patterns.md`
 - **Deliverables:**
@@ -269,6 +434,11 @@ service and called twice.
   says values live. Closes the `information-architecture.md` § Status row that has
   read "Proposed only… ungoverned until they land" since 2026-08-11.
 - **Depends on:** none
+- **Parallelism:** wave 0, worktree agent, **sonnet** — the one chunk whose remaining
+  work is transcription against a mechanical gate, for the reason in § Model tiers.
+  It writes `app.css` and nothing else, so it collides with nothing in its wave.
+  **The `project-preferences.md` row below is the main agent's to update at land**,
+  not the agent's: subagents do not write `.prawduct/`
 - **Artifacts consumed:** `design-direction.md` § Direction;
   `.prawduct/artifacts/prototypes/curation-ia-prototype.html`
 - **Deliverables:**
@@ -301,10 +471,32 @@ service and called twice.
   Theme becoming contextual screens. **This is the chunk the IA's Direction norm was
   ratified to bind**, and the point at which the surface stops violating it.
 - **Depends on:** Chunk 01 (walls exist to navigate to)
+- **Parallelism:** wave 1, worktree agent, opus. **This chunk is the barrier the rest
+  of the plan is shaped around** — its module split is what lets waves 2 and 3 run at
+  all, so nothing in them starts until it lands.
 - **Artifacts consumed:** `information-architecture.md` §§ Direction, Navigation
   Structure, Screen Inventory
 - **Deliverables:**
   - `index.html` and `app.js`: three destinations, flat, no drawer, no nesting
+  - **`app.js` split into ES modules** — `index.html` loads it as `type="module"`;
+    `app.js` keeps boot and the router table; `core/` holds the fetch plumbing, the
+    `render`/generation guard and the shared badges; `screens/` holds one module per
+    screen. **Scope added deliberately on 2026-08-12, and the reason is not
+    tidiness**: six chunks in this plan rewrite `app.js`, and one file is one writer,
+    so the split is what converts them from a queue into two waves. Splitting here
+    rather than in its own chunk is the operator's call, taken on the grounds that
+    this chunk already rewrites the router and `index.html` and would otherwise be
+    unpicked by the next chunk to touch them. The second reason stands on its own:
+    measured on 2026-08-12, before any screen in this plan is written, the file is
+    already 1,954 lines
+  - **The split is mechanical.** A screen's move into `screens/` and a change to what
+    that screen does are two different acts, and this chunk performs only the first —
+    a module that arrives already reshaped has no reviewable before-state. The
+    destinations' own reshape is this chunk's other deliverables, above
+  - **The no-sideways-import rule recorded in `architecture.md`** § Components &
+    Responsibilities, beside the boundaries it already carries. A structural rule that
+    lives only in a build plan dies when the plan is archived, and this one has to
+    outlive it: every screen added after this work is subject to it
   - The masthead status indicator — always present, reads "well" or names what is
     wrong, expands to Health. **The indicator is the contract that makes demoting
     Health safe**; a silent one is worse than the tab it replaced
@@ -319,10 +511,16 @@ service and called twice.
 - **Tests:** browser — each destination is reachable and addressable; a Work opened
   from one destination returns to it and not to a fixed parent; the status indicator
   announces a degraded state without colour being the sole carrier. Unit — route
-  parsing for the extended state
+  parsing for the extended state. **The existing browser modules are the split's
+  harness**: `test_the_grid.py`, `test_the_review_grid.py` and `test_the_run_view.py`
+  exercise screens this chunk moves but does not redesign, and they pass unchanged
+  across the move or the move was not mechanical
 - **Acceptance criteria:** no destination in the navigation names a pipeline stage;
   Health is reachable and not navigable-to; every screen and consequential state has
-  a URL.
+  a URL. **No module under `screens/` imports another** — they meet in `core/` and in
+  the router table, which is what keeps a later wave's four agents to one shared line
+  each; a screen that reaches sideways into another rebuilds the single writer this
+  split exists to end.
 - **Visual change:** yes
 - **Done when:**
   1. Acceptance criteria met and tests pass
@@ -337,6 +535,8 @@ service and called twice.
   from, and what is next. One wall is the degenerate case of many, never a special
   case — there is no single-wall layout for a second display to replace.
 - **Depends on:** Chunks 01, 02, 04
+- **Parallelism:** wave 2, worktree agent, opus. Owns `screens/walls.js`; carries no
+  migration.
 - **Artifacts consumed:** `information-architecture.md` §§ More than one wall,
   Information Hierarchy, Screen States; flow 6
 - **Deliverables:** the Walls screen; the per-wall theme control and `next`; the
@@ -362,7 +562,13 @@ service and called twice.
 - **Description:** The retrieval layer Collection stands on. `nonfunctional-requirements.md`
   made search mandatory rather than optional, and the fields it searches did not
   exist until `WorkFacet` was designed.
-- **Depends on:** none (backend-only; may run in parallel with 04–05)
+- **Depends on:** none (backend-only)
+- **Parallelism:** wave 1, worktree agent, opus — **not wave 0, though its
+  dependencies would allow it.** It carries a migration and so does Chunk 01, and two
+  migrations authored without sight of each other have no defined order. Landing it
+  behind 01 costs nothing and settles the ordering by construction. Its thousands-scale
+  corpus seed is a separate **sonnet** agent that runs in wave 0, so the fixture is
+  waiting when this chunk starts
 - **Artifacts consumed:** `data-model.md` § WorkFacet; `information-architecture.md`
   § Retrieval: search and facets; `api-contract.md` (the `GET /api/works` extension)
 - **Deliverables:**
@@ -392,6 +598,9 @@ service and called twice.
   beside it rather than in another tab. Themes stop being a destination and become a
   rail that filters and is editable.
 - **Depends on:** Chunks 04, 06
+- **Parallelism:** wave 2, worktree agent, opus. Owns `screens/collection.js`; the
+  theme rail's membership editing is its backend half and touches no other wave-2
+  chunk's routes.
 - **Artifacts consumed:** `information-architecture.md` §§ Information Hierarchy,
   Screen States; flow 5
 - **Deliverables:**
@@ -426,6 +635,8 @@ service and called twice.
   product**, and this chunk is where that stops being a rule in an artifact and
   becomes a label on a control.
 - **Depends on:** Chunks 04, 06
+- **Parallelism:** wave 2, worktree agent, opus. Owns `screens/work.js`; adds routes
+  and a service rule but no entity and no migration.
 - **Artifacts consumed:** `information-architecture.md` § Information Hierarchy;
   `api-contract.md` § "Work delete" was the wrong word
 - **Deliverables:**
@@ -454,6 +665,7 @@ service and called twice.
 - **Description:** The one thing about a theme that is genuinely its own act rather
   than an operation on works.
 - **Depends on:** Chunks 01, 07
+- **Parallelism:** wave 3, worktree agent, opus. Owns `screens/theme.js`.
 - **Artifacts consumed:** `information-architecture.md` flow 5, flow 6;
   `api-contract.md` (theme rename and delete)
 - **Deliverables:** members in wall order; rename via `POST /api/themes/{id}`;
@@ -478,6 +690,10 @@ service and called twice.
   a polish item** — the commit card becomes the run's progress card becomes "12
   works ready to review", with the transcript above it the whole time.
 - **Depends on:** Chunk 04
+- **Parallelism:** wave 2, worktree agent, opus. Owns `screens/conversation.js`, and
+  is the **only** wave-2 chunk carrying a migration — which is what lets the other
+  three run beside it. **Its `verify-api` step runs in wave 0**, as its own opus
+  agent: see Done-when step 0
 - **Artifacts consumed:** `data-model.md` §§ Conversation, ConversationTurn;
   `information-architecture.md` flow 1; `api-contract.md` (the conversation routes)
 - **Deliverables:** `Conversation` and `ConversationTurn`; `GET`/`POST
@@ -498,7 +714,13 @@ service and called twice.
 - **Done when:**
   0. verify-api — probe a real multi-turn exchange with image samples through the
      existing client; capture the actual request and response shapes before any
-     handler is drafted, and build fakes from what came back
+     handler is drafted, and build fakes from what came back. **Run this in wave 0,
+     as its own opus agent, not when this chunk starts.** It depends on nothing but
+     the OpenRouter client that already exists, and it is the step that settles this
+     plan's least-confident assumption — a shape that is not what this chunk assumes
+     is worth knowing while Chunk 04 is still being designed rather than three
+     landings later. It spends real money and writes no product code, so it is also
+     the one wave-0 agent that can fail without costing a rebuild
   1. Acceptance criteria met and tests pass
   2. **`conversation_tokens` ships with its producer or not at all** — the rule
      `data-model.md` states for this category. A route that spends without writing
@@ -512,6 +734,10 @@ service and called twice.
   with its derivation visible. And the one operation in this product that genuinely
   destroys a record.
 - **Depends on:** Chunk 10
+- **Parallelism:** wave 3, worktree agent, opus. Owns `screens/taste.js`. **Lands
+  last whatever else is in flight** — its `cumulative` review reads
+  `merge-base...HEAD`, so it is only the whole-branch review this plan wants if every
+  other chunk is already in
 - **Artifacts consumed:** `data-model.md` § Affinity; `security-model.md` § Deleting
   a conversation; `api-contract.md` § `art_taste`
 - **Deliverables:**
@@ -556,11 +782,27 @@ do — three destinations, the wall first, Health where a status indicator belon
 Everything before 04 is underneath; 04 is where the redesign becomes visible, and
 it is the chunk whose feedback most changes what follows.
 
+**The milestone and the parallelism barrier are the same chunk, and that is a
+scheduling risk worth naming.** Six chunks wait on 04's module split, so the
+temptation at 04 is to land it and fan out immediately — which spends four agents on
+screens the feedback may reshape. **Take the feedback before wave 2 launches.** The
+cost of waiting is one serial pause; the cost of not waiting is four concurrent
+rebuilds.
+
 ## Governance Checkpoints
 
 **Commit & PR cadence:** commit per chunk after its Critic review passes — per-chunk
 commit is what scopes `chunk`-mode reviews, and this plan has eleven of them. Chunk
 11's `cumulative` review makes the branch PR-ready.
+
+**Parallel building does not change this cadence — § Parallel Execution's land
+protocol is what preserves it.** A chunk built in a worktree merges with
+`--no-commit`, is reviewed as the uncommitted diff exactly as a serially-built chunk
+would be, and is then committed. One chunk, one review, one commit, in that order,
+however many agents were building at the time. **Reviews never overlap**:
+`critic-begin` refuses while one is live, and it archives leftover partials on
+dispatch, so a second concurrent review would sweep away findings still being
+written.
 
 - **After Chunk 01:** the keystone review. Four entity changes, a migration over
   live data and a ruling against a Direction norm — confirm the shape before ten
