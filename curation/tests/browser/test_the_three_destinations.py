@@ -509,7 +509,10 @@ def test_the_search_is_the_catalogue_s_and_not_this_screen_s(ui, service, seeded
     ui.page.wait_for_selector("#view h2:has-text('matching')")
 
     assert ui.page.locator("ul.grid li.card").count() == 1
-    assert ui.page.inner_text("#view h2") == "1 works matching \u201cTempera\u201d"
+    # "1 work", not "1 works". The heading pluralises as of the chunk that gave
+    # the grid its rails: a theme holding one work made the old wording visible
+    # often enough to fix, and this line is the copy it was asserting.
+    assert ui.page.inner_text("#view h2") == "1 work matching \u201cTempera\u201d"
 
 
 def test_a_search_finds_a_work_by_its_artist(ui, seeded_service):
