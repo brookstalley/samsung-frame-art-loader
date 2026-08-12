@@ -123,6 +123,30 @@ def test_the_confirmation_names_the_wall_that_is_showing_the_work(ui, ready_work
     assert wall.name in ui.page.inner_text(".confirm-consequence")
 
 
+def test_the_confirmation_says_how_to_make_the_room_catch_up(ui, ready_work, hang):
+    """When *and* how, because the ruling that allows the delay rests on the how.
+
+    Nothing in the archive path republishes a manifest, so the picture stays up
+    until something rebuilds that wall. The operator ruled that acceptable on
+    condition that a path exists to force one — which makes the remedy part of
+    the sentence rather than a nicety, since a curator told only *when* is being
+    handed a fact they cannot act on.
+
+    Asserted apart from the wall-naming test above because they fail for
+    different reasons: that one breaks when the evaluation is wrong, this one
+    when a tidying edit shortens the sentence.
+    """
+    work = ready_work(title="Nighthawks")
+    hang(work)
+
+    open_work(ui, work)
+    ask(ui, "Archive")
+
+    consequence = ui.page.inner_text(".confirm-consequence")
+    assert "next manifest build" in consequence
+    assert "Re-hanging" in consequence
+
+
 def test_a_work_hanging_in_two_rooms_names_both(ui, ready_work, hang):
     """One wall is the degenerate case of many, and the sentence does not switch.
 
@@ -251,7 +275,9 @@ def test_restoring_says_which_act_it_is_and_what_the_wall_will_do(ui, ready_work
     ask(ui, "Restore")
 
     assert ui.page.inner_text(".confirm-title") == "Restore Nighthawks?"
-    assert "next manifest build" in ui.page.inner_text(".confirm-consequence")
+    consequence = ui.page.inner_text(".confirm-consequence")
+    assert "next manifest build" in consequence
+    assert "Re-hanging" in consequence
 
     ui.page.click(".confirm-actions button:has-text('Restore')")
     ui.page.wait_for_selector("#view button:has-text('Archive')")

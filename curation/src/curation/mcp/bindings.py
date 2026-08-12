@@ -56,6 +56,29 @@ Binding = Callable[[Services, Mapping[str, Any]], dict[str, Any]]
 #: model could see in the schema and never have applied.
 _FACET_KINDS: Final[tuple[str, ...]] = tuple(str(kind) for kind in VocabularyKind)
 
+#: What restoring a work does at the wall, and when, and how to make it sooner.
+#:
+#: **A module constant because the browser says the identical sentence.**
+#: `screens/work.js` holds this text verbatim, and two surfaces stating one fact
+#: in different words is how a reader learns to trust neither. Nothing can make
+#: Python and JavaScript share a literal, so the next best thing holds them
+#: together: `tests/unit/test_client_vocabulary.py` asserts this string appears in
+#: the client, and a drift on either side fails there rather than in front of a
+#: curator. Naming it here rather than inline is what gives that test something
+#: to import.
+#:
+#: **The second sentence exists because of a ruling.** The operator ruled on
+#: 2026-08-12 that a work archived while hanging may stay on the television, on
+#: condition that some path exists to push the update — so the surfaces owe the
+#: path, not merely the timing. It is worded for both audiences: a curator
+#: re-hangs from the Walls screen, an agent calls `activate`, and
+#: `DisplayService.activate_theme` writes the assignment and syncs
+#: unconditionally, so hanging what is already hanging republishes.
+RESTORE_NOTICE: Final[str] = (
+    "It is eligible for the wall again; a theme holding it will carry it at the "
+    "next manifest build. Re-hanging a wall's current theme builds one."
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -126,7 +149,7 @@ def _restore_artwork(services: Services, arguments: Mapping[str, Any]) -> dict[s
     artwork = services.catalogue.restore_artwork(arguments["artwork_id"])
     return ok(
         artwork=_artwork_fields(artwork),
-        notice="It is eligible for the wall again; a theme holding it will carry it at the next manifest build.",
+        notice=RESTORE_NOTICE,
     )
 
 

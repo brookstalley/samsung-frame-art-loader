@@ -21,6 +21,7 @@ import pytest
 
 from curation.discovery.conversation import SUGGESTION_KINDS
 from curation.http.pages import STATIC_DIR
+from curation.mcp.bindings import RESTORE_NOTICE
 from curation.persistence.discovery_records import (
     ResolutionStatus,
     RunStatus,
@@ -270,3 +271,40 @@ def test_every_facet_kind_label_actually_has_a_word_in_it():
 
     empty = sorted(key for key, phrase in values.items() if not phrase.strip())
     assert not empty, f"`FACET_KIND_WORDS` has keys with no words behind them: {empty}"
+
+
+def test_both_surfaces_say_the_same_sentence_about_a_restored_work():
+    """One fact, one wording, across a boundary no compiler checks.
+
+    The agent-facing notice and the Work screen's confirmation are the same
+    sentence deliberately: a curator who restores through the browser and an
+    agent that restores through `art_catalogue` are told the same thing about
+    when the wall catches up and how to make it sooner. Two surfaces stating one
+    fact in different words is how a reader learns to trust neither, and the
+    divergence is invisible from either side alone — each file reads fine.
+
+    Python and JavaScript cannot share a literal, so this is the join. It fails
+    the moment one side is reworded, which is the only moment the fix is cheap.
+    """
+    assert RESTORE_NOTICE in CLIENT, (
+        "The client no longer contains the restore notice verbatim. Either the browser was "
+        "reworded and `bindings.RESTORE_NOTICE` was not, or the reverse — the two surfaces "
+        "have started saying one fact in two wordings."
+    )
+
+
+def test_the_restore_sentence_says_how_to_make_the_wall_catch_up():
+    """The half the operator's ruling turns on, and the half easiest to drop.
+
+    Archiving and restoring are both silent at the wall — nothing in either path
+    republishes a manifest. The operator ruled that this is acceptable *because*
+    a path exists to force one, so a sentence that names the delay without naming
+    the remedy leaves the curator holding a fact they cannot act on. That remedy
+    is a whole clause; a tidying edit removes it without touching the grammar of
+    what remains.
+    """
+    assert "Re-hanging" in RESTORE_NOTICE, (
+        "The restore notice no longer tells the reader how to build a manifest now. "
+        "The operator's ruling that an archived work may stay on the wall depends on "
+        "the surfaces naming that path."
+    )
