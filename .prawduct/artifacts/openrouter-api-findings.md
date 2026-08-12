@@ -753,7 +753,7 @@ doing so means burning a key to exhaustion, they are already recorded against a
 real key above, and `_read_body` discriminates them before any of this code is
 reached. A conversation turn inherits that behaviour unchanged.
 
-### A defect found by accident: the first request on an idle connection costs ~150 seconds, on this machine
+### A defect found by accident: the first request on an idle connection costs ~150 seconds, and the deployment shares the cause
 
 Calls of identical shape took 0.3 s and 158 s. The pattern is not the model:
 
@@ -785,15 +785,57 @@ Three consequences follow, and only the first is about this round: the round's
 own wall-clock was dominated by this, not by the API. **The 180-second timeout is
 the only reason anything works** — a shorter one, which a browser-facing turn
 would reasonably want, turns every turn into `OpenRouterError: Could not reach
-OpenRouter`. And it affects discovery and the mat engine **today**, on any
-deployment whose IPv6 path is broken; it is invisible there because both run on a
-worker thread behind an already-returned run handle, while a conversation turn is
-a synchronous POST a curator is watching. Whether the Pi's network has the same
-pathology is unknown and worth checking before a conversation feature ships.
+OpenRouter`. And it affects discovery and the mat engine **today**; it is
+invisible there because both run on a worker thread behind an already-returned
+run handle, while a conversation turn is a synchronous POST a curator is
+watching.
 
-This did not establish that the pathology is anything but local — it is one
-machine's LAN. The finding is not "the provider is slow"; it is that the client
-has no fallback path when the fast one is broken.
+**Traced afterwards, and the first reading was wrong in the way that mattered.**
+This is not one machine's LAN. IPv6 is configured correctly and works locally — a
+global SLAAC address, a valid default route, the router answering `ping6` in 5 ms.
+Packets leave the house and die four hops out, in the *provider's* transit:
+
+```
+traceroute6 → Cloudflare              traceroute6 → Google
+ 1-3  (local, then the ISP)            1-3  (same)
+ 4    edge8.denver1.level3.net  15ms   4    edge8.denver1.level3.net  16ms
+ 5-12 * * * * * * * *                  5-12 * * * * * * * *
+```
+
+Over IPv4 that same Level3 interface forwards fine. So it is IPv6-specific,
+**destination-independent** — Google and Cloudflare die identically — and
+upstream of the building: an advertised prefix with no working transit behind it.
+`openrouter.ai` is incidental; every AAAA on the internet black-holes from this
+address.
+
+**Which means the deployment shares it, and this stops being a dev-machine quirk
+to note and move past.** The panel runs on the same uplink.
+
+**The fix is one argument, and it does not wait on the ISP.** `_post` passes a
+*scalar* `timeout=` (`openrouter.py:319`), and httpx applies a scalar to connect,
+read, write and pool alike — so the dead socket gets the whole generation budget.
+Splitting it bounds the doomed attempt without touching the budget generation
+actually needs:
+
+```python
+httpx.Timeout(180.0, connect=5.0)
+```
+
+`discovery/artic.py` already carries exactly this shape; the mitigation this
+codebase had already chosen was applied to one client and not the other.
+
+**One number to be careful with, because two readings of this got it wrong in
+opposite directions.** `openrouter.ai` publishes **two** AAAA records and two A
+records (verified 2026-08-12) — not the ten an earlier arithmetic assumed. So
+`connect=5.0` costs about *ten* seconds on a cold connection, not five and not
+fifty: httpx walks the resolved list in order and each dead address costs the
+bound. That is still the difference between a turn a curator abandons and one
+they wait through. **And the measured 151 s does not decompose cleanly against
+two addresses** — it is recorded here as measured and unexplained, rather than
+fitted to a formula.
+
+The finding is not "the provider is slow"; it is that the client has no fallback
+path when the fast one is broken, on a network where the fast one is broken.
 
 ### What this round left open
 
