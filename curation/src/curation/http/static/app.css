@@ -1354,3 +1354,53 @@ dialog.confirm::backdrop {
   font-size: var(--text-sm);
   color: var(--text-muted);
 }
+
+/* The three reactions, under the picture that prompted them. Wrapping, because
+   three controls and a 12rem picture do not share a line on a phone. */
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+/* "Go to <artist>'s work", set apart from the reactions above it — a rule and a
+   gap, because it is the one control in a turn that leaves the thread and a
+   curator should be able to see that before pressing it rather than after. */
+.departure {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+/* -- taste ------------------------------------------------------------------ */
+
+.taste-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.affinity + .affinity {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.affinity p {
+  margin: 0 0 var(--space-1);
+}
+
+.affinity-judgment {
+  display: flex;
+  gap: var(--space-1);
+  align-items: baseline;
+}
+
+/* Indented under the judgment it qualifies, so the page reads as a list of
+   judgments each carrying its provenance rather than as a list of alternating
+   facts. */
+.affinity-provenance {
+  margin: 0 0 var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}

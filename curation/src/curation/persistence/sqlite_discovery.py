@@ -40,6 +40,9 @@ from curation.persistence.adapter import (
     to_money,
 )
 from curation.persistence.discovery_records import (
+    Affinity,
+    AffinityDerivation,
+    AffinitySentiment,
     CandidateImage,
     CandidateWork,
     Conversation,
@@ -58,7 +61,7 @@ from curation.persistence.discovery_records import (
     WorkProvenance,
 )
 from curation.persistence.durable import OrderBy
-from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
+from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass, VocabularyKind
 
 DISCOVERY_SCHEMA = """
 CREATE TABLE IF NOT EXISTS discovery_runs (
@@ -181,6 +184,47 @@ CREATE INDEX IF NOT EXISTS conversation_turns_by_conversation ON conversation_tu
 CREATE UNIQUE INDEX IF NOT EXISTS conversation_turns_one_per_ordinal
     ON conversation_turns(conversation_id, ordinal);
 
+-- What the curator has reacted to, and how. Retained across conversations, and
+-- the thing a new conversation opens knowing.
+CREATE TABLE IF NOT EXISTS affinities (
+    id             TEXT PRIMARY KEY,
+    kind           TEXT NOT NULL,
+    -- The thing itself as it was named, and a string rather than a foreign key.
+    -- The artists a conversation surfaces are the ones the curator could not
+    -- have named, so the common case at the moment a judgment is written is a
+    -- name with no row in this catalogue at all.
+    value          TEXT NOT NULL,
+    sentiment      TEXT NOT NULL,
+    -- Independent of `sentiment`, because one scalar is a bug: "meh on Magritte,
+    -- but open to learning more" is two facts, and collapsing them silently
+    -- blacklists an artist the curator asked to keep hearing about.
+    open_to_more   INTEGER NOT NULL,
+    derivation     TEXT NOT NULL,
+    -- Required by the write path for `inferred` and `observed`, and NOT NULL
+    -- here would say the same thing wrongly: it is a rule about which
+    -- derivations need evidence, not about the column.
+    rationale      TEXT,
+    -- **Nullable, with no ON DELETE clause, and neither is an oversight.** The
+    -- delete nulls this column: a NOT NULL would forbid the delete outright and
+    -- a cascade would destroy the judgment the delete is required to leave
+    -- standing. The rule that an `inferred` row cites a turn is enforced on the
+    -- write path, in `services/taste.py`, and cannot be enforced here without
+    -- making the deletion ruling unimplementable.
+    source_turn_id TEXT REFERENCES conversation_turns(id),
+    artist_id      TEXT REFERENCES artists(id),
+    created_at     TEXT NOT NULL,
+    updated_at     TEXT NOT NULL
+);
+
+-- One live judgment per thing, corrected in place. An index rather than a table
+-- constraint for the reason the turn ordinal's is: `CREATE UNIQUE INDEX IF NOT
+-- EXISTS` reaches a file written before it and a column clause does not.
+CREATE UNIQUE INDEX IF NOT EXISTS affinities_one_per_thing ON affinities(kind, value);
+
+-- The read behind detaching a deleted conversation, and behind the provenance
+-- link a curator follows from a judgment back to the turn that produced it.
+CREATE INDEX IF NOT EXISTS affinities_by_turn ON affinities(source_turn_id);
+
 CREATE TABLE IF NOT EXISTS spend_records (
     id                TEXT PRIMARY KEY,
     discovery_run_id  TEXT REFERENCES discovery_runs(id),
@@ -203,6 +247,10 @@ CREATE TABLE IF NOT EXISTS spend_records (
 
 CREATE INDEX IF NOT EXISTS spend_records_by_time ON spend_records(occurred_at);
 CREATE INDEX IF NOT EXISTS spend_records_by_run ON spend_records(discovery_run_id);
+-- The read behind detaching a deleted conversation's ledger entries. Without it
+-- the delete is a table scan per turn, on the one operation that must not be
+-- tempted into cascading for want of a cheap way to find the rows.
+CREATE INDEX IF NOT EXISTS spend_records_by_turn ON spend_records(conversation_turn_id);
 
 -- Which works a resolve run covers. Rows are never deleted: coverage records a
 -- fact about the run's scope, which does not change when the run's status does,
@@ -247,6 +295,11 @@ _BY_LAST_TURN: Final[tuple[OrderBy, ...]] = (OrderBy("last_turn_at", descending=
 
 #: The thread's own order. Ascending, because a transcript is read downwards.
 _BY_ORDINAL: Final[tuple[OrderBy, ...]] = (OrderBy("ordinal"),)
+
+#: Taste reads as a list a curator scans for a name, so it is ordered by the
+#: name — grouped by kind first, because the screen groups by kind and an order
+#: the screen has to re-impose is an order that can disagree with it.
+_BY_THING: Final[tuple[OrderBy, ...]] = (OrderBy("kind"), OrderBy("value", ignore_case=True), OrderBy("id"))
 
 
 class SqliteDiscovery(TableAdapter):
@@ -325,15 +378,82 @@ class SqliteDiscovery(TableAdapter):
     def list_conversation_turns(self, conversation_id: str) -> Sequence[ConversationTurn]:
         return self._list("conversation_turns", {"conversation_id": conversation_id}, _BY_ORDINAL, _turn)
 
+    def delete_conversation_turn(self, turn_id: str) -> None:
+        self._delete("conversation_turns", {"id": turn_id})
+
+    def delete_conversation(self, conversation_id: str) -> None:
+        self._delete("conversations", {"id": conversation_id})
+
+    # -- affinities -----------------------------------------------------------
+
+    def add_affinity(self, affinity: Affinity) -> None:
+        self._add("affinities", _affinity_row(affinity), subject=f"affinity {affinity.kind}/{affinity.value!r}")
+
+    def get_affinity(self, affinity_id: str) -> Affinity | None:
+        return self._get("affinities", {"id": affinity_id}, _affinity)
+
+    def find_affinity(self, *, kind: VocabularyKind, value: str) -> Affinity | None:
+        """The one live judgment about this thing, by the handle a caller has.
+
+        (`kind`, `value`) rather than an id, because the thing being judged is a
+        name in a sentence rather than a row anybody fetched — which is what makes
+        the write an upsert.
+        """
+        found = self._list("affinities", {"kind": str(kind), "value": value}, _BY_THING, _affinity)
+        return found[0] if found else None
+
+    def update_affinity(self, affinity: Affinity) -> None:
+        self._update("affinities", BY_ID, _affinity_row(affinity), subject=f"affinity {affinity.id!r}")
+
+    def delete_affinity(self, affinity_id: str) -> None:
+        self._delete("affinities", {"id": affinity_id})
+
+    def list_affinities(
+        self,
+        *,
+        kind: VocabularyKind | None = None,
+        sentiment: AffinitySentiment | None = None,
+        derivation: AffinityDerivation | None = None,
+        source_turn_id: str | None = None,
+    ) -> Sequence[Affinity]:
+        """Every matching judgment, grouped by kind and then by name.
+
+        `source_turn_id` is the detach read and is deliberately a filter here
+        rather than a method of its own: it is the same question every other
+        narrowing asks — which rows carry this value — and a second method would
+        be a second place for the order to be decided.
+        """
+        filters: dict[str, Any] = {}
+        if kind is not None:
+            filters["kind"] = str(kind)
+        if sentiment is not None:
+            filters["sentiment"] = str(sentiment)
+        if derivation is not None:
+            filters["derivation"] = str(derivation)
+        if source_turn_id is not None:
+            filters["source_turn_id"] = source_turn_id
+        return self._list("affinities", filters or None, _BY_THING, _affinity)
+
     # -- spend ----------------------------------------------------------------
 
     def add_spend_record(self, record: SpendRecord) -> None:
         self._add("spend_records", _spend_row(record), subject=f"spend record {record.id!r}")
 
+    def update_spend_record(self, record: SpendRecord) -> None:
+        """Overwrite a stored cost with this one.
+
+        **The ledger's amounts are never revised**, and this exists for the one
+        edit that is not a revision: nulling `conversation_turn_id` when the
+        thread it cites is deleted. What was spent does not change; only the
+        citation goes.
+        """
+        self._update("spend_records", BY_ID, _spend_row(record), subject=f"spend record {record.id!r}")
+
     def list_spend_records(
         self,
         *,
         run_id: str | None = None,
+        conversation_turn_id: str | None = None,
         since: datetime | None = None,
         until: datetime | None = None,
     ) -> Sequence[SpendRecord]:
@@ -346,8 +466,12 @@ class SqliteDiscovery(TableAdapter):
         widening that contract; the day it is, this method is where the change
         lands and no caller sees it.
         """
-        filters = None if run_id is None else {"discovery_run_id": run_id}
-        records = self._list("spend_records", filters, _BY_OCCURRENCE, _spend)
+        filters: dict[str, Any] = {}
+        if run_id is not None:
+            filters["discovery_run_id"] = run_id
+        if conversation_turn_id is not None:
+            filters["conversation_turn_id"] = conversation_turn_id
+        records = self._list("spend_records", filters or None, _BY_OCCURRENCE, _spend)
         return [
             record
             for record in records
@@ -474,6 +598,22 @@ def _spend_row(record: SpendRecord) -> dict[str, Any]:
     }
 
 
+def _affinity_row(affinity: Affinity) -> dict[str, Any]:
+    return {
+        "id": affinity.id,
+        "kind": str(affinity.kind),
+        "value": affinity.value,
+        "sentiment": str(affinity.sentiment),
+        "open_to_more": int(affinity.open_to_more),
+        "derivation": str(affinity.derivation),
+        "rationale": affinity.rationale,
+        "source_turn_id": affinity.source_turn_id,
+        "artist_id": affinity.artist_id,
+        "created_at": to_iso(affinity.created_at),
+        "updated_at": to_iso(affinity.updated_at),
+    }
+
+
 def _coverage_row(coverage: ResolveRunWork) -> dict[str, Any]:
     return {"resolve_run_id": coverage.resolve_run_id, "candidate_work_id": coverage.candidate_work_id}
 
@@ -559,6 +699,24 @@ def _spend(row: Mapping[str, Any]) -> SpendRecord:
         output_tokens=row["output_tokens"],
         units=row["units"],
         conversation_turn_id=row["conversation_turn_id"],
+    )
+
+
+def _affinity(row: Mapping[str, Any]) -> Affinity:
+    return Affinity(
+        id=row["id"],
+        kind=VocabularyKind(row["kind"]),
+        value=row["value"],
+        sentiment=AffinitySentiment(row["sentiment"]),
+        open_to_more=bool(row["open_to_more"]),
+        derivation=AffinityDerivation(row["derivation"]),
+        created_at=require_datetime(row["created_at"], "created_at"),
+        updated_at=require_datetime(row["updated_at"], "updated_at"),
+        rationale=row["rationale"],
+        # Null here is a legal state rather than a defect: an `inferred` row whose
+        # conversation was deleted keeps its judgment and loses its citation.
+        source_turn_id=row["source_turn_id"],
+        artist_id=row["artist_id"],
     )
 
 

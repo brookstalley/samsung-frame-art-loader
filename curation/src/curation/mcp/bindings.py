@@ -32,7 +32,14 @@ from curation.manifest.builder import ManifestBuild
 from curation.mcp.envelope import ImageBlock, ok, with_images
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
-from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, RunKind, RunStatus
+from curation.persistence.discovery_records import (
+    AffinityDerivation,
+    CandidateWork,
+    DiscoveryRun,
+    InitiatedBy,
+    RunKind,
+    RunStatus,
+)
 from curation.persistence.records import Artist, Artwork, Directive, Source, Theme, VocabularyKind, Wall
 from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing, FacetGroup
 from curation.services.container import Services
@@ -43,6 +50,7 @@ from curation.services.errors import ServiceError
 from curation.services.previews import InlinePreview
 from curation.services.review import MAX_REVIEW_LIMIT, CandidatePage, CandidateView, InstanceListing, InstanceView
 from curation.services.runner import RunListing, RunView
+from curation.services.taste import AffinityView
 
 #: A bound action: validated arguments in, a result payload out. Every binding
 #: takes the whole container rather than the one service it happens to need, so
@@ -698,6 +706,71 @@ def _add_wall(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any
     return ok(wall=_wall_fields(services.display.add_wall(name=arguments["name"])))
 
 
+def _list_taste(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    affinities = services.taste.list_affinities(
+        kind=arguments.get("kind"),
+        sentiment=arguments.get("sentiment"),
+        derivation=arguments.get("derivation"),
+    )
+    return ok(affinities=[_affinity_fields(entry) for entry in affinities], count=len(affinities))
+
+
+def _set_taste(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    affinity = services.taste.set_affinity(
+        kind=arguments["kind"],
+        value=arguments["value"],
+        sentiment=arguments["sentiment"],
+        open_to_more=arguments["open_to_more"],
+        # Defaulted here and not in the service signature's absence, because the
+        # tool's own schema names `stated` as the default and a second spelling
+        # of that default is a second thing to keep agreeing.
+        derivation=arguments.get("derivation", str(AffinityDerivation.STATED)),
+        rationale=arguments.get("rationale"),
+        source_turn_id=arguments.get("source_turn_id"),
+    )
+    return ok(affinity=_affinity_fields(affinity))
+
+
+def _delete_taste(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    forgotten = services.taste.delete_affinity(arguments["affinity_id"])
+    return ok(
+        affinity=_affinity_fields(forgotten),
+        notice=(
+            "That judgment is gone and nothing restores it. The product now knows nothing about "
+            f"{forgotten.affinity.value!r} rather than knowing to leave it alone."
+        ),
+    )
+
+
+def _affinity_fields(view: AffinityView) -> dict[str, Any]:
+    """One judgment as the tool surface reports it.
+
+    Field names match `AffinityOut` on the browser surface exactly, because the
+    two carry the same fact and an agent and a click that call it two things is
+    how they come to disagree about the same taste.
+    """
+    affinity = view.affinity
+    return {
+        "affinity_id": affinity.id,
+        "kind": str(affinity.kind),
+        "value": affinity.value,
+        "sentiment": str(affinity.sentiment),
+        "open_to_more": affinity.open_to_more,
+        "derivation": str(affinity.derivation),
+        "rationale": affinity.rationale,
+        # Null on an `inferred` row whose conversation was deleted, which is a
+        # legal state: the judgment stands and the citation is gone.
+        "source_turn_id": affinity.source_turn_id,
+        # Resolved from the cited turn by the service, so a model following a
+        # judgment back to its thread and a curator clicking through reach the
+        # same one. Null wherever `source_turn_id` is.
+        "conversation_id": view.conversation_id,
+        "artist_id": affinity.artist_id,
+        "created_at": affinity.created_at.isoformat(),
+        "updated_at": affinity.updated_at.isoformat(),
+    }
+
+
 def _built(build: ManifestBuild) -> dict[str, Any]:
     """What a manifest build looks like to a caller. Shared by `sync` and `activate`.
 
@@ -781,6 +854,9 @@ BINDINGS: Final[Mapping[tuple[str, str], Binding]] = {
     ("art_display", "sync"): _sync,
     ("art_display", "show_now"): _show_now,
     ("art_display", "next"): _next,
+    ("art_taste", "list"): _list_taste,
+    ("art_taste", "set"): _set_taste,
+    ("art_taste", "delete"): _delete_taste,
 }
 
 

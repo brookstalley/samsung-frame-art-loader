@@ -1,12 +1,17 @@
-"""The five tools, declared once.
+"""The tools, declared once.
 
-**All five names are registered from the start, and they never change.** A tool
-name is the one part of this surface a client binds to that cannot be evolved
-additively, so they are all claimed at once rather than appearing one at a time
-and tempting a rename along the way. A tool whose actions have not been built
-carries `unavailable_note`: it answers `action='help'` and returns an error
-naming what is available for anything else. That is deliberately more useful
-than an absent tool, which a client discovers only as a missing name.
+**A tool's name never changes once it is registered.** A name is the one part of
+this surface a client binds to that cannot be evolved additively, which is why
+the original set was claimed all at once rather than appearing one at a time and
+tempting a rename along the way. A tool whose actions have not been built carries
+`unavailable_note`: it answers `action='help'` and returns an error naming what
+is available for anything else. That is deliberately more useful than an absent
+tool, which a client discovers only as a missing name.
+
+*This docstring opened "The five tools" until `art_taste` made it six. The
+claim worth making is the rule — names are frozen, and the set only ever grows —
+which `TOOLS` below can be read against; the tally was a copy of a tuple twenty
+lines away, and `api-contract.md` records the same lesson from two other counts.*
 
 **The annotations describe each tool as designed, not as currently built.**
 They are part of the frozen surface: a client that auto-approves on
@@ -22,8 +27,8 @@ service method answers it, and the service method does the work.
 from typing import Final
 
 from curation.mcp.registry import Action, Param, ToolRecord
-from curation.persistence.discovery_records import RunKind, RunStatus
-from curation.persistence.records import ArtworkStatus
+from curation.persistence.discovery_records import AffinityDerivation, AffinitySentiment, RunKind, RunStatus
+from curation.persistence.records import ArtworkStatus, VocabularyKind
 from curation.services.catalogue import MAX_LIST_LIMIT
 from curation.services.review import MAX_REVIEW_LIMIT
 
@@ -874,14 +879,161 @@ ART_DISPLAY: Final = ToolRecord(
     ),
 )
 
+#: Every action's parameters flatten onto one wire schema per tool, so a name
+#: that appears on two actions is described once — the first description is the
+#: one that survives. `kind` is a filter on `list` and the handle on `set`, which
+#: is why this description says what the field *is* rather than what one action
+#: does with it.
+_TASTE_KIND_DESCRIPTION = (
+    "What sort of thing a judgment is about. The same closed vocabulary a work's facets use, so that what "
+    "the curator likes and what the catalogue holds can be matched at all."
+)
+_TASTE_KINDS: Final = tuple(str(kind) for kind in VocabularyKind)
+
+#: The required/optional pair the `run_id` parameters already model, and for the
+#: same reason: every action's parameters flatten onto one wire schema and only
+#: the first description survives, so the two share one that assumes neither
+#: arity. Which actions require it is in each action's own record.
+_TASTE_KIND = Param(name="kind", type="string", description=_TASTE_KIND_DESCRIPTION, choices=_TASTE_KINDS, required=True)
+_FILTER_KIND = Param(name="kind", type="string", description=_TASTE_KIND_DESCRIPTION, choices=_TASTE_KINDS)
+
+_SENTIMENT_DESCRIPTION = (
+    "How warmly the curator holds a thing: loves, likes, cool or declines. Read beside open_to_more rather "
+    "than instead of it — the pair is what lets a lukewarm judgment stay open to being shown more."
+)
+_SENTIMENTS: Final = tuple(str(member) for member in AffinitySentiment)
+
+_TASTE_SENTIMENT = Param(name="sentiment", type="string", description=_SENTIMENT_DESCRIPTION, choices=_SENTIMENTS, required=True)
+_FILTER_SENTIMENT = Param(name="sentiment", type="string", description=_SENTIMENT_DESCRIPTION, choices=_SENTIMENTS)
+
+#: **All three values, on both actions, and `set` refuses one of them at runtime
+#: rather than in the schema.** Narrowing the enum on `set` would be the cheaper
+#: guard and it is the wrong one twice over: the two actions would then declare
+#: `derivation` inconsistently — which the registry refuses at import, because a
+#: flattened wire schema can only publish one of them — and a caller reaching for
+#: `observed` would get "not a valid value" where what they need to be told is
+#: which path can honestly make that claim, and that it is not this one.
+_DERIVATION = Param(
+    name="derivation",
+    type="string",
+    description=(
+        "Where a judgment came from: 'stated' is the curator saying it, 'inferred' is a model reading it out "
+        "of what they said and needs the turn it read, 'observed' is the product reading it out of what was "
+        "accepted and rejected in review. action='set' writes the first two and refuses the third."
+    ),
+    choices=tuple(str(member) for member in AffinityDerivation),
+)
+
+ART_TASTE: Final = ToolRecord(
+    name="art_taste",
+    title="Art taste",
+    summary="Read and correct the curator's standing judgments about artists, movements and subjects.",
+    read_only=False,
+    # Destructive because `delete` drops a judgment and `set` overwrites one, and
+    # neither is recoverable — unlike `art_catalogue(action='archive')`, which is
+    # annotated non-destructive precisely because `restore` exists.
+    destructive=True,
+    open_world=False,
+    actions=(
+        Action(
+            name="list",
+            description="Return the curator's standing judgments, narrowed by kind, sentiment or derivation.",
+            example="art_taste(action='list', kind='artist')",
+            params=(
+                _FILTER_KIND,
+                _FILTER_SENTIMENT,
+                _DERIVATION,
+            ),
+            tips=(
+                "This returns the whole taste unpaged — tens of rows for a household — which is why there is "
+                "no action='get'. Read it once and work from what comes back.",
+                "Read `open_to_more` beside `sentiment` rather than instead of it: a cool judgment that is "
+                "still open to more means keep offering this, and treating it as a refusal blacklists an "
+                "artist the curator asked to keep hearing about.",
+                "A `stated` judgment carries no rationale and that is normal — the curator's own words are "
+                "the account. An `inferred` one whose `source_turn_id` is null had its conversation deleted; "
+                "its rationale is the evidence that survived.",
+            ),
+        ),
+        Action(
+            name="set",
+            description="Write one judgment over whatever was recorded about that thing, or record the first.",
+            example="art_taste(action='set', kind='artist', value='Kandinsky', sentiment='likes', open_to_more=True)",
+            params=(
+                _TASTE_KIND,
+                Param(
+                    name="value",
+                    type="string",
+                    description="The thing itself, as it is named — 'Kandinsky', 'Surrealism', '1920s', 'seascapes'.",
+                    required=True,
+                ),
+                _TASTE_SENTIMENT,
+                Param(
+                    name="open_to_more",
+                    type="boolean",
+                    description=(
+                        "Whether to keep offering this. Separate from sentiment and required with it: 'meh on "
+                        "Magritte, but open to learning more' is two facts, and no default is safe for the second."
+                    ),
+                    required=True,
+                ),
+                _DERIVATION,
+                Param(
+                    name="rationale",
+                    type="string",
+                    description=(
+                        "The account of the judgment in the curator's terms. Required for 'inferred'; normally "
+                        "absent for 'stated', where their own words are the account."
+                    ),
+                ),
+                Param(
+                    name="source_turn_id",
+                    type="string",
+                    description="The conversation turn an 'inferred' judgment was read out of. Required for it.",
+                ),
+            ),
+            tips=(
+                "An upsert, addressed by kind and value rather than by an id — one live judgment per thing, "
+                "corrected in place. There is nothing to fetch first.",
+                "It refuses derivation='observed'. That value is a claim only the review path can make, and a "
+                "row asserting behaviour that never happened cannot be audited afterwards.",
+                "It refuses to overwrite a stronger provenance with a weaker one: a reading of what the "
+                "curator said cannot overwrite what they said or did. Ask them, then write it as 'stated'.",
+                "Writing replaces the provenance as well as the judgment, so a correction cites the turn it "
+                "came from or none — never the turn the previous judgment cited.",
+            ),
+        ),
+        Action(
+            name="delete",
+            description="Forget one judgment entirely. Not recoverable.",
+            example="art_taste(action='delete', affinity_id='<an affinity_id from action=list>')",
+            params=(
+                Param(
+                    name="affinity_id",
+                    type="string",
+                    description="The judgment to forget, as returned by action='list'.",
+                    required=True,
+                ),
+            ),
+            tips=(
+                "Forgetting is not the same as recording a refusal: a deleted judgment leaves the product "
+                "knowing nothing about that thing, where sentiment='declines' tells it to stop offering it. "
+                "If the curator wants it left alone rather than forgotten, use action='set'.",
+            ),
+        ),
+    ),
+)
+
 #: Registration order, which is the order a client sees. Money first, then the
-#: gate that money runs through, then the collection it lands in.
+#: gate that money runs through, then the collection it lands in, and last what
+#: the product has come to know about the person it is all for.
 TOOLS: Final[tuple[ToolRecord, ...]] = (
     ART_DISCOVERY,
     ART_REVIEW,
     ART_CATALOGUE,
     ART_THEME,
     ART_DISPLAY,
+    ART_TASTE,
 )
 
 TOOLS_BY_NAME: Final[dict[str, ToolRecord]] = {tool.name: tool for tool in TOOLS}

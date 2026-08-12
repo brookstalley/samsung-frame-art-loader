@@ -67,7 +67,7 @@ async def test_the_model_is_offered_the_servers_own_tool_definitions(server_url)
     await drive(server_url, model, goal="Say nothing.", budget=4)
 
     offered = {tool["function"]["name"]: tool["function"] for tool in model.offered_tools}
-    assert set(offered) == {"art_catalogue", "art_discovery", "art_display", "art_review", "art_theme"}
+    assert set(offered) == {"art_catalogue", "art_discovery", "art_display", "art_review", "art_taste", "art_theme"}
 
     # The description is the server's, carried through untouched — this is the
     # property that makes the evaluation able to see description drift at all.

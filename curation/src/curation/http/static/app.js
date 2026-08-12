@@ -28,6 +28,7 @@ import { viewDiscover } from "./screens/discover.js";
 import { viewHealth } from "./screens/health.js";
 import { viewReview } from "./screens/review.js";
 import { RUN_POLL_MAX_FAILURES, viewRun } from "./screens/run.js";
+import { viewTaste } from "./screens/taste.js";
 import { viewTheme } from "./screens/theme.js";
 import { viewWalls } from "./screens/walls.js";
 import { viewWork } from "./screens/work.js";
@@ -72,6 +73,13 @@ const ROUTES = {
   // unreachable by URL.
   review: { render: viewReview, detail: true, opensFrom: "discover" },
   theme: { render: viewTheme, opensFrom: "collection" },
+  // No `destination`, and that absence is the whole of what keeps the three
+  // destinations three: `core/router.js` builds the navigation by filtering this
+  // table on that key, so a contextual screen is registered by leaving it off
+  // rather than by anyone remembering not to add a button. Taste is reached from
+  // Discover and from a suggestion's provenance, and returns to whichever
+  // destination it was opened from.
+  taste: { render: viewTaste, opensFrom: "discover" },
   health: { render: viewHealth, opensFrom: "walls" },
 };
 

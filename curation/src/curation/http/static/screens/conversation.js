@@ -16,9 +16,11 @@
  */
 
 import { api } from "../core/api.js";
+import { confirmAct } from "../core/confirm.js";
 import { el, guard, render } from "../core/render.js";
 import { backLink, go, refresh } from "../core/router.js";
 import { state } from "../core/state.js";
+import { REACTIONS, recordReaction } from "../core/taste.js";
 
 /* The same interval the run view uses, and for the same reasons: slow enough not
  * to hammer a Pi, fast enough that a curator watching a search does not wonder
@@ -187,10 +189,61 @@ async function paint(view, { conversationId, generation, pollGeneration }) {
       el("div", { class: "field" }, [el("label", { for: "say", text: "What are you after?" }), said]),
       el("div", { class: "row" }, [send]),
     ]),
+    el("div", { class: "panel" }, [
+      el("h3", { text: "Delete this conversation" }),
+      el("p", {
+        class: "muted",
+        // Said before the button rather than only in the dialog, because this is
+        // the one control on the surface whose act cannot be undone and a
+        // curator should be able to decide not to press it without pressing it.
+        text:
+          "Everything said here would be destroyed. What was learned from it is kept — the judgments stand " +
+          "and the spending is still recorded — but they stop saying which turn produced them.",
+      }),
+      el("div", { class: "row" }, [
+        el("button", {
+          class: "action quiet",
+          type: "button",
+          text: "Delete this conversation",
+          onclick: () => guard(() => destroy(conversationId)),
+        }),
+      ]),
+    ]),
   );
 
   state.painted = { conversationId, body };
   if (run !== null && !run.run.is_terminal) schedulePoll(conversationId, pollGeneration);
+}
+
+/* Destroy the thread, having said what that costs in the terms it costs it.
+ *
+ * **The one operation on this surface that genuinely destroys a record**, which
+ * is why the confirmation names a consequence rather than a count. Archiving a
+ * work keeps the row; deleting a theme is refused while it is hung; this is
+ * gone. What the curator loses is not "three rows" — it is the ability to
+ * rebuild the judgments this thread produced when the way the product reads a
+ * conversation improves, and that is what the sentence says.
+ *
+ * It navigates afterwards, and that is not the wizard this screen refuses. The
+ * commit stays because there is still a conversation to stay in; here there is
+ * not, and a screen left pointing at a deleted thread would fail its next poll
+ * with an error about something the curator meant to happen. */
+async function destroy(conversationId) {
+  const agreed = await confirmAct({
+    title: "Delete this conversation?",
+    consequence:
+      "Everything said here is destroyed and cannot be recovered. What was learned from it stays — the " +
+      "judgments about your taste and what the talking cost are both kept — but they will no longer say " +
+      "which turn produced them, so they can never be rebuilt when this product gets better at reading a " +
+      "conversation.",
+    confirmLabel: "Delete it",
+  });
+  if (!agreed) return;
+  await api(`/api/conversations/${encodeURIComponent(conversationId)}`, { method: "DELETE" });
+  // Bumped so a poll already in flight cannot land a paint over the screen that
+  // replaces this one, exactly as a write does.
+  state.poll += 1;
+  go("discover");
 }
 
 /* Paint a view that arrived from a write rather than from a poll.
@@ -219,20 +272,35 @@ function thread(view) {
         // An empty string is what a turn that could not be answered holds, and
         // saying so beats an empty paragraph a reader would take for a gap.
         el("p", { class: turn.text ? null : "muted", text: turn.text || "No answer came back for this." }),
-        turn.suggested.length ? el("div", { class: "suggestions" }, turn.suggested.map(suggestion)) : null,
+        turn.suggested.length
+          ? el(
+              "div",
+              { class: "suggestions" },
+              turn.suggested.map((entry) => suggestion(entry, turn.turn_id)),
+            )
+          : null,
       ]),
     ),
   );
 }
 
-/* One thing a turn named, and the pictures found for it.
+/* One thing a turn named, the pictures found for it, and what to do about it.
  *
- * `data-suggestion-kind` / `data-suggestion-value` and `data-sample-title` are
- * a deliberate, undocumented convention rather than a contract: the reaction
- * controls that write affinities belong to a later chunk and to a different
- * file, and they need something stable to attach to without this module being
- * reopened. Nothing in this screen reads them. */
-function suggestion(entry) {
+ * `data-suggestion-kind` / `data-suggestion-value` and `data-sample-title` were
+ * left here by the chunk that built the thread, for the reaction controls to
+ * attach to. This is that chunk, and they are now read: every reaction records a
+ * judgment about the *suggestion* — the artist or movement the reply named — so
+ * the value the affinity is keyed on comes off the enclosing block rather than
+ * off the picture the curator happened to be looking at.
+ *
+ * **The reactions sit on each sample, and the affinity they write is about the
+ * name above them.** That is the flow's own arrangement, and its reason is where
+ * the curator's attention is: the judgment is formed looking at a picture, so
+ * the control belongs beside the picture. The consequence is that three samples
+ * offer three routes to one row, which is harmless — the write is an upsert on
+ * (kind, value) — but is stated here so a reader does not go looking for the
+ * per-picture judgment the data model deliberately cannot hold. */
+function suggestion(entry, turnId) {
   return el("div", { class: "suggestion", "data-suggestion-kind": entry.kind, "data-suggestion-value": entry.value }, [
     el("p", { class: "suggestion-name" }, [
       // Glyph, word and value, so the kind survives greyscale and a reader who
@@ -258,10 +326,98 @@ function suggestion(entry) {
                   })
                 : el("p", { class: "muted", text: "No picture travels with this record." }),
               el("figcaption", { text: sample.artist ? `${sample.title} — ${sample.artist}` : sample.title }),
+              reactions(entry, turnId),
             ]),
           ),
         )
-      : null,
+      : // A suggestion the collection holds no picture for still gets its
+        // reactions. The name is what a judgment is about, and a curator who
+        // recognises a movement they dislike should not have to wait for a
+        // picture of it before saying so.
+        reactions(entry, turnId),
+    departure(entry),
+  ]);
+}
+
+/* The three reactions, and the fourth control kept away from them.
+ *
+ * **The three record taste and stay in the thread.** They write an `Affinity`
+ * with `derivation='stated'` — the curator saying so directly — rather than
+ * leaving the model to infer one from prose, and each is a different pair of the
+ * two fields taste is held in. "Tell me more" is the one worth reading twice: it
+ * is cool *and still open*, which is the sentence the two-field design exists
+ * for.
+ *
+ * The page does not repaint after one. The judgment is recorded elsewhere and
+ * nothing in the transcript changes — a thread that redrew itself under a
+ * curator who pressed a button beside a picture would move the picture. What
+ * confirms it is the control's own state, below. */
+function reactions(entry, turnId) {
+  return el(
+    "div",
+    // Announced rather than only shown: the confirmation below is a change of
+    // label on a control the curator has just left, and a reader who is not
+    // looking at it would otherwise get no acknowledgement at all.
+    { class: "reactions", "aria-live": "polite" },
+    Object.keys(REACTIONS).map((reaction) => {
+      const control = el("button", {
+        class: "action quiet",
+        type: "button",
+        text: reaction,
+        // The value in the accessible name, because the visible label is shared
+        // by every sample on the page: a screen reader moving through a turn
+        // that named three artists would otherwise hear "not this" nine times
+        // with nothing saying what "this" is.
+        "aria-label": `${reaction}: ${entry.value}`,
+        onclick: () =>
+          guard(async () => {
+            await recordReaction({ kind: entry.kind, value: entry.value, reaction, sourceTurnId: turnId });
+            // Said, not merely styled, and said in the past tense so it reads as
+            // a record rather than as an offer. `aria-live` on the row is what
+            // carries it to a reader who is not looking at the button.
+            control.textContent = `${reaction} — recorded`;
+            control.disabled = true;
+          }),
+      });
+      return control;
+    }),
+  );
+}
+
+/* "Go to <artist>'s work" — the one control here that leaves the thread.
+ *
+ * **Kept visually apart from the three reactions because it is a different kind
+ * of act.** The reactions record taste and stay; this one navigates, filtering
+ * Collection to the artist. Sitting it among them would put a control that loses
+ * the curator's place in a row of controls that do not, and the only way to find
+ * that out is to press it.
+ *
+ * Offered for artists only, and that is the vocabulary's doing rather than a
+ * simplification: Collection filters by facet kind, and "go to Surrealism's
+ * work" would be a filter on a kind the grid can take — but the artists a
+ * conversation surfaces are the ones this control exists for, and an artist is
+ * the only kind whose samples came from the collection at all.
+ *
+ * Where it lands is usually nowhere, and that is expected: the artists a
+ * conversation names are by definition ones the curator could not have named, so
+ * a collection holding none of them is the ordinary outcome. Collection says so
+ * as a normal state rather than as a failed query. */
+function departure(entry) {
+  if (entry.kind !== "artist") return null;
+  return el("div", { class: "row departure" }, [
+    el("button", {
+      class: "action quiet",
+      type: "button",
+      text: `Go to ${entry.value}'s work`,
+      // `encodeURIComponent` before the value goes in, because a facet in the
+      // fragment is escaped once by whoever writes it and once more by
+      // `core/route.js` — Collection unescapes both on the way back out, which
+      // is how a value holding the separator survives the trip. The one call is
+      // duplicated from Collection's own `joinValues` rather than shared,
+      // because a screen never imports another screen; the browser test that
+      // follows this button into the empty state is what holds the two together.
+      onclick: () => go("collection", null, { artist: encodeURIComponent(entry.value) }),
+    }),
   ]);
 }
 

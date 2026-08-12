@@ -22,7 +22,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any, Final
 
-from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
+from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass, VocabularyKind
 
 
 class RunKind(StrEnum):
@@ -442,6 +442,94 @@ class SpendRecord:
     #: thread, and a ledger whose totals fall when somebody tidies a transcript
     #: is the under-reporting this table exists to prevent.
     conversation_turn_id: str | None = None
+
+
+class AffinitySentiment(StrEnum):
+    """How warmly the curator holds a thing.
+
+    Four values rather than a number, and **warmth is only half of a judgment** —
+    `Affinity.open_to_more` carries the other half. "Meh on Magritte, but open to
+    learning more" is two facts, and a single scalar renders it as a low value
+    indistinguishable from "never show me this again".
+    """
+
+    LOVES = "loves"
+    LIKES = "likes"
+    COOL = "cool"
+    DECLINES = "declines"
+
+
+class AffinityDerivation(StrEnum):
+    """Where a claim about the curator's taste came from.
+
+    Deliberately *not* `FacetDerivation`, which is a different question with two
+    answers about where a claim about a *work* came from. Only `VocabularyKind`
+    is shared between the two sides; folding the derivations together would offer
+    `observed` to a facet and `sourced` to a taste.
+
+    **`OBSERVED` is a claim only the review path can honestly make**, and no
+    caller may write it: it means the product read the judgment out of accept and
+    reject behaviour, and a row asserting behaviour that never happened is
+    indistinguishable afterwards from one the product earned.
+
+    **`INFERRED` and `OBSERVED` both require a `rationale`.** It is the only
+    evidence that survives a deleted conversation — `source_turn_id` is nulled
+    rather than cascaded — and an inferred judgment with neither turn nor
+    rationale is one the product can neither explain nor revisit.
+    """
+
+    STATED = "stated"
+    INFERRED = "inferred"
+    OBSERVED = "observed"
+
+
+@dataclass(frozen=True, slots=True)
+class Affinity:
+    """One standing judgment about a thing the curator has reacted to.
+
+    Retained across conversations by design, and the thing a new conversation
+    opens knowing. Unique on (`kind`, `value`): one live judgment per thing,
+    corrected in place rather than accumulating a history of contradictions the
+    product would then have to arbitrate between. The history that matters is the
+    turns, which are retained separately.
+
+    **`value` is a string and never a foreign key, and that is this record's
+    central decision.** The product exists to surface artists the curator could
+    not have named, so the overwhelmingly common case at the moment an affinity is
+    written is an artist with no row in this catalogue at all. An FK would make
+    the taste model unable to hold exactly the judgments it exists to hold, and
+    would invert the flow: you could only love an artist you already owned.
+    `artist_id` *follows* the name where a match happens to exist, and its absence
+    means nothing.
+
+    **`source_turn_id` may be null on an `inferred` row, and that is a legal state
+    rather than a corruption.** Deleting a conversation nulls it. The rule that an
+    inferred judgment cites a turn is an invariant on the **write path** — see
+    `services/taste.py` — and building it into the file would make the delete
+    impossible, which is the opposite of what the deletion ruling asks for.
+    """
+
+    id: str
+    kind: VocabularyKind
+    value: str
+    sentiment: AffinitySentiment
+    #: Whether to keep offering this. **Independent of `sentiment`**, so a
+    #: lukewarm reaction cannot silently blacklist an artist the curator
+    #: explicitly asked to keep hearing about.
+    open_to_more: bool
+    derivation: AffinityDerivation
+    created_at: datetime
+    updated_at: datetime
+    #: The account of the judgment in the curator's terms. Null is normal for
+    #: `stated`, where the curator's own words are the account; required by the
+    #: write path for the other two, where it is the only evidence a deleted
+    #: thread leaves behind.
+    rationale: str | None = None
+    #: The turn this was derived from, where one is cited and still exists.
+    source_turn_id: str | None = None
+    #: Set only where `kind` is `artist` **and** the name resolves to a catalogue
+    #: artist. Derived and re-derivable; never the identity.
+    artist_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

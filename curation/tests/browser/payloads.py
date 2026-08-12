@@ -12,6 +12,8 @@ nothing the import does not.
 """
 
 from curation.http.models import (
+    AffinityListOut,
+    AffinityOut,
     ArtistOut,
     CandidateCardOut,
     CandidatePageOut,
@@ -39,6 +41,8 @@ from curation.http.models import (
     WorkPageOut,
 )
 from curation.persistence.discovery_records import (
+    AffinityDerivation,
+    AffinitySentiment,
     InitiatedBy,
     ResolutionStatus,
     RunKind,
@@ -47,7 +51,7 @@ from curation.persistence.discovery_records import (
     Verdict,
     WorkProvenance,
 )
-from curation.persistence.records import ArtworkStatus
+from curation.persistence.records import ArtworkStatus, VocabularyKind
 from curation.services.display_fit import DisplayFit
 
 
@@ -382,3 +386,40 @@ def a_thread(turns=None, **overrides) -> dict:
 def a_conversation_list(conversations=None) -> dict:
     conversations = [a_conversation()] if conversations is None else list(conversations)
     return ConversationListOut(conversations=conversations, count=len(conversations)).model_dump(mode="json")
+
+
+def an_affinity(value="Agnes Martin", **overrides) -> AffinityOut:
+    """One judgment, defaulting to one the curator stated themselves.
+
+    `stated` is the default because it is what every reaction and every
+    correction writes, and because it is the one derivation that legitimately
+    carries neither a rationale nor a turn — a builder defaulting to `inferred`
+    would make every test that did not care about provenance assert against a
+    row the write path would refuse.
+    """
+    fields = {
+        "affinity_id": f"affinity-{abs(hash(value)) % 100000}",
+        "kind": VocabularyKind.ARTIST.value,
+        "value": value,
+        "sentiment": AffinitySentiment.LOVES.value,
+        "open_to_more": True,
+        "derivation": AffinityDerivation.STATED.value,
+        "rationale": None,
+        "source_turn_id": None,
+        "conversation_id": None,
+        "artist_id": None,
+        "created_at": "2026-08-12T10:00:00+00:00",
+        "updated_at": "2026-08-12T10:00:00+00:00",
+    }
+    return AffinityOut(**(fields | overrides))
+
+
+def a_taste(affinities=None) -> dict:
+    """The whole taste as `/api/affinities` answers it.
+
+    `count` is derived rather than passed, exactly as the server derives it: a
+    fixture free to disagree with itself could assert an empty state over a list
+    that holds rows, or a populated screen over none.
+    """
+    affinities = [] if affinities is None else list(affinities)
+    return AffinityListOut(affinities=affinities, count=len(affinities)).model_dump(mode="json")

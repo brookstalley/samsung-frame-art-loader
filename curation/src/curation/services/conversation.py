@@ -40,6 +40,7 @@ from curation.discovery.conversation import ConversationEngine, ConversationFail
 from curation.discovery.engine import EngineSpend
 from curation.persistence.discovery import DiscoveryStore
 from curation.persistence.discovery_records import (
+    Affinity,
     Conversation,
     ConversationTurn,
     DiscoveryRun,
@@ -128,6 +129,61 @@ class TurnView:
     #: is of *what was said* — a thread re-read next month must show the pictures
     #: it showed at the time, not whatever the collection would answer today.
     suggested: Sequence[tuple[Suggestion, Sequence[Sample]]] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationDeletion:
+    """What a delete destroyed, and what it left standing.
+
+    The counts are here so a surface can say how much was detached; the *sentence*
+    is `describe` below, and it is what a confirmation reports. The two are held
+    apart because the requirement is that the confirmation names a consequence
+    rather than a row count — the numbers qualify the sentence, they do not
+    replace it.
+    """
+
+    conversation_id: str
+    turns_deleted: int
+    #: Judgments that kept their judgment and lost their derivation.
+    affinities_detached: int
+    #: Ledger entries that kept their amount and lost their citation. **The month
+    #: total does not move**, which is the whole reason this is a detachment.
+    spend_records_detached: int
+    #: Runs whose committing turn went with the thread. Such a run becomes
+    #: indistinguishable from one started directly — nothing is orphaned, and the
+    #: provenance is gone rather than degraded.
+    runs_unattributed: int
+
+    def describe(self) -> str:
+        """What was lost, in the terms the curator loses it in.
+
+        **Never a row count on its own.** "3 rows deleted" tells somebody nothing
+        about what they can no longer do; what they can no longer do is rebuild
+        those judgments when the derivation improves, and that is not recoverable.
+        """
+        parts = [
+            "The conversation and everything said in it are gone, and that cannot be undone.",
+        ]
+        if self.affinities_detached:
+            judgments = "judgment" if self.affinities_detached == 1 else "judgments"
+            parts.append(
+                f"{self.affinities_detached} {judgments} drawn from it are kept — the taste stands — but they "
+                "no longer say which turn produced them, so they can never be rebuilt when the way this "
+                "product reads a conversation improves."
+            )
+        if self.spend_records_detached:
+            entries = "entry" if self.spend_records_detached == 1 else "entries"
+            parts.append(
+                f"{self.spend_records_detached} spend {entries} keep what they cost and lose only the turn "
+                "they name, so no month total changes."
+            )
+        if self.runs_unattributed:
+            searches = "search" if self.runs_unattributed == 1 else "searches"
+            parts.append(
+                f"{self.runs_unattributed} {searches} started from this thread are untouched, but nothing "
+                "will record that this conversation is where they came from."
+            )
+        return " ".join(parts)
 
 
 @dataclass(frozen=True, slots=True)
@@ -300,6 +356,69 @@ class ConversationService:
         )
         return self.get(conversation_id)
 
+    def delete(self, conversation_id: str) -> ConversationDeletion:
+        """Destroy the thread and its turns, and detach everything derived from them.
+
+        **This is the only operation in the product that genuinely destroys a
+        record**, and the difference from every other removal is worth naming so
+        the shape is not generalised: archiving a work keeps the row and takes it
+        out of circulation, and deleting a theme is refused while it is hung.
+        Here the transcript is gone, which is precisely why the things standing on
+        it are detached rather than destroyed with it.
+
+        **The citations are nulled, never cascaded, and the two rows are nulled
+        for different reasons.** An affinity is a judgment accumulated across
+        conversations and cannot be reconstructed from a thread that no longer
+        exists; cascading would mean deleting a six-month-old transcript quietly
+        resets what the product knows about its operator's taste. A spend record
+        is a ledger entry, and a ledger must not change retroactively; cascading
+        would make a month total *fall* because somebody tidied, which is a number
+        that lies about the past.
+
+        **Nulling is written here rather than as an `ON DELETE` clause on the
+        file**, and that is the whole design: a cascade and a detach are one line
+        apart, both read as correct in a diff, and only one of them survives a
+        mutation sweep of this method. The schema deliberately carries no delete
+        behaviour for either column.
+
+        One transaction, so a delete interrupted halfway cannot leave a judgment
+        citing a turn that is gone.
+        """
+        view = self.get(conversation_id)
+        turn_ids = [entry.turn.id for entry in view.turns]
+        detached_affinities = 0
+        detached_spend = 0
+        runs = sum(1 for entry in view.turns if entry.turn.committed_run_id is not None)
+
+        with self._store.transaction():
+            for turn_id in turn_ids:
+                for affinity in self._store.list_affinities(source_turn_id=turn_id):
+                    store_write(self._store.update_affinity, _detached_affinity(affinity))
+                    detached_affinities += 1
+                for record in self._store.list_spend_records(conversation_turn_id=turn_id):
+                    store_write(self._store.update_spend_record, _detached_spend(record))
+                    detached_spend += 1
+                store_write(self._store.delete_conversation_turn, turn_id)
+            store_write(self._store.delete_conversation, conversation_id)
+
+        log.info(
+            "a conversation was deleted",
+            extra={
+                "event": "conversation.deleted",
+                "conversation_id": conversation_id,
+                "turns": len(turn_ids),
+                "affinities_detached": detached_affinities,
+                "spend_records_detached": detached_spend,
+            },
+        )
+        return ConversationDeletion(
+            conversation_id=conversation_id,
+            turns_deleted=len(turn_ids),
+            affinities_detached=detached_affinities,
+            spend_records_detached=detached_spend,
+            runs_unattributed=runs,
+        )
+
     # -- internals ------------------------------------------------------------
 
     def _append(
@@ -389,6 +508,51 @@ class ConversationService:
             group.query.artist: [Sample(title=work.title, artist=work.artist, image_url=work.preview_url) for work in group.works]
             for group in groups
         }
+
+
+def _detached_affinity(affinity: Affinity) -> Affinity:
+    """The judgment with its citation dropped and everything else kept.
+
+    Every field but `source_turn_id` is carried across on purpose. `rationale` in
+    particular is what an `inferred` row is left with — required on the write path
+    for exactly this moment — and `derivation` is not softened to `stated`, which
+    would be the product claiming the curator said something they never said.
+    """
+    return Affinity(
+        id=affinity.id,
+        kind=affinity.kind,
+        value=affinity.value,
+        sentiment=affinity.sentiment,
+        open_to_more=affinity.open_to_more,
+        derivation=affinity.derivation,
+        created_at=affinity.created_at,
+        updated_at=affinity.updated_at,
+        rationale=affinity.rationale,
+        source_turn_id=None,
+        artist_id=affinity.artist_id,
+    )
+
+
+def _detached_spend(record: SpendRecord) -> SpendRecord:
+    """The ledger entry with its citation dropped. `cost_usd` is untouched.
+
+    The amount is the fact a month total is summed from, and it does not change
+    because a transcript was deleted. Nothing else on the row is rewritten either
+    — a ledger that revises itself is worse than one with a gap in its provenance.
+    """
+    return SpendRecord(
+        id=record.id,
+        category=record.category,
+        cost_usd=record.cost_usd,
+        occurred_at=record.occurred_at,
+        discovery_run_id=record.discovery_run_id,
+        artwork_id=record.artwork_id,
+        model_id=record.model_id,
+        input_tokens=record.input_tokens,
+        output_tokens=record.output_tokens,
+        units=record.units,
+        conversation_turn_id=None,
+    )
 
 
 def _touched(conversation: Conversation, now: datetime) -> Conversation:

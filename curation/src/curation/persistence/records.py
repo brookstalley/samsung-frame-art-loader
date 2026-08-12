@@ -118,15 +118,17 @@ class VocabularyKind(StrEnum):
     **This enum is deliberately shared rather than duplicated, and the sharing is
     the reason `WorkFacet` exists at all.** One set of terms then serves three
     purposes: what a work *is* (`WorkFacet.kind`), what the curator *likes*
-    (`Affinity.kind`, unbuilt), and what discovery weights when it proposes. Two
+    (`Affinity.kind`), and what discovery weights when it proposes. Two
     vocabularies for one idea is the drift being avoided — "Post-Impressionism"
     as a taste and "post impressionist" as a catalogue value cannot be matched,
     and nothing would report the mismatch.
 
-    **So `Affinity` binds to this type when it lands, rather than declaring its
-    own.** Widening one without the other silently breaks the join that makes
-    taste useful, and the only way to make that structural instead of a promise
-    is for there to be one enum to widen.
+    **`Affinity` binds to this type rather than declaring its own**, which is
+    what makes the agreement structural. Widening one without the other would
+    silently break the join that makes taste useful, and the only way to stop
+    that being a promise is for there to be one enum to widen. `Affinity` itself
+    lives in `discovery_records.py`, beside the conversations a judgment is
+    derived from and inside the transaction its detachment has to hold.
 
     Closed on purpose. A free-text kind turns a typo into a new dimension, and
     nothing downstream can tell `subject` from `subjcet`; a seventh kind is a
