@@ -441,9 +441,23 @@ the confirmation says so.
 > precedent that catalogue-side tidying does not reach across the plane boundary —
 > the same reason `clear_wall` does not. **That is a defensible ruling and it
 > leaves a real gap**: a curator who archives the picture they are looking at will
-> still be looking at it. Flagged for the operator rather than closed here, because
-> closing it means deciding that a catalogue edit may drive a display, which is a
-> larger decision than this screen. `architecture.md` records that archiving removes a work
+> still be looking at it.
+>
+> **The operator ruled on that gap on 2026-08-12 (Brooks): the picture may stay up,
+> on the condition that some path exists to push the update, however clunky.** The
+> condition is met, and by a path that is not clunky at all — **re-hanging the same
+> theme on the same wall from the Walls screen.** `activate_theme` writes the
+> assignment and syncs unconditionally, so hanging what is already hanging
+> republishes; the Walls picker lists every theme including the one up, so nothing
+> filters the act out. `screens/theme.js` is the one that cannot do it: it offers a
+> hang button per wall the theme is *not* on, which is right for its own screen and
+> means the republish path lives on Walls alone. A later change that makes the
+> Walls picker skip the hanging theme would silently remove the only path this
+> ruling rests on.
+>
+> So the archive path still does not republish, and the plane boundary still holds:
+> a catalogue edit does not drive a display, and the curator who wants the wall to
+> catch up performs a display act to make it. `architecture.md` records that archiving removes a work
 from the manifest and leaves it in the theme, with `archived` the first of the five
 exclusion causes — and calls that silence "precisely this product's characteristic
 failure". Flow 6 already requires activation to name its consequence in

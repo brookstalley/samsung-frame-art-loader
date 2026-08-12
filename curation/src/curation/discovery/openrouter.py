@@ -72,6 +72,14 @@ KEY_TIMEOUT_SECONDS: Final[float] = 15.0
 #: seconds, so anything slower than a tight loop pays it on every single call. A
 #: browser on the same network falls back in about 250 milliseconds.
 #:
+#: **The measurement above is no longer reproducible from here, and the constant
+#: stays.** The operator disabled IPv6 at the router on 2026-08-12, after the fix
+#: landed, so a cold connection on this network now opens over IPv4 in
+#: milliseconds. That is a change to one network, not to httpx: the next one that
+#: advertises a black-holed prefix — a hotel, a phone hotspot, the ISP again —
+#: brings the whole 150 seconds back. Read a fast cold connect as the router doing
+#: its job, not as evidence this bound is dead weight.
+#:
 #: Five seconds is generous for a reachable host on a slow link and short enough
 #: that walking a dead address family is an inconvenience rather than an outage.
 #: The right long-term answer is a transport that races the two families; this is
