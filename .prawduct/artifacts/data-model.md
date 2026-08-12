@@ -703,8 +703,9 @@ Answers Q15. Added 2026-08-10 with the collection's retrieval surface
 > **`kind` is a shared enum in code, not a matching pair of them.** The rule above
 > — that the two enums must move together — is carried by there being one:
 > `persistence/records.py` declares `VocabularyKind`, `WorkFacet.kind` is typed by
-> it, and `Affinity.kind` binds to the same type when that entity lands. Two enums
-> that must agree is a promise; one enum is a fact.
+> it, and `Affinity.kind` binds to the same type — which it now does, the entity
+> having landed on 2026-08-12. Two enums that must agree is a promise; one enum is
+> a fact.
 >
 > **`derivation` is a second, separate enum, and deliberately.** `FacetDerivation`
 > is `sourced | inferred`; `Affinity.derivation` is `stated | inferred | observed`.
@@ -779,6 +780,32 @@ to arbitrate between. The history that matters is the turns, which are retained.
 > show me this again". The curator's lukewarm honesty would then quietly blacklist
 > an artist they explicitly asked to keep hearing about — the same shape as
 > Q3-versus-Q11, where rejecting an image must not suppress the work.
+
+> **Built 2026-08-12**, as the `affinities` table, `services/taste.py`, the Taste
+> screen, and the `art_taste` tool. Every field above is as designed. Three things
+> the build decided that the design did not state:
+>
+> **What makes one provenance "weaker" than another was undefined, and `set`
+> refuses to overwrite with a weaker one.** The ranking built is `stated` >
+> `observed` > `inferred`, at `_PROVENANCE_RANK` in `services/taste.py`: what the
+> curator said outranks what their behaviour showed, which outranks what a model
+> read into their words. Equal ranks are permitted, so a re-inference can correct
+> an earlier inference and a second statement can correct a first. *This is the
+> builder's ruling rather than an artifact's, named by them as the thing most worth
+> challenging — and they were right to. It is a norm born mid-build.*
+>
+> **`observed` is refused at runtime by `art_taste`, while all three values are
+> published on `set`.** The registry permits one declaration of a parameter across
+> a tool's actions, so the schema cannot offer two of the three and hide the third;
+> the contract instead requires a refusal that names the path which *can* write an
+> observed affinity, which is review.
+>
+> **A reaction is keyed on (`kind`, `value`), so per-picture judgments are not
+> expressible.** The IA and the build plan both put the reaction controls on each
+> *sample*, and three samples of one artist therefore write the same row. Built as
+> specified because the upsert makes it harmless, and stated here rather than left
+> to be discovered: **if per-picture judgments are wanted, this entity changes, not
+> the screen.**
 
 ### Conversation
 

@@ -1053,3 +1053,106 @@ class CommitDirection(BaseModel):
     """
 
     intent: str
+
+
+class ConversationDeletionOut(BaseModel):
+    """What deleting a conversation destroyed, and what it left standing.
+
+    **`description` is the response's point and the counts qualify it.** This is
+    the one operation in the product that genuinely destroys a record, and the
+    requirement is that the confirmation names a consequence — the ability to
+    rebuild those judgments when the derivation improves, which is gone — rather
+    than reporting how many rows moved.
+    """
+
+    conversation_id: str
+    turns_deleted: int
+    #: Judgments that kept their judgment and lost their derivation. Their rows
+    #: are untouched but for `source_turn_id`, which is now null.
+    affinities_detached: int
+    #: Ledger entries that kept their amount and lost their citation. **No month
+    #: total changes**, which is why these are detached rather than cascaded.
+    spend_records_detached: int
+    #: Searches this thread committed. They are untouched; what is gone is the
+    #: record that this conversation is where they came from.
+    runs_unattributed: int
+    description: str
+
+
+class AffinityOut(BaseModel):
+    """One standing judgment about a thing the curator has reacted to.
+
+    `sentiment` and `open_to_more` are two fields rather than one warmth score,
+    because "meh on Magritte, but open to learning more" is two facts and a single
+    scalar renders it as a low value indistinguishable from "never show me this
+    again".
+    """
+
+    affinity_id: str
+    #: One of the six shared vocabulary kinds — the same closed set a work's
+    #: facets are recorded in, so that what a work *is* and what the curator
+    #: *likes* can be matched at all.
+    kind: str
+    #: The thing itself, as it was named. A string and never a foreign key: the
+    #: artists a conversation surfaces are the ones the curator could not have
+    #: named, so most judgments are about a name this catalogue does not hold.
+    value: str
+    sentiment: str
+    open_to_more: bool
+    #: `stated`, `inferred` or `observed` — where the judgment came from, and the
+    #: thing the Taste screen shows beside every row so a curator knows which
+    #: claim they are arguing with.
+    derivation: str
+    #: The account of the judgment in the curator's terms. Null is normal for
+    #: `stated`; required on the write path for the other two, where it is the
+    #: only evidence a deleted conversation leaves behind.
+    rationale: str | None
+    #: The turn this was read out of, where one was cited and still exists.
+    #: **Null on an `inferred` row whose conversation was deleted**, which is a
+    #: legal state rather than a corruption.
+    source_turn_id: str | None
+    #: The thread that turn belongs to, resolved by the service rather than
+    #: stored — the affinity cites a turn, and a turn already knows its
+    #: conversation. This is what the Taste screen's way back to a judgment's
+    #: provenance is addressed by; null exactly where `source_turn_id` is.
+    conversation_id: str | None
+    artist_id: str | None
+    created_at: str
+    updated_at: str
+
+
+class AffinityListOut(BaseModel):
+    """The whole taste, or whatever narrowing was asked for.
+
+    Unpaged, deliberately: this is a household's entire taste, which is tens of
+    rows, and a page over it would be a second way to read what one call hands
+    back whole.
+    """
+
+    affinities: list[AffinityOut]
+    count: int
+
+
+class SetAffinity(BaseModel):
+    """One judgment to write over whatever was there.
+
+    Addressed by (`kind`, `value`) rather than by an id, because the thing being
+    judged is a name in a sentence rather than a row anybody fetched — which is
+    what makes this an upsert and not a create.
+
+    `sentiment` and `open_to_more` are both required, with no default for either:
+    the default that reads as safe — do not offer more — is the one that silently
+    blacklists an artist the curator asked to keep hearing about.
+    """
+
+    kind: str
+    value: str
+    sentiment: str
+    open_to_more: bool
+    #: Defaults to `stated`, which is what the Taste screen's correction and every
+    #: reaction in a thread are. `observed` is refused whoever sends it.
+    derivation: str = "stated"
+    rationale: str | None = None
+    #: Required by the service when `derivation` is `inferred`, and meaningless
+    #: otherwise: a curator saying a thing is the whole provenance.
+    source_turn_id: str | None = None

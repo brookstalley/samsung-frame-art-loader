@@ -19,11 +19,18 @@ from curation.services.errors import ServiceError
 
 #: A regression here silently renames the entire MCP tool surface for every
 #: client. Tool names are a frozen contract: never renamed, never removed.
+#:
+#: **The set may grow, and `art_taste` is the case that proved it.** Adding a
+#: name here is a deliberate widening of the surface — `api-contract.md` names
+#: the tool and the operator's decision to have it — where changing one is the
+#: regression this guards. A new entry therefore belongs in the same commit as
+#: the tool; an *edited* one never belongs at all.
 FROZEN_TOOL_NAMES = {
     "art_catalogue",
     "art_discovery",
     "art_display",
     "art_review",
+    "art_taste",
     "art_theme",
 }
 
@@ -53,7 +60,7 @@ async def test_the_server_boots_and_a_real_client_completes_the_handshake(server
     assert result.serverInfo.version == version("curation")
 
 
-async def test_the_five_tool_names_are_exactly_these(tools):
+async def test_the_tool_names_are_exactly_these(tools):
     assert set(tools) == FROZEN_TOOL_NAMES
 
 
@@ -106,9 +113,10 @@ async def test_exactly_the_tools_that_leave_the_machine_declare_an_open_world(to
     # Reaches outside: discovery searches the web and queries museums; the
     # catalogue re-fetches images and asks a vision model for mat colours.
     assert open_world == {"art_discovery", "art_catalogue"}
-    # Purely local: reviewing candidates, arranging themes and writing the
-    # manifest all touch this machine's catalogue and its own filesystem.
-    assert {"art_review", "art_theme", "art_display"} & open_world == set()
+    # Purely local: reviewing candidates, arranging themes, writing the manifest
+    # and recording what the curator likes all touch this machine's catalogue and
+    # its own filesystem.
+    assert {"art_review", "art_theme", "art_display", "art_taste"} & open_world == set()
 
 
 async def test_every_tool_requires_an_action_and_nothing_else(tools):

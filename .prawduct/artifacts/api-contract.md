@@ -334,13 +334,15 @@ is a claim only another path can honestly make.
 until discovery begins weighting `Affinity`. That section now records the decision
 and what the deferral would have bought; this one is the tool it obliges.
 
-**It stands on `Affinity`, which does not exist.** Nothing here is declared at
-runtime until the entity and its service method do — "unbuilt actions are never
-declared" governs it, and a tool serving none answers `action='help'` with its
-`unavailable_note`. The precedent is in this file: `art_display(show_now|next)` was
-specified before the manifest-only channel was ratified and was unimplementable as
-written the day the norm landed. So the paragraphs below fix meaning and rules, and
-leave field-level shapes to the chunk that builds the service method under them.
+**It stands on `Affinity`, and both were built on 2026-08-12.** Until then nothing
+here was declared at runtime — "unbuilt actions are never declared" governed it, and
+the tool answered `action='help'` with its `unavailable_note`. The paragraphs below
+fixed meaning and rules and left field-level shapes to the chunk that built the
+service method under them; that chunk has landed, all three actions are declared,
+and `FROZEN_TOOL_NAMES` now pins the name it could not reach before. The rules
+below are therefore descriptions of built behaviour rather than instructions to a
+future builder, with one exception marked where it occurs: the `inferred` invariant
+is enforced on the write path only, and deliberately not as a stored constraint.
 
 **Three actions and no `get`.** `list` returns the taste, narrowed by `kind`,
 `sentiment` or `derivation`; `set` writes one judgment; `delete` forgets one. The
@@ -880,9 +882,9 @@ them back to the model.
 > TOOLS]`, so the list is whatever is declared on the day rather than a number
 > written here. *(This read "the five real names" until 2026-08-11 — Critic R-10 —
 > which was the third stale tool count in this artifact and the only one stating
-> what a shipped payload contains. Note that "registered" is not the same set as
-> § The surface: `art_taste` is designed and undeclared, so it is Frozen in the
-> tiers table and absent from this enumeration until it ships.)* The same
+> what a shipped payload contains. Between 2026-08-11 and
+> 2026-08-12 "registered" was not the same set as § The surface, `art_taste` being
+> designed and undeclared; it shipped on the 12th and the two sets agree again.)* The same
 > teach-don't-guess shape as every
 > other error here. The exception's own reasoning is what makes this cheap: a
 > client only calls names `list_tools` returned, so the case is defensive
@@ -1056,7 +1058,7 @@ exemption's reasoning and must not be cited for the manifest contract.)*
 
 | Element | Tier | Meaning |
 |---|---|---|
-| Tool names (every row of § The surface) | **Frozen** | Never renamed or removed. **Pinned by test from the day the tool is declared, and frozen by decision until then** — `FROZEN_TOOL_NAMES` in `curation/tests/contract/test_mcp_surface.py` asserts set-equality against the live server, so it can only ever cover tools that exist. `art_taste` is Frozen from 2026-08-11 and is the one name nothing pins; its entry joins that set on the day it ships. *(The row said only "Pinned by test" until 2026-08-11 — Critic R-16 — while widening itself to cover exactly the name the pin cannot reach.)* |
+| Tool names (every row of § The surface) | **Frozen** | Never renamed or removed. **Pinned by test from the day the tool is declared, and frozen by decision until then** — `FROZEN_TOOL_NAMES` in `curation/tests/contract/test_mcp_surface.py` asserts set-equality against the live server, so it can only ever cover tools that exist. `art_taste` was Frozen from 2026-08-11 and, for one day, was the one name nothing pinned; it shipped on 2026-08-12 and its entry joined that set with it. *(The row said only "Pinned by test" until 2026-08-11 — Critic R-16 — while widening itself to cover exactly the name the pin cannot reach.)* |
 | `action` values | **Stable** | Additive; retirement is announced and annotated. |
 | Required parameters | **Stable** | New ones must be optional with a default. |
 | Optional parameters | **Additive** | May be added freely. |
@@ -1185,12 +1187,12 @@ spellings for "change this" costs more than the orthodoxy is worth here.
 | `POST /api/works/{id}/archive`, `/restore` | Take a work out of circulation, and put it back. **Not a delete** — see below. **Built 2026-08-12**; both read back the full `WorkDetailOut` dossier, because the screen that archives is the screen that shows the work and a slimmer body would only send it straight back for the rest. | `Artwork.status`, built | `art_catalogue(action='archive'\|'restore')`, already designed |
 | `POST /api/themes/{id}` | Rename. **Built 2026-08-12**; answers with `ThemeOut`, so the screen repaints the name the service *normalised* rather than the one it typed. Its body carries a name and **nothing else** — see below. | `Theme`, built | `art_theme(action='update')`, already designed |
 | `DELETE /api/themes/{id}` | Delete. **The refusal it must reuse is already built** — see below. **Built 2026-08-12**; answers with `ThemeListOut`, the themes that remain, so the list repaints from the response like every other membership act. | `Theme`, built, and `DisplayService.delete_theme`'s guard with it | `art_theme(action='delete')`, built and wired to that guard |
-| `GET`/`POST /api/conversations` | The thread list, ordered by `last_turn_at`; and starting one. | `Conversation` — **unbuilt** | none proposed — see below |
-| `GET /api/conversations/{id}` | One thread with its turns. | `ConversationTurn` — **unbuilt** | none proposed |
-| `POST /api/conversations/{id}/turns` | One exchange. **Spends** — `SpendRecord` category `conversation_tokens`. | `ConversationTurn` — **unbuilt** | none proposed |
-| `POST /api/conversations/{id}/commit` | Commit a direction: starts a `DiscoveryRun` and sets the turn's `committed_run_id`. | `ConversationTurn` — **unbuilt** | none proposed |
-| `DELETE /api/conversations/{id}` | Deletes the thread and its turns. **Detaches rather than cascades** — see below. | `ConversationTurn` — **unbuilt** | none proposed |
-| `GET`/`POST /api/affinities`, `DELETE /api/affinities/{id}` | The Taste screen, and every sample reaction in a conversation. | `Affinity` — **unbuilt** | `art_taste(action='list'\|'set'\|'delete')` — decided 2026-08-11, see below and § `art_taste` |
+| `GET`/`POST /api/conversations` | The thread list, ordered by `last_turn_at`; and starting one. **Built 2026-08-12.** | `Conversation`, built | none proposed — see below |
+| `GET /api/conversations/{id}` | One thread with its turns. **Built 2026-08-12.** | `ConversationTurn`, built | none proposed |
+| `POST /api/conversations/{id}/turns` | One exchange. **Spends** — `SpendRecord` category `conversation_tokens`. **Built 2026-08-12**; a retry sends no new text, so the transcript is the idempotency key and asking again spends nothing twice. | `ConversationTurn`, built | none proposed |
+| `POST /api/conversations/{id}/commit` | Commit a direction: starts a `DiscoveryRun` and sets the turn's `committed_run_id`. **Built 2026-08-12.** | `ConversationTurn`, built | none proposed |
+| `DELETE /api/conversations/{id}` | Deletes the thread and its turns. **Detaches rather than cascades** — see below. **Built 2026-08-12.** The detach is a loop over the citing rows rather than a schema rule, so its atomicity rests on the transaction it runs in and on reading the code — it is the one behaviour in this chunk no mutation could express. | `ConversationTurn`, built | none proposed |
+| `GET`/`POST /api/affinities`, `DELETE /api/affinities/{id}` | The Taste screen, and every sample reaction in a conversation. **Built 2026-08-12**; `POST` upserts on (`kind`, `value`) and refuses to overwrite a stronger provenance with a weaker one. | `Affinity`, built | `art_taste(action='list'\|'set'\|'delete')`, built — see below and § `art_taste` |
 | `POST /api/works/{id}/mat` | Re-derive a work's mat. **Owned by issue #91, not by this set** — see below. | `MatColor`, built | `art_catalogue(action='set_mat_color')`, built |
 | `POST /api/directives` | The Walls screen's `next`. **Shape settled and built 2026-08-12** — see below. | `Directive`, built | `art_display(action='next')`, built |
 | `GET /api/spend` | The Health screen's spend history, across runs. | `SpendRecord`, built | `art_discovery(action='spend')` already answers the cross-run question by calendar month — see below |
@@ -1536,9 +1538,13 @@ was taken **against the recommendation recorded here**, which argued for deferri
 until discovery began weighting `Affinity`, on the grounds that tool names are
 **Frozen** — never renamed or removed — so adding is cheap and retiring is not,
 which argues for deciding late. That reasoning is left standing rather than deleted,
-because it is what the decision cost: a name is now frozen over an unbuilt entity,
-and if `Affinity` is reshaped before it is built, `art_taste` is the part that
-cannot be reshaped with it. Set against that, the deferral had its own cost — item
+because it is what the decision cost: a name was frozen over an entity that did not
+yet exist, and had `Affinity` been reshaped before it was built, `art_taste` was the
+part that could not be reshaped with it. **The window closed on 2026-08-12**, one
+day later, when the entity and all three actions shipped together and nothing had
+been reshaped — so the risk was real and it did not land, which is worth recording
+as precisely that rather than as either vindication or a near miss. Set against
+that, the deferral had its own cost — item
 8's parity claim would have read as met while the surface knowingly withheld an
 operation the web UI has, and a "revisit trigger" is a promise nothing enforces.
 

@@ -52,6 +52,20 @@ export async function viewDiscover(generation) {
       }),
   });
 
+  /* The way into what the product has come to believe about the curator.
+   *
+   * Here rather than in the navigation: Taste is a contextual screen, and its
+   * entry points are Discover and a suggestion's provenance. It sits beside the
+   * two ways of asking for something because it is the thing that shapes what
+   * comes back — a curator wondering why they keep being offered pale grids
+   * looks for the answer where they do the asking. */
+  const taste = el("button", {
+    class: "action quiet",
+    type: "button",
+    text: "See what this product thinks you like",
+    onclick: () => go("taste"),
+  });
+
   const entry = el("div", { class: "panel" }, [
     el("h3", { text: "Ask for something" }),
     el("div", { class: "field" }, [
@@ -65,7 +79,7 @@ export async function viewDiscover(generation) {
       // allowance and an estimate it can exceed is not an estimate.
       text: `Asking costs at most $${estimate.estimated_cost_usd}. ${estimate.basis}`,
     }),
-    el("div", { class: "row" }, [start, talk]),
+    el("div", { class: "row" }, [start, talk, taste]),
   ]);
 
   const panels = [el("h2", { text: "Discover" }), entry];

@@ -23,6 +23,8 @@ from curation.discovery.conversation import SUGGESTION_KINDS
 from curation.http.pages import STATIC_DIR
 from curation.mcp.bindings import RESTORE_NOTICE
 from curation.persistence.discovery_records import (
+    AffinityDerivation,
+    AffinitySentiment,
     ResolutionStatus,
     RunStatus,
     TurnRole,
@@ -91,6 +93,29 @@ def test_the_client_parses(path):
     )
 
     assert result.returncode == 0, f"{path.name} does not parse:\n{result.stderr}"
+
+
+def _literal_body(name: str) -> str:
+    """The raw text inside a top-level `const <name> = { ... }` object literal.
+
+    The two readers below both strip or extract before they answer; this is what
+    is left for a literal whose values are neither bare identifiers nor strings.
+    Brace-counted for the reason they are: a non-greedy pattern stops at the
+    first `}` and silently reads a truncated object, and a check that reads half
+    its input passes for the wrong reason.
+    """
+    opening = re.search(rf"^(?:export )?const {re.escape(name)} = (?={{)", CLIENT, re.MULTILINE)
+    assert opening, f"the client has no top-level `const {name} = {{`"
+    start = opening.end()
+    depth = 0
+    for index in range(start, len(CLIENT)):
+        if CLIENT[index] == "{":
+            depth += 1
+        elif CLIENT[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return CLIENT[start + 1 : index]
+    raise AssertionError(f"`{name}` is never closed")
 
 
 def _object_keys(name: str) -> set[str]:
@@ -308,3 +333,66 @@ def test_the_restore_sentence_says_how_to_make_the_wall_catch_up():
         "The operator's ruling that an archived work may stay on the wall depends on "
         "the surfaces naming that path."
     )
+
+
+def test_every_taste_kind_has_a_heading_the_screen_can_group_under():
+    """The Taste screen groups by kind, and a kind with no heading has no group.
+
+    Same shared vocabulary and the same failure as the Work screen's labels, one
+    screen along: a seventh member arrives for reasons that have nothing to do
+    with taste, and reaches this page as a raw token over a list of judgments.
+    The Taste screen renders only the kinds it has headings for, so an unlabelled
+    kind is worse than an ugly one — the judgments under it are *not drawn*, and
+    the curator sees no evidence they exist.
+    """
+    assert _object_keys("TASTE_KIND_WORDS") == {str(kind) for kind in VocabularyKind}
+
+
+@pytest.mark.parametrize("name", ["SENTIMENT_WORDS", "SENTIMENT_GLYPHS"])
+def test_every_sentiment_has_words_and_a_shape(name):
+    """Warmth is exactly the thing a first draft renders as a colour ramp.
+
+    `accessibility-spec.md` binds this surface and colour is never the sole
+    carrier of state, so each of the four gets a distinguishable glyph as well as
+    a word — and a fifth sentiment added to the enum fails here rather than
+    arriving on the page as its own token beside no shape at all.
+    """
+    assert _object_keys(name) == {str(member) for member in AffinitySentiment}
+
+
+def test_every_derivation_has_a_sentence_saying_what_the_claim_is():
+    """The Taste screen exists to make derivation visible, so a bare token defeats it.
+
+    "inferred" on its own tells a curator nothing about whether the product is
+    repeating them or guessing at them — which is precisely the thing they need
+    in order to decide whether to overrule the row.
+    """
+    assert _object_keys("DERIVATION_WORDS") == {str(member) for member in AffinityDerivation}
+
+
+@pytest.mark.parametrize("name", ["TASTE_KIND_WORDS", "SENTIMENT_WORDS", "SENTIMENT_GLYPHS", "DERIVATION_WORDS"])
+def test_every_taste_phrase_a_curator_reads_actually_has_words_in_it(name):
+    """Right keys, empty value — the hole the keys checks above cannot see."""
+    values = _object_values(name)
+    assert values, f"`{name}` parsed to no string values at all — this guard would pass vacuously"
+
+    empty = sorted(key for key, phrase in values.items() if not phrase.strip())
+    assert not empty, f"`{name}` carries {empty} with no words behind them"
+
+
+def test_the_three_reactions_are_the_pairs_of_fields_taste_is_held_in():
+    """Each reaction writes a `sentiment` and an `open_to_more`, and both are named.
+
+    The two-fields rule is only paid for at the point a control writes them, and
+    a reaction table that carried a sentiment alone would default the openness —
+    where the default that reads as safe is the one that silently blacklists an
+    artist the curator asked to keep hearing about. Read off the client rather
+    than agreed to, because nothing else in this repository executes it.
+    """
+    body = _literal_body("REACTIONS")
+
+    for reaction in ("more like this", "not this", "tell me more"):
+        assert f'"{reaction}"' in body, f"the client has no control writing {reaction!r}"
+    assert body.count("sentiment:") == body.count("open_to_more:") == 3
+    # And the pair that the whole design exists for: cool, and still open.
+    assert '"tell me more": { sentiment: "cool", open_to_more: true }' in body

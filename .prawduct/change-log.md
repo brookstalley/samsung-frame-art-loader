@@ -54,6 +54,51 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-12: Wave 3 — the Theme screen, taste as a first-class record, and a position that means one thing
+
+<!-- prawduct: chunks=09,11 | scope=curation-ux -->
+
+**Why:** the last two chunks of the curation surface, built concurrently in two
+worktrees. Both landed; chunk 09 came back once, for a defect its own headline fix
+did not reach.
+
+**Chunk 09 — the Theme screen, and the reorder that had never worked downward.**
+Rename, reorder, hang and delete, with the delete refusing a theme hanging on any
+wall and naming the rooms. Underneath it, a defect no screen chunk was looking
+for: the service wrote the requested number into the position column and stopped,
+and because the listing breaks a tie on `added_at`, a work moved from 0 to 1 tied
+with its neighbour and sorted ahead of it again as the older row. Moving up
+worked; the ↓ button had never once reordered anything, on either surface. A
+screen chunk is the first thing that *drives* a service method a curator can see
+the result of, and three chunks of tests over that method never asked it to move
+something down.
+
+**The fix was wrong until Critic review, and the second fix is a ruling.** The
+renumber walked the *placed* memberships while the surface indexed into
+placed-then-unplaced — and nothing a curator or a tool touches sends a position,
+so every theme the product could actually build had two lists indexed against each
+other. Every test setup passed explicit dense positions, which is a state no
+browser can produce. The operator ruled #132 rather than patching the screen: a
+position is an index on an add as much as on a move, omitting it means the end,
+and the placed/unplaced split stops being reachable from any product path. One
+list, for MCP callers as much as for the screen.
+
+**Chunk 11 — taste, and the one delete that detaches instead of cascading.**
+`Affinity` lands as a table, a service, a screen and the sixth tool. Deleting a
+conversation nulls the citations on affinities and spend rather than taking them
+with it, per the operator's #118 ruling — so `rationale` becomes required for
+anything not stated, being the only evidence an inferred judgment is left with.
+Three things the specification did not decide and the build had to: what makes one
+provenance weaker than another, why `observed` is published on the schema and
+refused at runtime, and that a per-sample reaction writes a per-*artist* row —
+which is stated as a consequence rather than left to be discovered.
+
+**Two accessibility rules changed rather than being applied.** `accessibility-spec.md`
+said *icon-only* controls name what they act on; three theme panels emitting
+identical "Rename" and "Delete" showed that the thing being protected is a control
+being distinguishable from its siblings, which a word shared by every sibling
+fails as completely as no word at all.
+
 ## 2026-08-12: Wave 2 — the Walls become home, a work is archived not removed, and intent becomes a conversation
 
 <!-- prawduct: chunks=05,07,08,10 | scope=curation-ux -->

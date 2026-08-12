@@ -10,6 +10,65 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The Theme screen, and the reorder that had never worked — added 2026-08-12
+
+**Chunk 09.** Run `cd curation && uv run python -m curation` and open Themes.
+
+1. **The ↓ button now does something, and until this chunk it never had.** The
+   service wrote the requested number into the position column and stopped;
+   `list_memberships` breaks a tie on `added_at`, so a work sent from 0 to 1 tied
+   with its neighbour and sorted ahead again as the older row. Moving *up* worked,
+   on both surfaces, for as long as reordering has existed. Worth doing a few
+   moves in both directions and trusting your eyes rather than the fact that it is
+   now tested.
+2. **Adding a work now places it at the end, and that is your ruling from this
+   session (#132).** A position is an index everywhere — on an add as much as on
+   a move — and "unplaced" is no longer reachable from anything you can click. It
+   survives as something an agent can ask for on a reorder. If a theme ever wants
+   a "no opinion" pile again, this is the decision that removed it.
+3. **A theme hanging on any wall cannot be deleted, and the refusal names the
+   rooms.** Hang one in two rooms and try. The sentence is the server's own — the
+   screen predicts nothing — so judge it as a sentence: does it tell you what to
+   do next, or only what went wrong?
+4. **Rename, Delete and the name field carry accessible names saying which
+   theme.** Invisible unless you use a screen reader; the visible words are
+   unchanged. Mentioned because it changed `accessibility-spec.md`'s rule from
+   *icon-only controls* to *controls whose visible words repeat across sibling
+   panels*, which is my reading of what the rule was for and is challengeable.
+5. **Each theme states its member count**, which the IA has always asked for and
+   the screen never showed. Check it does not read as clutter above the table
+   that already numbers the rows.
+6. **"Take down from {wall}" asks no question, deliberately.** Flow 6 makes
+   *activation* the confirmed act; a take-down rewrites no manifest, the room goes
+   on showing what it was showing, and the undo is the hang button reappearing in
+   its place. That is a judgement call nobody has reviewed.
+
+**Visual change: yes.**
+
+### Taste, and the delete that detaches instead of cascading — added 2026-08-12
+
+**Chunk 11.** Run `cd curation && uv run python -m curation` and open Taste.
+
+1. **Reactions on a conversation sample are keyed on the artist, not the
+   picture.** The three controls sit under each sample, but an affinity is one row
+   per (kind, value) — so reacting to one Kandinsky and then to another writes the
+   same row, and the second overwrites the first. Built as specified. **If you
+   want per-picture judgments, say so: the data model changes, not the screen.**
+2. **"Tell me more" is cool *and* still open**, which is the pair the whole
+   two-field design exists for. Check that the three controls read as three
+   distinct things rather than as a warmth slider with gaps.
+3. **A stronger provenance is not overwritten by a weaker one** — `stated` beats
+   `observed` beats `inferred`, equal ranks permitted so a re-inference can correct
+   an inference. *That ranking is the builder's ruling, not an artifact's, and they
+   flagged it as the thing most worth challenging.* The visible effect: something
+   you said yourself cannot be silently replaced by something a model inferred.
+4. **Deleting a conversation detaches rather than cascades**, per your #118
+   ruling. The affinities it produced survive with their rationale and lose only
+   the citation; the spend stays on the books. The confirmation names what is lost
+   in those terms rather than reporting a row count — judge whether it does.
+
+**Visual change: yes.**
+
 ### The Walls screen, and the Work screen's archive — added 2026-08-12
 
 **Two screens rebuilt, and the first confirmation dialog the product has ever

@@ -231,6 +231,7 @@ async def test_an_unknown_tool_is_reported_with_the_names_that_do_exist(server_u
         "art_discovery",
         "art_display",
         "art_review",
+        "art_taste",
         "art_theme",
     }
     # The hint must name something callable. This is the one error raised

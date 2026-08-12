@@ -36,6 +36,8 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from curation.http.models import (
     AddWork,
+    AffinityListOut,
+    AffinityOut,
     ArtistOut,
     ArtworkBoxOut,
     BackupOut,
@@ -43,6 +45,7 @@ from curation.http.models import (
     CandidatePageOut,
     CandidateWorkOut,
     CommitDirection,
+    ConversationDeletionOut,
     ConversationListOut,
     ConversationOut,
     ConversationTurnOut,
@@ -76,6 +79,7 @@ from curation.http.models import (
     SearchUsageOut,
     SelectedImageOut,
     SelectImage,
+    SetAffinity,
     SetVerdict,
     SourceOut,
     Speak,
@@ -111,7 +115,7 @@ from curation.persistence.discovery_records import (
 from curation.persistence.records import Artist, Directive, MatColor, Original, Source, Theme, WorkFacet
 from curation.services.catalogue import FacetGroup, RenditionView
 from curation.services.container import Services
-from curation.services.conversation import ConversationView, TurnView
+from curation.services.conversation import ConversationDeletion, ConversationView, TurnView
 from curation.services.discovery import VerdictOutcome
 from curation.services.display import ThemePlacement, WallView
 from curation.services.display_fit import ArtworkBox
@@ -119,6 +123,7 @@ from curation.services.health import HealthReading
 from curation.services.review import CandidatePage, CandidateView, InstanceListing, InstanceView
 from curation.services.runner import Estimate, RunView, SpendReport
 from curation.services.survey import WorkDossier, WorkSurvey
+from curation.services.taste import AffinityView
 
 log = logging.getLogger(__name__)
 
@@ -1288,4 +1293,111 @@ def _conversation_turn(view: TurnView) -> ConversationTurnOut:
         ],
         committed_run_id=view.turn.committed_run_id,
         created_at=view.turn.created_at.isoformat(),
+    )
+
+
+@router.delete("/conversations/{conversation_id}")
+def delete_conversation(request: Request, conversation_id: str) -> ConversationDeletionOut:
+    """Destroy the thread and its turns, and detach everything derived from them.
+
+    **The one operation in this product that genuinely destroys a record**, which
+    is exactly why what stands on it is detached rather than destroyed with it:
+    `Affinity.source_turn_id` and `SpendRecord.conversation_turn_id` are nulled,
+    and nothing else is touched. An affinity is a judgment accumulated across
+    conversations and cannot be reconstructed from a thread that no longer exists;
+    a spend record is a ledger entry, and a month total that fell because somebody
+    tidied would be a number that lies about the past.
+
+    **The response names the consequence, not the row count.** What the curator
+    loses is the ability to rebuild those judgments when the derivation improves,
+    and `description` says so in those terms — the counts are there to qualify it.
+    """
+    return _conversation_deletion(_services(request).conversation.delete(conversation_id))
+
+
+def _conversation_deletion(deletion: ConversationDeletion) -> ConversationDeletionOut:
+    return ConversationDeletionOut(
+        conversation_id=deletion.conversation_id,
+        turns_deleted=deletion.turns_deleted,
+        affinities_detached=deletion.affinities_detached,
+        spend_records_detached=deletion.spend_records_detached,
+        runs_unattributed=deletion.runs_unattributed,
+        # Composed by the service so this surface and the tool one cannot come to
+        # describe the same destruction differently.
+        description=deletion.describe(),
+    )
+
+
+# -- taste --------------------------------------------------------------------
+
+
+@router.get("/affinities")
+def list_affinities(
+    request: Request,
+    kind: Annotated[str | None, Query()] = None,
+    sentiment: Annotated[str | None, Query()] = None,
+    derivation: Annotated[str | None, Query()] = None,
+) -> AffinityListOut:
+    """The curator's standing judgments, narrowed by any of the three.
+
+    Unpaged: this is a household's whole taste, which is tens of rows, and a page
+    over it would be a second way to read what one call hands back whole.
+    """
+    affinities = _services(request).taste.list_affinities(kind=kind, sentiment=sentiment, derivation=derivation)
+    return AffinityListOut(affinities=[_affinity(entry) for entry in affinities], count=len(affinities))
+
+
+@router.post("/affinities")
+def set_affinity(request: Request, body: SetAffinity) -> AffinityOut:
+    """Write one judgment over whatever was there, or write the first one.
+
+    `POST` rather than `PATCH` because this surface writes with `POST` everywhere
+    and one surface with two spellings for "change this" costs more than the
+    orthodoxy is worth. It is an upsert addressed by (`kind`, `value`), so a
+    correction needs no id — which is right for the caller that has a name in a
+    sentence rather than a row it fetched.
+    """
+    return _affinity(
+        _services(request).taste.set_affinity(
+            kind=body.kind,
+            value=body.value,
+            sentiment=body.sentiment,
+            open_to_more=body.open_to_more,
+            derivation=body.derivation,
+            rationale=body.rationale,
+            source_turn_id=body.source_turn_id,
+        )
+    )
+
+
+@router.delete("/affinities/{affinity_id}")
+def delete_affinity(request: Request, affinity_id: str) -> AffinityOut:
+    """Forget one judgment, and answer with what was forgotten.
+
+    The row rather than an acknowledgement of the id, because this is not
+    recoverable: a confirmation should name the thing that is gone rather than the
+    handle it was addressed by.
+    """
+    return _affinity(_services(request).taste.delete_affinity(affinity_id))
+
+
+def _affinity(view: AffinityView) -> AffinityOut:
+    affinity = view.affinity
+    return AffinityOut(
+        affinity_id=affinity.id,
+        kind=str(affinity.kind),
+        value=affinity.value,
+        sentiment=str(affinity.sentiment),
+        open_to_more=affinity.open_to_more,
+        derivation=str(affinity.derivation),
+        rationale=affinity.rationale,
+        source_turn_id=affinity.source_turn_id,
+        # Resolved by the service from the cited turn rather than stored, so the
+        # link and the citation cannot come apart — and absent for a judgment
+        # whose conversation was deleted, which is what stops the screen offering
+        # a way through to a thread that is not there.
+        conversation_id=view.conversation_id,
+        artist_id=affinity.artist_id,
+        created_at=affinity.created_at.isoformat(),
+        updated_at=affinity.updated_at.isoformat(),
     )

@@ -70,6 +70,7 @@ from curation.services.review import ReviewService
 from curation.services.runner import DiscoveryRunner, DiscoverySettings
 from curation.services.survey import SurveyService
 from curation.services.sweep import PreviewSweep
+from curation.services.taste import TasteService
 from curation.services.thumbnails import ThumbnailService, ThumbnailSettings
 
 
@@ -127,6 +128,14 @@ class Services:
     #: acquires nothing, has no status to poll and nothing to approve. What it has
     #: is one edge onto the runner, and that edge is the whole relationship.
     conversation: ConversationService
+    #: The curator's standing judgments. Its own concern rather than a corner of
+    #: the conversation service, because taste outlives every thread that
+    #: contributed to it: an affinity is accumulated across conversations, is
+    #: correctable from a screen that has no conversation in front of it, and is
+    #: what discovery consults. Folding it into intent-forming would tie the
+    #: product's memory of its operator to the lifetime of a transcript, which is
+    #: precisely what deleting one must not do.
+    taste: TasteService
 
     @classmethod
     def bind(
@@ -277,6 +286,11 @@ class Services:
                 runner_service,
                 collection=collection,
             ),
+            # Over the same store the conversations live in, because a judgment's
+            # citation and the turn it cites have to be detachable in one
+            # transaction — the delete's whole correctness is that it commits or
+            # does not.
+            taste=TasteService(discovery),
         )
 
     def reconcile(self) -> None:
