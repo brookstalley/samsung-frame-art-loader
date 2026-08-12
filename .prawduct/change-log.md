@@ -56,10 +56,11 @@
 
 ## 2026-08-12: Wave 2 — the Walls become home, a work is archived not removed, and intent becomes a conversation
 
-<!-- prawduct: chunks=05,08,10 | scope=curation-ux -->
+<!-- prawduct: chunks=05,07,08,10 | scope=curation-ux -->
 
 **Why:** four chunks built concurrently in four worktrees, landed one at a time.
-Three of them are here; Collection went back to its builder and lands separately.
+Three went straight in; Collection came back once, for a browser test that failed
+in its own worktree at the commit it had been reported green on.
 
 **Chunk 05 — the Walls, and four ways a wall can be dark.** The screen that says
 what is hanging was a table of render paths and is now the pictures, one section
@@ -97,6 +98,31 @@ sharing through each other — so `core/confirm.js` landed first, as the platfor
 overlapping dialogs mint their own ids because `aria-labelledby` resolves
 document-wide and a shared id announces the older question above the newer one's
 buttons.
+
+**Chunk 07 — the collection in one place, and three waits that waited on nothing.**
+It landed last because it came back once. Density is a control and part of the
+address; the facet rail carries counts inside each control's own text, because a
+disabled control is out of the tab order and a count in adjacent text is one a
+screen-reader user never hears; themes become a rail rather than a destination.
+Three empty states stay three, because telling a curator with three thousand
+works that they own nothing, or reporting the expected outcome of following a
+suggestion as a failed query, are different lies.
+
+**Two things it changed outside its own screen, which the plan said it owned
+alone.** `core/render.js`'s `el()` rendered a boolean `true` as the empty string —
+right for `checked` and `disabled`, invalid for ARIA, where `aria-hidden=""` is
+not a valid token and falls back to *not hidden*. Thirteen glyph sites across
+four modules had therefore been reading their shape aloud beside their word. And
+`fetchAllWorks` gained two optional parameters. Both were fixed at the shared
+helper rather than at the call sites, which is right, and both are recorded here
+because a chunk that edits `core/` under a plan that says it owns one screen file
+should not do so silently.
+
+**Replacing a stub with two thousand real works found what the stub could not.**
+The client's runaway guard caps the grid at 1,250, so at the scale this design was
+drawn for the collection is partly unreachable — filed as its own item. It says so
+out loud rather than stopping quietly, which is the difference between a limit and
+a defect.
 
 **What this wave cost, and it is all one lesson.** Every failure here looked
 green. A chunk reported a passing browser suite whose test fails in its own

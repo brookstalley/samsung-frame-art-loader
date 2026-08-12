@@ -600,6 +600,84 @@ def test_adding_a_work_the_theme_already_holds_is_not_an_error(ui, display, a_th
     assert len(display.theme_works(theme.id)) == 2
 
 
+def test_a_refusal_partway_through_leaves_exactly_the_works_that_did_not_go(ui, display, a_theme_holding_one_work):
+    """The loop can stop halfway, and what it leaves behind has to be the retry.
+
+    Reading the theme first removes the refusal the client can foresee; it cannot
+    remove the one it cannot — here the second work is deleted from the catalogue
+    between that read and its own write. Two half-states are then available and
+    both are wrong: a selection cleared, which loses the record of which works did
+    not go, and a selection left whole, which carries the work that already landed
+    back into the retry. Exactly the works that did not go stay ticked, and the
+    retry sends exactly those.
+
+    **Only the refusal is stubbed.** Accepting one write and refusing the next is
+    what no server can be asked for on purpose; both other writes go to the real
+    route, so what the theme holds after each press is the store's own answer
+    rather than this test's — and the read in front of the retry is filtering
+    against a theme that really did take one work and really did not take the
+    other.
+    """
+    theme, works = a_theme_holding_one_work
+    refusal = f"No artwork with id {works[2].id!r} is in the catalogue."
+    writes = []
+
+    def refuse_the_second_write(route):
+        writes.append(json.loads(route.request.post_data)["artwork_id"])
+        if len(writes) == 2:
+            route.fulfill(status=400, content_type="application/json", body=json.dumps({"error": refusal}))
+        else:
+            route.continue_()
+
+    ui.page.route(f"**/api/themes/{theme.id}/works", refuse_the_second_write)
+
+    ui.open("#collection")
+    ui.page.wait_for_selector("ul.grid li.card")
+    ui.page.check(f"li.card[data-artwork='{works[1].id}'] input.tile-select")
+    ui.page.check(f"li.card[data-artwork='{works[2].id}'] input.tile-select")
+    ui.page.select_option("#add-to-theme", theme.id)
+    # The live region holds one sentence, and before the click it is this one — so
+    # the outcome waited for below is text only the refusal can have produced.
+    assert "2 selected." in ui.text()
+
+    ui.page.click("button:has-text('Add to theme')")
+    ui.page.wait_for_selector(".selection-status:has-text('Added 1 of 2 to Baroque.')")
+
+    # Read whole rather than by substring: how far the loop got and what pressing
+    # Add again will do are one sentence, and a client that dropped the second
+    # half would leave the curator to guess whether retrying repeats the work.
+    assert ui.page.inner_text(".selection-status") == (
+        "Added 1 of 2 to Baroque. The rest are still selected, so pressing Add again retries only those."
+    )
+
+    # Why it stopped is the server's sentence, not one composed here: the failure
+    # is rethrown precisely so the banner can carry the server's own words beside
+    # the region's account of how far the loop got.
+    ui.page.wait_for_selector(f'#error:has-text("{refusal}")')
+
+    # Exactly the work that did not go, and only it. Clearing the selection and
+    # leaving it whole both satisfy "something is ticked"; neither is this.
+    assert ui.page.locator("input.tile-select:checked").count() == 1
+    assert ui.page.locator(f"li.card[data-artwork='{works[2].id}'] input.tile-select").is_checked()
+    assert writes == [works[1].id, works[2].id]
+    assert {held.artwork.id for held in display.theme_works(theme.id)} == {works[0].id, works[1].id}
+
+    # The retry is pressing the same button, so it has to still be pressable.
+    assert ui.page.is_enabled("button:has-text('Add to theme')")
+    ui.page.click("button:has-text('Add to theme')")
+    ui.page.wait_for_selector(".selection-status:has-text('Added 1 work to Baroque.')")
+
+    # The clause that matters: one further write, carrying the work that was
+    # refused and not the one that landed. Whole again rather than by substring —
+    # a retry that offered the landed work back would be skipped by the read in
+    # front of the loop and say so, and " 1 was already in it." is the only trace
+    # of a selection that was never reduced.
+    assert writes == [works[1].id, works[2].id, works[2].id]
+    assert ui.page.inner_text(".selection-status") == "Added 1 work to Baroque."
+    assert ui.page.locator("input.tile-select:checked").count() == 0
+    assert {held.artwork.id for held in display.theme_works(theme.id)} == {work.id for work in works}
+
+
 def test_removing_a_theme_s_last_member_leaves_a_sentence_not_a_blank(ui, a_theme_holding_one_work):
     """An empty grid with nothing said is indistinguishable from a broken screen."""
     theme, works = a_theme_holding_one_work
