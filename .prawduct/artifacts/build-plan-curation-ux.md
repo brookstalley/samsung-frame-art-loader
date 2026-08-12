@@ -91,7 +91,7 @@ the plan is ordered so they do not wait on the two.
 
 - ~~[ASSUMPTION: text search is SQLite FTS5 over title, artist name and facet values, not a `LIKE` scan]~~ **Settled 2026-08-12 against the 4,000-work corpus, and the answer was the simpler option: `LIKE`, with no full-text index.** Two reasons, and only the second is about speed. FTS5 matches whole *tokens*, so `harb` stops finding "harbour" and a curator has to be taught a prefix operator — adopting it changes the search's semantics rather than only its cost. And the clause is 1.5 ms of a 30 ms answer, so replacing it buys about 5% for a duplicated copy of every searched column kept in step by triggers, in a file whose whole appeal is that it copies to a backup and back. The numbers, the tool that reproduces them and the condition that would reopen this are in `api-contract.md` § `GET /api/works`. **What the measurement did change was the counts**, which were several times the cost of the search — see that section.
 - [ASSUMPTION: one wall exists at cutover and the migration assigns it the currently-active theme | HIGH impact if wrong | this is what keeps Chunk 01 from blanking the wall. User can correct the wall's name; the count is verifiable and is verified in the chunk]
-- [ASSUMPTION: the conversation's model turn can be served by the existing OpenRouter client without a new abstraction | MED impact | Chunk 10's verify-api step tests it rather than assuming; the discovery use is single-shot and this one is multi-turn with images]
+- [~~ASSUMPTION: the conversation's model turn can be served by the existing OpenRouter client without a new abstraction~~ | **SETTLED 2026-08-12 by the probe, and settled against itself** | It does not hold as written, and the gap is a method signature rather than an abstraction: `complete()` takes a `prompt: str` and hard-codes a single-message body, so it cannot express a history at all. A second method taking a message sequence, sharing the existing `_post`/`_read_body`/`_read_completion`, is sufficient — the response half needed nothing, verified by running real captured payloads through it. The full measurement is in `openrouter-api-findings.md`; the three facts that change the design are carried into the chunk's spec below]
 - [ASSUMPTION: the contact-sheet threshold is "a few hundred" works | LOW impact | `information-architecture.md` § Open questions already names this a guess to be set from a real thousands-scale corpus. Chunk 07 makes it one constant with the guess recorded at its site, not a decision spread through the grid]
 - **Whether Review needs its own density control is deliberately unresolved** and is
   not an assumption — the IA defers it until a run is large enough to hurt, and no
@@ -859,7 +859,12 @@ split was made to end, and it will not announce itself as having done so.
 - **Deliverables:** `Conversation` and `ConversationTurn`; `GET`/`POST
   /api/conversations`, `GET /api/conversations/{id}`, `POST .../turns`, `POST
   .../commit`; the thread UI with samples inline; the commit card and its in-place
-  transform; a failed turn that stays in the thread and is retryable
+  transform; a failed turn that stays in the thread and is retryable — **which
+  requires surfacing the diagnosable half of a provider error**, discarded today:
+  OpenRouter wraps provider faults as `error.message = "Provider returned error"`
+  with the real cause in `error.metadata.raw`, and the probe hit three distinct
+  400s that all reached the caller as that one string. Tolerable for a caller that
+  falls back silently; not for a failure a curator is being asked to retry
 - **Tests:** browser — the commit card transforms in place and the transcript stays
   above it; a failed turn is retryable and never silently vanishes. Integration — a
   turn writes a `SpendRecord` with category `conversation_tokens`; `committed_run_id`
@@ -867,20 +872,62 @@ split was made to end, and it will not announce itself as having done so.
 - **Acceptance criteria:** committing a direction never navigates away. Spend for a
   conversation appears in the month total.
 - **Foreign API:** openrouter
-  <!-- The client exists from Chunk 14B, but its use there is single-shot and this
-       one is multi-turn with images. The shape is what needs verifying, not the
-       vendor. -->
+  <!-- The client exists already, but its use there is single-shot and this one is
+       multi-turn with images. The shape is what needs verifying, not the vendor. -->
+- **What the probe established, 2026-08-12 — these are measurements, not guesses,
+  and each one changes what gets built:**
+  - **Reasoning is the dominant failure mode and it is invisible.** Ten straight
+    calls returned empty content, billed in full, with `reasoning_tokens` exactly
+    equal to `max_tokens`. `reasoning: {"enabled": false}` fixed it — 27× cheaper
+    and an actual answer. On an open-ended conversational prompt this is the
+    *default*, not an edge case. The client cannot pass the parameter today
+    because its request body key set is fixed, so widening that is part of this
+    chunk and not an optional tidy-up.
+  - **A truncated assistant turn comes back with `content: null`, and feeding it
+    back is a hard 400** ("The content field is a required field"). A handler that
+    stores the provider's message object untouched therefore fails on the *next*
+    turn. This lands exactly on the retryable-failed-turn requirement: normalise
+    `null` to `""` on the way in, or the thread poisons itself.
+  - **An image on an *assistant* turn is refused** (400, "incorrect modal `image`
+    … placed in the wrong position"). Samples render inline in the browser
+    regardless; if the model must *see* one again it rides the curator's next user
+    turn.
+  - **Images are re-sent, re-billed and genuinely re-read.** A 768px preview costs
+    434 prompt tokens on every turn it remains in history, `cached_tokens` 0
+    throughout — about $0.0000138 a resend. Proven re-read rather than merely
+    re-billed: the model described a sent image's palette two turns later, where
+    the control thread said none had been provided. A long thread's cost is
+    therefore superlinear in its images, which the commit card's estimate should
+    not pretend otherwise.
+  - **`usage.cost` maps one-for-one to a `conversation_tokens` `SpendRecord`** and
+    needs no shape change. With no search plugin, `cost == upstream_inference_cost`,
+    so no spurious `web_search` row. Costs arrive in both fixed and scientific
+    notation (`4.78e-06`) — parse accordingly.
+  - **`DISCOVERY_MODEL` cannot do this chunk at all**: it is `input_modalities:
+    ["text"]`. Conversation needs its own model setting, on the same argument
+    `config.py` already records for the mat model.
+  - **A refusal is not distinguishable on the wire** — ordinary content,
+    `finish_reason: "stop"`, `refusal: null`. Nothing to branch on.
+- **Samples come from the museum lookup the product already has, and cost nothing.**
+  My inference, not a ruling from an artifact, and flagged for the Critic to
+  challenge: flow 1 says a turn "answers from model knowledge and shows a few
+  sample pictures", and `data-model.md` says "a model call per turn, plus whatever
+  the sample lookups cost" without naming a mechanism. The existing free museum
+  client is that mechanism; nothing else in the product retrieves a picture by
+  artist. So `conversation_tokens` covers the model call and there is no second
+  priced thing to account for. If a paid lookup is ever introduced it earns its own
+  category by the same rule that governs this one.
 - **Visual change:** yes
 - **Done when:**
-  0. verify-api — probe a real multi-turn exchange with image samples through the
-     existing client; capture the actual request and response shapes before any
-     handler is drafted, and build fakes from what came back. **Run this in wave 0,
-     as its own opus agent, not when this chunk starts.** It depends on nothing but
-     the OpenRouter client that already exists, and it is the step that settles this
-     plan's least-confident assumption — a shape that is not what this chunk assumes
-     is worth knowing while Chunk 04 is still being designed rather than three
-     landings later. It spends real money and writes no product code, so it is also
-     the one wave-0 agent that can fail without costing a rebuild
+  0. ~~verify-api~~ — **DONE 2026-08-12, $0.00156, `qwen/qwen3.7-flash` routed to
+     Alibaba.** 41 request/response captures taken against the live API; the
+     findings are in `openrouter-api-findings.md` and the design consequences are
+     in § What the probe established above. **It ran late — after wave 1 rather
+     than in wave 0 — and the cost of that was real**: this chunk's brief was
+     written against an unmeasured shape and had to be corrected before dispatch.
+     The step was right and its scheduling was the thing that slipped, which is
+     worth remembering for the next plan that front-loads a probe. **Build the
+     fakes from the captures, not from the prose describing them**
   1. Acceptance criteria met and tests pass
   2. **`conversation_tokens` ships with its producer or not at all** — the rule
      `data-model.md` states for this category. A route that spends without writing
