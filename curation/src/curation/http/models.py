@@ -92,6 +92,53 @@ class WorkOut(BaseModel):
     image: ImageOut
 
 
+class WorkFacetOut(BaseModel):
+    """One thing a work is said to be."""
+
+    facet_id: str
+    #: One of the six shared vocabulary kinds — `artist`, `movement`, `era`,
+    #: `subject`, `medium`, `palette`.
+    kind: str
+    value: str
+    #: `sourced` or `inferred`. **Inferred is the rule rather than the exception**
+    #: for the wired collection, so a screen states that default once and marks
+    #: only the rare `sourced` value; badging every inferred row is a label on
+    #: almost everything, which is a label nobody reads.
+    derivation: str
+    #: Which field of which provider, or which model. Null where nobody recorded it.
+    source_note: str | None
+
+
+class FacetOptionOut(BaseModel):
+    """One value a facet control offers."""
+
+    value: str
+    #: Works this value would select **given every other facet but not this one**.
+    #: That is what lets a curator change their mind about a facet without first
+    #: clearing it.
+    count: int
+    selected: bool
+    #: True for an option that would select nothing. **Returned rather than
+    #: omitted**: a vocabulary that shrank as filters were applied would read as
+    #: data loss rather than as an empty intersection. A selected value is never
+    #: disabled, because the control that turns it off is the option itself.
+    disabled: bool
+
+
+class FacetGroupOut(BaseModel):
+    """One facet kind as a control renders it."""
+
+    kind: str
+    #: Commonest first, then alphabetically, capped — with every selected value
+    #: kept whatever its count.
+    options: list[FacetOptionOut]
+    #: How many values this kind offers in total, before the cap.
+    total_values: int
+    #: True when the cap left some out, so a control can say how much it is not
+    #: showing rather than implying the vocabulary is as long as the list.
+    truncated: bool
+
+
 class WorkPageOut(BaseModel):
     """A page of works that describes its own place in the set."""
 
@@ -100,6 +147,11 @@ class WorkPageOut(BaseModel):
     limit: int
     offset: int
     truncated: bool
+    #: The facet controls for exactly this filter, in the same response as the
+    #: works they label. **Not a second route** — they answer the same question
+    #: the grid answers, and two routes would give a curator two answers to it
+    #: with a write free to land in between.
+    facets: list[FacetGroupOut] = []
 
 
 class SourceOut(BaseModel):
@@ -166,6 +218,10 @@ class WorkDetailOut(BaseModel):
     sources: list[SourceOut]
     renditions: list[RenditionOut]
     mat_colors: list[MatColorOut]
+    #: What this work is, in the vocabulary the collection is filtered by. On the
+    #: detail rather than on `WorkOut`, because the grid shows the collection's
+    #: counts and the Work screen shows one work's facts.
+    facets: list[WorkFacetOut] = []
 
 
 class ThemeOut(BaseModel):

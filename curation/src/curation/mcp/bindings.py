@@ -33,8 +33,8 @@ from curation.mcp.envelope import ImageBlock, ok, with_images
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
 from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, RunKind, RunStatus
-from curation.persistence.records import Artist, Artwork, Directive, Source, Theme, Wall
-from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing
+from curation.persistence.records import Artist, Artwork, Directive, Source, Theme, VocabularyKind, Wall
+from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing, FacetGroup
 from curation.services.container import Services
 from curation.services.discovery import VerdictOutcome
 from curation.services.display import UNSET, ThemePlacement, WallView
@@ -49,12 +49,21 @@ from curation.services.runner import RunListing, RunView
 #: an action moving between concerns is not also a change to the dispatcher.
 Binding = Callable[[Services, Mapping[str, Any]], dict[str, Any]]
 
+#: The facet filters `art_catalogue(action='list')` takes, one array parameter per
+#: kind. Read off the vocabulary rather than listed, so a seventh kind reaches this
+#: surface with the enum that declares it — `tools.py` declares the parameters and
+#: this is what unpacks them, and the two going out of step would be a filter a
+#: model could see in the schema and never have applied.
+_FACET_KINDS: Final[tuple[str, ...]] = tuple(str(kind) for kind in VocabularyKind)
+
 log = logging.getLogger(__name__)
 
 
 def _list_artworks(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
     listing = services.catalogue.list_artworks(
         status=arguments.get("status"),
+        q=arguments.get("q"),
+        facets={kind: arguments[kind] for kind in _FACET_KINDS if arguments.get(kind)},
         limit=arguments.get("limit"),
         offset=arguments.get("offset", 0),
     )
@@ -67,8 +76,27 @@ def _list_artworks(services: Services, arguments: Mapping[str, Any]) -> dict[str
         limit=listing.limit,
         offset=listing.offset,
         truncated=listing.truncated,
+        # The same groups the browser gets, in the same response as the works, for
+        # the reason the HTTP surface carries them: they answer the question the
+        # listing answers, and a model that had to ask separately could be told
+        # about a different set. Zero-count options travel too — a model choosing
+        # a filter needs to see that a combination is empty rather than infer it
+        # from an absence.
+        facets=[_facet_group(group) for group in listing.facets],
         notice=_truncation_notice(listing),
     )
+
+
+def _facet_group(group: FacetGroup) -> dict[str, Any]:
+    return {
+        "kind": str(group.kind),
+        "values": [
+            {"value": option.value, "count": option.count, "selected": option.selected, "disabled": option.disabled}
+            for option in group.options
+        ],
+        "total_values": group.total_values,
+        "truncated": group.truncated,
+    }
 
 
 def _get_artwork(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:

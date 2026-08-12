@@ -24,10 +24,13 @@ if they could disagree — they cannot, because the index is strictly the weaker
 statement of the same rule.
 """
 
+import logging
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, Final
 
 from curation.persistence.adapter import BY_ID, TableAdapter, from_iso, require_datetime, to_iso
+from curation.persistence.catalogue import WorkQuery
 from curation.persistence.durable import OrderBy
 from curation.persistence.errors import StorageError
 from curation.persistence.records import (
@@ -37,6 +40,7 @@ from curation.persistence.records import (
     ArtworkPage,
     ArtworkStatus,
     Directive,
+    FacetDerivation,
     FetchStatus,
     MatColor,
     MatMethod,
@@ -49,8 +53,12 @@ from curation.persistence.records import (
     Theme,
     ThemeAssignment,
     ThemeMembership,
+    VocabularyKind,
     Wall,
+    WorkFacet,
 )
+
+log = logging.getLogger(__name__)
 
 CATALOGUE_SCHEMA = """
 -- `family_name` and `given_name` are nullable because a record that is not a
@@ -86,6 +94,37 @@ CREATE TABLE IF NOT EXISTS artworks (
 );
 
 CREATE INDEX IF NOT EXISTS artworks_by_status ON artworks(status);
+
+-- What a work IS, in the same typed vocabulary the curator's taste is expressed
+-- in. A new table rather than columns on `artworks`, because a work has many
+-- facets and each carries its own derivation and provenance note.
+--
+-- This table needed no written migration: `CREATE TABLE IF NOT EXISTS` and
+-- `CREATE UNIQUE INDEX IF NOT EXISTS` both reach a catalogue file written before
+-- they existed, which is the case `durable.py`'s widening step and
+-- `migrations.py` between them exist to cover. Adding a *table* is neither.
+CREATE TABLE IF NOT EXISTS work_facets (
+    id           TEXT PRIMARY KEY,
+    artwork_id   TEXT NOT NULL REFERENCES artworks(id),
+    kind         TEXT NOT NULL,
+    value        TEXT NOT NULL,
+    derivation   TEXT NOT NULL,
+    source_note  TEXT,
+    created_at   TEXT NOT NULL
+);
+
+-- A work is Baroque once. Load-bearing rather than tidy: a facet's count is a
+-- plain `COUNT(*)` over this table, so a second identical row on one work would
+-- inflate the number a curator reads off the collection — and would do it
+-- invisibly, since the grid it labels would still show that work once.
+CREATE UNIQUE INDEX IF NOT EXISTS work_facets_once_per_work ON work_facets(artwork_id, kind, value);
+
+-- Serves the two reads that are asked once per request per kind: "which works
+-- carry this value" (the filter's subquery) and "every value of this kind" (the
+-- counts). It enforces nothing — the uniqueness above is the constraint.
+CREATE INDEX IF NOT EXISTS work_facets_by_value ON work_facets(kind, value);
+
+CREATE INDEX IF NOT EXISTS work_facets_by_artwork ON work_facets(artwork_id);
 
 -- `rotation_interval_seconds` and `shuffle` are nullable because null means
 -- "inherit the global default" rather than "unset": a theme that has never
@@ -257,12 +296,144 @@ _BY_RECENCY: Final[tuple[OrderBy, ...]] = (OrderBy("chosen_at", descending=True)
 #: different day and every caller here is comparing sets.
 _BY_WALL_ID: Final[tuple[OrderBy, ...]] = (OrderBy("wall_id"),)
 
+#: Grouped by kind so a work's facets read as a vocabulary rather than a list.
+_BY_KIND_VALUE: Final[tuple[OrderBy, ...]] = (OrderBy("kind"), OrderBy("value", ignore_case=True), OrderBy("id"))
+
 #: Curated order, with the entries nobody placed after the ones somebody did.
 _BY_POSITION: Final[tuple[OrderBy, ...]] = (
     OrderBy("position", nulls_last=True),
     OrderBy("added_at"),
     OrderBy("artwork_id"),
 )
+
+
+#: The artist table, joined only when something is searched across its name. The
+#: join is `LEFT` because an unattributed work is ordinary and must still be
+#: listed, and it cannot multiply rows — `artists.id` is a primary key — which is
+#: what lets the count beside a page be a plain `COUNT(*)`.
+_JOIN_ARTISTS: Final[str] = " LEFT JOIN artists ar ON ar.id = a.artist_id"
+
+#: What a curator scans by, then a tie-break that makes paging repeatable — the
+#: same decision `_BY_TITLE` carries, spelled for the joined statement.
+_WORKS_ORDER: Final[str] = 'a."title" COLLATE NOCASE, a."id"'
+
+#: What free text is searched across, and it is the work's own words plus its
+#: artist's name. **Facet values are deliberately not among them**: a facet is
+#: chosen from a control that shows its count, and folding it into the text box
+#: would give the same word two meanings — one exact and counted, one fuzzy and
+#: not — with nothing on screen to say which had been used.
+_SEARCHED: Final[tuple[str, ...]] = (
+    "a.title",
+    "a.description",
+    "a.commentary",
+    "a.medium",
+    "a.date_created",
+    "ar.name",
+)
+
+#: `LIKE`'s own wildcards, which have to survive a curator typing one. Escaped
+#: with a backslash declared per-clause as `ESCAPE '\'`; SQLite has no default
+#: escape character, so without the clause a searched `%` would match everything.
+_LIKE_SPECIAL: Final[str] = "\\%_"
+
+
+def _like_pattern(term: str) -> str:
+    """One search term as a contains-match, with its wildcards defused."""
+    escaped = "".join(f"\\{character}" if character in _LIKE_SPECIAL else character for character in term)
+    return f"%{escaped}%"
+
+
+def _known_kind(value: str) -> VocabularyKind | None:
+    try:
+        return VocabularyKind(value)
+    except ValueError:
+        log.warning("Ignoring facet of unknown kind %r; this build knows %s.", value, ", ".join(VocabularyKind))
+        return None
+
+
+@dataclass(frozen=True, slots=True)
+class _Restriction:
+    """A `WorkQuery` rendered for SQL: which works, and how to ask for them."""
+
+    #: The WHERE body over `artworks a`. `"1"` when nothing narrows.
+    where: str
+    values: tuple[Any, ...]
+    #: True when the clause reads `ar.name`, so the artist table has to be joined.
+    #: Tracked rather than always joining: on this catalogue the unconditional
+    #: join cost measurably more than the search clause it exists for.
+    reads_the_artist: bool
+
+    @property
+    def narrows(self) -> bool:
+        """False when this selects the whole catalogue, and every caller checks it.
+
+        A restriction that narrows nothing still renders as valid SQL — but a
+        `WHERE artwork_id IN (SELECT id FROM artworks)` over a table of facets
+        makes SQLite build an ephemeral index of every work and probe it once per
+        facet row, to arrive at "all of them". Measured on the 4,000-work corpus,
+        dropping that subquery took a facet count from 7.0 ms to 0.5 ms — and the
+        unnarrowed case is the collection's *first* screen, so it is the one a
+        curator meets before they have asked for anything.
+        """
+        return self.where != "1"
+
+    def over_works(self, *, column: str) -> str:
+        """The tail restricting a facet-table read to the works this selects.
+
+        Empty when nothing narrows — see `narrows`.
+        """
+        if not self.narrows:
+            return ""
+        return f" AND {column} IN (SELECT a.id {self.source} WHERE {self.where})"
+
+    @property
+    def source(self) -> str:
+        return "FROM artworks a" + (_JOIN_ARTISTS if self.reads_the_artist else "")
+
+
+def _matching(query: WorkQuery) -> _Restriction:
+    """Render `query` as a WHERE clause over `artworks a`, with its values to bind.
+
+    One renderer for the page, its total, the facet counts and the vocabulary —
+    which is the point. Four statements describing the same set in four
+    hand-written clauses is four chances for the numbers beside a grid to be
+    right about a different set from the one on screen.
+
+    Every value is bound; nothing a caller typed is interpolated. `"1"` is the
+    clause for an unnarrowed query, so the caller can always write `WHERE {where}`
+    rather than deciding whether to write `WHERE` at all.
+    """
+    clauses: list[str] = []
+    values: list[Any] = []
+
+    if query.status is not None:
+        clauses.append('a."status" = ?')
+        values.append(str(query.status))
+
+    # ANDed across terms, ORed across columns: "blue harbour" means both words
+    # appear somewhere about the work, which is what a person typing two words
+    # means. ORing the terms instead would make every extra word widen the
+    # result, so a search would get less useful the more precisely it was asked.
+    for term in query.terms:
+        clauses.append("(" + " OR ".join(f"{column} LIKE ? ESCAPE '\\'" for column in _SEARCHED) + ")")
+        values.extend([_like_pattern(term)] * len(_SEARCHED))
+
+    # ORed within a kind, ANDed across kinds — see `WorkQuery.facets`. A kind
+    # present with nothing chosen narrows nothing, rather than selecting nothing:
+    # an empty list is what a control sends when the curator has cleared it.
+    for kind, chosen in query.facets.items():
+        if not chosen:
+            continue
+        placeholders = ", ".join("?" for _ in chosen)
+        clauses.append(f'a."id" IN (SELECT artwork_id FROM work_facets WHERE kind = ? AND value IN ({placeholders}))')
+        values.append(str(kind))
+        values.extend(chosen)
+
+    return _Restriction(
+        where=" AND ".join(clauses) if clauses else "1",
+        values=tuple(values),
+        reads_the_artist=bool(query.terms),
+    )
 
 
 class SqliteCatalogue(TableAdapter):
@@ -293,15 +464,75 @@ class SqliteCatalogue(TableAdapter):
     def update_artwork(self, artwork: Artwork) -> None:
         self._update("artworks", BY_ID, _artwork_row(artwork), subject=f"artwork {artwork.id!r}")
 
-    def list_artworks(self, *, status: ArtworkStatus | None, limit: int, offset: int) -> ArtworkPage:
-        rows, total = self._store.select_page(
-            "artworks",
-            order_by=_BY_TITLE,
-            filters=None if status is None else {"status": str(status)},
-            limit=limit,
-            offset=offset,
+    def list_artworks(self, query: WorkQuery, *, limit: int, offset: int) -> ArtworkPage:
+        selects = _matching(query)
+        # Counted first and from the same clause as the page, so "showing 20 of
+        # 84" cannot describe a different 84 from the twenty beside it.
+        total = int(
+            self._store.select_rows(f"SELECT COUNT(*) AS total {selects.source} WHERE {selects.where}", selects.values)[0][
+                "total"
+            ]
+        )
+        rows = self._store.select_rows(
+            f"SELECT a.* {selects.source} WHERE {selects.where} ORDER BY {_WORKS_ORDER} LIMIT ? OFFSET ?",
+            (*selects.values, limit, offset),
         )
         return ArtworkPage(artworks=[_artwork(row) for row in rows], total=total)
+
+    # -- what a work is, and what a filter would select -----------------------
+
+    def add_facet(self, facet: WorkFacet) -> None:
+        # Named by what it claims rather than by its id, for the reason `add_wall`
+        # gives: the id is a fresh uuid4 and can never collide, so the only way
+        # this refuses is the (artwork_id, kind, value) uniqueness — and a refusal
+        # quoting a uuid nobody has seen would name the wrong thing entirely.
+        self._add("work_facets", _facet_row(facet), subject=f"facet {facet.kind}={facet.value!r} on artwork {facet.artwork_id!r}")
+
+    def remove_facet(self, facet_id: str) -> None:
+        self._store.delete("work_facets", {"id": facet_id})
+
+    def list_facets(self, artwork_id: str) -> Sequence[WorkFacet]:
+        return self._list("work_facets", {"artwork_id": artwork_id}, _BY_KIND_VALUE, _facet)
+
+    def facet_vocabulary(self, *, status: ArtworkStatus | None) -> Mapping[VocabularyKind, Sequence[str]]:
+        selects = _matching(WorkQuery(status=status))
+        rows = self._store.select_rows(
+            f"SELECT f.kind AS kind, f.value AS value FROM work_facets f "
+            f"WHERE 1{selects.over_works(column='f.artwork_id')} "
+            f"GROUP BY f.kind, f.value ORDER BY f.kind, f.value COLLATE NOCASE",
+            selects.values,
+        )
+        vocabulary: dict[VocabularyKind, list[str]] = {}
+        for row in rows:
+            # A row whose kind this build does not know is skipped rather than
+            # raising: a file written by a later version is a thing a downgrade
+            # meets, and one unrecognised value must not make the whole
+            # collection unreadable.
+            kind = _known_kind(row["kind"])
+            if kind is not None:
+                vocabulary.setdefault(kind, []).append(row["value"])
+        return vocabulary
+
+    def count_facet_values(self, kinds: Sequence[VocabularyKind], query: WorkQuery) -> Mapping[VocabularyKind, Mapping[str, int]]:
+        if not kinds:
+            return {}
+        selects = _matching(query)
+        placeholders = ", ".join("?" for _ in kinds)
+        rows = self._store.select_rows(
+            # `COUNT(*)` and not `COUNT(DISTINCT ...)`: `work_facets_once_per_work`
+            # makes a second row for the same work and value impossible, so the
+            # two are the same number and the cheaper one says so.
+            f"SELECT f.kind AS kind, f.value AS value, COUNT(*) AS tally FROM work_facets f "
+            f"WHERE f.kind IN ({placeholders}){selects.over_works(column='f.artwork_id')} "
+            f"GROUP BY f.kind, f.value",
+            (*(str(kind) for kind in kinds), *selects.values),
+        )
+        counted: dict[VocabularyKind, dict[str, int]] = {kind: {} for kind in kinds}
+        for row in rows:
+            kind = _known_kind(row["kind"])
+            if kind is not None:
+                counted[kind][row["value"]] = int(row["tally"])
+        return counted
 
     # -- sources --------------------------------------------------------------
 
@@ -490,6 +721,18 @@ def _artwork_row(artwork: Artwork) -> dict[str, Any]:
     }
 
 
+def _facet_row(facet: WorkFacet) -> dict[str, Any]:
+    return {
+        "id": facet.id,
+        "artwork_id": facet.artwork_id,
+        "kind": str(facet.kind),
+        "value": facet.value,
+        "derivation": str(facet.derivation),
+        "source_note": facet.source_note,
+        "created_at": to_iso(facet.created_at),
+    }
+
+
 def _source_row(source: Source) -> dict[str, Any]:
     return {
         "id": source.id,
@@ -624,6 +867,18 @@ def _artwork(row: Mapping[str, Any]) -> Artwork:
         rights=row["rights"],
         accepted_at=from_iso(row["accepted_at"]),
         commentary=row["commentary"],
+    )
+
+
+def _facet(row: Mapping[str, Any]) -> WorkFacet:
+    return WorkFacet(
+        id=row["id"],
+        artwork_id=row["artwork_id"],
+        kind=VocabularyKind(row["kind"]),
+        value=row["value"],
+        derivation=FacetDerivation(row["derivation"]),
+        created_at=require_datetime(row["created_at"], "created_at"),
+        source_note=row["source_note"],
     )
 
 

@@ -49,6 +49,41 @@ _OFFSET = Param(
     minimum=0,
 )
 
+_QUERY = Param(
+    name="q",
+    type="string",
+    description=(
+        "Free text. Every word must appear somewhere in the work's title, description, commentary, medium, date or "
+        "artist name, so a second word narrows rather than widens."
+    ),
+)
+
+
+def _facet_param(name: str, description: str) -> Param:
+    """One facet kind's filter: an array of chosen values, several meaning either."""
+    return Param(name=name, type="array", items="string", description=description)
+
+
+#: One array parameter per facet kind, rather than one parameter carrying pairs.
+#: The kinds are a closed vocabulary, so naming them is what lets a model see the
+#: whole filter surface in the schema instead of learning a mini-language for it —
+#: and it is the same shape `GET /api/works` takes, which is the parity
+#: `product-brief.md` item 8 asks for.
+#:
+#: **Spelled out rather than generated from `VocabularyKind`**, because the useful
+#: half of each description is an example of that kind's *values*, which the enum
+#: does not carry. `tests/contract` holds the guard that the set here is exactly
+#: the vocabulary — a seventh kind that reached the enum and not this tuple would
+#: be a filter the browser offered and a model could not.
+_FACET_PARAMS: Final = (
+    _facet_param("artist", "Keep only works with these artist facets. Several mean either; combining kinds means both."),
+    _facet_param("movement", "Keep only works in these movements, e.g. ['Baroque', 'Cubism']."),
+    _facet_param("era", "Keep only works in these eras, as the catalogue names them."),
+    _facet_param("subject", "Keep only works with these subjects, e.g. ['Seascape']."),
+    _facet_param("medium", "Keep only works with these medium facets, e.g. ['Oil on canvas']."),
+    _facet_param("palette", "Keep only works with these palette facets."),
+)
+
 #: One description for `artwork_id`, because every action's parameters flatten
 #: onto a single wire schema and only the first description survives.
 _ARTWORK_ID = Param(
@@ -106,12 +141,16 @@ ART_CATALOGUE: Final = ToolRecord(
     actions=(
         Action(
             name="list",
-            description="Page through catalogued works, optionally filtered by status.",
-            example="art_catalogue(action='list', status='accepted', limit=20)",
-            params=(_STATUS, _LIMIT, _OFFSET),
+            description="Search and filter catalogued works, with the counts each further filter would select.",
+            example="art_catalogue(action='list', q='harbour', movement=['Impressionism'], limit=20)",
+            params=(_STATUS, _QUERY, *_FACET_PARAMS, _LIMIT, _OFFSET),
             tips=(
                 "A truncated result says so and reports the total, so a short list is never mistaken for a complete one.",
                 "Listings carry the fields needed to choose; use action='get' for the whole record.",
+                "Every result carries the facet vocabulary with counts, so call it once with no filter to see what "
+                "there is to filter by.",
+                "A facet's counts are computed with its OWN selection ignored, so an option showing 0 with another "
+                "facet chosen is an empty intersection rather than an empty catalogue.",
             ),
         ),
         Action(

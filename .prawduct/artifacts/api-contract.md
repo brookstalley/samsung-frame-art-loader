@@ -1180,8 +1180,8 @@ spellings for "change this" costs more than the orthodoxy is worth here.
 
 | Route | What it is | Stands on | MCP twin |
 |---|---|---|---|
-| `GET /api/works` — extended | Gains `q` for text search and one repeatable filter per facet `kind`. Additive to a built route. | `WorkFacet` — **unbuilt** | `art_catalogue(action='list')` gains the same filters |
-| `GET /api/works` — facet counts in the same response | The counts the IA's disabled-not-hidden rule needs. **Not a second route** — see below. | `WorkFacet` — **unbuilt** | as above |
+| `GET /api/works` — extended | Gains `q` for text search and one repeatable filter per facet `kind`. Additive to a built route. **Built 2026-08-12** — see below for the parameter shapes. | `WorkFacet`, built | `art_catalogue(action='list')` takes the same filters |
+| `GET /api/works` — facet counts in the same response | The counts the IA's disabled-not-hidden rule needs. **Not a second route** — see below. **Built 2026-08-12**, with the latency measured. | `WorkFacet`, built | as above |
 | `POST /api/works/{id}/archive`, `/restore` | Take a work out of circulation, and put it back. **Not a delete** — see below. | `Artwork.status`, built | `art_catalogue(action='archive'\|'restore')`, already designed |
 | `POST /api/themes/{id}` | Rename. | `Theme`, built | `art_theme(action='update')`, already designed |
 | `DELETE /api/themes/{id}` | Delete. **The refusal it must reuse is already built** — see below. | `Theme`, built, and `DisplayService.delete_theme`'s guard with it | `art_theme(action='delete')`, built and wired to that guard |
@@ -1203,6 +1203,60 @@ review view's own source. The cost is that counts are recomputed on page 2 of a
 grid that did not change them. That is accepted rather than optimised away, on a
 loopback service serving one household; **revisit trigger:** the recompute shows
 up in the collection's response time on the real thousands-scale corpus.
+
+**How the filters are carried, and what comes back.** `q` is free text, split on
+whitespace, and every word must appear somewhere in the work's title, description,
+commentary, medium or date, or in its artist's name; a second word narrows rather
+than widens, and at most eight are accepted (more is refused, because dropping the
+surplus would silently *broaden* the answer). Each facet kind is its own repeatable
+parameter named for the kind — `?movement=Baroque&movement=Rococo&era=17th+c.` —
+repeated rather than comma-joined, because a facet value may contain a comma and a
+separator the data can hold is a parser that goes wrong on the data. **Values
+within one kind mean *either*; two kinds mean *both*.** The response carries a
+`facets` array of one group per kind, always all six and always in vocabulary
+order, each with its `options` (`value`, `count`, `selected`, `disabled`),
+`total_values` and `truncated`. Options are ordered commonest first and capped at
+fifty per kind — an `artist` rail on a thousands-work catalogue is a scroll rather
+than a choice — with any *selected* value kept whatever its count, since the
+control that removes a filter is the option itself. `art_catalogue(action='list')`
+takes the same six arrays and `q`, and returns the same groups.
+
+> **Measured 2026-08-12 on the 4,000-work corpus, and the FTS5 question is
+> settled: `LIKE`, and no full-text index.** Run
+> `cd curation && uv run python tools/search_latency.py` to reproduce; figures are
+> medians of 50 runs on an Apple-silicon laptop, and the tool prints p95 and worst
+> beside them.
+>
+> | | median |
+> |---|---|
+> | The whole response, unfiltered first page | **5.9 ms** |
+> | The whole response, one facet chosen | **17.9 ms** |
+> | The whole response, a search term | **24–33 ms** |
+> | The `LIKE` clause on its own | **1.0–1.7 ms** |
+> | The same term through an FTS5 index | **0.01–0.19 ms** |
+>
+> **FTS5 is genuinely two orders of magnitude faster and is still the wrong
+> answer, for two reasons and only the second is about speed.** It matches whole
+> tokens, so a search for `harb` finds nothing at all where `LIKE '%harb%'` finds
+> "harbour" — the contains-match a search box is expected to do would have to be
+> taught to the curator as a prefix operator, or given up. And the clause is not
+> where the time goes: 1.5 ms of a 30 ms answer. Replacing it would buy about 5%
+> of the response for a second copy of every searched column, kept in step by
+> triggers, on a file whose whole appeal is that it can be copied to a backup and
+> back. *(The measurement is the number; this paragraph's account of where the
+> time goes is inference from the per-part timings in the same tool run.)*
+>
+> **The revisit trigger above fired, and was answered by fixing the query rather
+> than by dropping the counts.** Recomputing them cost 57 ms unfiltered and 101 ms
+> with a search term — on a laptop, so several times that on the Pi this is
+> deployed to. Two changes took it to the table above: a facet count no longer
+> restricts itself to a set of works when nothing narrows that set (the collection's
+> *first* screen is exactly that case), and the kinds the curator has not filtered
+> on are counted in one statement instead of five, which is not an exception to the
+> exclusion rule but a consequence of it — dropping a kind's own selection leaves
+> the same query for every kind that has none. **Counts still ride on the works
+> response.** The trigger now reads: revisit if the recompute shows up again on the
+> real corpus, measured with the tool above rather than estimated.
 
 **Three built routes gain a wall, and this is the only change in this section to
 something that already ships.** The operator ruled on 2026-08-12 that themes are

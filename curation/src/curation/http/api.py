@@ -46,6 +46,8 @@ from curation.http.models import (
     CreateWall,
     EstimateOut,
     ExclusionOut,
+    FacetGroupOut,
+    FacetOptionOut,
     FitOut,
     HangTheme,
     HealthOut,
@@ -80,6 +82,7 @@ from curation.http.models import (
     WallOut,
     WallRefOut,
     WorkDetailOut,
+    WorkFacetOut,
     WorkOut,
     WorkPageOut,
 )
@@ -87,8 +90,8 @@ from curation.manifest.builder import ManifestBuild
 from curation.manifest.heartbeat import HeartbeatReading
 from curation.persistence.backup import BackupReading
 from curation.persistence.discovery_records import CandidateImage, CandidateWork, DiscoveryRun, InitiatedBy
-from curation.persistence.records import Artist, MatColor, Original, Source, Theme
-from curation.services.catalogue import RenditionView
+from curation.persistence.records import Artist, MatColor, Original, Source, Theme, WorkFacet
+from curation.services.catalogue import FacetGroup, RenditionView
 from curation.services.container import Services
 from curation.services.discovery import VerdictOutcome
 from curation.services.display import ThemePlacement, WallView
@@ -142,17 +145,45 @@ def _services(request: Request) -> Services:
 def list_works(
     request: Request,
     status: Annotated[str | None, Query()] = None,
+    q: Annotated[str | None, Query()] = None,
+    artist: Annotated[list[str] | None, Query()] = None,
+    movement: Annotated[list[str] | None, Query()] = None,
+    era: Annotated[list[str] | None, Query()] = None,
+    subject: Annotated[list[str] | None, Query()] = None,
+    medium: Annotated[list[str] | None, Query()] = None,
+    palette: Annotated[list[str] | None, Query()] = None,
     limit: Annotated[int | None, Query()] = None,
     offset: Annotated[int, Query()] = 0,
 ) -> WorkPageOut:
-    """A page of works, each with its fit verdict and its image state."""
-    page = _services(request).survey.list_works(status=status, limit=limit, offset=offset)
+    """A page of works with the facet controls for exactly this filter.
+
+    `q` is free text; every word must appear somewhere in the work's own text or
+    its artist's name. **One repeatable parameter per facet kind** — `?movement=
+    Baroque&movement=Rococo` means either, and adding `&era=17th+c.` means both.
+    Repeated rather than comma-joined because a facet value may itself contain a
+    comma, and a separator a value can hold is a parser that goes wrong on the
+    data rather than on the request.
+
+    The six are spelled out rather than gathered from the raw query string:
+    FastAPI generates this route's schema from the signature, so a named
+    parameter is what makes the filter set discoverable and an unknown one a
+    stated refusal instead of a silent no-op.
+    """
+    chosen = {"artist": artist, "movement": movement, "era": era, "subject": subject, "medium": medium, "palette": palette}
+    page = _services(request).survey.list_works(
+        status=status,
+        q=q,
+        facets={kind: values for kind, values in chosen.items() if values},
+        limit=limit,
+        offset=offset,
+    )
     return WorkPageOut(
         works=[_work(entry) for entry in page.entries],
         total=page.total,
         limit=page.limit,
         offset=page.offset,
         truncated=page.truncated,
+        facets=[_facet_group(group) for group in page.facets],
     )
 
 
@@ -627,6 +658,32 @@ def _dossier(dossier: WorkDossier) -> WorkDetailOut:
         sources=[_source(source) for source in dossier.sources],
         renditions=[_rendition(view) for view in dossier.renditions],
         mat_colors=[_mat_color(mat) for mat in dossier.mat_colors],
+        facets=[_facet(facet) for facet in dossier.facets],
+    )
+
+
+def _facet(facet: WorkFacet) -> WorkFacetOut:
+    return WorkFacetOut(
+        facet_id=facet.id,
+        kind=str(facet.kind),
+        value=facet.value,
+        derivation=str(facet.derivation),
+        source_note=facet.source_note,
+    )
+
+
+def _facet_group(group: FacetGroup) -> FacetGroupOut:
+    return FacetGroupOut(
+        kind=str(group.kind),
+        options=[
+            FacetOptionOut(value=option.value, count=option.count, selected=option.selected, disabled=option.disabled)
+            for option in group.options
+        ],
+        total_values=group.total_values,
+        # The group's own property rather than `len(options) < total_values`
+        # recomputed here, so a client and the service cannot disagree about
+        # whether a rail is showing everything.
+        truncated=group.truncated,
     )
 
 

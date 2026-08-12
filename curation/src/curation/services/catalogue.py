@@ -25,17 +25,18 @@ without an event loop.
 
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Final
 
-from curation.persistence.catalogue import CatalogueStore
+from curation.persistence.catalogue import CatalogueStore, WorkQuery
 from curation.persistence.records import (
     AcquisitionMethod,
     Artist,
     Artwork,
     ArtworkStatus,
+    FacetDerivation,
     FetchStatus,
     MatColor,
     MatMethod,
@@ -45,6 +46,8 @@ from curation.persistence.records import (
     RightsStatus,
     Source,
     SourceClass,
+    VocabularyKind,
+    WorkFacet,
     is_current,
 )
 from curation.services.display_fit import ArtworkBox, FitAssessment, assess_display_fit
@@ -62,6 +65,23 @@ DEFAULT_LIST_LIMIT: Final[int] = 25
 #: a short one that says how much it left behind.
 MAX_LIST_LIMIT: Final[int] = 100
 
+#: How many options one facet offers before the list is cut. **A rail is read, so
+#: it has to be readable**: `artist` alone holds hundreds of values on a
+#: thousands-work catalogue, and a control listing every one of them is a scroll
+#: rather than a choice. The cut is by count, so what survives is what most of the
+#: collection actually is — and the group reports how many values it holds, so a
+#: control can say "50 of 512" rather than implying the vocabulary is fifty long.
+#: **A value the curator has selected is never cut**, whatever its count: an
+#: option that vanished from the rail could not be switched off again.
+MAX_FACET_VALUES: Final[int] = 50
+
+#: How many words one search may carry. Terms narrow rather than widen, so
+#: dropping the surplus would silently *broaden* the result — the refusal names
+#: the cap instead. The bound exists because each term adds a `LIKE` against every
+#: searched column, and a pasted paragraph would compose a statement in the
+#: hundreds of clauses against a request nobody meant to make.
+MAX_SEARCH_TERMS: Final[int] = 8
+
 
 @dataclass(frozen=True, slots=True)
 class ArtworkDetail:
@@ -72,6 +92,51 @@ class ArtworkDetail:
 
 
 @dataclass(frozen=True, slots=True)
+class FacetOption:
+    """One value a facet control offers, and what choosing it would select."""
+
+    value: str
+    #: How many works the *rest* of the filter selects that also carry this value.
+    #: Computed with this facet's own selection dropped — see `WorkQuery.without`.
+    count: int
+    selected: bool
+
+    @property
+    def disabled(self) -> bool:
+        """True for an option that would select nothing, and it is still returned.
+
+        **Disabled, never omitted.** Hiding a zero makes the vocabulary appear to
+        shrink as filters are applied, which reads as data loss rather than as an
+        empty intersection — and it takes away the only on-screen evidence that
+        the combination the curator is imagining does not exist.
+
+        A *selected* value is never disabled even at zero, because the control
+        that turns it off is the same control that would be greyed out. That is
+        the state a shared link can arrive in, and it is the one state from which
+        an empty grid has to be escapable.
+        """
+        return self.count == 0 and not self.selected
+
+
+@dataclass(frozen=True, slots=True)
+class FacetGroup:
+    """One facet kind as a control renders it."""
+
+    kind: VocabularyKind
+    #: Ordered by count, commonest first, then by value. Capped at
+    #: `MAX_FACET_VALUES` with every selected value kept regardless.
+    options: Sequence[FacetOption]
+    #: How many distinct values this kind holds across the catalogue, before the
+    #: cap. Present so a control can say how much it is not showing.
+    total_values: int
+
+    @property
+    def truncated(self) -> bool:
+        """True when this kind holds values the options do not carry."""
+        return len(self.options) < self.total_values
+
+
+@dataclass(frozen=True, slots=True)
 class ArtworkListing:
     """One page of works, and enough context to describe it honestly."""
 
@@ -79,6 +144,11 @@ class ArtworkListing:
     total: int
     limit: int
     offset: int
+    #: One group per facet kind, always all of them and always in vocabulary
+    #: order, so a control does not appear and disappear as the catalogue is
+    #: filtered. A kind the catalogue holds no facets of comes back with no
+    #: options rather than being left out.
+    facets: Sequence[FacetGroup] = ()
 
     @property
     def truncated(self) -> bool:
@@ -100,6 +170,24 @@ class RenditionView:
     stale: bool
 
 
+def _offered(options: Sequence[FacetOption]) -> Sequence[FacetOption]:
+    """Order a kind's options and cut the tail, keeping every selected one.
+
+    Commonest first, then alphabetically, because what a rail is *for* is showing
+    where most of the collection is; a value the curator has already chosen
+    survives the cut whatever its count, since the control that removes it is the
+    option itself.
+    """
+    ordered = sorted(options, key=lambda option: (-option.count, option.value.casefold()))
+    if len(ordered) <= MAX_FACET_VALUES:
+        return ordered
+    kept = list(ordered[:MAX_FACET_VALUES])
+    # The tail is already in order, so appending from it keeps the whole list in
+    # order — nothing is re-sorted and the kept prefix does not move.
+    kept.extend(option for option in ordered[MAX_FACET_VALUES:] if option.selected)
+    return kept
+
+
 class CatalogueService:
     """Read and write the catalogue."""
 
@@ -112,13 +200,28 @@ class CatalogueService:
         self,
         *,
         status: str | None = None,
+        q: str | None = None,
+        facets: Mapping[str, Sequence[str]] | None = None,
         limit: int | None = None,
         offset: int = 0,
     ) -> ArtworkListing:
-        """Page through the catalogue.
+        """Page through the catalogue, narrowed by text and by facet.
 
         `status` is optional: omitting it lists accepted and archived works
         together, which is what "the whole catalogue" means.
+
+        `q` is free text, split on whitespace; every word must appear somewhere in
+        the work's own text or its artist's name. `facets` maps a facet kind to
+        the values chosen for it — several values within a kind mean *either*,
+        several kinds mean *both*.
+
+        **The facet counts come back with the page rather than from a second
+        route**, because they answer the same question the grid answers — what
+        does this filter select? — and two routes would give a curator two answers
+        to it, which could differ by a write landing between the calls. The cost
+        is that they are recomputed on page 2 of a grid that did not change them;
+        that is accepted on a loopback service serving one household, and
+        `api-contract.md` records the measurement and the trigger for revisiting.
         """
         resolved_status = self._parse_status(status)
         resolved_limit = DEFAULT_LIST_LIMIT if limit is None else limit
@@ -127,7 +230,8 @@ class CatalogueService:
         if offset < 0:
             raise ServiceError(f"offset cannot be negative, got {offset}.")
 
-        page = self._store.list_artworks(status=resolved_status, limit=resolved_limit, offset=offset)
+        query = WorkQuery(status=resolved_status, terms=self._parse_terms(q), facets=self._parse_facets(facets))
+        page = self._store.list_artworks(query, limit=resolved_limit, offset=offset)
         # Attribution is the first thing anyone judges a work by, so a listing
         # that returned a bare artist id would send every caller straight back
         # for a second read. Resolved here, memoised within the page: a page is
@@ -137,7 +241,61 @@ class CatalogueService:
         entries = [
             ArtworkDetail(artwork=artwork, artist=self._resolve_artist(artwork.artist_id, artists)) for artwork in page.artworks
         ]
-        return ArtworkListing(entries=entries, total=page.total, limit=resolved_limit, offset=offset)
+        return ArtworkListing(
+            entries=entries,
+            total=page.total,
+            limit=resolved_limit,
+            offset=offset,
+            facets=self._facet_groups(query),
+        )
+
+    def _facet_groups(self, query: WorkQuery) -> Sequence[FacetGroup]:
+        """Every facet kind, with each value's count and whether it is chosen.
+
+        **The rule this method exists for: a facet's counts are computed over the
+        results filtered by every *other* facet, never by its own.** Including its
+        own would collapse each control to the single value already chosen — the
+        curator could not change their mind about Baroque without first clearing
+        Baroque, which at a rail of six controls is a filter that can only be
+        escaped and never adjusted.
+
+        What it buys is the acceptance criterion: an option offered as enabled has
+        a count computed against exactly the filter that would be in force once it
+        is clicked, so **clicking an enabled option cannot produce an empty grid**.
+        Free text is the one narrowing that can, and it explains itself.
+
+        **The kinds nobody has filtered on are counted together, in one
+        statement.** That is not an exception to the rule above — it *is* the
+        rule: `without(kind)` returns the same query for every kind that is not
+        narrowing anything, so those kinds all need one and the same count. Only a
+        kind with a selection of its own needs a query of its own. Measured on the
+        4,000-work corpus with `tools/search_latency.py`, this and the unnarrowed
+        skip in `_Restriction.narrows` together took the whole listing's median
+        from **57 ms to 6 ms** unfiltered and from **101 ms to 31 ms** with a
+        search term.
+        """
+        vocabulary = self._store.facet_vocabulary(status=query.status)
+        # A kind with nothing chosen has nothing to drop, so `without` leaves the
+        # query as it stands and one statement answers for all of them together.
+        unfiltered = [kind for kind in VocabularyKind if not query.facets.get(kind)]
+        counts = dict(self._store.count_facet_values(unfiltered, query))
+        for kind in VocabularyKind:
+            if query.facets.get(kind):
+                counts.update(self._store.count_facet_values([kind], query.without(kind)))
+
+        groups: list[FacetGroup] = []
+        for kind in VocabularyKind:
+            held = list(vocabulary.get(kind, ()))
+            chosen = set(query.facets.get(kind, ()))
+            # A chosen value the catalogue does not hold — a shared link naming
+            # a value since renamed away, or one that exists only among works the
+            # status filter excludes — is still offered, at zero and selected.
+            # Otherwise the filter in force would have no control to turn it off.
+            values = held + [value for value in chosen if value not in set(held)]
+            tallies = counts[kind]
+            options = [FacetOption(value=value, count=tallies.get(value, 0), selected=value in chosen) for value in values]
+            groups.append(FacetGroup(kind=kind, options=_offered(options), total_values=len(values)))
+        return groups
 
     def get_artwork(self, artwork_id: str) -> ArtworkDetail:
         """Return one work in full, with its artist resolved."""
@@ -367,6 +525,78 @@ class CatalogueService:
         restored = replace(artwork, status=ArtworkStatus.ACCEPTED)
         store_write(self._store.update_artwork, restored)
         return restored
+
+    # -- what a work is -------------------------------------------------------
+
+    def facets_for(self, artwork_id: str) -> Sequence[WorkFacet]:
+        """Everything this work is said to be, grouped by kind."""
+        self._require_artwork(artwork_id)
+        return self._store.list_facets(artwork_id)
+
+    def record_facet(
+        self,
+        *,
+        artwork_id: str,
+        kind: VocabularyKind | str,
+        value: str,
+        derivation: FacetDerivation | str,
+        source_note: str | None = None,
+    ) -> WorkFacet:
+        """Say that a work is one more thing, and where that claim came from.
+
+        `derivation` has no default, deliberately. `sourced` and `inferred` carry
+        different authority — one is what a holding institution published, the
+        other is what a model decided — and a default would let the caller that
+        forgot claim the stronger of the two on every row it wrote. That is the
+        same reason `Source.rights_status` has none.
+
+        **Recording a facet a work already has is a no-op, not a refusal.** The
+        row is a statement that the work *is* Baroque, and asserting it twice is
+        the same statement; a caller re-running an inference pass would otherwise
+        have to check first, and the check would be this method. What it does not
+        do is overwrite the stored derivation — the first recording of a claim is
+        the one whose provenance survives, and a later pass that could silently
+        relabel a museum's own value as inferred is the failure the column exists
+        to prevent.
+        """
+        self._require_artwork(artwork_id)
+        resolved_kind = require_member(kind, enum=VocabularyKind, field="kind")
+        resolved_derivation = require_member(derivation, enum=FacetDerivation, field="derivation")
+        resolved_value = require_text(value, field="value")
+        held = next(
+            (
+                facet
+                for facet in self._store.list_facets(artwork_id)
+                if facet.kind is resolved_kind and facet.value == resolved_value
+            ),
+            None,
+        )
+        if held is not None:
+            return held
+        facet = WorkFacet(
+            id=str(uuid.uuid4()),
+            artwork_id=artwork_id,
+            kind=resolved_kind,
+            value=resolved_value,
+            derivation=resolved_derivation,
+            created_at=datetime.now(UTC),
+            source_note=source_note,
+        )
+        store_write(self._store.add_facet, facet)
+        return facet
+
+    def remove_facet(self, artwork_id: str, *, facet_id: str) -> None:
+        """Withdraw a claim about a work.
+
+        Takes the work as well as the facet so a caller cannot delete a row off
+        another work by holding an id — the same reason `record_original` checks
+        that a source belongs to the work it is being recorded against.
+        """
+        self._require_artwork(artwork_id)
+        held = next((facet for facet in self._store.list_facets(artwork_id) if facet.id == facet_id), None)
+        if held is None:
+            raise ServiceError(f"Artwork {artwork_id!r} has no facet with id {facet_id!r}.")
+        store_write(self._store.remove_facet, facet_id)
 
     # -- writes: sources ------------------------------------------------------
 
@@ -648,6 +878,44 @@ class CatalogueService:
         if artist_id not in seen:
             seen[artist_id] = self._store.get_artist(artist_id)
         return seen[artist_id]
+
+    @staticmethod
+    def _parse_terms(q: str | None) -> Sequence[str]:
+        """Split a search box into the words that must all appear.
+
+        Whitespace is the only separator, and nothing here is clever about
+        quoting or operators: a curator typing `blue harbour` means both words,
+        and a query language on a household collection is a thing to learn rather
+        than a thing to use.
+        """
+        if q is None:
+            return ()
+        terms = q.split()
+        if len(terms) > MAX_SEARCH_TERMS:
+            raise ServiceError(f"A search takes at most {MAX_SEARCH_TERMS} words, got {len(terms)}.")
+        return tuple(terms)
+
+    @staticmethod
+    def _parse_facets(facets: Mapping[str, Sequence[str]] | None) -> Mapping[VocabularyKind, Sequence[str]]:
+        """Resolve the chosen facet kinds, refusing one this vocabulary does not have.
+
+        A kind is refused rather than ignored: silently dropping an unknown filter
+        returns a *wider* result than the caller asked for, which reads as the
+        filter having been applied and found this many works.
+        """
+        if not facets:
+            return {}
+        parsed: dict[VocabularyKind, Sequence[str]] = {}
+        for name, values in facets.items():
+            try:
+                kind = VocabularyKind(name)
+            except ValueError as exc:
+                valid = ", ".join(member.value for member in VocabularyKind)
+                raise ServiceError(f"Unknown facet {name!r}. Valid facets are: {valid}.") from exc
+            chosen = tuple(value for value in values if value.strip())
+            if chosen:
+                parsed[kind] = chosen
+        return parsed
 
     @staticmethod
     def _parse_status(status: str | None) -> ArtworkStatus | None:

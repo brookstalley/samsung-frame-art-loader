@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from curation.persistence.catalogue import StorageError, StoreMisuseError
+from curation.persistence.catalogue import StorageError, StoreMisuseError, WorkQuery
 from curation.persistence.durable import SqliteDurableStore
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import (
@@ -174,7 +174,7 @@ def test_a_catalogue_survives_the_process_that_wrote_it(tmp_path):
         assert theme is not None
         assert (theme.name, theme.description) == ("Late night", "After hours")
 
-        assert reopened.list_artworks(status=None, limit=10, offset=0).total == 1
+        assert reopened.list_artworks(WorkQuery(), limit=10, offset=0).total == 1
         assert [entry.name for entry in reopened.list_themes()] == ["Late night"]
     finally:
         reopened.close()
@@ -341,10 +341,12 @@ def test_a_catalogue_written_by_an_earlier_revision_still_reads(tmp_path):
         assert (theme.name, theme.description, theme.created_at) == ("Late night", "After hours", moment)
 
         # Ordering is case-insensitive by title, so the lowercase entry leads.
-        listed = catalogue.list_artworks(status=None, limit=10, offset=0)
+        listed = catalogue.list_artworks(WorkQuery(), limit=10, offset=0)
         assert [work.id for work in listed.artworks] == ["w2", "w1"]
         assert listed.total == 2
-        assert [work.id for work in catalogue.list_artworks(status=ArtworkStatus.ACCEPTED, limit=10, offset=0).artworks] == ["w1"]
+        assert [
+            work.id for work in catalogue.list_artworks(WorkQuery(status=ArtworkStatus.ACCEPTED), limit=10, offset=0).artworks
+        ] == ["w1"]
         assert [entry.id for entry in catalogue.list_themes()] == ["t2", "t1"]
     finally:
         catalogue.close()

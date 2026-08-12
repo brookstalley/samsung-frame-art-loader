@@ -19,8 +19,9 @@ caller — a store that also enforced would be a second place for those rules to
 live, and the two would disagree.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from contextlib import AbstractContextManager
+from dataclasses import dataclass, field, replace
 from typing import Protocol
 
 from curation.persistence.errors import StorageError, StoreMisuseError
@@ -37,8 +38,53 @@ from curation.persistence.records import (
     Theme,
     ThemeAssignment,
     ThemeMembership,
+    VocabularyKind,
     Wall,
+    WorkFacet,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class WorkQuery:
+    """Which works a listing is about, before paging.
+
+    Three independent narrowings, and they are one object rather than three
+    parameters because the same set has to be described **four different ways in
+    one response** — the page, its total, and a count per facet kind. Passing them
+    separately would let the page and the counts it is labelled with disagree
+    about which works they are talking about, which is the one defect a facet
+    control cannot survive: the numbers would be right about a set nobody is
+    looking at.
+    """
+
+    #: Accepted, archived, or both. The one axis that is not a facet, and the one
+    #: that is applied to every read here including the facet vocabulary.
+    status: ArtworkStatus | None = None
+    #: Free-text terms, already split. **Every term must match somewhere** — they
+    #: are ANDed across the work's text and its artist's name, so a second word
+    #: narrows rather than widens. Empty means no text narrowing at all.
+    terms: Sequence[str] = ()
+    #: Chosen values per facet kind. **Values within one kind are ORed and kinds
+    #: are ANDed**: two movements means either movement, a movement and an era
+    #: means both. That asymmetry is what makes a facet control behave the way a
+    #: person expects, and it is stated here because it is invisible at the call
+    #: site.
+    facets: Mapping[VocabularyKind, Sequence[str]] = field(default_factory=dict)
+
+    def without(self, kind: VocabularyKind) -> WorkQuery:
+        """The same query with one facet kind's own selection dropped.
+
+        **This is the retrieval rule the collection stands on.** A facet's counts
+        are computed over the results filtered by every *other* facet, never by
+        its own: including its own collapses the control to the single value
+        already chosen, and the curator cannot change their mind without first
+        clearing the filter they want to change.
+
+        Invisible at 41 works, where every option has a count either way. At
+        thousands it is the difference between a working control and one that
+        can only be escaped from.
+        """
+        return replace(self, facets={other: chosen for other, chosen in self.facets.items() if other is not kind})
 
 
 class CatalogueStore(Protocol):
@@ -106,8 +152,49 @@ class CatalogueStore(Protocol):
         """Overwrite a stored work with this one. Raises if the id is absent."""
         ...
 
-    def list_artworks(self, *, status: ArtworkStatus | None, limit: int, offset: int) -> ArtworkPage:
-        """Return a page of works in a stable order, with the unpaged total."""
+    def list_artworks(self, query: WorkQuery, *, limit: int, offset: int) -> ArtworkPage:
+        """Return a page of works matching `query` in a stable order, with the unpaged total."""
+        ...
+
+    # -- what a work is, and what a filter would select -----------------------
+
+    def add_facet(self, facet: WorkFacet) -> None:
+        """Persist a facet. Raises if the id, or the work's (kind, value), is already present."""
+        ...
+
+    def remove_facet(self, facet_id: str) -> None:
+        """Delete a facet. Removing an absent one is not an error."""
+        ...
+
+    def list_facets(self, artwork_id: str) -> Sequence[WorkFacet]:
+        """Return a work's facets in a stable order, grouped by kind."""
+        ...
+
+    def facet_vocabulary(self, *, status: ArtworkStatus | None) -> Mapping[VocabularyKind, Sequence[str]]:
+        """Every value each kind holds anywhere in the catalogue, in a stable order.
+
+        The whole vocabulary rather than the matching part of it, because **a
+        zero-count option is disabled and not hidden**: a list that shrank as
+        filters were applied would read as data loss rather than as an empty
+        intersection. What the counts are computed over is a separate question,
+        answered by `count_facet_values`.
+        """
+        ...
+
+    def count_facet_values(self, kinds: Sequence[VocabularyKind], query: WorkQuery) -> Mapping[VocabularyKind, Mapping[str, int]]:
+        """How many works `query` selects for each value the named kinds hold.
+
+        Values with no matching work are simply absent — the caller pairs this
+        against `facet_vocabulary` to decide which options are offered at zero.
+        Every named kind gets an entry, empty when it selects nothing.
+
+        **Several kinds at once because they usually share a query.** Nothing here
+        knows the exclusion rule; the caller passes the query it wants counted,
+        which for a facet's own counts is `query.without(kind)` — and that is the
+        same object for every kind the curator has not filtered on. Counting those
+        together is one statement instead of five, which is what keeps the
+        collection's default screen from paying for six near-identical scans.
+        """
         ...
 
     # -- sources --------------------------------------------------------------
@@ -282,4 +369,4 @@ class CatalogueStore(Protocol):
 #: the two domains it serves. They stay importable from here because
 #: `CatalogueStore`'s own methods raise them, and a caller holding a catalogue
 #: store should not have to know which module declared the class to catch it.
-__all__ = ["CatalogueStore", "StorageError", "StoreMisuseError"]
+__all__ = ["CatalogueStore", "StorageError", "StoreMisuseError", "WorkQuery"]
