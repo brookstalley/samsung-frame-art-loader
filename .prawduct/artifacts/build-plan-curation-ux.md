@@ -63,6 +63,11 @@ close. Two live plans is the documented gitflow case, and the Stop hook's gates
 follow the pointer — so chunk-close here runs `/prawduct:critic` explicitly rather
 than relying on the gate to fire.
 
+**Pass `--chunk` on those dispatches.** With the pointer on the other plan,
+record-lint otherwise grades that plan's next unticked box instead of the chunk
+being closed — a green grade for work nobody reviewed. Noted by the Critic on the
+round that authored this plan.
+
 ## Requirements Confidence
 
 **Level:** Medium
