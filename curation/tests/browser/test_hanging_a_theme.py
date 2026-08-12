@@ -69,6 +69,13 @@ def test_hanging_reports_back_by_naming_the_wall_rather_than_a_colour(ui, a_them
     ui.page.wait_for_selector(".panel")
 
     ui.page.click("text=Hang on Study")
+    # Through the confirmation, which this screen gained when the chunk that owns
+    # it adopted `core/confirm.js`: activation is the one act that changes what
+    # other people in the house see, and flow 6 requires it be asked about. What
+    # the question says is asserted in `test_the_theme_screen.py`; here it is the
+    # gate between the click and the write.
+    ui.page.wait_for_selector("dialog.confirm[open]")
+    ui.page.click("dialog.confirm .confirm-actions button:has-text('Hang')")
     # Waited on the wall view the hang lands on, not on a heading. The theme
     # screen already has an `h2`, so waiting for one waits for nothing — and the
     # reload below is then free to overtake the POST, after which the theme is

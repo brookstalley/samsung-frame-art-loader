@@ -66,6 +66,7 @@ from curation.http.models import (
     MatColorOut,
     MoveWork,
     OriginalOut,
+    RenameTheme,
     RenditionOut,
     RunListOut,
     RunOut,
@@ -270,6 +271,41 @@ def get_theme(request: Request, theme_id: str) -> ThemeDetailOut:
 def create_theme(request: Request, body: CreateTheme) -> ThemeOut:
     """Record a theme."""
     return _theme(_services(request).display.add_theme(name=body.name, description=body.description))
+
+
+@router.post("/themes/{theme_id}")
+def rename_theme(request: Request, theme_id: str, body: RenameTheme) -> ThemeOut:
+    """Change a theme's name.
+
+    **`POST` rather than `PATCH`**, following this surface's own convention: it
+    writes with `POST` and removes with `DELETE`, and one surface with two
+    spellings for "change this" costs more than the orthodoxy is worth.
+
+    Answers with the theme, so the screen repaints the name it now has rather
+    than the one it sent. Those differ whenever the service normalises — a name
+    surrounded by whitespace comes back trimmed — and a screen painting its own
+    input would show a name the catalogue does not hold.
+    """
+    return _theme(_services(request).display.update_theme(theme_id, name=body.name))
+
+
+@router.delete("/themes/{theme_id}")
+def delete_theme(request: Request, theme_id: str) -> ThemeListOut:
+    """Remove a theme and its membership rows. The works themselves are untouched.
+
+    **The refusal is the service's, not this handler's.** `delete_theme` refuses
+    a theme hanging on any wall and names the walls, and the same rule reaches
+    `art_theme(action='delete')`; a guard written here would be a second copy for
+    a click and an agent to disagree over. What arrives is a 400 carrying a
+    sentence written to be shown, by the same path every other refusal takes.
+
+    Answers with the themes that remain, because what a delete changes is the
+    list it was performed from — and the alternative, an empty 204, would leave
+    the screen re-reading a listing it has just been told the shape of.
+    """
+    services = _services(request)
+    services.display.delete_theme(theme_id)
+    return ThemeListOut(themes=[_placement(placement) for placement in services.display.survey_themes()])
 
 
 @router.post("/themes/{theme_id}/works")
