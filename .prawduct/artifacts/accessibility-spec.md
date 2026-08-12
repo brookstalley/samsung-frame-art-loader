@@ -266,9 +266,9 @@ except the person who cannot read it.
 
 **The ladder was set in regular weight, so this floor is conservative.** Stroke
 weight matters disproportionately on a reflective panel, where contrast rather
-than resolution is the limit, and the family name is *to be* set bold. Bold may reach the
-same comfort a size step down — worth measuring before spending the panel's
-budget on size that weight could have bought.
+than resolution is the limit, and the family name is *to be* set bold. Bold
+may reach the same comfort a size step down — worth measuring before spending
+the panel's budget on size that weight could have bought.
 
 `CAP_RATIO` is the face's cap height as a fraction of its em — ~0.70 for the text
 faces this product sets. It is stated rather than measured because it varies

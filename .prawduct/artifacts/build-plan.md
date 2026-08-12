@@ -1975,7 +1975,10 @@ hardware.
     splitting on commas, because a name or a nationality may contain one. So this
     sub-chunk's first move is to make that property yield runs rather than a
     string, and the flat-string contract (`tuple[str, ...]` out of `lines()`) is
-    what has to give. **13B-4 needs the same thing for a different reason** —
+    what has to give. **Two comments ride this commit** rather than earning a
+    review round of their own: `curation/tests/unit/test_manifest.py` and
+    `test_seed_ingest.py` still describe the panel setting a name in bold
+    capitals as present behaviour, which is true only once this lands. **13B-4 needs the same thing for a different reason** —
     sizing by role rather than by position — so whichever lands first should build
     the structure both use rather than a weight-only one.
   - **13B-3 — the catalogue fields, and the content model they exist for. Built
