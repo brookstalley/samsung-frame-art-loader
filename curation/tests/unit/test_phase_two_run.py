@@ -263,7 +263,7 @@ def test_the_floor_is_deployment_geometry_rather_than_a_pixel_count(
         plane = Services.bind(
             catalogue=store,
             discovery=discovery_store,
-            wall=wall_settings,
+            display_settings=wall_settings,
             thumbnails=thumbnail_settings,
             artwork_box=geometry.tv_artwork_box,
             engine=engine,

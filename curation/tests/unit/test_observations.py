@@ -199,7 +199,7 @@ class TestTheTwoReadings:
         assert "6 days ago" in backup.read(path).describe()
 
     def test_a_stale_heartbeat_is_stated_in_days_too(self, tmp_path):
-        path = tmp_path / heartbeat.HEARTBEAT_FILENAME
+        path = heartbeat.heartbeat_path_in(tmp_path, "a-wall")
         path.write_text(
             json.dumps({"reported_at": (datetime.now(UTC) - timedelta(days=4)).isoformat()}),
             encoding="utf-8",

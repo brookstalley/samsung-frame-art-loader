@@ -130,7 +130,8 @@ it. Three things to see:
    attached, which is the whole question.
 2. **The label follows.** The panel names the work the wall is showing. (With no
    panel attached, `label.failed` absent from the journal and
-   `label_surface_working` in `display-heartbeat.json` are the proxy.)
+   `label_surface_working` in that wall's `display-heartbeat-{wall_id}.json` are
+   the proxy — one file per wall since 2026-08-12.)
 3. **The remote is a curator too — added with the behaviour, 2026-08-08.** In art
    mode, pick a *different* work with the television's own remote, one the active
    theme carries. The label should follow within a poll interval rather than

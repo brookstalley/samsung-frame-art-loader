@@ -107,6 +107,7 @@ def deployment(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "load_dotenv", lambda *a, **k: None)
     for name, value in (
         ("ART_ROOT", str(tmp_path)),
+        ("WALL_ID", "living-room"),
         ("TV_ADDRESS", "10.0.0.2"),
         ("LATITUDE", "45.68"),
         ("LONGITUDE", "-111.04"),

@@ -330,15 +330,22 @@ async def test_the_wall_admits_that_nothing_has_reported(server_url):
     """No display plane runs in a test, and `status` says exactly that.
 
     The dangerous answer here is a cheerful one. `status` reads a heartbeat file
-    the display plane writes; with no plane running there is nothing to read,
-    and a status that omitted the distinction would let a curator believe the
-    wall is showing a theme that in fact reached no hardware at all.
+    the display plane writes, one per wall; with no plane running there is
+    nothing to read, and a status that omitted the distinction would let a
+    curator believe the wall is showing a theme that in fact reached no hardware
+    at all.
     """
     async with connect(server_url) as caller:
         payload = await caller.ok("art_display", "status")
 
-    assert payload["display_plane_has_reported"] is False
-    assert payload["reported_at"] is None
+    # Every wall, because the answerable question with a display per room is
+    # which room has gone quiet — and an answer about one could be given while
+    # another was dark.
+    [reading] = payload["walls"]
+    assert payload["count"] == 1
+    assert reading["display_plane_has_reported"] is False
+    assert reading["reported_at"] is None
+    assert reading["wall_name"], "the reading did not name the wall it is about"
     assert payload["observation"], "status returned no human-readable observation"
 
 
@@ -369,7 +376,7 @@ class TestReviewingWhatDiscoveryFound:
         return Services.bind(
             catalogue=store,
             discovery=discovery_store,
-            wall=wall_settings,
+            display_settings=wall_settings,
             thumbnails=thumbnail_settings,
             artwork_box=settings.tv_artwork_box,
             engine=engine,

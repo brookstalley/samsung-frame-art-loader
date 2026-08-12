@@ -433,8 +433,26 @@ class BackupOut(BaseModel):
     reported: dict[str, Any] | None
 
 
+class WallHeartbeatOut(BaseModel):
+    """One wall and what the display serving it last said about itself.
+
+    The wall's name travels with its reading rather than being looked up by the
+    client from a second call: a panel that has to join two responses to say
+    *which* room is silent is a panel that will say "a wall is silent" instead.
+    """
+
+    wall_id: str
+    wall_name: str
+    heartbeat: HeartbeatOut
+
+
 class HealthOut(BaseModel):
-    """Observations about the wall, the backup, and this deployment's geometry.
+    """Observations about the walls, the backup, and this deployment's geometry.
+
+    **The heartbeat is a list, one entry per wall**, since 2026-08-12. Each wall's
+    display writes its own file, so "has the display plane reported" stopped being
+    a question with one answer and became "which wall has not" — and a single
+    reading could not have carried the name of the room that went quiet.
 
     **There is no budget balance here, and its absence is a decision** (operator,
     2026-08-04). The provider's `limit_remaining` was observed reporting credit
@@ -445,7 +463,11 @@ class HealthOut(BaseModel):
     outcome, and both are on the run view.
     """
 
-    heartbeat: HeartbeatOut
+    walls: list[WallHeartbeatOut]
+    #: One sentence across every wall, naming the ones that have not reported.
+    #: An observation and never a verdict: no threshold is applied here, so this
+    #: says how long ago rather than whether that is too long.
+    description: str
     backup: BackupOut
     artwork_box: ArtworkBoxOut
 

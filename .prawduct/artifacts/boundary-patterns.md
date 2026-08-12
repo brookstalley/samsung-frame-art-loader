@@ -90,13 +90,20 @@
 
 ### curation ↔ display contract
 
-- **Exists: both halves, as of 2026-08-06.** Curation writes
-  `theme-manifest.json` into `ART_ROOT` (schema major 1), atomically, with the
-  rotation settings and directive block the design calls for; the display plane
-  polls its mtime, refuses a major it does not recognise while keeping the last
-  good document, and converges the television on what it lists. The reverse
-  direction is still one-sided: curation *reads* a heartbeat and reports honestly
-  that none exists, which stays true until the chunk that writes one.
+- **Exists: both halves, as of 2026-08-06; per wall since 2026-08-12.** Curation
+  writes `theme-manifest-{wall_id}.json` into `ART_ROOT` (schema major 1),
+  atomically, with the rotation settings and directive block the design calls for;
+  the display plane resolves **one** such path from its own `WALL_ID`, polls its
+  mtime, refuses a major it does not recognise while keeping the last good
+  document, and converges the television on what it lists. **The wall is carried by
+  the filename and by nothing in the document**, which is what leaves a display
+  structurally unable to open a room it does not serve. The reverse
+  direction is **no longer one-sided** *(corrected 2026-08-12)*: display writes
+  `display-heartbeat-{wall_id}.json` per wall and curation reads it. This bullet
+  said the reverse channel was unwritten "until the chunk that writes one", which
+  had been false since 2026-08-07 and was contradicted three bullets down in this
+  same file — the shape a retired claim leaves when it is edited where it is
+  restated and not where it was first made.
 
   **Exercised end to end by neither plane's suite, and that is the residual.**
   Each side is tested against its own reading of the contract — curation asserts
@@ -105,9 +112,12 @@
   builder into the real reader. The cheap version of that check is the live pass
   on the Pi, which is outstanding.
 - **Producer:** curation plane. **Consumer:** display plane. **Same machine.**
-- **Contract:** the **theme manifest** — a versioned JSON document written
-  atomically (temp + `os.replace`) into the shared `ART_ROOT` and polled by display
-  at ~1 s. It carries a schema version, the active theme, rotation settings
+- **Contract:** the **theme manifest** — one versioned JSON document *per wall*,
+  written atomically (temp + `os.replace`) into the shared `ART_ROOT` and polled by
+  display at ~1 s. Its filename is a template both planes declare separately and
+  may not import from each other; `tests/preferences/test_heartbeat_contract.py`
+  compares the two copies, and pins the literal, because both sides moving together
+  is still a break. It carries a schema version, the active theme, rotation settings
   (`rotation_interval_seconds`, `shuffle`), a directive block (`sequence`,
   optional `pinned_work_id`), and an ordered list of entries — work id, render
   path, and the label fields.
@@ -127,8 +137,10 @@
   fails on a curation import or an HTTP client — the television websocket
   exempted, because talking to the set is that plane's job.
 - **The reverse direction exists and is narrow:** display writes a heartbeat/status
-  file that curation reads. Sole writer is display; it never checks whether anyone
-  read it, so it creates no dependency in the protected direction.
+  file that curation reads — one per wall, `display-heartbeat-{wall_id}.json`,
+  since 2026-08-12, so health can name *which* wall is silent. Sole writer is
+  display; it never checks whether anyone read it, so it creates no dependency in
+  the protected direction.
 
 ### Catalogue schema
 

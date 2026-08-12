@@ -15,8 +15,6 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from curation.manifest.builder import MANIFEST_FILENAME
-from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import (
     AcquisitionMethod,
@@ -30,7 +28,7 @@ from curation.persistence.records import (
 )
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.services.catalogue import CatalogueService
-from curation.services.display import DisplayService, WallSettings
+from curation.services.display import DisplayService, DisplaySettings
 from curation.services.errors import ServiceError
 
 
@@ -72,12 +70,7 @@ def _display(store, tmp_path, *, catalogue=None):
     return DisplayService(
         store,
         catalogue or CatalogueService(store),
-        WallSettings(
-            manifest_path=tmp_path / MANIFEST_FILENAME,
-            heartbeat_path=tmp_path / HEARTBEAT_FILENAME,
-            rotation_interval_seconds=180,
-            shuffle=True,
-        ),
+        DisplaySettings(art_root=tmp_path, rotation_interval_seconds=180, shuffle=True),
     )
 
 

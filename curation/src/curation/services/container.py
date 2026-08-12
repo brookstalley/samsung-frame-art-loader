@@ -59,7 +59,7 @@ from curation.persistence.catalogue import CatalogueStore
 from curation.persistence.discovery import DiscoveryStore
 from curation.services.catalogue import CatalogueService
 from curation.services.discovery import DiscoveryService
-from curation.services.display import DisplayService, WallSettings
+from curation.services.display import DisplayService, DisplaySettings
 from curation.services.display_fit import ArtworkBox
 from curation.services.errors import ServiceError
 from curation.services.health import HealthService
@@ -127,7 +127,7 @@ class Services:
         *,
         catalogue: CatalogueStore,
         discovery: DiscoveryStore,
-        wall: WallSettings,
+        display_settings: DisplaySettings,
         thumbnails: ThumbnailSettings,
         artwork_box: ArtworkBox,
         engine: DiscoveryEngine,
@@ -161,7 +161,7 @@ class Services:
         one every test that has no business reaching a museum uses.
         """
         catalogue_service = CatalogueService(catalogue)
-        display_service = DisplayService(catalogue, catalogue_service, wall)
+        display_service = DisplayService(catalogue, catalogue_service, display_settings)
         thumbnail_service = ThumbnailService(catalogue_service, thumbnails)
         # The artwork box reaches discovery for one reason: automatic selection
         # must withhold an instance that would render below the floor, and the
@@ -192,9 +192,10 @@ class Services:
             # copies to disagree, and nothing would notice which was right.
             review=ReviewService(discovery_service, box=artwork_box, art_root=thumbnails.art_root),
             # The receipt is located the same way, and for the same reason. It is
-            # not a `WallSettings` field beside the heartbeat's path: that
-            # settings object carries what the *wall's* operations need, and the
-            # backup is this plane's own business rather than the display plane's.
+            # not a `DisplaySettings` field beside the art root the heartbeats are
+            # named from: that settings object carries what the *walls'*
+            # operations need, and the backup is this plane's own business rather
+            # than the display plane's.
             health=HealthService(
                 display_service,
                 backup_receipt_path=thumbnails.art_root / BACKUP_RECEIPT_FILENAME,

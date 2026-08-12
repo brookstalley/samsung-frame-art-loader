@@ -134,7 +134,7 @@ recorded plan (curation on a desktop, NAS, or second Pi) — see Decision Log.
                     │  │    /mcp     MCP (SHTTP)  │   │  ART_ROOT (shared dir)   │ │
                     │  │                          │   │                          │ │
                     │  │  discovery · acquisition │   │   catalogue.sqlite  (C)  │ │
-                    │  │  image prep · mat colour │   │   theme-manifest.json(C) │ │
+                    │  │  image prep · mat colour │   │  theme-manifest-<wall>(C)│ │
                     │  └───────────┬──────────────┘   │   raw/ ready/ thumbs/    │ │
                     │              │                  │   tv-thumbs/ tile-cache/ │ │
                     │              │                  │   previews/              │ │
@@ -730,17 +730,24 @@ read by display.
 - **Versioned, despite the co-location exemption.** See Deployment & Version Skew
   — this is where a recorded contradiction gets resolved rather than inherited.
 
-### One manifest per wall — designed 2026-08-12, not built
+### One manifest per wall — built 2026-08-12
 
 The operator's ruling that **themes are global and assigned per wall**
 (`data-model.md` § ThemeAssignment) reaches the inter-plane contract, because
-everything above is written in the singular: *the* active theme's identity, *the*
+everything above was written in the singular: *the* active theme's identity, *the*
 sequence, *the* file. With more than one wall each of those is a per-wall fact.
 
-**The manifest becomes one file per wall**, named by wall id, and each display
-instance reads only the manifest for the wall it is configured to serve. The
-directive semantics above are unchanged — they simply become per wall, which is
-what the ruling already did to the counter itself.
+**The manifest is one file per wall**, `theme-manifest-{wall_id}.json` under
+`ART_ROOT`, and each display instance reads only the manifest for the wall it is
+configured to serve. The directive semantics above are unchanged — they simply
+became per wall, which is what the ruling already did to the counter itself.
+
+**The wall is carried by the filename and by nothing inside the document.** That
+is deliberate and it is what makes the guarantee structural: a display resolves
+one path from its `WALL_ID` and stats it, so another room's manifest is a file it
+never opens — not a file it opens and declines to act on. A `wall` field in the
+document would be a second answer to the same question, and two answers can
+disagree.
 
 `[DECISION: one manifest file per wall, rather than one file carrying a section
 per wall | change detection is an mtime poll at ~1 s, and a shared file makes
@@ -749,18 +756,31 @@ manifest's sequence" ambiguous exactly where the coalescing and
 sequence-regression rules need it to be singular; per-file also keeps a display
 plane unable to read a wall it does not serve | user can veto/override]`
 
-**Two consequences, both cheap now:**
+**Two consequences, both taken:**
 
-- **`display-heartbeat.json` takes the same treatment**, for the same reason and
-  in the other direction — `information-architecture.md` requires health to name
-  which wall is silent, and one shared heartbeat file has no way to say it.
+- **The heartbeat took the same treatment**, for the same reason and in the other
+  direction — `information-architecture.md` requires health to name which wall is
+  silent, and one shared heartbeat file had no way to say it: the second display
+  would overwrite the first's report every minute, so a wall that had gone dark
+  would read exactly like a wall that was fine. It is
+  `display-heartbeat-{wall_id}.json`, and `GET /api/health` carries one reading
+  per wall under `walls[]` with a `description` across them.
 - **The single-writer table below generalises rather than growing rows.** One
   writer per file still holds; the file set is now indexed by wall.
 
-**What is built today is the single-file form**, `theme-manifest.json` in
-`ART_ROOT` (`curation/src/curation/manifest/builder.py`), and it stays that way
-until `build-plan-curation-ux.md` migrates it. The one-wall installation is the
-degenerate case: one wall, one manifest, byte-identical behaviour.
+**How the display plane knows which wall it is.** `WALL_ID` in its environment,
+required and with no default, exactly as `TV_ADDRESS` is — because there is no
+wall a second device could be guessed onto, and the consequence of a guess is the
+failure this whole arrangement removes: a television showing another room's
+pictures while every log line reads fine. The value is the id the curation
+catalogue minted, read off the Walls screen or `art_display(action='walls')`.
+
+**Built 2026-08-12** (`curation/src/curation/manifest/builder.py`,
+`display/src/display/config.py`). The one-wall installation is the degenerate
+case: one wall, one manifest, one heartbeat, and behaviour identical to the
+single-file form apart from the filename. Neither filename may be imported across
+the planes — the isolation norm forbids it — so both are declared twice and held
+equal by `tests/preferences/test_heartbeat_contract.py`.
 
 ## Data Ownership & Consistency
 
@@ -769,10 +789,10 @@ degenerate case: one wall, one manifest, byte-identical behaviour.
 | Store | Sole writer | Readers |
 |---|---|---|
 | `catalogue.sqlite` | curation | curation |
-| `theme-manifest.json` — **one per wall once § One manifest per wall lands** | curation | display |
+| `theme-manifest-{wall_id}.json` — **one file per wall**, since 2026-08-12 | curation | display |
 | image tree (`raw/`, `ready/`, …) | curation | display |
 | `display-state.sqlite` | display | display |
-| `display-heartbeat.json` (heartbeat) — **likewise one per wall** | display | curation |
+| `display-heartbeat-{wall_id}.json` (heartbeat) — **likewise one per wall** | display | curation |
 
 There is no entity written by both planes, so there is no coordination protocol,
 no conflict resolution, and no distributed-transaction problem. That is the payoff

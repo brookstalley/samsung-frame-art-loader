@@ -1083,7 +1083,7 @@ the client with them.
 | `POST`/`DELETE /api/themes/{id}/works[/{work_id}]`, `POST .../position` | Membership and order. Each returns the resulting order, so the surface repaints from the response. |
 | `POST /api/themes/{id}/activate` | Change the wall. Returns the manifest that was published, exclusions included. |
 | `GET /api/manifest` | What a theme *would* put on the wall, evaluated without writing. |
-| `GET /api/health` | Every observation the panel states: the heartbeat and the document the display plane reported, the backup's age, and this deployment's resolved artwork box. **Three observations and no fourth** — there is deliberately no budget balance, settled 2026-08-04. |
+| `GET /api/health` | Every observation the panel states: **one heartbeat per wall** with the document that wall's display reported, the backup's age, and this deployment's resolved artwork box. **Three observations and no fourth** — there is deliberately no budget balance, settled 2026-08-04. Shape below. |
 
 Added 2026-08-05 with the run half of the browser surface, and exercised by
 `curation/tests/integration/test_browser_discovery.py`:
@@ -1276,9 +1276,63 @@ the tool surface than on the web one, because there is no confirmation dialog to
 catch it.
 
 **Built 2026-08-12**, and the one-wall installation is the degenerate case
-throughout: one wall, one assignment, identical behaviour. **The inter-plane half is
-not** — `architecture.md` § One manifest per wall is its own chunk, and until it lands
-the display plane still reads a single manifest.
+throughout: one wall, one assignment, identical behaviour. **The inter-plane half
+landed the same day** — `architecture.md` § One manifest per wall: one
+`theme-manifest-{wall_id}.json` and one `display-heartbeat-{wall_id}.json` per
+wall, with the display plane taking `WALL_ID` from its environment as it takes
+`TV_ADDRESS`. No route carries a manifest's *bytes*, so nothing in the table above
+changed shape for it; `GET /api/health` did, and its new shape is below.
+
+### `GET /api/health` aggregates across walls — built 2026-08-12
+
+The heartbeat became one file per wall, so "has the display plane reported"
+stopped being a question with one answer and became "which wall has not". The
+response is:
+
+```json
+{
+  "walls": [
+    {
+      "wall_id": "…",
+      "wall_name": "The living room",
+      "heartbeat": {
+        "path": "/srv/art/display-heartbeat-….json",
+        "reported_at": "2026-08-12T09:14:02+00:00",
+        "age_seconds": 41.2,
+        "absent": false,
+        "problem": null,
+        "description": "The display plane last reported 41 seconds ago.",
+        "reported": { "…": "whatever that plane wrote, passed through" }
+      }
+    }
+  ],
+  "description": "Every wall has reported; the least recent is 'The study', 4 minutes ago.",
+  "backup": { "…": "unchanged" },
+  "artwork_box": { "…": "unchanged" }
+}
+```
+
+**`heartbeat` is gone from the top level and is not coming back**: one reading for
+an installation with two rooms is a reading that cannot name the room, which is
+the entire reason the file was split. `walls` is ordered as `GET /api/walls`
+orders them, so no surface has to hold two orderings.
+
+**`description` is a summary of the readings beside it, not a fourth signal.** It
+names the walls that have not reported — `"'The study' has not reported. …"` — or,
+when all of them have, states the *least recent* age, because a sentence quoting
+the freshest would read as an all-clear bought from whichever wall reported last.
+It applies **no threshold and uses no verdict word**: whether four minutes is late
+depends on whether that television was switched off on purpose, which this plane
+does not know. A client must not derive a colour from it.
+
+**The per-wall `heartbeat` object is byte-for-byte the shape the top-level one
+had**, including `reported` being passed through unread — exactly one key
+(`reported_at`) is contract, and inventing more on the reading side would be a
+second contract the writer never agreed to.
+
+`art_display(action='status')` mirrors this on the tool surface: it takes no wall,
+returns `walls[]` with `count`, and states the same `observation` sentence from the
+same readings.
 
 **How the wall is actually carried, since the table above says only that it is.**
 `POST /api/themes/{id}/activate` takes `{"wall_id": …}` as a request **body**;
@@ -1298,10 +1352,15 @@ had designed:
 | `DELETE /api/walls/{wall_id}/theme` | `art_theme(action='unhang')` | Takes the picture down. See § Deleting a theme for why this had to exist before the delete refusal could be made absolute. |
 | — | — | `GET /api/themes` reshaped to `{theme, hanging_on[]}` per entry, because `ThemeOut.is_active` had nothing to become: "is it active" is now "which walls is it on". The MCP listing stays flat with a `hanging_on` key added, since a model reads a list better than a nesting. |
 
-**`art_display(action='status')` deliberately does *not* take a wall.** The heartbeat
-is still one file until the inter-plane chunk lands, so a wall parameter there would be
-a lie the surface told to look consistent. It gains one when there is something
-per-wall for it to report.
+**`art_display(action='status')` still takes no wall, and the reason changed
+underneath it on 2026-08-12.** It said a wall parameter would be a lie while the
+heartbeat was one file, and that the action would gain one when the inter-plane
+chunk landed. That chunk landed: the heartbeat *is* per wall now. The action
+takes no wall anyway, because what it answers is "has every wall reported" —
+it returns `walls[]` with a count and one observation sentence, which is the
+aggregate question and not a per-wall one. A caller wanting one room reads the
+entry it wants out of that list. See § `GET /api/health` aggregates across walls
+above, which this paragraph must not be read as contradicting.
 
 **"Work delete" was the wrong word, and the route is archive.** The IA § Status
 row asked for one; `data-model.md` gives `Artwork.status` exactly two values,

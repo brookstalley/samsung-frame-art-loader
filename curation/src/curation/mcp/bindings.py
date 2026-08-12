@@ -37,7 +37,7 @@ from curation.persistence.records import Artist, Artwork, Directive, Source, The
 from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing, FacetGroup
 from curation.services.container import Services
 from curation.services.discovery import VerdictOutcome
-from curation.services.display import UNSET, ThemePlacement, WallView
+from curation.services.display import UNSET, ThemePlacement, WallView, describe_wall_status
 from curation.services.display_fit import DisplayFit
 from curation.services.errors import ServiceError
 from curation.services.previews import InlinePreview
@@ -654,14 +654,34 @@ def _verdict_notice(outcome: VerdictOutcome) -> str | None:
 
 
 def _wall_status(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    reading = services.display.wall_status()
+    """Every wall's heartbeat, and one sentence across them.
+
+    **All the walls rather than one**, and without a `wall_id` to narrow it. The
+    question this action is asked is "is anything wrong", and an action that
+    answered it about one room would let a model report a healthy installation
+    having looked at the room that was fine.
+    """
+    seen = services.display.survey_wall_status()
     return ok(
-        observation=reading.describe(),
-        display_plane_has_reported=not reading.absent,
-        reported_at=_moment(reading.reported_at),
-        age_seconds=reading.age_seconds,
-        problem=reading.problem,
-        reported=reading.contents,
+        # Composed from the readings just taken rather than from a second pass,
+        # so the sentence and the list below it cannot describe two different
+        # instants — and from the shared function, so it cannot differ in
+        # wording from what the browser panel states.
+        observation=describe_wall_status(seen),
+        walls=[
+            {
+                "wall_id": each.wall.id,
+                "wall_name": each.wall.name,
+                "observation": each.heartbeat.describe(),
+                "display_plane_has_reported": not each.heartbeat.absent,
+                "reported_at": _moment(each.heartbeat.reported_at),
+                "age_seconds": each.heartbeat.age_seconds,
+                "problem": each.heartbeat.problem,
+                "reported": each.heartbeat.contents,
+            }
+            for each in seen
+        ],
+        count=len(seen),
     )
 
 

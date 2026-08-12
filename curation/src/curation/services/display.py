@@ -27,6 +27,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
+from curation import observations
 from curation.manifest import heartbeat
 from curation.manifest.builder import (
     ManifestBuild,
@@ -34,10 +35,11 @@ from curation.manifest.builder import (
     as_document,
     assess,
     entry_for,
+    manifest_path_in,
     tv_rendition_of,
     write_atomically,
 )
-from curation.manifest.heartbeat import HeartbeatReading
+from curation.manifest.heartbeat import HeartbeatReading, heartbeat_path_in
 from curation.persistence.catalogue import CatalogueStore
 from curation.persistence.records import Directive, Theme, ThemeAssignment, ThemeMembership, Wall
 from curation.services.catalogue import ArtworkDetail, CatalogueService
@@ -61,26 +63,36 @@ UNSET: Final[Unset] = Unset()
 
 
 @dataclass(frozen=True, slots=True)
-class WallSettings:
-    """The deployment facts the wall's own operations need.
+class DisplaySettings:
+    """The deployment facts the walls' operations need.
+
+    **Named for the plane rather than for a wall**, because a wall is now a
+    first-class entity with a name and an id: a type called `WallSettings` beside
+    `Services.bind(wall=…)` read as though the container were being handed a
+    wall, when what it is handed is where this installation publishes and the
+    pace a theme inherits when it has expressed none of its own.
 
     Passed in rather than read from the environment here, because a service that
     resolved its own configuration could not be tested against two deployments
     and would make every caller share one.
     """
 
-    #: One file for the installation, which is a fact about the *inter-plane*
-    #: contract and not about the catalogue: the catalogue names as many walls as
-    #: the curator has rooms, and `sync` writes every one of them here. So a
-    #: second wall is recordable and not yet showable — see `sync` for what that
-    #: costs. Whoever makes the manifest per-wall retires this comment and this
-    #: field's singular meaning together.
-    manifest_path: Path
-    #: Written by the display plane, read here. Never written by this plane.
-    heartbeat_path: Path
+    #: The directory both planes share. The manifest and the heartbeat are named
+    #: from it **per wall**, so this holds the root and not a file: the catalogue
+    #: names as many walls as the curator has rooms, and each one has its own
+    #: pair of files.
+    art_root: Path
     #: What a theme that has expressed no pace of its own inherits.
     rotation_interval_seconds: int
     shuffle: bool
+
+    def manifest_path(self, wall_id: str) -> Path:
+        """Where this plane publishes one wall's desired state."""
+        return manifest_path_in(self.art_root, wall_id)
+
+    def heartbeat_path(self, wall_id: str) -> Path:
+        """Where the display serving one wall reports. Never written by this plane."""
+        return heartbeat_path_in(self.art_root, wall_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,6 +113,65 @@ class WallView:
 
 
 @dataclass(frozen=True, slots=True)
+class WallHeartbeat:
+    """One wall and what the display serving it last said about itself.
+
+    The pairing exists because the reading alone cannot say *whose* silence it
+    is, and naming which wall has stopped reporting is the whole reason the
+    heartbeat became one file per wall.
+    """
+
+    wall: Wall
+    heartbeat: HeartbeatReading
+
+
+def describe_wall_status(readings: Sequence[WallHeartbeat]) -> str:
+    """One sentence across every wall — an observation, never a verdict.
+
+    **It names the wall that has not reported, and that is what the heartbeat
+    became one file per wall for.** A line saying "the study has not reported" is
+    what a reader of a two-room installation needs, and one shared heartbeat could
+    not have said it: the second display would have overwritten the first's
+    report, so a wall that had gone quiet would have looked exactly like a wall
+    that was fine.
+
+    **No threshold is applied and no word like "healthy" appears.** What is
+    stated are facts a reader cannot get wrong — a wall has written a heartbeat
+    or it has not, and if it has, how long ago in the unit a person reads it in.
+    Whether four minutes is late is the reader's to decide, because this plane
+    does not know whether that television was switched off on purpose.
+
+    A function rather than a method, because the browser panel and the tool
+    surface both state this and neither owns it: two hand-written sentences from
+    the same readings drift, and a caller told "the study has not reported" by
+    one surface and "every wall has reported" by the other cannot tell which is
+    lying.
+    """
+    if not readings:
+        # Unreachable through a catalogue this plane opened, which seeds a wall on
+        # first open — so it means a file something else wrote, and saying that
+        # plainly beats a sentence composed over an empty list that reads as an
+        # all-clear.
+        return "No wall is in the catalogue, so there is nothing for a display plane to report about."
+    silent = [seen for seen in readings if seen.heartbeat.absent or seen.heartbeat.problem is not None]
+    if silent:
+        names = ", ".join(repr(seen.wall.name) for seen in silent)
+        counted = (
+            f"{names} has not reported"
+            if len(silent) == 1
+            else f"{len(silent)} of {len(readings)} walls have not reported: {names}"
+        )
+        return f"{counted}. Each wall's own reading says whether nothing was ever written or what could not be read."
+    # The least recent, because a summary quoting the freshest would read as an
+    # all-clear bought from whichever wall happened to report last.
+    oldest = max(readings, key=lambda seen: seen.heartbeat.age_seconds or 0.0)
+    aged = observations.ago(oldest.heartbeat.age_seconds)
+    if len(readings) == 1:
+        return f"{oldest.wall.name!r} last reported {aged}."
+    return f"Every wall has reported; the least recent is {oldest.wall.name!r}, {aged}."
+
+
+@dataclass(frozen=True, slots=True)
 class ThemePlacement:
     """One theme and every wall showing it.
 
@@ -116,7 +187,7 @@ class ThemePlacement:
 class DisplayService:
     """Read and write the themes, memberships, and directives the walls run on."""
 
-    def __init__(self, store: CatalogueStore, catalogue: CatalogueService, settings: WallSettings) -> None:
+    def __init__(self, store: CatalogueStore, catalogue: CatalogueService, settings: DisplaySettings) -> None:
         self._store = store
         self._catalogue = catalogue
         self._settings = settings
@@ -269,15 +340,14 @@ class DisplayService:
         belongs on a wall the curator has not hung anything on, and the empty
         state is a designed one.
 
-        **A second wall can be recorded here and cannot yet be shown, and that
-        gap is a real hazard rather than a missing feature.** `sync` writes the
-        one `WallSettings.manifest_path` whatever wall it is given, because the
-        inter-plane contract is still a single manifest file. So hanging a theme
-        on a second wall overwrites the manifest the existing display is reading
-        and hands it the wrong room's pictures — silently, since a display has no
-        way to notice the file stopped being about it. The catalogue half of
-        per-wall walls landed before the inter-plane half; until that lands, this
-        method outruns what the plane can serve.
+        **A wall recorded here shows nothing until a display plane is configured
+        to serve it**, and that is a deployment step rather than a gap. Each wall
+        gets its own manifest, named by the wall's id, and a display reads the one
+        wall its `WALL_ID` names — so a second wall's manifest exists from the
+        moment a theme is hung on it and is read by whichever device is pointed at
+        it. Nothing is overwritten and no display can open a wall it does not
+        serve; until 2026-08-12 both were false, and a second wall was a thing an
+        operator could record and be told would not light up.
         """
         with self._store.transaction():
             wall = Wall(id=str(uuid.uuid4()), name=require_text(name, field="name"), created_at=datetime.now(UTC))
@@ -468,15 +538,20 @@ class DisplayService:
 
     # -- reads: what the display plane says about itself -----------------------
 
-    def wall_status(self) -> HeartbeatReading:
-        """Observe the display plane's heartbeat.
+    def survey_wall_status(self) -> Sequence[WallHeartbeat]:
+        """Every wall with whatever the display serving it last said.
 
-        An observation, never a verdict: the reading carries an age in seconds
-        and the caller decides what that means. Absent is a true answer — on a
-        deployment where the display plane has not been started, it is the
-        correct one.
+        **Composed here rather than by the health surface**, for the reason
+        `survey_walls` is: the panel and the tool surface both need the identical
+        pairing, and two callers assembling it from a wall listing and a read
+        apiece would be two places for "which walls are we listening to" to be
+        decided — which is exactly the question a wall that has gone silent is
+        answered by.
         """
-        return heartbeat.read(self._settings.heartbeat_path)
+        return [
+            WallHeartbeat(wall=wall, heartbeat=heartbeat.read(self._settings.heartbeat_path(wall.id)))
+            for wall in self._store.list_walls()
+        ]
 
     # -- writes: the display directive ----------------------------------------
 
@@ -580,25 +655,15 @@ class DisplayService:
         converges within the display plane's poll interval, and saying anything
         stronger would assert something this plane cannot observe.
 
-        **It takes a wall and writes one file, and that mismatch is a live
-        hazard rather than a loose end.** The catalogue can name many walls; the
-        inter-plane contract is still a single manifest at
-        `WallSettings.manifest_path`, so publishing a second wall's theme hands
-        the running television the wrong room's pictures — silently, because the
-        display plane has no way to notice the manifest it is reading stopped
-        being about it. The catalogue half of walls landed before the inter-plane
-        half, and until manifests are per-wall this method outruns what the plane
-        can serve.
-
-        **It says so rather than refusing**, which is a choice and not an
-        oversight. A guard here would make a theme unhangable on any wall but the
-        first, and hanging one theme on two walls is exactly what the walls work
-        is for — the refusal would be a second, larger lie told to look
-        consistent. So the limit is carried where the operations are reached:
-        this docstring, `add_wall`'s tips, and the wall-creating route.
+        **It takes a wall and writes that wall's file, and no other's.** The
+        manifest is one document per wall, named by the wall's id, so hanging a
+        theme in the study leaves the living room's file untouched — its mtime
+        included, which is what the other display polls. Two rooms therefore run
+        independent themes and independent directive sequences without either
+        plane coordinating anything.
         """
         build = self.build_manifest(wall_id, theme_id)
-        write_atomically(self._settings.manifest_path, as_document(build))
+        write_atomically(self._settings.manifest_path(wall_id), as_document(build))
         if build.exclusions:
             # Named at WARNING with the count, because a theme quietly showing
             # fewer works than it holds is precisely this product's

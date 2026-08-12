@@ -78,6 +78,7 @@ from curation.http.models import (
     ThemeOut,
     ThemePlacementOut,
     VerdictOut,
+    WallHeartbeatOut,
     WallListOut,
     WallOut,
     WallRefOut,
@@ -268,13 +269,12 @@ def list_walls(request: Request) -> WallListOut:
 def create_wall(request: Request, body: CreateWall) -> WallOut:
     """Record a wall. It arrives with nothing hanging on it.
 
-    **A second wall can be recorded here and cannot yet be shown.** The display
-    plane still reads one manifest file for the installation, so hanging a theme
-    on a wall this route created overwrites the manifest the existing display is
-    reading and hands it the wrong room's pictures, without either plane
-    noticing — see `DisplayService.sync` for why that is stated rather than
-    guarded. Recording the room is harmless; the operator should be told it will
-    not light up until manifests are per-wall.
+    **A wall recorded here lights up once a display plane is pointed at it.**
+    Hanging a theme writes that wall's own manifest, named by the id this route
+    returns, and a display serves the one wall its `WALL_ID` names — so a second
+    room needs a second device configured with that id, and nothing about it
+    disturbs the first. Until 2026-08-12 there was one manifest for the
+    installation and a second wall overwrote it silently.
     """
     services = _services(request)
     return _wall(services.display.get_wall_view(services.display.add_wall(name=body.name).id))
@@ -1027,7 +1027,11 @@ def _spend(report: SpendReport) -> SpendOut:
 
 def _health(reading: HealthReading) -> HealthOut:
     return HealthOut(
-        heartbeat=_heartbeat(reading.heartbeat),
+        walls=[
+            WallHeartbeatOut(wall_id=seen.wall.id, wall_name=seen.wall.name, heartbeat=_heartbeat(seen.heartbeat))
+            for seen in reading.walls
+        ],
+        description=reading.describe(),
         backup=_backup(reading.backup),
         artwork_box=_artwork_box(reading.artwork_box),
     )

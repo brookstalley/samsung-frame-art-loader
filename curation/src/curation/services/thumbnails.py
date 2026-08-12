@@ -94,7 +94,7 @@ class ThumbnailSource:
 class ThumbnailSettings:
     """Where the images are and where their downscaled copies go.
 
-    Passed in rather than resolved here for the reason `WallSettings` gives: a
+    Passed in rather than resolved here for the reason `DisplaySettings` gives: a
     service that read its own configuration could not be tested against two
     deployments and would make every caller share one.
     """

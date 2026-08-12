@@ -24,8 +24,6 @@ from curation.config import (
     ConfigError,
     Settings,
 )
-from curation.manifest.builder import MANIFEST_FILENAME
-from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 
 
 @pytest.fixture(autouse=True)
@@ -187,14 +185,22 @@ def test_an_explicit_host_and_port_override_the_defaults(monkeypatch, tmp_path):
 # television that is not on the wall.
 
 
-def test_the_manifest_and_heartbeat_are_anchored_under_art_root(monkeypatch, tmp_path):
-    """Both planes have to agree where these are, so neither is configurable."""
+def test_the_manifest_and_heartbeat_are_anchored_under_art_root_and_named_per_wall(monkeypatch, tmp_path):
+    """Both planes have to agree where these are, so neither is configurable.
+
+    And both are **per wall**: the file set is indexed by wall id, which is what
+    keeps one room's rewrite out of another room's file and lets health name which
+    wall is silent. A settings object holding one path apiece is what let a second
+    wall's theme overwrite the first's until 2026-08-12.
+    """
     monkeypatch.setenv("ART_ROOT", str(tmp_path))
 
     settings = Settings.from_env()
 
-    assert settings.manifest_path == tmp_path / MANIFEST_FILENAME
-    assert settings.heartbeat_path == tmp_path / HEARTBEAT_FILENAME
+    assert settings.manifest_path("living-room") == tmp_path / "theme-manifest-living-room.json"
+    assert settings.heartbeat_path("living-room") == tmp_path / "display-heartbeat-living-room.json"
+    # Two walls, two files. The assertion the singular fields could not make.
+    assert settings.manifest_path("study") != settings.manifest_path("living-room")
 
 
 def test_the_shipped_rotation_defaults_are_what_the_wall_runs_today(monkeypatch, tmp_path):

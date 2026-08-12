@@ -228,7 +228,7 @@ def test_the_written_manifest_is_json_the_display_plane_can_parse(display, ready
 
     display.sync(wall_id, theme.id)
 
-    document = json.loads(wall_settings.manifest_path.read_text())
+    document = json.loads(wall_settings.manifest_path(wall_id).read_text())
     assert document["schema"]["major"] == SCHEMA_MAJOR
     assert document["theme"]["name"] == theme.name
     assert [entry["render_path"] for entry in document["entries"]] == [f"ready/{document['entries'][0]['work_id']}.jpg"]
@@ -241,7 +241,7 @@ def test_the_manifest_does_not_carry_the_exclusions(display, ready_work, theme_o
     build = display.sync(wall_id, theme.id)
 
     assert len(build.exclusions) == 1
-    document = json.loads(wall_settings.manifest_path.read_text())
+    document = json.loads(wall_settings.manifest_path(wall_id).read_text())
     assert "exclusions" not in document
     assert len(document["entries"]) == 1
 
@@ -313,14 +313,14 @@ def test_switching_themes_carries_the_sequence_forward(display, ready_work, them
 def test_only_a_directive_advances_the_sequence(display, ready_work, theme_of, wall_settings, wall_id):
     theme = theme_of(ready_work())
     display.sync(wall_id, theme.id)
-    before = json.loads(wall_settings.manifest_path.read_text())["directive"]["sequence"]
+    before = json.loads(wall_settings.manifest_path(wall_id).read_text())["directive"]["sequence"]
 
     display.sync(wall_id, theme.id)
-    assert json.loads(wall_settings.manifest_path.read_text())["directive"]["sequence"] == before
+    assert json.loads(wall_settings.manifest_path(wall_id).read_text())["directive"]["sequence"] == before
 
     display.step_display(wall_id)
     display.sync(wall_id, theme.id)
-    assert json.loads(wall_settings.manifest_path.read_text())["directive"]["sequence"] == before + 1
+    assert json.loads(wall_settings.manifest_path(wall_id).read_text())["directive"]["sequence"] == before + 1
 
 
 def test_the_manifest_carries_a_standing_pin(display, ready_work, theme_of, wall_settings, wall_id):
@@ -330,7 +330,7 @@ def test_the_manifest_carries_a_standing_pin(display, ready_work, theme_of, wall
 
     display.sync(wall_id, theme.id)
 
-    assert json.loads(wall_settings.manifest_path.read_text())["directive"]["pinned_work_id"] == work.id
+    assert json.loads(wall_settings.manifest_path(wall_id).read_text())["directive"]["pinned_work_id"] == work.id
 
 
 # -- writing ---------------------------------------------------------------------
@@ -471,3 +471,139 @@ def test_building_for_an_unknown_wall_names_the_id_it_could_not_find(display):
 def test_building_an_unknown_theme_names_the_id_it_could_not_find(display, wall_id):
     with pytest.raises(ServiceError, match="No theme with id 'nope'"):
         display.build_manifest(wall_id, "nope")
+
+
+# -- one manifest per wall -------------------------------------------------------
+
+
+class TestOneManifestPerWall:
+    """Each wall gets its own document, and one room's rewrite leaves the rest alone.
+
+    **This is the property the per-file decision was made for.** Change detection
+    on the display side is an mtime poll at about a second, so a shared file
+    would wake every wall's display on every other wall's change — and would make
+    "the manifest's sequence" ambiguous exactly where the coalescing and
+    sequence-regression rules need it to be a single number. Per file also leaves
+    a display plane unable to read a wall it does not serve: it stats one path.
+
+    Until 2026-08-12 there was one file for the installation, so hanging a theme
+    on a second wall overwrote the first's manifest and handed the running
+    television the wrong room's pictures — silently, since a display had no way to
+    notice the document had stopped being about it.
+    """
+
+    @pytest.fixture
+    def two_walls(self, display, wall_id):
+        """The wall a fresh catalogue holds, and a second the curator recorded."""
+        return wall_id, display.add_wall(name="The study").id
+
+    def test_each_wall_gets_its_own_document(self, display, ready_work, theme_of, wall_settings, two_walls):
+        living_room, study = two_walls
+        theirs = theme_of(ready_work("Nighthawks"), name="Late night")
+        ours = theme_of(ready_work("The Elephants"), name="Surrealists")
+
+        display.activate_theme(theirs.id, wall_id=living_room)
+        display.activate_theme(ours.id, wall_id=study)
+
+        assert json.loads(wall_settings.manifest_path(living_room).read_text())["theme"]["name"] == "Late night"
+        assert json.loads(wall_settings.manifest_path(study).read_text())["theme"]["name"] == "Surrealists"
+
+    def test_one_walls_rewrite_does_not_touch_another_walls_file(self, display, ready_work, theme_of, wall_settings, two_walls):
+        """**The mtime, not just the contents.** A display polls the file's mtime
+        at about a second, so touching another wall's file at all is a wall woken
+        — and re-deriving — for a change that was never about it."""
+        living_room, study = two_walls
+        theme = theme_of(ready_work("Nighthawks"))
+        display.activate_theme(theme.id, wall_id=living_room)
+        display.activate_theme(theme.id, wall_id=study)
+        untouched = wall_settings.manifest_path(study)
+        before = untouched.stat()
+
+        for _ in range(3):
+            display.step_display(living_room)
+            display.sync(living_room)
+
+        after = untouched.stat()
+        assert (after.st_mtime_ns, after.st_size) == (before.st_mtime_ns, before.st_size)
+
+    def test_two_walls_run_independent_directive_sequences(self, display, ready_work, theme_of, wall_settings, two_walls):
+        """A `next` in the living room does not step the study.
+
+        The counters were already per wall in the catalogue; this is the half
+        that reaches the display plane, and without it both rooms read one
+        number — so an advance meant for one would fire a jump in the other.
+        """
+        living_room, study = two_walls
+        theme = theme_of(ready_work("Nighthawks"))
+        display.activate_theme(theme.id, wall_id=living_room)
+        display.activate_theme(theme.id, wall_id=study)
+
+        display.step_display(living_room)
+        display.step_display(living_room)
+        display.sync(living_room)
+        display.step_display(study)
+        display.sync(study)
+
+        assert json.loads(wall_settings.manifest_path(living_room).read_text())["directive"]["sequence"] == 2
+        assert json.loads(wall_settings.manifest_path(study).read_text())["directive"]["sequence"] == 1
+
+    def test_a_pin_reaches_one_wall_and_not_the_other(self, display, ready_work, theme_of, wall_settings, two_walls):
+        """Multi-hop: the pin is written, published, and *absent* from the neighbour."""
+        living_room, study = two_walls
+        work = ready_work("Nighthawks")
+        theme = theme_of(work)
+        display.activate_theme(theme.id, wall_id=living_room)
+        display.activate_theme(theme.id, wall_id=study)
+
+        display.show_work_now(living_room, work.id)
+        display.sync(living_room)
+
+        assert json.loads(wall_settings.manifest_path(living_room).read_text())["directive"]["pinned_work_id"] == work.id
+        assert json.loads(wall_settings.manifest_path(study).read_text())["directive"]["pinned_work_id"] is None
+
+    def test_the_one_wall_case_is_what_it_was_apart_from_the_filename(
+        self, display, ready_work, theme_of, wall_settings, wall_id
+    ):
+        """The acceptance criterion, asserted rather than assumed.
+
+        A one-wall installation is the degenerate case of this design, and the
+        only thing that changed for it is where the file is written. The document
+        itself carries no wall — the *filename* is what names it, which is what
+        keeps a display unable to open a room it does not serve rather than
+        merely unwilling to act on it. Two answers to "which wall is this" could
+        disagree; one cannot.
+        """
+        theme = theme_of(ready_work("Nighthawks"))
+
+        display.activate_theme(theme.id, wall_id=wall_id)
+
+        published = wall_settings.manifest_path(wall_id)
+        assert published.name == f"theme-manifest-{wall_id}.json"
+        document = json.loads(published.read_text())
+        assert set(document) == {"schema", "generated_at", "theme", "rotation", "directive", "entries"}
+        assert [entry["work_id"] for entry in document["entries"]] == [theme_works(display, theme.id)[0]]
+
+    def test_the_heartbeat_is_read_per_wall_too(self, display, wall_settings, two_walls):
+        """Health has to be able to name which wall is silent.
+
+        One shared heartbeat could not: the second display would overwrite the
+        first's report every minute, so a wall that had gone dark would read
+        exactly like a wall that was fine.
+        """
+        living_room, study = two_walls
+        wall_settings.heartbeat_path(living_room).write_text(
+            json.dumps({"reported_at": "2026-08-12T00:00:00+00:00"}), encoding="utf-8"
+        )
+
+        # Read through the survey, which is what both surfaces call. There was a
+        # single-wall `wall_status` beside it whose only callers were these two
+        # lines; a second service-level answer to "has this wall reported" is one
+        # more thing that can disagree with the first, and it was removed rather
+        # than given a test of its own.
+        reported = {reading.wall.id: reading.heartbeat.absent for reading in display.survey_wall_status()}
+
+        assert reported == {living_room: False, study: True}
+
+
+def theme_works(display, theme_id) -> list[str]:
+    return [detail.artwork.id for detail in display.theme_works(theme_id)]

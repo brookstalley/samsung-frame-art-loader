@@ -400,7 +400,7 @@ class TestWhatTheRunBroughtBack:
         return Services.bind(
             catalogue=store,
             discovery=discovery_store,
-            wall=wall_settings,
+            display_settings=wall_settings,
             thumbnails=thumbnail_settings,
             artwork_box=settings.tv_artwork_box,
             engine=engine,
