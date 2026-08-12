@@ -305,6 +305,27 @@ class WallListOut(BaseModel):
     walls: list[WallOut]
 
 
+class DirectiveOut(BaseModel):
+    """What one wall was last told to do.
+
+    **The wall is in the answer, not only in the request.** A directive is a row
+    per wall rather than a singleton, and an answer that reported only a counter
+    would leave a caller holding a number with nothing attached to it — which is
+    exactly the state the singleton was in before the split.
+
+    `WallOut` carries the same two facts beside the theme, and this is
+    deliberately not that: stepping a wall changes what it was told to do and
+    nothing about what hangs there, so an answer shaped like a wall would invite
+    a reader to look for a change in the rest of it.
+    """
+
+    wall_id: str
+    sequence: int
+    #: Null after a step, always: moving on and standing on a pinned work are
+    #: contradictory instructions, so the step clears any pin.
+    pinned_work_id: str | None
+
+
 class ThemeDetailOut(BaseModel):
     """A theme and the works it holds, in curated order."""
 
@@ -842,6 +863,18 @@ class HangTheme(BaseModel):
     **Required, even while there is one wall and the answer is obvious.** A
     request that omitted it would produce a confirmation that reads correctly
     today and silently becomes wrong the day a second display arrives.
+    """
+
+    wall_id: str
+
+
+class StepDisplay(BaseModel):
+    """Which wall is being told to move on to the next work.
+
+    **Required, for the reason `HangTheme` states.** A `next` aimed at the living
+    room that stepped the study is one counter being asked a question it cannot
+    answer, and a request that guessed would be indistinguishable from one that
+    meant it.
     """
 
     wall_id: str

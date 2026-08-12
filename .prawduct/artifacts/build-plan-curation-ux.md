@@ -247,11 +247,16 @@ grade rather than an error.)*
 
 ### A fresh worktree does not have the browser group
 
-**Measured 2026-08-12, before the first dispatch: the curation suite reports
-`1957 passed, 4 skipped` in a fresh worktree against `1957 passed, 1 skipped` in the
-main checkout.** The three extra skips are `tests/browser/` — the group is a
-per-venv install and a new worktree has its own venv, so the modules skip with the
-command that fixes them and the run stays green.
+**Measured 2026-08-12, before the first dispatch: a fresh worktree reports the same
+pass count as the main checkout and *three more skips*.** Those three are
+`tests/browser/` — the group is a per-venv install and a new worktree has its own
+venv, so the modules skip with the command that fixes them and the run stays green.
+
+*(The delta is the finding and the totals were noise, so the totals are gone: this
+paragraph carried an absolute pass count until 2026-08-12, and it had drifted by
+nearly two hundred within the same day's work. A number nothing reads is a number
+that decays into a false statement — and one sitting inside the warning about
+believing a green suite would have been a poor place to keep it.)*
 
 **This is the trap `CLAUDE.md` describes, arriving by a route it does not cover.** A
 screen-chunk agent writes browser tests, runs the suite, sees green, and reports a
@@ -666,7 +671,7 @@ split was made to end, and it will not announce itself as having done so.
   from, and what is next. One wall is the degenerate case of many, never a special
   case — there is no single-wall layout for a second display to replace.
 - **Depends on:** Chunks 01, 02, 04
-- **Parallelism:** wave 2, worktree agent, opus. Owns `screens/walls.js`; carries no
+- **Parallelism:** wave 2, worktree agent, opus. Owns `curation/src/curation/http/static/screens/walls.js`; carries no
   migration.
 - **Artifacts consumed:** `information-architecture.md` §§ More than one wall,
   Information Hierarchy, Screen States; flow 6
@@ -732,7 +737,7 @@ split was made to end, and it will not announce itself as having done so.
   beside it rather than in another tab. Themes stop being a destination and become a
   rail that filters and is editable.
 - **Depends on:** Chunks 04, 06
-- **Parallelism:** wave 2, worktree agent, opus. Owns `screens/collection.js`; the
+- **Parallelism:** wave 2, worktree agent, opus. Owns `curation/src/curation/http/static/screens/collection.js`; the
   theme rail's membership editing is its backend half and touches no other wave-2
   chunk's routes.
 - **Artifacts consumed:** `information-architecture.md` §§ Information Hierarchy,
@@ -782,7 +787,7 @@ split was made to end, and it will not announce itself as having done so.
   product**, and this chunk is where that stops being a rule in an artifact and
   becomes a label on a control.
 - **Depends on:** Chunks 04, 06
-- **Parallelism:** wave 2, worktree agent, opus. Owns `screens/work.js`; adds routes
+- **Parallelism:** wave 2, worktree agent, opus. Owns `curation/src/curation/http/static/screens/work.js`; adds routes
   and a service rule but no entity and no migration.
 - **Artifacts consumed:** `information-architecture.md` § Information Hierarchy;
   `api-contract.md` § "Work delete" was the wrong word
@@ -817,7 +822,7 @@ split was made to end, and it will not announce itself as having done so.
 - **Description:** The one thing about a theme that is genuinely its own act rather
   than an operation on works.
 - **Depends on:** Chunks 01, 07
-- **Parallelism:** wave 3, worktree agent, opus. Owns `screens/theme.js`.
+- **Parallelism:** wave 3, worktree agent, opus. Owns `curation/src/curation/http/static/screens/theme.js`.
 - **Artifacts consumed:** `information-architecture.md` flow 5, flow 6;
   `api-contract.md` (theme rename and delete)
 - **Deliverables:** members in wall order; rename via `POST /api/themes/{id}`;
@@ -850,7 +855,7 @@ split was made to end, and it will not announce itself as having done so.
   a polish item** — the commit card becomes the run's progress card becomes "12
   works ready to review", with the transcript above it the whole time.
 - **Depends on:** Chunk 04
-- **Parallelism:** wave 2, worktree agent, opus. Owns `screens/conversation.js`, and
+- **Parallelism:** wave 2, worktree agent, opus. Owns `curation/src/curation/http/static/screens/conversation.js`, and
   is the **only** wave-2 chunk carrying a migration — which is what lets the other
   three run beside it. **Its `verify-api` step runs in wave 0**, as its own opus
   agent: see Done-when step 0

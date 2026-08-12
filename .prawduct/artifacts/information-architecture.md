@@ -415,7 +415,22 @@ work is still there will trust the next confirmation less.
 > rule about, arrived at while fixing its mirror image.
 
 **Archiving a work that is in the active theme takes a picture off the wall**, and
-the confirmation says so. `architecture.md` records that archiving removes a work
+the confirmation says so.
+
+> **Corrected 2026-08-12, while building it: it takes the picture off the wall at
+> the next manifest build, not at the moment of archiving.** Nothing in the archive
+> path republishes a manifest — only activation and sync do — so a work archived
+> while hanging stays on the television until something rebuilds. The confirmation
+> therefore says the room "loses it at the next manifest build", which is the true
+> sentence and a longer one.
+>
+> The alternative was to make archiving republish, and it was rejected on the
+> precedent that catalogue-side tidying does not reach across the plane boundary —
+> the same reason `clear_wall` does not. **That is a defensible ruling and it
+> leaves a real gap**: a curator who archives the picture they are looking at will
+> still be looking at it. Flagged for the operator rather than closed here, because
+> closing it means deciding that a catalogue edit may drive a display, which is a
+> larger decision than this screen. `architecture.md` records that archiving removes a work
 from the manifest and leaves it in the theme, with `archived` the first of the five
 exclusion causes — and calls that silence "precisely this product's characteristic
 failure". Flow 6 already requires activation to name its consequence in

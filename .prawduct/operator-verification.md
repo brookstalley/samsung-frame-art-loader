@@ -10,6 +10,44 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The Walls screen, and the Work screen's archive — added 2026-08-12
+
+**Two screens rebuilt, and the first confirmation dialog the product has ever
+had.** Run `cd curation && uv run python -m curation` and open The Walls.
+
+**Specific things worth an opinion, each a judgement call made while building:**
+
+1. **`--text-3xl` (2.25rem/36px) went to the screen's own `h2` — "The Walls" —
+   and not to a wall's name.** `design-direction.md` reserved the token for "the
+   Walls screen's single large heading" without saying which heading, and that
+   sits in tension with the Information Hierarchy row making *which wall*
+   secondary to the artwork. So the page title is the large thing and the walls
+   below it are not. The other reading — each wall's name set large, the screen
+   title small — is a different product and is one line to try.
+2. **The confirmation is a modal `<dialog>`**, and it is the pattern every
+   consequential act will now use. Focus lands on **Cancel**, a click on the
+   backdrop dismisses nothing, and `Escape` cancels. It names the wall even
+   though you have one: "Hang Winter in the living room?" That is deliberate and
+   it will read as over-explaining until there are two walls.
+3. **The Walls screen does not poll.** Nothing repaints behind you. The masthead
+   indicator is what carries liveness. If a wall feels stale, that is why.
+4. **Archive and Restore are styled as ordinary controls, not as danger.** The
+   argument is that archiving is cheap and reversible and dressing it as
+   destructive makes a curator hesitate over nothing. Check whether it now reads
+   as *too* quiet for an act that takes a picture off the wall.
+5. **The archive confirmation names which walls lose the picture**, computed from
+   each wall's real manifest rather than predicted — and it says the room "loses
+   it at the next manifest build", which is the honest sentence. **Worth your
+   ruling:** archiving does not itself republish, so the work you just archived
+   stays on the television until something rebuilds. Closing that gap means
+   deciding a catalogue edit may drive a display, which is bigger than this
+   screen. See `information-architecture.md` § the archive correction.
+6. **A work's facets are listed with the rare `sourced` ones marked by a tick**,
+   under one footnote saying everything else is inferred. `artist` appears both
+   as its own fact row above and in the facet list, which duplicates it — the
+   alternative was a filtering rule no artifact states, which would silently drop
+   a sourced artist's provenance.
+
 ### Three destinations, and the whole client rebuilt as modules — added 2026-08-12
 
 **The largest visual change since the surface was built, and none of it is a

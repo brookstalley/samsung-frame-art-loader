@@ -1182,7 +1182,7 @@ spellings for "change this" costs more than the orthodoxy is worth here.
 |---|---|---|---|
 | `GET /api/works` — extended | Gains `q` for text search and one repeatable filter per facet `kind`. Additive to a built route. **Built 2026-08-12** — see below for the parameter shapes. | `WorkFacet`, built | `art_catalogue(action='list')` takes the same filters |
 | `GET /api/works` — facet counts in the same response | The counts the IA's disabled-not-hidden rule needs. **Not a second route** — see below. **Built 2026-08-12**, with the latency measured. | `WorkFacet`, built | as above |
-| `POST /api/works/{id}/archive`, `/restore` | Take a work out of circulation, and put it back. **Not a delete** — see below. | `Artwork.status`, built | `art_catalogue(action='archive'\|'restore')`, already designed |
+| `POST /api/works/{id}/archive`, `/restore` | Take a work out of circulation, and put it back. **Not a delete** — see below. **Built 2026-08-12**; both read back the full `WorkDetailOut` dossier, because the screen that archives is the screen that shows the work and a slimmer body would only send it straight back for the rest. | `Artwork.status`, built | `art_catalogue(action='archive'\|'restore')`, already designed |
 | `POST /api/themes/{id}` | Rename. | `Theme`, built | `art_theme(action='update')`, already designed |
 | `DELETE /api/themes/{id}` | Delete. **The refusal it must reuse is already built** — see below. | `Theme`, built, and `DisplayService.delete_theme`'s guard with it | `art_theme(action='delete')`, built and wired to that guard |
 | `GET`/`POST /api/conversations` | The thread list, ordered by `last_turn_at`; and starting one. | `Conversation` — **unbuilt** | none proposed — see below |
@@ -1192,7 +1192,7 @@ spellings for "change this" costs more than the orthodoxy is worth here.
 | `DELETE /api/conversations/{id}` | Deletes the thread and its turns. **Detaches rather than cascades** — see below. | `ConversationTurn` — **unbuilt** | none proposed |
 | `GET`/`POST /api/affinities`, `DELETE /api/affinities/{id}` | The Taste screen, and every sample reaction in a conversation. | `Affinity` — **unbuilt** | `art_taste(action='list'\|'set'\|'delete')` — decided 2026-08-11, see below and § `art_taste` |
 | `POST /api/works/{id}/mat` | Re-derive a work's mat. **Owned by issue #91, not by this set** — see below. | `MatColor`, built | `art_catalogue(action='set_mat_color')`, built |
-| `POST /api/directives` (shape open) | The Walls screen's `next`. **The only screen action here with an MCP action and no HTTP route at all** — see below. | `Directive`, built | `art_display(action='next')`, built |
+| `POST /api/directives` | The Walls screen's `next`. **Shape settled and built 2026-08-12** — see below. | `Directive`, built | `art_display(action='next')`, built |
 | `GET /api/spend` | The Health screen's spend history, across runs. | `SpendRecord`, built | `art_discovery(action='spend')` already answers the cross-run question by calendar month — see below |
 
 **Facet counts ride on the works response rather than getting a route.** They are
@@ -1267,7 +1267,7 @@ makes three of the routes above singular where the product is not:
 |---|---|---|
 | `POST /api/themes/{id}/activate` | Changes *the* wall | Names which wall it hangs on. The wall is a required part of the request, **even while there is one and the answer is obvious** — the IA's rule that every act naming a wall keeps a confirmation from silently becoming wrong. |
 | `GET /api/manifest` | What a theme would put on *the* wall | Takes the wall as well as the theme: exclusions are per-wall once two walls can hang different themes, and this route's whole job is to state a consequence before it happens. |
-| `POST /api/directives` (designed above) | An advance | Names the wall. `Directive` stops being a singleton and becomes one row per wall, so a `next` in the living room does not step the study. |
+| `POST /api/directives` (built above) | An advance | Names the wall. `Directive` stops being a singleton and becomes one row per wall, so a `next` in the living room does not step the study. |
 
 **`art_theme(action='activate')` and `art_display` take the same parameter**, by
 the parity requirement in `product-brief.md` item 8 — a model that can hang a
@@ -1577,14 +1577,28 @@ than to bound a surface.
 > Work screen's builder finds it rather than inventing a route outside this set;
 > its shape is #91's.
 
-> **`next` is the one screen action with an MCP action and no HTTP route.**
-> `art_display(action='next')` increments the directive sequence; the built HTTP
-> surface only ever *reports* `directive_sequence` in the manifest payload and has
-> no directive write. So the Walls screen — flow 6, and this design's home screen —
-> has a control the browser cannot perform today. The shape is left open because
-> the multi-display blockers in § More than one wall land on exactly this route: a
-> directive is per-wall the moment there is more than one, and writing the
-> installation-wide shape now would be writing the shape that has to change.
+> **`next` was the one screen action with an MCP action and no HTTP route, and
+> the shape it was waiting on arrived. Settled and built 2026-08-12.**
+>
+> It was left open on purpose: `art_display(action='next')` incremented the
+> directive sequence while the built HTTP surface only ever *reported*
+> `directive_sequence` in the manifest payload, so the Walls screen had a control
+> the browser could not perform — and the multi-display blockers in § More than
+> one wall landed on exactly this route. A directive is per-wall the moment there
+> is more than one, so writing the installation-wide shape then would have been
+> writing the shape that had to change. Walls became first-class; the shape
+> followed.
+>
+> **`POST /api/directives`, body `{wall_id}`, returning `DirectiveOut {wall_id,
+> sequence, pinned_work_id}`.** One service call, no new domain logic — the
+> advance rule already lived in `DisplayService`.
+>
+> **It returns the directive rather than the wall**, which is the one part worth
+> stating here rather than leaving in a docstring. A directive is what the caller
+> changed and `sequence` is the thing that moved; returning the wall would answer
+> a question nobody asked and would make the caller diff two wall payloads to
+> discover whether the advance took. The read-back convention is honoured — the
+> response is the written row, re-read — and the *row* is the directive.
 
 **Still deliberately absent, so these omissions are not read as oversights:**
 nothing here writes an artwork's own metadata, a source or an original. Title,
