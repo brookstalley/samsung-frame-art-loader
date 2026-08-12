@@ -300,3 +300,67 @@ The decision collapses to one question: **do you want 3tears agent memory?**
 
 Nothing in between buys anything: NATS is only worth running to keep caches coherent
 across multiple pods, and this product has one curation process.
+
+## The search seam, agreed across sessions on 2026-08-12 — sketch pending
+
+**Nothing here is built, and none of it is in an active build plan.** 3tears is
+building a search plane whose Aggregate stage takes candidate *producers*, and this
+product's discovery engine is intended to be one — their own success check names it
+as the consumer least like the ones that shaped their code, which is the point of
+choosing it. Their seam is their step 4; they bring a contract sketch to check
+against this boundary before building it. This section exists so the agreements
+reached in conversation are not re-derived from a transcript nobody kept.
+
+**Identity comes from `work_dedup_key`, not from a second key.** A model-mediated
+candidate carries **zero locators** — `ProposedWork` is title, rationale and artist,
+and no URL exists until phase 2 resolves images. So identity has to come from
+somewhere, and the choice was one derivation or two. Two identities for one work are
+free to disagree, and here the disagreement is invisible: a rejection suppresses one
+spelling and not the other, and nothing surfaces the painting that stopped being
+offered. `engine.py` already argues this — the caller mints the key precisely so it
+is derived in one place.
+
+**The coupling that buys is stated rather than discovered.** `work_dedup_key` is a
+derived value under an opinionated normalisation contract — accent folding, iterative
+stripping of trailing dates, catalogue clauses and alternate titles, and the
+deliberate refusal to collapse `Untitled (…)` into `Untitled`. A change to those
+rules moves their identities. They record it as a dependency; we should not change
+those rules casually now that something outside this repo resolves through them.
+
+**`rationale` travels as `curation:match_rationale`, guaranteed by the producer.**
+Their facets are open and ignorable by contract, which is right for consumers and
+wrong for this field: `ProposedWork.rationale` is required, the stored row requires
+it, and the review card renders it — a candidate without one asks the curator to
+judge a bare title. The shape that satisfies both is a producer guarantee: ignorable
+by consumers, mandatory for this producer, asserted at the boundary rather than
+hoped for. The namespace names the *producing component* and not this repo's
+directory: the engine that writes that sentence knows nothing about televisions, and
+`samsung:` would have named the display plane in a facet that never travels there.
+
+**Spend references `SpendRecord.id`, opaque.** Their contract forbids re-pricing
+model spend into search spend. `EngineSpend` is the wrong thing to reference by
+shape — it is pre-persistence, so it has no id and no timestamp and two of them are
+indistinguishable, and `SpendCategory` grows with attribution rules that are not
+derivable from the shape (`CONVERSATION_TOKENS` is deliberately *not* attributed to
+the run a conversation seeds, so a naive roll-up double-counts intent-forming spend
+into a run's actuals). One priced row, one pointer.
+
+**One question is open and belongs to their sketch: whether a producer candidate
+carries a rank.** Two rules meet here from opposite directions. Ours says a
+provider's rank is only *meaningful* inside the call that produced it, so it does not
+escape the client — measured, in `browse.py`: the Art Institute's relevance score
+survives a filter-only query, one Ellsworth Kelly painting at 13,535 against its
+siblings' 6 to 8, so a caller handed that order gets a ranking that looks meaningful
+and is not. Theirs says a rank is only *recoverable* inside the call that produced
+it, so it must be captured before grouping by identity destroys it. Same observation,
+opposite remedies — and a seam that exported our candidates with a position would be
+handing them the thing we refuse to hand our own callers. Their expectation is that
+it resolves our way by default, because a candidate with no position gets no fused
+score and their fusion already distinguishes "ranked nowhere" from "ranked last". It
+is flagged to be *decided* rather than to fall out of an implementation.
+
+**A naming rule of theirs, worth knowing before reading their types.** Their
+contract-discipline suite forbids layer names — `Adapter`, `Call`, `Aggregate`,
+`Extract`, `Select`, `Bind` — inside type names, so that re-cutting the layers stays
+cheap. Their result type is `Shortlist` rather than `Selection` for that reason, and
+their names will keep reading that way.
