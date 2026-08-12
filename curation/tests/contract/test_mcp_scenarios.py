@@ -103,10 +103,17 @@ async def test_a_work_can_be_put_on_the_wall_through_the_tools_alone(server_url,
         added = await caller.ok("art_theme", "add", theme_id=theme_id, artwork_id=chosen["artwork_id"])
         assert added["artwork_id"] == work.id
 
-        published = await caller.ok("art_theme", "activate", theme_id=theme_id)
+        # The wall comes out of the surface too. A caller that had to know a wall
+        # id before it could hang anything would be holding an argument nothing
+        # gave it, which is the shape of an action that cannot actually be used.
+        walls = await caller.ok("art_display", "walls")
+        wall_id = walls["walls"][0]["wall_id"]
+
+        published = await caller.ok("art_theme", "activate", theme_id=theme_id, wall_id=wall_id)
 
         assert published["theme"]["name"] == "Pointillism, briefly"
-        assert published["theme"]["is_active"] is True
+        # The result names the wall, so a caller reporting back says which room.
+        assert published["wall"]["wall_id"] == wall_id
         on_the_wall = [entry["artwork_id"] for entry in published["on_the_wall"]]
         assert on_the_wall == [work.id], f"after {caller.transcript}"
 
@@ -133,7 +140,8 @@ async def test_a_work_that_cannot_be_shown_is_reported_rather_than_dropped(serve
         for entry in listing["artworks"]:
             await caller.ok("art_theme", "add", theme_id=theme_id, artwork_id=entry["artwork_id"])
 
-        published = await caller.ok("art_theme", "activate", theme_id=theme_id)
+        walls = await caller.ok("art_display", "walls")
+        published = await caller.ok("art_theme", "activate", theme_id=theme_id, wall_id=walls["walls"][0]["wall_id"])
 
     assert published["on_the_wall"] == []
     excluded = {entry["title"]: entry for entry in published["not_displayable"]}
@@ -224,12 +232,15 @@ async def test_a_curator_can_jump_the_wall_to_one_work_and_step_off_it(server_ur
         created = await caller.ok("art_theme", "create", name="One work, pinned")
         theme_id = created["theme"]["theme_id"]
         added = await caller.ok("art_theme", "add", theme_id=theme_id, artwork_id=work.id)
-        await caller.ok("art_theme", "activate", theme_id=theme_id)
+        walls = await caller.ok("art_display", "walls")
+        wall_id = walls["walls"][0]["wall_id"]
+        await caller.ok("art_theme", "activate", theme_id=theme_id, wall_id=wall_id)
 
-        pinned = await caller.ok("art_display", "show_now", artwork_id=added["artwork_id"])
+        pinned = await caller.ok("art_display", "show_now", wall_id=wall_id, artwork_id=added["artwork_id"])
         assert pinned["pinned_work_id"] == work.id
+        assert pinned["wall_id"] == wall_id
 
-        stepped = await caller.ok("art_display", "next")
+        stepped = await caller.ok("art_display", "next", wall_id=wall_id)
 
     assert stepped["pinned_work_id"] is None, "stepping on should release the pin"
     # The sequence advances, which is how the display plane knows the directive
@@ -353,12 +364,12 @@ class TestReviewingWhatDiscoveryFound:
         return a_museum_holding("The Elephants", "Swans Reflecting Elephants")
 
     @pytest.fixture
-    def services(self, store, discovery_store, wall, thumbnail_settings, settings, engine, museum):
+    def services(self, store, discovery_store, wall_settings, thumbnail_settings, settings, engine, museum):
         engine.result = WorkList(works=(a_work("The Elephants"), a_work("Swans Reflecting Elephants")))
         return Services.bind(
             catalogue=store,
             discovery=discovery_store,
-            wall=wall,
+            wall=wall_settings,
             thumbnails=thumbnail_settings,
             artwork_box=settings.tv_artwork_box,
             engine=engine,

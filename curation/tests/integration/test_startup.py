@@ -7,6 +7,7 @@ tested and entirely unwired, and only removing the call and re-running the suite
 showed it. So the call is asserted here, through `main()` itself.
 """
 
+import sqlite3
 from dataclasses import replace
 from decimal import Decimal
 
@@ -49,7 +50,7 @@ from curation.discovery.phase_one import OpenRouterEngine
 from curation.manifest.builder import MANIFEST_FILENAME
 from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 from curation.persistence.file import open_catalogue_file
-from curation.persistence.records import Theme
+from curation.persistence.migrations import DEFAULT_WALL_NAME
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.services.catalogue import CatalogueService
 from curation.services.display import DisplayService, WallSettings
@@ -78,6 +79,7 @@ def _defaults(art_root, **overrides) -> Settings:
             heartbeat_path=art_root / HEARTBEAT_FILENAME,
             host="127.0.0.1",
             port=0,
+            wall_name=DEFAULT_WALL_NAME,
             acquisition_user_agent=DEFAULT_ACQUISITION_USER_AGENT,
             tile_binary=DEFAULT_TILE_BINARY,
             tile_max_pixels=DEFAULT_TILE_MAX_PIXELS,
@@ -127,22 +129,41 @@ def _stub_settings(monkeypatch, art_root, **overrides) -> None:
     monkeypatch.setattr(Settings, "from_env", classmethod(lambda cls: _defaults(art_root, **overrides)))
 
 
-def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch):
-    """A surface must not answer from a catalogue still in a state its rules forbid.
+def test_the_plane_moves_the_catalogue_onto_walls_before_it_serves(tmp_path, monkeypatch):
+    """A surface must not answer from a catalogue still in a shape the code left behind.
 
-    The order matters as much as the call: a repair that ran after `uvicorn.run`
-    would run at shutdown, which is to say never.
+    The order matters as much as the step: a migration that ran after
+    `uvicorn.run` would run at shutdown, which is to say never — and every
+    request in between would be asking a store for tables the file does not have.
+
+    This test asserted the *repair* — the promote-the-oldest pass — until
+    2026-08-12. That repair is gone, and what took its place at the same point in
+    the sequence is the move onto walls, so the ordering claim is re-pointed
+    rather than dropped.
     """
     art_root = tmp_path / "art"
     art_root.mkdir()
     path = art_root / "catalogue.sqlite"
 
-    # A catalogue as the revision before the exactly-one-active rule wrote one:
-    # themes exist and none of them is active.
-    seeding = SqliteCatalogue(open_catalogue_file(path))
-    seeding.add_theme(Theme(id="t1", name="Late night", created_at=_a_moment()))
-    seeding.add_theme(Theme(id="t2", name="Daylight", created_at=_a_moment()))
-    seeding.close()
+    # The file every existing deployment has: a boolean on the theme, and one
+    # directive row for the whole installation. Written with raw SQL because the
+    # store no longer knows how to make one.
+    connection = sqlite3.connect(path)
+    try:
+        connection.executescript(
+            "CREATE TABLE themes (id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, description TEXT,"
+            " is_active INTEGER NOT NULL, created_at TEXT NOT NULL);"
+            "CREATE UNIQUE INDEX themes_one_active ON themes(is_active) WHERE is_active = 1;"
+            "CREATE TABLE directive (id INTEGER PRIMARY KEY CHECK (id = 1), sequence INTEGER NOT NULL,"
+            " pinned_work_id TEXT);"
+            "INSERT INTO directive (id, sequence, pinned_work_id) VALUES (1, 4, NULL);"
+        )
+        moment = _a_moment().isoformat()
+        connection.execute("INSERT INTO themes VALUES ('t1', 'Late night', NULL, 1, ?)", (moment,))
+        connection.execute("INSERT INTO themes VALUES ('t2', 'Daylight', NULL, 0, ?)", (moment,))
+        connection.commit()
+    finally:
+        connection.close()
 
     _stub_settings(monkeypatch, art_root)
 
@@ -153,7 +174,7 @@ def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch)
         # a request arriving at this moment would observe.
         observer = SqliteCatalogue(open_catalogue_file(path))
         try:
-            active = DisplayService(
+            display = DisplayService(
                 observer,
                 CatalogueService(observer),
                 WallSettings(
@@ -162,8 +183,13 @@ def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch)
                     rotation_interval_seconds=180,
                     shuffle=True,
                 ),
-            ).active_theme()
-            served.append("none" if active is None else active.name)
+            )
+            wall = observer.list_walls()[0]
+            hanging = display.hanging_on(wall.id)
+            served.append("nothing" if hanging is None else hanging.name)
+            # The counter came across too, so the first advance after the upgrade
+            # is a step rather than a repeat of one already taken.
+            served.append(str(display.read_directive(wall.id).sequence))
         finally:
             observer.close()
 
@@ -171,7 +197,7 @@ def test_the_plane_repairs_the_catalogue_before_it_serves(tmp_path, monkeypatch)
 
     entry_point.main()
 
-    assert served == ["Late night"], "the catalogue was still unrepaired when the server started"
+    assert served == ["Late night", "4"], "the catalogue had not been moved onto walls when the server started"
 
 
 def _a_moment():

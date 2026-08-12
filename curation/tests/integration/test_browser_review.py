@@ -65,13 +65,13 @@ def museum() -> FakeImageSearch:
 
 
 @pytest.fixture
-def services(store, discovery_store, wall, thumbnail_settings, settings, engine, museum) -> Services:
+def services(store, discovery_store, wall_settings, thumbnail_settings, settings, engine, museum) -> Services:
     """The whole plane, wired the way a deployment with an image provider is."""
     engine.result = WorkList(works=(a_work("The Elephants"), a_work("Swans Reflecting Elephants")))
     return Services.bind(
         catalogue=store,
         discovery=discovery_store,
-        wall=wall,
+        wall=wall_settings,
         thumbnails=thumbnail_settings,
         artwork_box=settings.tv_artwork_box,
         engine=engine,
@@ -444,7 +444,13 @@ class TestTheWholeLoop:
         one thing standing in for work this chunk does not own is the master
         image acquisition would fetch after acceptance; everything else is the
         surface answering for itself.
+
+        The wall comes out of the surface like every other id: hanging is an act
+        against a named wall, so a loop that reached around the API for it would
+        be closing onto a wall no browser could have found.
         """
+        wall = http.get("/api/walls").json()["walls"][0]
+
         estimate = http.get("/api/estimate").json()
         assert estimate["phase"] == "phase_1"
 
@@ -463,10 +469,10 @@ class TestTheWholeLoop:
 
         theme = http.post("/api/themes", json={"name": "Elephants"}).json()
         http.post(f"/api/themes/{theme['theme_id']}/works", json={"artwork_id": artwork_id})
-        manifest = http.post(f"/api/themes/{theme['theme_id']}/activate").json()
+        manifest = http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]}).json()
 
         assert [entry["artwork_id"] for entry in manifest["entries"]] == [artwork_id]
-        assert manifest["theme"]["is_active"] is True
+        assert manifest["wall_id"] == wall["wall_id"]
 
 
 @pytest.fixture

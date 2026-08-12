@@ -80,7 +80,7 @@ middle of it.
 import logging
 import sqlite3
 import threading
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -98,6 +98,12 @@ ConflictPolicy = Literal["raise", "ignore", "update"]
 #: Derived from the type rather than restated, so the runtime check and the
 #: annotation cannot drift apart.
 _POLICIES: Final[frozenset[str]] = frozenset(get_args(ConflictPolicy))
+
+#: One schema change this store cannot infer, applied to the open file. Opaque
+#: on purpose: this module holds no artwork, theme or wall concept, and a
+#: migration that named one here would put domain knowledge in the tier whose
+#: whole reason to exist is not having any. `migrations.py` writes them.
+type Migration = Callable[[sqlite3.Connection], None]
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,7 +188,7 @@ def _column_declaration(column: sqlite3.Row) -> str:
 class SqliteDurableStore:
     """One SQLite file, addressed as tables of rows."""
 
-    def __init__(self, path: Path | str, schema: str) -> None:
+    def __init__(self, path: Path | str, schema: str, migrations: Sequence[Migration] = ()) -> None:
         # Reentrant because `transaction()` holds it across a body that calls
         # back into the store's own methods, each of which takes it again.
         self._lock = threading.RLock()
@@ -198,6 +204,13 @@ class SqliteDurableStore:
             self._connection.executescript(schema)
             self._widen_existing_tables(schema)
             self._connection.commit()
+            # After the schema, because a migration carries rows into tables the
+            # schema has just created; before `_read_schema`, because one may
+            # take a column away and this store validates every identifier
+            # against what the file actually holds.
+            for migration in migrations:
+                migration(self._connection)
+            self._connection.commit()
             self._columns = self._read_schema()
 
     # -- atomicity ------------------------------------------------------------
@@ -206,8 +219,8 @@ class SqliteDurableStore:
     def transaction(self) -> Iterator[None]:
         """Commit every write in the body together, or none of them.
 
-        A rule that spans rows — exactly one theme active, exactly one mat colour
-        current — is applied as a clear-then-set pair, and a pair interrupted
+        A rule that spans rows — exactly one mat colour current, at most one
+        source primary — is applied as a clear-then-set pair, and a pair interrupted
         between its halves leaves the catalogue in the state the rule forbids.
         Wrapping the pair here is what makes "it cannot be observed half-applied"
         true rather than likely.
@@ -379,6 +392,12 @@ class SqliteDurableStore:
         `CREATE UNIQUE INDEX IF NOT EXISTS` does reach an existing file; a
         constraint that has to hold on every file belongs there rather than in a
         column clause, and one added to a column needs a written migration.
+
+        **Everything this cannot do is what `migrations.py` is for**, and the
+        `migrations` argument to this class is where one is handed in. A column
+        that goes away, a table replaced by a differently-keyed one, rows carried
+        from the first shape to the second: none of it is inferable from a
+        comparison of two schemas, because the comparison cannot see intent.
         """
         intended = sqlite3.connect(":memory:")
         try:

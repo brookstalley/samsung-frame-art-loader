@@ -169,12 +169,17 @@ class WorkDetailOut(BaseModel):
 
 
 class ThemeOut(BaseModel):
-    """A grouping of works, and the pace it runs at."""
+    """A grouping of works, and the pace it runs at.
+
+    **It does not say where it is hanging**, and that is the shape of the
+    2026-08-12 ruling rather than an omission: a theme is global, two walls may
+    hang the same one, and an `is_active` boolean here could only ever have meant
+    "active on the one television". `WallOut` is what says what is where.
+    """
 
     theme_id: str
     name: str
     description: str | None
-    is_active: bool
     #: Null means "inherit the deployment default" rather than "unset", so it is
     #: reported as stored rather than resolved to a number that would read as a
     #: choice the curator made.
@@ -183,10 +188,65 @@ class ThemeOut(BaseModel):
     created_at: str
 
 
-class ThemeListOut(BaseModel):
-    """Every theme."""
+class WallRefOut(BaseModel):
+    """A wall named from somewhere that is not about walls.
 
-    themes: list[ThemeOut]
+    Just enough to say which wall and to print its name. The full shape would
+    carry the theme hanging on it, and a theme listing that carried each wall's
+    theme would be answering a question nobody asked from inside the answer to
+    another one.
+    """
+
+    wall_id: str
+    name: str
+
+
+class ThemePlacementOut(BaseModel):
+    """A theme and every wall showing it.
+
+    A list rather than a single wall, because two walls may hang the same theme
+    — and a field with room for one would have re-made the single-wall
+    assumption one layer above the boolean that was removed. Empty is the
+    ordinary state of a theme nobody has hung.
+    """
+
+    theme: ThemeOut
+    hanging_on: list[WallRefOut]
+
+
+class ThemeListOut(BaseModel):
+    """Every theme, and where each is hanging."""
+
+    themes: list[ThemePlacementOut]
+
+
+class WallOut(BaseModel):
+    """A place where art hangs, and what is hanging there.
+
+    The theme travels with the wall rather than being a second request, because
+    every screen that shows a wall shows what is on it — and because the pair is
+    read at one instant here, where two requests could report a wall and a theme
+    that were never simultaneously true.
+
+    **`theme` is null when nothing is hanging**, which is an ordinary state: an
+    empty catalogue, or a curator who took everything down.
+    """
+
+    wall_id: str
+    name: str
+    created_at: str
+    theme: ThemeOut | None
+    #: What this wall was last told to do. Carried because the Walls screen shows
+    #: "what is next" beside "what is hanging", and because a per-wall counter is
+    #: the thing a reader has to be able to see is per-wall.
+    directive_sequence: int
+    pinned_work_id: str | None
+
+
+class WallListOut(BaseModel):
+    """Every wall, with what each is showing."""
+
+    walls: list[WallOut]
 
 
 class ThemeDetailOut(BaseModel):
@@ -224,6 +284,11 @@ class ManifestOut(BaseModel):
     whole reason the builder reports them.
     """
 
+    #: Which wall this build is about. Named in the response so a confirmation
+    #: can say "Hang Winter in the living room" without a second request, even
+    #: while there is one wall and the answer is obvious.
+    wall_id: str
+    wall_name: str
     theme: ThemeOut
     entries: list[ManifestEntryOut]
     exclusions: list[ExclusionOut]
@@ -685,6 +750,23 @@ class CreateTheme(BaseModel):
 
     name: str
     description: str | None = None
+
+
+class CreateWall(BaseModel):
+    """Everything needed to record a wall: a name, and nothing device-shaped."""
+
+    name: str
+
+
+class HangTheme(BaseModel):
+    """Which wall a theme is being hung on.
+
+    **Required, even while there is one wall and the answer is obvious.** A
+    request that omitted it would produce a confirmation that reads correctly
+    today and silently becomes wrong the day a second display arrives.
+    """
+
+    wall_id: str
 
 
 class AddWork(BaseModel):

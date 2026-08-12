@@ -142,50 +142,50 @@ def test_an_archived_work_moves_between_the_status_listings(service):
 # -- the display directive -----------------------------------------------------
 
 
-def test_a_fresh_catalogue_has_a_directive_at_the_start(display):
-    directive = display.read_directive()
+def test_a_fresh_catalogue_has_a_directive_at_the_start(display, wall_id):
+    directive = display.read_directive(wall_id)
 
     assert (directive.sequence, directive.pinned_work_id) == (0, None)
 
 
-def test_stepping_on_advances_the_sequence_and_carries_no_pin(display):
-    first = display.step_display()
-    second = display.step_display()
+def test_stepping_on_advances_the_sequence_and_carries_no_pin(display, wall_id):
+    first = display.step_display(wall_id)
+    second = display.step_display(wall_id)
 
     assert (first.sequence, second.sequence) == (1, 2)
     assert second.pinned_work_id is None
 
 
-def test_showing_a_work_now_advances_the_sequence_and_pins_it(ready_work, display):
+def test_showing_a_work_now_advances_the_sequence_and_pins_it(ready_work, display, wall_id):
     work = ready_work()
 
-    directive = display.show_work_now(work.id)
+    directive = display.show_work_now(wall_id, work.id)
 
     assert directive.sequence == 1
     assert directive.pinned_work_id == work.id
 
 
-def test_stepping_on_clears_a_standing_pin(ready_work, display):
+def test_stepping_on_clears_a_standing_pin(ready_work, display, wall_id):
     """A step that left the pin in place would read as "jump there again"."""
     work = ready_work()
-    display.show_work_now(work.id)
+    display.show_work_now(wall_id, work.id)
 
-    directive = display.step_display()
+    directive = display.step_display(wall_id)
 
     assert directive.sequence == 2
     assert directive.pinned_work_id is None
 
 
-def test_archiving_the_pinned_work_withdraws_the_pin(service, ready_work, display):
+def test_archiving_the_pinned_work_withdraws_the_pin(service, ready_work, display, wall_id):
     work = ready_work()
-    display.show_work_now(work.id)
+    display.show_work_now(wall_id, work.id)
 
     service.archive_artwork(work.id)
 
-    assert display.read_directive().pinned_work_id is None
+    assert display.read_directive(wall_id).pinned_work_id is None
 
 
-def test_withdrawing_a_pin_does_not_advance_the_sequence(service, ready_work, display):
+def test_withdrawing_a_pin_does_not_advance_the_sequence(service, ready_work, display, wall_id):
     """The display plane acts every time the number goes up.
 
     Archiving a work is not an instruction to it, so an advance here would fire a
@@ -193,92 +193,99 @@ def test_withdrawing_a_pin_does_not_advance_the_sequence(service, ready_work, di
     one that was archived.
     """
     work = ready_work()
-    display.show_work_now(work.id)
-    before = display.read_directive().sequence
+    display.show_work_now(wall_id, work.id)
+    before = display.read_directive(wall_id).sequence
 
     service.archive_artwork(work.id)
 
-    assert display.read_directive().sequence == before
+    assert display.read_directive(wall_id).sequence == before
 
 
-def test_archiving_some_other_work_leaves_the_pin_alone(service, ready_work, display):
+def test_archiving_some_other_work_leaves_the_pin_alone(service, ready_work, display, wall_id):
     pinned = ready_work()
     other = service.add_artwork(title="Chop Suey")
-    display.show_work_now(pinned.id)
+    display.show_work_now(wall_id, pinned.id)
 
     service.archive_artwork(other.id)
 
-    assert display.read_directive().pinned_work_id == pinned.id
+    assert display.read_directive(wall_id).pinned_work_id == pinned.id
 
 
-def test_an_archived_work_cannot_be_pinned(service, ready_work, display):
+def test_an_archived_work_cannot_be_pinned(service, ready_work, display, wall_id):
     work = ready_work()
     service.archive_artwork(work.id)
 
     with pytest.raises(ServiceError, match="archived"):
-        display.show_work_now(work.id)
+        display.show_work_now(wall_id, work.id)
 
 
-def test_pinning_an_unknown_work_is_refused(display):
+def test_pinning_an_unknown_work_is_refused(display, wall_id):
     with pytest.raises(ServiceError, match="No artwork with id 'nope'"):
-        display.show_work_now("nope")
+        display.show_work_now(wall_id, "nope")
 
 
-def test_theme_activity_never_touches_the_sequence(service, display):
+def test_theme_activity_never_touches_the_sequence(service, display, wall_id):
     """Only `next` and `show_now` advance it; a theme switch rewrites the list.
 
     A switch that advanced the counter would look to the display plane exactly
     like a curator pressing "next" at the same moment.
     """
-    display.step_display()
-    before = display.read_directive()
+    display.step_display(wall_id)
+    before = display.read_directive(wall_id)
 
     first = display.add_theme(name="American Modernists")
     second = display.add_theme(name="Surrealists")
-    display.activate_theme(second.id)
+    display.activate_theme(second.id, wall_id=wall_id)
     work = service.add_artwork(title="Nighthawks")
     display.add_to_theme(theme_id=first.id, artwork_id=work.id)
 
-    assert display.read_directive() == before
+    assert display.read_directive(wall_id) == before
 
 
 def test_the_sequence_survives_the_process_that_advanced_it(tmp_path):
-    """Monotonic for the life of the catalogue, not for the life of the process.
+    """Monotonic for the life of the wall, not for the life of the process.
 
     The counter is stored catalogue-side precisely so that a restart — which
     `Restart=always` makes routine — cannot reset it. A reset reads to the
     display plane as an advance, which fires a directive nobody issued.
     """
-    path = tmp_path / "catalogue.sqlite"
+    path = tmp_path / "second-catalogue.sqlite"
     first_store = SqliteCatalogue(open_catalogue_file(path))
     first_catalogue = CatalogueService(first_store)
     first = _display(first_store, tmp_path, catalogue=first_catalogue)
+    # Read from the file this test opened rather than taken from the shared
+    # fixture: the wall's id is a UUID minted when the file was established, so
+    # another file's wall is a different wall.
+    wall_id = first_store.list_walls()[0].id
     work = _a_showable_work(first_catalogue)
-    first.step_display()
-    first.show_work_now(work.id)
+    first.step_display(wall_id)
+    first.show_work_now(wall_id, work.id)
     first_store.close()
 
     reopened_store = SqliteCatalogue(open_catalogue_file(path))
     try:
         reopened = _display(reopened_store, tmp_path)
-        assert reopened.read_directive().sequence == 2
-        assert reopened.read_directive().pinned_work_id == work.id
-        assert reopened.step_display().sequence == 3
+        assert [wall.id for wall in reopened_store.list_walls()] == [wall_id]
+        assert reopened.read_directive(wall_id).sequence == 2
+        assert reopened.read_directive(wall_id).pinned_work_id == work.id
+        assert reopened.step_display(wall_id).sequence == 3
     finally:
         reopened_store.close()
 
 
-# -- repairing a catalogue that predates a rule --------------------------------
+# -- nothing is ever hung by anything but a curator -----------------------------
+#
+# This section asserted the opposite until 2026-08-12, and the reversal is a
+# ruling rather than a relaxation. `reconcile` promoted the oldest theme when
+# none was active, and `add_theme` promoted a new one for the same reason: a
+# catalogue with themes and none active left the display plane no sync target.
+# With more than one wall that rule hangs the same theme in every room unbidden,
+# and "a wall with nothing on it" is now a designed state rather than a broken
+# one — so the promotion is dropped and these are what is left to hold.
 
 
-def _legacy_catalogue_with_no_active_theme(path):
-    """A catalogue as the revision before the exactly-one-active rule wrote one.
-
-    That revision's `add_theme` took no `is_active` argument and it shipped no way
-    to activate a theme, so every theme it ever wrote was inactive. Built through
-    the store rather than through the service, because the service is exactly what
-    will not produce this state any more.
-    """
+def _catalogue_with_unhung_themes(path):
+    """Two themes, neither hanging anywhere. The ordinary state of a fresh catalogue."""
     catalogue = SqliteCatalogue(open_catalogue_file(path))
     moment = datetime(2026, 7, 20, 9, 30, tzinfo=UTC)
     catalogue.add_theme(Theme(id="t-late", name="Late night", created_at=moment + timedelta(days=1)))
@@ -286,85 +293,65 @@ def _legacy_catalogue_with_no_active_theme(path):
     return catalogue
 
 
-def test_a_catalogue_whose_themes_are_all_inactive_is_repaired_on_start(tmp_path, caplog):
-    """The rule postdates files already on disk, so it has to be brought to them.
+def test_a_catalogue_of_unhung_themes_stays_that_way_across_a_restart(tmp_path, caplog):
+    """Nothing promotes a theme automatically, and opening the file is not an exception.
 
-    Nothing else repairs this: the index the file carries says only "at most one",
-    which zero satisfies, and a catalogue nobody adds a theme to would stay in the
-    forbidden state indefinitely — with the display plane given no sync target and
-    nothing reporting it.
+    With N walls there is no defensible answer to which theme belongs on a wall
+    the curator has not hung anything on — so the honest answer is the empty one,
+    and it is silent, because there is nothing wrong to report. Opening the file
+    is where the repair used to be reachable from, which is why the restart is
+    the interesting moment rather than an incidental one.
+
+    (`Services.reconcile` is the other half of this and is asserted where the
+    container is: a display repair that no longer exists cannot be entered here.)
     """
-    catalogue = _legacy_catalogue_with_no_active_theme(tmp_path / "catalogue.sqlite")
+    path = tmp_path / "catalogue.sqlite"
+    _catalogue_with_unhung_themes(path).close()
+
+    with caplog.at_level(logging.WARNING, logger="curation"):
+        catalogue = SqliteCatalogue(open_catalogue_file(path))
     try:
         display = _display(catalogue, tmp_path)
-        assert display.active_theme() is None
-
-        with caplog.at_level(logging.WARNING):
-            display.reconcile()
-
-        # The oldest theme, so every machine opening the same file makes the same
-        # choice rather than following whatever the listing happened to return.
-        assert display.active_theme().id == "t-early"
-        assert [theme.is_active for theme in display.list_themes()].count(True) == 1
-        assert "none active" in caplog.text
-        assert "Daylight" in caplog.text
+        assert display.hanging_on(catalogue.list_walls()[0].id) is None
+        assert [theme.id for theme in display.list_themes()] == ["t-early", "t-late"]
+        # Scoped to this plane's own loggers rather than to everything the
+        # process said: the claim is that *curation* reported no repair, and a
+        # bare emptiness check makes any library's warning fail this test for a
+        # reason that has nothing to do with hanging.
+        assert [record.message for record in caplog.records if record.name.startswith("curation.")] == []
     finally:
         catalogue.close()
 
 
-def test_reconciling_a_healthy_catalogue_changes_nothing_and_says_nothing(tmp_path, caplog):
-    """A repair that logged on every start would train the operator to ignore it."""
-    catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
-    try:
-        display = _display(catalogue, tmp_path)
-        first = display.add_theme(name="American Modernists")
-        display.add_theme(name="Surrealists")
-
-        with caplog.at_level(logging.WARNING):
-            display.reconcile()
-
-        assert display.active_theme().id == first.id
-        assert caplog.text == ""
-    finally:
-        catalogue.close()
-
-
-def test_reconciling_an_empty_catalogue_is_not_a_repair(tmp_path, caplog):
-    """No themes is not the forbidden state — there is nothing to be active."""
-    catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
-    try:
-        display = _display(catalogue, tmp_path)
-        with caplog.at_level(logging.WARNING):
-            display.reconcile()
-
-        assert display.active_theme() is None
-        assert caplog.text == ""
-    finally:
-        catalogue.close()
-
-
-def test_adding_a_theme_to_a_catalogue_with_none_active_promotes_it(tmp_path):
-    """The condition is "none is active", not "there are none", so this repairs too."""
-    catalogue = _legacy_catalogue_with_no_active_theme(tmp_path / "catalogue.sqlite")
+def test_adding_a_theme_to_a_catalogue_with_nothing_hanging_hangs_nothing(tmp_path):
+    """The condition used to be "none is active", which made this a second repair path."""
+    catalogue = _catalogue_with_unhung_themes(tmp_path / "catalogue.sqlite")
     try:
         display = _display(catalogue, tmp_path)
 
         added = display.add_theme(name="Precisionists")
 
-        assert added.is_active is True
-        assert [theme.is_active for theme in display.list_themes()].count(True) == 1
+        assert display.walls_hanging(added.id) == []
+        assert display.hanging_on(catalogue.list_walls()[0].id) is None
     finally:
         catalogue.close()
 
 
-def test_the_repair_reaches_the_file(tmp_path):
+def test_what_a_curator_hung_reaches_the_file_and_survives_a_reopen(tmp_path):
+    """The other half of the same claim: a deliberate hang is durable.
+
+    Dropping the promotion means the assignment row is the only thing that can
+    put a theme on a wall, so it is the only thing that can put one back after a
+    restart.
+    """
     path = tmp_path / "catalogue.sqlite"
-    catalogue = _legacy_catalogue_with_no_active_theme(path)
-    _display(catalogue, tmp_path).reconcile()
+    catalogue = _catalogue_with_unhung_themes(path)
+    wall_id = catalogue.list_walls()[0].id
+    _display(catalogue, tmp_path).activate_theme("t-early", wall_id=wall_id)
     catalogue.close()
 
     reopened = SqliteCatalogue(open_catalogue_file(path))
     try:
-        assert _display(reopened, tmp_path).active_theme().id == "t-early"
+        assert _display(reopened, tmp_path).hanging_on(wall_id).id == "t-early"
     finally:
         reopened.close()

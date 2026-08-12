@@ -36,6 +36,7 @@ from curation.persistence.records import (
     Original,
     Rendition,
     Theme,
+    Wall,
     is_current,
     tv_renditions_newest_first,
 )
@@ -121,6 +122,14 @@ class ManifestEntry:
 class ManifestBuild:
     """What one build produced — including, deliberately, what it left out."""
 
+    #: Which wall this build is about. Carried so that a surface can name it in
+    #: the confirmation — "Hang Winter in the living room" — without asking a
+    #: second question; a confirmation that reads correctly only because there is
+    #: one possible target silently becomes wrong when a second display arrives.
+    #: It is deliberately **not** in the document `as_document` writes: the
+    #: manifest is still one file for the installation, and which wall reads it is
+    #: display-plane configuration.
+    wall: Wall
     theme: Theme
     entries: Sequence[ManifestEntry]
     exclusions: Sequence[Exclusion]

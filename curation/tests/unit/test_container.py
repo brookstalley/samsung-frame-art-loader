@@ -51,19 +51,22 @@ def test_the_container_carries_every_concern_a_surface_may_need(services):
     assert isinstance(services.sweep, PreviewSweep)
 
 
-def test_one_reconcile_call_reaches_the_display_repair(store, services):
-    """An entry point calls the container once; each service's repair must run.
+def test_reconcile_promotes_nothing_onto_a_wall(services, store, wall_id):
+    """The display repair was dropped on 2026-08-12 rather than made per-wall.
 
-    Seeded through the store rather than the service, because the state being
-    repaired — themes with none active — is one the service's own rules forbid it
-    to create, and only a file written by an earlier revision holds it.
+    It promoted the oldest theme when none was active, which with more than one
+    wall hangs the same theme in every room unbidden and on a schedule nobody
+    asked for. This test is what the previous one became: it was
+    `test_one_reconcile_call_reaches_the_display_repair`, and it asserted the
+    promotion this asserts the absence of. Seeded through the store so the themes
+    exist without anything having chosen to hang one.
     """
     store.add_theme(Theme(id="t1", name="Late night", created_at=_A_MOMENT))
     store.add_theme(Theme(id="t2", name="Daylight", created_at=_A_MOMENT))
 
     services.reconcile()
 
-    assert services.display.active_theme().name == "Late night"
+    assert services.display.hanging_on(wall_id) is None
 
 
 def test_one_reconcile_call_reaches_the_discovery_repair(discovery, services):

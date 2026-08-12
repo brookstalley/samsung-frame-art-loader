@@ -21,7 +21,7 @@ Methods are synchronous, for the reason `catalogue.py` gives.
 
 import logging
 import uuid
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -39,7 +39,7 @@ from curation.manifest.builder import (
 )
 from curation.manifest.heartbeat import HeartbeatReading
 from curation.persistence.catalogue import CatalogueStore
-from curation.persistence.records import Directive, Theme, ThemeMembership
+from curation.persistence.records import Directive, Theme, ThemeAssignment, ThemeMembership, Wall
 from curation.services.catalogue import ArtworkDetail, CatalogueService
 from curation.services.errors import ServiceError
 from curation.services.fields import require_text
@@ -77,8 +77,38 @@ class WallSettings:
     shuffle: bool
 
 
+@dataclass(frozen=True, slots=True)
+class WallView:
+    """One wall with everything a surface showing it needs, read at one instant.
+
+    Composed here rather than by each surface, for the reason the service layer
+    exists at all: both surfaces need the identical composition, and two callers
+    assembling it from three reads apiece would be two places for "what is a wall
+    made of" to be decided — and two chances to report a wall and a theme that
+    were never simultaneously true.
+    """
+
+    wall: Wall
+    #: Null when nothing is hanging, which is an ordinary state.
+    hanging: Theme | None
+    directive: Directive
+
+
+@dataclass(frozen=True, slots=True)
+class ThemePlacement:
+    """One theme and every wall showing it.
+
+    Several walls, deliberately: hanging the same theme in two rooms requires no
+    duplication, and a shape with room for one wall would have re-made the
+    single-wall assumption one layer up from the boolean that was removed.
+    """
+
+    theme: Theme
+    walls: Sequence[Wall]
+
+
 class DisplayService:
-    """Read and write the themes, memberships, and directive the wall runs on."""
+    """Read and write the themes, memberships, and directives the walls run on."""
 
     def __init__(self, store: CatalogueStore, catalogue: CatalogueService, settings: WallSettings) -> None:
         self._store = store
@@ -98,12 +128,99 @@ class DisplayService:
             raise ServiceError(f"No theme with id {theme_id!r} is in the catalogue.")
         return theme
 
-    def active_theme(self) -> Theme | None:
-        """The theme the wall is showing, or None while the catalogue has no themes."""
-        for theme in self._store.list_themes():
-            if theme.is_active:
-                return theme
-        return None
+    # -- reads: walls and what hangs on them -----------------------------------
+
+    def list_walls(self) -> Sequence[Wall]:
+        """Every wall the catalogue holds."""
+        return self._store.list_walls()
+
+    def get_wall(self, wall_id: str) -> Wall:
+        """Return one wall."""
+        wall = self._store.get_wall(wall_id)
+        if wall is None:
+            raise ServiceError(f"No wall with id {wall_id!r} is in the catalogue.")
+        return wall
+
+    def hanging_on(self, wall_id: str) -> Theme | None:
+        """The theme hanging on this wall, or None while nothing is.
+
+        None is an ordinary answer, not a fault: an empty catalogue and a curator
+        who took everything down both produce it, and `information-architecture.md`
+        designs it as one of the Walls screen's named empty states.
+        """
+        self.get_wall(wall_id)
+        assignment = self._store.get_assignment(wall_id)
+        return None if assignment is None else self.get_theme(assignment.theme_id)
+
+    def walls_hanging(self, theme_id: str) -> Sequence[Wall]:
+        """Every wall showing this theme, in the order walls are listed.
+
+        Several, deliberately: two walls may hang the same theme and that
+        requires no duplication, which is the property the old boolean could not
+        have. This is what the delete refusal counts and what it names.
+        """
+        hung = {assignment.wall_id for assignment in self._store.list_assignments() if assignment.theme_id == theme_id}
+        # Keyed off the wall listing rather than off the assignment order, so the
+        # walls come back in the order every other surface shows them in.
+        return [wall for wall in self._store.list_walls() if wall.id in hung]
+
+    def survey_walls(self) -> Sequence[WallView]:
+        """Every wall with what hangs on it and what it was last told to do."""
+        themes = {theme.id: theme for theme in self._store.list_themes()}
+        hanging = {assignment.wall_id: assignment.theme_id for assignment in self._store.list_assignments()}
+        # Keyed by wall rather than indexed positionally: `list_directives`
+        # promises an order but nothing promises it matches the wall listing's,
+        # and a read that lined the two up by position would be wrong the first
+        # time a wall was renamed.
+        directives = {directive.wall_id: directive for directive in self._store.list_directives()}
+        return [self._view(wall, themes, hanging, directives) for wall in self._store.list_walls()]
+
+    def get_wall_view(self, wall_id: str) -> WallView:
+        """One wall with what hangs on it and what it was last told to do."""
+        wall = self.get_wall(wall_id)
+        assignment = self._store.get_assignment(wall_id)
+        return WallView(
+            wall=wall,
+            hanging=None if assignment is None else self.get_theme(assignment.theme_id),
+            directive=self._store.get_directive(wall_id),
+        )
+
+    def survey_themes(self) -> Sequence[ThemePlacement]:
+        """Every theme with every wall showing it.
+
+        One pass over the assignments rather than one lookup per theme: the
+        question "where is each of these hanging" is asked about the whole list
+        every time it is asked at all.
+        """
+        walls = {wall.id: wall for wall in self._store.list_walls()}
+        hung: dict[str, list[str]] = {}
+        for assignment in self._store.list_assignments():
+            hung.setdefault(assignment.theme_id, []).append(assignment.wall_id)
+        return [
+            ThemePlacement(
+                theme=theme,
+                # Ordered by the wall listing so every surface names walls the
+                # same way round, whatever order the assignments came back in.
+                walls=[wall for wall in walls.values() if wall.id in set(hung.get(theme.id, ()))],
+            )
+            for theme in self._store.list_themes()
+        ]
+
+    @staticmethod
+    def _view(
+        wall: Wall,
+        themes: Mapping[str, Theme],
+        hanging: Mapping[str, str],
+        directives: Mapping[str, Directive],
+    ) -> WallView:
+        directive = directives.get(wall.id)
+        if directive is None:
+            # Unreachable through this service — a wall is created with its
+            # directive in one transaction — so it means the file was written by
+            # something else, and saying so beats a KeyError from a dict lookup.
+            raise ServiceError(f"Wall {wall.name!r} has no display directive, which this plane never writes.")
+        theme_id = hanging.get(wall.id)
+        return WallView(wall=wall, hanging=None if theme_id is None else themes[theme_id], directive=directive)
 
     def theme_works(self, theme_id: str) -> Sequence[ArtworkDetail]:
         """The theme's works in curated order, each with its artist resolved.
@@ -119,41 +236,67 @@ class DisplayService:
 
     # -- reads: the display directive -----------------------------------------
 
-    def read_directive(self) -> Directive:
-        """The standing instruction to the display plane."""
-        return self._store.get_directive()
+    def read_directive(self, wall_id: str) -> Directive:
+        """One wall's standing instruction to the display plane."""
+        self.get_wall(wall_id)
+        return self._store.get_directive(wall_id)
+
+    # -- writes: walls --------------------------------------------------------
+
+    def add_wall(self, *, name: str) -> Wall:
+        """Record a wall, with the directive every wall has from creation.
+
+        The pair is written together so that no caller ever has to make a
+        directive, and so that no wall can be observed without one: every advance
+        reads the counter it is about, and a wall lacking the row would refuse a
+        `next` for a reason that is this product's mistake rather than the
+        curator's.
+
+        A wall arrives with nothing hanging on it. Nothing is promoted onto it —
+        with more than one wall there is no defensible answer to which theme
+        belongs on a wall the curator has not hung anything on, and the empty
+        state is a designed one.
+        """
+        with self._store.transaction():
+            wall = Wall(id=str(uuid.uuid4()), name=require_text(name, field="name"), created_at=datetime.now(UTC))
+            store_write(self._store.add_wall, wall)
+            store_write(self._store.add_directive, Directive(wall_id=wall.id, sequence=0, pinned_work_id=None))
+        return wall
 
     # -- writes: themes and membership ----------------------------------------
 
     def add_theme(self, *, name: str, description: str | None = None) -> Theme:
         """Record a theme and return it.
 
-        A theme arrives active when no other theme currently is, because a
-        catalogue that has themes and no active one leaves the display plane with
-        no sync target at all — and nothing would report that as a problem. The
-        condition is "none is active" rather than "there are none", so that a
-        catalogue which somehow reached that state is repaired by the next
-        addition rather than staying broken until someone notices.
+        **It hangs nowhere.** A theme is created globally and hanging it is a
+        separate act — `activate_theme` — because with more than one wall there
+        is no wall a new theme could be put on without the curator having chosen
+        one. This method arrived active-if-none-else-is, which was the same
+        automatic promotion `reconcile` did and is dropped for the same reason.
         """
-        with self._store.transaction():
-            theme = Theme(
-                id=str(uuid.uuid4()),
-                name=require_text(name, field="name"),
-                created_at=datetime.now(UTC),
-                description=description,
-                is_active=not any(existing.is_active for existing in self._store.list_themes()),
-            )
-            store_write(self._store.add_theme, theme)
+        theme = Theme(
+            id=str(uuid.uuid4()),
+            name=require_text(name, field="name"),
+            created_at=datetime.now(UTC),
+            description=description,
+        )
+        store_write(self._store.add_theme, theme)
         return theme
 
-    def activate_theme(self, theme_id: str) -> ManifestBuild:
-        """Make this the theme the wall shows, and publish it.
+    def activate_theme(self, theme_id: str, *, wall_id: str) -> ManifestBuild:
+        """Hang this theme on this wall, and publish what follows.
 
-        **Activating rewrites the manifest**, so switching themes changes the
-        wall rather than arming a later `sync`. A curator who chose a theme and
-        found the wall unchanged would reasonably conclude the product was
-        broken, and the two-step alternative exists only as an artefact of how
-        the operations decompose.
+        **The wall is named even while there is one and the answer is obvious.**
+        A confirmation that reads correctly today only because there is one
+        possible target is a sentence that silently becomes wrong the day a
+        second display arrives, and this is the call every such sentence is built
+        from.
+
+        **Hanging rewrites the manifest**, so switching themes changes the wall
+        rather than arming a later `sync`. A curator who chose a theme and found
+        the wall unchanged would reasonably conclude the product was broken, and
+        the two-step alternative exists only as an artefact of how the operations
+        decompose.
 
         The switch costs **zero television writes**: the whole library stays on
         the TV and rotation is driven from here, so this is a file rewrite rather
@@ -163,15 +306,36 @@ class DisplayService:
         how much of itself reached the wall — and a switch that silently put up
         four of a theme's twelve works is the failure this report exists for.
         """
-        theme = self.get_theme(theme_id)
-        activated = replace(theme, is_active=True)
-        with self._store.transaction():
-            for other in self._store.list_themes():
-                if other.is_active and other.id != theme_id:
-                    stood_down = replace(other, is_active=False)
-                    store_write(self._store.update_theme, stood_down)
-            store_write(self._store.update_theme, activated)
-        return self.sync(theme_id)
+        self.get_theme(theme_id)
+        self.get_wall(wall_id)
+        store_write(
+            self._store.set_assignment,
+            ThemeAssignment(wall_id=wall_id, theme_id=theme_id, assigned_at=datetime.now(UTC)),
+        )
+        return self.sync(wall_id, theme_id)
+
+    def clear_wall(self, wall_id: str) -> None:
+        """Take down whatever is hanging, leaving the wall holding nothing.
+
+        The inverse of `activate_theme`, and the operation that keeps a theme
+        deletable: the delete refusal below is absolute about a theme that hangs
+        somewhere, so without a way to take one down a curator could never empty
+        the catalogue.
+
+        **It does not advance the directive sequence and does not clear the pin.**
+        Taking a theme down is not an instruction to the display plane, and an
+        advance here would fire a directive nobody issued — the same reasoning
+        that keeps archiving a pinned work from advancing it.
+
+        **It deliberately does not rewrite the manifest.** The wall keeps showing
+        what it was showing, which is the same posture as curation being stopped
+        entirely and the same one deleting the last theme already had. Publishing
+        an empty manifest would blank the wall as a side effect of tidying up.
+        """
+        self.get_wall(wall_id)
+        if self._store.get_assignment(wall_id) is None:
+            raise ServiceError(f"Nothing is hanging on wall {wall_id!r}, so there is nothing to take down.")
+        store_write(self._store.remove_assignment, wall_id)
 
     def add_to_theme(self, *, theme_id: str, artwork_id: str, position: int | None = None) -> ThemeMembership:
         """Place a work in a theme, optionally at a curated position."""
@@ -235,24 +399,33 @@ class DisplayService:
     def delete_theme(self, theme_id: str) -> None:
         """Remove a theme and its membership rows. The works themselves are untouched.
 
-        The active theme is refused while another exists, rather than deleted and
-        silently repaired: `reconcile` would promote the oldest remaining theme,
-        which means a curator deleting what is on the wall gets *some* other
-        theme on it without having chosen one. Deleting the last theme is allowed
-        — no themes at all is a normal empty state, not the forbidden one.
+        **A theme hanging on any wall is refused**, and the count that matters is
+        walls rather than themes: a theme hung in three rooms is three rooms that
+        lose their picture, so "it is the only theme" is not a reason to permit
+        it. The curator hangs something else, or takes it down, and then deletes
+        — either way what happens to those walls is a choice.
 
-        **Deleting the last theme deliberately does not rewrite the manifest.**
-        The wall keeps showing what it was showing, which is the same posture as
-        curation being stopped entirely: the display plane runs off the last
+        This generalises a narrower rule. Until 2026-08-12 the refusal was "the
+        active theme, while another theme exists", and the last theme was
+        deletable *even while active* because there was no way to take one down
+        and a curator has to be able to empty the catalogue. `clear_wall` is that
+        way, which is what lets this be absolute.
+
+        **A deletion that is permitted does not rewrite any manifest.** A theme
+        that hangs nowhere is on no wall to take a picture off, and a wall whose
+        theme was taken down keeps showing what it was showing — the same posture
+        as curation being stopped entirely: the display plane runs off the last
         manifest indefinitely, and that is normal operation rather than
         degradation. Publishing an empty manifest instead would blank the wall as
         a side effect of tidying up the catalogue.
         """
         theme = self.get_theme(theme_id)
-        if theme.is_active and len(self._store.list_themes()) > 1:
+        hanging = self.walls_hanging(theme_id)
+        if hanging:
+            where = ", ".join(repr(wall.name) for wall in hanging)
             raise ServiceError(
-                f"Theme {theme.name!r} is the one the wall is showing. Activate another theme first, "
-                "so that what replaces it on the wall is a choice rather than whichever is oldest."
+                f"Theme {theme.name!r} is hanging on {where}. Hang another theme there first, or take this one "
+                "down, so that what those walls show next is a choice rather than whatever was on them before."
             )
         with self._store.transaction():
             for membership in self._store.list_memberships(theme_id):
@@ -273,17 +446,22 @@ class DisplayService:
 
     # -- writes: the display directive ----------------------------------------
 
-    def step_display(self) -> Directive:
-        """Tell the display plane to move to the next work.
+    def step_display(self, wall_id: str) -> Directive:
+        """Tell the display serving this wall to move to the next work.
+
+        **One wall's advance leaves every other wall's counter alone**, which is
+        what the directive stopped being a singleton for: a `next` aimed at the
+        living room stepping the study is one counter being asked a question it
+        cannot answer.
 
         The step clears any standing pin. A sequence that advanced while a pin
         was still set would read as "jump to that work again" rather than as
         "move on", so the two directives cannot both be in force.
         """
-        return self._advance(pinned_work_id=None)
+        return self._advance(wall_id, pinned_work_id=None)
 
-    def show_work_now(self, artwork_id: str) -> Directive:
-        """Tell the display plane to jump to this work and carry on from there.
+    def show_work_now(self, wall_id: str, artwork_id: str) -> Directive:
+        """Tell the display serving this wall to jump to this work and carry on from there.
 
         **Refused if the work is not displayable**, with the same reason the
         manifest build would have given. `data-model.md` specifies the refusal
@@ -306,19 +484,26 @@ class DisplayService:
         excluded = assess(self._gather(artwork_id))
         if excluded is not None:
             raise ServiceError(f"Artwork {artwork_id!r} cannot be shown on the wall: {excluded.detail}")
-        return self._advance(pinned_work_id=artwork_id)
+        return self._advance(wall_id, pinned_work_id=artwork_id)
 
     # -- the manifest ---------------------------------------------------------
 
-    def build_manifest(self, theme_id: str | None = None) -> ManifestBuild:
-        """Evaluate a theme's readiness without writing anything.
+    def build_manifest(self, wall_id: str, theme_id: str | None = None) -> ManifestBuild:
+        """Evaluate what a theme would put on one wall, without writing anything.
 
         Separate from `sync` so a curator can ask "what would go on the wall, and
         what would not" before changing what is on it — and so the readiness rule
         is testable without a filesystem.
+
+        **The wall is named, and the theme defaults to what is hanging there.**
+        Exclusions belong to a wall rather than to the installation once two
+        walls can hang different themes, and this route's whole job is to state a
+        consequence before it happens — which it cannot do without knowing whose
+        consequence it is.
         """
-        theme = self.get_theme(theme_id) if theme_id is not None else self._require_active_theme()
-        directive = self._store.get_directive()
+        wall = self.get_wall(wall_id)
+        theme = self.get_theme(theme_id) if theme_id is not None else self._require_hanging(wall)
+        directive = self._store.get_directive(wall_id)
 
         entries = []
         exclusions = []
@@ -331,6 +516,7 @@ class DisplayService:
                 exclusions.append(excluded)
 
         return ManifestBuild(
+            wall=wall,
             theme=theme,
             entries=entries,
             exclusions=exclusions,
@@ -349,7 +535,7 @@ class DisplayService:
             pinned_work_id=directive.pinned_work_id,
         )
 
-    def sync(self, theme_id: str | None = None) -> ManifestBuild:
+    def sync(self, wall_id: str, theme_id: str | None = None) -> ManifestBuild:
         """Rebuild the manifest and publish it to the display plane.
 
         Returns what it wrote **and what it left out**. A caller that only
@@ -360,79 +546,52 @@ class DisplayService:
         converges within the display plane's poll interval, and saying anything
         stronger would assert something this plane cannot observe.
         """
-        build = self.build_manifest(theme_id)
+        build = self.build_manifest(wall_id, theme_id)
         write_atomically(self._settings.manifest_path, as_document(build))
         if build.exclusions:
             # Named at WARNING with the count, because a theme quietly showing
             # fewer works than it holds is precisely this product's
             # characteristic failure.
             log.warning(
-                "Theme %r: %d of %d works are not currently displayable (%s).",
+                "Wall %r, theme %r: %d of %d works are not currently displayable (%s).",
+                build.wall.name,
                 build.theme.name,
                 len(build.exclusions),
                 build.considered,
                 ", ".join(sorted({exclusion.reason.value for exclusion in build.exclusions})),
             )
-        log.info("Wrote manifest for theme %r with %d entries.", build.theme.name, len(build.entries))
+        log.info(
+            "Wrote the manifest for wall %r showing theme %r, with %d entries.",
+            build.wall.name,
+            build.theme.name,
+            len(build.entries),
+        )
         return build
-
-    # -- repair ---------------------------------------------------------------
-
-    def reconcile(self) -> None:
-        """Repair rules a catalogue on disk may predate. Run once, as the plane starts.
-
-        A catalogue file outlives any single version of this code, so a rule added
-        after a file was written has to be brought to that file rather than
-        assumed of it. Exactly one theme active is such a rule: an earlier
-        revision created every theme inactive and offered no way to activate one,
-        so a catalogue from then holds themes with none active — the state the
-        rule forbids, and precisely the one where the display plane has no sync
-        target while nothing reports a problem.
-
-        No ordinary write repairs it. The index the file carries states only "at
-        most one", which that state satisfies; and while adding a theme now
-        promotes one when none is active, a catalogue nobody adds to would stay
-        broken indefinitely.
-
-        The repair is logged at WARNING because it is a silent condition being
-        corrected: nothing else would ever say the catalogue had been in it.
-        """
-        with self._store.transaction():
-            themes = self._store.list_themes()
-            if not themes or any(theme.is_active for theme in themes):
-                return
-            # The oldest theme, so the choice is the same on every machine that
-            # opens the same file rather than whichever the listing happened to
-            # put first.
-            promoted = min(themes, key=lambda theme: (theme.created_at, theme.id))
-            log.warning(
-                "Catalogue held %d theme(s) with none active, which leaves the display plane no sync target; activated %r.",
-                len(themes),
-                promoted.name,
-            )
-            store_write(self._store.update_theme, replace(promoted, is_active=True))
 
     # -- internals ------------------------------------------------------------
 
-    def _advance(self, *, pinned_work_id: str | None) -> Directive:
-        """Move the directive on by one.
+    def _advance(self, wall_id: str, *, pinned_work_id: str | None) -> Directive:
+        """Move one wall's directive on by one.
 
-        The counter only ever increases, for the life of the catalogue. The
-        display plane acts each time it sees the number go up, so a counter that
-        reset — on a manifest rebuild, on a theme switch — would fire a directive
-        nobody issued.
+        The counter only ever increases, for the life of the wall. The display
+        plane acts each time it sees the number go up, so a counter that reset —
+        on a manifest rebuild, on a theme switch — would fire a directive nobody
+        issued.
         """
+        self.get_wall(wall_id)
         with self._store.transaction():
-            current = self._store.get_directive()
-            advanced = Directive(sequence=current.sequence + 1, pinned_work_id=pinned_work_id)
+            current = self._store.get_directive(wall_id)
+            advanced = replace(current, sequence=current.sequence + 1, pinned_work_id=pinned_work_id)
             store_write(self._store.set_directive, advanced)
         return advanced
 
-    def _require_active_theme(self) -> Theme:
-        theme = self.active_theme()
-        if theme is None:
-            raise ServiceError("No theme is active, so there is nothing to put on the wall. Create a theme first.")
-        return theme
+    def _require_hanging(self, wall: Wall) -> Theme:
+        assignment = self._store.get_assignment(wall.id)
+        if assignment is None:
+            raise ServiceError(
+                f"Nothing is hanging on {wall.name!r}, so there is nothing to put on it. Hang a theme there first."
+            )
+        return self.get_theme(assignment.theme_id)
 
     def _gather(self, artwork_id: str) -> WorkInputs:
         """Collect everything the readiness rule judges one work on."""

@@ -37,6 +37,19 @@ def http(server_url):
         yield client
 
 
+@pytest.fixture
+def wall(http):
+    """The wall this deployment has, read off the surface rather than the store.
+
+    Every act that changes a wall names one, so a browser test that reached
+    around the API for the id would be exercising a flow no browser can take —
+    the client has to be able to get here from `GET /api/walls` alone.
+    """
+    walls = http.get("/api/walls").json()["walls"]
+    assert len(walls) == 1, f"a fresh deployment should serve exactly one wall, got {walls}"
+    return walls[0]
+
+
 def card_for(listing: dict, artwork_id: str) -> dict:
     """Pick a work out of a listing by identity, never by title.
 
@@ -362,7 +375,7 @@ class TestHealth:
 
 
 class TestTheWholeLoop:
-    def test_the_whole_curatorial_loop_runs_over_http(self, http, hold):
+    def test_the_whole_curatorial_loop_runs_over_http(self, http, hold, wall):
         """Chunk 10B's acceptance criterion, start to finish.
 
         See the works, build a theme, put it on the wall, and read exactly why a
@@ -381,7 +394,7 @@ class TestTheWholeLoop:
             assert added.status_code == 200
         assert [work["artwork_id"] for work in added.json()["works"]] == [ready.id, no_mat.id, no_render.id]
 
-        activated = http.post(f"/api/themes/{theme['theme_id']}/activate")
+        activated = http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]})
         assert activated.status_code == 200
         published = activated.json()
 
@@ -396,18 +409,20 @@ class TestTheWholeLoop:
         assert published["summary"] == "1 of 3 works in this theme are on the wall; 2 are not currently displayable."
 
         # And the standing view of the wall agrees with what activation returned.
-        standing = http.get("/api/manifest").json()
+        standing = http.get("/api/manifest", params={"wall_id": wall["wall_id"]}).json()
         assert standing["theme"]["theme_id"] == theme["theme_id"]
-        assert standing["theme"]["is_active"] is True
+        # Named, so a confirmation built from this response says which room —
+        # even while there is one wall and the answer looks obvious.
+        assert (standing["wall_id"], standing["wall_name"]) == (wall["wall_id"], wall["name"])
         assert [entry["artwork_id"] for entry in standing["entries"]] == [ready.id]
         assert len(standing["exclusions"]) == 2
 
-    def test_activating_a_theme_publishes_the_manifest_the_display_plane_reads(self, http, hold, settings):
+    def test_activating_a_theme_publishes_the_manifest_the_display_plane_reads(self, http, hold, settings, wall):
         """Activation changes the wall, so it must write the file, not only the row."""
         artwork = hold("Automat", rendered=True, mat=True)
         theme = http.post("/api/themes", json={"name": "Late night"}).json()
         http.post(f"/api/themes/{theme['theme_id']}/works", json={"artwork_id": artwork.id})
-        http.post(f"/api/themes/{theme['theme_id']}/activate")
+        http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]})
         assert settings.manifest_path.is_file()
 
 
@@ -430,11 +445,19 @@ class TestThemeOrder:
         response = http.request("DELETE", f"/api/themes/{theme_id}/works/{ids[1]}")
         assert [work["artwork_id"] for work in response.json()["works"]] == [ids[0], ids[2]]
 
-    def test_the_theme_listing_marks_which_one_is_on_the_wall(self, http, theme_with_three):
+    def test_the_theme_listing_names_the_walls_each_theme_hangs_on(self, http, theme_with_three, wall):
+        """A boolean could say "on the wall"; only a list can say which, and how many."""
         theme_id, _ = theme_with_three
-        http.post(f"/api/themes/{theme_id}/activate")
+        http.post(f"/api/themes/{theme_id}/activate", json={"wall_id": wall["wall_id"]})
+
         themes = http.get("/api/themes").json()["themes"]
-        assert [theme["is_active"] for theme in themes if theme["theme_id"] == theme_id] == [True]
+
+        hung = {entry["theme"]["theme_id"]: entry["hanging_on"] for entry in themes}
+        assert [where["wall_id"] for where in hung[theme_id]] == [wall["wall_id"]]
+        assert [where["name"] for where in hung[theme_id]] == [wall["name"]]
+        # And every other theme says plainly that it hangs nowhere, which is an
+        # ordinary state rather than an absent field.
+        assert all(hung[other] == [] for other in hung if other != theme_id)
 
 
 class TestRefusalsReachTheCurator:
@@ -443,8 +466,8 @@ class TestRefusalsReachTheCurator:
         assert response.status_code == 400
         assert "nope" in response.json()["error"]
 
-    def test_asking_for_the_wall_with_no_active_theme_says_so(self, http):
-        response = http.get("/api/manifest")
+    def test_asking_for_the_wall_with_no_active_theme_says_so(self, http, wall):
+        response = http.get("/api/manifest", params={"wall_id": wall["wall_id"]})
         assert response.status_code == 400
         assert response.json()["error"]
 
@@ -478,13 +501,13 @@ class TestStateThatIsEasyToHide:
         assert gone.id in ids
         assert live.id not in ids
 
-    def test_an_archived_work_leaves_the_wall_with_its_reason_stated(self, http, hold, service):
+    def test_an_archived_work_leaves_the_wall_with_its_reason_stated(self, http, hold, service, wall):
         artwork = hold("Withdrawn", rendered=True, mat=True)
         theme = http.post("/api/themes", json={"name": "Late night"}).json()
         http.post(f"/api/themes/{theme['theme_id']}/works", json={"artwork_id": artwork.id})
         service.archive_artwork(artwork.id)
 
-        published = http.post(f"/api/themes/{theme['theme_id']}/activate").json()
+        published = http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]}).json()
         assert published["entries"] == []
         assert published["exclusions"][0]["reason"] == "archived"
         # Membership is curatorial and survives archiving: the work stays in the
@@ -609,26 +632,26 @@ class TestWhatTheWallSummaryClaims:
     what a curator reads — and prose that ships to a caller is behaviour.
     """
 
-    def test_an_empty_theme_says_it_is_empty_rather_than_reporting_zero_of_zero(self, http):
+    def test_an_empty_theme_says_it_is_empty_rather_than_reporting_zero_of_zero(self, http, wall):
         theme = http.post("/api/themes", json={"name": "Nothing yet"}).json()
-        published = http.post(f"/api/themes/{theme['theme_id']}/activate").json()
+        published = http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]}).json()
 
         assert published["summary"] == "This theme holds no works yet, so nothing is on the wall."
         assert published["considered"] == 0
 
-    def test_a_theme_with_nothing_missing_states_the_full_count(self, http, hold):
+    def test_a_theme_with_nothing_missing_states_the_full_count(self, http, hold, wall):
         """ "2 of 2" is what makes "1 of 2" legible, so the clean case is stated too."""
         theme = http.post("/api/themes", json={"name": "All good"}).json()
         for title in ("Automat", "Chop Suey"):
             artwork = hold(title, rendered=True, mat=True)
             http.post(f"/api/themes/{theme['theme_id']}/works", json={"artwork_id": artwork.id})
 
-        published = http.post(f"/api/themes/{theme['theme_id']}/activate").json()
+        published = http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]}).json()
 
         assert published["summary"] == "All 2 works in this theme are on the wall."
         assert published["exclusions"] == []
 
-    def test_the_browser_summary_carries_no_pointer_at_a_tool_result_field(self, http, hold):
+    def test_the_browser_summary_carries_no_pointer_at_a_tool_result_field(self, http, hold, wall):
         """The shared sentence stops at the counts; `not_displayable` is the MCP surface's word.
 
         A browser has no field by that name, so a summary naming one would be
@@ -638,7 +661,7 @@ class TestWhatTheWallSummaryClaims:
         artwork = hold("Unrendered", mat=True)
         http.post(f"/api/themes/{theme['theme_id']}/works", json={"artwork_id": artwork.id})
 
-        published = http.post(f"/api/themes/{theme['theme_id']}/activate").json()
+        published = http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]}).json()
 
         assert "not_displayable" not in published["summary"]
         assert published["summary"] == "0 of 1 works in this theme are on the wall; 1 are not currently displayable."

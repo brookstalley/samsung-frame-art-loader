@@ -15,7 +15,15 @@ import pathlib
 
 #: Modules that may bind to the storage driver directly. Everything else reaches
 #: storage through the `CatalogueStore` contract.
-_MAY_IMPORT_SQLITE = {"curation.persistence.durable"}
+_MAY_IMPORT_SQLITE = {
+    "curation.persistence.durable",
+    # A migration moves rows between shapes and takes columns and tables away.
+    # None of that is expressible through a contract over records — the whole
+    # point of the contract is that it does not know the file has tables — so
+    # this one reaches the driver by necessity rather than by convenience. It
+    # stays inside the persistence package, which is the line this guard draws.
+    "curation.persistence.migrations",
+}
 
 _DRIVER = "sqlite3"
 _SOURCE_ROOT = pathlib.Path(__file__).resolve().parents[2] / "src"

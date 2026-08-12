@@ -541,7 +541,7 @@ class TestWhereTheCacheMayLive:
 
 
 class TestReadinessIsUnaffected:
-    def test_a_thumbnail_does_not_make_a_work_displayable(self, thumbnails, service, display, work):
+    def test_a_thumbnail_does_not_make_a_work_displayable(self, thumbnails, service, display, work, wall_id):
         """A thumbnail is a curation convenience; the wall wants a television render.
 
         Recorded as a test because both are `Rendition` rows, and a readiness rule
@@ -553,7 +553,7 @@ class TestReadinessIsUnaffected:
         thumbnails.thumbnail(artwork.id)
         theme = display.add_theme(name="Evening")
         display.add_to_theme(theme_id=theme.id, artwork_id=artwork.id)
-        build = display.build_manifest(theme.id)
+        build = display.build_manifest(wall_id, theme.id)
         assert [exclusion.reason for exclusion in build.exclusions] == ["no_rendition"]
 
 

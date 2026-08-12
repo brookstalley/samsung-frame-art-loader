@@ -33,11 +33,11 @@ from curation.mcp.envelope import ImageBlock, ok, with_images
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
 from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, RunKind, RunStatus
-from curation.persistence.records import Artist, Artwork, Directive, Source, Theme
+from curation.persistence.records import Artist, Artwork, Directive, Source, Theme, Wall
 from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing
 from curation.services.container import Services
 from curation.services.discovery import VerdictOutcome
-from curation.services.display import UNSET
+from curation.services.display import UNSET, ThemePlacement, WallView
 from curation.services.display_fit import DisplayFit
 from curation.services.errors import ServiceError
 from curation.services.previews import InlinePreview
@@ -297,8 +297,12 @@ def _sources_notice(sources: Sequence[Source]) -> str | None:
 
 
 def _list_themes(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    themes = services.display.list_themes()
-    return ok(themes=[_theme_fields(theme) for theme in themes], count=len(themes))
+    # Where each theme hangs travels with it, because "which one is on the wall"
+    # is what this listing is read to answer — and a caller that had to ask per
+    # theme would ask once and guess after. The pairing is the service's, not
+    # this binding's: the browser surface states the same fact.
+    placements = services.display.survey_themes()
+    return ok(themes=[_placement_fields(placement) for placement in placements], count=len(placements))
 
 
 def _get_theme(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -356,9 +360,19 @@ def _reorder_in_theme(services: Services, arguments: Mapping[str, Any]) -> dict[
 
 
 def _activate_theme(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    # Activating publishes, so this answers with the same shape as `sync` — the
+    # Hanging publishes, so this answers with the same shape as `sync` — the
     # caller needs to know how much of the theme actually reached the wall.
-    return _built(services.display.activate_theme(arguments["theme_id"]))
+    return _built(services.display.activate_theme(arguments["theme_id"], wall_id=arguments["wall_id"]))
+
+
+def _unhang(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    services.display.clear_wall(arguments["wall_id"])
+    return ok(
+        wall_id=arguments["wall_id"],
+        # The contract's own words: nothing is republished, so a result implying
+        # the wall had gone blank would be wrong about the thing that matters.
+        notice="Nothing is hanging there now. The wall goes on showing what it was showing until a theme is hung.",
+    )
 
 
 def _estimate(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -624,7 +638,16 @@ def _wall_status(services: Services, arguments: Mapping[str, Any]) -> dict[str, 
 
 
 def _sync(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    return _built(services.display.sync(arguments.get("theme_id")))
+    return _built(services.display.sync(arguments["wall_id"], arguments.get("theme_id")))
+
+
+def _list_walls(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    views = services.display.survey_walls()
+    return ok(walls=[_wall_view_fields(view) for view in views], count=len(views))
+
+
+def _add_wall(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    return ok(wall=_wall_fields(services.display.add_wall(name=arguments["name"])))
 
 
 def _built(build: ManifestBuild) -> dict[str, Any]:
@@ -635,6 +658,10 @@ def _built(build: ManifestBuild) -> dict[str, Any]:
     exclusions from one path and not the other.
     """
     return ok(
+        # The wall by name, so a caller reporting back says "in the living room"
+        # rather than "on the wall" — a sentence that reads correctly today only
+        # because there is one wall is one that silently becomes wrong.
+        wall=_wall_fields(build.wall),
         theme=_theme_fields(build.theme),
         on_the_wall=[{"artwork_id": entry.work_id, "title": entry.label["title"]} for entry in build.entries],
         # Never omitted when empty: a caller that saw this key only sometimes
@@ -656,12 +683,12 @@ def _built(build: ManifestBuild) -> dict[str, Any]:
 
 
 def _show_now(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    directive = services.display.show_work_now(arguments["artwork_id"])
+    directive = services.display.show_work_now(arguments["wall_id"], arguments["artwork_id"])
     return ok(**_directive_fields(directive))
 
 
 def _next(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    return ok(**_directive_fields(services.display.step_display()))
+    return ok(**_directive_fields(services.display.step_display(arguments["wall_id"])))
 
 
 #: Every built action, keyed by tool and action name. A tool absent from here
@@ -699,6 +726,9 @@ BINDINGS: Final[Mapping[tuple[str, str], Binding]] = {
     ("art_theme", "remove"): _remove_from_theme,
     ("art_theme", "reorder"): _reorder_in_theme,
     ("art_theme", "activate"): _activate_theme,
+    ("art_theme", "unhang"): _unhang,
+    ("art_display", "walls"): _list_walls,
+    ("art_display", "add_wall"): _add_wall,
     ("art_display", "status"): _wall_status,
     ("art_display", "sync"): _sync,
     ("art_display", "show_now"): _show_now,
@@ -847,7 +877,6 @@ def _theme_fields(theme: Theme) -> dict[str, Any]:
         "theme_id": theme.id,
         "name": theme.name,
         "description": theme.description,
-        "is_active": theme.is_active,
         # Null means "inherit the deployment default" rather than "unset", so it
         # is reported as it is stored rather than resolved to a number that would
         # read as a choice the curator made.
@@ -857,8 +886,31 @@ def _theme_fields(theme: Theme) -> dict[str, Any]:
     }
 
 
+def _wall_fields(wall: Wall) -> dict[str, Any]:
+    """One wall as a caller sees it: a place and a name, never a device."""
+    return {"wall_id": wall.id, "name": wall.name, "created_at": _moment(wall.created_at)}
+
+
+def _wall_view_fields(view: WallView) -> dict[str, Any]:
+    """One wall, what hangs on it, and what it was last told to do."""
+    return {
+        **_wall_fields(view.wall),
+        # Never omitted when nothing hangs: a key a caller saw only sometimes
+        # would be read as "there is always something", and an empty wall is an
+        # ordinary state this surface has to be able to state.
+        "hanging": None if view.hanging is None else _theme_fields(view.hanging),
+        "directive": _directive_fields(view.directive),
+    }
+
+
+def _placement_fields(placement: ThemePlacement) -> dict[str, Any]:
+    """One theme and every wall showing it."""
+    return {**_theme_fields(placement.theme), "hanging_on": [_wall_fields(wall) for wall in placement.walls]}
+
+
 def _directive_fields(directive: Directive) -> dict[str, Any]:
     return {
+        "wall_id": directive.wall_id,
         "sequence": directive.sequence,
         "pinned_work_id": directive.pinned_work_id,
         # The contract's own words. This action cannot observe the television, so

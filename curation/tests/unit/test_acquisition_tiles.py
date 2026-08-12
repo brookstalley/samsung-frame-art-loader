@@ -103,7 +103,7 @@ class TestTheContainerWiresResolutionFromTheConfiguredProvider:
     """
 
     def _container(
-        self, store, discovery_store, wall, thumbnail_settings, settings, engine, image_search, tmp_path, resolve=None
+        self, store, discovery_store, wall_settings, thumbnail_settings, settings, engine, image_search, tmp_path, resolve=None
     ):
         from curation.services.container import Services
         from curation.services.previews import PreviewSettings
@@ -111,7 +111,7 @@ class TestTheContainerWiresResolutionFromTheConfiguredProvider:
         services = Services.bind(
             catalogue=store,
             discovery=discovery_store,
-            wall=wall,
+            wall=wall_settings,
             thumbnails=thumbnail_settings,
             artwork_box=settings.tv_artwork_box,
             engine=engine,
@@ -161,7 +161,7 @@ class TestTheContainerWiresResolutionFromTheConfiguredProvider:
         return work
 
     def test_a_configured_provider_is_consulted_on_a_real_acquisition(
-        self, store, discovery_store, wall, thumbnail_settings, settings, engine, tmp_path
+        self, store, discovery_store, wall_settings, thumbnail_settings, settings, engine, tmp_path
     ):
         from fakes import FakeImageSearch
 
@@ -171,7 +171,7 @@ class TestTheContainerWiresResolutionFromTheConfiguredProvider:
         # proceed would build a real museum URL and hand it to the real
         # dezoomify-rs — a default-suite test fetching from the Art Institute.
         museum = FakeImageSearch(unreachable=True)
-        services = self._container(store, discovery_store, wall, thumbnail_settings, settings, engine, museum, tmp_path)
+        services = self._container(store, discovery_store, wall_settings, thumbnail_settings, settings, engine, museum, tmp_path)
         work = self._artic_work(services)
 
         result = services.acquisition.acquire(work.id)
@@ -181,17 +181,17 @@ class TestTheContainerWiresResolutionFromTheConfiguredProvider:
         assert result.outcome is AcquisitionOutcome.FAILED
 
     def test_with_no_provider_configured_an_artic_fetch_refuses_rather_than_passing_it_on(
-        self, store, discovery_store, wall, thumbnail_settings, settings, engine, tmp_path
+        self, store, discovery_store, wall_settings, thumbnail_settings, settings, engine, tmp_path
     ):
         """The keyless deployment, which is what every seeded install starts as."""
-        services = self._container(store, discovery_store, wall, thumbnail_settings, settings, engine, None, tmp_path)
+        services = self._container(store, discovery_store, wall_settings, thumbnail_settings, settings, engine, None, tmp_path)
         work = self._artic_work(services)
 
         with pytest.raises(TileTargetUnavailable):
             services.acquisition.acquire(work.id)
 
     def test_a_tiled_source_is_not_gated_on_its_provenance_url_being_reachable(
-        self, store, discovery_store, wall, thumbnail_settings, settings, engine, tmp_path
+        self, store, discovery_store, wall_settings, thumbnail_settings, settings, engine, tmp_path
     ):
         """`Source.url` identifies the object. On this path nothing ever fetches it.
 
@@ -215,7 +215,7 @@ class TestTheContainerWiresResolutionFromTheConfiguredProvider:
             raise OSError("no address associated with hostname")
 
         services = self._container(
-            store, discovery_store, wall, thumbnail_settings, settings, engine, museum, tmp_path, resolve=_no_such_host
+            store, discovery_store, wall_settings, thumbnail_settings, settings, engine, museum, tmp_path, resolve=_no_such_host
         )
         work = self._artic_work(services)
 

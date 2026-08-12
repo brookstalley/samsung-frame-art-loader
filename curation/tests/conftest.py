@@ -60,6 +60,7 @@ from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 from curation.persistence.discovery_records import DiscoveryRun, InitiatedBy
 from curation.persistence.durable import SqliteDurableStore
 from curation.persistence.file import open_catalogue_file
+from curation.persistence.migrations import DEFAULT_WALL_NAME
 from curation.persistence.records import (
     AcquisitionMethod,
     FetchStatus,
@@ -100,6 +101,21 @@ def store(catalogue_file: SqliteDurableStore) -> SqliteCatalogue:
 
 
 @pytest.fixture
+def wall_id(store: SqliteCatalogue) -> str:
+    """The wall a freshly opened catalogue file already has.
+
+    Opening the file establishes one, named from configuration, because a
+    catalogue with no wall has nowhere to hang anything and every operation that
+    changes a wall names one. Read back rather than remembered: the id is a UUID
+    minted at open, and a test that invented one would be asserting against a
+    wall the plane does not have.
+    """
+    walls = store.list_walls()
+    assert len(walls) == 1, f"a freshly opened catalogue should have exactly one wall_settings, found {len(walls)}"
+    return walls[0].id
+
+
+@pytest.fixture
 def discovery_store(catalogue_file: SqliteDurableStore) -> SqliteDiscovery:
     return SqliteDiscovery(catalogue_file)
 
@@ -124,6 +140,7 @@ def settings(tmp_path) -> Settings:
         heartbeat_path=tmp_path / HEARTBEAT_FILENAME,
         host=DEFAULT_HOST,
         port=DEFAULT_PORT,
+        wall_name=DEFAULT_WALL_NAME,
         acquisition_user_agent=DEFAULT_ACQUISITION_USER_AGENT,
         tile_binary=DEFAULT_TILE_BINARY,
         tile_max_pixels=DEFAULT_TILE_MAX_PIXELS,
@@ -160,7 +177,7 @@ def settings(tmp_path) -> Settings:
 
 
 @pytest.fixture
-def wall(settings: Settings) -> WallSettings:
+def wall_settings(settings: Settings) -> WallSettings:
     """A manifest destination of this test's own, and the shipped rotation defaults."""
     return WallSettings(
         manifest_path=settings.manifest_path,
@@ -191,7 +208,7 @@ def engine() -> FakeEngine:
 def services(
     store: SqliteCatalogue,
     discovery_store: SqliteDiscovery,
-    wall: WallSettings,
+    wall_settings: WallSettings,
     thumbnail_settings: ThumbnailSettings,
     settings: Settings,
     engine: FakeEngine,
@@ -200,7 +217,7 @@ def services(
     bound = Services.bind(
         catalogue=store,
         discovery=discovery_store,
-        wall=wall,
+        wall=wall_settings,
         thumbnails=thumbnail_settings,
         # Derived by the same property the entry point calls, so a test never
         # asserts against a box a real deployment would not produce.

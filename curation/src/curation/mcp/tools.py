@@ -597,19 +597,33 @@ _POSITION = Param(
     minimum=0,
 )
 
+#: One description across both tools, because every action's parameters flatten
+#: onto a single wire schema and only the first description survives. Required
+#: wherever it appears: an action that guessed the wall would be worse here than
+#: on the web surface, where at least a confirmation dialog could catch it.
+_WALL_ID = Param(
+    name="wall_id",
+    type="string",
+    description="Which wall to act on, as returned by art_display(action='walls'). Required even when there is one.",
+    required=True,
+)
+
 ART_THEME: Final = ToolRecord(
     name="art_theme",
     title="Art themes",
-    summary="Group works into themes and choose which one the wall is showing.",
+    summary="Group works into themes, and hang a theme on a named wall.",
     read_only=False,
     destructive=True,
     open_world=False,
     actions=(
         Action(
             name="list",
-            description="Return every theme, with which one is active.",
+            description="Return every theme, with the walls each is hanging on.",
             example="art_theme(action='list')",
-            tips=("Exactly one theme is active whenever any theme exists; that is the one the wall syncs from.",),
+            tips=(
+                "A theme is global and hangs nowhere until action='activate' puts it on a named wall. "
+                "The same theme may hang on several walls at once, and a theme hanging on none is normal.",
+            ),
         ),
         Action(
             name="get",
@@ -623,7 +637,7 @@ ART_THEME: Final = ToolRecord(
         ),
         Action(
             name="create",
-            description="Create a theme. It becomes active if no other theme currently is.",
+            description="Create a theme. It hangs nowhere until action='activate' puts it on a wall.",
             example="art_theme(action='create', name='American Modernists')",
             params=(
                 Param(name="name", type="string", description="What to call the theme. Must be unique.", required=True),
@@ -661,8 +675,9 @@ ART_THEME: Final = ToolRecord(
             example="art_theme(action='delete', theme_id='<a theme_id>')",
             params=(_THEME_ID,),
             tips=(
-                "The active theme is refused while another exists — activate the one that should replace it first, "
-                "so what lands on the wall is a choice.",
+                "A theme hanging on any wall is refused, and the refusal names those walls. Hang something else "
+                "there with action='activate', or take it down with action='unhang', and then delete. This holds "
+                "even when it is the only theme: a wall losing its picture has to be a choice.",
             ),
         ),
         Action(
@@ -701,15 +716,29 @@ ART_THEME: Final = ToolRecord(
         ),
         Action(
             name="activate",
-            description="Make this the theme the wall shows, and the only one.",
-            example="art_theme(action='activate', theme_id='<a theme_id>')",
-            params=(_THEME_ID,),
+            description="Hang this theme on a named wall, replacing whatever was hanging there.",
+            example="art_theme(action='activate', theme_id='<a theme_id>', wall_id='<a wall_id>')",
+            params=(_THEME_ID, _WALL_ID),
             tips=(
+                "The wall is required even when there is only one, so the confirmation you report names it. "
+                "Get wall ids from art_display(action='walls').",
                 "This publishes the theme: it rewrites the manifest, so the wall converges on it "
                 "within about a second. No separate sync is needed.",
                 "The result names every member that will NOT be on the wall and why, exactly as "
                 "art_display(action='sync') does — a theme can be half-displayable.",
                 "Switching costs no television writes: the whole library stays on the TV and rotation is driven from here.",
+            ),
+        ),
+        Action(
+            name="unhang",
+            description="Take down whatever is hanging on a wall, leaving it holding nothing.",
+            example="art_theme(action='unhang', wall_id='<a wall_id>')",
+            params=(_WALL_ID,),
+            tips=(
+                "Refused when nothing is hanging on that wall — there is nothing to take down.",
+                "The wall goes on showing what it was showing until something else is hung: no manifest is "
+                "rewritten, because publishing an empty one would blank the wall as a side effect of tidying up.",
+                "This is how a theme that is refused by action='delete' becomes deletable.",
             ),
         ),
     ),
@@ -718,7 +747,7 @@ ART_THEME: Final = ToolRecord(
 _SYNC_THEME_ID = Param(
     name="theme_id",
     type="string",
-    description="Which theme to publish. Omit to publish the active one, which is the usual case.",
+    description="Which theme to publish. Omit to publish the one already hanging on that wall, which is the usual case.",
 )
 
 ART_DISPLAY: Final = ToolRecord(
@@ -730,20 +759,43 @@ ART_DISPLAY: Final = ToolRecord(
     open_world=False,
     actions=(
         Action(
+            name="walls",
+            description="Return every wall, with the theme hanging on each and that wall's directive.",
+            example="art_display(action='walls')",
+            tips=(
+                "Start here: every other action on this tool and art_theme(action='activate') needs a wall_id, "
+                "and this is where they come from.",
+                "A wall with no theme hanging on it is an ordinary state, not a fault.",
+            ),
+        ),
+        Action(
+            name="add_wall",
+            description="Record a wall — a place where art hangs. It arrives with nothing on it.",
+            example="art_display(action='add_wall', name='Living room')",
+            params=(Param(name="name", type="string", description="What to call the wall. Must be unique.", required=True),),
+            tips=(
+                "A wall is a place and a name, never a device: which display serves it is that display's own "
+                "configuration, and nothing about a television is recorded here.",
+            ),
+        ),
+        Action(
             name="status",
             description="Report what the display plane last said about itself, and how long ago.",
             example="art_display(action='status')",
             tips=(
                 "This reports an observation and its age in seconds, never a verdict about health. "
                 "If the display plane has never run, it says so plainly rather than reporting a zero.",
+                "It takes no wall: the display plane still writes one heartbeat for the installation.",
             ),
         ),
         Action(
             name="sync",
-            description="Rebuild the theme manifest so the wall converges on the active theme.",
-            example="art_display(action='sync')",
-            params=(_SYNC_THEME_ID,),
+            description="Rebuild the theme manifest so a named wall converges on what is hanging there.",
+            example="art_display(action='sync', wall_id='<a wall_id>')",
+            params=(_WALL_ID, _SYNC_THEME_ID),
             tips=(
+                "Refused when nothing is hanging on that wall and no theme_id is given — there is nothing "
+                "to put on it. Hang one with art_theme(action='activate') first.",
                 "The result names every theme member that will NOT be on the wall and why. "
                 "A theme can be half-displayable, and this is the only place that says so.",
                 "Switching themes costs no television writes: the whole library stays on the TV "
@@ -752,9 +804,9 @@ ART_DISPLAY: Final = ToolRecord(
         ),
         Action(
             name="show_now",
-            description="Ask the wall to jump to one work and carry on rotating from there.",
-            example="art_display(action='show_now', artwork_id='<an artwork_id>')",
-            params=(Param(name="artwork_id", type="string", description="The work to jump to.", required=True),),
+            description="Ask a named wall to jump to one work and carry on rotating from there.",
+            example="art_display(action='show_now', wall_id='<a wall_id>', artwork_id='<an artwork_id>')",
+            params=(_WALL_ID, Param(name="artwork_id", type="string", description="The work to jump to.", required=True)),
             tips=(
                 "Any work that could not reach the wall is refused rather than pinned — archived, "
                 "missing its master image, mat colour or television render, or carrying a render "
@@ -765,9 +817,14 @@ ART_DISPLAY: Final = ToolRecord(
         ),
         Action(
             name="next",
-            description="Ask the wall to step to the next work in the current theme.",
-            example="art_display(action='next')",
-            tips=("Repeated calls inside one poll interval coalesce into a single step — latest wins.",),
+            description="Ask a named wall to step to the next work in the theme hanging on it.",
+            example="art_display(action='next', wall_id='<a wall_id>')",
+            params=(_WALL_ID,),
+            tips=(
+                "It steps that wall and no other: each wall carries its own counter, so a step in the living "
+                "room leaves the study where it was.",
+                "Repeated calls inside one poll interval coalesce into a single step — latest wins.",
+            ),
         ),
     ),
 )

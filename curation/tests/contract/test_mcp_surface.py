@@ -13,7 +13,7 @@ from mcp.client.streamable_http import streamable_http_client
 
 from curation.manifest.builder import ExclusionReason, assess
 from curation.mcp.registry import DESCRIPTION_BUDGET_BYTES
-from curation.mcp.tools import ART_DISPLAY, TOOLS
+from curation.mcp.tools import ART_DISPLAY, ART_THEME, TOOLS, TOOLS_BY_NAME
 from curation.persistence.records import FetchStatus
 from curation.services.errors import ServiceError
 
@@ -197,7 +197,7 @@ def test_every_reason_show_now_can_refuse_for_is_named_in_its_tip():
         (ExclusionReason.NO_RENDITION, {"rendition": False}),
     ],
 )
-def test_each_documented_refusal_is_one_the_service_actually_raises(display, ready_work, reason, unready):
+def test_each_documented_refusal_is_one_the_service_actually_raises(display, ready_work, reason, unready, wall_id):
     """The other half: the tip must not promise a refusal the code does not make.
 
     Driving the real service rather than reading the table above, so this pins
@@ -211,14 +211,14 @@ def test_each_documented_refusal_is_one_the_service_actually_raises(display, rea
     assert excluded.reason is reason, "the fixture did not reach the state this row is about"
 
     with pytest.raises(ServiceError) as refused:
-        display.show_work_now(work.id)
+        display.show_work_now(wall_id, work.id)
 
     # The tip promises the refusal uses the same words sync uses for an
     # excluded work. That is the claim under test, not a shared noun.
     assert excluded.detail in str(refused.value)
 
 
-def test_an_archived_work_is_refused_in_the_words_the_tip_uses(service, display, ready_work):
+def test_an_archived_work_is_refused_in_the_words_the_tip_uses(service, display, ready_work, wall_id):
     work = ready_work()
     service.archive_artwork(work.id)
 
@@ -226,13 +226,13 @@ def test_an_archived_work_is_refused_in_the_words_the_tip_uses(service, display,
     assert excluded.reason is ExclusionReason.ARCHIVED
 
     with pytest.raises(ServiceError) as refused:
-        display.show_work_now(work.id)
+        display.show_work_now(wall_id, work.id)
 
     assert excluded.detail in str(refused.value)
     assert "archived" in str(refused.value).lower()
 
 
-def test_a_stale_render_is_refused_in_the_words_the_tip_uses(service, display, ready_work):
+def test_a_stale_render_is_refused_in_the_words_the_tip_uses(service, display, ready_work, wall_id):
     """Re-acquiring leaves the previous render in place, and it is no longer of this image."""
     work = ready_work()
     source = service.list_sources(work.id)[0]
@@ -253,10 +253,168 @@ def test_a_stale_render_is_refused_in_the_words_the_tip_uses(service, display, r
     assert excluded.reason is ExclusionReason.STALE_RENDITION
 
     with pytest.raises(ServiceError) as refused:
-        display.show_work_now(work.id)
+        display.show_work_now(wall_id, work.id)
 
     assert excluded.detail in str(refused.value)
     assert "earlier acquisition" in str(refused.value).lower()
+
+
+# -- the wall a refusal turns on must be in the text that documents it ----------
+#
+# `delete_theme` refused before this chunk and refuses after it, and the *reason*
+# changed underneath: "the active theme, while another exists" became "a theme
+# hanging on any wall". A refusal that changes without its tip changing is the
+# drift the guards above exist for, and it has now happened twice on this file's
+# watch, so the delete tip gets the same treatment `show_now`'s did.
+
+#: What every cause `delete_theme` can refuse for must be recognisable by in the
+#: tip. One cause today, which is the whole shape of the generalisation: the
+#: theme-count clause went away, so a table with a `last theme` row in it would be
+#: documenting a rule the code no longer has.
+_DELETE_TIP_PREPARES_FOR = {"hung on a wall": ("hanging", "wall")}
+
+#: Words the retired rule used, which must not survive anywhere in this tool's
+#: prose. Asserting the absence rather than only the presence: a tip can name the
+#: new rule and go on stating the old one beside it, and a caller reading both
+#: learns a rule the service will not honour.
+_RETIRED_SINGLE_WALL_PHRASES = (
+    "the active theme",
+    "while another exists",
+    "whichever is oldest",
+    "exactly one theme is active",
+    "and the only one",
+)
+
+
+def _tool_prose(record) -> str:
+    """Every sentence a client can read off one tool record."""
+    parts = [record.summary]
+    for action in record.actions:
+        parts.extend([action.description, *action.tips])
+    return " ".join(parts).lower()
+
+
+def test_the_delete_tip_states_the_refusal_the_service_actually_makes(display, wall_id, ready_work):
+    """Driven through the real service, so the tip is pinned to behaviour.
+
+    The check runs both ways round. The tip has to prepare a caller for the
+    refusal that fires, and the service has to actually fire it — a tip promising
+    a refusal nobody makes is the same defect wearing the other face.
+    """
+    theme = display.add_theme(name="Late night")
+    display.add_to_theme(theme_id=theme.id, artwork_id=ready_work().id)
+    display.activate_theme(theme.id, wall_id=wall_id)
+
+    with pytest.raises(ServiceError) as refused:
+        display.delete_theme(theme.id)
+
+    action = next(entry for entry in ART_THEME.actions if entry.name == "delete")
+    tips = " ".join(action.tips).lower()
+    for cause, tokens in _DELETE_TIP_PREPARES_FOR.items():
+        for token in tokens:
+            assert token in tips, f"the delete tip does not prepare a caller for {cause!r}"
+    # And the tip's remedy is one the surface offers: an instruction naming an
+    # action that does not exist is worse than none.
+    assert {entry.name for entry in ART_THEME.actions} >= {"activate", "unhang"}
+    assert "unhang" in tips
+    # The refusal names the wall, which is the whole reason the wall has a name.
+    assert "the wall" in str(refused.value).lower()
+
+
+def test_the_refusal_no_longer_fires_for_the_rule_it_used_to(display, wall_id):
+    """The other half of the generalisation: a theme that hangs nowhere is deletable.
+
+    It was refused while it was the active theme and another existed, and that
+    clause is gone — so a second theme, unhung, deletes even though a theme is
+    hanging elsewhere in the catalogue.
+    """
+    hanging = display.add_theme(name="Late night")
+    spare = display.add_theme(name="Daylight")
+    display.activate_theme(hanging.id, wall_id=wall_id)
+
+    display.delete_theme(spare.id)
+
+    assert [theme.id for theme in display.list_themes()] == [hanging.id]
+
+
+def test_the_last_theme_becomes_deletable_by_being_taken_down(display, wall_id):
+    """The route the tip points at has to work, or the refusal is a dead end.
+
+    Deleting the last theme was permitted even while active, ratified 2026-08-11
+    *because* there was no way to take one down — so a curator could never empty
+    the catalogue. The refusal is absolute now, and this is what pays for that.
+    """
+    only = display.add_theme(name="Late night")
+    display.activate_theme(only.id, wall_id=wall_id)
+
+    with pytest.raises(ServiceError):
+        display.delete_theme(only.id)
+
+    display.clear_wall(wall_id)
+    display.delete_theme(only.id)
+
+    assert display.list_themes() == []
+
+
+@pytest.mark.parametrize("record", TOOLS, ids=lambda record: record.name)
+def test_no_tool_still_teaches_the_single_wall_rule_it_replaced(record):
+    """Retiring a rule is a sweep of the sentences that taught it, not a local edit.
+
+    The prose is the contract a model reads, and a retired rule left in it is
+    indistinguishable from a live one to the only reader that matters.
+    """
+    prose = _tool_prose(record)
+    surviving = [phrase for phrase in _RETIRED_SINGLE_WALL_PHRASES if phrase in prose]
+
+    assert not surviving, f"{record.name} still teaches the retired single-wall rule: {surviving}"
+
+
+#: Every action that changes one wall. Written out rather than derived from the
+#: parameter lists, because deriving it from what the code declares would make
+#: this test agree with any answer the code gave — including an action that
+#: quietly stopped naming a wall.
+_ACTS_ON_ONE_WALL = {
+    ("art_theme", "activate"),
+    ("art_theme", "unhang"),
+    ("art_display", "sync"),
+    ("art_display", "show_now"),
+    ("art_display", "next"),
+}
+
+
+@pytest.mark.parametrize(("tool_name", "action_name"), sorted(_ACTS_ON_ONE_WALL))
+def test_every_act_against_a_wall_names_which_wall(tool_name, action_name):
+    """Required even while there is one wall and the answer is obvious.
+
+    An action that guessed the wall is worse here than on the web surface, where
+    a confirmation dialog could at least catch it. The example is asserted too:
+    it is what a model copies, and one that omitted the parameter would teach a
+    call the schema refuses.
+    """
+    record = TOOLS_BY_NAME[tool_name]
+    action = next(entry for entry in record.actions if entry.name == action_name)
+
+    wall = next((param for param in action.params if param.name == "wall_id"), None)
+    assert wall is not None, f"{tool_name}(action={action_name!r}) does not take a wall"
+    assert wall.required, f"{tool_name}(action={action_name!r}) makes the wall optional"
+    assert "wall_id=" in action.example, f"{tool_name}(action={action_name!r})'s example omits the wall"
+
+
+def test_the_walls_action_is_where_every_wall_id_comes_from(tools):
+    """An action is only usable if its arguments are obtainable from something built.
+
+    Five actions require a `wall_id` and nothing else on the surface returns one,
+    so this listing is load-bearing rather than a convenience — and the actions
+    that need it say where to get it.
+    """
+    assert "walls" in tools["art_display"].inputSchema["properties"]["action"]["enum"]
+
+    for tool_name, action_name in sorted(_ACTS_ON_ONE_WALL):
+        record = TOOLS_BY_NAME[tool_name]
+        action = next(entry for entry in record.actions if entry.name == action_name)
+        wall = next(param for param in action.params if param.name == "wall_id")
+        pointer = " ".join([wall.description, *action.tips]).lower()
+        assert "walls" in pointer, f"{tool_name}(action={action_name!r}) never says where a wall id comes from"
 
 
 def test_a_parameter_that_is_required_by_some_actions_is_described_neutrally(tools):
