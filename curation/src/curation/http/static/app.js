@@ -621,17 +621,27 @@ async function viewManifest(generation) {
   );
 
   const panels = [el("h2", { text: "The walls" })];
-  for (const wall of walls.walls.filter((candidate) => !candidate.theme)) {
+  const empty = walls.walls.filter((candidate) => !candidate.theme);
+  for (const wall of empty) {
     panels.push(el("p", { class: "muted", text: `Nothing is hanging on ${wall.name}. Hang a theme from Themes.` }));
-    // The fact the MCP surface already states after an unhang, said here too.
-    // Taking a theme down rewrites no manifest, so the set goes on showing the
-    // picture — and a curator who read only the line above would take a
-    // successful take-down for a failed one, which is the same inference
-    // `activate_theme` cites when it argues hanging must publish immediately.
+  }
+  // The fact the MCP surface already states after an unhang, said here too:
+  // taking a theme down rewrites no manifest, so the set goes on showing the
+  // picture. A curator who read only the lines above would take a successful
+  // take-down for a failed one — the same inference `activate_theme`'s docstring
+  // cites when it argues that hanging must publish immediately.
+  //
+  // Once, after the list, rather than once per wall: it is one fact about how
+  // taking down works, not a property of any particular wall, and three empty
+  // rooms would otherwise print it three times. It is the MCP binding's own
+  // sentence with "The wall" widened to "A wall", because here it stands under a
+  // list rather than after one wall's take-down — two surfaces stating one fact
+  // in different words is how a reader learns to trust neither.
+  if (empty.length) {
     panels.push(
       el("p", {
         class: "note",
-        text: "Taking a theme down does not blank the wall: the display goes on showing what it last received until a theme is hung.",
+        text: "A wall goes on showing what it was showing until a theme is hung.",
       }),
     );
   }

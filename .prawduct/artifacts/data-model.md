@@ -444,10 +444,12 @@ naming and grouping concept, not an accounts concept.
 > below. Two walls may hang the same theme, and that requires no duplication,
 > which is the property the boolean could not have.
 >
-> **Not yet built.** The catalogue still has the column and the
-> `themes_one_active` partial index; `build-plan-curation-ux.md` carries the
-> migration. Read the Constraints section for what is enforced *today* versus what
-> is designed.
+> **Built 2026-08-12.** The column and the `themes_one_active` partial index are
+> gone from the schema and are dropped from files already on disk — the first
+> column this catalogue has ever removed. What hangs where is a
+> **ThemeAssignment** row; Constraint 1 records how it is enforced and by which
+> layer, and `architecture.md` § Components records the migration mechanism that
+> took the column away.
 
 ### ThemeMembership
 

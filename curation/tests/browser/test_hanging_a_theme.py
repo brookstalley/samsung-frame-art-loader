@@ -114,4 +114,33 @@ def test_a_wall_with_nothing_hanging_says_so_instead_of_showing_an_empty_manifes
     # surface withheld: taking a theme down rewrites no manifest, so the set goes
     # on showing the picture. Without this line the empty wall reads as a failed
     # take-down, and the curator's next move is to do it again.
-    assert "does not blank the wall" in ui.text()
+    assert "goes on showing what it was showing until a theme is hung" in ui.text()
+
+
+def test_each_walls_panels_nest_under_that_wall_rather_than_beside_it(ui, a_theme, services):
+    """Two hung walls, and a reader navigating by heading can still tell the rooms apart.
+
+    The wall view renders one section per wall, each with its own Showing / Not
+    showing / How it rotates panels. When every one of those was an `h3` the
+    single-wall case read correctly by accident — with two walls hung it is six
+    sibling headings in a row and no structural signal for which counts belong to
+    which room. Asserted rather than left to the eye because nothing else
+    executes this markup: `accessibility-spec.md` states no heading rule, so this
+    test is the rule.
+    """
+    # Named rather than indexed: walls come back ordered by name, so the study
+    # displaces the migration's wall from position zero and an index would hang
+    # the theme on the same room twice.
+    the_wall = services.display.survey_walls()[0].wall
+    study = services.display.add_wall(name="Study")
+    services.display.activate_theme(a_theme.id, wall_id=the_wall.id)
+    services.display.activate_theme(a_theme.id, wall_id=study.id)
+
+    ui.open("#manifest")
+    ui.page.wait_for_selector("h3")
+
+    # One h3 per wall, and every panel heading a rank below it.
+    assert sorted(ui.page.locator("h3").all_inner_texts()) == ["Study: Late night", "The wall: Late night"]
+    assert ui.page.locator("h3.wall-title").count() == 2
+    assert ui.page.locator(".panel h3").count() == 0
+    assert ui.page.locator(".panel h4").count() == 6
