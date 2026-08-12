@@ -146,7 +146,30 @@ that republished nothing looks identical to one that did:
 
     sudo -u tvpi jq '.schema, .entries[0].label' /srv/art/theme-manifest.json
 
-### What the first start actually did, and what to expect
+### Looking at the label without the daemon
+
+`display/tools/label_preview.py` renders the chain the daemon runs — metadata,
+layout, Pango — so the type can be judged against real ink rather than imagined.
+Its own docstring points here for this machine's paths, because a checkout, a
+service account and its home are facts about a deployment and do not belong in a
+source file:
+
+    sudo systemctl stop display.service
+    cd /opt/samsung-frame-art-loader/display && sudo -u tvpi env HOME=/var/lib/tvpi \
+        /usr/local/bin/uv run --group raster --group epaper \
+        python tools/label_preview.py --panel --cap-arcmin 11
+    sudo systemctl start display.service
+
+**Stopping the unit is not optional.** `--panel` takes the SPI device, and
+`display.service` holds it while it runs; the two contend for the same bus.
+
+**It states no geometry, and that is correct here and only here.** The tool
+refuses to guess the panel's diagonal or its reading distance, and takes both
+from this deployment's `.env` — the same two settings the daemon reads. So the
+short form above is right on this machine and would be wrong anywhere else, where
+`--diagonal-inches` and `--viewing-distance-inches` have to be passed. Running it
+before the two `.env` lines above are in place gets a refusal naming them, not a
+guess.
 
 Read as evidence that the arrangement works, not as a promise about your machine:
 

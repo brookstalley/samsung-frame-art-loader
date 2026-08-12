@@ -147,11 +147,14 @@ the 2024 index was run here rather than copied from a dev machine; it spends
 nothing, carries the mat colours the wall is already running, and adopts the
 renders already in the tree.
 
-**Four guards in `tests/test_repo_hygiene.py` now assert on the units that
-actually run.** They covered only the retired 2024 loader, so the two units the
-product is being rebuilt onto had nothing checking their paths or their
-`ExecStart` — a unit file is code that only executes on one machine, which is the
-worst place to discover a typo.
+**`tests/test_repo_hygiene.py` now asserts on the units that actually run.** It
+covered only the retired 2024 loader, so the two units the product is being
+rebuilt onto had nothing checking their paths or their `ExecStart` — a unit file
+is code that executes on one machine only, which is the worst place to discover a
+typo. Four guards apply to both live units (an `EnvironmentFile=`, a restart that
+cannot silently stop retrying, no path under a home directory, an interpreter
+named absolutely), and a fifth holds the display unit's `TimeoutStopSec` above a
+television connection attempt's worst case.
 
 **What the first start did, recorded as evidence rather than as a promise:** the
 curation plane marked the art root on its own, the display plane adopted the
