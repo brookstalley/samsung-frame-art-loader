@@ -262,11 +262,63 @@ class TestHealth:
 
     def test_the_panel_states_an_observation_and_never_a_verdict(self, http):
         health = http.get("/api/health").json()
-        assert health["heartbeat"]["absent"] is True
-        assert "has not reported yet" in health["heartbeat"]["description"]
-        assert set(health["heartbeat"]) == self.OBSERVATION_FIELDS | {"reported_at"}
+        [reading] = health["walls"]
+        assert reading["heartbeat"]["absent"] is True
+        assert "has not reported yet" in reading["heartbeat"]["description"]
+        assert set(reading["heartbeat"]) == self.OBSERVATION_FIELDS | {"reported_at"}
 
-    def test_the_panel_reports_what_the_display_plane_said_about_itself(self, http, settings):
+    def test_the_panel_names_the_wall_that_has_not_reported(self, http, wall):
+        """The reason the heartbeat became one file per wall.
+
+        A one-room installation could be told "the display plane has not
+        reported" and act on it; a two-room one cannot, and one shared heartbeat
+        had no way to say which room was dark — the second display would have
+        overwritten the first's report every minute.
+        """
+        second = http.post("/api/walls", json={"name": "The study"}).json()
+
+        health = http.get("/api/health").json()
+
+        assert {reading["wall_id"] for reading in health["walls"]} == {wall["wall_id"], second["wall_id"]}
+        # Named in the order walls are listed in, which is the order every other
+        # surface shows them in — so a reader is not asked to hold two orderings.
+        assert health["description"] == (
+            "2 of 2 walls have not reported: 'The study', 'The wall'. "
+            "Each wall's own reading says whether nothing was ever written or what could not be read."
+        )
+
+    def test_a_wall_that_has_reported_is_named_apart_from_one_that_has_not(self, http, settings, wall):
+        """The sentence a two-room installation is actually read for."""
+        http.post("/api/walls", json={"name": "The study"})
+        settings.heartbeat_path(wall["wall_id"]).write_text(
+            json.dumps({"reported_at": datetime.now(UTC).isoformat()}),
+            encoding="utf-8",
+        )
+
+        assert http.get("/api/health").json()["description"] == (
+            "'The study' has not reported. "
+            "Each wall's own reading says whether nothing was ever written or what could not be read."
+        )
+
+    def test_a_summary_over_walls_that_have_all_reported_still_states_an_age(self, http, settings, wall):
+        """Never "well", and never a threshold: the age is the whole answer.
+
+        The *least* recent, deliberately. A summary quoting the freshest would
+        read as an all-clear bought from whichever wall happened to report last.
+        """
+        second = http.post("/api/walls", json={"name": "The study"}).json()
+        settings.heartbeat_path(wall["wall_id"]).write_text(
+            json.dumps({"reported_at": datetime.now(UTC).isoformat()}), encoding="utf-8"
+        )
+        settings.heartbeat_path(second["wall_id"]).write_text(
+            json.dumps({"reported_at": (datetime.now(UTC) - timedelta(days=4)).isoformat()}), encoding="utf-8"
+        )
+
+        assert http.get("/api/health").json()["description"] == (
+            "Every wall has reported; the least recent is 'The study', 4 days ago."
+        )
+
+    def test_the_panel_reports_what_the_display_plane_said_about_itself(self, http, settings, wall):
         """The failure table maps TV, panel and last-error state onto this document.
 
         Until it reached the payload those rows named a signal nothing displayed —
@@ -275,7 +327,7 @@ class TestHealth:
         `reported_at` is the only key the strategy makes contract and inventing
         more here would be a second contract the writer never agreed to.
         """
-        settings.heartbeat_path.write_text(
+        settings.heartbeat_path(wall["wall_id"]).write_text(
             json.dumps(
                 {
                     # The keys the display plane's writer actually emits. They were
@@ -296,23 +348,25 @@ class TestHealth:
             ),
             encoding="utf-8",
         )
-        heartbeat = http.get("/api/health").json()["heartbeat"]
+        [reading] = http.get("/api/health").json()["walls"]
+        assert reading["wall_name"] == wall["name"]
+        heartbeat = reading["heartbeat"]
         assert heartbeat["absent"] is False
         assert heartbeat["reported"]["television_reachable"] is False
         assert heartbeat["reported"]["last_error"] == "the television refused the pairing token"
         assert heartbeat["reported"]["some_future_field"] == 17
 
-    def test_an_age_is_stated_in_the_unit_a_person_reads_it_in(self, http, settings):
+    def test_an_age_is_stated_in_the_unit_a_person_reads_it_in(self, http, settings, wall):
         """ "345600 seconds ago" is a conversion the reader has to do themselves.
 
         On the one surface built so they would not have to, and for the failure it
         exists to catch — a plane that has been down since Tuesday.
         """
-        settings.heartbeat_path.write_text(
+        settings.heartbeat_path(wall["wall_id"]).write_text(
             json.dumps({"reported_at": (datetime.now(UTC) - timedelta(days=4)).isoformat()}),
             encoding="utf-8",
         )
-        assert "4 days ago" in http.get("/api/health").json()["heartbeat"]["description"]
+        assert "4 days ago" in http.get("/api/health").json()["walls"][0]["heartbeat"]["description"]
 
     def test_the_panel_says_plainly_that_no_backup_has_ever_been_recorded(self, http):
         """A true observation before the backup job exists, which is why it ships first.
@@ -363,7 +417,9 @@ class TestHealth:
         assert not [key for key in named if any(word in key for word in ("limit", "credit", "balance", "budget"))]
         # And the panel is three observations, not four. The check above would
         # pass for a balance carried under a name that dodges those four words.
-        assert set(http.get("/api/health").json()) == {"heartbeat", "backup", "artwork_box"}
+        # `description` is the walls' own summary rather than a fourth signal —
+        # it states nothing the readings beside it do not.
+        assert set(http.get("/api/health").json()) == {"walls", "description", "backup", "artwork_box"}
 
     def test_the_panel_shows_the_geometry_every_size_in_the_grid_is_judged_against(self, http):
         box = http.get("/api/health").json()["artwork_box"]
@@ -423,7 +479,7 @@ class TestTheWholeLoop:
         theme = http.post("/api/themes", json={"name": "Late night"}).json()
         http.post(f"/api/themes/{theme['theme_id']}/works", json={"artwork_id": artwork.id})
         http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]})
-        assert settings.manifest_path.is_file()
+        assert settings.manifest_path(wall["wall_id"]).is_file()
 
 
 class TestThemeOrder:

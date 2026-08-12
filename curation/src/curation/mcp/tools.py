@@ -777,21 +777,21 @@ ART_DISPLAY: Final = ToolRecord(
                 "A wall is a place and a name, never a device: which display serves it is that display's own "
                 "configuration, and nothing about a television is recorded here.",
                 "Refuses a name that is empty or already taken.",
-                "IMPORTANT — a second wall can be recorded but cannot yet be shown. The display plane still "
-                "reads a single manifest file, so hanging a theme on a second wall overwrites the one the "
-                "existing display is reading and sends it the wrong room's pictures, without either plane "
-                "noticing. Until manifests are per-wall, record a second wall only if the operator has asked "
-                "for one, and tell them it will not light up.",
+                "A new wall shows nothing until a display device is configured with the wall_id this "
+                "returns — each wall has its own manifest file, and a display serves the one wall it is "
+                "pointed at. Hanging a theme on a new wall disturbs no other wall.",
             ),
         ),
         Action(
             name="status",
-            description="Report what the display plane last said about itself, and how long ago.",
+            description="Report what the display serving each wall last said about itself, and how long ago.",
             example="art_display(action='status')",
             tips=(
                 "This reports an observation and its age in seconds, never a verdict about health. "
-                "If the display plane has never run, it says so plainly rather than reporting a zero.",
-                "It takes no wall: the display plane still writes one heartbeat for the installation.",
+                "If no display has ever run for a wall, it says so plainly rather than reporting a zero.",
+                "It takes no wall and reports every one of them: each wall's display writes its own "
+                "heartbeat, so the answerable question is which wall has gone quiet — and an answer about "
+                "one room could be given while another was dark.",
             ),
         ),
         Action(

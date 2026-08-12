@@ -226,7 +226,7 @@ async def test_activating_a_theme_puts_it_on_the_wall_rather_than_arming_a_later
     assert hung[first] == []
 
     # The manifest is what the wall reads, so this is where "on the wall" is true.
-    assert json.loads(wall_settings.manifest_path.read_text())["theme"]["id"] == second
+    assert json.loads(wall_settings.manifest_path(wall).read_text())["theme"]["id"] == second
 
 
 async def test_activating_publishes_exactly_the_readiness_filtered_theme(server_url, wall_settings, service, wall):
@@ -284,7 +284,7 @@ async def test_activating_publishes_exactly_the_readiness_filtered_theme(server_
     )
 
     # And the file the display plane reads carries exactly that one work.
-    document = json.loads(wall_settings.manifest_path.read_text())
+    document = json.loads(wall_settings.manifest_path(wall).read_text())
     assert [entry["work_id"] for entry in document["entries"]] == [ready]
     assert document["entries"][0]["render_path"] == "ready/nighthawks.jpg"
     assert document["entries"][0]["label"]["title"] == "Nighthawks"
@@ -341,7 +341,7 @@ async def test_taking_down_does_not_republish_or_advance_the_wall(server_url, wa
     """
     theme_id = await _a_theme(server_url)
     await call(server_url, "art_theme", action="activate", theme_id=theme_id, wall_id=wall)
-    published = wall_settings.manifest_path.read_text()
+    published = wall_settings.manifest_path(wall).read_text()
     before, _ = await call(server_url, "art_display", action="walls")
 
     payload, errored = await call(server_url, "art_theme", action="unhang", wall_id=wall)
@@ -352,7 +352,7 @@ async def test_taking_down_does_not_republish_or_advance_the_wall(server_url, wa
     assert payload["notice"] == (
         "Nothing is hanging there now. The wall goes on showing what it was showing until a theme is hung."
     )
-    assert wall_settings.manifest_path.read_text() == published
+    assert wall_settings.manifest_path(wall).read_text() == published
     after, _ = await call(server_url, "art_display", action="walls")
     assert after["walls"][0]["directive"]["sequence"] == before["walls"][0]["directive"]["sequence"]
     assert after["walls"][0]["hanging"] is None
@@ -419,14 +419,14 @@ async def test_deleting_the_last_theme_leaves_the_wall_showing_what_it_had(serve
     """
     theme_id = await _a_theme(server_url)
     await call(server_url, "art_display", action="sync", wall_id=wall, theme_id=theme_id)
-    before = wall_settings.manifest_path.read_text()
+    before = wall_settings.manifest_path(wall).read_text()
 
     payload, errored = await call(server_url, "art_theme", action="delete", theme_id=theme_id)
 
     assert errored is False
     listed, _ = await call(server_url, "art_theme", action="list")
     assert listed["themes"] == []
-    assert wall_settings.manifest_path.read_text() == before
+    assert wall_settings.manifest_path(wall).read_text() == before
 
 
 async def test_deleting_a_theme_with_works_in_it_leaves_the_works_alone(server_url, seeded_titles):
@@ -451,13 +451,22 @@ async def test_status_says_plainly_that_the_display_plane_has_never_reported(ser
     Not a zero, not a green light: both would read as a reading. This is the
     state a fresh deployment is in, and it has to be legible rather than
     look like a healthy wall.
+
+    **And it names the wall**, which is what one heartbeat per wall bought: with
+    two rooms the useful sentence is "the study has not reported", and one shared
+    file could only ever have said that *something* had not.
     """
     payload, errored = await call(server_url, "art_display", action="status")
 
     assert errored is False
-    assert payload["display_plane_has_reported"] is False
-    assert payload["age_seconds"] is None
-    assert "has not reported yet" in payload["observation"]
+    [reading] = payload["walls"]
+    assert reading["display_plane_has_reported"] is False
+    assert reading["age_seconds"] is None
+    assert "has not reported yet" in reading["observation"]
+    assert payload["observation"] == (
+        f"{reading['wall_name']!r} has not reported. "
+        "Each wall's own reading says whether nothing was ever written or what could not be read."
+    )
 
 
 async def test_sync_names_every_work_that_will_not_be_on_the_wall(server_url, wall):
@@ -516,7 +525,7 @@ async def test_sync_writes_the_manifest_the_display_plane_reads(server_url, wall
 
     await call(server_url, "art_display", action="sync", wall_id=wall, theme_id=theme_id)
 
-    document = json.loads(wall_settings.manifest_path.read_text())
+    document = json.loads(wall_settings.manifest_path(wall).read_text())
     assert document["theme"]["id"] == theme_id
     assert document["schema"]["major"] == 1
 
@@ -552,7 +561,7 @@ async def test_the_directive_reaches_the_manifest(server_url, wall_settings, rea
 
     await call(server_url, "art_display", action="sync", wall_id=wall, theme_id=theme_id)
 
-    directive = json.loads(wall_settings.manifest_path.read_text())["directive"]
+    directive = json.loads(wall_settings.manifest_path(wall).read_text())["directive"]
     assert directive["sequence"] == 1
     assert directive["pinned_work_id"] == work.id
 
@@ -587,7 +596,7 @@ async def test_syncing_twice_does_not_advance_the_sequence(server_url, wall_sett
     await call(server_url, "art_display", action="sync", wall_id=wall, theme_id=theme_id)
     await call(server_url, "art_display", action="sync", wall_id=wall, theme_id=theme_id)
 
-    assert json.loads(wall_settings.manifest_path.read_text())["directive"]["sequence"] == 1
+    assert json.loads(wall_settings.manifest_path(wall).read_text())["directive"]["sequence"] == 1
 
 
 async def test_showing_an_archived_work_is_refused_rather_than_pinned(server_url, service, wall):

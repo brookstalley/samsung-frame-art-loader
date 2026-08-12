@@ -724,32 +724,43 @@ async function viewHealth(generation) {
     generation,
     el("h2", { text: "Health" }),
     el("div", { class: "panel" }, [
-      el("h3", { text: "The display plane" }),
-      // An observation with its age, never a verdict. A green dot computed from
-      // a file that may simply be young is how a health surface starts lying.
-      el("p", { text: health.heartbeat.description }),
-      facts([
-        ["Heartbeat file", health.heartbeat.path],
-        ["Last reported", health.heartbeat.reported_at],
-        // The exact figure beside the sentence's plain-language one. Not the
-        // same fact twice in worse units: the sentence is what a curator reads,
-        // and this is what an operator compares against the 60-second interval.
-        ["Age", health.heartbeat.age_seconds === null ? null : `${health.heartbeat.age_seconds.toFixed(0)} seconds`],
-        ["Problem", health.heartbeat.problem],
-      ]),
-      health.heartbeat.absent
-        ? el("p", {
-            class: "muted",
-            // States what absent *means*, not why it is absent. "The display
-            // plane has not been built yet" would have been true the day this
-            // was written and wrong the day that plane ships, with nothing to
-            // catch it — a page asserting a fact about the project rather than
-            // reporting one about the file in front of it.
-            text: "Nothing has ever written a heartbeat here. Where the display plane is not running, that is the correct reading rather than a fault.",
-          })
-        : null,
-      health.heartbeat.reported ? el("h4", { text: "What it reported" }) : null,
-      reportedFacts(health.heartbeat.reported),
+      el("h3", { text: "The walls" }),
+      // The one sentence across every wall, which names the room that has gone
+      // quiet rather than saying that a room has. An observation with its age,
+      // never a verdict: a green dot computed from a file that may simply be
+      // young is how a health surface starts lying.
+      el("p", { text: health.description }),
+      // One block per wall, headed by its name. The name is what makes the
+      // reading actionable — "the study has not reported" sends somebody into a
+      // room, and a bare age does not.
+      ...health.walls.map((wall) =>
+        el("div", { class: "wall-reading" }, [
+          el("h4", { text: wall.wall_name }),
+          el("p", { text: wall.heartbeat.description }),
+          facts([
+            ["Heartbeat file", wall.heartbeat.path],
+            ["Last reported", wall.heartbeat.reported_at],
+            // The exact figure beside the sentence's plain-language one. Not the
+            // same fact twice in worse units: the sentence is what a curator reads,
+            // and this is what an operator compares against the 60-second interval.
+            ["Age", wall.heartbeat.age_seconds === null ? null : `${wall.heartbeat.age_seconds.toFixed(0)} seconds`],
+            ["Problem", wall.heartbeat.problem],
+          ]),
+          wall.heartbeat.absent
+            ? el("p", {
+                class: "muted",
+                // States what absent *means*, not why it is absent. "The display
+                // plane has not been built yet" would have been true the day this
+                // was written and wrong the day that plane ships, with nothing to
+                // catch it — a page asserting a fact about the project rather than
+                // reporting one about the file in front of it.
+                text: "Nothing has ever written a heartbeat for this wall. Where no display is pointed at it, that is the correct reading rather than a fault.",
+              })
+            : null,
+          wall.heartbeat.reported ? el("h5", { text: "What it reported" }) : null,
+          reportedFacts(wall.heartbeat.reported),
+        ]),
+      ),
     ]),
     el("div", { class: "panel" }, [
       el("h3", { text: "The backup" }),

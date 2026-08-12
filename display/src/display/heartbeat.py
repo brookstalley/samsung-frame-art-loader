@@ -8,7 +8,8 @@ ability to show art never depends on the curation plane being reachable — whil
 still giving a health surface something real to read.
 
 **Two names in this document are a contract rather than a preference, because the
-reader was built first.** The file is `display-heartbeat.json` under `ART_ROOT`
+reader was built first.** The file is `display-heartbeat-<wall id>.json` under
+`ART_ROOT` — one per wall, so a health surface can name which wall is silent —
 and the instant is spelled `reported_at`. `curation/src/curation/manifest/heartbeat.py` treats
 any other spelling as an unreadable heartbeat and says so — so a writer that
 called the field `timestamp` would produce a plane that looks *down* to curation
@@ -44,9 +45,15 @@ from typing import Any, Final
 
 log = logging.getLogger(__name__)
 
-#: Where curation looks. Not configurable, for the same reason the manifest's name
-#: is not: both planes have to agree, and a setting is a way for them to disagree.
-HEARTBEAT_FILENAME: Final[str] = "display-heartbeat.json"
+#: Where curation looks, **one file per wall**. Not configurable, for the same
+#: reason the manifest's name is not: both planes have to agree, and a setting is
+#: a way for them to disagree. Which wall this process serves *is* configuration
+#: — `WALL_ID` — and that is a different thing from where a wall's file is.
+#:
+#: Per wall so that health can name which wall is silent. One shared file could
+#: not: the second display would overwrite the first's report every minute, and a
+#: wall that had gone dark would read exactly like a wall that was fine.
+HEARTBEAT_FILENAME_TEMPLATE: Final[str] = "display-heartbeat-{wall_id}.json"
 
 #: The key carrying the instant. Contract — see this module's docstring.
 REPORTED_AT_KEY: Final[str] = "reported_at"
@@ -117,12 +124,17 @@ class Health:
         }
 
 
-def path_in(art_root: Path) -> Path:
-    """Where the heartbeat lives under a given art root."""
-    return art_root / HEARTBEAT_FILENAME
+def path_in(art_root: Path, wall_id: str) -> Path:
+    """Where one wall's heartbeat lives under a given art root.
+
+    The one place the template is filled in on this side, so this plane cannot
+    spell the name two ways — and so curation's copy of the template has exactly
+    one thing to agree with.
+    """
+    return art_root / HEARTBEAT_FILENAME_TEMPLATE.format(wall_id=wall_id)
 
 
-def write(art_root: Path, health: Health, *, reported_at: datetime) -> None:
+def write(art_root: Path, health: Health, *, wall_id: str, reported_at: datetime) -> None:
     """Put the heartbeat on disk, atomically, replacing whatever was there.
 
     **Temp-and-rename, and the same discipline as the manifest builder's
@@ -154,7 +166,7 @@ def write(art_root: Path, health: Health, *, reported_at: datetime) -> None:
     heartbeat is an annotation and not the product, and it is the caller that
     holds the report-once machinery to say so at most once per episode.
     """
-    destination = path_in(art_root)
+    destination = path_in(art_root, wall_id)
     temporary = destination.with_name(f"{destination.name}.tmp")
     payload = json.dumps(health.document(reported_at=reported_at), indent=2, ensure_ascii=False)
     try:

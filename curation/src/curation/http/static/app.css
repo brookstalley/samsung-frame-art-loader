@@ -554,16 +554,28 @@ th {
   margin-bottom: var(--space-5);
 }
 
-/* `h3` or `h4`, one treatment. The rank of a panel's heading depends on what it
- * sits under — at the top of a view it is an `h3`, and inside a wall's own
- * section on the walls view it is an `h4`, so that two hung walls do not present
- * a reader navigating by heading with four siblings and no nesting. That is a
+/* `h3`, `h4` or `h5`, one treatment. The rank of a panel's heading depends on
+ * what it sits under — at the top of a view it is an `h3`, inside a wall's own
+ * section on the walls view an `h4`, and inside one wall's heartbeat reading on
+ * the health view an `h5`, so that neither two hung walls nor two reporting ones
+ * present a reader navigating by heading with a flat run of siblings. That is a
  * document-structure fact and not a typographic one: the panels look the same
- * either way, which is what this selector says. */
-.panel :is(h3, h4) {
+ * whichever rank is used, which is what this selector says. */
+.panel :is(h3, h4, h5) {
   margin: 0 0 var(--space-3);
   font: 400 var(--text-md) / 1.3 var(--font-label);
   color: var(--text-strong);
+}
+
+/* One wall's heartbeat on the health view. Separated by a rule rather than by
+ * spacing alone: with several walls the readings are runs of identically shaped
+ * label/value pairs, and a reader scanning for the room that has gone quiet has
+ * to be able to see where one wall's reading ends. The first has no rule above
+ * it, since the panel's own heading already bounds it. */
+.wall-reading + .wall-reading {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
 }
 
 /* One wall's section heading on the walls view. A direct child of the view root,

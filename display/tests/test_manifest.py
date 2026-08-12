@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 import pytest
-from conftest import write_manifest
+from conftest import WALL_ID, write_manifest
 
 from display.manifest import (
     SUPPORTED_SCHEMA_MAJOR,
@@ -31,8 +31,9 @@ def a_document(**overrides: object) -> dict:
     return document
 
 
-def a_watcher(art_root: Path) -> Watcher:
-    return Watcher(art_root / "theme-manifest.json", **FALLBACKS)
+def a_watcher(art_root: Path, wall_id: str = WALL_ID) -> Watcher:
+    """A watcher over one wall's manifest — the only file it will ever open."""
+    return Watcher(art_root / f"theme-manifest-{wall_id}.json", **FALLBACKS)
 
 
 class TestParsing:
@@ -166,7 +167,7 @@ class TestWatching:
         watcher = a_watcher(art_root)
         good = watcher.poll()
 
-        (art_root / "theme-manifest.json").write_bytes(b'{"schema": {"major": 1}, "entries": [], "\xff\xfe": 1}')
+        (art_root / f"theme-manifest-{WALL_ID}.json").write_bytes(b'{"schema": {"major": 1}, "entries": [], "\xff\xfe": 1}')
 
         with caplog.at_level(logging.ERROR):
             assert watcher.poll() is None
@@ -191,7 +192,7 @@ class TestWatching:
         """`sync` and a `next` can land inside one second, and a coarse mtime would
         hide the second one forever — the wall would stop responding with nothing
         in the journal to say why."""
-        target = art_root / "theme-manifest.json"
+        target = art_root / f"theme-manifest-{WALL_ID}.json"
         write_manifest(art_root, a_document())
         watcher = a_watcher(art_root)
         watcher.poll()
@@ -255,3 +256,100 @@ class TestAnUnreadableManifestIsSaidOnce:
             watcher.poll()
 
         assert [r for r in caplog.records if getattr(r, "event", None) == "manifest.statable"]
+
+
+class TestOneManifestPerWall:
+    """A display serves one room, and cannot read another's.
+
+    **The mechanism is the path, not a check.** Each wall's manifest is
+    `theme-manifest-<wall id>.json`, and this process stats exactly the one its
+    `WALL_ID` names — so the other rooms' documents are files it never opens.
+    That is what makes "the wall shows another room's pictures" structurally
+    impossible rather than defended against, and it is why the decision was one
+    file per wall instead of one file with a section per wall.
+
+    It matters because a shared file's other failure was silent in both
+    directions: curation publishing the study's theme would overwrite the living
+    room's document, and the living room's display had no way to notice that the
+    file it was reading had stopped being about it.
+    """
+
+    def test_it_adopts_the_manifest_for_the_wall_it_serves(self, art_root: Path):
+        write_manifest(art_root, a_document(), wall_id=WALL_ID)
+
+        adopted = a_watcher(art_root, WALL_ID).poll()
+
+        assert adopted is not None
+        assert adopted.directive_sequence == 7
+
+    def test_a_manifest_for_a_wall_it_does_not_serve_is_not_acted_on(self, art_root: Path, caplog):
+        """Published for the study; this device serves the living room.
+
+        Not adopted, and — the half that matters — reported as *absent* rather
+        than as anything having gone wrong. A device waiting for a manifest that
+        has not been published yet is an ordinary state, and another room's file
+        sitting beside it does not change what this one is waiting for.
+        """
+        write_manifest(art_root, a_document(), wall_id="study")
+
+        with caplog.at_level(logging.INFO):
+            assert a_watcher(art_root, WALL_ID).poll() is None
+
+        assert "manifest.absent" in {record.__dict__.get("event") for record in caplog.records}
+
+    def test_a_rewrite_of_another_wall_does_not_wake_this_one(self, art_root: Path):
+        """The reason the decision names the mtime poll.
+
+        A shared file would make every wall's display re-read and re-derive on
+        every other wall's change, at a poll a second — and would make "the
+        manifest's sequence" ambiguous exactly where the coalescing and
+        sequence-regression rules need it to be a single number.
+        """
+        write_manifest(art_root, a_document(), wall_id=WALL_ID)
+        watcher = a_watcher(art_root, WALL_ID)
+        watcher.poll()
+
+        for sequence in range(8, 12):
+            write_manifest(art_root, a_document(directive={"sequence": sequence, "pinned_work_id": None}), wall_id="study")
+
+        assert watcher.poll() is None
+        assert watcher.current is not None
+        assert watcher.current.directive_sequence == 7
+
+
+async def test_the_daemon_shows_its_own_walls_theme_and_ignores_another_walls(daemon, tv, art_root: Path):
+    """End to end over the double: two manifests in one art root, one wall each.
+
+    The living room's display is driven by the living room's document and by
+    nothing else — the study's is present, newer, and names entirely different
+    works, and none of them reach the television.
+    """
+    write_manifest(art_root, a_document(entries=[_entry("mine")]), wall_id=WALL_ID)
+    write_manifest(art_root, a_document(entries=[_entry("not-mine")]), wall_id="study")
+    for work_id in ("mine", "not-mine"):
+        (art_root / "ready" / f"{work_id}.jpg").write_bytes(b"not really a jpeg")
+
+    await daemon.tick()
+
+    assert tv.on_the_wall.name == "mine.jpg"
+    assert [path.name for path in (tv.holding[content] for content in tv.selected)] == ["mine.jpg"]
+
+
+async def test_a_daemon_whose_wall_has_no_manifest_shows_nothing_rather_than_someone_elses(daemon, tv, art_root: Path):
+    """A manifest for an unknown wall is not acted on — it is not a fallback.
+
+    A device pointed at a wall nothing has published for waits, exactly as it
+    waits on a fresh install. Reaching for whatever manifest *is* there would
+    turn a mistyped `WALL_ID` from a wall that never lights up into a wall
+    showing another room's pictures, which is the failure that has no symptom.
+    """
+    write_manifest(art_root, a_document(entries=[_entry("not-mine")]), wall_id="study")
+    (art_root / "ready" / "not-mine.jpg").write_bytes(b"not really a jpeg")
+
+    await daemon.tick()
+
+    assert tv.selected == []
+
+
+def _entry(work_id: str) -> dict:
+    return {"work_id": work_id, "render_path": f"ready/{work_id}.jpg", "label": {"title": work_id}}

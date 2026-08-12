@@ -1274,12 +1274,17 @@ class Daemon:
             last_error=self._last_error,
         )
         try:
-            heartbeat_module.write(self._settings.art_root, health, reported_at=self._clock.now())
+            heartbeat_module.write(
+                self._settings.art_root,
+                health,
+                wall_id=self._settings.wall_id,
+                reported_at=self._clock.now(),
+            )
         except OSError as exc:
             if self._heartbeat_failed.begin():
                 log.warning(
                     "could not write the heartbeat to %s (%s); the wall is unaffected",
-                    heartbeat_module.path_in(self._settings.art_root),
+                    heartbeat_module.path_in(self._settings.art_root, self._settings.wall_id),
                     exc,
                     extra={"event": "heartbeat.failed"},
                 )

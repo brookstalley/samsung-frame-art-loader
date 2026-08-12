@@ -25,7 +25,7 @@ from curation.persistence.file import open_catalogue_file
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.persistence.sqlite_discovery import SqliteDiscovery
 from curation.services.container import Services
-from curation.services.display import WallSettings
+from curation.services.display import DisplaySettings
 from curation.services.previews import PreviewSettings
 from curation.services.thumbnails import ThumbnailSettings
 
@@ -143,9 +143,9 @@ def main(argv: Sequence[str] = ()) -> None:
     # panel — never the e-paper one, which belongs to the display plane.
     box = settings.tv_artwork_box
     log.info(
-        'art_root=%s manifest=%s tv_panel=%dx%dpx/%.1f" (%.1f px per inch) rotation=%ds shuffle=%s',
+        'art_root=%s manifests=%s tv_panel=%dx%dpx/%.1f" (%.1f px per inch) rotation=%ds shuffle=%s',
         settings.art_root,
-        settings.manifest_path,
+        settings.manifest_pattern,
         settings.tv_panel_width_px,
         settings.tv_panel_height_px,
         settings.tv_panel_diagonal_inches,
@@ -256,9 +256,8 @@ def main(argv: Sequence[str] = ()) -> None:
         services = Services.bind(
             catalogue=SqliteCatalogue(catalogue_file),
             discovery=SqliteDiscovery(catalogue_file),
-            wall=WallSettings(
-                manifest_path=settings.manifest_path,
-                heartbeat_path=settings.heartbeat_path,
+            display_settings=DisplaySettings(
+                art_root=settings.art_root,
                 rotation_interval_seconds=settings.rotation_interval_seconds,
                 shuffle=settings.rotation_shuffle,
             ),

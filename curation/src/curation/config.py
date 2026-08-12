@@ -19,8 +19,8 @@ from typing import Final
 
 from dotenv import load_dotenv
 
-from curation.manifest.builder import MANIFEST_FILENAME
-from curation.manifest.heartbeat import HEARTBEAT_FILENAME
+from curation.manifest.builder import MANIFEST_FILENAME_TEMPLATE, manifest_path_in
+from curation.manifest.heartbeat import heartbeat_path_in
 from curation.persistence.migrations import DEFAULT_WALL_NAME
 from curation.services.display_fit import ArtworkBox
 from curation.services.runner import DiscoverySettings
@@ -349,8 +349,6 @@ class Settings:
 
     art_root: Path
     catalogue_path: Path
-    manifest_path: Path
-    heartbeat_path: Path
     host: str
     port: int
     #: What this deployment's one wall is called, **used only when the catalogue
@@ -451,6 +449,30 @@ class Settings:
             phase1_input_tokens=self.phase1_input_tokens,
             phase1_output_tokens=self.phase1_output_tokens,
         )
+
+    def manifest_path(self, wall_id: str) -> Path:
+        """Where one wall's manifest is published.
+
+        **A method taking a wall rather than a field**, because there is no such
+        thing as "the manifest path" any more: the file set is indexed by wall,
+        and a settings object holding one path is what let a second wall's theme
+        overwrite the first wall's file until 2026-08-12.
+        """
+        return manifest_path_in(self.art_root, wall_id)
+
+    def heartbeat_path(self, wall_id: str) -> Path:
+        """Where the display serving one wall reports. Read here, never written."""
+        return heartbeat_path_in(self.art_root, wall_id)
+
+    @property
+    def manifest_pattern(self) -> str:
+        """What the manifests are called, with the wall id left standing.
+
+        For the startup line, which is read before any wall id is in anyone's
+        hand. The resolved root with the placeholder still standing puts a wrong
+        `ART_ROOT` one `journalctl` away without inventing a wall to name.
+        """
+        return str(self.art_root / MANIFEST_FILENAME_TEMPLATE)
 
     @property
     def thumbnails_path(self) -> Path:
@@ -562,8 +584,6 @@ class Settings:
         return cls(
             art_root=art_root,
             catalogue_path=art_root / CATALOGUE_FILENAME,
-            manifest_path=art_root / MANIFEST_FILENAME,
-            heartbeat_path=art_root / HEARTBEAT_FILENAME,
             # Loopback by default: the plane is reached over an overlay network
             # rather than by being exposed on the LAN, and a default that binds
             # every interface is a decision no one made.

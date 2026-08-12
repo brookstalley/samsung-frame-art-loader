@@ -57,8 +57,6 @@ from curation.config import (
     DEFAULT_TV_PANEL_WIDTH_PX,
     Settings,
 )
-from curation.manifest.builder import MANIFEST_FILENAME
-from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 from curation.persistence.discovery_records import DiscoveryRun, InitiatedBy
 from curation.persistence.durable import SqliteDurableStore
 from curation.persistence.file import open_catalogue_file
@@ -78,7 +76,7 @@ from curation.persistence.sqlite_discovery import SqliteDiscovery
 from curation.services.catalogue import CatalogueService
 from curation.services.container import Services
 from curation.services.discovery import DiscoveryService
-from curation.services.display import DisplayService, WallSettings
+from curation.services.display import DisplayService, DisplaySettings
 from curation.services.runner import DiscoveryRunner
 from curation.services.thumbnails import ThumbnailService, ThumbnailSettings
 
@@ -140,8 +138,6 @@ def settings(tmp_path) -> Settings:
     return Settings(
         art_root=tmp_path,
         catalogue_path=tmp_path / CATALOGUE_FILENAME,
-        manifest_path=tmp_path / MANIFEST_FILENAME,
-        heartbeat_path=tmp_path / HEARTBEAT_FILENAME,
         host=DEFAULT_HOST,
         port=DEFAULT_PORT,
         wall_name=DEFAULT_WALL_NAME,
@@ -181,11 +177,15 @@ def settings(tmp_path) -> Settings:
 
 
 @pytest.fixture
-def wall_settings(settings: Settings) -> WallSettings:
-    """A manifest destination of this test's own, and the shipped rotation defaults."""
-    return WallSettings(
-        manifest_path=settings.manifest_path,
-        heartbeat_path=settings.heartbeat_path,
+def wall_settings(settings: Settings) -> DisplaySettings:
+    """An art root of this test's own, and the shipped rotation defaults.
+
+    Manifests and heartbeats are named per wall beneath it, so this holds the
+    root and no file path: which files exist is a consequence of which walls the
+    catalogue holds.
+    """
+    return DisplaySettings(
+        art_root=settings.art_root,
         rotation_interval_seconds=settings.rotation_interval_seconds,
         shuffle=settings.rotation_shuffle,
     )
@@ -212,7 +212,7 @@ def engine() -> FakeEngine:
 def services(
     store: SqliteCatalogue,
     discovery_store: SqliteDiscovery,
-    wall_settings: WallSettings,
+    wall_settings: DisplaySettings,
     thumbnail_settings: ThumbnailSettings,
     settings: Settings,
     engine: FakeEngine,
@@ -221,7 +221,7 @@ def services(
     bound = Services.bind(
         catalogue=store,
         discovery=discovery_store,
-        wall=wall_settings,
+        display_settings=wall_settings,
         thumbnails=thumbnail_settings,
         # Derived by the same property the entry point calls, so a test never
         # asserts against a box a real deployment would not produce.

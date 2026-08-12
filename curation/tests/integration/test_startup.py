@@ -47,13 +47,11 @@ from curation.config import (
     Settings,
 )
 from curation.discovery.phase_one import OpenRouterEngine
-from curation.manifest.builder import MANIFEST_FILENAME
-from curation.manifest.heartbeat import HEARTBEAT_FILENAME
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.migrations import DEFAULT_WALL_NAME
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.services.catalogue import CatalogueService
-from curation.services.display import DisplayService, WallSettings
+from curation.services.display import DisplayService, DisplaySettings
 
 #: A key shaped like the real thing, so a naive redaction that only hides values
 #: it recognises as secret-looking cannot pass by accident.
@@ -75,8 +73,6 @@ def _defaults(art_root, **overrides) -> Settings:
         Settings(
             art_root=art_root,
             catalogue_path=art_root / "catalogue.sqlite",
-            manifest_path=art_root / MANIFEST_FILENAME,
-            heartbeat_path=art_root / HEARTBEAT_FILENAME,
             host="127.0.0.1",
             port=0,
             wall_name=DEFAULT_WALL_NAME,
@@ -177,12 +173,7 @@ def test_the_plane_moves_the_catalogue_onto_walls_before_it_serves(tmp_path, mon
             display = DisplayService(
                 observer,
                 CatalogueService(observer),
-                WallSettings(
-                    manifest_path=art_root / MANIFEST_FILENAME,
-                    heartbeat_path=art_root / HEARTBEAT_FILENAME,
-                    rotation_interval_seconds=180,
-                    shuffle=True,
-                ),
+                DisplaySettings(art_root=art_root, rotation_interval_seconds=180, shuffle=True),
             )
             wall = observer.list_walls()[0]
             hanging = display.hanging_on(wall.id)

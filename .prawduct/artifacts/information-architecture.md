@@ -203,11 +203,14 @@ step the study), and the inter-plane contract (`architecture.md` § One manifest
 wall).
 
 **The data half is built as of 2026-08-12** — walls, assignments, per-wall directives,
-the routes and tool actions that name a wall, and an unhang. **The screens are not**:
-every layout described here still renders the pre-wall surface, and
-`build-plan-curation-ux.md` carries the rest. The inter-plane half is also still
-outstanding — one manifest per wall is its own chunk, so today's display plane reads a
-single manifest whatever the catalogue now knows about walls.
+the routes and tool actions that name a wall, and an unhang. **The inter-plane half
+landed the same day**: one manifest and one heartbeat per wall, and each display
+plane serves the one wall its `WALL_ID` names (`architecture.md` § One manifest per
+wall). That is what lets the health panel meet this artifact's requirement to name
+*which* wall is silent, which one shared heartbeat file could never have done.
+**The screens are not**: every layout described here still renders the pre-wall
+surface apart from the health panel, and `build-plan-curation-ux.md` carries the
+rest.
 
 ## Retrieval: search and facets
 
