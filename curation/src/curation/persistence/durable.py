@@ -353,6 +353,61 @@ class SqliteDurableStore:
             ).fetchall()
         return [dict(row) for row in rows], total
 
+    @contextmanager
+    def reading(self) -> Iterator[None]:
+        """Hold the file still for several reads that must agree with each other.
+
+        `select_page` takes its COUNT and its page under one lock by its own
+        design, because a total that disagrees with the rows beneath it is a
+        wrong answer rather than a stale one. A composite read assembled from
+        *several* calls needs the same guarantee and cannot get it from the
+        individual locks: handlers are synchronous `def`, so Starlette runs them
+        in a worker thread and a write can land between any two of them.
+
+        The lock is the same re-entrant one `transaction` takes, so a read scope
+        inside a transaction — or nested inside another read scope — joins rather
+        than deadlocks.
+
+        **Reads only, and it is not a snapshot.** Nothing here begins a SQLite
+        transaction: it excludes this process's own writers, which is what the
+        one-connection design makes sufficient, and it says nothing about a
+        second process. There is no second process by design — `catalogue.sqlite`
+        has one writer and it is this plane.
+        """
+        with self._lock:
+            yield
+
+    def select_rows(self, statement: str, values: Sequence[Any] = ()) -> list[dict[str, Any]]:
+        """Run one adapter-authored `SELECT` and return its rows.
+
+        **The escape hatch for a read this store's own vocabulary cannot express**,
+        and it is deliberately narrow: a text search across three tables, and a
+        facet count grouped over one of them, are joins with a `GROUP BY` — there
+        is no decomposition of `fetch_one`/`scan`/`select_page` that reaches them,
+        and a general query builder here would be a second SQL dialect to maintain
+        for the sake of not writing SQL.
+
+        **It does not weaken the identifier discipline, and the reason is who
+        writes the statement.** Every other method interpolates table and column
+        names supplied by a *caller*, which is why they are validated against the
+        file's own schema first. A statement passed here is written in this
+        package by the adapter that declares the schema — the same module, the
+        same commit — and every value a caller ever supplied is bound as a
+        parameter. `_validate` would have nothing to check: there is no caller
+        identifier in the statement to check.
+
+        The layering is unchanged by it. This module still holds no artwork, theme
+        or wall concept: it owns the connection, the lock and the row shape, and
+        the SQL arrives from above the way a table name does.
+
+        Read-only by contract — it neither commits nor rolls back, so a write sent
+        through it would leave an implicit transaction open for the next commit to
+        publish. `SELECT` only.
+        """
+        with self._lock:
+            rows = self._connection.execute(statement, tuple(values)).fetchall()
+        return [dict(row) for row in rows]
+
     def close(self) -> None:
         """Release the underlying resources."""
         with self._lock:

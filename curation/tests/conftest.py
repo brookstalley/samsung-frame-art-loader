@@ -67,11 +67,13 @@ from curation.persistence.records import (
     AcquisitionMethod,
     Artist,
     Artwork,
+    FacetDerivation,
     FetchStatus,
     MatMethod,
     RenditionKind,
     RightsStatus,
     SourceClass,
+    VocabularyKind,
 )
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.persistence.sqlite_discovery import SqliteDiscovery
@@ -679,9 +681,20 @@ def build_large_catalogue(
 
     Facet-ish values a curator would filter on — movement, subject, medium,
     date — go into `medium`, `date_created` and `description`, the columns that
-    already exist. A dedicated facet entity is deliberately not used, because a
-    fixture that depended on one could not be written before it existed; this
-    only has to give a search measurement real token variety to run against.
+    already exist, **and since `WorkFacet` was built they are also written as
+    facets**, from the very same draws. Both, not one: `date_created` stays the
+    free-text evidence and the `era` facet is the lossy index beside it, which is
+    the arrangement `data-model.md` requires and the thing a test asserting
+    "selecting a movement narrows era" has to have real data behind.
+
+    **The draws are unchanged and in the same order**, so the seed still
+    reproduces the corpus the earlier measurements were taken against: the facet
+    rows are written from values already drawn rather than from new ones.
+
+    **`palette` is deliberately left with no values at all.** A kind the catalogue
+    holds nothing of is a real state — nothing infers palettes yet — and a fixture
+    where every kind is populated cannot tell a control that handles an empty
+    vocabulary from one that has never met it.
     """
     rng = random.Random(seed)
 
@@ -718,20 +731,61 @@ def build_large_catalogue(
         artist = None if rng.random() < 0.02 else artists[int(len(artists) * (rng.random() ** 2))]
         movement, era, subjects = rng.choice(_MOVEMENTS)
 
-        works.append(
-            service.add_artwork(
-                title=title,
-                artist_id=artist.id if artist else None,
-                date_created=str(rng.randint(*era)),
-                medium=rng.choice(_MEDIA),
-                dimensions=f"{rng.randint(30, 200)} x {rng.randint(30, 200)} cm",
-                description=(
-                    f"{rng.choice(subjects)} in the {movement} tradition, "
-                    f"{rng.choice(_PLACES)}. {rng.choice(_DESCRIPTION_CLAUSES)}"
-                ),
-            )
+        # Drawn into locals in exactly the order the `add_artwork` call used to
+        # evaluate them — year, medium, the two dimensions, subject, place,
+        # clause. The facets below need three of these values a second time, and
+        # re-drawing any of them would move the random stream and change every
+        # work after it, which is the one property this corpus exists to have.
+        year = rng.randint(*era)
+        medium = rng.choice(_MEDIA)
+        dimensions = f"{rng.randint(30, 200)} x {rng.randint(30, 200)} cm"
+        subject = rng.choice(subjects)
+        place = rng.choice(_PLACES)
+        clause = rng.choice(_DESCRIPTION_CLAUSES)
+
+        work = service.add_artwork(
+            title=title,
+            artist_id=artist.id if artist else None,
+            date_created=str(year),
+            medium=medium,
+            dimensions=dimensions,
+            description=f"{subject} in the {movement} tradition, {place}. {clause}",
         )
+        # `sourced` for the two a holding institution actually publishes — who
+        # made it and what it is made of — and `inferred` for the three no
+        # collection reliably carries. That split is the corpus's job here: a
+        # fixture where every row said `inferred` could not tell a surface that
+        # marks the rare sourced value from one that marks nothing.
+        for kind, value, derivation in (
+            (VocabularyKind.MOVEMENT, movement, FacetDerivation.INFERRED),
+            (VocabularyKind.ERA, _century(year), FacetDerivation.INFERRED),
+            (VocabularyKind.SUBJECT, subject, FacetDerivation.INFERRED),
+            (VocabularyKind.MEDIUM, medium, FacetDerivation.SOURCED),
+        ):
+            service.record_facet(artwork_id=work.id, kind=kind, value=value, derivation=derivation)
+        if artist is not None:
+            service.record_facet(
+                artwork_id=work.id,
+                kind=VocabularyKind.ARTIST,
+                value=artist.name,
+                derivation=FacetDerivation.SOURCED,
+            )
+        works.append(work)
     return works
+
+
+def _century(year: int) -> str:
+    """A year as the era facet names it — "17th c." for 1650.
+
+    Lossy on purpose, and it sits beside `date_created` rather than replacing it:
+    the free text is the evidence and this is only the index. Ordinal suffixes are
+    spelled out because 11th, 12th and 13th break the last-digit rule, and a
+    corpus that read "21th c." would look like a data defect in every assertion
+    that quoted it.
+    """
+    ordinal = (year - 1) // 100 + 1
+    suffix = "th" if 11 <= ordinal % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(ordinal % 10, "th")
+    return f"{ordinal}{suffix} c."
 
 
 def _open_seeded_catalogue(path, *, size: int, seed: int) -> tuple[SqliteDurableStore, CatalogueService, Sequence[Artwork]]:
@@ -756,10 +810,15 @@ def _large_catalogue(tmp_path_factory) -> Iterator[tuple[CatalogueService, Seque
 
     Session-scoped so the build is paid for once rather than once per test.
     Measured directly (bypassing pytest and process start-up) on 2026-08-12 at
-    `_LARGE_CORPUS_SIZE` = 4000: **0.165s** — comfortably under the "a second
-    or two" bar this file's other session-scale fixtures are held to, mostly
-    because the whole build runs inside one `transaction()` rather than
-    committing per row (see `_open_seeded_catalogue`). Session scope still
+    `_LARGE_CORPUS_SIZE` = 4000: **1.34s**, on an M-series laptop. Still under
+    the "a second or two" bar this file's other session-scale fixtures are held
+    to, and it stays there mostly because the whole build runs inside one
+    `transaction()` rather than committing per row (see
+    `_open_seeded_catalogue`). It was **0.165s** before the same commit added the
+    ~18,000 facet rows — four or five per work, each written through
+    `record_facet`, which reads the work's existing facets first so that
+    re-recording a claim is a no-op. That read is what the eightfold difference
+    mostly is, and it is a fixture cost rather than a query one. Session scope
     saves the cost across the several tests below that all want the same
     corpus, and keeps a hypothetical slower future build from being paid for
     more than once.

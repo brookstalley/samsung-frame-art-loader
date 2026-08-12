@@ -91,6 +91,15 @@ class TableAdapter:
         """
         return self._store.transaction()
 
+    def reading(self) -> AbstractContextManager[None]:
+        """Group several reads so they answer about one instant of the file.
+
+        Delegated for the same reason as `transaction` above, and it reaches the
+        same lock — so a composite read spanning both adapters is as consistent
+        as one inside either.
+        """
+        return self._store.reading()
+
     def close(self) -> None:
         """Release the file. Every adapter over the same file is closed with it.
 

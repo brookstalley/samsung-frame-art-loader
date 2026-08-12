@@ -14,7 +14,7 @@ from mcp.client.streamable_http import streamable_http_client
 from curation.manifest.builder import ExclusionReason, assess
 from curation.mcp.registry import DESCRIPTION_BUDGET_BYTES
 from curation.mcp.tools import ART_DISPLAY, ART_THEME, TOOLS, TOOLS_BY_NAME
-from curation.persistence.records import FetchStatus
+from curation.persistence.records import FetchStatus, VocabularyKind
 from curation.services.errors import ServiceError
 
 #: A regression here silently renames the entire MCP tool surface for every
@@ -475,3 +475,25 @@ def test_a_parameter_that_is_required_by_some_actions_is_described_neutrally(too
 
     assert "omit" not in published.lower(), f"run_id's published description assumes one action's arity: {published!r}"
     assert "run" in published.lower()
+
+
+def test_every_facet_kind_the_collection_filters_by_is_a_parameter_of_the_listing(tools):
+    """The browser and the tool surface offer the same filters, or one of them lies.
+
+    `GET /api/works` takes one repeatable parameter per facet kind, named from
+    `VocabularyKind`; `art_catalogue(action='list')` declares its six by hand,
+    because the useful half of each description is an example of that kind's
+    *values* and the enum does not carry those. Hand-written means it can drift,
+    and a seventh kind reaching the vocabulary and not this tuple would be a
+    filter a curator could apply and a model could not — the exact
+    agent-and-a-click disagreement the shared service layer exists to prevent.
+    """
+    published = tools["art_catalogue"].inputSchema["properties"]
+    listing = next(action for action in TOOLS_BY_NAME["art_catalogue"].actions if action.name == "list")
+    declared = {param.name for param in listing.params}
+
+    for kind in VocabularyKind:
+        assert str(kind) in declared, f"art_catalogue(action='list') takes no {kind} filter"
+        assert published[str(kind)]["type"] == "array", f"{kind} is not published as a repeatable filter"
+        assert published[str(kind)]["items"] == {"type": "string"}
+    assert "q" in declared, "the listing offers facets and no free text"

@@ -677,6 +677,40 @@ Answers Q15. Added 2026-08-10 with the collection's retrieval surface
 > category in the same chunk that builds it — the rule this artifact already states
 > for `conversation_tokens`, for the reason `mat_color_vision` demonstrates.
 
+> **Built 2026-08-12, as the `work_facets` table with the retrieval that stands on
+> it.** Every field above is as designed. Three things the design left open were
+> decided by building it, and one thing it implies is still not built.
+>
+> **`kind` is a shared enum in code, not a matching pair of them.** The rule above
+> — that the two enums must move together — is carried by there being one:
+> `persistence/records.py` declares `VocabularyKind`, `WorkFacet.kind` is typed by
+> it, and `Affinity.kind` binds to the same type when that entity lands. Two enums
+> that must agree is a promise; one enum is a fact.
+>
+> **`derivation` is a second, separate enum, and deliberately.** `FacetDerivation`
+> is `sourced | inferred`; `Affinity.derivation` is `stated | inferred | observed`.
+> Only the *vocabulary* is shared — where a claim about a work came from and where
+> a claim about a taste came from are different questions with different answers,
+> and folding them into one enum would offer `observed` to a facet and `sourced` to
+> a taste.
+>
+> **No migration was written, and that is the finding rather than an omission.**
+> `SqliteDurableStore` widens a file by adding *columns*, and `migrations.py`
+> exists for what cannot be inferred from comparing two schemas — but this is a new
+> table with a new unique index, and `CREATE TABLE IF NOT EXISTS` and `CREATE
+> UNIQUE INDEX IF NOT EXISTS` both reach a catalogue file written before either
+> existed. A file that predates facets gains them on its next open with no
+> version, no step and nothing to interrupt. `test_work_facets.py` opens exactly
+> such a file rather than leaving the claim to be read.
+>
+> **What is not built: nothing writes a facet on its own account yet.**
+> `CatalogueService.record_facet` and `remove_facet` exist and are how a facet
+> reaches the catalogue; no discovery path calls them, and neither the HTTP surface
+> nor the tool surface offers a write. So a real catalogue's facet vocabulary is
+> empty until inference lands, and the collection's rail is correspondingly empty —
+> which the retrieval treats as an ordinary state rather than an error, and which
+> the paid-path rule above still governs when it is filled.
+
 ### Affinity
 
 What the curator has reacted to, and how. Answers Q13; retained across
@@ -1983,6 +2017,19 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
     are written and displayed while no decision reads them, and the tool tip on
     `retry_acquisition` promising that a retry is safe is true only for the failure
     case it happens to name.
+17. **A work carries a given (`kind`, `value`) facet at most once, enforced by the
+    `work_facets_once_per_work` unique index.** *(Added 2026-08-12 with the
+    entity.)* A work is Baroque once. **Load-bearing rather than tidy:** the number
+    a curator reads beside a facet option is a plain `COUNT(*)` over this table,
+    chosen precisely because the index makes `COUNT(DISTINCT artwork_id)` the same
+    number — so a duplicate row would inflate the count while the grid it labels
+    still showed that work once, which is a wrong number with nothing on screen
+    contradicting it. Above the index, `CatalogueService.record_facet` returns the
+    row already held rather than writing a second, so re-recording a claim is a
+    no-op; the index is what protects a catalogue written by anything else. The
+    stored `derivation` is the *first* recording's and is never relabelled by a
+    later one, because a sweeping inference pass must not be able to quietly
+    restate a museum's own value as a guess.
 
     **The comparison is quality, not recency, and it is deliberately coarse.** Only
     the complete/partial distinction is read. Pixel count is *not* consulted: a

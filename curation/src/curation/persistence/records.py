@@ -112,6 +112,58 @@ class MatMethod(StrEnum):
     MANUAL = "manual"
 
 
+class VocabularyKind(StrEnum):
+    """The one typed vocabulary, used from both sides.
+
+    **This enum is deliberately shared rather than duplicated, and the sharing is
+    the reason `WorkFacet` exists at all.** One set of terms then serves three
+    purposes: what a work *is* (`WorkFacet.kind`), what the curator *likes*
+    (`Affinity.kind`, unbuilt), and what discovery weights when it proposes. Two
+    vocabularies for one idea is the drift being avoided — "Post-Impressionism"
+    as a taste and "post impressionist" as a catalogue value cannot be matched,
+    and nothing would report the mismatch.
+
+    **So `Affinity` binds to this type when it lands, rather than declaring its
+    own.** Widening one without the other silently breaks the join that makes
+    taste useful, and the only way to make that structural instead of a promise
+    is for there to be one enum to widen.
+
+    Closed on purpose. A free-text kind turns a typo into a new dimension, and
+    nothing downstream can tell `subject` from `subjcet`; a seventh kind is a
+    schema change, which is the point.
+    """
+
+    ARTIST = "artist"
+    MOVEMENT = "movement"
+    ERA = "era"
+    SUBJECT = "subject"
+    MEDIUM = "medium"
+    PALETTE = "palette"
+
+
+class FacetDerivation(StrEnum):
+    """Where a facet's claim about a work came from.
+
+    Never absent — an unlabelled facet is a guess wearing a citation.
+
+    **The expected steady state is that most facets are `INFERRED`**, and that is
+    a fact about the providers rather than a defect: `discovery/browse.py` records
+    that for the Art Institute "style, classification and period were measured
+    missing on ordinary spellings", and that collection publishes no style field
+    at all. Which is exactly why every row has to say which it is — a facet the
+    museum published and a facet a model guessed carry different authority, and a
+    curator correcting the catalogue needs to know which one they are arguing
+    with.
+
+    Deliberately *not* `Affinity.derivation`, which is a different question with
+    three answers (`stated`, `inferred`, `observed`) about where a *taste* came
+    from. Only `kind` is the shared vocabulary.
+    """
+
+    SOURCED = "sourced"
+    INFERRED = "inferred"
+
+
 @dataclass(frozen=True, slots=True)
 class Artist:
     """A person a work is attributed to.
@@ -175,6 +227,36 @@ class Artwork:
     rights: str | None = None
     accepted_at: datetime | None = None
     commentary: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkFacet:
+    """What a work *is*, in the same typed vocabulary the curator's taste is expressed in.
+
+    Many per work, unique on (`artwork_id`, `kind`, `value`): a work is Baroque
+    once. The uniqueness is not decoration — the facet counts a curator reads off
+    the collection are a plain `COUNT(*)` per value, and a second Baroque row on
+    one work would inflate every one of them.
+
+    **`era` sits BESIDE `Artwork.date_created`, never over it.** `date_created` is
+    free text — "1931", "c. 1650", "1888-89" — because normalising would destroy
+    the distinction between a known year and an estimated one, and that decision
+    stands. An era facet is an additional, coarser, *lossy* reading of the same
+    fact, kept here where its derivation is recorded: the free text stays the
+    evidence and the facet is only the index. A surface showing "Late 19th c."
+    must still be able to show "1888-89".
+    """
+
+    id: str
+    artwork_id: str
+    kind: VocabularyKind
+    value: str
+    derivation: FacetDerivation
+    created_at: datetime
+    #: For `SOURCED`, which field of which provider — e.g. `artic:classification_title`.
+    #: For `INFERRED`, the model id. Null where nobody recorded it, which is
+    #: honest rather than tidy.
+    source_note: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
