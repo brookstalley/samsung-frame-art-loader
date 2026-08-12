@@ -1,8 +1,8 @@
 """The tools directory is code, and nothing was executing it.
 
 **This file exists because of a specific failure.** The type-floor derivation
-moved three contract surfaces at once — `lay_out` gained a required parameter, `LabelSurface` gained a
-required property, and three module constants were deleted — and
+moved three contract surfaces at once — `lay_out` gained a required parameter,
+`LabelSurface` gained a required property, three module constants were deleted — and
 `tools/label_preview.py` used all three. Every invocation raised. The suite stayed
 green, the linters stayed green, and the only thing that would have discovered it
 is the operator running the tool at the panel with the service stopped, which is
@@ -124,19 +124,34 @@ class TestTheLabelPreviewStillRuns:
         printed = capsys.readouterr().out
         assert "Katsushika, Hokusai" in printed, "the sample no longer carries the name parts the panel sets"
 
-    def test_the_report_shows_the_drop_rule_taking_something_off(self, label_preview, tmp_path, capsys):
+    def test_the_report_shows_the_drop_rule_taking_the_lowest_line_off(self, label_preview, tmp_path, capsys):
         """**The half of the label that is invisible in the image.**
 
         The drop rule's whole failure mode is silence: a label that lost its
-        dimensions looks like a label that never had any. So the sample has to be
-        a work the panel genuinely cannot hold — a fully populated one, down to
-        the commentary that is first to go — or the tool renders a comfortable
-        label and never exercises the line it exists to make visible.
+        dimensions looks like a label that never had any. So the sample has to
+        overflow — a fully populated work, down to the commentary that is first to
+        go — or the tool renders a comfortable label and never exercises the line
+        it exists to make visible.
+
+        **What this can and cannot say.** It runs against `StubRasterizer`, whose
+        measure is arithmetic of this file's choosing, so it establishes that the
+        sample overflows *the stub* and not that it overflows Pango on the real
+        panel — no test on this machine can say the second thing. What transfers
+        is the property under test: the sample is populated enough to reach the
+        drop rule at all, and the lowest-priority line is the one it takes. A
+        sample trimmed back to something comfortable fails here first.
         """
         label_preview.main([str(tmp_path / "label.png")])
 
         (dropped,) = [line for line in capsys.readouterr().out.splitlines() if "DROPPED" in line]
-        assert "outran the series" in dropped, "the sample no longer overflows far enough to drop its last line"
+        # `Layout.dropped` keeps label order, so the LAST name here is the
+        # lowest-priority line — the first one the rule actually gave up.
+        # Asserting on that end pins the ordering rather than merely that
+        # something came off.
+        taken = dropped.split(":", 1)[1].strip()
+        assert taken.endswith(
+            "One of thirty-six views, and the one that outran the series."
+        ), f"commentary was not the lowest line given up: {taken}"
 
     def test_the_calibration_override_changes_the_type(self, label_preview, tmp_path, capsys):
         """`--cap-arcmin` is the one judgement the operator still makes, so it is

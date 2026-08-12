@@ -333,7 +333,7 @@ def _artist(service, artist_id):
 class TestNamingTheArtists:
     """Which part of a name is the family name — authored, never inferred.
 
-    The e-paper label leads with the family name in bold capitals, and the 2024
+    The e-paper label leads with the family name and sets it apart, and the 2024
     index stores one undivided string per artist, so the split is a table this
     package carries. These pin the two things that table has to do: put the parts
     on rows it creates, and put them on rows that were written before the fields
@@ -345,8 +345,8 @@ class TestNamingTheArtists:
         report = seed([entry], service, tree(entry))
 
         artist = service.get_artwork(report.works[0].work_id).artist
-        # Japanese order: the family name leads, so last-word would set the wrong
-        # one of the two in bold capitals on every work of his.
+        # Japanese order: the family name leads, so last-word would lead with the
+        # wrong one of the two on every work of his.
         assert (artist.family_name, artist.given_name) == ("Katsushika", "Hokusai")
 
     def test_an_artist_who_is_not_a_person_is_left_with_no_parts_at_all(self, service, record, tree):

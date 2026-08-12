@@ -38,8 +38,8 @@ from curation.persistence.sqlite import SqliteCatalogue
 
 _EXPECTED_SCHEMA = {
     # Widened with `family_name` and `given_name` when the e-paper label began
-    # setting the family part in bold capitals — which needs to know which part
-    # that is, and no rule over `name` can say for "van Gogh".
+    # leading with the family part — which needs to know which part that is, and
+    # no rule over `name` can say for "van Gogh".
     "artists": {"id", "name", "nationality", "born", "died", "lifespan_text", "biography", "family_name", "given_name"},
     # `commentary` is the line written for a wall label, which is not
     # `description` — that is the holding institution's paragraph.

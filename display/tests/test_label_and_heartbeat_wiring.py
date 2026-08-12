@@ -49,7 +49,7 @@ def surface() -> Iterator[FakeSurface]:
 
 @pytest.fixture
 def labelled(settings, tv, state, clock, surface: FakeSurface) -> Daemon:
-    """A daemon with a label surface attached — the deployment 13B provisions."""
+    """A daemon with a label surface attached — the shape the Pi is provisioned to."""
     watcher = Watcher(
         settings.manifest_path,
         rotation_interval_fallback=settings.rotation_interval_fallback_seconds,

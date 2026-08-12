@@ -77,7 +77,7 @@ class TestTheHierarchy:
 
         **Asserted on the sizes the layout actually emits, not on `TypeScale`'s
         field list.** A structural check on the dataclass guards the shape rather
-        than the decision, and it would fail on 13B-4 adding a mandatory-tier
+        than the decision, and it would fail when the mandatory tier adds its
         size — which is a *smaller* size, below the floor, not a middle one. This
         assertion stays true through that change and false through the one it
         exists to catch.
