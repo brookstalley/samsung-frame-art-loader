@@ -101,18 +101,27 @@ the plan is ordered so they do not wait on the two.
 measurement against a seeded thousands-scale corpus. Both are cheap, both convert a
 named assumption into a recorded fact, and neither blocks the chunks before it.
 
+*(Both are now done, and both were worth their cost — the corpus measurement
+retired the FTS5 assumption in favour of `LIKE`, and the API probe falsified the
+assumption it was built to test. **The probe's own lesson is about scheduling, not
+about the step**: it was designed for wave 0 precisely so a wrong answer would
+arrive while the surface was still being designed, it slipped to after wave 1, and
+the cost was a chunk brief written against an unmeasured shape that had to be
+corrected before dispatch. A step that only pays when it runs early is one to run
+early.)*
+
 ## Status
 
 - [x] Chunk 01: Wall, ThemeAssignment, and the end of `Theme.is_active`
 - [x] Chunk 02: One manifest per wall — the inter-plane half
 - [x] Chunk 03: The revised palette lands in the stylesheet
 - [x] Chunk 04: Three destinations — the navigation reshape
-- [ ] Chunk 05: The Walls screen — the product's home
+- [x] Chunk 05: The Walls screen — the product's home
 - [x] Chunk 06: `WorkFacet`, text search, and facet counts
 - [ ] Chunk 07: Collection — the grid, the rails, and the three empties
-- [ ] Chunk 08: The Work screen, archive and restore
+- [x] Chunk 08: The Work screen, archive and restore
 - [ ] Chunk 09: The Theme screen — rename, reorder, hang, delete
-- [ ] Chunk 10: Conversation — the thread, the turns, and the commit seam
+- [x] Chunk 10: Conversation — the thread, the turns, and the commit seam
 - [ ] Chunk 11: Taste — affinities, reactions, and the delete that detaches
 
 Context: Plan authored 2026-08-12, the day the operator ruled on the three questions

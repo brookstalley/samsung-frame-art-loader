@@ -54,6 +54,64 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-12: Wave 2 — the Walls become home, a work is archived not removed, and intent becomes a conversation
+
+<!-- prawduct: chunks=05,08,10 | scope=curation-ux -->
+
+**Why:** four chunks built concurrently in four worktrees, landed one at a time.
+Three of them are here; Collection went back to its builder and lands separately.
+
+**Chunk 05 — the Walls, and four ways a wall can be dark.** The screen that says
+what is hanging was a table of render paths and is now the pictures, one section
+per wall. One wall and three walls are the same rendering with a different count,
+which is the point of fixing the shape while it is free. Every act names its wall
+even though there is one, because a sentence that reads correctly only because
+there is a single possible target silently becomes wrong. `POST /api/directives`
+closes a shape the contract deliberately left open pending walls becoming
+first-class. The four empty reasons are four branches, each offering the fix for
+its own reason, split structurally between the three that arrive inside a
+successful answer and the one that is a request which never came back.
+
+**Chunk 08 — archive as a label on a control.** There is no delete of a work in
+this product, and this is where that stopped being a rule in an artifact. The
+confirmation names which walls lose the picture, computed by building each hung
+wall's manifest rather than predicted — which is what separates a wall showing the
+work from one merely holding it in a theme where something else excludes it. A
+work's facets carry provenance the way a museum label does: the default stated
+once below the facts, and only the rare sourced value marked, with a tick rather
+than a word.
+
+**Chunk 10 — the thread, and the seam that keeps it from being a wizard.** The
+commit card becomes the progress card becomes works-ready-to-review, in place,
+transcript above it throughout. Everything about the provider was measured before
+it was built, and three measurements changed the code: reasoning left on spends
+the whole ceiling and returns nothing, billed in full; a truncated turn returns
+null content which is a hard refusal when fed back; and an image may not ride an
+assistant turn. Retrying spends nothing twice because asking again sends no text —
+the transcript is the idempotency key, which beats one we would have invented.
+
+**One confirmation, built before the wave forked.** Two chunks needed one, no
+artifact said what a confirmation was, and the module boundary forbade them
+sharing through each other — so `core/confirm.js` landed first, as the platform's
+`<dialog>`. Focus starts on Cancel, a backdrop click dismisses nothing, and
+overlapping dialogs mint their own ids because `aria-labelledby` resolves
+document-wide and a shared id announces the older question above the newer one's
+buttons.
+
+**What this wave cost, and it is all one lesson.** Every failure here looked
+green. A chunk reported a passing browser suite whose test fails in its own
+worktree at that commit. Two tests asserted over an empty fixture and were true of
+nothing — a sweep found seven mutations surviving them untouched, and all seven
+caught once the tests seeded a real thread. The evidence gate exited zero against
+a record naming none of a chunk's thirty-five files, because it checks the session
+rather than the tree. The findings file twice held the previous chunk's review
+while the current one ran, with plausible counts both times. And a shared
+`aria-hidden: true` rendered as the empty string, which is not a valid ARIA token
+and falls back to *not* hidden, so every badge glyph in the client had been
+reading its shape aloud. None of these were caught by the mechanism meant to catch
+them; they were caught by sweeping, by re-running somewhere else, and by reading
+evidence instead of exit codes.
+
 ## 2026-08-12: Wave 1 — the manifest goes per wall, the surface gets three destinations, and the collection gets search
 
 <!-- prawduct: chunks=02,04,06 | scope=curation-ux -->
