@@ -726,6 +726,61 @@ holds anything — measured at 0px with no margins when empty, so it costs no sp
 carries the work and its artist. There is no third state — an image with a missing
 alt attribute is a filename read aloud.
 
+### A confirmation is the platform's `<dialog>`, and there is exactly one of them
+
+**Ruled by the operator 2026-08-12, on a gap this artifact had left open.** The IA
+requires a confirmation in at least three places — activation names the wall and
+the consequence, archive names which walls lose the picture, and flow 6 makes
+activation the one act that changes what other people in the house see — while
+neither this artifact nor `design-direction.md` said what a confirmation *is*. Two
+chunks needed one at the same time, which is how the silence was found.
+
+**The mechanism is `<dialog>` with `showModal()`, wrapped once in `core/confirm.js`.**
+Focus trapping, `Escape` to dismiss, background inertness and `aria-modal`
+semantics are then the browser's rather than ours — on a surface with no build step
+and no framework, a hand-rolled modal is a focus bug waiting for the one operator
+who uses this to hit it. The rules that are *not* free, and are therefore asserted
+in the browser suite:
+
+- **Initial focus is the cancel control, never the affirmative one.** A keypress
+  that arrives before the sentence has been read must not commit the act.
+- **A backdrop click dismisses nothing.** `Escape` is the deliberate exit and is
+  the only one; an accidental click outside the dialog resolves the question
+  neither way.
+- **The dialog leaves the DOM once it settles**, so a screen that confirms twice
+  does not accumulate a second one behind the first.
+- The title carries the act *and its target* — "Hang Winter in the living room?",
+  never "Hang Winter?" — because the governing rule that every act names its wall
+  is enforced by what the caller passes, and a confirmation is the last place it
+  could be dropped.
+
+**No `danger` styling, and no such class exists to reach for.** The acts that use
+this are ordinary and reversible: archive's whole point is that `Restore` exists,
+and dressing it as destructive would produce exactly the hesitation over a cheap
+act that the IA argues the word "Remove" produces.
+
+Three things the build surfaced that are worth holding, because each is invisible
+when it is wrong:
+
+- **Every dialog mints its own ids, and that is an accessibility requirement
+  rather than tidiness.** `aria-labelledby` resolves document-wide, so two
+  overlapping confirmations sharing one id announce the *older* question above the
+  newer question's buttons — while every id still resolves to a real element, so
+  the markup inspects clean. Nothing stops two calls overlapping; the platform
+  stacks them, `Escape` settles only the topmost, and the one beneath stays
+  unanswered.
+- **"Initial focus is Cancel" is the one rule here no test can defend**, because
+  the platform's own first-focusable default already lands there — Cancel is
+  written first. The explicit call survives a mutation sweep only by surviving it,
+  and it is kept anyway: it makes the guarantee independent of DOM order rather
+  than a coincidence of it, and a link in a consequence or a relaid-out button row
+  would break the coincidence silently. Same disposition `MEASURE_EM` carries
+  above.
+- **Focus restoration on close is inherited and unasserted.** The browser returns
+  focus to whatever held it before `showModal()`, and the dialog is removed in the
+  `close` handler — after that restoration, which is the ordering that makes it
+  work. Nothing tests it, and it would break without a symptom a suite would see.
+
 ### What the IA adds that is not yet practised
 
 **Owed.** These are requirements on the work that reshapes the surface, not

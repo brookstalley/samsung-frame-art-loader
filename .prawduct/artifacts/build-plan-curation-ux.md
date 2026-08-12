@@ -189,6 +189,31 @@ fixes the shape. If that shape turns out to be wrong, it is the artifact that ge
 corrected and both agents that get re-briefed; an agent that quietly invents a field
 to unblock itself has broken the seam that lets them run at all.
 
+**Wave 2's seams, settled before dispatch rather than at merge.** Wave 1's lesson
+was that a shared contract holds where it is written down and leaks where it is
+not, so these were found by reading each chunk's brief against the others and
+fixed on the branch first:
+
+- **The confirmation.** Chunks 05 and 08 both need one and no artifact said what a
+  confirmation was; the module boundary forbids either importing the other's
+  screen, so each would have built its own. `core/confirm.js` is therefore built
+  and committed on this branch *before* wave 2 forks, to the interface
+  `confirmAct({title, consequence, confirmLabel, cancelLabel}) -> Promise<boolean>`,
+  and both chunks import it rather than author it. The pattern is recorded in
+  `accessibility-spec.md`. Chunks 09 and 11 inherit it.
+- **Archived works are already listed.** `CatalogueService.list_artworks` returns
+  accepted and archived together, and `core/badges.js` already badges the
+  difference. Chunk 07 does not add a status filter and Chunk 08 does not change
+  the listing — each brief says so, because either agent acting alone would have
+  read its own half as an omission to fix.
+- **Four chunks append to `api.py`.** 05 owes `POST /api/directives` (designed in
+  `api-contract.md`, never built — the plan's "and `next`" did not flag that it is
+  new backend surface), 08 owes archive and restore, 10 owes the conversation
+  routes. They meet in one file in different route functions, as wave 1 did. Each
+  agent appends its own block and reorganises nothing.
+- **Only Chunk 10 adds to the route table in `app.js`.** The other three screens
+  are already registered there by Chunk 04.
+
 ### The land protocol
 
 Each chunk lands alone, into the main checkout, by the main agent:
@@ -717,8 +742,21 @@ split was made to end, and it will not announce itself as having done so.
     tiles) and catalogue (the built card), remembered and part of the addressable
     state
   - The facet rail — typed vocabulary, counts shown, zero options disabled and not
-    hidden, the inferred-is-the-rule footnote below the facts and the rare `sourced`
-    marked with a tick rather than a word
+    hidden
+    <!-- The inferred-is-the-rule footnote and the `sourced` tick were listed here
+         until 2026-08-12 and are now Chunk 08's. My ruling, on reading what the IA
+         actually says: it puts the footnote "below the facts particular to this
+         one" work, which is the Work screen, not a rail. The rail aggregates
+         across works, where a single derivation is meaningless, and its payload
+         carries none to render — building it here meant inventing an API shape no
+         artifact specifies. — Claude -->
+  - **Archive is not offered from the grid.** My ruling, same day: the IA's
+    Information Hierarchy table lists archive among Collection's actions, but its
+    confirmation must name which walls lose the picture, computed from the
+    manifest. That machinery is the Work screen's, and duplicating it into the grid
+    to satisfy a table cell would ship the product's characteristic failure — a
+    silent wall consequence — by the cheaper route. The grid links to the work; the
+    work archives.
   - The theme rail: filters the grid to a theme's members, membership edited in
     place with multi-select
   - **Three distinct empty states** — no works at all; no works matching the filter;
@@ -751,6 +789,11 @@ split was made to end, and it will not announce itself as having done so.
 - **Deliverables:**
   - The Work screen: image primary, facts stated once each, the mat showing its
     colour and nothing else, no label geometry
+  - **The inferred-is-the-rule footnote, and the rare `sourced` marked with a tick
+    rather than a word** — moved here from Chunk 07 on 2026-08-12, because the IA
+    places the footnote below the facts particular to *this* work and only the work
+    dossier carries `WorkFacet.derivation` at all. The word stays for assistive
+    technology, so neither colour nor shape is the sole carrier
   - `POST /api/works/{id}/archive` and `/restore`, and the MCP actions already
     designed
   - The controls read **Archive** and **Restore**, styled as ordinary reversible
@@ -781,6 +824,14 @@ split was made to end, and it will not announce itself as having done so.
   reorder; "hang this" naming the wall; `DELETE /api/themes/{id}` calling the
   service guard rather than writing its own, with the refusal message already
   written in `api-contract.md`
+  - **Two debts this screen inherits, both found while briefing wave 2 and both
+    left here deliberately rather than fixed by a chunk that does not own the
+    file.** Its membership control reads **Remove**, which Chunk 08's acceptance
+    criterion — no control anywhere says "Remove" of a work — reads as a violation
+    on sight; it removes a work from a *theme* rather than from the catalogue, so
+    the fix is a label that says which ("Remove from Winter"), not a rename to
+    Archive. And its "hang on {wall}" button fires with no confirmation at all,
+    while flow 6 requires one; it adopts `core/confirm.js`, built for wave 2
 - **Tests:** integration — delete refuses a theme hung on any wall and permits the
   last unhung one; the refusal message is the normative sentence. Browser — reorder
   persists and repaints from the response

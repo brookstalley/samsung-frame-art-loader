@@ -814,6 +814,52 @@ dl.facts dd {
   padding-top: 0;
 }
 
+/* -- confirmation ---------------------------------------------------------- */
+
+/* The question asked before a wall changes, and deliberately the plainest
+   surface in this stylesheet. It is a native `<dialog>`, so everything that
+   makes it a modal — the centring, the focus trap, the inert page behind it —
+   is the browser's; what is left here is a sheet of the same paper every panel
+   is made of, one step nearer the reader. Chrome yields to the artwork on this
+   surface, and a dialog is the one place a design is most tempted to forget
+   that. */
+dialog.confirm {
+  max-width: 32rem;
+  background: var(--surface-1);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+  padding: var(--space-5);
+  font: var(--text-md) / 1.55 var(--font-ui);
+}
+
+/* The page is still visible behind the question, because what the act is about
+   to change is usually on it — the wall, the theme, the work being archived.
+   `--scrim` is the token for exactly this: type-bearing chrome laid over
+   something whose colours are not ours to predict. */
+dialog.confirm::backdrop {
+  background: var(--scrim);
+}
+
+.confirm-title {
+  margin: 0 0 var(--space-3);
+}
+
+.confirm-consequence {
+  margin: 0 0 var(--space-5);
+  color: var(--text);
+}
+
+/* The verb sits last, where the eye finishes the sentence; Cancel is to its
+   left and is where the keyboard starts. */
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
