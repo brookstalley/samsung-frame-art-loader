@@ -140,6 +140,65 @@ class ImageAttachment:
 
 
 @dataclass(frozen=True, slots=True)
+class Message:
+    """One turn of a thread, in the provider's vocabulary rather than the product's.
+
+    `role` is `"system"`, `"user"` or `"assistant"` — the names the API accepts,
+    and deliberately not the product's `curator`/`system` pair. Measured: a role
+    of `"curator"` is a 400 reading *"curator is not one of ['system',
+    'assistant', 'user', 'tool', 'function']"*, so the translation happens above
+    this seam or it happens at the provider's expense.
+
+    **`text` is a string and never `None`, and that is the load-bearing part.**
+    A truncated turn comes back with `content: null`, and feeding that object
+    straight back into the next request is refused — *"The content field is a
+    required field"* — while `content: ""` is accepted and answered normally.
+    Both measured, twice, on 2026-08-12. A caller that stored the provider's
+    message object untouched would therefore poison the thread one turn later,
+    which is why nothing here can express a null.
+
+    **An image may only ride a `user` turn.** An `image_url` part on an assistant
+    turn is a 400: *"An incorrect modal `image` was entered … or was placed in
+    the wrong position (e.g., in system/assistant)"*. Refused below, where the
+    mistake is made, rather than by the provider a network round trip later.
+    """
+
+    role: str
+    text: str
+    image: ImageAttachment | None = None
+
+    def __post_init__(self) -> None:
+        if self.role not in _ROLES:
+            raise ValueError(f"A message role is one of {sorted(_ROLES)}, got {self.role!r}.")
+        if self.image is not None and self.role != "user":
+            raise ValueError(
+                f"An image may only travel on a user turn, not on a {self.role!r} one. Measured against the live "
+                "API: the provider refuses an image part in a system or assistant message. A sample the model "
+                "should look at again rides the curator's next turn."
+            )
+
+    def wire(self) -> dict[str, Any]:
+        """This turn as the request body carries it."""
+        if self.image is None:
+            # A bare string rather than a one-element part list. Both are
+            # accepted; this is the shape every capture of a text-only turn
+            # holds, and matching what was measured is what makes the fakes
+            # built from those captures mean anything.
+            return {"role": self.role, "content": self.text}
+        return {
+            "role": self.role,
+            "content": [
+                {"type": "text", "text": self.text},
+                {"type": "image_url", "image_url": {"url": self.image.data_uri}},
+            ],
+        }
+
+
+#: The roles the provider accepts, quoted from its own refusal of one it does not.
+_ROLES: Final[frozenset[str]] = frozenset({"system", "user", "assistant"})
+
+
+@dataclass(frozen=True, slots=True)
 class Completion:
     """What one call produced, and what it cost in the provider's own terms.
 
@@ -283,15 +342,49 @@ class OpenRouterClient:
         same choices, same `usage.cost`, same `finish_reason` — and the image
         bills inside `prompt_tokens` rather than as a separate charge.
         """
-        content: str | list[dict[str, Any]] = prompt
-        if image is not None:
-            content = [
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": image.data_uri}},
-            ]
+        return self.complete_thread(
+            messages=[Message(role="user", text=prompt, image=image)],
+            schema=schema,
+            search_results=search_results,
+        )
+
+    def complete_thread(
+        self,
+        *,
+        messages: Sequence[Message],
+        schema: Mapping[str, Any] | None = None,
+        schema_name: str = "work_list",
+        search_results: int = 0,
+        reasoning: Mapping[str, Any] | None = None,
+    ) -> Completion:
+        """Ask the model with a history behind the question.
+
+        **The provider keeps no thread state.** Measured 2026-08-12 over twelve
+        multi-turn calls: there is no thread id and no `previous_response_id`, so
+        every turn resends the whole conversation and is billed for it. An image
+        left in the history is re-sent, re-billed and genuinely re-read — 434
+        prompt tokens on *every* subsequent turn for one 768-pixel preview, with
+        `cached_tokens` zero throughout — so a thread's cost is linear in
+        (images × remaining turns) and a caller deciding how much history to
+        carry is deciding what it spends.
+
+        `reasoning` is the parameter `complete` has no need of and a
+        conversational turn cannot do without. On an open-ended prompt the routed
+        model consumed its **entire** output reservation on reasoning before
+        emitting a character — measured at 16, 200 and 900 tokens alike, ten
+        calls in a row, each returning empty content and each billed in full.
+        `{"enabled": False}` produced an answer for a twenty-seventh of the cost.
+        Passed through rather than decided here: this client reports what a call
+        cost and does not hold opinions about how the model should think.
+        """
+        if not messages:
+            # Refused here rather than by the provider, which answers 400 with
+            # *"Input required: specify \"prompt\" or \"messages\""* — a true
+            # sentence about a request this method should never have sent.
+            raise ValueError("A thread needs at least one message; the provider refuses an empty one.")
         body: dict[str, Any] = {
             "model": self._model,
-            "messages": [{"role": "user", "content": content}],
+            "messages": [message.wire() for message in messages],
             # Deliberate, never omitted: this is the reservation the provider
             # prices, and leaving it out invites a 402 at full credit.
             "max_tokens": self._max_output_tokens,
@@ -303,13 +396,15 @@ class OpenRouterClient:
         if schema is not None:
             body["response_format"] = {
                 "type": "json_schema",
-                "json_schema": {"name": "work_list", "strict": True, "schema": dict(schema)},
+                "json_schema": {"name": schema_name, "strict": True, "schema": dict(schema)},
             }
         if search_results > 0:
             plugin: dict[str, Any] = {"id": "web", "max_results": search_results}
             if self._search_engine is not None:
                 plugin["engine"] = self._search_engine
             body["plugins"] = [plugin]
+        if reasoning is not None:
+            body["reasoning"] = dict(reasoning)
 
         payload = self._post("/chat/completions", body)
         return _read_completion(payload, fallback_model=self._model)

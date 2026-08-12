@@ -19,6 +19,8 @@ from typing import Protocol
 from curation.persistence.discovery_records import (
     CandidateImage,
     CandidateWork,
+    Conversation,
+    ConversationTurn,
     DiscoveryRun,
     ResolveRunWork,
     RunKind,
@@ -112,6 +114,36 @@ class DiscoveryStore(Protocol):
         highest-ranked, which may be one already refused. `is_selected` answers
         which case this is; position does not.
         """
+        ...
+
+    # -- conversations --------------------------------------------------------
+
+    def add_conversation(self, conversation: Conversation) -> None:
+        """Persist a conversation. Raises if the id is already present."""
+        ...
+
+    def get_conversation(self, conversation_id: str) -> Conversation | None:
+        """Return the conversation, or None if no such id is stored."""
+        ...
+
+    def update_conversation(self, conversation: Conversation) -> None:
+        """Overwrite a stored conversation with this one. Raises if the id is absent."""
+        ...
+
+    def list_conversations(self) -> Sequence[Conversation]:
+        """Return every conversation, the most recently spoken in first."""
+        ...
+
+    def add_conversation_turn(self, turn: ConversationTurn) -> None:
+        """Append a turn. Raises if the id, or the thread position, is taken."""
+        ...
+
+    def get_conversation_turn(self, turn_id: str) -> ConversationTurn | None:
+        """Return the turn, or None if no such id is stored."""
+        ...
+
+    def list_conversation_turns(self, conversation_id: str) -> Sequence[ConversationTurn]:
+        """Return a thread's turns in ordinal order, which is reading order."""
         ...
 
     # -- spend ----------------------------------------------------------------

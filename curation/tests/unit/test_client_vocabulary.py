@@ -19,10 +19,12 @@ import subprocess
 
 import pytest
 
+from curation.discovery.conversation import SUGGESTION_KINDS
 from curation.http.pages import STATIC_DIR
 from curation.persistence.discovery_records import (
     ResolutionStatus,
     RunStatus,
+    TurnRole,
     UnresolvedReason,
     Verdict,
     WorkProvenance,
@@ -196,6 +198,23 @@ def test_every_run_status_is_named_in_the_client():
     """
     for status in RunStatus:
         assert f'"{status}"' in CLIENT, f"the client has no sentence naming the {status} state"
+
+
+def test_every_turn_role_has_a_name_a_reader_would_recognise():
+    """The transcript labels each turn with who said it, and both roles need words.
+
+    Same bargain as the run statuses above: without it a third role would render
+    as its own enum value beside the sentence it introduces — `system` above a
+    reply, which reads as a fault rather than as an answer.
+    """
+    for role in TurnRole:
+        assert f"{role}:" in CLIENT or f'"{role}"' in CLIENT, f"the client has no name for a {role} turn"
+
+
+def test_every_suggestion_kind_has_words_for_a_curator():
+    """A kind with no entry renders as the enum's own token beside an artist's name."""
+    for kind in SUGGESTION_KINDS:
+        assert f"{kind}:" in CLIENT, f"the client has no word for a {kind} suggestion"
 
 
 def test_every_resolution_status_has_a_glyph():

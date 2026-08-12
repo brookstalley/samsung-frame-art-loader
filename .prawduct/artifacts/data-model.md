@@ -786,7 +786,7 @@ changes — the second half of Q14.
 | `ordinal` | integer | required, unique per conversation | Order within the thread. Not a timestamp: two turns can share a second. |
 | `role` | enum | required | `curator` \| `system`. |
 | `text` | text | required | Verbatim. |
-| `suggested` | JSON | nullable | What this turn offered, as `[{kind, value}]` — the artists, movements or subjects named. Denormalised on purpose: it is a record of *what was said*, not a live index, and normalising it would let a later edit rewrite history. |
+| `suggested` | JSON | nullable | What this turn offered, as `[{kind, value, samples}]` — the artists, movements or subjects named, each with the sample pictures shown beside it. Denormalised on purpose: it is a record of *what was said*, not a live index, and normalising it would let a later edit rewrite history. **`samples` was added 2026-08-12, on building the thread**: the flow requires samples inline in the turn and no other structure gives them anywhere to live, and freezing them here is the same argument the rest of this row already makes — a sample re-fetched later is not the picture the curator reacted to. |
 | `committed_run_id` | UUID | FK → DiscoveryRun, nullable | Set on the turn where the curator committed a direction. **This is the seam** — it is what lets a run say which conversation produced it, and a conversation show what came of it. |
 | `created_at` | datetime | auto | |
 

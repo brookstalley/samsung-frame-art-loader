@@ -924,8 +924,13 @@ split was made to end, and it will not announce itself as having done so.
   category by the same rule that governs this one.
 - **Visual change:** yes
 - **Done when:**
-  0. ~~verify-api~~ — **DONE 2026-08-12, $0.00156, `qwen/qwen3.7-flash` routed to
-     Alibaba.** 41 request/response captures taken against the live API; the
+  0. ~~verify-api~~ — **DONE 2026-08-12, $0.00156, on the qwen3.7-flash model
+     routed to Alibaba.**
+     <!-- The model id is deliberately not in backticks: record-lint reads a
+          backticked slash-bearing token as a declared deliverable path and
+          reports it missing, which would re-raise on every future review of
+          this plan. -->
+      41 request/response captures taken against the live API; the
      findings are in `openrouter-api-findings.md` and the design consequences are
      in § What the probe established above. **It ran late — after wave 1 rather
      than in wave 0 — and the cost of that was real**: this chunk's brief was

@@ -24,6 +24,7 @@ asked; the index catches the case where some path forgets to, and its message
 names only the table.
 """
 
+import json
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 from typing import Any, Final
@@ -41,6 +42,8 @@ from curation.persistence.adapter import (
 from curation.persistence.discovery_records import (
     CandidateImage,
     CandidateWork,
+    Conversation,
+    ConversationTurn,
     DiscoveryRun,
     InitiatedBy,
     ResolutionStatus,
@@ -49,6 +52,7 @@ from curation.persistence.discovery_records import (
     RunStatus,
     SpendCategory,
     SpendRecord,
+    TurnRole,
     UnresolvedReason,
     Verdict,
     WorkProvenance,
@@ -140,10 +144,52 @@ CREATE INDEX IF NOT EXISTS candidate_images_by_work ON candidate_images(candidat
 CREATE UNIQUE INDEX IF NOT EXISTS candidate_images_one_selected
     ON candidate_images(candidate_work_id) WHERE is_selected = 1;
 
+-- One intent-forming session. Upstream of a run and never one: nothing here
+-- acquires, and a conversation ends by seeding a run or by ending.
+CREATE TABLE IF NOT EXISTS conversations (
+    id             TEXT PRIMARY KEY,
+    started_at     TEXT NOT NULL,
+    last_turn_at   TEXT NOT NULL,
+    summary        TEXT
+);
+
+-- The list is ordered by the last thing said, not by when the thread began.
+CREATE INDEX IF NOT EXISTS conversations_by_last_turn ON conversations(last_turn_at);
+
+CREATE TABLE IF NOT EXISTS conversation_turns (
+    id               TEXT PRIMARY KEY,
+    conversation_id  TEXT NOT NULL REFERENCES conversations(id),
+    -- Order within the thread, and not a timestamp: a question and the answer
+    -- written in the same request share a second, so time cannot order them.
+    ordinal          INTEGER NOT NULL,
+    role             TEXT NOT NULL,
+    text             TEXT NOT NULL,
+    -- `[{kind, value, samples}]` as JSON text. A record of what was said rather
+    -- than a live index, which is why the sample pictures are frozen into it.
+    suggested        TEXT,
+    -- The seam, and the only edge from this side of the product to a run.
+    committed_run_id TEXT REFERENCES discovery_runs(id),
+    created_at       TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS conversation_turns_by_conversation ON conversation_turns(conversation_id);
+
+-- A partial-free unique index rather than a table constraint, because
+-- `CREATE UNIQUE INDEX IF NOT EXISTS` reaches a file written before it and a
+-- column clause does not. Two turns claiming one position is a thread that
+-- reads differently depending on the tie-break, so the file refuses it.
+CREATE UNIQUE INDEX IF NOT EXISTS conversation_turns_one_per_ordinal
+    ON conversation_turns(conversation_id, ordinal);
+
 CREATE TABLE IF NOT EXISTS spend_records (
     id                TEXT PRIMARY KEY,
     discovery_run_id  TEXT REFERENCES discovery_runs(id),
     artwork_id        TEXT REFERENCES artworks(id),
+    -- Nulled, never cascaded, when a conversation is deleted: the money was
+    -- spent whatever became of the thread. No `ON DELETE` clause here for that
+    -- reason — the nulling is an act somebody takes, not a consequence the file
+    -- applies behind them.
+    conversation_turn_id TEXT REFERENCES conversation_turns(id),
     category          TEXT NOT NULL,
     model_id          TEXT,
     input_tokens      INTEGER,
@@ -194,6 +240,13 @@ _BY_OCCURRENCE: Final[tuple[OrderBy, ...]] = (OrderBy("occurred_at", descending=
 
 #: A join with no fields of its own; the key is the only stable order it has.
 _BY_COVERAGE: Final[tuple[OrderBy, ...]] = (OrderBy("resolve_run_id"), OrderBy("candidate_work_id"))
+
+#: Newest activity first: the thread a curator is looking for is the one they
+#: last said something in, which the day it began says nothing about.
+_BY_LAST_TURN: Final[tuple[OrderBy, ...]] = (OrderBy("last_turn_at", descending=True), OrderBy("id"))
+
+#: The thread's own order. Ascending, because a transcript is read downwards.
+_BY_ORDINAL: Final[tuple[OrderBy, ...]] = (OrderBy("ordinal"),)
 
 
 class SqliteDiscovery(TableAdapter):
@@ -248,6 +301,29 @@ class SqliteDiscovery(TableAdapter):
 
     def list_candidate_images(self, candidate_work_id: str) -> Sequence[CandidateImage]:
         return self._list("candidate_images", {"candidate_work_id": candidate_work_id}, _BY_SELECTION, _candidate_image)
+
+    # -- conversations --------------------------------------------------------
+
+    def add_conversation(self, conversation: Conversation) -> None:
+        self._add("conversations", _conversation_row(conversation), subject=f"conversation {conversation.id!r}")
+
+    def get_conversation(self, conversation_id: str) -> Conversation | None:
+        return self._get("conversations", {"id": conversation_id}, _conversation)
+
+    def update_conversation(self, conversation: Conversation) -> None:
+        self._update("conversations", BY_ID, _conversation_row(conversation), subject=f"conversation {conversation.id!r}")
+
+    def list_conversations(self) -> Sequence[Conversation]:
+        return self._list("conversations", None, _BY_LAST_TURN, _conversation)
+
+    def add_conversation_turn(self, turn: ConversationTurn) -> None:
+        self._add("conversation_turns", _turn_row(turn), subject=f"conversation turn {turn.id!r}")
+
+    def get_conversation_turn(self, turn_id: str) -> ConversationTurn | None:
+        return self._get("conversation_turns", {"id": turn_id}, _turn)
+
+    def list_conversation_turns(self, conversation_id: str) -> Sequence[ConversationTurn]:
+        return self._list("conversation_turns", {"conversation_id": conversation_id}, _BY_ORDINAL, _turn)
 
     # -- spend ----------------------------------------------------------------
 
@@ -357,11 +433,37 @@ def _candidate_image_row(image: CandidateImage) -> dict[str, Any]:
     }
 
 
+def _conversation_row(conversation: Conversation) -> dict[str, Any]:
+    return {
+        "id": conversation.id,
+        "started_at": to_iso(conversation.started_at),
+        "last_turn_at": to_iso(conversation.last_turn_at),
+        "summary": conversation.summary,
+    }
+
+
+def _turn_row(turn: ConversationTurn) -> dict[str, Any]:
+    return {
+        "id": turn.id,
+        "conversation_id": turn.conversation_id,
+        "ordinal": turn.ordinal,
+        "role": str(turn.role),
+        "text": turn.text,
+        # `None` rather than `"null"` for an absent value, so the column's own
+        # nullability is what says "this turn offered nothing" — a JSON null in a
+        # text column would be a second spelling of the same absence.
+        "suggested": None if turn.suggested is None else json.dumps(list(turn.suggested)),
+        "committed_run_id": turn.committed_run_id,
+        "created_at": to_iso(turn.created_at),
+    }
+
+
 def _spend_row(record: SpendRecord) -> dict[str, Any]:
     return {
         "id": record.id,
         "discovery_run_id": record.discovery_run_id,
         "artwork_id": record.artwork_id,
+        "conversation_turn_id": record.conversation_turn_id,
         "category": str(record.category),
         "model_id": record.model_id,
         "input_tokens": record.input_tokens,
@@ -456,6 +558,29 @@ def _spend(row: Mapping[str, Any]) -> SpendRecord:
         input_tokens=row["input_tokens"],
         output_tokens=row["output_tokens"],
         units=row["units"],
+        conversation_turn_id=row["conversation_turn_id"],
+    )
+
+
+def _conversation(row: Mapping[str, Any]) -> Conversation:
+    return Conversation(
+        id=row["id"],
+        started_at=require_datetime(row["started_at"], "started_at"),
+        last_turn_at=require_datetime(row["last_turn_at"], "last_turn_at"),
+        summary=row["summary"],
+    )
+
+
+def _turn(row: Mapping[str, Any]) -> ConversationTurn:
+    return ConversationTurn(
+        id=row["id"],
+        conversation_id=row["conversation_id"],
+        ordinal=row["ordinal"],
+        role=TurnRole(row["role"]),
+        text=row["text"],
+        created_at=require_datetime(row["created_at"], "created_at"),
+        suggested=None if row["suggested"] is None else json.loads(row["suggested"]),
+        committed_run_id=row["committed_run_id"],
     )
 
 

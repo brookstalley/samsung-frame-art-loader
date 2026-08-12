@@ -23,6 +23,7 @@ import { installSearch, paintSearch } from "./core/search.js";
 import { installStatus, paintStatus } from "./core/status.js";
 import { state } from "./core/state.js";
 import { viewCollection } from "./screens/collection.js";
+import { viewConversation } from "./screens/conversation.js";
 import { viewDiscover } from "./screens/discover.js";
 import { viewHealth } from "./screens/health.js";
 import { viewReview } from "./screens/review.js";
@@ -61,6 +62,11 @@ const ROUTES = {
   discover: { render: viewDiscover, destination: "Discover" },
   work: { render: viewWork, detail: true, opensFrom: "collection" },
   run: { render: viewRun, detail: true, opensFrom: "discover" },
+  // Keyed by the conversation, and contextual rather than a fourth destination:
+  // intent-forming is something a curator does *within* Discover, and a
+  // destination for it would name a stage of the pipeline — which is the one
+  // thing the navigation is not allowed to do.
+  conversation: { render: viewConversation, detail: true, opensFrom: "discover" },
   // Keyed by the run whose works are being judged, not by a work: a curator
   // reviews a run's output as a set, and a per-work address would make the grid
   // unreachable by URL.

@@ -18,7 +18,7 @@ from typing import Final
 
 import pytest
 import uvicorn
-from fakes import FakeEngine
+from fakes import FakeConversationEngine, FakeEngine
 from PIL import Image
 
 from curation.acquisition.preparation import PreparationSettings
@@ -77,6 +77,7 @@ from curation.persistence.sqlite import SqliteCatalogue
 from curation.persistence.sqlite_discovery import SqliteDiscovery
 from curation.services.catalogue import CatalogueService
 from curation.services.container import Services
+from curation.services.conversation import ConversationService
 from curation.services.discovery import DiscoveryService
 from curation.services.display import DisplayService, DisplaySettings
 from curation.services.runner import DiscoveryRunner
@@ -211,6 +212,16 @@ def engine() -> FakeEngine:
 
 
 @pytest.fixture
+def conversation_engine() -> FakeConversationEngine:
+    """The intent-forming engine every test runs against, in its default mood.
+
+    Overridable the same way `engine` is: reassigning its fields before a turn is
+    taken is what selects a failure, a refusal, or a reply that names artists.
+    """
+    return FakeConversationEngine()
+
+
+@pytest.fixture
 def services(
     store: SqliteCatalogue,
     discovery_store: SqliteDiscovery,
@@ -218,6 +229,7 @@ def services(
     thumbnail_settings: ThumbnailSettings,
     settings: Settings,
     engine: FakeEngine,
+    conversation_engine: FakeConversationEngine,
 ) -> Services:
     """Every service, wired the way the entry point wires them."""
     bound = Services.bind(
@@ -261,6 +273,10 @@ def services(
         # it and every acquisition test starts resolving real hostnames again with
         # nothing failing to say so.
         resolve=lambda _host: ["93.184.216.34"],
+        # Injected for the same reason `engine` is: the container's own default
+        # refuses every turn, which is the keyless deployment and is right for
+        # it — and would make every conversation test assert against a refusal.
+        conversation_engine=conversation_engine,
     )
     return bound
 
@@ -278,6 +294,11 @@ def service(services: Services) -> CatalogueService:
 @pytest.fixture
 def discovery(services: Services) -> DiscoveryService:
     return services.discovery
+
+
+@pytest.fixture
+def conversation(services: Services) -> ConversationService:
+    return services.conversation
 
 
 @pytest.fixture

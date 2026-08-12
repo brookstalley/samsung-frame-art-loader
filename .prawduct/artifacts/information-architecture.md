@@ -329,6 +329,19 @@ be traced means the inventory is wrong.
    > common.
 3. When a direction firms up, the system offers it as a **commit card** in the
    thread: what would be searched, how many works, what it would cost.
+
+   > **"How many works" is not available before the run, and the built card does
+   > not show it.** Recorded 2026-08-12, on building it. The estimate the card is
+   > drawn from carries no count, and the runner's own note says the number is
+   > only known once phase 1 has settled against a real work list — which is
+   > after committing, not before. So the card states what would be searched and
+   > what it would cost, and the count arrives on the progress card the commit
+   > transforms into.
+   >
+   > This line asked for a figure the pipeline cannot produce, which is the
+   > failure this artifact exists to catch — a design written against fields the
+   > system does not have. It is left in place rather than edited away, with the
+   > correction beneath it, for the same reason the facet section keeps its own.
 4. Committing starts a `DiscoveryRun`. **The curator does not leave the
    conversation.**
 

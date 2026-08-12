@@ -689,6 +689,39 @@ def test_the_engine_settings_ship_at_the_values_the_analysis_chose(monkeypatch, 
     assert settings.discovery_search_results == 10
 
 
+def test_the_conversation_has_its_own_model_and_reservation(monkeypatch, tmp_path):
+    """A third model, and neither of the other two would do.
+
+    `DISCOVERY_MODEL` lists `input_modalities: ["text"]` and cannot see a
+    picture; the mat reservation is sized to let a reasoning model finish, and a
+    conversational turn switches reasoning off instead. One setting for all three
+    would make each choice a constraint on the others.
+    """
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+
+    settings = Settings.from_env()
+
+    assert settings.conversation_model == "qwen/qwen3.7-flash"
+    assert ":" not in settings.conversation_model, "a dated snapshot pin, not the floating alias"
+    assert settings.conversation_max_output_tokens == 2_000
+
+    monkeypatch.setenv("CONVERSATION_MODEL", "probe/model-under-test")
+    monkeypatch.setenv("CONVERSATION_MAX_OUTPUT_TOKENS", "512")
+    overridden = Settings.from_env()
+
+    assert overridden.conversation_model == "probe/model-under-test"
+    assert overridden.conversation_max_output_tokens == 512
+
+
+def test_the_conversation_reservation_must_be_positive(monkeypatch, tmp_path):
+    """Same reason as the other two: a request reserving nothing is refused."""
+    monkeypatch.setenv("ART_ROOT", str(tmp_path))
+    monkeypatch.setenv("CONVERSATION_MAX_OUTPUT_TOKENS", "0")
+
+    with pytest.raises(ConfigError, match="CONVERSATION_MAX_OUTPUT_TOKENS"):
+        Settings.from_env()
+
+
 def test_the_output_reservation_must_be_positive(monkeypatch, tmp_path):
     """There is no coherent request that reserves no output, and the provider
     refuses one rather than running it cheaply."""
