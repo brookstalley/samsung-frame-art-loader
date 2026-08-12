@@ -28,6 +28,7 @@ from typing import Final
 from curation.persistence.records import MatMethod, RenditionKind, RightsStatus
 from curation.seed.images import read_image_facts
 from curation.seed.legacy import LegacyRecord, ParsedArtist
+from curation.seed.names import parts_for
 from curation.services.catalogue import MAX_LIST_LIMIT, CatalogueService
 
 log = logging.getLogger(__name__)
@@ -67,6 +68,7 @@ class SeedNote(StrEnum):
     RENDITION_UNREADABLE = "rendition_unreadable"
     RENDITION_STALE = "rendition_stale"
     DUPLICATE_RECORD_DISCARDED = "duplicate_record_discarded"
+    ARTIST_NAME_PARTS_ABSENT = "artist_name_parts_absent"
 
 
 #: A sentence per cause, in terms of what it means rather than what it is called.
@@ -93,6 +95,10 @@ _DETAIL: Final[dict[SeedNote, str]] = {
     ),
     SeedNote.DUPLICATE_RECORD_DISCARDED: (
         "The index describes this work {count} times; the last was taken and the earlier mat colour {discarded} was dropped."
+    ),
+    SeedNote.ARTIST_NAME_PARTS_ABSENT: (
+        "Nothing says which part of {name} is the family name, so its label sets the whole name unstyled; "
+        "add a line to curation/seed/names.py to have the panel lead with it."
     ),
 }
 
@@ -156,6 +162,9 @@ def seed_catalogue(records: Sequence[LegacyRecord], *, catalogue: CatalogueServi
     collapsed = _collapse(records)
     artists = _merge_artists(record for record, _ in collapsed)
     existing = _Existing.of(catalogue)
+    # Before the loop, so that rows minted below — which are given their parts at
+    # creation — are not written a second time to say what they already say.
+    _name_stored_artists(catalogue)
 
     works: list[SeededWork] = []
     for record, notes in collapsed:
@@ -179,6 +188,37 @@ def seed_catalogue(records: Sequence[LegacyRecord], *, catalogue: CatalogueServi
         len(report.noted),
     )
     return report
+
+
+def _name_stored_artists(catalogue: CatalogueService) -> int:
+    """Give artists already in the catalogue the name parts the table knows.
+
+    **The backfill, and the reason it lives in the ordinary seeding run rather
+    than in a command of its own.** Every artist in this catalogue was written
+    before the family and given parts existed as fields, from an index that gave
+    one undivided string — so the rows are right about everything except the one
+    thing the panel now needs. Re-running the seed is already the documented way
+    to fill in what a previous run could not (see this module's docstring), and a
+    separate one-shot command would be a second thing to remember on the machine
+    where it matters and nowhere else.
+
+    Idempotent by comparison rather than by a marker: a row that already says
+    what the table says is left untouched, so a second run writes nothing and the
+    third writes nothing either. Artists the table does not cover are left alone
+    entirely — `_label_notes` reports them per work, which is where a curator is
+    already reading.
+    """
+    named = 0
+    for artist in catalogue.list_artists():
+        parts = parts_for(artist.name)
+        if parts is None or (artist.family_name, artist.given_name) == parts:
+            continue
+        family, given = parts
+        catalogue.name_parts_for(artist.id, family_name=family, given_name=given)
+        named += 1
+    if named:
+        log.info("named %d artist(s) that predated the family and given name fields", named)
+    return named
 
 
 @dataclass(slots=True)
@@ -252,9 +292,12 @@ def _collapse(records: Sequence[LegacyRecord]) -> list[tuple[LegacyRecord, list[
 def _merge_artists(records: Iterable[LegacyRecord]) -> dict[str, ParsedArtist]:
     """One reading per artist, combining what each record knew about them.
 
-    Merged before anything is written because an artist row is created once and
-    has no later edit: without this, how well an artist is described would depend
-    on which of their works the index happened to list first.
+    Merged before anything is written because nothing edits what the *source*
+    said about an artist afterwards: without this, how well an artist is
+    described would depend on which of their works the index happened to list
+    first. The one later write a row does take — `_name_stored_artists` — touches
+    only the family and given parts, which no source supplied and this merge
+    therefore has nothing to say about.
     """
     merged: dict[str, ParsedArtist] = {}
     for record in records:
@@ -267,12 +310,20 @@ def _mint(record: LegacyRecord, *, catalogue: CatalogueService, artist: ParsedAr
     """Create the work, its artist if it is new, and the source it came from."""
     artist_id = existing.artists.get(artist.name)
     if artist_id is None:
+        # `(None, None)` for a name the table does not carry, which is the same
+        # thing it says about a record that is not a person. The difference
+        # between "nobody has said" and "there is nothing to say" is reported to
+        # the curator by `_label_notes`; to the row itself they are one state,
+        # because the label does the same thing with both.
+        family, given = parts_for(artist.name) or (None, None)
         artist_id = catalogue.add_artist(
             name=artist.name,
             nationality=artist.nationality,
             born=artist.born,
             died=artist.died,
             lifespan_text=artist.lifespan_text,
+            family_name=family,
+            given_name=given,
         ).id
         existing.artists[artist.name] = artist_id
 
@@ -304,6 +355,11 @@ def _mint(record: LegacyRecord, *, catalogue: CatalogueService, artist: ParsedAr
 def _label_notes(record: LegacyRecord, *, artist: ParsedArtist) -> list[SeedNoteEntry]:
     """What this work's physical label will be missing when it is set."""
     notes: list[SeedNoteEntry] = []
+    # `None` only — a table entry of `(None, None)` is a settled answer about a
+    # record that is not a person, and reporting it would ask a curator to supply
+    # a surname for the Moche.
+    if parts_for(artist.name) is None:
+        notes.append(_note(SeedNote.ARTIST_NAME_PARTS_ABSENT, name=artist.name))
     if artist.nationality is None:
         notes.append(_note(SeedNote.NATIONALITY_ABSENT))
     if artist.born is None:

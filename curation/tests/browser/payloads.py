@@ -52,6 +52,7 @@ def a_catalogue_work(**overrides) -> WorkOut:
         "medium": None,
         "dimensions": None,
         "description": None,
+        "commentary": None,
         "rights": None,
         "status": ArtworkStatus.ACCEPTED.value,
         "fit": None,
@@ -247,6 +248,8 @@ def an_artist(**overrides) -> ArtistOut:
         "died": None,
         "lifespan_text": None,
         "biography": None,
+        "family_name": None,
+        "given_name": None,
     }
     return ArtistOut(**(fields | overrides))
 

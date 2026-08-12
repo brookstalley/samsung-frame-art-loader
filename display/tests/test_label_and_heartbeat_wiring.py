@@ -68,12 +68,25 @@ def labelled(settings, tv, state, clock, surface: FakeSurface) -> Daemon:
 class TestTheLabelFollowsTheWall:
     @pytest.mark.asyncio
     async def test_a_confirmed_selection_puts_a_label_on_the_surface(self, labelled, surface, publish):
-        publish(["work-a"], labels={"work-a": {"title": "Cat Litter", "artist": "Ed Ruscha"}})
+        publish(
+            ["work-a"],
+            labels={
+                "work-a": {
+                    "title": "Cat Litter",
+                    "artist": "Ed Ruscha",
+                    "artist_family_name": "Ruscha",
+                    "artist_given_name": "Ed",
+                }
+            },
+        )
 
         await labelled.tick()
 
         assert surface.shown, "the wall changed and no label was drawn"
-        assert surface.last_text[:2] == ["Cat Litter", "Ed Ruscha"]
+        # The artist leads and the work follows it — the panel's ordering, not a
+        # museum wall's, because the family name is the token read from across a
+        # room and a long title is what drove the tombstone off the bottom.
+        assert surface.last_text[:2] == ["Ruscha, Ed", "Cat Litter"]
 
     @pytest.mark.asyncio
     async def test_the_label_is_set_at_the_surface_s_own_type_scale(self, settings, tv, state, clock, publish):

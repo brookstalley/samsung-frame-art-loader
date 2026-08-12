@@ -285,8 +285,12 @@ def ready_work(service: CatalogueService):
     manifest entry, a directive pin — needs a work that can actually be shown.
     """
 
-    def _ready(title="Nighthawks", *, artist_id=None, original=True, rendition=True, mat=True, content_hash="hash-1"):
-        work = service.add_artwork(title=title, artist_id=artist_id, date_created="1942", medium="Oil on canvas")
+    def _ready(
+        title="Nighthawks", *, artist_id=None, original=True, rendition=True, mat=True, content_hash="hash-1", commentary=None
+    ):
+        work = service.add_artwork(
+            title=title, artist_id=artist_id, date_created="1942", medium="Oil on canvas", commentary=commentary
+        )
         source = service.add_source(
             artwork_id=work.id,
             url=f"https://museum.example/{work.id}",

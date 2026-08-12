@@ -34,6 +34,12 @@ class ArtistOut(BaseModel):
     #: parsed year are different claims.
     lifespan_text: str | None
     biography: str | None
+    #: Which part of the name the e-paper label sets in bold capitals. Stored
+    #: rather than derived from `name`, because no rule over one string is right
+    #: for both "van Gogh" and "Frank Lloyd Wright"; null on a record that is not
+    #: a person, and on one nobody has said yet.
+    family_name: str | None
+    given_name: str | None
 
 
 class FitOut(BaseModel):
@@ -73,6 +79,10 @@ class WorkOut(BaseModel):
     medium: str | None
     dimensions: str | None
     description: str | None
+    #: The line written for a wall label, which is not the holding institution's
+    #: paragraph — see `description` above it, and `Artwork` for why one cannot
+    #: stand in for the other.
+    commentary: str | None
     rights: str | None
     status: str
     fit: FitOut | None

@@ -194,12 +194,23 @@ only entity the curator thinks of as "a piece of art".
 | `date_created` | string | nullable | Free text — sources give "1931", "c. 1650", "1888–89". Not a date type; normalising would destroy information. |
 | `medium` | string | nullable | e.g. "Oil and graphite on fiber board". |
 | `dimensions` | string | nullable | Physical dimensions as the source states them. |
-| `description` | text | nullable | May contain limited markup; see Constraints. |
+| `description` | text | nullable | May contain limited markup; see Constraints. The **holding institution's own paragraph**, at whatever length it was written. |
+| `commentary` | text | nullable | A line written **for a wall label**, to be read at standing distance. Not `description`, and neither substitutes for the other. |
 | `rights` | string | nullable | Rights statement as given. Display-only — rights gate nothing (decided 2026-07-20; constraint 13). |
 | `status` | enum | required | `accepted` \| `archived`. See State Machines. |
 | `accepted_at` | datetime | nullable | Set on creation from an accepted CandidateWork. |
 | `created_at` | datetime | auto | |
 
+> **`commentary` is a separate field from `description` on purpose, added
+> 2026-08-11.** Rendering the institution's paragraph where a label line belongs
+> would put several hundred words on a 6-inch panel read from 7 feet, so a label
+> that wants a sentence has to have one written for it. It is the label's
+> lowest-priority line — the only one that identifies nothing, so the first thing
+> a surface too small for everything gives up. **Nothing writes it yet**: works
+> enter this catalogue by seeding and by acquisition, and neither has a
+> commentary to supply. A writer belongs to the curation surface, which has no
+> plan yet.
+>
 > **An Artwork only exists once accepted.** This entity previously carried
 > `candidate` and `rejected` statuses, which duplicated what `CandidateWork.verdict`
 > now owns. Two entities modelling the same lifecycle is how they drift — a work
@@ -221,11 +232,24 @@ re-parsing a blob, and so two works by the same artist agree.
 | `died` | integer | nullable | Year only. |
 | `lifespan_text` | string | nullable | Fallback free text when `born`/`died` cannot be parsed, e.g. "active 1620s". |
 | `biography` | text | nullable | |
+| `family_name` | string | nullable | Which part of the name the e-paper label sets in bold capitals, e.g. "Katsushika" for Katsushika Hokusai. |
+| `given_name` | string | nullable | The rest of the person's name, e.g. "Frank Lloyd" for Frank Lloyd Wright. |
 
 > Directly replaces the 2024 `artist_details` blob
 > (`"Charles Demuth\nAmerican, 1883–1935"`), which `metadata.py` re-parsed with
 > regex on every read. The parsing logic is preserved — it moves to ingest time
 > and runs once. **Q9.**
+>
+> **The two name parts are stored rather than derived, added 2026-08-11.** The
+> e-paper label leads with the family name in bold capitals, so something has to
+> know which part that is, and no rule over `name` can say: the 31 seeded artists
+> alone break last-word ("Frank Lloyd Wright"), first-word ("Georgia O'Keeffe")
+> and Western order ("Katsushika Hokusai"), and one of them is a culture rather
+> than a person. Both are nullable and the two ways of being null are the same
+> fact downstream — the label falls back to `name`, unstyled. Supplied for the
+> seeded corpus by a written table (`curation/seed/names.py`), never by a
+> heuristic; `discovery/artic.py` documents its own surname guess as unreliable.
+> Nothing derives one part from the other, and nothing derives `name` from them.
 
 ### Source
 

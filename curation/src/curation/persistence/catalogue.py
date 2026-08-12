@@ -71,6 +71,10 @@ class CatalogueStore(Protocol):
         """Return the artist, or None if no such id is stored."""
         ...
 
+    def update_artist(self, artist: Artist) -> None:
+        """Overwrite a stored artist with this one. Raises if the id is absent."""
+        ...
+
     def list_artists(self) -> Sequence[Artist]:
         """Every artist held, in a stable order.
 

@@ -205,12 +205,32 @@ text for whoever walks up; the operator reached the same split independently, by
 naming a size acceptable only when closer. The family name carries the primary
 tier at 12.4′ and everything else steps down to the 8.8′ floor.
 
-**Today the primary tier goes to the leading line, which is still the title.**
-`layout._size_for` assigns by position, and the artist-first ordering is owed
-rather than built (§ The label's content model, 13B-2/13B-3). So the family name
-carries the primary tier *once the artist leads* — stated here because this
-section is marked Practised, and a reader of it alone would otherwise conclude
-the reordering had already happened.
+**The primary tier goes to the leading line, and since 13B-3 that line is the
+artist.** `layout._size_for` assigns by position and `LabelText.lines()` now puts
+the identification block first, so the family name carries the 12.4′ tier and
+everything else steps down to the 8.8′ floor — which is what this section
+described and, until 2026-08-11, was not yet what ran.
+
+**What the primary tier lands on is the whole identification line, not the family
+name alone, and that costs height.** `_size_for` sizes a *block*, and the block
+is now `FAMILY, Given, Nationality, Dates` — so nationality and dates are set at
+12.4′ beside the name instead of at the floor beneath it, and a line that long at
+130 px wraps to three rows on this panel where the name alone would take one or
+two. It is a consequence of the collapse rather than a decision, and **13B-4 is
+where it stops being one**: a fill model that admits candidates with roles can
+set each run at the size its role earns rather than at the size its position
+does.
+
+**Net, the collapse still wins, and by more than it costs — modelled 2026-08-11,
+not measured.** Running `lay_out` over two real seeded works with an *arithmetic*
+stand-in for the measurer (0.5 em advance, 1.2 line height — **not Pango, so the
+figures do not transfer and are here for direction only**), the reordered and
+collapsed label drops **one** line where the old one dropped two and three:
+Hokusai's *Great Wave* kept its date and medium instead of losing date, medium
+and dimensions, and the O'Keeffe kept its medium. The wrapped identification
+block eats roughly 90 px that the floor would not have — real, and smaller than
+the ~260 px the collapse returns. **The panel is what settles this**, and it is
+on the operator's list for the next look.
 
 **The measured number is larger than the derived one**, which is the argument for
 having measured it. A defensible 10′ taken from legibility literature would have
@@ -270,8 +290,41 @@ rotating.
 
 ### The label's content model, and the fill rule that adapts it
 
-**Owed.** Requested by the operator 2026-08-11 and written here before it was
-built, because it is a set of decisions and not a layout tweak.
+**Requested by the operator 2026-08-11 and written here before it was built,
+because it is a set of decisions and not a layout tweak.**
+
+**Half practised, half owed, and the seam runs between the content and the
+styling.** 13B-3 built the *content model* — the ordering, the one-line
+identification block, the stored name parts and the commentary field, all in
+`display/src/display/panel/metadata.py` and carried there by the manifest. What
+remains owed is the *typography*: the bold capitals, the italic title and the
+name ladder are 13B-2 and 13B-4, so today every line below is set in one weight
+at one of two sizes.
+
+**Two decisions this build had to make rather than inherit**, both consequences
+of composing two rules this section states separately:
+
+- **The inverted name and the one-line tombstone compose into one line, not
+  two.** `FAMILY, Given` already spends a comma as its inversion marker, and
+  running nationality and dates onto the same line spends two more — so
+  `O'KEEFFE, Georgia, American, 1887–1986` is four comma-separated parts where a
+  reader might expect the first comma to mean something different from the
+  others. It is set that way anyway, because the alternative — the name on its
+  own line — reclaims ~130 px instead of ~260 px, and the ~260 is the figure that
+  makes optional content fit at all. **What disambiguates the first comma is
+  weight, not punctuation**: the family name is set bold and capitalised, so the
+  eye takes `O'KEEFFE` and then the rest, rather than four equal parts. That puts
+  a load on 13B-2 worth stating plainly — **until the styled runs land, this line
+  is genuinely four undifferentiated parts on the panel**, and it is the first
+  thing to look at when the operator next stands in front of it.
+- **A single known name part stands alone rather than being padded out of
+  `name`.** An artist with a family name and no given name sets just the family
+  name; the whole string is used only when *neither* part is known. Combining
+  them would produce "Rembrandt, Rembrandt Harmenszoon van Rijn", which is the
+  same name twice.
+
+**Built 2026-08-11 as 13B-3**, with the tests in
+`display/tests/test_label_metadata.py` § TestWhoMadeIt.
 
 **The artist outranks the work.** The 2024-era ordering led with the title, and on
 a 6-inch panel that is what wastes it: measured on the panel, "Under the Well of
@@ -303,13 +356,31 @@ lines" would break `ANDERS, Joseph` for every short name on the wall; one told
 "one line" would shrink Toulouse-Lautrec to fit a break it could have taken for
 free.
 
-- **This needs a real field, not a heuristic.** `Artist` carries `name` as one
-  string; the surname heuristic in `discovery/artic.py` is documented there as
-  unreliable, and it is wrong for "Titian (Tiziano Vecellio)", for "van Gogh", and
-  for every name whose family part is not the last word. The catalogue gains
-  `family_name` and `given_name`; the manifest carries them; the panel sets them.
-  A work whose artist has neither falls back to `name`, unstyled — an unknown
-  artist is a fact about the record, not a reason to guess at one.
+- **This needs a real field, not a heuristic. Built 2026-08-11.** `Artist`
+  carries `name` as one string; the surname heuristic in `discovery/artic.py` is
+  documented there as unreliable, and it is wrong for "Titian (Tiziano
+  Vecellio)", for "van Gogh", and for every name whose family part is not the
+  last word. The catalogue gained `family_name` and `given_name`; the manifest
+  carries them; the panel sets them. A work whose artist has neither falls back
+  to `name`, unstyled — an unknown artist is a fact about the record, not a
+  reason to guess at one.
+
+  **Where the split for the seeded corpus comes from: a written table, not a
+  rule** (`curation/src/curation/seed/names.py`). Thirty-one names, each with its
+  parts spelled out, because this corpus alone defeats every heuristic in a
+  different way — "Frank Lloyd Wright" defeats last-word, "Georgia O'Keeffe"
+  defeats first-word, "Katsushika Hokusai" inverts the Western order it appears
+  to follow, and "Moche" is a culture with no parts at all. A table can also say
+  *nothing* about a name it does not carry, which is the behaviour a guess cannot
+  have: seeding reports such an artist to the curator and leaves the row unsplit.
+
+  **The backfill rides the ordinary seeding run rather than a command of its
+  own.** Every artist row in the deployed catalogue predates these fields, and
+  re-running the seed is already the documented way to fill in what an earlier
+  run could not. It compares before writing, so a second run writes nothing, and
+  it touches only the two fields no source ever supplied — an artist's
+  nationality, dates and biography came from the holding institution and are not
+  this table's to overwrite.
 - **Bold is a Pango attribute over a byte range, never markup.** `metadata.py`
   escapes nothing on purpose: a 2024 label passed description text to Pango markup
   and a title containing `<` produced mangled type or a parse failure. Styling a
@@ -360,15 +431,41 @@ to be corrected on these 2026-08-11, and was on the first one:
   Japanese, 1760–1849" — the term modifies the *artist*, not the work's origin,
   and that is the practice at the Art Institute, the Met, MoMA and the National
   Gallery. Country names belong to a different slot on a label: place of birth or
-  death, and credit lines. **No data change follows**: the Art Institute's
-  `artist_display` already supplies the adjectival form, so the stored
-  `artist_nationality` is correct as it stands.
-- **The tombstone is one line, not three.** Name, nationality and life dates are
-  conventionally set as a single run — `Katsushika Hokusai, Japanese, 1760–1849`.
-  This product emits them as three lines, which spends three line-boxes and their
-  leading on one fact. **On the reference panel that is worth ~260 px**, against a
-  measured slack of ~66 px, so it is the single change that decides whether
-  optional content fits at all. It is a fill-model input rather than a nicety.
+  death, and credit lines.
+
+  **"No data change follows" was wrong, and 13B-3 found out by running it.** That
+  claim rested on the Art Institute's `artist_display` always supplying the
+  adjectival form. Reading all 31 seeded artists back out of a freshly seeded
+  catalogue, **two do not**: Moche stores `North coast, Peru` — a place, for a
+  record that is a culture rather than a person — and Vasily Kandinsky stores
+  `Born Moscow (formerly Russian Empire, now Russia)`, which is a birthplace
+  clause with no demonym in it at all. Both reach the panel today as the middle
+  of the identification line: `Moche, North coast, Peru`.
+
+  **Left as stored, deliberately, and not silently.** Neither is *wrong* — they
+  are what the holding institution published, and the label printing them is the
+  label being honest about its record. Correcting them means either editing
+  catalogue content by hand or teaching the seed parser to tell a demonym from a
+  birthplace clause, and the second is a rule that would need its own ruling
+  about what to store when it cannot tell. Both are curation-content work rather
+  than a type-floor change, so this section records the exception instead of the
+  build inventing an answer for it. **The number is 2 of 31, not a rounding
+  error, and it is the kind of thing only a run finds** — the assertion above had
+  been read past by every review it went through.
+- **The tombstone is one line, not three. Collapsed 2026-08-11 by 13B-3.** Name,
+  nationality and life dates are conventionally set as a single run —
+  `Katsushika Hokusai, Japanese, 1760–1849`. This product emitted them as three
+  lines, which spent three line-boxes and their leading on one fact. **On the
+  reference panel that is worth ~260 px**, against a measured slack of ~66 px, so
+  it is the single change that decides whether optional content fits at all —
+  which is why it was built *before* the fill model rather than as an input to
+  it: tuning a fill rule against the un-collapsed numbers would have tuned it
+  against figures that were about to move by four times the slack.
+
+  **It is `LabelText.identification`, and it composes rather than concatenates**:
+  an artist with no dates, or no nationality, or neither, yields a shorter line
+  rather than a line with holes in it, and a work with none of the three yields
+  no identification line at all and opens with its title.
 - **Titles are set in italic**, including *Untitled*. Another styled run, so it
   belongs with the bold-capitals work rather than behind it.
 - **`FAMILY, Given` is an index convention, not a wall-label one.** Wall labels use
@@ -382,6 +479,18 @@ than a tuning target.** With the identification block set at the floor there is
 ~66 px of slack against the ~130 px a further line needs. The fill rule is what
 makes that a per-work answer instead of a global one: the works with short names
 and no title will have room, and the ones that do not will drop it.
+
+**The field exists and nothing writes to it yet, which is stated here rather than
+discovered later.** 13B-3 added `commentary` to the work, carried it through the
+manifest and made the panel read it — but works enter this catalogue only by
+seeding and, later, by acquisition, and neither has a commentary to supply: the
+2024 index carries the holding institution's `description`, which is paragraphs
+long and is emphatically not this. So every work on the wall today has a null
+commentary and the line simply does not appear. A writer for it belongs to the
+curation surface, which has no plan yet; building one here would have been a
+requirement nobody stated. **What the field buys before it has a writer** is that
+the panel's last-and-first-dropped candidate exists for 13B-4 to model against,
+rather than being added after the fill rule was tuned without it.
 
 ### The four provisional numbers, and what became of them
 

@@ -24,7 +24,12 @@ def record():
         return LegacyRecord(
             url=url or f"https://www.artic.edu/artworks/{stem}",
             title=title,
-            artist=artist or ParsedArtist(name="Edward Hopper", nationality="American", born=1882, died=1967),
+            # An artist the 2024 corpus actually holds, so the default record is
+            # one the index could have produced. That matters now that seeding
+            # reports an artist whose name it cannot split: with a made-up name
+            # here, every test asserting an exact list of notes would carry one
+            # about the fixture rather than about the behaviour under test.
+            artist=artist or ParsedArtist(name="Georgia O'Keeffe", nationality="American", born=1887, died=1986),
             raw_path=f"raw/{stem}.jpg",
             ready_path=f"ready/{stem}_rscaled.jpg",
             mat_hex=mat,
@@ -62,7 +67,7 @@ class TestTheReportsVocabulary:
     #: Every value a note's sentence is allowed to ask for, and something to put
     #: there. A sentence naming anything else could not be filled at the site
     #: that raises it, and would reach a curator as a formatting error.
-    CONTEXT = {"path": "raw/a.jpg", "count": 2, "discarded": "#433735"}
+    CONTEXT = {"path": "raw/a.jpg", "count": 2, "discarded": "#433735", "name": "Piet Mondrian"}
 
     def test_every_cause_has_a_sentence(self):
         """A cause added without one reaches a curator as a bare enum value."""
@@ -91,7 +96,7 @@ class TestSeedingOnce:
         detail = service.get_artwork(seeded.work_id)
         assert detail.artwork.title == "Nighthawks"
         assert detail.artwork.status is ArtworkStatus.ACCEPTED
-        assert detail.artist is not None and detail.artist.name == "Edward Hopper"
+        assert detail.artist is not None and detail.artist.name == "Georgia O'Keeffe"
 
     def test_identity_is_minted_and_is_never_the_source_url(self, service, record, tree):
         entry = record()
@@ -313,6 +318,100 @@ class TestWhatTheTreeDoesNotHold:
         report = seed([entry], service, tmp_path)
 
         assert SeedNote.ORIGINAL_UNREADABLE in {item.note for item in report.works[0].notes}
+
+
+def _artist(service, artist_id):
+    """One stored artist, read back the only way the service offers — a listing.
+
+    There is no `get_artist` on the service and nothing needs one: an artist is
+    reached through the work that is attributed to them. Adding one for a test's
+    convenience would put a read on the surface that no caller has asked for.
+    """
+    return next(artist for artist in service.list_artists() if artist.id == artist_id)
+
+
+class TestNamingTheArtists:
+    """Which part of a name is the family name — authored, never inferred.
+
+    The e-paper label leads with the family name in bold capitals, and the 2024
+    index stores one undivided string per artist, so the split is a table this
+    package carries. These pin the two things that table has to do: put the parts
+    on rows it creates, and put them on rows that were written before the fields
+    existed — which is every row in the deployed catalogue.
+    """
+
+    def test_a_minted_artist_is_given_the_parts_the_table_knows(self, service, record, tree):
+        entry = record(artist=ParsedArtist(name="Katsushika Hokusai", nationality="Japanese", born=1760, died=1849))
+        report = seed([entry], service, tree(entry))
+
+        artist = service.get_artwork(report.works[0].work_id).artist
+        # Japanese order: the family name leads, so last-word would set the wrong
+        # one of the two in bold capitals on every work of his.
+        assert (artist.family_name, artist.given_name) == ("Katsushika", "Hokusai")
+
+    def test_an_artist_who_is_not_a_person_is_left_with_no_parts_at_all(self, service, record, tree):
+        """A pre-Columbian culture has no surname, and inventing one is worse than
+        printing the name whole."""
+        entry = record(artist=ParsedArtist(name="Moche"))
+        report = seed([entry], service, tree(entry))
+
+        artist = service.get_artwork(report.works[0].work_id).artist
+        assert (artist.family_name, artist.given_name) == (None, None)
+
+    def test_an_artist_the_table_does_not_cover_is_reported_rather_than_guessed_at(self, service, record, tree):
+        """The failure this prevents is silent: a heuristic would set VINCI in bold
+        capitals for "Leonardo da Vinci" and nobody would see it but the wall."""
+        entry = record(artist=ParsedArtist(name="Leonardo da Vinci", nationality="Italian", born=1452, died=1519))
+        report = seed([entry], service, tree(entry))
+
+        artist = service.get_artwork(report.works[0].work_id).artist
+        assert (artist.family_name, artist.given_name) == (None, None)
+        assert SeedNote.ARTIST_NAME_PARTS_ABSENT in {item.note for item in report.works[0].notes}
+
+    def test_a_record_that_is_not_a_person_is_not_reported_as_owing_a_name(self, service, record, tree):
+        """ "Nobody has said" and "there is nothing to say" are different facts, and
+        only the first is something a curator can act on."""
+        entry = record(artist=ParsedArtist(name="Moche", nationality="Peruvian", born=100))
+        report = seed([entry], service, tree(entry))
+
+        assert report.works[0].notes == []
+
+    def test_an_artist_stored_before_the_fields_existed_is_named_by_the_next_run(self, service, record, tree):
+        """The deployed catalogue's every artist row is this one, and re-running the
+        seed is the documented way to fill in what a previous run could not."""
+        stored = service.add_artist(name="Piet Mondrian", nationality="Dutch", born=1872, died=1944)
+        assert (stored.family_name, stored.given_name) == (None, None)
+
+        entry = record(artist=ParsedArtist(name="Piet Mondrian", nationality="Dutch", born=1872, died=1944))
+        seed([entry], service, tree(entry))
+
+        named = _artist(service, stored.id)
+        assert (named.family_name, named.given_name) == ("Mondrian", "Piet")
+
+    def test_naming_an_artist_leaves_everything_the_source_said_about_them_alone(self, service, record, tree):
+        """The backfill touches the two fields no source supplied. Anything wider
+        would overwrite a holding institution's own words with this table's."""
+        stored = service.add_artist(
+            name="Paul Klee", nationality="Swiss, born Germany", born=1879, died=1940, biography="Bauhaus master."
+        )
+
+        entry = record(artist=ParsedArtist(name="Paul Klee"))
+        seed([entry], service, tree(entry))
+
+        named = _artist(service, stored.id)
+        assert (named.nationality, named.born, named.died) == ("Swiss, born Germany", 1879, 1940)
+        assert named.biography == "Bauhaus master."
+
+    def test_an_artist_the_table_does_not_cover_is_not_cleared_by_a_later_run(self, service, record, tree):
+        """Parts that arrived from somewhere else — discovery, a curator — must
+        survive a re-seed, which knows nothing about the artist that has them."""
+        stored = service.add_artist(name="Leonora Carrington", family_name="Carrington", given_name="Leonora")
+
+        entry = record(artist=ParsedArtist(name="Leonora Carrington"))
+        seed([entry], service, tree(entry))
+
+        named = _artist(service, stored.id)
+        assert (named.family_name, named.given_name) == ("Carrington", "Leonora")
 
 
 class TestWhatTheLabelWillBeMissing:

@@ -129,6 +129,42 @@ a fully populated Hokusai record): the identification block fills the panel and
 regression — it is what the tombstone collapse in 13B-3 exists to reclaim, and it
 is why the operator put 13B-3 ahead of 13B-2 in the build order.
 
+### What 13B-3 changed on the panel, and the two things to look for — added 2026-08-11
+
+**Run the preview before the daemon.** The label reorganised, so the next render
+looks different in three ways at once and it is worth separating them by eye
+rather than in a photograph of a rotating wall:
+
+```sh
+cd display && uv run --group raster python tools/label_preview.py /tmp/label.png
+```
+
+1. **The artist now leads and the title follows it.** Deliberate — the family
+   name is what a passer-by scans at 7 feet, and a long title was consuming over
+   half the panel. Not a regression.
+2. **Name, nationality and dates are one line** where they were three. This is
+   the ~260 px the collapse was for. Modelled against two real works it turns
+   three dropped lines into one — but that was an arithmetic stand-in for the
+   measurer, not Pango, so **the panel is what settles whether it is enough**.
+3. **The whole identification line is set at the primary 12.4′ tier**, because
+   the layout sizes by position and that line is now first. On a long name it
+   wraps to three rows and eats roughly 90 px the floor would not have.
+
+**The thing to judge, and it is a real question rather than a formality:** the
+identification line reads `O'KEEFFE, Georgia, American, 1887–1986` — four
+comma-separated parts, where the first comma means "inverted" and the others mean
+"and". The argument for it holding together is that **weight** separates the
+family name from the rest, not punctuation — and **13B-2 has not landed, so
+nothing is bold yet.** What you will see is four undifferentiated parts. If it
+reads badly *with* the bold capitals in place, the fallback is the name on its
+own line, which costs about half the collapse's gain.
+
+**Also worth a glance, and it is data rather than type:** two of the 31 seeded
+artists carry something that is not a demonym in the nationality slot — Moche
+reads `Moche, North coast, Peru` and Kandinsky's is a birthplace clause. Left as
+the institution published them; correcting them is a curation-content call, and
+this entry is where it is being put to you.
+
 ### The display daemon against the wall — added 2026-08-06
 
 **Status: answered on 2026-08-07 — all three acceptance criteria met on the real

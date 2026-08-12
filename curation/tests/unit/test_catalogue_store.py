@@ -37,7 +37,12 @@ from curation.persistence.records import (
 from curation.persistence.sqlite import SqliteCatalogue
 
 _EXPECTED_SCHEMA = {
-    "artists": {"id", "name", "nationality", "born", "died", "lifespan_text", "biography"},
+    # Widened with `family_name` and `given_name` when the e-paper label began
+    # setting the family part in bold capitals — which needs to know which part
+    # that is, and no rule over `name` can say for "van Gogh".
+    "artists": {"id", "name", "nationality", "born", "died", "lifespan_text", "biography", "family_name", "given_name"},
+    # `commentary` is the line written for a wall label, which is not
+    # `description` — that is the holding institution's paragraph.
     "artworks": {
         "id",
         "title",
@@ -50,6 +55,7 @@ _EXPECTED_SCHEMA = {
         "status",
         "accepted_at",
         "created_at",
+        "commentary",
     },
     # Widened 2026-07-31 with the per-theme rotation settings. This was the first
     # change to a table files already on disk carried, so it is also what the
@@ -302,6 +308,13 @@ def test_a_catalogue_written_by_an_earlier_revision_still_reads(tmp_path):
             None,
             None,
         )
+
+        # The columns the file predates read as absent rather than failing, which
+        # is the whole of what the deployed catalogue does on the restart after
+        # the label gained a family name: the panel falls back to the whole name
+        # until something says which part is which.
+        assert (hopper.family_name, hopper.given_name) == (None, None)
+        assert catalogue.get_artwork("w1").commentary is None
 
         nighthawks = catalogue.get_artwork("w1")
         assert (nighthawks.id, nighthawks.title, nighthawks.artist_id) == ("w1", "Nighthawks", "a1")

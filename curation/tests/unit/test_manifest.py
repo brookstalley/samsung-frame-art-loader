@@ -190,17 +190,25 @@ def test_an_exclusion_names_the_work_a_curator_would_look_for(display, ready_wor
 
 def test_the_manifest_carries_the_label_text_but_no_label_geometry(service, display, ready_work, theme_of):
     """Label text crosses to the display plane; how it is set does not."""
-    hopper = service.add_artist(name="Edward Hopper", nationality="American", born=1882, died=1967)
-    theme = theme_of(ready_work(artist_id=hopper.id))
+    hopper = service.add_artist(
+        name="Edward Hopper", nationality="American", born=1882, died=1967, family_name="Hopper", given_name="Edward"
+    )
+    theme = theme_of(ready_work(artist_id=hopper.id, commentary="Painted in a Greenwich Village studio."))
 
     label = display.build_manifest(theme.id).entries[0].label
 
     assert label["title"] == "Nighthawks"
     assert label["artist"] == "Edward Hopper"
+    # The whole name AND its parts: a panel setting the family name in bold
+    # capitals needs the parts, and a work whose artist has none has only the
+    # whole — so dropping either shape makes one of the two unlabelable.
+    assert label["artist_family_name"] == "Hopper"
+    assert label["artist_given_name"] == "Edward"
     assert label["artist_nationality"] == "American"
     assert label["artist_dates"] == "1882–1967"
     assert label["date_created"] == "1942"
     assert label["medium"] == "Oil on canvas"
+    assert label["commentary"] == "Painted in a Greenwich Village studio."
     assert not any(key in label for key in ("font", "font_size", "panel_width", "panel_height"))
 
 

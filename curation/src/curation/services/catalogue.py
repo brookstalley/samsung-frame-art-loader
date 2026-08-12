@@ -235,6 +235,8 @@ class CatalogueService:
         died: int | None = None,
         lifespan_text: str | None = None,
         biography: str | None = None,
+        family_name: str | None = None,
+        given_name: str | None = None,
     ) -> Artist:
         """Record an artist and return it with its minted identity."""
         artist = Artist(
@@ -245,9 +247,35 @@ class CatalogueService:
             died=died,
             lifespan_text=lifespan_text,
             biography=biography,
+            family_name=family_name,
+            given_name=given_name,
         )
         store_write(self._store.add_artist, artist)
         return artist
+
+    def name_parts_for(self, artist_id: str, *, family_name: str | None, given_name: str | None) -> Artist:
+        """Say which part of a stored artist's name is the family name.
+
+        **The only edit an artist row has, and it exists because the parts
+        arrived after the rows did.** Every artist in a seeded catalogue was
+        written from a source that gave one undivided name string, and the
+        e-paper label needs to set the family part in bold capitals — a fact no
+        rule over that string can recover for "van Gogh" or "Frank Lloyd Wright".
+        So the parts are supplied by whoever knows, to rows that already exist.
+
+        **Narrow on purpose.** A general artist edit would let a caller overwrite
+        nationality and dates that came from the holding institution with
+        whatever it happened to hold, and nothing asks for that; this touches the
+        two fields that were never sourced in the first place. Passing `None` for
+        a part clears it, which is what a record that turns out not to be a
+        person needs.
+        """
+        artist = self._store.get_artist(artist_id)
+        if artist is None:
+            raise ServiceError(f"No artist with id {artist_id!r} is in the catalogue.")
+        named = replace(artist, family_name=family_name, given_name=given_name)
+        store_write(self._store.update_artist, named)
+        return named
 
     def add_artwork(
         self,
@@ -259,6 +287,7 @@ class CatalogueService:
         dimensions: str | None = None,
         description: str | None = None,
         rights: str | None = None,
+        commentary: str | None = None,
     ) -> Artwork:
         """Record a work in the catalogue and return it.
 
@@ -284,6 +313,11 @@ class CatalogueService:
             description=description_markup(description),
             rights=rights,
             accepted_at=now,
+            # Not passed through `description_markup`: that strips a holding
+            # institution's HTML paragraph down to text, and commentary is
+            # written for a wall label rather than fetched from anywhere, so
+            # there is no markup to take out of it.
+            commentary=commentary,
         )
         store_write(self._store.add_artwork, artwork)
         return artwork

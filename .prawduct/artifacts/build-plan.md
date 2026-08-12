@@ -1967,11 +1967,38 @@ hardware.
     byte ranges — never markup**, because `metadata.py` escapes nothing on purpose
     and `<b>`-wrapping would reintroduce the 2024 injection on the surface it was
     fixed for.
-  - **13B-3 — the catalogue fields.** `family_name` and `given_name` on `Artist`,
-    `commentary` on the work, both carried by `entry_for` into the manifest and
-    read by `LabelText`. Includes the schema change and the backfill of the 31
-    seeded artists; a work whose artist has neither name part falls back to `name`,
-    unstyled.
+  - **13B-3 — the catalogue fields, and the content model they exist for. Built
+    2026-08-11.** `family_name` and `given_name` on `Artist`, `commentary` on the
+    work, all three carried by `entry_for` into the manifest (schema minor 0 → 1,
+    additive) and read by `LabelText`. The schema change reaches files already on
+    disk through the store's existing additive-column widening, so the deployed
+    catalogue upgrades on the next open with nothing to run.
+    **Two things this bullet did not name and the sub-chunk carried**, both
+    written in `accessibility-spec.md` § The label's content model with no chunk
+    against them, and both belonging to the tier that decides *what the lines
+    are*: the **artist-first ordering**, and the **tombstone collapse** —
+    identification, nationality and dates as one line instead of three. The
+    collapse is why the operator put this sub-chunk ahead of 13B-2 and 13B-4: it
+    reclaims ~260 px against a measured slack of ~66 px, so a fill model tuned
+    before it would have been tuned against figures about to move by four times
+    the slack.
+    **The backfill of the 31 seeded artists is a written table**
+    (`curation/seed/names.py`), not a rule — this corpus alone defeats last-word,
+    first-word and Western-order heuristics, and one of its records is a culture
+    rather than a person. It is applied by the ordinary seeding run, which
+    compares before writing and touches only the two fields no source supplied.
+    A work whose artist has neither name part falls back to `name`, unstyled; an
+    artist the table does not cover is **reported to the curator** rather than
+    guessed at.
+    **Found by running it, and recorded rather than fixed:** the spec's claim
+    that no data change follows from the demonym convention is wrong for 2 of the
+    31 — Moche stores a place and Kandinsky a birthplace clause. Left as stored,
+    because correcting them is curation-content work needing its own ruling; the
+    exception is written into `accessibility-spec.md` where the wrong claim was.
+    **`commentary` has no writer yet** and is null on every work: seeding and
+    acquisition have none to supply, and a curation-surface editor is unplanned.
+    It is built now so 13B-4 models the fill rule against the candidate list it
+    will actually have.
   - **13B-4 — the fill model.** Candidates with priority and role; optional
     content admitted only if it fits at the floor and never set below it; slack
     spent on content before type; drops still reported. **Carries the norm
