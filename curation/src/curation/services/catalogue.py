@@ -341,12 +341,16 @@ class CatalogueService:
             # instruction to the display plane, and an advance would step the wall
             # to an unrelated work. Every rule about what an advance *means* lives
             # in the display service; none of them is duplicated here.
-            directive = self._store.get_directive()
-            if directive.pinned_work_id == artwork_id:
+            # Every wall, not the one: a work can be pinned in two rooms at once,
+            # and a withdrawal that cleared only the first would leave the second
+            # holding an instruction that can never be carried out.
+            for directive in self._store.list_directives():
+                if directive.pinned_work_id != artwork_id:
+                    continue
                 # Said out loud: a standing instruction disappearing is exactly the
                 # kind of silent state change that turns into "the wall stopped
                 # doing what I told it" with nothing to read back.
-                log.info("archiving %s withdrew the standing pin naming it", artwork_id)
+                log.info("archiving %s withdrew the standing pin naming it on wall %s", artwork_id, directive.wall_id)
                 store_write(self._store.set_directive, replace(directive, pinned_work_id=None))
         return archived
 

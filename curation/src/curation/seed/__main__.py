@@ -44,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     settings.art_root.mkdir(parents=True, exist_ok=True)
-    catalogue_file = open_catalogue_file(settings.catalogue_path)
+    catalogue_file = open_catalogue_file(settings.catalogue_path, wall_name=settings.wall_name)
     try:
         # The catalogue service and nothing else: seeding writes works, artists,
         # sources, images and mats, and touches neither discovery state nor the

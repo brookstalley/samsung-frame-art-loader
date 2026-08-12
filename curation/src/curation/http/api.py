@@ -43,9 +43,11 @@ from curation.http.models import (
     CandidatePageOut,
     CandidateWorkOut,
     CreateTheme,
+    CreateWall,
     EstimateOut,
     ExclusionOut,
     FitOut,
+    HangTheme,
     HealthOut,
     HeartbeatOut,
     ImageOut,
@@ -72,7 +74,11 @@ from curation.http.models import (
     ThemeDetailOut,
     ThemeListOut,
     ThemeOut,
+    ThemePlacementOut,
     VerdictOut,
+    WallListOut,
+    WallOut,
+    WallRefOut,
     WorkDetailOut,
     WorkOut,
     WorkPageOut,
@@ -85,6 +91,7 @@ from curation.persistence.records import Artist, MatColor, Original, Source, The
 from curation.services.catalogue import RenditionView
 from curation.services.container import Services
 from curation.services.discovery import VerdictOutcome
+from curation.services.display import ThemePlacement, WallView
 from curation.services.display_fit import ArtworkBox
 from curation.services.health import HealthReading
 from curation.services.review import CandidatePage, CandidateView, InstanceListing, InstanceView
@@ -160,8 +167,8 @@ def get_work(request: Request, artwork_id: str) -> WorkDetailOut:
 
 @router.get("/themes")
 def list_themes(request: Request) -> ThemeListOut:
-    """Every theme."""
-    return ThemeListOut(themes=[_theme(theme) for theme in _services(request).display.list_themes()])
+    """Every theme, and the walls each is hanging on."""
+    return ThemeListOut(themes=[_placement(placement) for placement in _services(request).display.survey_themes()])
 
 
 @router.get("/themes/{theme_id}")
@@ -207,26 +214,75 @@ def move_in_theme(request: Request, theme_id: str, artwork_id: str, body: MoveWo
 
 
 @router.post("/themes/{theme_id}/activate")
-def activate_theme(request: Request, theme_id: str) -> ManifestOut:
-    """Make this the theme the wall shows, and publish the manifest that follows.
+def activate_theme(request: Request, theme_id: str, body: HangTheme) -> ManifestOut:
+    """Hang this theme on the named wall, and publish the manifest that follows.
 
-    Returns the build, so the curator sees what actually reached the wall in the
-    same response that put it there — including everything that did not.
+    Returns the build, so the curator sees what actually reached that wall in the
+    same response that put it there — including everything that did not, and
+    including the wall's own name.
     """
-    return _manifest(_services(request).display.activate_theme(theme_id))
+    return _manifest(_services(request).display.activate_theme(theme_id, wall_id=body.wall_id))
+
+
+# -- walls --------------------------------------------------------------------
+
+
+@router.get("/walls")
+def list_walls(request: Request) -> WallListOut:
+    """Every wall, and what is hanging on each."""
+    return WallListOut(walls=[_wall(view) for view in _services(request).display.survey_walls()])
+
+
+@router.post("/walls")
+def create_wall(request: Request, body: CreateWall) -> WallOut:
+    """Record a wall. It arrives with nothing hanging on it.
+
+    **A second wall can be recorded here and cannot yet be shown.** The display
+    plane still reads one manifest file for the installation, so hanging a theme
+    on a wall this route created overwrites the manifest the existing display is
+    reading and hands it the wrong room's pictures, without either plane
+    noticing — see `DisplayService.sync` for why that is stated rather than
+    guarded. Recording the room is harmless; the operator should be told it will
+    not light up until manifests are per-wall.
+    """
+    services = _services(request)
+    return _wall(services.display.get_wall_view(services.display.add_wall(name=body.name).id))
+
+
+@router.delete("/walls/{wall_id}/theme")
+def clear_wall(request: Request, wall_id: str) -> WallOut:
+    """Take down whatever is hanging, leaving the wall holding nothing.
+
+    Returns the wall, because the interesting change is what it now shows — the
+    read-back-after-mutate shape the theme-membership routes already take, for
+    the same reason and recorded as the same known departure.
+
+    The wall keeps showing what it was showing until something else is hung: no
+    manifest is rewritten, because publishing an empty one would blank the wall
+    as a side effect of tidying up.
+    """
+    services = _services(request)
+    services.display.clear_wall(wall_id)
+    return _wall(services.display.get_wall_view(wall_id))
 
 
 # -- the wall -----------------------------------------------------------------
 
 
 @router.get("/manifest")
-def get_manifest(request: Request, theme_id: Annotated[str | None, Query()] = None) -> ManifestOut:
-    """What a theme would put on the wall, and every work it would leave off.
+def get_manifest(
+    request: Request,
+    wall_id: Annotated[str, Query()],
+    theme_id: Annotated[str | None, Query()] = None,
+) -> ManifestOut:
+    """What a theme would put on one wall, and every work it would leave off.
 
     Evaluates without writing, so a curator can ask what would happen before
-    changing what is on the wall.
+    changing what is on the wall. The wall is required and the theme is not:
+    exclusions belong to a wall once two walls can hang different themes, and the
+    theme defaults to whatever is already hanging there.
     """
-    return _manifest(_services(request).display.build_manifest(theme_id))
+    return _manifest(_services(request).display.build_manifest(wall_id, theme_id))
 
 
 @router.get("/health")
@@ -641,15 +697,34 @@ def _theme(theme: Theme) -> ThemeOut:
         theme_id=theme.id,
         name=theme.name,
         description=theme.description,
-        is_active=theme.is_active,
         rotation_interval_seconds=theme.rotation_interval_seconds,
         shuffle=theme.shuffle,
         created_at=theme.created_at.isoformat(),
     )
 
 
+def _wall(view: WallView) -> WallOut:
+    return WallOut(
+        wall_id=view.wall.id,
+        name=view.wall.name,
+        created_at=view.wall.created_at.isoformat(),
+        theme=None if view.hanging is None else _theme(view.hanging),
+        directive_sequence=view.directive.sequence,
+        pinned_work_id=view.directive.pinned_work_id,
+    )
+
+
+def _placement(placement: ThemePlacement) -> ThemePlacementOut:
+    return ThemePlacementOut(
+        theme=_theme(placement.theme),
+        hanging_on=[WallRefOut(wall_id=wall.id, name=wall.name) for wall in placement.walls],
+    )
+
+
 def _manifest(build: ManifestBuild) -> ManifestOut:
     return ManifestOut(
+        wall_id=build.wall.id,
+        wall_name=build.wall.name,
         theme=_theme(build.theme),
         entries=[
             ManifestEntryOut(

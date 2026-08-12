@@ -200,7 +200,14 @@ fixing the shape early was worth it. What they changed is underneath: the routes
 (`POST /api/themes/{id}/activate` and `GET /api/manifest` become per-wall), the
 `Directive` singleton (one row per wall, so a `next` in the living room does not
 step the study), and the inter-plane contract (`architecture.md` § One manifest per
-wall). **None of it is built** — `build-plan-curation-ux.md` carries it.
+wall).
+
+**The data half is built as of 2026-08-12** — walls, assignments, per-wall directives,
+the routes and tool actions that name a wall, and an unhang. **The screens are not**:
+every layout described here still renders the pre-wall surface, and
+`build-plan-curation-ux.md` carries the rest. The inter-plane half is also still
+outstanding — one manifest per wall is its own chunk, so today's display plane reads a
+single manifest whatever the catalogue now knows about walls.
 
 ## Retrieval: search and facets
 

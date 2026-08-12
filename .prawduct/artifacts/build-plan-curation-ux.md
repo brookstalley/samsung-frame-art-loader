@@ -103,7 +103,7 @@ named assumption into a recorded fact, and neither blocks the chunks before it.
 
 ## Status
 
-- [ ] Chunk 01: Wall, ThemeAssignment, and the end of `Theme.is_active`
+- [x] Chunk 01: Wall, ThemeAssignment, and the end of `Theme.is_active`
 - [ ] Chunk 02: One manifest per wall — the inter-plane half
 - [x] Chunk 03: The revised palette lands in the stylesheet
 - [ ] Chunk 04: Three destinations — the navigation reshape
@@ -116,7 +116,8 @@ named assumption into a recorded fact, and neither blocks the chunks before it.
 - [ ] Chunk 11: Taste — affinities, reactions, and the delete that detaches
 
 Context: Plan authored 2026-08-12, the day the operator ruled on the three questions
-that had been holding it. Nothing built. **The list order is the dependency order,
+that had been holding it. Chunks 01 and 03 landed the same day. **The list order is
+the dependency order,
 not the execution order** — § Parallel Execution below groups these eleven into
 waves, and the one ordering decision worth knowing survives the regrouping: the wall
 chunks come first: they are underneath every screen, they are the expensive retrofit,
@@ -436,7 +437,7 @@ split was made to end, and it will not announce itself as having done so.
     an advance would fire a directive nobody issued, which is the reasoning
     `data-model.md` § Directive already records for archiving a pinned work. The
     *screen* for this belongs to Chunks 05 and 09; this chunk builds the operation
-  - **A wall creator — service method, thin route, `art_wall` action.** Added on the
+  - **A wall creator — service method, thin route, `art_display(action='add_wall')`.** Added on the
     same round and for a plainer reason: **nothing else in this plan creates a wall**,
     the migration makes exactly one, and this chunk's own tests require a theme on two
     walls and a `next` on one wall not advancing another's. A service method whose only
@@ -448,7 +449,7 @@ split was made to end, and it will not announce itself as having done so.
   migration assigns the active theme and creates exactly one wall; the generalised
   refusal fires for a theme on two walls and permits the last unhung theme; unhang
   clears the assignment **without advancing the wall's directive sequence**, and the
-  theme it took down becomes deletable. **The `art_theme` and `art_wall` tips name
+  theme it took down becomes deletable. **The `art_theme` and `art_display` tips name
   every refusal their actions can raise** — the tips are the one text with no
   assertion behind them and a model reads them rather than the docstring, which is
   drift this repo has taken twice in one chunk.
@@ -476,6 +477,20 @@ split was made to end, and it will not announce itself as having done so.
 - **Description:** The manifest and the heartbeat become one file per wall, and the
   display plane reads the wall it is configured to serve. The chunk that could most
   easily break the architecture norm it is governed by.
+- **This chunk closes a live hazard, and that raises its priority above "next in the
+  wave".** Chunk 01 shipped the catalogue half of walls ahead of the inter-plane half,
+  so a second wall can be *recorded* and cannot be *shown*: `DisplayService.sync`
+  writes the single `WallSettings.manifest_path` whatever wall it is handed, so
+  hanging a theme on a second wall overwrites the manifest the running display reads
+  and sends it the wrong room's pictures — silently, because a display cannot notice
+  the file stopped being about it. Found by two reviewers independently on Chunk 01's
+  review. It is documented at `DisplayService.add_wall` and `DisplayService.sync`, on
+  `WallSettings.manifest_path`, in `art_display`'s `add_wall` tip, on the
+  `POST /api/walls` route, and here; **nothing enforces it**, which was a deliberate
+  choice: a guard would have to refuse hanging a theme on any wall but the first,
+  which forbids the two-wall state Chunk 01's own acceptance criteria require, so the
+  temporary fix would have cost more than the hazard. Until this chunk lands, a
+  second wall is a thing an operator can ask for and be told will not light up
 - **Depends on:** Chunk 01
 - **Parallelism:** wave 1, worktree agent, opus. Owns `GET /api/health`'s new
   aggregate shape; Chunk 04 consumes it from `api-contract.md` in the same wave and
@@ -495,6 +510,16 @@ split was made to end, and it will not announce itself as having done so.
     break*. This chunk is that case: update the specification, not the assertion
   - `GET /api/health` aggregates across walls — "well", or the wall that has not
     reported
+  - **Rename `WallSettings`**, added to this chunk from Chunk 01's review. It holds
+    the installation's manifest destination and rotation defaults, while `Wall` is
+    now a first-class entity meaning a place with a name — so `Services.bind(wall=…)`
+    reads as though the container is handed a wall, and one noun means two things.
+    The test suite already noticed, renaming its fixture `wall` → `wall_settings`
+    while the production name stood. It belongs *here* rather than in Chunk 01
+    because this chunk has to decide what `manifest_path` means once manifests are
+    per wall, and it should not make that decision against a type whose name already
+    claims the other meaning. `DisplaySettings` or `ManifestSettings`; three call
+    sites today
 - **Tests:** display — the daemon reads its own wall's manifest and ignores another's
   (over the existing double, no hardware); a manifest for an unknown wall is not
   acted on. Curation — one wall's rewrite does not touch another wall's file mtime,

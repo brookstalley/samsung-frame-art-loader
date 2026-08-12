@@ -251,7 +251,7 @@ def main(argv: Sequence[str] = ()) -> None:
     # One connection behind both halves of the model: acceptance promotes a
     # candidate's image instances into a work's sources, and that has to commit
     # once or not at all.
-    catalogue_file = open_catalogue_file(settings.catalogue_path)
+    catalogue_file = open_catalogue_file(settings.catalogue_path, wall_name=settings.wall_name)
     try:
         services = Services.bind(
             catalogue=SqliteCatalogue(catalogue_file),

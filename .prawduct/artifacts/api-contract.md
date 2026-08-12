@@ -200,9 +200,17 @@ display plane a command; it writes desired state, and display converges on it.**
 | Action | What curation does | What display does |
 |---|---|---|
 | `status` | Reads the display plane's heartbeat file | Nothing — it wrote the heartbeat already |
-| `sync` | Rebuilds and rewrites the manifest from the active theme | Picks up the new manifest on its next poll and reconciles |
-| `show_now(work_id)` | Increments the manifest's directive `sequence` and sets `pinned_work_id` | Jumps to that work, then continues rotating from there |
-| `next` | Increments the directive `sequence` with no pin | Steps to the next work in the list |
+| `sync` | Rebuilds and rewrites the manifest from the theme hanging on the named wall | Picks up the new manifest on its next poll and reconciles. **Still one file for the installation** — the per-wall split is its own chunk, so a second wall's `sync` overwrites the first wall's manifest |
+| `show_now(wall_id, artwork_id)` | Increments **that wall's** directive `sequence` and sets its `pinned_work_id` | Jumps to that work, then continues rotating from there |
+| `next(wall_id)` | Increments **that wall's** directive `sequence` with no pin | Steps to the next work in the list |
+
+**Every action but `status` takes a required `wall_id`**, built 2026-08-12. The
+directive is a row per wall rather than a singleton, so a `next` in the living
+room does not step the study — which is the whole point of naming a wall, and
+which the earlier form of this table could not express. `status` is the exception
+and stays one for a stated reason: the heartbeat is still one file for the
+installation, so a wall parameter there would be a lie the surface told to look
+consistent. It gains one when there is something per-wall for it to report.
 
 `show_now` **refuses any work that could not reach the wall**, rather than pinning
 one, and archiving the pinned work withdraws the pin without advancing the
@@ -1213,10 +1221,33 @@ theme must be able to say where, and an action that guesses the wall is worse on
 the tool surface than on the web one, because there is no confirmation dialog to
 catch it.
 
-**None of this is built**, and the one-wall installation is the degenerate case
-throughout: one wall, one assignment, identical behaviour. The migration and the
-inter-plane half (`architecture.md` § One manifest per wall) belong to
-`build-plan-curation-ux.md`.
+**Built 2026-08-12**, and the one-wall installation is the degenerate case
+throughout: one wall, one assignment, identical behaviour. **The inter-plane half is
+not** — `architecture.md` § One manifest per wall is its own chunk, and until it lands
+the display plane still reads a single manifest.
+
+**How the wall is actually carried, since the table above says only that it is.**
+`POST /api/themes/{id}/activate` takes `{"wall_id": …}` as a request **body**;
+`GET /api/manifest` takes `wall_id` as a **required query parameter**, having no body
+to put it in. Stated because the two differ and a reader of the table above would have
+no way to tell which was which. `GET /api/manifest` also echoes `wall_id` and
+`wall_name` back, so a caller stating a consequence can name the room in words rather
+than in a UUID.
+
+**Four routes and three tool actions arrived with them**, none of which this section
+had designed:
+
+| Route | Tool | What it is for |
+|---|---|---|
+| `POST /api/walls` | `art_display(action='add_wall')` | Nothing else creates a wall. The migration makes the first one; a second room needs an operation. **Create only** — no delete and no rename, because deleting a wall raises consequences for its assignment, its directive row and any display configured to serve it that nothing has ruled on. |
+| `GET /api/walls` | `art_display(action='walls')` | What rooms exist, and what hangs in each. |
+| `DELETE /api/walls/{wall_id}/theme` | `art_theme(action='unhang')` | Takes the picture down. See § Deleting a theme for why this had to exist before the delete refusal could be made absolute. |
+| — | — | `GET /api/themes` reshaped to `{theme, hanging_on[]}` per entry, because `ThemeOut.is_active` had nothing to become: "is it active" is now "which walls is it on". The MCP listing stays flat with a `hanging_on` key added, since a model reads a list better than a nesting. |
+
+**`art_display(action='status')` deliberately does *not* take a wall.** The heartbeat
+is still one file until the inter-plane chunk lands, so a wall parameter there would be
+a lie the surface told to look consistent. It gains one when there is something
+per-wall for it to report.
 
 **"Work delete" was the wrong word, and the route is archive.** The IA § Status
 row asked for one; `data-model.md` gives `Artwork.status` exactly two values,
@@ -1237,10 +1268,11 @@ wall consequence, not merely which of archive and restore it is doing** —
 writing, so the route can state the consequence rather than predict it. The IA
 carries this rule for flow 6's activation and now carries it here too.
 
-**Deleting the active theme refuses — and this rule is built, not designed.** The
+**Deleting a theme that is hanging refuses — and this rule is built, not designed.** The
 operator settled the question on 2026-08-11, and the answer turned out to be what
-`DisplayService.delete_theme` has enforced all along, reached by
-`art_theme(action='delete')` today. **This paragraph therefore describes shipped
+`DisplayService.delete_theme` had enforced all along, reached by
+`art_theme(action='delete')`. It was generalised from "the active theme" to "hanging on
+any wall" on 2026-08-12, when a theme stopped being active and started hanging somewhere. **This paragraph therefore describes shipped
 behaviour**, and it is the one thing in this section that does: the HTTP route is
 still unbuilt, and what it owes is to call that method rather than to write a guard
 of its own.
@@ -1258,36 +1290,70 @@ of its own.
 > docstring, which matters because the two are worth different amounts to whoever
 > next proposes changing it.
 
-**The refusal is narrower than "while active", and the narrowing is the part worth
-reading.** `delete_theme` refuses the active theme **only while another theme
-exists**. Deleting the *last* theme is permitted even though it is active, because
-no themes at all is a normal empty state rather than the forbidden one — and it is
-what makes a theme deletable at all. **Ratified by the operator 2026-08-11**, put to
-them with the alternative stated: refusing unconditionally would make the last theme
-undeletable forever, since there is no deactivate operation, so a curator could never
-empty the catalogue. Deleting it deliberately does not rewrite the
-manifest: the wall keeps showing what it was showing, the same posture as curation
-being stopped entirely. Publishing an empty manifest would blank the wall as a side
-effect of tidying the catalogue.
+**The refusal is now absolute, and the exception that used to soften it is retired —
+replaced rather than dropped.** `delete_theme` refuses a theme **hanging on any
+wall**, and names the walls. Built 2026-08-12.
 
-**The message is normative and is already written.** "Theme *X* is the one the wall
-is showing. Activate another theme first, so that what replaces it on the wall is a
-choice rather than whichever is oldest." An earlier draft of this paragraph invented
-"or deactivate this one" — there is no deactivate action, no such route, and no
-state it could produce that the surface has a name for. § Errors teach is why a
-refusal must say what to do; the *principle* binds here, not the shape, because that
-section specifies the tool envelope's `valid_actions` / `example` / `hint` and the
-HTTP surface has one shape and one status — `{"error": "..."}` — which carries the
-sentence and nothing else.
+> **What this replaced, and why the replacement was owed.** Until then the refusal was
+> narrower: it refused the active theme *only while another theme existed*, so the
+> last theme was deletable even while hanging. That was **ratified by the operator on
+> 2026-08-11** for a specific and good reason — refusing unconditionally would have
+> made the last theme undeletable forever, because there was no way to take a theme
+> down, so a curator could never empty the catalogue.
+>
+> Generalising the refusal to "hanging on any wall" reinstates exactly that deadlock,
+> and with walls it gets worse rather than better: "the last theme" hanging in three
+> rooms would be freely deletable and would blank three rooms at once. **So the
+> operation the 2026-08-11 ruling was compensating for now exists** — see
+> `art_theme(action='unhang')` below — and the exception is retired because the thing
+> it worked around is gone. The ruling is honoured, not overturned: a curator can
+> still empty the catalogue, by taking the theme down first.
+>
+> The gap was found mid-build, from this plan's own acceptance test saying the refusal
+> "permits the last *unhung* theme" — a word that presupposed an operation nothing had
+> built.
 
-> **"Promote another theme, then delete" was the third option, and it is not
-> hypothetical — it is what happens by default if the guard is removed.**
-> `reconcile()` promotes the oldest remaining theme when none is active, so a
-> curator deleting what is on the wall would get *some* other theme on it without
-> having chosen one. That is the reason the built code refuses, and it is a better
-> reason than the one this document gave when it declined the option as a design
-> choice: the earlier draft argued it "collapses into a refusal anyway when the
-> theme being deleted is the only one", which is the opposite of what ships.
+Deleting a theme deliberately does not rewrite the manifest: a wall keeps showing what
+it was showing, the same posture as curation being stopped entirely. Publishing an
+empty manifest would blank a wall as a side effect of tidying the catalogue.
+
+**The message is normative and is already written.** "Theme *X* is hanging on *'Living
+room', 'Study'*. Hang another theme there first, or take this one down, so that what
+those walls show next is a choice rather than whatever was on them before."
+
+It names the walls, because with more than one wall "the wall" identifies nothing, and
+it offers **both** ways out. Hanging another theme there is a remedy in its own right
+rather than a longer road to the same place: `wall_id` alone is the assignment's
+primary key, so hanging something else *is* the unhanging. The remedy a refusal names
+has to be an operation that exists and that the curator can reach — that is the whole
+obligation § Errors teach places on it.
+
+> **The message changed when the refusal did, 2026-08-12, and the old one is recorded
+> because it was right for a shape that no longer exists.** It read: "Theme *X* is the
+> one the wall is showing. Activate another theme first, so that what replaces it on
+> the wall is a choice rather than whichever is oldest." Every clause of that has
+> stopped being true. There is more than one wall now, so "the wall" does not
+> identify anything. Activating another theme no longer resolves the refusal, because
+> the theme has to leave *every* wall. And "whichever is oldest" described
+> `reconcile()`'s promote-the-oldest behaviour, which was **removed in the same
+> change** — along with `add_theme`'s activate-if-none-else-is, the same rule reached
+> by a second route, which the plan had not noticed and which was equally
+> indefensible once a wall had to be named.
+>
+> An earlier draft had also invented "or deactivate this one", refused at the time
+> because no such action existed. **It does now** — `unhang` — which is worth noticing:
+> the draft was not wrong about what a curator would want, only about what was built,
+> and the honest fix was to build it rather than to keep steering people away from it.
+
+> **"Promote another theme, then delete" was the third option, and the reason it was
+> declined is now gone too.** `reconcile()` promoted the oldest remaining theme when
+> none was active, so a curator deleting what was on the wall would get *some* other
+> theme on it without having chosen one. That was the strongest argument for refusing.
+> With promotion removed, deleting a hung theme would simply leave the wall hanging
+> nothing — a named, designed empty state rather than an unbidden substitution. The
+> refusal survives on the remaining reason, which is enough on its own: a wall that
+> goes dark should do so because a curator took the picture down, not as a side effect
+> of tidying the catalogue.
 
 > **Both rules generalise once themes are assigned per wall, and neither survives
 > translation unexamined.** "Refuses the active theme while another exists" becomes

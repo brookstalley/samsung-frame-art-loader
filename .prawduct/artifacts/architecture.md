@@ -524,7 +524,7 @@ is no network between planes.
   once or not at all; a surface takes the container rather than a service, so a
   fourth concern changes the wiring and nothing else.
 
-  Two patterns are load-bearing enough to name here rather than leave in module
+  Three patterns are load-bearing enough to name here rather than leave in module
   docstrings:
 
   - **The persistence seam is split by schema knowledge, and its lower half is
@@ -539,6 +539,36 @@ is no network between planes.
     from a single registry entry, so a tool cannot declare one thing and do
     another. Generation carries no per-tool logic — that would be the
     thin-binding norm's stated failure mode arriving by a side door.
+  - **A schema change the file cannot be widened into is a migration, and there
+    is no version number anywhere in the mechanism** *(added 2026-08-12, with the
+    first such change this product has ever made — the walls one)*. The durable
+    store widens a file by adding columns the declared schema has and the file
+    lacks; that is the only change SQLite applies in place without losing data,
+    so a column that goes *away*, a table replaced by a differently-keyed one, or
+    rows carried between the two is written by hand in
+    `curation/src/curation/persistence/migrations.py`. The facts a later schema
+    change needs and cannot infer from reading one migration:
+    - Migrations are **handed to the store at construction** —
+      `SqliteDurableStore(path, schema, migrations=...)` — never reached for from
+      inside it. The tier that knows no domain concept goes on knowing none.
+    - They run **after widening and before the schema is read back**, in that
+      order and for that reason: widening must not be denied the columns a
+      migration will need, and the read-back must see the shape the migration
+      left, because one of them may take a column away.
+    - **Idempotent, and safe to interrupt.** Every step is guarded by what the
+      file actually holds rather than by a recorded version, and the order is
+      chosen so that any prefix leaves a file the next open finishes correctly —
+      rows are carried before anything holding them is dropped. A version table
+      was available and was deliberately not taken: it would be one more thing
+      the file has to be trusted to keep accurate, and a half-applied migration
+      is exactly the case where that trust is misplaced.
+    - **`migrations.py` may hold no domain concept the durable tier does not.**
+      It speaks in tables, columns and rows. The one exception is the default
+      wall's *name*, which is a deployment value the migration must apply at the
+      moment it creates the wall — declared there and read back down by
+      `config.py`, rather than reached upward for.
+    - **A migration makes the catalogue one-way**, which is a deployment fact
+      before it is a persistence one — see § Deployment & Version Skew.
 - **Must never:** talk to the TV, talk to the e-paper panel, know the **e-paper
   panel's** geometry, or know TV content ids. Every device fact belongs to display.
   Note the TV panel's *physical* geometry is not a device fact in this sense and
@@ -876,8 +906,26 @@ an unrecognised major is defined. `api-contract.md` now says exactly that
 (amended 2026-07-20) — the blanket exemption is retired there too, so this
 obligation reads as discharged, not outstanding.
 
-**Rollback** is `git checkout` plus two restarts. No data migration spans the
-planes, because no data is shared — the manifest is regenerated, never migrated.
+**No data migration spans the planes**, because no data is shared — the manifest
+is regenerated, never migrated. That half is unchanged and structural.
+
+**Rollback stopped being `git checkout` plus two restarts on 2026-08-12**, and
+the sentence said it for the whole life of the product before that. What changed
+is *within* the curation plane: the walls migration drops `themes.is_active` and
+the singleton `directive` table, and a previous release reopening that file hits
+the durable store's widening step, which refuses a NOT NULL column it cannot
+default. **The plane declines to start**, which is the good half — loud,
+immediate, and before anything is served, where the alternative is a release
+quietly reading a catalogue it does not understand. The missing half was the
+record.
+
+So a rollback **across a migration is a restore, not a checkout**: check out the
+previous commit, put back the `catalogue.sqlite` copied before the deploy, then
+restart both. **The backup is the rollback plan** — without one, rolling back
+across this migration is not possible, and re-creating what the migration removed
+by hand would reset the directive counter it was careful to carry. A rollback
+that crosses no migration is still the old two-step. `operational-spec.md`
+§ Routine Operations carries the operator-facing form.
 
 ## Scaling Model
 

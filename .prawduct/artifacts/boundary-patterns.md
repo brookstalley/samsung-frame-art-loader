@@ -132,15 +132,30 @@
 
 ### Catalogue schema
 
-- **Exists:** **yes**, as of 2026-07-27 — fourteen tables on stdlib `sqlite3` in
-  one file, behind two Protocols in `curation/src/curation/persistence/`: the
-  `CatalogueStore` over Artwork, Artist, Theme, Source, Original, Rendition,
-  MatColor, ThemeMembership and the Directive singleton, and the `DiscoveryStore`
+- **Exists:** **yes**, as of 2026-07-27 — sixteen tables as of 2026-08-12, on
+  stdlib `sqlite3` in one file, behind two Protocols in
+  `curation/src/curation/persistence/`: the `CatalogueStore` over Artwork,
+  Artist, Theme, Wall, ThemeAssignment, Source, Original, Rendition, MatColor,
+  ThemeMembership and a Directive **per wall**, and the `DiscoveryStore`
   over DiscoveryRun, CandidateWork, CandidateImage, SpendRecord and the
   ResolveRunWork join. A generic durable store sits under both adapters and is the
   only thing that opens the file, because acceptance writes across the two halves
-  and has to commit once. All fifteen constraints, both discovery state machines
-  and startup reconciliation are enforced in the service layer. The per-theme
+  and has to commit once. The constraints in `data-model.md` § Constraints, both
+  discovery state machines and startup reconciliation are enforced in the service
+  layer — **with one exception since 2026-08-12**: Constraint 1 ("at most one
+  theme hangs on a wall") is the `theme_assignments` primary key, so the store
+  refuses a second assignment rather than the service checking for one. That is
+  the shape a constraint takes when the thing it constrains becomes a row of its
+  own, and it is why the walls change moved a rule *down* a layer for the first
+  time.
+- **The store gained a second in-place seam on 2026-08-12, and it is not the
+  column-widening one.** `persistence/migrations.py` holds migrations handed to
+  `SqliteDurableStore(path, schema, migrations=...)` at construction, and they
+  run after `_widen_existing_tables` and before the schema is read back —
+  because a migration may take a column *away*, which is precisely what widening
+  cannot do and why it could not be stretched to cover this. See
+  `architecture.md` § Components for the mechanism and the facts a later schema
+  change needs. The per-theme
   rotation settings landed with the manifest builder that reads them, and were the
   first change to a table that files on disk already carried — the durable store's
   column-widening step exists because of them. `work_dedup_key`'s derivation was

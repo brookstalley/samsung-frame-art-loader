@@ -93,13 +93,13 @@ def test_q1_a_work_can_be_moved_and_removed_without_touching_the_work_itself(ser
     assert service.get_artwork(second.id).artwork.title == "Chop Suey"
 
 
-def test_q2_which_work_the_wall_is_on_so_the_label_can_match_it(service, display):
-    """The catalogue's half of the answer: the active theme, its order, and the pin.
+def test_q2_which_work_the_wall_is_on_so_the_label_can_match_it(service, display, wall_id):
+    """The catalogue's half of the answer: what hangs on the wall, its order, and the pin.
 
     The display plane owns which entry it has reached; what it needs from here is
-    the theme the wall is showing, the order to rotate through, and the label text
-    for whichever work that lands on. The pin is the one case where the catalogue
-    names a specific work.
+    the theme that wall is showing, the order to rotate through, and the label
+    text for whichever work that lands on. The pin is the one case where the
+    catalogue names a specific work.
     """
     demuth = service.add_artist(name="Charles Demuth", nationality="American", born=1883, died=1935)
     figure_five = service.add_artwork(
@@ -113,10 +113,11 @@ def test_q2_which_work_the_wall_is_on_so_the_label_can_match_it(service, display
     theme = display.add_theme(name="American Modernists")
     display.add_to_theme(theme_id=theme.id, artwork_id=figure_five.id, position=1)
 
-    display.show_work_now(figure_five.id)
+    display.activate_theme(theme.id, wall_id=wall_id)
+    display.show_work_now(wall_id, figure_five.id)
 
-    assert display.active_theme().id == theme.id
-    directive = display.read_directive()
+    assert display.hanging_on(wall_id).id == theme.id
+    directive = display.read_directive(wall_id)
     assert directive.pinned_work_id == figure_five.id
 
     # Every field the physical label renders is reachable from that id.

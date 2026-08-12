@@ -54,6 +54,78 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-12: A theme stops being active and starts hanging somewhere
+
+<!-- prawduct: chunks=01 | scope=curation-ux -->
+
+**Why:** `Theme.is_active` could only ever mean "on the one television". The
+product's own information architecture had argued since 2026-08-11 that fixing
+the shape while it is free is the whole point, and every screen chunk in this
+plan builds on top of it. So a wall is now a first-class entity — a place with a
+name — and hanging is a `ThemeAssignment` row keyed by `wall_id`, with a
+directive per wall so a `next` in the living room does not step the study.
+
+**The first migration this product has ever written.** `themes.is_active`, its
+partial unique index and the singleton `directive` table are dropped; the theme
+that was active is hung on a wall named from configuration, and the singleton's
+counter and pin are carried onto it so no deployment loses its picture and no
+advance is fired by the upgrade. It is idempotent, safe to interrupt, and
+carries no version number — every step is guarded by what the file actually
+holds, because a half-applied migration is exactly the case where a recorded
+version is not to be trusted. The mechanism is recorded in `architecture.md`
+§ Components rather than left in module docstrings, since the next schema change
+would otherwise be written from first principles.
+
+**Two removals, where the plan knew about one.** `reconcile()` promoted the
+oldest theme when none was active; `add_theme` activated a theme whenever no
+other was — the same rule by a second route, invisible to anyone searching for
+the first. Both are gone: with N walls there is no defensible answer to which
+theme belongs on a wall the curator has not hung anything on, so a wall with
+nothing on it is a designed empty state.
+
+**An unhang had to be built before the delete refusal could be made absolute**,
+and that is the ruling this chunk changed rather than followed. Refusing to
+delete a theme hanging on any wall reinstates the deadlock the 2026-08-11
+last-theme ruling was written to avoid — worse with walls, since "the last
+theme" hanging in three rooms would blank three rooms at once. So
+`art_theme(action='unhang')` and `DELETE /api/walls/{wall_id}/theme` exist, and
+the exception is retired because the thing it worked around is gone. The gap was
+found mid-build, from this plan's own acceptance test using the word "unhung"
+for an operation nothing had built.
+
+**Three build-time additions the plan had not designed**, all recorded where a
+reader meets them: a wall creator (`POST /api/walls`,
+`art_display(action='add_wall')`) because nothing else in the plan creates one,
+create-only because deleting a wall raises consequences nothing has ruled on; a
+wall listing; and `GET /api/themes` reshaped to `{theme, hanging_on[]}`, because
+`is_active` had nothing to become — "is it active" is now "which walls is it
+on".
+
+**Rollback stopped being `git checkout` plus two restarts, and both deploy
+documents now say so.** A previous release reopening a migrated catalogue
+refuses to start rather than running against a column it requires and cannot
+find — which is the good outcome, loud and before anything is served. But it
+makes a rollback across this migration a *restore*: the backup taken before the
+deploy is the rollback plan.
+
+**Known and deliberate: a second wall can be recorded and cannot yet be shown.**
+The inter-plane contract is still one manifest file, so `sync` writes the same
+path whatever wall it is handed. It is stated at `add_wall`, at `sync`, on
+`WallSettings.manifest_path`, in the `add_wall` tip and on the route — and not
+guarded, because a guard would have to forbid the two-wall state this chunk's
+own acceptance criteria require. Chunk 02 closes it, and that raises its
+priority above "next in the wave".
+
+**Review residue, fixed in the same commit:** the normative delete-refusal
+message is now pinned whole by a test rather than by a substring that happened
+to match the default wall's name; the `add_wall` tips name both refusals the
+service makes, with a test binding them; a duplicate wall name is refused by
+name rather than by a UUID nobody has seen; the browser surface states the fact
+about an unhang that only the MCP surface carried, so an empty wall does not
+read as a failed take-down; `get_wall_view` composes from the two single-fact
+reads instead of holding a second copy of each; and a twelve-mutation sweep over
+the assignment key, the migration and the generalised refusal caught all twelve.
+
 ## 2026-08-12: The revised palette lands in the stylesheet, and the plan learns to run in parallel
 
 <!-- prawduct: chunks=03 | scope=curation-ux -->

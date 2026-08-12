@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 
 from curation.manifest.builder import MANIFEST_FILENAME
 from curation.manifest.heartbeat import HEARTBEAT_FILENAME
+from curation.persistence.migrations import DEFAULT_WALL_NAME
 from curation.services.display_fit import ArtworkBox
 from curation.services.runner import DiscoverySettings
 
@@ -352,6 +353,11 @@ class Settings:
     heartbeat_path: Path
     host: str
     port: int
+    #: What this deployment's one wall is called, **used only when the catalogue
+    #: has no wall yet**. Once a wall exists the name is the curator's and this
+    #: value stops being consulted, so changing it later renames nothing — which
+    #: is why it is not simply read wherever a wall's name is wanted.
+    wall_name: str
     rotation_interval_seconds: int
     rotation_shuffle: bool
     #: How often the plane reclaims the previews of works the curator has
@@ -563,6 +569,7 @@ class Settings:
             # every interface is a decision no one made.
             host=os.environ.get("CURATION_HOST") or DEFAULT_HOST,
             port=_port("CURATION_PORT", DEFAULT_PORT),
+            wall_name=os.environ.get("WALL_NAME") or DEFAULT_WALL_NAME,
             rotation_interval_seconds=_positive_int("ROTATION_INTERVAL_SECONDS", DEFAULT_ROTATION_INTERVAL_SECONDS),
             rotation_shuffle=_flag("ROTATION_SHUFFLE", DEFAULT_ROTATION_SHUFFLE),
             # `_counted` rather than `_positive_int`: zero means "do not sweep",

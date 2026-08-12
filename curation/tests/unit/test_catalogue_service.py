@@ -137,18 +137,21 @@ def test_two_themes_cannot_share_a_name(display):
         display.add_theme(name="American Modernists")
 
 
-def test_the_first_theme_is_active(display):
-    """This assertion used to read `is_active is False`, and the inversion is deliberate.
+def test_the_first_theme_hangs_nowhere(display):
+    """This assertion has now been inverted twice, and both inversions were rulings.
 
-    `Theme.is_active` arrived as a column with no enforcement behind it, and the
-    old assertion described exactly that. The rule that governs it has since been
-    implemented — exactly one theme is active, so the display plane's sync target
-    is never a guess — and it says the opposite: a catalogue holding themes with
-    none of them active gives the display plane nothing to sync, and nothing
-    would report that as a problem. The rest of the rule is exercised in
-    `test_catalogue_constraints.py`.
+    It read `is_active is False` when `Theme.is_active` was a column with no
+    enforcement behind it, then `is True` once "exactly one theme is active" was
+    implemented — a catalogue with themes and none active gave the display plane
+    nothing to sync. The operator ruled on 2026-08-12 that themes are global and
+    hanging is a separate act against a named wall, which removes the column and
+    the question with it: creating a theme puts it on no wall, and a wall with
+    nothing on it is an ordinary state rather than the broken one. The rest of the
+    rule is exercised in `test_catalogue_constraints.py`.
     """
-    assert display.add_theme(name="American Modernists").is_active is True
+    theme = display.add_theme(name="American Modernists")
+
+    assert display.walls_hanging(theme.id) == []
 
 
 def _by_title(service, title):

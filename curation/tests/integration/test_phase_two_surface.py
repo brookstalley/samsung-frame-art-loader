@@ -61,7 +61,7 @@ def museum() -> FakeImageSearch:
 
 
 @pytest.fixture
-def services(store, discovery_store, wall, thumbnail_settings, settings, engine, museum) -> Services:
+def services(store, discovery_store, wall_settings, thumbnail_settings, settings, engine, museum) -> Services:
     """The whole plane, wired the way a deployment with ARTIC_USER_AGENT set is."""
     engine.result = WorkList(
         works=(
@@ -74,7 +74,7 @@ def services(store, discovery_store, wall, thumbnail_settings, settings, engine,
     return Services.bind(
         catalogue=store,
         discovery=discovery_store,
-        wall=wall,
+        wall=wall_settings,
         thumbnails=thumbnail_settings,
         artwork_box=settings.tv_artwork_box,
         engine=engine,

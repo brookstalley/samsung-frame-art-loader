@@ -358,7 +358,13 @@ class ThemeMembership:
 
 @dataclass(frozen=True, slots=True)
 class Theme:
-    """A curator's grouping of works, and the unit the wall rotates through.
+    """A curator's grouping of works, and the unit a wall rotates through.
+
+    **Global, and hung rather than activated.** This record carried an
+    `is_active` boolean until 2026-08-12, which could only ever mean "active on
+    the one television" — the single-wall assumption written into the noun. What
+    is hanging where is `ThemeAssignment`'s to say, so two walls may hang the
+    same theme with nothing duplicated.
 
     Rotation is host-driven — the TV's own slideshow can only be scoped to a
     whole category, so timing is this product's data rather than the television's
@@ -371,14 +377,61 @@ class Theme:
     name: str
     created_at: datetime
     description: str | None = None
-    is_active: bool = False
     rotation_interval_seconds: int | None = None
     shuffle: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
+class Wall:
+    """A place where art hangs. One display serves one wall.
+
+    **Three fields, and the shortness is the design.** A wall is an identity and
+    a name; it is not a device. Geometry, network address, panel model, TV
+    content ids, upload state, reachability and last-heartbeat are all per-device
+    runtime state and are permanently forbidden here — they belong to the display
+    plane's own store or to the configuration both planes read. Which display
+    serves which wall is display-plane configuration, exactly as `TV_ADDRESS`
+    already is.
+
+    That this record lives in the catalogue at all is a ruling against
+    `data-model.md`'s "per-device runtime state never lives in the catalogue"
+    rather than an oversight: a wall is a *place* and its name is a *curatorial*
+    fact, and assigning a theme to it is a curatorial act, which is precisely why
+    it cannot live on the display side where the curator cannot reach it.
+    Replace the television and the wall persists, keeps its name and keeps its
+    theme — where a design keying assignment on a device would lose the curation
+    along with the device.
+    """
+
+    id: str
+    name: str
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ThemeAssignment:
+    """What is hanging on one wall — the act the interface calls *hanging*.
+
+    **`wall_id` alone is the primary key, which is what makes "one theme per
+    wall" structural.** The predecessor needed a partial unique index over
+    `Theme.is_active` plus a reconciliation pass to approximate it, and this
+    product has already been bitten once by reading that arrangement as an
+    absolute it never enforced. Nothing here has to claim anything: a second
+    theme on a wall is not a violation to detect, it is a row that cannot be
+    inserted.
+
+    **A wall with no row hangs nothing, and that is an ordinary state** — an
+    empty catalogue, or a curator who took everything down.
+    """
+
+    wall_id: str
+    theme_id: str
+    assigned_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class Directive:
-    """The standing instruction the display plane acts on, held catalogue-side.
+    """One wall's standing instruction to the display plane, held catalogue-side.
 
     The display plane is reached only through the theme manifest, so an
     interactive command — "show this work now", "step to the next one" — travels
@@ -386,12 +439,19 @@ class Directive:
     an optional work the sequence's advance points at. Display acts once each
     time it observes the sequence advance.
 
+    **One row per wall, seeded when the wall is created so no caller ever has to
+    make it.** This was a singleton until 2026-08-12, and a `next` aimed at the
+    living room would otherwise have stepped every wall in the house: one counter
+    cannot say which display an advance was meant for.
+
     The counter lives here, in the catalogue, because a manifest rebuild must
     carry it forward unchanged. A counter derived from the manifest would reset
     whenever the manifest was rewritten, and a reset reads to the display plane
-    as an advance — firing a directive nobody issued.
+    as an advance — firing a directive nobody issued. It stays *per wall* rather
+    than per theme for the same reason: it has to survive theme switching.
     """
 
+    wall_id: str
     sequence: int
     pinned_work_id: str | None = None
 

@@ -417,7 +417,10 @@ async function viewWork(artworkId, generation) {
 }
 
 async function viewThemes(generation) {
-  const [themes, works] = await Promise.all([api("/api/themes"), fetchAllWorks()]);
+  // The walls come along because hanging is an act against a named wall: a
+  // theme panel cannot offer "put this up" without saying where, and it cannot
+  // say where without knowing what the walls are called.
+  const [themes, walls, works] = await Promise.all([api("/api/themes"), api("/api/walls"), fetchAllWorks()]);
 
   const name = el("input", { type: "text", id: "new-theme-name", required: true });
   const create = el("div", { class: "panel" }, [
@@ -446,13 +449,21 @@ async function viewThemes(generation) {
   const shortfall = shortfallNote(works);
   if (shortfall) panels.push(shortfall);
 
-  for (const theme of themes.themes) {
-    panels.push(themePanel(theme, works.works));
+  if (!walls.walls.length) {
+    panels.push(
+      el("p", { class: "note", text: "There are no walls, so nothing can be hung. A wall is created when the plane first opens the catalogue." }),
+    );
+  }
+
+  for (const placement of themes.themes) {
+    panels.push(themePanel(placement, walls.walls, works.works));
   }
   render(generation, ...panels);
 }
 
-function themePanel(theme, allWorks) {
+function themePanel(placement, walls, allWorks) {
+  const theme = placement.theme;
+  const hangingOn = placement.hanging_on;
   const picker = el("select", { id: `add-${theme.theme_id}` });
   for (const work of allWorks) {
     picker.append(
@@ -474,11 +485,13 @@ function themePanel(theme, allWorks) {
   return el("div", { class: "panel" }, [
     el("h3", {}, [
       el("span", { text: theme.name }),
-      // Active state carries a glyph and the word beside any colour.
-      theme.is_active
+      // Hanging carries a glyph and the words beside any colour — and the words
+      // name the walls, because "on the wall" reads correctly today only while
+      // there is one of them.
+      hangingOn.length
         ? el("span", { class: "badge", style: "margin-left: 0.5rem" }, [
             el("span", { class: "glyph", text: "●", "aria-hidden": true }),
-            el("span", { text: "on the wall" }),
+            el("span", { text: `on ${hangingOn.map((wall) => wall.name).join(", ")}` }),
           ])
         : null,
     ]),
@@ -501,18 +514,39 @@ function themePanel(theme, allWorks) {
             await refreshMembers();
           }),
       }),
-      theme.is_active
-        ? null
-        : el("button", {
+      // One button per wall, named for that wall. There is no single-wall
+      // shortcut to replace when a second display arrives, which is the whole
+      // point: with one wall this reads "Hang on the living room" and with three
+      // it reads as three choices, and neither is a different layout.
+      ...walls
+        .filter((wall) => !hangingOn.some((hung) => hung.wall_id === wall.wall_id))
+        .map((wall) =>
+          el("button", {
             class: "action",
             type: "button",
-            text: "Put on the wall",
+            text: `Hang on ${wall.name}`,
             onclick: () =>
               guard(async () => {
-                await api(`/api/themes/${encodeURIComponent(theme.theme_id)}/activate`, { method: "POST" });
+                await api(`/api/themes/${encodeURIComponent(theme.theme_id)}/activate`, {
+                  method: "POST",
+                  body: JSON.stringify({ wall_id: wall.wall_id }),
+                });
                 go("manifest");
               }),
           }),
+        ),
+      ...hangingOn.map((wall) =>
+        el("button", {
+          class: "action quiet",
+          type: "button",
+          text: `Take down from ${wall.name}`,
+          onclick: () =>
+            guard(async () => {
+              await api(`/api/walls/${encodeURIComponent(wall.wall_id)}/theme`, { method: "DELETE" });
+              await refresh();
+            }),
+        }),
+      ),
     ]),
     body,
   ]);
@@ -576,12 +610,48 @@ function memberList(themeId, works, after) {
 }
 
 async function viewManifest(generation) {
-  const manifest = await api("/api/manifest");
-  const panels = [
-    el("h2", { text: `On the wall: ${manifest.theme.name}` }),
+  // One section per wall, with one wall the degenerate case rather than a
+  // special one: there is no single-wall layout here for a second display to
+  // replace. A wall with nothing hanging is asked nothing — the route would
+  // refuse, and correctly, because there is no theme to evaluate.
+  const walls = await api("/api/walls");
+  const hung = walls.walls.filter((wall) => wall.theme);
+  const builds = await Promise.all(
+    hung.map(async (wall) => [wall, await api(`/api/manifest?wall_id=${encodeURIComponent(wall.wall_id)}`)]),
+  );
+
+  const panels = [el("h2", { text: "The walls" })];
+  for (const wall of walls.walls.filter((candidate) => !candidate.theme)) {
+    panels.push(el("p", { class: "muted", text: `Nothing is hanging on ${wall.name}. Hang a theme from Themes.` }));
+    // The fact the MCP surface already states after an unhang, said here too.
+    // Taking a theme down rewrites no manifest, so the set goes on showing the
+    // picture — and a curator who read only the line above would take a
+    // successful take-down for a failed one, which is the same inference
+    // `activate_theme` cites when it argues hanging must publish immediately.
+    panels.push(
+      el("p", {
+        class: "note",
+        text: "Taking a theme down does not blank the wall: the display goes on showing what it last received until a theme is hung.",
+      }),
+    );
+  }
+  for (const [wall, manifest] of builds) {
+    panels.push(...manifestPanels(wall, manifest));
+  }
+  render(generation, ...panels);
+}
+
+function manifestPanels(wall, manifest) {
+  return [
+    // `h3` for the wall and `h4` for its panels, so the nesting survives a
+    // second wall: with two walls hung, sibling `h3`s would give a reader
+    // navigating by heading four headings in a row and no signal for which
+    // counts belong to which room. The single-wall view read correctly by
+    // accident, having only one room's worth of headings to confuse.
+    el("h3", { class: "wall-title", text: `${wall.name}: ${manifest.theme.name}` }),
     el("p", { class: "note", text: manifest.summary }),
     el("div", { class: "panel" }, [
-      el("h3", { text: `Showing (${manifest.entries.length})` }),
+      el("h4", { text: `Showing (${manifest.entries.length})` }),
       manifest.entries.length
         ? table(
             "Every work the display plane is being asked to show, in order.",
@@ -593,7 +663,7 @@ async function viewManifest(generation) {
     el("div", { class: "panel" }, [
       // Never omitted when empty: a section that appeared only on trouble would
       // train a reader to take its absence as "everything is fine".
-      el("h3", { text: `Not showing (${manifest.exclusions.length})` }),
+      el("h4", { text: `Not showing (${manifest.exclusions.length})` }),
       manifest.exclusions.length
         ? table(
             "Every work this theme holds that is not on the wall, and exactly why.",
@@ -603,7 +673,7 @@ async function viewManifest(generation) {
         : el("p", { class: "muted", text: "Every work in this theme reached the wall." }),
     ]),
     el("div", { class: "panel" }, [
-      el("h3", { text: "How it rotates" }),
+      el("h4", { text: "How it rotates" }),
       facts([
         ["Interval", `${manifest.rotation_interval_seconds} seconds`],
         ["Order", manifest.shuffle ? "shuffled" : "as curated"],
@@ -612,7 +682,6 @@ async function viewManifest(generation) {
       ]),
     ]),
   ];
-  render(generation, ...panels);
 }
 
 /* The display plane's own report, whatever it chose to put in it.

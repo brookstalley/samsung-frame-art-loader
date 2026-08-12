@@ -261,8 +261,15 @@ class Services:
         assumed of it. Each service owns the repairs for its own records; this is
         the one call a process start has to remember, so a service gaining a
         repair does not mean an entry point gaining a line.
+
+        **The display service had the other one until 2026-08-12**, and it was
+        dropped rather than made per-wall: it promoted the oldest theme when none
+        was active, which with more than one wall would hang the same theme in
+        every room unbidden. What the file may predate about hanging is a *shape*
+        rather than a rule now — the single-wall columns — and a shape is moved by
+        `persistence/migrations.py` when the file is opened, before any service
+        can read it.
         """
-        self.display.reconcile()
         self.discovery.reconcile()
 
 

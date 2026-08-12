@@ -526,10 +526,24 @@ What is hanging on one wall. The act `information-architecture.md` flow 6 calls
 > catalogue, or a curator who took everything down. `information-architecture.md`
 > § Screen States already designs it as one of the Walls screen's named empties.
 >
-> **Nothing promotes a theme automatically.** `reconcile()` currently promotes the
-> oldest theme when none is active, which was right when there was one wall and one
-> possible answer. With more than one wall the same rule hangs the same theme in
-> every room unbidden, on a schedule nobody asked for.
+> **Nothing promotes a theme automatically.** `reconcile()` promoted the oldest theme
+> when none was active, which was right when there was one wall and one possible
+> answer. With more than one wall the same rule hangs the same theme in every room
+> unbidden, on a schedule nobody asked for.
+>
+> **Built 2026-08-12, and it took two removals rather than one.** `add_theme` also
+> activated a theme whenever no other was active — the same rule by a second route,
+> which nothing had noticed and which a search for `reconcile` would never have found.
+> A wall a curator has not hung anything on now hangs nothing, and that empty state is
+> designed rather than defaulted.
+>
+> **A wall is emptied by `clear_wall`**, reached as `DELETE /api/walls/{wall_id}/theme`
+> and `art_theme(action='unhang')`. It exists because generalising the delete refusal
+> to "hanging on any wall" would otherwise have made a hung theme undeletable with no
+> way out — the deadlock the 2026-08-11 last-theme ruling was written to avoid. Taking
+> a theme down does **not** advance the wall's directive sequence, for the reason
+> recorded at **Directive**: it is not an instruction to the display plane, and an
+> advance would fire a directive nobody issued.
 >
 > `[DECISION: automatic promotion is dropped rather than made per-wall | with N
 > walls there is no defensible answer to "which theme should appear on a wall the
@@ -1802,12 +1816,19 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
    theme on a wall is a row the store will not accept. A wall with no assignment
    hangs nothing, which is an ordinary state and not a violation.
 
-   **Designed 2026-08-12, not built.** What the catalogue enforces *today* is the
-   single-wall predecessor: `Theme.is_active` with `themes_one_active`, a *partial*
-   unique index over `is_active = 1`, plus `reconcile()` promoting the oldest theme
-   when none is active. `build-plan-curation-ux.md` carries the migration, which
-   assigns the currently-active theme to the one existing wall; the promotion is
-   dropped rather than carried over, for the reason recorded at **ThemeAssignment**.
+   **Built 2026-08-12.** The single-wall predecessor is gone: `Theme.is_active` and
+   the `themes_one_active` partial index are dropped — the first column this schema
+   has ever removed — and the migration establishes a wall, names it from
+   configuration, hangs whatever was active and carries the singleton directive's
+   counter and pin onto it.
+
+   **Automatic promotion was removed twice, not once**, which is worth recording
+   because the plan only knew about one of them. `reconcile()`'s promote-the-oldest
+   was the known case. `add_theme` also activated a theme when no other was active —
+   the same rule reached by a second route, equally indefensible once a wall has to be
+   named, and invisible to anyone searching for the first. With N walls there is no
+   defensible answer to which theme should appear on a wall the curator has not hung
+   anything on, so the honest empty state is what a wall gets.
 
    *This constraint read "Exactly one Theme has `is_active = true`" until
    2026-08-11, which the index had never enforced and the empty catalogue had

@@ -35,7 +35,9 @@ from curation.persistence.records import (
     Rendition,
     Source,
     Theme,
+    ThemeAssignment,
     ThemeMembership,
+    Wall,
 )
 
 
@@ -47,13 +49,18 @@ class CatalogueStore(Protocol):
     def transaction(self) -> AbstractContextManager[None]:
         """Group several writes so they commit together or not at all.
 
-        Several of the catalogue's rules span rows — exactly one theme is
-        active, exactly one mat colour is current, at most one source is
-        primary. Each is applied as a clear-then-set pair, and a pair that can
-        be interrupted between its halves leaves the catalogue in a state the
-        rule forbids: no active theme at all, and so no sync target for the
-        display plane. Nesting is permitted and joins the outer group, so a
-        service operation composed of others still commits once.
+        Several of the catalogue's rules span rows — exactly one mat colour is
+        current, at most one source is primary. Each is applied as a
+        clear-then-set pair, and a pair that can be interrupted between its
+        halves leaves the catalogue in a state the rule forbids: a work with no
+        mat colour in force, and so nothing to compose its canvas against.
+        Nesting is permitted and joins the outer group, so a service operation
+        composed of others still commits once.
+
+        **"Exactly one theme is active" was the third example here until
+        2026-08-12**, and it went away rather than being restated per wall:
+        `ThemeAssignment` is keyed by the wall alone, so what replaced it is a
+        primary key and not a pair of writes that has to be atomic.
         """
         ...
 
@@ -207,14 +214,65 @@ class CatalogueStore(Protocol):
         """Return a theme's entries in curated order, unordered entries last."""
         ...
 
-    # -- the display directive ------------------------------------------------
+    # -- walls ----------------------------------------------------------------
 
-    def get_directive(self) -> Directive:
-        """Return the standing directive. A fresh catalogue has one already."""
+    def add_wall(self, wall: Wall) -> None:
+        """Persist a wall. Raises if the id or the name is already present."""
+        ...
+
+    def get_wall(self, wall_id: str) -> Wall | None:
+        """Return the wall, or None if no such id is stored."""
+        ...
+
+    def list_walls(self) -> Sequence[Wall]:
+        """Return every wall in a stable order.
+
+        Unpaged: a household has as many walls as it has displays.
+        """
+        ...
+
+    # -- what is hanging ------------------------------------------------------
+
+    def get_assignment(self, wall_id: str) -> ThemeAssignment | None:
+        """What is hanging on this wall, or None while nothing is."""
+        ...
+
+    def set_assignment(self, assignment: ThemeAssignment) -> None:
+        """Hang a theme on a wall, replacing whatever was hanging there.
+
+        There is no second row to displace: `wall_id` is the whole primary key,
+        so a wall holding a theme already is an update rather than a conflict to
+        resolve.
+        """
+        ...
+
+    def remove_assignment(self, wall_id: str) -> None:
+        """Take down whatever is hanging. Clearing an empty wall is not an error."""
+        ...
+
+    def list_assignments(self) -> Sequence[ThemeAssignment]:
+        """Every wall that has something hanging on it, in a stable order.
+
+        Walls with nothing hanging have no row and do not appear.
+        """
+        ...
+
+    # -- the display directives -----------------------------------------------
+
+    def add_directive(self, directive: Directive) -> None:
+        """Persist a wall's directive. Raises if that wall already has one."""
+        ...
+
+    def get_directive(self, wall_id: str) -> Directive:
+        """Return this wall's standing directive. A wall has one from creation."""
         ...
 
     def set_directive(self, directive: Directive) -> None:
-        """Replace the standing directive."""
+        """Replace a wall's standing directive. Raises if that wall has none."""
+        ...
+
+    def list_directives(self) -> Sequence[Directive]:
+        """Every wall's standing directive, in a stable order."""
         ...
 
 

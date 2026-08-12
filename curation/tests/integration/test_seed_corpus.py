@@ -135,12 +135,12 @@ class TestPuttingThemOnTheWall:
     """Seeding is proven by a manifest, which is the only channel to the display plane."""
 
     @pytest.fixture
-    def built(self, records, service, display, art_root):
+    def built(self, records, service, display, art_root, wall_id):
         report = seed_catalogue(records, catalogue=service, art_root=art_root)
         theme = display.add_theme(name="Everything")
         for work in report.works:
             display.add_to_theme(theme_id=theme.id, artwork_id=work.work_id)
-        return display.build_manifest(theme.id)
+        return display.build_manifest(wall_id, theme.id)
 
     def test_entries_and_exclusions_together_account_for_every_work(self, built):
         assert built.considered == WORKS
@@ -172,7 +172,7 @@ class TestPuttingThemOnTheWall:
         (brancusi,) = [entry for entry in built.entries if entry.label["artist"] == "Constantin Brancusi"]
         assert brancusi.label["artist_dates"] == "1876–1957"
 
-    def test_a_work_the_tree_had_no_render_for_is_excluded_by_name(self, records, service, display, tmp_path, jpeg):
+    def test_a_work_the_tree_had_no_render_for_is_excluded_by_name(self, records, service, display, tmp_path, jpeg, wall_id):
         """The report and the manifest have to agree about which work is not ready."""
         for record in records:
             jpeg(tmp_path / record.raw_path, width=6000, height=4000)
@@ -184,7 +184,7 @@ class TestPuttingThemOnTheWall:
         theme = display.add_theme(name="Everything")
         for work in report.works:
             display.add_to_theme(theme_id=theme.id, artwork_id=work.work_id)
-        built = display.build_manifest(theme.id)
+        built = display.build_manifest(wall_id, theme.id)
 
         assert built.considered == WORKS
         assert [(exclusion.title, exclusion.reason) for exclusion in built.exclusions] == [

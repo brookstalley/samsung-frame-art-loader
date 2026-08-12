@@ -47,7 +47,9 @@ from curation.persistence.records import (
     Source,
     SourceClass,
     Theme,
+    ThemeAssignment,
     ThemeMembership,
+    Wall,
 )
 
 CATALOGUE_SCHEMA = """
@@ -88,19 +90,40 @@ CREATE INDEX IF NOT EXISTS artworks_by_status ON artworks(status);
 -- `rotation_interval_seconds` and `shuffle` are nullable because null means
 -- "inherit the global default" rather than "unset": a theme that has never
 -- expressed a pace is a normal theme, not an incomplete one.
+--
+-- A theme is global: nothing here says where it is hanging. `is_active` and its
+-- `themes_one_active` partial index were dropped on 2026-08-12, when hanging
+-- became an act against a named wall; `migrations.py` carries the file that
+-- still has them.
 CREATE TABLE IF NOT EXISTS themes (
     id                        TEXT PRIMARY KEY,
     name                      TEXT NOT NULL UNIQUE,
     description               TEXT,
-    is_active                 INTEGER NOT NULL,
     created_at                TEXT NOT NULL,
     rotation_interval_seconds INTEGER,
     shuffle                   INTEGER
 );
 
--- The display plane's sync target has to be unambiguous, so no two themes may
--- claim it at once.
-CREATE UNIQUE INDEX IF NOT EXISTS themes_one_active ON themes(is_active) WHERE is_active = 1;
+-- A place where art hangs, and nothing about the device that serves it. The
+-- forbidden columns are listed on the `Wall` record; the rule is that this table
+-- must survive its television being replaced.
+CREATE TABLE IF NOT EXISTS walls (
+    id          TEXT PRIMARY KEY,
+    name        TEXT NOT NULL UNIQUE,
+    created_at  TEXT NOT NULL
+);
+
+-- What is hanging on one wall. `wall_id` alone is the key, so "at most one theme
+-- per wall" is the key rather than a rule anything has to check: a second theme
+-- on a wall is a row that cannot be inserted. A wall with no row hangs nothing,
+-- which is an ordinary state.
+CREATE TABLE IF NOT EXISTS theme_assignments (
+    wall_id      TEXT PRIMARY KEY REFERENCES walls(id),
+    theme_id     TEXT NOT NULL REFERENCES themes(id),
+    assigned_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS theme_assignments_by_theme ON theme_assignments(theme_id);
 
 CREATE TABLE IF NOT EXISTS sources (
     id                   TEXT PRIMARY KEY,
@@ -185,23 +208,26 @@ CREATE TABLE IF NOT EXISTS theme_memberships (
 
 CREATE INDEX IF NOT EXISTS theme_memberships_by_artwork ON theme_memberships(artwork_id);
 
--- One row, always. The display plane's standing directive is a property of the
--- catalogue rather than of any theme, because the sequence has to survive every
--- manifest rebuild and every theme switch to stay monotonic.
-CREATE TABLE IF NOT EXISTS directive (
-    id              INTEGER PRIMARY KEY CHECK (id = 1),
+-- One row per wall, seeded when the wall is created so no caller ever has to
+-- make one. The standing directive is a property of the *wall* rather than of
+-- any theme, because the sequence has to survive every manifest rebuild and
+-- every theme switch to stay monotonic — and a singleton, which is what this
+-- was until 2026-08-12, cannot say which display an advance was meant for.
+CREATE TABLE IF NOT EXISTS directives (
+    wall_id         TEXT PRIMARY KEY REFERENCES walls(id),
     sequence        INTEGER NOT NULL,
     pinned_work_id  TEXT REFERENCES artworks(id)
 );
 
-INSERT OR IGNORE INTO directive (id, sequence, pinned_work_id) VALUES (1, 0, NULL);
+CREATE INDEX IF NOT EXISTS directives_by_pin ON directives(pinned_work_id);
 """
 
 #: The join's own key. A work appears at most once in a theme.
 _MEMBERSHIP_KEY: Final[tuple[str, ...]] = ("theme_id", "artwork_id")
 
-#: The singleton directive row's key, which is the same value forever.
-_DIRECTIVE_KEY: Final[Mapping[str, Any]] = {"id": 1}
+#: Both tables that hang off a wall are keyed by it alone, which is what makes
+#: "one theme per wall" and "one directive per wall" keys rather than claims.
+_BY_WALL: Final[tuple[str, ...]] = ("wall_id",)
 
 #: What a curator scans by, then a tie-break that makes paging repeatable.
 _BY_TITLE: Final[tuple[OrderBy, ...]] = (OrderBy("title", ignore_case=True), OrderBy("id"))
@@ -225,6 +251,11 @@ _BY_GEOMETRY: Final[tuple[OrderBy, ...]] = (
 #: Newest first, because a mat colour list is a history and the current choice
 #: is the one at the top of it.
 _BY_RECENCY: Final[tuple[OrderBy, ...]] = (OrderBy("chosen_at", descending=True), OrderBy("id"))
+
+#: The only order a set of rows keyed by a wall has. Stated rather than left to
+#: the file, because a listing with no ORDER BY is a different order on a
+#: different day and every caller here is comparing sets.
+_BY_WALL_ID: Final[tuple[OrderBy, ...]] = (OrderBy("wall_id"),)
 
 #: Curated order, with the entries nobody placed after the ones somebody did.
 _BY_POSITION: Final[tuple[OrderBy, ...]] = (
@@ -366,23 +397,63 @@ class SqliteCatalogue(TableAdapter):
     def list_memberships(self, theme_id: str) -> Sequence[ThemeMembership]:
         return self._list("theme_memberships", {"theme_id": theme_id}, _BY_POSITION, _membership)
 
-    # -- the display directive ------------------------------------------------
+    # -- walls ----------------------------------------------------------------
 
-    def get_directive(self) -> Directive:
-        row = self._store.fetch_one("directive", _DIRECTIVE_KEY)
+    def add_wall(self, wall: Wall) -> None:
+        # Named rather than identified, unlike every neighbour here. The id is a
+        # fresh uuid4 and can never be the thing already stored, so the only way
+        # this insert refuses is the UNIQUE on `name` — and "could not store wall
+        # '<uuid>'" would report a collision on a value nobody has ever seen, to
+        # a curator who typed a room's name. The refusal has to name what
+        # collided.
+        self._add("walls", _wall_row(wall), subject=f"wall {wall.name!r}")
+
+    def get_wall(self, wall_id: str) -> Wall | None:
+        return self._get("walls", {"id": wall_id}, _wall)
+
+    def list_walls(self) -> Sequence[Wall]:
+        return self._list("walls", None, _BY_NAME, _wall)
+
+    # -- what is hanging ------------------------------------------------------
+
+    def get_assignment(self, wall_id: str) -> ThemeAssignment | None:
+        return self._get("theme_assignments", {"wall_id": wall_id}, _assignment)
+
+    def set_assignment(self, assignment: ThemeAssignment) -> None:
+        # `update` rather than `raise`, because hanging a theme on a wall that
+        # already holds one replaces it. That is the whole operation — there is
+        # no take-down-then-hang pair a reader could be caught between.
+        self._store.upsert("theme_assignments", _assignment_row(assignment), pk=_BY_WALL, on_conflict="update")
+
+    def remove_assignment(self, wall_id: str) -> None:
+        self._store.delete("theme_assignments", {"wall_id": wall_id})
+
+    def list_assignments(self) -> Sequence[ThemeAssignment]:
+        return self._list("theme_assignments", None, _BY_WALL_ID, _assignment)
+
+    # -- the display directives -----------------------------------------------
+
+    def add_directive(self, directive: Directive) -> None:
+        self._add("directives", _directive_row(directive), subject=f"directive for wall {directive.wall_id!r}", key=_BY_WALL)
+
+    def get_directive(self, wall_id: str) -> Directive:
+        row = self._store.fetch_one("directives", {"wall_id": wall_id})
         if row is None:
-            # The schema seeds this row when the file is created, so its absence
-            # means the file was edited by something other than this code.
-            raise StorageError("The catalogue has no display directive row.")
-        return Directive(sequence=row["sequence"], pinned_work_id=row["pinned_work_id"])
+            # Seeded when the wall is created, so its absence means either an
+            # unknown wall or a file edited by something other than this code.
+            raise StorageError(f"Wall {wall_id!r} has no display directive row.")
+        return _directive(row)
 
     def set_directive(self, directive: Directive) -> None:
         self._update(
-            "directive",
-            BY_ID,
-            {**_DIRECTIVE_KEY, "sequence": directive.sequence, "pinned_work_id": directive.pinned_work_id},
-            subject="the display directive",
+            "directives",
+            _BY_WALL,
+            _directive_row(directive),
+            subject=f"the display directive for wall {directive.wall_id!r}",
         )
+
+    def list_directives(self) -> Sequence[Directive]:
+        return self._list("directives", None, _BY_WALL_ID, _directive)
 
 
 # -- record to row ------------------------------------------------------------
@@ -484,7 +555,6 @@ def _theme_row(theme: Theme) -> dict[str, Any]:
         "id": theme.id,
         "name": theme.name,
         "description": theme.description,
-        "is_active": int(theme.is_active),
         "created_at": to_iso(theme.created_at),
         "rotation_interval_seconds": theme.rotation_interval_seconds,
         # None survives as null — "inherit the global default" — where int(None)
@@ -500,6 +570,26 @@ def _membership_row(membership: ThemeMembership) -> dict[str, Any]:
         "artwork_id": membership.artwork_id,
         "position": membership.position,
         "added_at": to_iso(membership.added_at),
+    }
+
+
+def _wall_row(wall: Wall) -> dict[str, Any]:
+    return {"id": wall.id, "name": wall.name, "created_at": to_iso(wall.created_at)}
+
+
+def _assignment_row(assignment: ThemeAssignment) -> dict[str, Any]:
+    return {
+        "wall_id": assignment.wall_id,
+        "theme_id": assignment.theme_id,
+        "assigned_at": to_iso(assignment.assigned_at),
+    }
+
+
+def _directive_row(directive: Directive) -> dict[str, Any]:
+    return {
+        "wall_id": directive.wall_id,
+        "sequence": directive.sequence,
+        "pinned_work_id": directive.pinned_work_id,
     }
 
 
@@ -606,10 +696,25 @@ def _theme(row: Mapping[str, Any]) -> Theme:
         name=row["name"],
         created_at=require_datetime(row["created_at"], "created_at"),
         description=row["description"],
-        is_active=bool(row["is_active"]),
         rotation_interval_seconds=row["rotation_interval_seconds"],
         shuffle=None if row["shuffle"] is None else bool(row["shuffle"]),
     )
+
+
+def _wall(row: Mapping[str, Any]) -> Wall:
+    return Wall(id=row["id"], name=row["name"], created_at=require_datetime(row["created_at"], "created_at"))
+
+
+def _assignment(row: Mapping[str, Any]) -> ThemeAssignment:
+    return ThemeAssignment(
+        wall_id=row["wall_id"],
+        theme_id=row["theme_id"],
+        assigned_at=require_datetime(row["assigned_at"], "assigned_at"),
+    )
+
+
+def _directive(row: Mapping[str, Any]) -> Directive:
+    return Directive(wall_id=row["wall_id"], sequence=row["sequence"], pinned_work_id=row["pinned_work_id"])
 
 
 def _membership(row: Mapping[str, Any]) -> ThemeMembership:

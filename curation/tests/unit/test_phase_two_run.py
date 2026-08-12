@@ -243,7 +243,7 @@ def test_an_instance_that_clears_the_floor_is_preferred_over_one_that_does_not(s
 
 
 def test_the_floor_is_deployment_geometry_rather_than_a_pixel_count(
-    store, discovery_store, wall, thumbnail_settings, settings, engine, museum
+    store, discovery_store, wall_settings, thumbnail_settings, settings, engine, museum
 ):
     """The same image clears the floor on one panel and not on another.
 
@@ -263,7 +263,7 @@ def test_the_floor_is_deployment_geometry_rather_than_a_pixel_count(
         plane = Services.bind(
             catalogue=store,
             discovery=discovery_store,
-            wall=wall,
+            wall=wall_settings,
             thumbnails=thumbnail_settings,
             artwork_box=geometry.tv_artwork_box,
             engine=engine,
