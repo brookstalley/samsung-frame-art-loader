@@ -1675,3 +1675,39 @@ the third option, not either of the two obvious ones — assert the decision
 behaviourally (no size ever lands *between* the two tiers), which survives the
 next chunk and fails against a planted middle tier, and put the reason in the
 change log.
+
+## A check that never reached its subject reports the same green as one that passed — when a test, linter or record check covers something you did not watch fail, make it fail on purpose once, because "not run", "ran against a state the product cannot produce" and "ran and passed" are one indistinguishable line of output
+
+Three instances in one session, 2026-08-12, on `curation-ux/rulings-and-plan`,
+which is what made it a rule rather than an anecdote.
+
+**The reorder tests.** Chunk 09 fixed a reorder that had never worked downward,
+and the fix was also wrong. Every test passed because every fixture handed
+`add_to_theme` an explicit dense position — a state no screen and no tool can
+produce, since the Add button posts an artwork and nothing else. The suite was
+exercising a parallel product. A fixture is a claim about which states exist, and
+when the fixture's constructor and the product's constructor are different
+functions, that claim is false and nothing says so.
+
+**The deep-link test.** `/taste` shipped with no entry in `UI_PATHS`, so its deep
+link 404'd. The test that should have caught it enumerated the same hard-coded
+list `pages.py` did — so it agreed with the bug rather than catching it. Fixed by
+deriving the assertion from the client's own route table, with a vacuity guard,
+and proved by two mutations.
+
+**Record-lint.** Three of eleven chunks declared a deliverable path that would
+not resolve from the repo root, so record-lint never checked those chunks'
+deliverables at all — and the manifest reports that as zero findings, which is
+the same output as a clean pass. Found only because a review happened to grade
+one of the three.
+
+The cheap questions that would have caught each: build the fixture through the
+door the product uses; derive the list rather than restate it; and run the check
+per subject (`verify-chunk-refs 01`…`11`) rather than trusting one aggregate.
+
+The mutation sweep is the general form of this and earned its cost twice the same
+day — it found the reorder hole the new tests did not reach, and it produced a
+survivor that was *not* a hole (an identity check whose id-based equivalent
+refuses the same call by another route). A survivor is a question, not a verdict:
+the honest response there was to correct the docstring that had overclaimed the
+defence, not to write a test for a mutation that was never a defect.
