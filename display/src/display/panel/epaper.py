@@ -35,6 +35,7 @@ from typing import Final, Protocol, runtime_checkable
 from PIL import Image
 
 from display.panel.layout import Geometry, Layout, Measure
+from display.panel.legibility import TypeScale
 from display.panel.raster import Raster, Rasterizer
 from display.panel.surface import LabelSurface, SurfaceUnavailable
 
@@ -109,6 +110,7 @@ class EpaperSurface(LabelSurface):
         epd: Epd,
         rasterizer: Rasterizer,
         geometry: Geometry,
+        type_scale: TypeScale,
         rotate_degrees: int = DEFAULT_ROTATE_DEGREES,
     ) -> None:
         if rotate_degrees not in SUPPORTED_ROTATIONS:
@@ -120,6 +122,7 @@ class EpaperSurface(LabelSurface):
         self._epd = epd
         self._rasterizer = rasterizer
         self._geometry = geometry
+        self._type_scale = type_scale
         self._rotate_degrees = rotate_degrees
         self._set_greyscale_mode()
         self._warn_if_the_panel_disagrees_about_its_size()
@@ -180,6 +183,17 @@ class EpaperSurface(LabelSurface):
         construction and any disagreement is said out loud there.
         """
         return self._geometry
+
+    @property
+    def type_scale(self) -> TypeScale:
+        """Derived from this panel's resolution and its reading distance, upstream.
+
+        Resolved in the composition root rather than here, for the reason the
+        panel's size is: this class is written against any device omni-epd wraps
+        and takes its physical facts as arguments, so a `.env` read in this file
+        would be the geometry-in-the-wrong-place the architecture norm forbids.
+        """
+        return self._type_scale
 
     @property
     def measure(self) -> Measure:

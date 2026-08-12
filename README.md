@@ -17,16 +17,49 @@ exactly one file between them:
   reads. `deploy/curation.service` and `deploy/display.service` are written.
   The root `display.py` is a 2024 module and does none of this.
 
-**What runs the wall day to day is still the 2024 loader at the repository root.**
-The new display plane has driven the real television — on 2026-08-07 it rotated a
-theme unattended, confirmed every picture against the set, survived a restart
-without moving the wall, and kept going with the curation plane stopped. It did so
-**from a development Mac, not from the Pi**, so what is proven is the plane's
-behaviour against real hardware rather than the deployment. **What remains is the
-Pi itself**: the service account, the units installed and enabled, the panel wired
-up, and the type sizes settled by somebody standing in front of it — the label
-renders into a surface today and has never been drawn onto e-ink. That is the
-cutover. Take the plane as working and not yet deployed.
+**Both new planes now run on the Pi, from systemd, as of 2026-08-11.** The `tvpi`
+service account exists, `ART_ROOT` is `/srv/art`, the checkout is at
+`/opt/samsung-frame-art-loader`, and `display.service` and `curation.service` are
+installed and enabled. The catalogue was seeded there from the 2024 index — 40
+works — and the display plane reconciled the television against a manifest and
+re-uploaded the theme without a warning. `deploy/README.md` § The cutover is the
+record and the procedure.
+
+That was a **first install, not a swap**: nothing of this product was running
+unattended on that machine beforehand, so the 2024 loader at the repository root
+stopped being the answer to "what runs the wall" some time before this, not at the
+cutover. Those modules are still present and are deleted at the legacy retirement.
+
+**What remains at the hardware** — the check that a rotation still completes with
+a second subscriber attached, and an unattended run across a television
+power-cycle. Both need the television, not the panel.
+
+**What remains in software** is the label's *typography*. The panel visit turned
+three numbers into a redesign, and most of it has landed: the type floor derives
+from the panel's geometry and its reading distance, the catalogue carries
+`family_name`/`given_name` and a commentary field, the artist is set above the
+work, and the identification block is one line rather than three. What is left is
+the part that needs styled runs — the family name set apart in bold capitals, the
+title in italic — and the fill model that admits optional content in priority
+order and never sets a mandatory line below the floor. All of it is specified in
+`accessibility-spec.md` — § Type never shrinks to fit for the two content tiers,
+§ The label's content model for the ordering, the name ladder and the fill rule —
+which is where it stays after the build plan that schedules it is archived.
+
+**The label reached e-ink on 2026-08-11**, which it never had before: rotation
+does not run while the set is in standby, so the label path had never executed on
+hardware at all. The operator read a type ladder from the viewing position and
+settled the floor at **12.4 arcminutes** of cap height, with 8.8′ as the absolute
+minimum for content a reader steps closer for.
+
+**The derived type floor landed the same day, and the provisional sizes are gone.** The label's
+type is now derived from two values a deployment states — the panel's diagonal
+and the distance it is read from — against that calibrated cap height, so a
+second device with a different panel at a different distance gets a correct
+answer with nobody visiting it. Those two have no defaults and never will: a
+guessed distance gives silently illegible type, which is what this product
+shipped for as long as the sizes were fixed. **An existing `.env` needs both keys
+added or its device draws no label** — see `deploy/README.md`.
 
 ## Where things are written down
 

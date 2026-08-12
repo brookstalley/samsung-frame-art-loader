@@ -388,7 +388,7 @@ def test_an_original_must_belong_to_the_source_it_names(service):
 # -- 6. Every stored path is relative to ART_ROOT ------------------------------
 
 
-@pytest.mark.parametrize("path", ["/home/tvpi/art/originals/w1.tif", "/originals/w1.tif"])
+@pytest.mark.parametrize("path", ["/mnt/photos/originals/w1.tif", "/originals/w1.tif"])
 def test_an_absolute_original_path_is_refused(service, path):
     work = _work(service)
     source = _source(service, work.id)

@@ -36,12 +36,34 @@ def rasterizer() -> PangoRasterizer:
     return PangoRasterizer()
 
 
-def a_layout(text: str = "Cat Litter", *, size_px: int = 12, y_px: int = 5, surface: Geometry = AWKWARD) -> Layout:
+def a_layout(
+    text: str = "Cat Litter",
+    *,
+    size_px: int = 12,
+    y_px: int = 5,
+    surface: Geometry = AWKWARD,
+    wrap_px: int | None = None,
+) -> Layout:
     return Layout(
         surface=surface,
-        blocks=(Block(text=text, size_px=size_px, x_px=surface.margin_px, y_px=y_px, width_px=0, height_px=0),),
+        blocks=(
+            Block(
+                text=text,
+                size_px=size_px,
+                x_px=surface.margin_px,
+                y_px=y_px,
+                width_px=0,
+                height_px=0,
+                wrap_px=surface.text_width_px if wrap_px is None else wrap_px,
+            ),
+        ),
         dropped=(),
     )
+
+
+def _columns_with_ink(raster) -> set[int]:
+    """Which x positions carry any dark pixel."""
+    return {x for y in range(raster.height_px) for x in range(raster.width_px) if raster.pixels[y * raster.width_px + x] < 200}
 
 
 class TestTheBufferIsTheShapeItClaims:
@@ -105,13 +127,59 @@ class TestTheTypeIsDarkAndTheGreysAreReal:
         assert min(below) < 64, "the block was placed thirty pixels down and drawn nowhere"
 
 
+class TestTheBlockIsDrawnAtTheWidthItWasMeasuredAt:
+    """**The seam between the two tiers, pinned where only ink can pin it.**
+
+    The layout tier narrows a line to the measure bound and records that width on
+    the block; this tier must wrap to the same number. They disagreed once — layout
+    measured at the bound while the renderer went on wrapping at the surface width
+    — and every suite stayed green, because the layout-tier test can only prove the
+    number was *stored* and the fake surface records layouts without drawing. A
+    line measured as two rows and drawn as one runs past its bound, leaves every
+    block below it a row lower than the ink, and lets the drop rule shed a line the
+    panel would have held.
+
+    A fixture whose `wrap_px` equals `surface.text_width_px` cannot tell the two
+    expressions apart — they are the same number — so these pass a bound that is
+    strictly narrower, which is the only arrangement where the mistake is visible.
+    """
+
+    #: Comfortably inside AWKWARD's 91px of text width, so the two expressions
+    #: differ; wide enough that several characters still fit per row.
+    NARROW = 30
+
+    def test_no_ink_lands_right_of_the_blocks_own_wrap_width(self, rasterizer):
+        raster = rasterizer.render(
+            a_layout("wrapping at the bound rather than the panel", size_px=8, y_px=2, wrap_px=self.NARROW)
+        )
+
+        rightmost = max(_columns_with_ink(raster))
+        assert rightmost <= AWKWARD.margin_px + self.NARROW, (
+            f"ink reached x={rightmost}, past the {self.NARROW}px bound this block was measured at — "
+            "the renderer is wrapping at the surface width instead"
+        )
+
+    def test_the_same_text_at_the_surface_width_does_reach_further(self, rasterizer):
+        """The other half, and the one that keeps the test above honest: a
+        renderer that drew nothing at all, or wrapped everything to a sliver,
+        would satisfy it. This proves the bound is what moved the ink."""
+        text, size = "wrapping at the bound rather than the panel", 8
+
+        bounded = rasterizer.render(a_layout(text, size_px=size, y_px=2, wrap_px=self.NARROW))
+        full = rasterizer.render(a_layout(text, size_px=size, y_px=2))
+
+        assert max(_columns_with_ink(full)) > max(_columns_with_ink(bounded))
+
+
 class TestMeasuringMovesInTheDirectionsTheLayoutTierRelieson:
     def test_a_size_in_pixels_is_a_size_in_pixels(self, rasterizer):
         """**The units, which nothing else here would catch.**
 
-        Every size this product reasons about is in pixels: the layout tier's
-        constants, the panel's geometry, and the mid-20s-to-low-40s range the
-        operator's look at the real panel established. Pango's ordinary
+        Every size this product reasons about is in pixels: the panel's geometry,
+        and the type sizes the layout tier is handed — which are themselves derived
+        from a viewing distance in `panel/legibility.py`, so a units error here
+        would silently undo an arithmetic chain built to be right about exactly
+        this. Pango's ordinary
         `set_size` takes *points* and resolves them through an ambient
         resolution — 96 dpi by default — so the same number comes out a third
         larger, silently. Every relative assertion below passes either way, since

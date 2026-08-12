@@ -175,8 +175,24 @@ def test_no_source_file_carries_a_deployment_value(monkeypatch):
     import pathlib
     import re
 
-    # The previously-hardcoded values, plus the shape of any absolute home path.
-    forbidden = re.compile(r"10\.23\.17\.77|/home/tvpi|/Users/brookstalley|47\.606|-122\.332")
+    # Two generations of deployment path, and both halves earn their place.
+    # `/home/tvpi` is where the art tree and the checkout used to sit; `/srv/art`
+    # and `/opt/samsung-frame-art-loader` are where they sit now. **Retiring the
+    # dead path without adding the live one would have left a guard that passes
+    # for the wrong reason** — nothing can hardcode a directory that no longer
+    # exists, so the pattern would have gone on being green while the norm it
+    # enforces went unchecked. The old path stays because the way this norm
+    # actually breaks is somebody lifting a line out of the recovered 2024 unit,
+    # which still carries `/home/tvpi` in every path it names.
+    forbidden = re.compile(
+        r"10\.23\.17\.77"
+        r"|/home/tvpi"
+        r"|/srv/art"
+        r"|/opt/samsung-frame-art-loader"
+        r"|/Users/brookstalley"
+        r"|47\.606"
+        r"|-122\.332"
+    )
     # Anchored to this file rather than to the working directory: a glob rooted
     # at "." matches nothing when pytest is invoked from elsewhere, and a guard
     # whose whole value is that it cannot be quietly satisfied must not have a
@@ -187,13 +203,25 @@ def test_no_source_file_carries_a_deployment_value(monkeypatch):
     # once the legacy modules are retired, and this test is the enforcement
     # artifact `project-preferences.md` names for that norm — so a plane it never
     # walks is a norm nobody is checking.
+    # **`tools` as well as `src`, because a tool is where a real machine path is
+    # most tempting.** Its docstring is the thing an operator copies, so naming the
+    # deployment's own checkout and service account there reads as helpful — and it
+    # puts a deployment value in source just as surely as a constant would. That is
+    # not hypothetical: `label_preview.py` acquired exactly those paths and this
+    # guard did not walk the directory it acquired them in.
     modules = sorted(repository_root.glob("*.py"))
-    for plane in ("curation/src", "display/src"):
+    for plane in ("curation/src", "display/src", "curation/tools", "display/tools"):
         modules.extend(sorted((repository_root / plane).rglob("*.py")))
     assert modules, f"expected the 2024 modules at {repository_root}; has the layout moved?"
-    assert any(
-        "curation/src" in str(path) for path in modules
-    ), f"expected the curation plane under {repository_root}/curation/src; has the layout moved?"
+    # **One canary per plane, because `rglob` over a missing directory is silent.**
+    # A renamed or moved plane makes its loop contribute nothing and the guard goes
+    # on passing over the planes that remain — which is the same vacuous-green this
+    # test's own comment says a plane it never walks would produce. Asserting only
+    # curation left the display plane in exactly that position.
+    for plane in ("curation/src", "display/src", "curation/tools", "display/tools"):
+        assert any(
+            plane in str(path) for path in modules
+        ), f"expected a plane under {repository_root}/{plane}; has the layout moved?"
 
     offenders = []
     for path in modules:

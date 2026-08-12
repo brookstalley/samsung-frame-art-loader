@@ -21,6 +21,7 @@ from display.config import ConfigError, Settings, load
 from display.daemon import Clock, Daemon
 from display.manifest import Watcher
 from display.panel import Geometry, LabelSurface, SurfaceUnavailable
+from display.panel.legibility import TypeScale, ViewingConditionsUnknown, margin_for, type_scale_for
 from display.state import DisplayState, StateSchemaTooNew
 from display.tv.samsung import SamsungTv
 
@@ -43,9 +44,51 @@ def label_surface(settings: Settings) -> LabelSurface | None:
     pulls in Pango through PyGObject, which is installed only where a label is
     actually drawn, and importing it unconditionally would make a text stack a
     requirement for every device including the ones with no panel at all.
+
+    **The type scale is derived here** because this is where `.env` is read and
+    where a device is decided to have a panel; everything below the seam takes its
+    physical facts as arguments, which is what lets the next device be a
+    configuration rather than a rewrite.
     """
     if not settings.epd_device:
         return None
+
+    # **Before the driver import, deliberately.** Both are reasons this device
+    # gets no label, but only one of them is a value somebody typed: a deployment
+    # that has not stated its viewing distance should be told that, not told its
+    # text stack is missing — which on a dev machine it also is.
+    try:
+        scale = type_scale_for(
+            width_px=settings.epd_panel_width_px,
+            height_px=settings.epd_panel_height_px,
+            diagonal_inches=settings.epd_panel_diagonal_inches,
+            viewing_distance_inches=settings.epd_viewing_distance_inches,
+        )
+    except ViewingConditionsUnknown as exc:
+        # Converted rather than propagated, the same move the text stack's
+        # ImportError gets below: this function's promise to its caller is that a
+        # device without a usable label surface raises one type, and the caller
+        # answers all of them by saying so once and rotating the wall anyway.
+        raise SurfaceUnavailable(str(exc)) from exc
+
+    geometry = label_geometry(settings, scale)
+    # **The derived numbers, said out loud once, and before the imports below.**
+    # The startup line carries the two inputs; without these an operator asking
+    # "why is this label dropping three lines" has a formula in an artifact and no
+    # way to see what the wall actually computed. Whether the border was derived
+    # or overridden is named for the same reason — nothing else distinguishes the
+    # two. It sits above the driver import so that a device with a missing text
+    # stack still reports what it would have set, which is the case where somebody
+    # is already reading the journal.
+    log.info(
+        "label type derives to %d px over a %d px floor, with a %d px border (%s)",
+        scale.primary_px,
+        scale.floor_px,
+        geometry.margin_px,
+        "EPD_MARGIN_PX" if settings.epd_margin_px is not None else "derived",
+        extra={"event": "panel.type_scale"},
+    )
+
     try:
         from display.panel.epaper import EpaperSurface, open_panel  # noqa: PLC0415 -- see the docstring
         from display.panel.pango import PangoRasterizer  # noqa: PLC0415 -- see the docstring
@@ -59,12 +102,33 @@ def label_surface(settings: Settings) -> LabelSurface | None:
     return EpaperSurface(
         epd=open_panel(settings.epd_device),
         rasterizer=PangoRasterizer(),
-        geometry=Geometry(
-            width_px=settings.epd_panel_width_px,
-            height_px=settings.epd_panel_height_px,
-            margin_px=settings.epd_margin_px,
-        ),
+        geometry=geometry,
+        type_scale=scale,
         rotate_degrees=settings.epd_rotate_degrees,
+    )
+
+
+def label_geometry(settings: Settings, scale: TypeScale) -> Geometry:
+    """This panel's usable area, with a border derived from the type on it.
+
+    **Separate from `label_surface` because it is the only part of that function
+    reachable without hardware.** Everything else there needs a driver and a text
+    stack; this is a decision, and a decision covered by no test is one a
+    refactor can invert silently — which for this one means a label that quietly
+    goes back to a border chosen against type sizes nobody had measured.
+
+    The margin derives unless the deployment states one. It cannot be picked
+    independently: a border trades directly against how many lines survive the
+    drop rule, so choosing it apart from the floor that decides how many lines
+    there are leaves two numbers in tension that nobody compared. The override is
+    for the surface whose border is a physical fact rather than a typographic
+    choice — a device drawing its label into the mat area around an artwork does
+    not get to choose where the picture ends.
+    """
+    return Geometry(
+        width_px=settings.epd_panel_width_px,
+        height_px=settings.epd_panel_height_px,
+        margin_px=settings.epd_margin_px if settings.epd_margin_px is not None else margin_for(scale),
     )
 
 

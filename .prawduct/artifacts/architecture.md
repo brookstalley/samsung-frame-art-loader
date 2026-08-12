@@ -636,8 +636,13 @@ read by display.
 - **Contents:** a schema version, the active theme's identity, the **rotation
   settings** that drive the display timer (`rotation_interval_seconds`, `shuffle`),
   a **directive block** (below), and an ordered list of entries — for each, the
-  work id, the path to its prepared 4K render, and the label fields (title, artist,
-  dates, medium, dimensions). Label *text* crosses; label *rendering* does not.
+  work id, the path to its prepared 4K render, and the label fields (title, the
+  artist's whole name **and its family and given parts**, nationality, dates,
+  date, medium, dimensions, commentary). Label *text* crosses; label *rendering*
+  does not — which is why the parts cross as data rather than as a styled string:
+  the plane that decides how the family name is set is the one that owns the
+  panel, and the plane that knows which part is the family name is the one that
+  owns the catalogue.
 - **The directive block carries interactive commands.** A monotonically increasing
   `sequence` integer plus an optional `pinned_work_id`. When display sees
   `sequence` advance it acts once: with no pin it steps to the next work; with a

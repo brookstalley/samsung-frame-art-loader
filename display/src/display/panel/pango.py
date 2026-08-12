@@ -81,7 +81,10 @@ class PangoRasterizer(Rasterizer):
         context = cairo.Context(surface)
 
         for block in layout.blocks:
-            text = self._layout_for(context, block.text, block.size_px, surface_geometry.text_width_px)
+            # `block.wrap_px`, never the surface width: the block was measured at
+            # its own bound, and wrapping differently here would draw a line the
+            # layout tier never placed.
+            text = self._layout_for(context, block.text, block.size_px, block.wrap_px)
             context.move_to(block.x_px, block.y_px)
             # A8 carries coverage and no colour, so this paints "how much ink is
             # here" rather than a shade. Which end of the scale that means is

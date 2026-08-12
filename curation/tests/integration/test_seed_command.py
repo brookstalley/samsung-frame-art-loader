@@ -48,8 +48,11 @@ def index(tmp_path, jpeg):
                 "mat_hexrgb": "#27285b",
                 "metadata": {
                     "title": "Nighthawks",
-                    "artist": "Edward Hopper",
-                    "artist_details": "Edward Hopper\nAmerican, 1882–1967",
+                    # An artist the 2024 corpus holds, so this record is one the real
+                    # index could have produced — and so the run reports nothing,
+                    # which is what this fixture is for.
+                    "artist": "Georgia O'Keeffe",
+                    "artist_details": "Georgia O'Keeffe\nAmerican, 1887–1986",
                     "date_created": "1942",
                     "medium": "Oil on canvas",
                     "dimensions": "84.1 × 152.4 cm",
@@ -87,7 +90,7 @@ class TestRunningIt:
         listing = seeded_catalogue().list_artworks()
         assert listing.total == 1
         assert listing.entries[0].artwork.title == "Nighthawks"
-        assert listing.entries[0].artist.name == "Edward Hopper"
+        assert listing.entries[0].artist.name == "Georgia O'Keeffe"
 
     def test_the_work_it_seeds_is_ready_for_a_wall(self, index, seeded_catalogue, capsys):
         """A work reaches the wall on a master, a mat and a current render — all three from files."""

@@ -89,14 +89,47 @@ class TestWhatDefaults:
     def test_a_deployment_that_says_nothing_about_a_panel_has_none(self, art_root: Path):
         """The other half, and the supported deployment rather than the degraded one.
 
-        The margin and the rotation still take the reference deployment's defaults,
-        because they describe how a panel is used rather than whether there is one.
+        The rotation still takes the reference deployment's default, because it
+        describes how a panel is used rather than whether there is one.
+
+        **The margin no longer does, and that is the change rather than an
+        oversight.** It used to ship 40 px on the same reasoning, but a border
+        trades directly against how many lines survive the drop rule, so it cannot
+        be picked independently of the type floor that decides how many lines
+        there are — and that floor is now derived per device from the viewing
+        distance. So the margin derives with it, and this value is an override
+        nobody has exercised rather than a default everybody inherits.
         """
         settings = load(an_environment(art_root))
 
         assert settings.epd_device == ""
-        assert settings.epd_margin_px == 40
+        assert settings.epd_margin_px is None
         assert settings.epd_rotate_degrees == 180
+
+    def test_the_viewing_conditions_have_no_defaults_and_must_not_acquire_any(self, art_root: Path):
+        """**The one pair in this module that may never be guessed.**
+
+        Every other unset value here takes the reference wall's number, which is
+        right: a wrong poll interval is visible, a wrong brightness is visible. A
+        wrong *viewing distance* is not visible at all — it produces type nobody
+        can read from where they stand, while the daemon starts, the panel draws
+        and every test passes. That is not hypothetical; it is what shipped, at
+        half the size a letter has to reach to be resolvable, through a hardware
+        probe and a cutover. A default here would restore it.
+        """
+        stated = load(an_environment(art_root, EPD_PANEL_DIAGONAL_INCHES="6", EPD_VIEWING_DISTANCE_INCHES="84"))
+        assert (stated.epd_panel_diagonal_inches, stated.epd_viewing_distance_inches) == (6.0, 84.0)
+
+        unstated = load(an_environment(art_root))
+        assert unstated.epd_panel_diagonal_inches is None
+        assert unstated.epd_viewing_distance_inches is None
+
+    def test_a_viewing_measurement_that_is_not_a_number_is_refused_rather_than_dropped(self, art_root: Path):
+        """Absent and mistyped stay different things: `None` is a deployment that
+        did not measure, and silently making a typo into one would hand it the
+        same outcome as a deliberate choice."""
+        with pytest.raises(ConfigError, match="EPD_VIEWING_DISTANCE_INCHES"):
+            load(an_environment(art_root, EPD_VIEWING_DISTANCE_INCHES="seven feet"))
 
     def test_the_two_paths_under_the_art_root_are_not_configurable(self, art_root: Path):
         """A setting is just a way for the writer and the reader to stop agreeing
@@ -125,6 +158,29 @@ class TestTheStartupLine:
 
         assert lines["art_root"] == str(art_root)
         assert lines["epd_panel_px"] == "1448x1072"
+
+    def test_it_names_the_viewing_conditions_the_type_was_sized_from(self, art_root: Path):
+        """**The line that would have caught the defect this pair exists for.**
+
+        A wrong viewing distance is invisible everywhere else — the daemon starts,
+        the panel draws, every suite passes, and the only symptom is type nobody
+        can read from where they stand. This puts both facts one `journalctl` away
+        from the person who typed them, so it is worth an assertion rather than
+        resting on a field a refactor can blank with nothing objecting.
+        """
+        lines = load(an_environment(art_root, EPD_PANEL_DIAGONAL_INCHES="6", EPD_VIEWING_DISTANCE_INCHES="84")).startup_lines()
+
+        assert "6.0" in str(lines["epd_viewing"])
+        assert "84.0" in str(lines["epd_viewing"])
+
+    def test_unstated_viewing_conditions_are_reported_as_what_they_cost(self, art_root: Path):
+        """The other branch, and it says the consequence rather than "unset" —
+        a reader who has not met this pair cannot tell from "unset" whether their
+        label is missing on purpose."""
+        line = str(load(an_environment(art_root)).startup_lines()["epd_viewing"])
+
+        assert "not stated" in line
+        assert "draws none" in line, f"the line does not say what the absence costs: {line}"
 
     def test_it_holds_no_fact_about_the_television_s_physical_size(self, art_root: Path):
         """Curation composes the mat into the render, so this plane never needs the

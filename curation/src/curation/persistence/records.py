@@ -119,6 +119,17 @@ class Artist:
     Separate from the work so the physical label can render nationality and
     lifespan without re-parsing a blob, and so two works by the same artist
     agree about them.
+
+    **`name` is what a source called the artist; the two name parts are what a
+    label sets them as, and neither is derived from the other.** The e-paper
+    label leads with the family name and sets it apart, which needs to know which
+    part of the name that is — and no rule over `name` can say. "Titian (Tiziano
+    Vecellio)", "van Gogh" and "Frank Lloyd Wright" each break a different
+    last-word heuristic, and the heuristic in `discovery/artic.py` documents its
+    own unreliability. So the parts are stored facts, supplied by whoever knows,
+    and an artist who has neither is set unstyled under `name` rather than split
+    by a guess. Both parts are optional because the corpus holds records that are
+    not people at all — a culture, a workshop, an anonymous master.
     """
 
     id: str
@@ -128,6 +139,8 @@ class Artist:
     died: int | None = None
     lifespan_text: str | None = None
     biography: str | None = None
+    family_name: str | None = None
+    given_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,6 +154,13 @@ class Artwork:
     `date_created` is free text on purpose. Sources give "1931", "c. 1650",
     and "1888-89"; normalising those to a date type would destroy the
     distinction between a known year and an estimated one.
+
+    **`description` and `commentary` are different texts and neither substitutes
+    for the other.** `description` is the holding institution's own paragraph,
+    arriving with the record at whatever length it was written; `commentary` is a
+    line meant to be read on a wall label at standing distance. Rendering the
+    first where the second belongs would put several hundred words on a 6-inch
+    panel, so a label that wanted a sentence had to have one written for it.
     """
 
     id: str
@@ -154,6 +174,7 @@ class Artwork:
     description: str | None = None
     rights: str | None = None
     accepted_at: datetime | None = None
+    commentary: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

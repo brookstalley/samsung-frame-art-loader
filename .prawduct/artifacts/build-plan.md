@@ -44,6 +44,14 @@ governed_by:
   - artifact: design-direction
     dispositions:
       - "the visual direction, and the chunk that owes each piece of it → inapplicable because: same scope as the row above. The one place it could bite this plan is the e-paper label's typesetting, and that is governed by `accessibility-spec.md` § Direction instead, which Chunk 13B carries"
+  # Added 2026-08-11 by Critic R-2. The row above named this artifact as the one
+  # that governs the label's typesetting and the walk still could not find it,
+  # because it was never listed — the artifact a plan defers TO is exactly the one
+  # that must appear here.
+  - artifact: accessibility-spec
+    dispositions:
+      - "the e-paper label is legible at standing distance → applies, and is the whole of Chunk 13B's legibility deliverable: 16 grey levels with the mode READ BACK rather than assumed (`max_colors` reports 16 in both `bw` and `gray16`, which is how the 2024 plane rendered 1-bit type unnoticed), and type that never shrinks below the floor — content drops instead, except the facts that identify the work, which shrink rather than vanish. **RATIFIED 2026-08-11**, once the floor it refers to existed, and amended by the same ruling into two tiers — see `accessibility-spec.md` § Type never shrinks to fit; the mandatory tier is unbuilt and 13B-4 carries it. Enforced today by `display/tests/test_epaper.py` (a panel quietly staying 1-bit is refused), `display/tests/test_label_layout.py` (the drop rule, over an injected measurer) and — since 13B-1, 2026-08-11 — `display/tests/test_type_floor.py`, which is the guard the type sizes never had: it asserts in arcminutes rather than pixels, so it can say that a size is below the threshold of legibility, which is the thing every earlier check was structurally unable to notice. The sizes are no longer 'open and closable only at the panel': they derive from two stated deployment facts, and what the operator settles is one calibrated angle"
+      - "WCAG 2.1 AA on the curation browser, and colour is never the sole carrier of state → inapplicable because: this plan's remaining chunks are 13B and 20 — display-plane and operational work that renders no browser screen. Same scope as the `information-architecture` and `design-direction` rows above, and the norm binds the work that reshapes the surface, which has no plan yet"
 last_validated: 2026-08-11
 ---
 
@@ -141,7 +149,7 @@ re-created the same silence one line further down.
 - [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [x] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13A: The panel, the label, the heartbeat and the two units — no hardware *(built and reviewed; the box waits on Done-when step 0b, which needs the set — see § The announcement reaches both subscribers in `operator-verification.md`)*
-- [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover
+- [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover *(the machine half is done and running: account, both trees, both units enabled, catalogue seeded, manifest published — 2026-08-11. The legibility norm was ratified 2026-08-11 once the floor existed, and amended into two tiers by the same ruling — which is what 13B-4 builds against. **13B-1 landed 2026-08-11**: the floor, the margin and the line-length bound are all derived from two stated physical facts now, so the settlement that needed a panel visit is down to one calibrated angle the operator already gave. **13B-3 landed 2026-08-11** and did the job it was moved ahead for: the artist leads, the tombstone is one line instead of three, and the catalogue can finally say which part of a name is the family name. The box now waits on **13B-2 then 13B-4** — start 13B-2 at `LabelText.identification`, whose join is what both of them need undone — and on the unattended run across a television power-cycle. It also waits on the Pi: the fields exist there the moment the file is opened, but the *values* need the seed re-run, which `deploy/README.md` § The cutover carries)*
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
 Context: Plan authored 2026-07-20. Chunks 01, 02 and 06 landed 2026-07-27 in one
@@ -1875,18 +1883,148 @@ hardware.
 
 - **Description:** The hardware half of the original Chunk 13. The `tvpi` service
   account is created with its `spi` and `gpio` groups and given ownership of
-  `ART_ROOT` and the checkout; `ART_ROOT`'s path is settled off `/home/tvpi/art`
-  onto a neutral one (`operational-spec.md` § The Service Account records
-  `/srv/art` or `/var/lib/samsung-art` as the shape to prefer, and leaves the
-  choice to this cutover). 13A's two units are installed and enabled. The
-  operator looks at the real panel at standing distance and settles the Pango
-  type size, replacing 13A's provisional value. Cutover: the Pi runs the two new
-  units and `tvart.py` stops being the production entry point — legacy files
-  remain until Chunk 20.
+  `ART_ROOT` and the checkout; `ART_ROOT` is settled off the old home-directory
+  tree onto a neutral machine path (`operational-spec.md` § The Service Account
+  records the two shapes to prefer — srv or var/lib — and leaves the choice to
+  this cutover). 13A's two units are installed and enabled. The operator looks at
+  the real panel at standing distance and settles the label's legibility,
+  replacing 13A's provisional values. Cutover: the Pi runs the two new units and
+  `tvart.py` stops being the production entry point — legacy files remain until
+  Chunk 20.
+
+  *(**Paths in this entry are named without backticks on purpose.** They are
+  filesystem locations on the Pi, not files this repository contains, and the
+  deliverable check reads a backticked path as something it should be able to
+  resolve here — so writing them that way left five permanently unresolvable
+  deliverables that every review had to re-adjudicate.)*
+- **Amended 2026-08-11, at the cutover, on three things the plan had wrong or
+  missing.** *First*, this is a **first install, not a swap**: no unit of this
+  product was installed on the Pi at all, so "`tvart.py` stops being the production
+  entry point" described a replacement that did not exist, and there is no
+  rollback window to plan around. *Second*, **the checkout's path was a
+  requirement nobody had written down** — settled to the opt tree, with `ART_ROOT`
+  under srv (both spelled out in `deploy/README.md` § The cutover, which is where
+  machine paths belong), because the machine's only checkout and its only `uv`
+  both sat under a home directory at mode `0700` that a `nologin` account cannot
+  traverse. *Third*, and the one that changes this chunk's size: **the Pi
+  had no catalogue**, so the acceptance criteria could not be met by installing
+  units alone. Seeding it from the 2024 index is a step this entry never named and
+  the operator chose to run here rather than copy state from a dev machine; it
+  spends nothing. All three are recorded in `operational-spec.md` § The Service
+  Account and `deploy/README.md` § The cutover.
 - **The account and the cutover are one change, not four.** `operational-spec.md`
   § The Service Account is explicit: the account, its groups, moving `ART_ROOT`
   under it and both unit files land together, because any of them arriving alone
   leaves a machine that is neither the old arrangement nor the new one.
+- **Amended 2026-08-11, at the panel, and this one changes the chunk's size.** The
+  machine half was already done when the operator supplied two physical facts
+  nobody had written down — **the panel is 6 inches diagonal (so ~300 PPI at
+  1448×1072) and it is read from 7 feet** — and they invalidate the settlement this
+  chunk was going to make. At that distance the provisional `BODY_SIZE_PX = 26`
+  gives a **2.5 arcminute** cap height against the **5 arcminutes** 20/20 vision
+  needs to resolve a letter, so the provisional type was below the threshold of
+  legibility rather than merely small. Drawn on the real panel the same day — the
+  first label this product has ever put on that panel, because rotation never runs
+  while the set is in standby, so the label path had never executed on hardware.
+  The operator then asked for a reorganised label with an adaptive fill model.
+  **Four decisions came out of it, all recorded in `accessibility-spec.md`:**
+  *(1)* the type floor is **derived** from viewing distance and PPI via a stated
+  `COMFORTABLE_CAP_ARCMIN`, not settled as pixels — so it transfers to any device and the
+  operator calibrates one number instead of three; *(2)* **the artist outranks the
+  work**, set as `FAMILY, Given` with the family name in bold capitals — which is
+  also what makes the content fit, since leading with a 44-character title consumed
+  502 px of 952 usable on the panel and dropped three lines; *(3)* a **fill rule**
+  that admits optional content in priority order and spends slack on content before
+  type, because the corpus ranges from anonymous untitled works to long-titled
+  attributed ones; *(4)* **commentary** becomes a field, and does not fit at 7 feet
+  on most works — which the fill rule makes a per-work answer rather than a global
+  one.
+- **It is built as 13B-1 … 13B-4, under this one box.** The operator chose to fold
+  the redesign into this chunk rather than open a new one; the sub-numbering is
+  bookkeeping so each piece takes its own Critic round, because the whole is a
+  three-plane data-model change plus a new layout engine and one review over all of
+  it would read badly. The box ticks when all four are done.
+  - **13B-1 — the derived floor. Built 2026-08-11**
+    (`display/src/display/panel/legibility.py`).
+    Panel diagonal and viewing distance became deployment values with no
+    defaults; the floor is computed per device; the three provisional size
+    constants and `DEFAULT_EPD_MARGIN_PX` are gone, replaced by two derived tiers
+    and a margin at half the primary em. **Corrected as built, because this
+    bullet said the wrong thing**: "a deployment stating no viewing distance
+    fails" reads as a refusal to start, and `accessibility-spec.md` § The type
+    floor rules the opposite — such a device loses its *label surface* with a
+    named reason while the wall keeps rotating, because nothing about the label
+    may stop the television and a device with no usable label surface is a
+    supported configuration. It raises `SurfaceUnavailable`, the type the
+    composition root already catches, not `ConfigError`.
+    **Two judgements this sub-chunk had to make rather than inherit**, both now
+    recorded in the spec: the margin's ratio (half the primary tier — the
+    amendment said it derives and not by what rule), and three type sizes
+    collapsing to two, since the calibration settled only two readings and the
+    rung between them was recorded as the size that takes effort to read.
+  - **13B-2 — styled runs.** `Block` carries runs with their own weight and case
+    instead of one flat string, and the Pango renderer applies **attributes over
+    byte ranges — never markup**, because `metadata.py` escapes nothing on purpose
+    and `<b>`-wrapping would reintroduce the 2024 injection on the surface it was
+    fixed for.
+    **Start at `LabelText.identification`, which is where the boundaries were
+    lost.** 13B-3 joins four fields — two mandatory-tier, two optional-tier — into
+    one string with `", ".join`, at the point furthest from where the distinction
+    is needed: the tier each fact belongs to and the run each style would apply to
+    are both discarded inside `metadata.py` and cannot be recovered downstream by
+    splitting on commas, because a name or a nationality may contain one. So this
+    sub-chunk's first move is to make that property yield runs rather than a
+    string, and the flat-string contract (`tuple[str, ...]` out of `lines()`) is
+    what has to give. **Two comments ride this commit** rather than earning a
+    review round of their own: `curation/tests/unit/test_manifest.py` and
+    `test_seed_ingest.py` still describe the panel setting a name in bold
+    capitals as present behaviour, which is true only once this lands.
+    **13B-4 needs the same thing for a different reason** —
+    sizing by role rather than by position — so whichever lands first should build
+    the structure both use rather than a weight-only one.
+  - **13B-3 — the catalogue fields, and the content model they exist for. Built
+    2026-08-11.** `family_name` and `given_name` on `Artist`, `commentary` on the
+    work, all three carried by `entry_for` into the manifest (schema minor 0 → 1,
+    additive) and read by `LabelText`. The schema change reaches files already on
+    disk through the store's existing additive-column widening, so the deployed
+    catalogue upgrades on the next open with nothing to run.
+    **Two things this bullet did not name and the sub-chunk carried**, both
+    written in `accessibility-spec.md` § The label's content model with no chunk
+    against them, and both belonging to the tier that decides *what the lines
+    are*: the **artist-first ordering**, and the **tombstone collapse** —
+    identification, nationality and dates as one line instead of three. The
+    collapse is why the operator put this sub-chunk ahead of 13B-2 and 13B-4: it
+    reclaims ~260 px against a measured slack of ~66 px, so a fill model tuned
+    before it would have been tuned against figures about to move by four times
+    the slack.
+    **The backfill of the 31 seeded artists is a written table**
+    (`curation/src/curation/seed/names.py`), not a rule — this corpus alone defeats last-word,
+    first-word and Western-order heuristics, and one of its records is a culture
+    rather than a person. It is applied by the ordinary seeding run, which
+    compares before writing and touches only the two fields no source supplied.
+    A work whose artist has neither name part falls back to `name`, unstyled; an
+    artist the table does not cover is **reported to the curator** rather than
+    guessed at.
+    **Found by running it, and recorded rather than fixed:** the spec's claim
+    that no data change follows from the demonym convention is wrong for 2 of the
+    31 — Moche stores a place and Kandinsky a birthplace clause. Left as stored,
+    because correcting them is curation-content work needing its own ruling; the
+    exception is written into `accessibility-spec.md` where the wrong claim was.
+    **`commentary` has no writer yet** and is null on every work: seeding and
+    acquisition have none to supply, and a curation-surface editor is unplanned.
+    It is built now so 13B-4 models the fill rule against the candidate list it
+    will actually have.
+  - **13B-4 — the fill model.** Candidates with priority and role; optional
+    content admitted only if it fits at the floor and never set below it; slack
+    spent on content before type; drops still reported. **Carries the norm
+    amendment ratified 2026-08-11**, which is the half with no guard today: a
+    mandatory tier — family name, given name, and the title when there is one —
+    that shrinks below the floor rather than dropping, with the shrink journalled
+    exactly like a drop. That reporting is the condition the operator's ruling
+    rests on, not a nicety: the flat rule existed because illegible type fails
+    invisibly, and admitting a shrink re-opens that hole unless the journal names
+    it. Also the name ladder — one line, then two, then smaller — from
+    `accessibility-spec.md` § The label's content model.
 - **Depends on:** Chunk 13A
 - **Carries a number the unit must not be written without.** `TimeoutStopSec`
   has to clear this daemon's worst-case pass, which is a television connection
@@ -1905,12 +2043,13 @@ hardware.
   numbers do not transfer to Pango and the look has to be repeated.
 - **Deliverables:** the `tvpi` account with its groups and ownership, the settled
   `ART_ROOT` path recorded in the root `.env` and in `operational-spec.md`, both
-  units installed and enabled on the Pi, **all three of the label's legibility
-  settlements** — the Pango type sizes replacing 13A's provisional ones, the
-  `DEFAULT_EPD_MARGIN_PX` value replacing its provisional one, and a stated line-length
-  bound where none exists today — each with its "provisional" note replaced rather
-  than left standing over a settled number, cutover performed and recorded in
-  `deploy/README.md`
+  units installed and enabled on the Pi, **the label's legibility settled** — which
+  the 2026-08-11 amendment above turns from three judged pixel values into a
+  derived floor plus one calibrated `COMFORTABLE_CAP_ARCMIN`, with the line-length bound
+  built and honestly recorded as inert on this panel — plus the reorganised label,
+  its styled name, its catalogue fields and its fill model; each "provisional" note
+  replaced rather than left standing over a settled number; cutover performed and
+  recorded in `deploy/README.md`
 - **The three legibility settlements are one judgement and one visit, which is why
   they are one deliverable.** A margin trades directly against how many lines
   survive the drop rule, and a measure depends on the face and the size, so none of

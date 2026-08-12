@@ -542,6 +542,7 @@ def _work(survey: WorkSurvey) -> WorkOut:
         medium=artwork.medium,
         dimensions=artwork.dimensions,
         description=artwork.description,
+        commentary=artwork.commentary,
         rights=artwork.rights,
         status=str(artwork.status),
         fit=(
@@ -582,6 +583,8 @@ def _artist(artist: Artist) -> ArtistOut:
         died=artist.died,
         lifespan_text=artist.lifespan_text,
         biography=artist.biography,
+        family_name=artist.family_name,
+        given_name=artist.given_name,
     )
 
 

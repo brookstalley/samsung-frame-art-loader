@@ -261,15 +261,27 @@ toolchain skew, not a product problem — and it is why the label's *judgement*
 (what it says, where it goes) is a separate tier from its rasterization, so only
 the latter needs a machine that can run Pango.
 
-### Type sizing is NOT settled, and the probe's numbers must not be lifted
+### Type sizing was settled 2026-08-11, and the probe's range was wrong
 
-The type ladder put in front of the operator was rendered with **PIL/DejaVu**.
-The product renders labels with **Pango**. Different rasterizer, different face,
-different metrics — a pixel size that looked right in one does not transfer.
+**Superseded, and kept because the correction is the finding.** The type ladder
+put in front of the operator on 2026-08-04 was rendered with **PIL/DejaVu** while
+the product renders with **Pango** — different rasterizer, different face,
+different metrics — so this section correctly said its pixel numbers did not
+transfer. It then recorded a surviving **range**, mid-20s through low-40s px, as
+the thing the look *had* established.
 
-What the operator's look did establish is a **range**: mid-20s through low-40s px
-is live, and the 2024 `"Sans 18"` is dead. Real numbers wait for the Pango
-renderer and a second look at the panel.
+**That range was not merely untransferable, it was below the threshold of
+legibility**, and nothing here could tell because this document recorded no
+viewing distance. Measured on 2026-08-11: the panel is 6 inches diagonal at
+1448×1072 (~300 PPI) and is read from 7 feet, which makes 26 px a cap height of
+**2.5 arcminutes** against the **5** that 20/20 vision needs to resolve a letter
+at all. The low end of the live range was half the resolvable size, and the high
+end barely reached it.
+
+The numbers are no longer judged. They derive from the two physical facts above
+against a calibrated cap height — `display/src/display/panel/legibility.py`, with
+the reasoning in `accessibility-spec.md` § The type floor is derived from viewing
+distance. On this panel that is a 130 px primary tier over a 92 px floor.
 
 ## The television, verified against the set itself
 
@@ -570,17 +582,22 @@ the findings recovered from the old one are now false *about the machine* while
 remaining true about the card they were read from. Recorded 2026-08-04, measured
 over SSH:
 
-- **Access is `brooks@pi4-tv.local`.** There is no `tvpi` user on the rebuilt
-  card at all — only `brooks` (uid 1000, sudo, already in `spi` and `gpio`). The
-  committed unit and `deploy/README.md` specify `User=tvpi` and paths under
-  `/home/tvpi/`, none of which exist. Creating that account is part of the
-  systemd-unit cutover; see `operational-spec.md` § The Service Account.
-- **The art tree is effectively empty.** `~/art` has the right shape, but `raw/`
-  holds nothing and `ready/` holds only a bench file from the same day. The 41
-  masters and every finished television rendition the 2024 pipeline produced were
-  on the old card.
-- **The checkout is behind.** It sits at `6003edc`, three merges back from
-  `main`.
+- **Access is `brooks@pi4-tv.local`** (uid 1000, sudo, already in `spi` and
+  `gpio`). ~~There is no `tvpi` user on the rebuilt card at all~~ — **resolved
+  2026-08-11 at the cutover**: `tvpi` was created (uid 102, `--system`, `nologin`,
+  groups `spi` and `gpio`, home `/var/lib/tvpi` for tool state), and the
+  `/home/tvpi/` paths both units named were retired to `/srv/art` and
+  `/opt/samsung-frame-art-loader` rather than created. See `operational-spec.md`
+  § The Service Account and `deploy/README.md` § The cutover.
+- ~~**The art tree is effectively empty.**~~ **Restored, and then moved.** It was
+  refilled after this was written, and the cutover moved it to `/srv/art` — 168
+  files, 677,652,949 bytes, counted on both sides of the move. `raw/` holds 46
+  files for 40 distinct works and `ready/` holds 41.
+- ~~**The checkout is behind.**~~ The deployment checkout is now
+  `/opt/samsung-frame-art-loader`, owned by `tvpi` and tracking the branch it was
+  deployed from. The old `/home/brooks/source/…` checkout is **left in place on
+  purpose**: nothing runs it, and it holds an uncommitted `all.json` whose
+  `tv_content_id`s the 2026-08-07 run wrote.
 
 **The masters survived; the renditions did not.** The masters are on the
 operator's Mac at `~/art/raw` — 46 files, 40 distinct works, 574 MB, the six

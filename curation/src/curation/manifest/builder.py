@@ -54,7 +54,7 @@ SCHEMA_MAJOR: Final[int] = 1
 
 #: Bumped by additive changes. Display ignores a minor it does not know, which is
 #: what makes adding a field free.
-SCHEMA_MINOR: Final[int] = 0
+SCHEMA_MINOR: Final[int] = 1
 
 
 class ExclusionReason(StrEnum):
@@ -213,6 +213,15 @@ def entry_for(inputs: WorkInputs) -> ManifestEntry:
     Label *text* crosses to the display plane; label *rendering* does not. The
     e-paper panel's geometry belongs to the plane that owns that panel, so what
     goes here is the words and nothing about how they are set.
+
+    **The artist's name crosses three times over, and that is not redundancy.**
+    `artist` is what the source called them, `artist_family_name` and
+    `artist_given_name` are which part is which. A display plane setting the
+    family name apart needs the parts; one drawing a plain line needs
+    the whole; and a work whose artist has no recorded parts has only the whole.
+    Sending the parts alone would make the third case unlabelable, and sending
+    the whole alone would put the split back where it was refused — in a rule
+    over a string that is wrong for "van Gogh".
     """
     if inputs.tv_rendition is None:
         # Raised rather than asserted: `assert` disappears under -O, and what it
@@ -227,11 +236,14 @@ def entry_for(inputs: WorkInputs) -> ManifestEntry:
         label={
             "title": inputs.artwork.title,
             "artist": None if artist is None else artist.name,
+            "artist_family_name": None if artist is None else artist.family_name,
+            "artist_given_name": None if artist is None else artist.given_name,
             "artist_nationality": None if artist is None else artist.nationality,
             "artist_dates": None if artist is None else _artist_dates(artist),
             "date_created": inputs.artwork.date_created,
             "medium": inputs.artwork.medium,
             "dimensions": inputs.artwork.dimensions,
+            "commentary": inputs.artwork.commentary,
         },
     )
 

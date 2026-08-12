@@ -1,30 +1,242 @@
 # Deployment
 
-`samsung-frame-art-loader.service` runs the loader as a persistent daemon on the
-Raspberry Pi driving the Frame TV.
+**`display.service` and `curation.service` run the wall**, as the `tvpi` service
+account on the Raspberry Pi driving the Frame TV. They were installed and enabled
+on 2026-08-11; § The cutover below is what was run.
 
-## The two new units, and what still has to happen before they start
+`samsung-frame-art-loader.service` is the **2024** unit. It is retired, it is not
+installed, and it is kept here as recovered evidence until the legacy retirement —
+see the banner above its recipe further down before running anything from it.
+
+## The two new units, and where everything they name now lives
 
 `display.service` and `curation.service` are the planes this product is being
-rebuilt onto. **They are committed but not installed, and they will not start on
-the current Pi**, for the same reason the recovered 2024 unit will not: there is
-no `tvpi` user on the machine, and all three name absolute `/home/tvpi/…` paths.
+rebuilt onto. Three paths they depend on were unsettled until the cutover and are
+settled now; `operational-spec.md` § Where the two trees live records why each one
+won, and this is the short form:
 
-Creating that account, giving it the `spi` and `gpio` groups, settling where
-`ART_ROOT` actually lives, moving the tree under it, and enabling these two units
-are **one change, not five** — any of them landing alone leaves a machine that is
+| | |
+|---|---|
+| `ART_ROOT` | `/srv/art` |
+| Checkout | `/opt/samsung-frame-art-loader` |
+| `uv` | `/usr/local/bin/uv`, named absolutely in both units |
+
+**All three are off any home directory, and that is the requirement rather than a
+preference.** `tvpi` is a `--system` account with `/usr/sbin/nologin`; the machine's
+existing checkout and its only `uv` both sat under a home directory at mode `0700`,
+which such an account cannot traverse at all. A path the service account cannot
+reach is not a detail to leave to whoever reads a unit file next.
+
+Creating that account, giving it the `spi` and `gpio` groups, moving the art tree
+to `/srv/art`, placing the checkout at `/opt`, and enabling these two units are
+**one change, not five** — any of them landing alone leaves a machine that is
 neither the old arrangement nor the new one. `operational-spec.md` § The Service
-Account is the authority on the account; the build plan's Chunk 13B entry is the
-authority on the order.
+Account is the authority on the account and on why the five are one change; the
+steps below, in the order they are written, are the authority on the order.
+*(This used to point at a build-plan chunk for the ordering. A plan is archived
+when it finishes and its sub-numbering is bookkeeping, so a deployment document —
+which outlives every plan — cannot rest its procedure on one.)*
 
-**One thing to settle at install rather than to assume.** Both units run
-`ExecStart=/usr/bin/env uv run …`, and systemd's default `PATH` does not include
-`~/.local/bin`, which is where `uv` normally installs. The recovered 2024 unit
-solves the same problem with a hand-written `PATH=`. Nothing here records where
-`uv` actually lives on this Pi, so this is an unknown rather than a known defect —
-it fails loudly and immediately at `systemctl start`, and the fix is either an
-absolute `ExecStart` or an `Environment=PATH=` line. Check it before enabling
-either unit.
+> **What this cutover is not.** It has been described in the plan as the moment
+> `tvart.py` stops being the production entry point. On the machine as rebuilt
+> that describes a swap that does not exist: **no unit of this product is
+> installed on the Pi at all** — no `samsung-frame-art-loader.service`, no cron
+> entry, no user service. The 2024 loader has not run unattended since the card
+> was rebuilt on 2026-08-04, and the wall has been driven by hand since. So this
+> is a first install rather than a replacement, which removes the rollback
+> pressure a real cutover would carry and is worth knowing before anyone plans
+> around a maintenance window. The sentence is corrected here rather than
+> quietly, because it read as a statement about the machine and was one.
+
+## The cutover
+
+Performed 2026-08-11 on `pi4-tv` (Debian 13 trixie, aarch64). This is the record
+of what was run, in order, and it is the procedure for doing it again.
+
+    # uv where any account can reach it, and the account itself.
+    # Copying the operator's own binary takes whatever version that account holds
+    # — 0.12.1 on the day this was run, which is the fact worth recording, since
+    # nothing else in the tree pins it. `uv --version` after the copy is the check.
+    sudo install -m 0755 -o root -g root ~/.local/bin/uv /usr/local/bin/uv
+    sudo adduser --system --group --no-create-home --shell /usr/sbin/nologin tvpi
+    sudo adduser tvpi spi && sudo adduser tvpi gpio
+    sudo install -d -m 0750 -o tvpi -g tvpi /var/lib/tvpi
+    sudo usermod --home /var/lib/tvpi tvpi          # see the note below
+
+    # the checkout, owned by the account that executes it
+    sudo install -d -o "$USER" -g "$USER" /opt/samsung-frame-art-loader
+    git clone <this repo> /opt/samsung-frame-art-loader
+    sudo chown -R tvpi:tvpi /opt/samsung-frame-art-loader
+
+    # the art tree, moved rather than copied — same filesystem, so it is a rename
+    sudo mv <old ART_ROOT> /srv/art
+    sudo chown -R tvpi:tvpi /srv/art
+
+    # dependencies, as the account that will run them
+    cd /opt/samsung-frame-art-loader/display && sudo -u tvpi /usr/local/bin/uv sync --group raster --group epaper
+    cd /opt/samsung-frame-art-loader/curation && sudo -u tvpi /usr/local/bin/uv sync
+
+    # the environment file: 0640, owned by tvpi, because it carries API keys
+    sudo install -m 0640 -o tvpi -g tvpi <your .env> /opt/samsung-frame-art-loader/.env
+
+    # the units and the journal bound
+    sudo cp deploy/display.service deploy/curation.service /etc/systemd/system/
+    sudo mkdir -p /etc/systemd/journald.conf.d
+    sudo cp deploy/journald.conf.d/10-bound-the-journal.conf /etc/systemd/journald.conf.d/
+    sudo systemctl restart systemd-journald && sudo systemctl daemon-reload
+    sudo systemctl enable --now curation.service
+    sudo systemctl enable --now display.service
+
+**`--no-create-home` then `usermod --home` is not a detour, it is the finding.**
+An account with `HOME=/nonexistent` cannot run `uv` at all — it fails on its own
+cache directory before doing any work. `operational-spec.md` § The Service Account
+records why the answer is a home for tool state rather than a list of `UV_*`
+variables in both units. Create it directly with `--home /var/lib/tvpi` if you are
+doing this fresh; the two-step above is only what this machine's history looked
+like.
+
+**Moving the art tree is a rename when `/srv` and the old location share a
+filesystem**, which is worth checking (`stat -c %d`) before assuming the move is
+instant: across filesystems it is a 647 MB copy and the ownership change after it
+is not free either. Verify the count and the byte total on both sides rather than
+trusting `mv`'s silence — this move was checked at 168 files and 677,652,949
+bytes, identical before and after.
+
+**A machine that has never run this product needs a catalogue before the wall can
+do anything.** The units come up healthy against an art root with no catalogue and
+correctly do nothing, which looks like a fault and is not one. Seeding is a
+separate hand-run step and it neither spends nor renders — it carries the mat
+colour from the 2024 index and adopts the renders already in the tree:
+
+    cd /opt/samsung-frame-art-loader/curation && sudo -u tvpi /usr/local/bin/uv run python -m curation.seed <path to all.json>
+
+Then create a theme and activate it, over the JSON API or the browser interface —
+**activation is what publishes the manifest**, and until one is published the
+display plane has nothing to rotate and says so.
+
+**Re-run the same command on a machine that is already seeded, whenever the
+catalogue gains a field.** It creates no works the second time; what it does is
+carry across what an earlier run could not, and it is the only step that does.
+The catalogue *file* upgrades itself — the store adds nullable columns on open —
+but a column is not the same as a value, and the two arrive by different roads:
+
+    cd /opt/samsung-frame-art-loader/curation && sudo -u tvpi /usr/local/bin/uv run python -m curation.seed <path to all.json>
+    sudo systemctl restart curation.service     # republish the manifest
+    sudo systemctl restart display.service      # redraw the label
+
+**Skipping it costs a quieter label rather than an error**, which is why it is
+written here: the artists' family and given names arrived as fields on
+2026-08-11, and until this runs every row still has null ones. The panel then
+prints each artist's whole name unstyled instead of leading with the family name
+— correct behaviour for a record nobody has split, and indistinguishable by eye
+from the feature not working. The command reports which artists it named, and
+names any it could not.
+
+**The name table wins over what is stored, for the names it carries.** A re-run
+does not merely fill blanks: where the table and the row disagree, the row is
+rewritten. That is deliberate and it is how a *wrong* split gets fixed — correct
+the line in the table, re-run, and the wall follows. The cost of the same rule is
+that a hand-edited split would be reverted, which nothing can do today because no
+surface writes those two fields. Anything that gains one has to decide whether it
+outranks the table; until then the table is the only author and the only
+authority. Names the table does not carry are never touched.
+
+Then **check the manifest actually carries the new fields**, because a restart
+that republished nothing looks identical to one that did:
+
+    sudo -u tvpi jq '.schema, .entries[0].label' /srv/art/theme-manifest.json
+
+### Looking at the label without the daemon
+
+`display/tools/label_preview.py` renders the chain the daemon runs — metadata,
+layout, Pango — so the type can be judged against real ink rather than imagined.
+Its own docstring points here for this machine's paths, because a checkout, a
+service account and its home are facts about a deployment and do not belong in a
+source file:
+
+    sudo systemctl stop display.service
+    cd /opt/samsung-frame-art-loader/display && sudo -u tvpi env HOME=/var/lib/tvpi \
+        /usr/local/bin/uv run --group raster --group epaper \
+        python tools/label_preview.py --panel --cap-arcmin 11
+    sudo systemctl start display.service
+
+**Stopping the unit is not optional.** `--panel` takes the SPI device, and
+`display.service` holds it while it runs; the two contend for the same bus.
+
+**It states no geometry, and that is correct here and only here.** The tool
+refuses to guess the panel's diagonal or its reading distance, and takes both
+from this deployment's `.env` — the same two settings the daemon reads. So the
+short form above is right on this machine and would be wrong anywhere else, where
+`--diagonal-inches` and `--viewing-distance-inches` have to be passed. Running it
+before the two `.env` lines above are in place gets a refusal naming them, not a
+guess.
+
+Read as evidence that the arrangement works, not as a promise about your machine:
+
+- The curation plane marked the art root on its own — it holds a catalogue but had
+  no marker, and a directory holding a catalogue is an art root by the only
+  evidence that matters.
+- The display plane adopted the 40-entry manifest, **disabled the television's own
+  slideshow**, and **removed 40 images the binding table could not account for**.
+  That last one is startup reconciliation working as designed: this device had no
+  prior state, so nothing on the set was accounted for, and it re-uploaded all 40.
+  **Expect a fresh device to re-upload the whole theme**, which took about three
+  and a half minutes for 40 works.
+- The set was in standby, and the plane logged *"the television is not in art
+  mode; leaving the wall alone until it is"* rather than acting. The heartbeat said
+  `television_reachable: true`, `television_showing_art: false`,
+  `label_surface_working: null` — which is the honest reading of a device that has
+  a panel and has not yet had anything to draw.
+
+### How to tell your own install worked
+
+**The two failures this arrangement deliberately makes loud both happen before the
+process runs**, which is why "read the journal" is not the answer to them: a
+missing `EnvironmentFile=` and a missing `/usr/local/bin/uv` are both refused by
+systemd, so there is no application log line to go looking for. `systemctl status`
+names them and `journalctl -u <unit>` does not. Run these in order; each one fails
+differently from the others, which is the point of having four rather than one.
+
+    # 1. Both units loaded, active, and enabled — enabled is the one people skip,
+    #    and its absence is invisible until a reboot leaves the wall dark.
+    systemctl is-active curation.service display.service
+    systemctl is-enabled curation.service display.service
+
+    # 2. The installed copies still match the checkout. They drift the moment
+    #    somebody edits /etc/systemd/system directly, and nothing else notices.
+    for u in display curation; do
+      diff -q /etc/systemd/system/$u.service /opt/samsung-frame-art-loader/deploy/$u.service
+    done
+
+    # 3. The account can actually reach what it needs. Run AS tvpi — running it as
+    #    yourself proves nothing, because your account is the one that already works.
+    sudo -u tvpi /usr/local/bin/uv --version
+    sudo -u tvpi test -r /opt/samsung-frame-art-loader/.env && echo ".env readable"
+    sudo -u tvpi test -w /srv/art && echo "/srv/art writable"
+
+    # 4. The display plane's own account of itself. This is the honest one: it
+    #    distinguishes a device with no panel from one whose panel will not open,
+    #    and a set that is unreachable from one that is simply not showing art.
+    sudo cat /srv/art/display-heartbeat.json
+
+**Read the heartbeat rather than the wall.** `television_reachable: false` is a
+network or pairing problem; `television_showing_art: false` with the set awake
+means somebody is watching television and the plane is correctly leaving it alone;
+`has_label_surface: true` with `label_surface_working: false` is a panel that was
+configured and would not open — which costs the label and nothing else, and is a
+different fault from `has_label_surface: false`, which is a device that never had
+one. `label_surface_working: null` means nothing has been drawn yet, not that
+something failed.
+
+**A `last_error` of `null` and a `reported_at` that is not advancing is worse than
+an error**, because it means the daemon is not looping. Read it twice, a minute
+apart, before believing a quiet heartbeat.
+
+Verify the journal bound while you are here — `systemd-analyze cat-config` proves
+only that the file parses:
+
+    sudo journalctl -b -u systemd-journald | grep -i 'Journal.*max'
+    # expect: "Runtime Journal (...) is 8M, max 256M, 248M free."
 
 **The display plane's panel needs two optional dependency groups, and a default
 `uv sync` installs neither.** They are separate because they install on different
@@ -41,6 +253,25 @@ with no label. A device with a monitor rather than e-ink would install `raster`
 alone. Verified on the Pi 2026-08-07: PyGObject 3.56 and pycairo 1.29 resolve
 under uv on Trixie/aarch64 with no `apt install python3-gi` needed.
 
+**A device that names a panel owes two more values, and this is a step an
+existing deployment has to take by hand.** Since 2026-08-11 the label's type
+size is derived rather than fixed, from `EPD_PANEL_DIAGONAL_INCHES` and
+`EPD_VIEWING_DISTANCE_INCHES` — the panel's diagonal and the distance people
+actually stand at, inches for both. There is no default and there will not be
+one: a guessed distance gives type that is silently illegible, which is what
+this deployment shipped for as long as the sizes were fixed.
+
+So **a `.env` written before that date has neither key, and the first restart
+after deploying this draws no label** — the daemon logs which key is missing,
+reports it on the heartbeat, and goes on rotating the wall. Add both lines to
+`/opt/samsung-frame-art-loader/.env` before or with the deploy:
+
+    EPD_PANEL_DIAGONAL_INCHES=6
+    EPD_VIEWING_DISTANCE_INCHES=84
+
+Those are the reference wall's: a 6-inch panel read from 7 feet. Measure to
+where people stand, not to where you stand while installing it.
+
 **Before the unit is enabled, the checkout needs its environment file.** Since
 2026-07-27 `config.py` raises at import unless `ART_ROOT`, `TV_ADDRESS`,
 `LATITUDE`, `LONGITUDE` and `LOCATION_NAME` all resolve — deliberately, so that a
@@ -53,15 +284,17 @@ different ones **the unit's `EnvironmentFile=` wins**: it is already in the
 process environment by the time the code runs, and `load_dotenv` fills only
 what the environment does not carry.
 
-> **This unit will not start on the current Pi, and the block below is not enough
-> to make it.** The card was rebuilt on 2026-08-04 and **there is no `tvpi` user
-> on the machine at all**, while the committed unit runs as `User=tvpi` with
-> absolute `/home/tvpi/…` paths that name a home directory which does not exist.
-> Creating the account, deciding where the art tree actually lives, and moving
-> both unit files onto it is one coherent change and it belongs to the cutover —
-> it has deliberately not been done piecemeal. Until then, treat the recipe below
-> as the shape of the install rather than a working one. The Provenance section
-> at the foot of this file records what else was assumed from the original card.
+> **The recipe below installs the *2024* unit, and it is kept as a record rather
+> than as an instruction — do not run it.** That unit is retired: it names
+> `/home/tvpi/…` paths that do not exist — the account does now, since the
+> cutover created it, but deliberately without that home — it runs `tvart.py`
+> through a `.venv` that no longer exists, and its hand-written `PATH` carries
+> pyenv shims and a stray editor directory. It is committed exactly as recovered
+> because it had only ever existed on an SD card, and it is deleted with the rest
+> of the 2024 plane at the legacy retirement. The live procedure is
+> **§ The cutover, near the top of this file** — not below this banner, where the
+> only thing you will find is the retired recipe itself. The Provenance section at
+> the foot of this file records what else was assumed from the original card.
 
     cp .env.example .env      # then fill it in
     sudo cp deploy/samsung-frame-art-loader.service /etc/systemd/system/

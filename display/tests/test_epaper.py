@@ -19,9 +19,17 @@ import pytest
 
 from display.panel.epaper import GREYSCALE_MODE, EpaperSurface, open_panel
 from display.panel.layout import Block, Geometry, Layout
+from display.panel.legibility import TypeScale
 from display.panel.raster import Raster, Rasterizer
 
 GEOMETRY = Geometry(width_px=8, height_px=4, margin_px=1)
+
+#: **Absurd on purpose, to match the eight-pixel-wide "panel" above.** Nothing in
+#: this module typesets anything — the rasterizer is a double — so what these
+#: sizes have to be is *carried through unchanged*, and numbers that could not
+#: come off a real derivation make it obvious that this file is not the place
+#: any judgement about legibility is made.
+TYPE_SCALE = TypeScale(primary_px=2, floor_px=1)
 
 
 class FakeEpd:
@@ -74,12 +82,13 @@ def a_surface(**kwargs) -> EpaperSurface:
         epd=epd,
         rasterizer=kwargs.pop("rasterizer", None) or FlatRasterizer(),
         geometry=kwargs.pop("geometry", GEOMETRY),
+        type_scale=kwargs.pop("type_scale", TYPE_SCALE),
         **kwargs,
     )
 
 
 def a_layout() -> Layout:
-    block = Block(text="Cat Litter", size_px=4, x_px=1, y_px=1, width_px=6, height_px=2)
+    block = Block(text="Cat Litter", size_px=4, x_px=1, y_px=1, width_px=6, height_px=2, wrap_px=6)
     return Layout(surface=GEOMETRY, blocks=(block,), dropped=())
 
 

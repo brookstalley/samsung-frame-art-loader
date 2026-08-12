@@ -809,6 +809,10 @@ def _artwork_fields(artwork: Artwork) -> dict[str, Any]:
         "medium": artwork.medium,
         "dimensions": artwork.dimensions,
         "description": artwork.description,
+        # The line written for a wall label. Distinct from `description`, which
+        # is the holding institution's paragraph — an agent asked to write one
+        # must not read the other back and think it is done.
+        "commentary": artwork.commentary,
         # Provenance and source quality. It gates nothing.
         "rights": artwork.rights,
         "status": str(artwork.status),
@@ -826,6 +830,11 @@ def _artist_fields(artist: Artist) -> dict[str, Any]:
         "died": artist.died,
         "lifespan_text": artist.lifespan_text,
         "biography": artist.biography,
+        # Which part of the name is the family name — the part the e-paper label
+        # leads with. Null where nobody has said, and on a record that is not a
+        # person at all.
+        "family_name": artist.family_name,
+        "given_name": artist.given_name,
     }
 
 

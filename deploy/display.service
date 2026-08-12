@@ -7,7 +7,7 @@
 
 [Unit]
 Description=Samsung Frame art wall — display plane
-Documentation=file:///home/tvpi/source/samsung-frame-art-loader/deploy/README.md
+Documentation=file:///opt/samsung-frame-art-loader/deploy/README.md
 
 # **The stock start rate limit is disabled deliberately, and this is the
 # load-bearing line in the file.** systemd's default is five starts in ten
@@ -35,7 +35,7 @@ Group=tvpi
 # The e-paper HAT is reached through both, over SPI and GPIO.
 SupplementaryGroups=spi gpio
 
-WorkingDirectory=/home/tvpi/source/samsung-frame-art-loader/display
+WorkingDirectory=/opt/samsung-frame-art-loader/display
 
 # **Un-prefixed on purpose.** systemd treats a missing un-prefixed
 # EnvironmentFile= as fatal and refuses to start the unit, naming the path it
@@ -43,9 +43,18 @@ WorkingDirectory=/home/tvpi/source/samsung-frame-art-loader/display
 # failure this removes: the process starts, raises at import against missing
 # variables, and dies for a reason nobody connects to a file that was never
 # placed. One .env at the repository root, read by both planes.
-EnvironmentFile=/home/tvpi/source/samsung-frame-art-loader/.env
+EnvironmentFile=/opt/samsung-frame-art-loader/.env
 
-ExecStart=/usr/bin/env uv run python -m display
+# **Absolute, not `/usr/bin/env uv`.** systemd's PATH does not include the
+# per-user directory uv installs itself into by default, and this account has no
+# login to establish one. It does have a home — `/var/lib/tvpi` — but that holds
+# uv's cache and its managed interpreter, not uv itself, which is deliberately
+# shared and system-owned so the two planes cannot drift onto different copies.
+# Naming the binary is also the honest failure: a missing interpreter fails here,
+# where the path is written, rather than resolving to whatever a PATH= line
+# happened to inherit — which is how the recovered 2024 unit came to carry pyenv
+# shims and a stray editor directory it never needed.
+ExecStart=/usr/local/bin/uv run python -m display
 
 Restart=always
 

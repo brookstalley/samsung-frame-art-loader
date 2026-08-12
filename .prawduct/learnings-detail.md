@@ -19,6 +19,58 @@ found, and what it cost — is the part worth keeping, and editing them to match
 today would destroy the evidence while making the rule look like it had always
 been obvious. This note is here so nobody follows one of them as a procedure.
 
+## An instrument a human judges by must exercise the SHIPPED branch, not a legal fallback — when a preview tool, sample or fixture feeds the path a person uses to make a call, assert it produces what production produces, because a fallback renders cleanly and reports cleanly and shows the wrong thing, which is worse than the crash a missing field would have caused
+
+2026-08-11, found twice in the same round — once in a self-scrub and once,
+independently, by the Critic, which is the tell that it was not obvious.
+
+`display/tools/label_preview.py` is the instrument the operator uses at the panel
+to settle the calibrated cap-height angle and to see what the drop rule took off.
+Its `SAMPLE` dict predated the family and given name fields. Nothing broke:
+`LabelText.identification` has a **legal** fallback for an artist whose parts are
+unknown, so the tool rendered `Katsushika Hokusai, …` where the daemon now sets
+`Katsushika, Hokusai, …` — a clean render, a clean report, and a picture of a
+label the wall does not produce.
+
+**What makes this its own rule rather than an instance of stale-fixture drift is
+the direction of the failure.** A missing *required* field would have raised on
+the first invocation and been fixed in a minute. What the fallback bought was
+silence, on the one surface whose entire purpose is to let a person judge by eye —
+and the person judging has no way to know the instrument is showing them the
+wrong branch. The cost was small this round (one comma of width) and grows the
+moment styled runs land, because the preview is then the only place the styling
+can be looked at before the panel itself.
+
+**The guard is on the tool's own output, not on the dict** — asserting the
+report contains `Katsushika, Hokusai` holds however the sample is built, where an
+assertion about `SAMPLE.keys()` would pass against a sample that carried the keys
+and used them wrongly. A second guard pins that the report shows the drop rule
+taking something off, because the mutation sweep found the first one alone left
+the sample's lowest-priority line undefended: removing it changed nothing any
+test noticed.
+
+## A decision's stated PREMISE is checkable at the moment you build on it, and that moment is the last cheap one — before implementing a recorded decision, run the measurement its justifying clause asserts, because a premise written in prose during a walkthrough reads afterwards as an observation, and here "the mechanical derivation lands in the region the corpus occupies" was false by +15.2 L* on 31 of 40 works
+
+**Recurred 2026-08-11, one round after the rule was minted, in the same
+artifact — which is why this rule now has a detail entry at all.**
+`accessibility-spec.md` settled the museum convention that nationality is the
+adjectival demonym, then asserted **"No data change follows"** on the stated
+premise that "the Art Institute's `artist_display` already supplies the
+adjectival form, so the stored `artist_nationality` is correct as it stands".
+Reading all 31 seeded artists back out of a freshly seeded catalogue — one query,
+seconds — falsified it for **two**: Moche stores `North coast, Peru`, which is a
+place, and Vasily Kandinsky stores `Born Moscow (formerly Russian Empire, now
+Russia)`, a birthplace clause with no demonym in it at all.
+
+**The generalisation the first instance did not carry: the cheap check is not
+always a measurement — sometimes it is a query.** Here the premise was about the
+*shape of stored data* and had been checked against the *source that populates
+it*, by reading the museum's field documentation rather than the rows. The tell
+is identical in both instances: a justifying clause phrased as an observation
+about something nobody looked at. So is the second half of the pattern — the
+claim had been read past by every review it went through, because prose asserting
+a fact about data reads as evidence rather than as a hypothesis.
+
 ## Before putting a decision to the owner, check whether the code already made it
 
 2026-08-11. `api-contract.md` § The routes the interface design requires recorded
@@ -1579,3 +1631,47 @@ The check that would have settled it was one `grep token` over the installed
 package. Sibling shape already in this log: `get_current_artwork` adopted as a
 confirming read on the strength of what it was assumed to report.
 
+## A requirement about human perception is under-specified until the artifact carries the PHYSICAL quantity it depends on — record viewing distance, angular size or luminance beside any rendered number (px, pt), because pixels are a fact about a panel while legibility is a fact about a person at a distance
+
+Three artifacts here reasoned carefully about WHICH pixel value while none asked how
+far away the reader stands. The answer was 2x below the acuity threshold — a 2.5
+arcminute cap height against the 5 that 20/20 vision needs to resolve a letter at
+all — and it had passed a hardware probe, a Critic round and a cutover. What closed
+it was deriving the size from a stated viewing distance rather than judging it:
+`display/src/display/panel/legibility.py`, with `display/tests/test_type_floor.py`
+asserting in arcminutes so the claim a pixel test structurally cannot make gets
+made.
+
+## A test asserting that a producer STORED a value does not pin a producer-to-consumer seam — assert on the consumer's own output, because a fixture that feeds the consumer the same number by both routes cannot tell the two expressions apart
+
+The fix here was *measured* at a new bound and *drawn* at the old one, and the only
+arrangement that shows it is a fixture where the two are strictly different. It
+recurred within the same chunk: a mutation sweep found the daemon could lay a label
+out against type sizes the surface never gave it, missed because the fake surface
+carried the reference wall's own numbers. Giving the fake a scale no derivation
+would produce is what made the two routes distinguishable.
+
+## A directory no suite imports is code with no tests, and a signature change breaks it silently — when you delete a constant or add a required parameter, grep `tools/` and `scripts/` for consumers, because the linter, the type checker and a green suite are all silent about a file nothing imports
+
+Here 13B-1 deleted three constants and added required parameters to `lay_out` and
+`EpaperSurface`. `display/tools/label_preview.py` used all of them and was dead in
+four ways. A green suite, clean ruff, clean black and a 14/14 mutation sweep all
+said nothing, because none of them loads that file — `tests/test_config.py` walks
+`display/tools/*.py` with a regex and never imports it. The discovery site would
+have been the operator at the panel with the service stopped, which is the most
+expensive place this product has to find anything. `display/tests/test_tools.py`
+now calls `main()` behaviourally; an import check alone would have caught two of
+the four breaks, since the other two only fail when reached.
+
+## A guard that is badly SHAPED is a reason to reshape it, not a licence to drop it quietly — when you delete a test because it asserts the wrong thing, replace it with one asserting the right thing in the same commit and record why, because reasoning that lives only in your head reads to every later reader as carelessness
+
+A first pass guarded "two type tiers, not three" with
+`set(vars(TypeScale)["__slots__"]) == {...}`. That checks the dataclass's shape
+rather than the decision, and it would have failed wrongly on the next chunk's
+mandatory tier — which is a *smaller* size, below the floor, not a middle one. The
+reasoning was right and was written down nowhere, so the Critic correctly read it
+as an unaccounted deletion: the claim then survived only in prose. The repair was
+the third option, not either of the two obvious ones — assert the decision
+behaviourally (no size ever lands *between* the two tiers), which survives the
+next chunk and fails against a planted middle tier, and put the reason in the
+change log.

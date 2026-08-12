@@ -32,16 +32,19 @@ question and it is kept: it is what the committed unit, `deploy/README.md` and
 this product's own history already say, and renaming would have bought nothing
 but a diff across every one of them.
 
-The account itself does not exist on the machine. The Pi was rebuilt onto a fresh
-card and `tvpi` did not survive it — see `platform-and-dependency-findings.md`
-§ That card is gone. What has to be created:
+**The account was created at the cutover on 2026-08-11 and now exists** (uid 102).
+It had not survived the Pi's rebuild onto a fresh card — see
+`platform-and-dependency-findings.md` § That card is gone — so this table is the
+record of what was made, and the specification for making it again on the next
+machine:
 
 | | |
 |---|---|
 | Login | None. `--system`, no password, shell `/usr/sbin/nologin` |
+| Home | `/var/lib/tvpi`, for tool state only — see below |
 | Privilege | No sudo. Nothing either plane does needs root |
 | Groups | `spi` and `gpio` — the e-paper HAT is reached through both |
-| Owns | `ART_ROOT`, and the checkout the units execute from |
+| Owns | `/srv/art` (`ART_ROOT`) and `/opt/samsung-frame-art-loader` (the checkout the units execute from) |
 
 **Create it as part of the systemd-unit cutover, not before.** The account, its
 group memberships, moving `ART_ROOT` under it, and both unit files are one
@@ -49,13 +52,63 @@ change: any of them landing alone leaves a machine that is neither the old
 arrangement nor the new one. That cutover is the work that installs the new
 systemd units, and this account is created as part of it.
 
-**`ART_ROOT` is not settled by this section.** The committed unit puts the art
-tree at `/home/tvpi/art`, inside a home directory that a service account with no
-login has no other use for. A neutral path — `/srv/art` or `/var/lib/samsung-art`
-— matches what the account actually is, and is the shape to prefer at cutover.
-Deciding it costs nothing today because every reader of that path is already
-configuration: `ART_ROOT` in the root `.env`, which is where the existing norm
-against deployment values in source put it.
+### Where the two trees live — settled at the cutover, 2026-08-11
+
+**`ART_ROOT` is `/srv/art`. The checkout is `/opt/samsung-frame-art-loader`.**
+Both are off any home directory, which is the whole point: a `--system` account
+with `/usr/sbin/nologin` has no use for one, and this section had already made
+that argument about the art tree without noticing it applied twice.
+
+| | | Why this one |
+|---|---|---|
+| `ART_ROOT` | `/srv/art` | FHS reads `/srv` as site-specific data this system serves, which is what 647 MB of the operator's masters are. `/var/lib/samsung-art` was the alternative and fits `catalogue.sqlite` better; it lost because the tree is overwhelmingly the operator's corpus rather than the product's private state, and a path they may want to browse or restore should not read as internals. |
+| Checkout | `/opt/samsung-frame-art-loader` | FHS reads `/opt` as software installed outside the package manager. Keeping code apart from data is the backup story in one line: **back up `/srv/art`, re-clone `/opt`.** `/srv/samsung-frame-art-loader` was the alternative and lost because it puts the thing you can always re-fetch beside the thing you can never lose. |
+
+**The checkout's path was a requirement nobody had written down.** This section
+said the account owns "the checkout the units execute from" and never said where
+it was; both unit files said `/home/tvpi/source/samsung-frame-art-loader`, which
+is not a location anyone chose so much as the path the 2024 card happened to
+have. It surfaced at the cutover as a hard blocker rather than a preference: the
+only checkout on the machine sat at `/home/brooks/source/…` under a home
+directory at mode `0700`, which `tvpi` cannot traverse at all. A path a service
+account cannot reach is not a configuration detail, so the answer is recorded
+here rather than left to whoever next reads a unit file.
+
+**The account has a home at `/var/lib/tvpi`, and it holds tool state rather than
+data.** This was not planned; it was measured. Created with `--no-create-home`,
+the account's `HOME` is `/nonexistent`, and the first thing attempted under it
+failed outright:
+
+    error: Failed to initialize cache at `/nonexistent/.cache/uv`
+      Caused by: failed to create directory `/nonexistent/.cache/uv`: Permission denied
+
+uv needs a writable cache, and the curation plane additionally needs somewhere to
+put the managed CPython 3.14 that § The Curation Interpreter commits this
+deployment to — two directories, and the count is the argument. The alternative
+was naming each one through its own environment variable (`UV_CACHE_DIR`,
+`UV_PYTHON_INSTALL_DIR`, and whatever a later uv adds) in both unit files; a home
+directory covers all of them and anything either plane wants later, in one line
+at account creation, and `/var/lib` is where Debian puts system-account state.
+
+**This does not reopen the argument above.** What that argument objects to is the
+*art tree* living in a home directory — 647 MB of the operator's masters behind a
+path that exists only because an account does. Tool state is the case a home
+directory is actually for. The two are kept apart deliberately: `/var/lib/tvpi`
+is disposable and rebuilt by a sync, `/srv/art` is the thing that must never be
+lost, and no backup should ever have to tell them apart.
+
+**`uv` lives at `/usr/local/bin/uv`, and both units name it absolutely.** Same
+failure, same shape: the machine's only `uv` was at `/home/brooks/.local/bin/uv`,
+behind the same `0700`. `deploy/README.md` had flagged the `PATH` question as
+settle-at-install and offered two fixes — an absolute `ExecStart=` or an
+`Environment=PATH=` line. The absolute path wins because the other one is how the
+recovered 2024 unit came to carry pyenv shims and a stray editor directory in its
+`PATH`, and because a missing interpreter should fail where it is named.
+
+Deciding all three cost nothing in code, because every reader of the art path is
+already configuration — `ART_ROOT` in the root `.env`, which is where the existing
+norm against deployment values in source put it. The unit files are the only
+things that carry the other two, and they are version-controlled.
 
 ## The Curation Interpreter — decided
 
@@ -283,13 +336,31 @@ Panel geometry was briefly listed as a second shared value; it is not, because
     most display devices are a television and nothing else. It is also what
     decides whether the two optional dependency groups are needed at all, so it
     is the one value that changes what has to be installed.*
-  - *`EPD_MARGIN_PX` (40) — the clear border. **Provisional**, and settled by the
-    same look at the real panel that settles the type sizes: it trades border
-    against how many lines fit before the label's drop rule takes one off.*
+  - *`EPD_MARGIN_PX` (no default) — the clear border. **It derives from the type
+    since 13B-1**, at half the primary tier, because it trades directly against
+    how many lines survive the label's drop rule and so cannot be picked apart
+    from the floor that decides how many lines there are. Set it only for a
+    surface whose border is a physical fact rather than a typographic choice — a
+    device drawing its label into the mat area around an artwork does not choose
+    where the picture ends.*
   - *`EPD_ROTATE_DEGREES` (180) — how far the frame is turned before it reaches
     the panel, the reference wall's panel being mounted ribbon-uppermost. Only 0
     and 180 are accepted; a quarter turn exchanges the panel's width and height,
     so the label would have to be laid out against the swapped geometry.*
+
+  *(**Two more joined them on 2026-08-11 with the derived type floor, and they are
+  the only settings in this plane with no default and no fallback:**)*
+
+  - *`EPD_PANEL_DIAGONAL_INCHES` and `EPD_VIEWING_DISTANCE_INCHES` — the label
+    panel's diagonal and the distance it is read from, inches for both. Together
+    they decide every type size on the label. **A guess is the one thing that must
+    not happen here**: a wrong distance produces silently illegible type, which is
+    what this deployment ran for as long as the sizes were fixed constants, and it
+    looks like success from every direction except standing in front of the panel.
+    A device that names a panel and states neither loses its **label surface**,
+    with the missing key named, while the television goes on rotating — the same
+    path a missing driver takes. It is not a refusal to start, because nothing
+    about the label may stop the wall.*
 
   *The panel's own reported size is compared against the configured pair at
   startup and a disagreement is **warned about rather than refused**, the same
@@ -400,7 +471,8 @@ Mostly automatic; the table below is what a human would do when it is not.
 | Acquisition fails on one work with a refused URL | `art_catalogue(action='sources')` for that work | The fetch policy refused the URL and the reason is recorded on the source. Schemes other than `http`/`https`, and hosts that resolve to this network rather than the open internet, are refused by design (`security-model.md` § The fetch trigger fired) — a source that needs one of those is a source this product will not fetch |
 | Every tiled acquisition fails at once | `dezoomify-rs` on the unit's `PATH` | Acquisition raises rather than recording a failed fetch when the binary is absent, precisely so this is not mistaken for museums going away. Install it, or set `DEZOOMIFY_PATH` to where it lives |
 | Every **Art Institute** acquisition raises, while other providers fetch fine | `ARTIC_USER_AGENT` in `.env` | An artic source records the museum's page for the object, and the tile fetcher needs the image service — which only the collection can be asked for. Unset, there is no way to reach those tiles, so acquisition raises by name rather than handing the fetcher a URL it cannot read. Set it and the same works fetch unchanged. Raises rather than records for the same reason the row above does: no source is at fault, and a `failed` row here would send its reader to the museum |
-| Neither plane starts after a reboot | Both planes' resolved `ART_ROOT` in the journal | Mismatched or missing `ART_ROOT` is the likely cause |
+| Neither plane starts after a reboot | `systemctl status` — **not the journal** | The two ways this fails now are both refused by systemd *before* a process exists, so there is no application log line to find and `journalctl -u` is empty in exactly the cases you most want it. A missing `EnvironmentFile=` and a missing `/usr/local/bin/uv` are each named by `systemctl status`, which is the fastest diagnosis available and is why both are declared the way they are. `deploy/README.md` § How to tell your own install worked is the ordered set of checks |
+| Both planes start, then exit at import | The journal, `journalctl -u <unit>` | Now there *is* a process, and this is the mismatched-or-missing-`ART_ROOT` case: `config.py` raises naming the first variable it could not resolve, and the unit retries visibly rather than giving up. Both planes log their resolved `ART_ROOT` on the way up, so a plane that got far enough to log it and still failed is a different fault from one that never started |
 
 ## Risks
 
@@ -496,8 +568,10 @@ carry rather than rediscover.** Post-reboot diagnosis has to come from somewhere
 other than the journal — the health surface's heartbeat age, or the catalogue —
 which is a constraint on how failures are made visible, not merely a missing
 convenience. And the top operational risk keeps its narrowest form: nothing this
-product does writes continuously to the card except the display heartbeat, whose
-writer is not built.
+product does writes continuously to the card except the display heartbeat. **That
+writer is built and has been running unattended since the 2026-08-11 cutover**,
+writing into `/srv/art` on the Pi — so this risk is live rather than pending, and
+the wear path it names is the one currently in use.
 
 The pre-acquisition free-space guard is unrelated to any of this: it is
 curation-side and checks before a fetch.

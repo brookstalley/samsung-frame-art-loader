@@ -20,7 +20,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
-from display.panel import Extent, Geometry, LabelSurface, Layout, Measure, SurfaceUnavailable
+from display.panel import Extent, Geometry, LabelSurface, Layout, Measure, SurfaceUnavailable, TypeScale, type_scale_for
 from display.tv import (
     RemovalOutcome,
     SelectionAnnouncement,
@@ -303,8 +303,22 @@ class FakeSurface(LabelSurface):
     real one that cannot.
     """
 
-    def __init__(self, *, width_px: int = 1448, height_px: int = 1072, margin_px: int = 40) -> None:
+    def __init__(
+        self,
+        *,
+        width_px: int = 1448,
+        height_px: int = 1072,
+        margin_px: int = 40,
+        type_scale: TypeScale | None = None,
+    ) -> None:
         self._geometry = Geometry(width_px=width_px, height_px=height_px, margin_px=margin_px)
+        #: **The reference wall's, derived rather than invented**, so a caller who
+        #: does not care about type still gets sizes a real panel would produce —
+        #: a fake carrying made-up numbers here would let a caller pass against
+        #: proportions no device has.
+        self._type_scale = type_scale or type_scale_for(
+            width_px=1448, height_px=1072, diagonal_inches=6.0, viewing_distance_inches=84.0
+        )
         #: Every layout this surface was asked to draw, in order.
         self.shown: list[Layout] = []
         self.closed = 0
@@ -340,6 +354,10 @@ class FakeSurface(LabelSurface):
     @property
     def geometry(self) -> Geometry:
         return self._geometry
+
+    @property
+    def type_scale(self) -> TypeScale:
+        return self._type_scale
 
     @property
     def measure(self) -> Measure:

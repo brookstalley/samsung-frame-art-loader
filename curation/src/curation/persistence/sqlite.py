@@ -51,6 +51,11 @@ from curation.persistence.records import (
 )
 
 CATALOGUE_SCHEMA = """
+-- `family_name` and `given_name` are nullable because a record that is not a
+-- person — a culture, a workshop, an anonymous master — has neither, and
+-- because a file written before they existed has neither either. Both cases
+-- read the same way downstream and are meant to: the label falls back to `name`
+-- rather than splitting one by a rule that is wrong for "van Gogh".
 CREATE TABLE IF NOT EXISTS artists (
     id             TEXT PRIMARY KEY,
     name           TEXT NOT NULL,
@@ -58,7 +63,9 @@ CREATE TABLE IF NOT EXISTS artists (
     born           INTEGER,
     died           INTEGER,
     lifespan_text  TEXT,
-    biography      TEXT
+    biography      TEXT,
+    family_name    TEXT,
+    given_name     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS artworks (
@@ -72,7 +79,8 @@ CREATE TABLE IF NOT EXISTS artworks (
     rights        TEXT,
     status        TEXT NOT NULL,
     accepted_at   TEXT,
-    created_at    TEXT NOT NULL
+    created_at    TEXT NOT NULL,
+    commentary    TEXT
 );
 
 CREATE INDEX IF NOT EXISTS artworks_by_status ON artworks(status);
@@ -237,6 +245,9 @@ class SqliteCatalogue(TableAdapter):
     def get_artist(self, artist_id: str) -> Artist | None:
         return self._get("artists", {"id": artist_id}, _artist)
 
+    def update_artist(self, artist: Artist) -> None:
+        self._update("artists", BY_ID, _artist_row(artist), subject=f"artist {artist.id!r}")
+
     def list_artists(self) -> Sequence[Artist]:
         return self._list("artists", None, _BY_NAME, _artist)
 
@@ -386,6 +397,8 @@ def _artist_row(artist: Artist) -> dict[str, Any]:
         "died": artist.died,
         "lifespan_text": artist.lifespan_text,
         "biography": artist.biography,
+        "family_name": artist.family_name,
+        "given_name": artist.given_name,
     }
 
 
@@ -402,6 +415,7 @@ def _artwork_row(artwork: Artwork) -> dict[str, Any]:
         "status": str(artwork.status),
         "accepted_at": to_iso(artwork.accepted_at),
         "created_at": to_iso(artwork.created_at),
+        "commentary": artwork.commentary,
     }
 
 
@@ -501,6 +515,8 @@ def _artist(row: Mapping[str, Any]) -> Artist:
         died=row["died"],
         lifespan_text=row["lifespan_text"],
         biography=row["biography"],
+        family_name=row["family_name"],
+        given_name=row["given_name"],
     )
 
 
@@ -517,6 +533,7 @@ def _artwork(row: Mapping[str, Any]) -> Artwork:
         description=row["description"],
         rights=row["rights"],
         accepted_at=from_iso(row["accepted_at"]),
+        commentary=row["commentary"],
     )
 
 

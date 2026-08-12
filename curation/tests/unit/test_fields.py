@@ -102,7 +102,7 @@ def test_a_relative_path_passes_through_normalised():
     assert relative_path("./originals//w1.tif", field="path") == "originals/w1.tif"
 
 
-@pytest.mark.parametrize("value", ["/home/tvpi/art/w1.tif", "/w1.tif"])
+@pytest.mark.parametrize("value", ["/mnt/photos/w1.tif", "/w1.tif"])
 def test_an_absolute_path_is_refused(value):
     with pytest.raises(ServiceError, match="must be relative to ART_ROOT"):
         relative_path(value, field="path")

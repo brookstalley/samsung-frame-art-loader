@@ -91,38 +91,79 @@ retires.
 
 ### The label's type sizes, at the panel — added 2026-08-07
 
-**This is the whole of what Chunk 13A could not settle**, and it is deliberately
-not a defect: the sizes in `display/src/display/panel/layout.py` are marked
-provisional at their definition site, and only somebody standing in front of the
-real panel can replace them. The 2026-08-04 look narrowed the live range to the
-mid-20s through the low-40s px and killed the 2024 `"Sans 18"` — but that ladder
-was rendered with PIL/DejaVu and this product typesets with Pango, so the numbers
-do not transfer.
+**Status: answered 2026-08-11, and by a different route than this entry
+anticipated.** It was written expecting somebody to judge three pixel values at
+the panel. What happened instead is that the operator supplied the two physical
+facts nobody had written down — a 6-inch panel read from 7 feet — and those made
+the sizes *computable*. The judgement that remains is one calibrated angle
+(12.4 arcminutes of cap height, read off a six-rung ladder at the viewing
+position), and 13B-1 derives everything else from it. The provisional constants
+this entry pointed at no longer exist.
 
-**Narrow it at a desk first.** The whole chain now renders without a panel:
+**The trap it was written to avoid was real, and worse than it looked.** The
+provisional `BODY_SIZE_PX = 26` gave a 2.5 arcminute cap at 7 feet against the 5
+that 20/20 vision needs to resolve a letter at all — so the label was not merely
+small, it was below the threshold of legibility, and had passed a hardware probe,
+a review and a cutover in that state. Nothing could have caught it, because
+nothing anywhere converted a pixel into the angle a person sees. That conversion
+now exists, and `display/tests/test_type_floor.py` asserts in arcminutes.
+
+**What is still worth a look at the panel, and it is smaller than this entry
+was.** Whether 12.4′ is right in *bold* — the ladder was read in regular weight,
+and stroke weight matters disproportionately on a reflective panel where contrast
+rather than resolution is the limit, so the family name may reach the same comfort
+a size step down. Worth measuring before spending the panel's budget on size that
+weight could have bought.
 
 ```sh
 cd display && uv sync --group raster            # once; the Pi and CI have it, this Mac cannot
-cd display && uv run --group raster python tools/label_preview.py /tmp/label.png --title-px 34
+cd display && uv run --group raster python tools/label_preview.py /tmp/label.png --cap-arcmin 11
 ```
 
-`--title-px` scales artist and body in the same proportion, and the tool prints
-where each line landed and what the drop rule took off — which is the half that is
-invisible in the image.
+The tool now prints arcminutes beside every pixel size, and says what the drop
+rule took off — the half that is invisible in the image.
 
-**One observation from the first real render** (1448×1072, margin 40, title 40 /
-artist 32 / body 26, a fully populated Hokusai record): the label occupies about
-the **top third** of the panel and nothing is dropped. There is a lot of headroom,
-so the honest question at the panel is not "does this fit" but "is this as large
-as it should be" — the sizes could go substantially up before the drop rule
-engages, and larger is the accessibility direction.
+**One observation from the derived render** (1448×1072, the margin deriving to 65,
+a fully populated Hokusai record): the identification block fills the panel and
+**the medium and the dimensions drop**. That is the expected finding rather than a
+regression — it is what the tombstone collapse in 13B-3 exists to reclaim, and it
+is why the operator put 13B-3 ahead of 13B-2 in the build order.
 
-**A PNG on a backlit monitor is not the answer**, which is why this entry stays
-open: sixteen greys of reflective e-paper read at standing distance in room light
-is a different medium, and the reason the numbers are provisional in the first
-place. What the preview can settle is layout — what fits, what drops, whether the
-hierarchy reads. Chunk 13B is where the trip to the panel happens, and **whoever
-settles the numbers should replace the provisional note as well as the numbers**.
+### What 13B-3 changed on the panel, and the two things to look for — added 2026-08-11
+
+**Run the preview before the daemon.** The label reorganised, so the next render
+looks different in three ways at once and it is worth separating them by eye
+rather than in a photograph of a rotating wall:
+
+```sh
+cd display && uv run --group raster python tools/label_preview.py /tmp/label.png
+```
+
+1. **The artist now leads and the title follows it.** Deliberate — the family
+   name is what a passer-by scans at 7 feet, and a long title was consuming over
+   half the panel. Not a regression.
+2. **Name, nationality and dates are one line** where they were three. This is
+   the ~260 px the collapse was for. Modelled against two real works it turns
+   three dropped lines into one — but that was an arithmetic stand-in for the
+   measurer, not Pango, so **the panel is what settles whether it is enough**.
+3. **The whole identification line is set at the primary 12.4′ tier**, because
+   the layout sizes by position and that line is now first. On a long name it
+   wraps to three rows and eats roughly 90 px the floor would not have.
+
+**The thing to judge, and it is a real question rather than a formality:** the
+identification line reads `O'KEEFFE, Georgia, American, 1887–1986` — four
+comma-separated parts, where the first comma means "inverted" and the others mean
+"and". The argument for it holding together is that **weight** separates the
+family name from the rest, not punctuation — and **13B-2 has not landed, so
+nothing is bold yet.** What you will see is four undifferentiated parts. If it
+reads badly *with* the bold capitals in place, the fallback is the name on its
+own line, which costs about half the collapse's gain.
+
+**Also worth a glance, and it is data rather than type:** two of the 31 seeded
+artists carry something that is not a demonym in the nationality slot — Moche
+reads `Moche, North coast, Peru` and Kandinsky's is a birthplace clause. Left as
+the institution published them; correcting them is a curation-content call, and
+this entry is where it is being put to you.
 
 ### The display daemon against the wall — added 2026-08-06
 
@@ -703,14 +744,20 @@ with the below-floor work pictured and marked `is_on_offer: false`.
 
 ### The loader unit starts clean with its declared `EnvironmentFile=` — added 2026-08-02
 
-> **Blocked as written, 2026-08-04.** The Pi was rebuilt onto a fresh card: there
-> is no `tvpi` user and no `/home/tvpi/...` tree, so every path below names
-> something that does not exist, and the checkout is three merges behind `main`.
-> **This item cannot be performed until the Chunk 13 cutover creates the account
-> and installs the new units**, at which point the unit under test is a different
-> file and this item should be rewritten rather than run. Left here rather than
-> deleted because the *question* — does the un-prefixed `EnvironmentFile=` start
-> clean on the real machine — is still owed.
+> **DISCHARGED 2026-08-11, by the cutover rather than by running this item.** The
+> question this was kept for — does an un-prefixed `EnvironmentFile=` start clean
+> on the real machine — is answered, on the units that matter. Both
+> `display.service` and `curation.service` declare it un-prefixed against
+> `/opt/samsung-frame-art-loader/.env` and both came up clean on the first
+> `systemctl enable --now`, curation logging its resolved configuration and
+> display its startup line. Neither refused to start, which was the risk.
+>
+> **The unit named below is not the unit that was tested.** As predicted, the file
+> under test became a different one: this item describes the 2024 loader, which is
+> retired and will never be installed again. What follows is left as the record of
+> a question that was owed and is not any more — do not run it. The properties it
+> was written to protect are now asserted mechanically for both live units in
+> `tests/test_repo_hygiene.py`, which is the durable form of this check.
 
 **Not visual — this needs the Pi, and it is quick.** The unit now declares
 `EnvironmentFile=/home/tvpi/source/samsung-frame-art-loader/.env` un-prefixed and
