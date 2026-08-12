@@ -55,6 +55,30 @@ COMPLETION_TIMEOUT_SECONDS: Final[float] = 180.0
 #: budget readout that hangs is worse than one that says it could not be read.
 KEY_TIMEOUT_SECONDS: Final[float] = 15.0
 
+#: How long **one connection attempt** may take, as opposed to the whole request.
+#:
+#: **Not a subdivision of the budgets above, and the distinction is the point.**
+#: Those bound *generation*, which legitimately takes minutes; opening a socket to
+#: a host that is going to answer takes milliseconds. Handing httpx a single
+#: number sets both, which is what makes an unreachable address cost a whole
+#: completion budget.
+#:
+#: **It exists because httpx has no Happy Eyeballs.** Its transport walks the
+#: addresses `getaddrinfo` returns in order, and this provider publishes AAAA
+#: records — so on a network whose IPv6 path is black-holed, every connection
+#: begins with an attempt that will never be answered, and only then falls back to
+#: IPv4. Measured 2026-08-12 on such a network: ~150 seconds per connection
+#: against 0.02 seconds over IPv4, and httpx's keepalive expires after five
+#: seconds, so anything slower than a tight loop pays it on every single call. A
+#: browser on the same network falls back in about 250 milliseconds.
+#:
+#: Five seconds is generous for a reachable host on a slow link and short enough
+#: that walking a dead address family is an inconvenience rather than an outage.
+#: The right long-term answer is a transport that races the two families; this is
+#: the one-value version of it, and it works without depending on any network
+#: being correctly configured.
+CONNECT_TIMEOUT_SECONDS: Final[float] = 5.0
+
 
 class OpenRouterError(Exception):
     """The provider could not be made to answer."""
@@ -316,7 +340,7 @@ class OpenRouterClient:
     def _post(self, path: str, body: Mapping[str, Any]) -> Mapping[str, Any]:
         try:
             response = self._http.post(
-                f"{BASE_URL}{path}", headers=self._headers, json=dict(body), timeout=COMPLETION_TIMEOUT_SECONDS
+                f"{BASE_URL}{path}", headers=self._headers, json=dict(body), timeout=_timeout(COMPLETION_TIMEOUT_SECONDS)
             )
         except httpx.HTTPError as exc:
             raise OpenRouterError(f"Could not reach OpenRouter: {exc}") from exc
@@ -324,10 +348,20 @@ class OpenRouterClient:
 
     def _get(self, path: str) -> Mapping[str, Any]:
         try:
-            response = self._http.get(f"{BASE_URL}{path}", headers=self._headers, timeout=KEY_TIMEOUT_SECONDS)
+            response = self._http.get(f"{BASE_URL}{path}", headers=self._headers, timeout=_timeout(KEY_TIMEOUT_SECONDS))
         except httpx.HTTPError as exc:
             raise OpenRouterError(f"Could not reach OpenRouter: {exc}") from exc
         return _read_body(response)
+
+
+def _timeout(overall: float) -> httpx.Timeout:
+    """A budget that bounds connecting far more tightly than waiting for an answer.
+
+    Built here rather than at each call site so the two requests cannot drift into
+    disagreeing about how long a socket may take to open — which is the kind of
+    difference that shows up only on the one network that provokes it.
+    """
+    return httpx.Timeout(overall, connect=CONNECT_TIMEOUT_SECONDS)
 
 
 def _read_body(response: httpx.Response) -> Mapping[str, Any]:
@@ -369,15 +403,68 @@ def _provider_message(response: httpx.Response) -> str:
     Quoted through rather than replaced: the 402's text carries the arithmetic
     that explains it — what was requested against what is affordable — and no
     message written here could reconstruct that.
+
+    **A refusal has two possible authors, and reading only the outer one throws
+    away the half worth acting on.** OpenRouter's own refusals — the money codes,
+    a malformed request it rejects itself — put the reason in `error.message`.
+    A refusal from the *model provider* behind it puts the constant string
+    "Provider returned error" there instead, and the actual objection inside
+    `error.metadata.raw`. Measured 2026-08-12: a null content field, an image on
+    an assistant turn and an unknown role all arrived wearing that one string,
+    three different mistakes with three different fixes, indistinguishable to
+    whoever had to act on them.
     """
     try:
         body = response.json()
     except ValueError:
         return response.text[:300]
     error = body.get("error") if isinstance(body, dict) else None
+    if not isinstance(error, dict):
+        return response.text[:300]
+    message = str(error.get("message") or "").strip()
+    upstream = _upstream_message(error.get("metadata"))
+    if message and upstream:
+        return f"{message} ({upstream})"
+    return message or upstream or response.text[:300]
+
+
+def _upstream_message(metadata: object) -> str:
+    """What the provider behind OpenRouter said, attributed to which one said it.
+
+    The provider is named because the route decides it: the same request can be
+    refused by one provider and served by another, so "Alibaba objected" is a
+    materially different report from "the model objected".
+    """
+    if not isinstance(metadata, Mapping):
+        return ""
+    name = str(metadata.get("provider_name") or "").strip()
+    raw = metadata.get("raw")
+    if not isinstance(raw, str) or not raw.strip():
+        return f"{name} gave no reason" if name else ""
+    detail = _upstream_detail(raw) or raw.strip()[:300]
+    return f"{name}: {detail}" if name else detail
+
+
+def _upstream_detail(raw: str) -> str:
+    """The `message` out of an upstream error body, or nothing if it is not there.
+
+    `raw` is the provider's own response forwarded verbatim, still wearing the
+    SSE `data:` frame it was streamed in. That framing belongs to a third party
+    and is free to change, so a body this cannot parse falls back to being passed
+    through whole by the caller: harder to read, and strictly better than the
+    alternative of telling someone only that an error occurred.
+    """
+    text = raw.strip()
+    if text.startswith("data:"):
+        text = text[len("data:") :].strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return ""
+    error = payload.get("error") if isinstance(payload, dict) else None
     if isinstance(error, dict) and error.get("message"):
         return str(error["message"])
-    return response.text[:300]
+    return ""
 
 
 def _read_completion(payload: Mapping[str, Any], *, fallback_model: str) -> Completion:

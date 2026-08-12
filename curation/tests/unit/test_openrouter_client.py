@@ -17,6 +17,8 @@ import pytest
 
 from curation.discovery.openrouter import (
     BASE_URL,
+    COMPLETION_TIMEOUT_SECONDS,
+    KEY_TIMEOUT_SECONDS,
     KeyExhausted,
     OpenRouterClient,
     OpenRouterError,
@@ -74,6 +76,31 @@ UNSEARCHED = {
         "cost_details": {"upstream_inference_cost": 0.00002717},
     },
 }
+
+#: A 400 raised by the **model provider** behind OpenRouter, measured 2026-08-12.
+#: The outer `message` is the constant string "Provider returned error" — a null
+#: content field, an image on an assistant turn and an unknown role all arrived
+#: wearing it. What actually went wrong is inside `metadata.raw`, which is the
+#: provider's own error body forwarded verbatim, still in its SSE `data:` frame.
+PROVIDER_400 = {
+    "error": {
+        "message": "Provider returned error",
+        "code": 400,
+        "metadata": {
+            "raw": 'data: {"error":{"code":"invalid_parameter_error","param":null,'
+            '"message":"The content field is a required field.",'
+            '"type":"invalid_request_error"},"id":"chatcmpl-1c1aada9"}\n\n',
+            "provider_name": "Alibaba",
+            "is_byok": False,
+        },
+    },
+    "user_id": "user_2ntxh0Npiz",
+}
+
+#: A 400 from OpenRouter's **own** edge, measured in the same round. No `metadata`
+#: at all, and `message` already says what is wrong. The two shapes have to be read
+#: differently, and a reader written for either one alone loses the other.
+EDGE_400 = {"error": {"message": 'Input required: specify "prompt" or "messages"', "code": 400}}
 
 
 def client_over(handler, **kwargs) -> OpenRouterClient:
@@ -234,6 +261,131 @@ def test_an_unreachable_provider_is_an_error_not_a_crash():
 
     with pytest.raises(OpenRouterError, match="Could not reach OpenRouter"):
         client_over(refuse).complete(prompt="anything")
+
+
+# -- a refusal has two authors, and only one of them is OpenRouter --------------
+
+
+def test_a_provider_400_names_what_the_provider_actually_objected_to():
+    """The diagnosable half of a provider refusal is not in `error.message`.
+
+    Every provider-side 400 measured carries the same outer string, so a client
+    reading only that reports one message for a null content field, a misplaced
+    image and an unknown role alike — three different mistakes with three
+    different fixes, indistinguishable to whoever has to act on them.
+    """
+    with pytest.raises(OpenRouterError) as raised:
+        client_over(responding(PROVIDER_400, status=400)).complete(prompt="anything")
+
+    message = str(raised.value)
+    assert "The content field is a required field." in message, "the provider's actual objection reaches the caller"
+    assert "Alibaba" in message, "and says which provider made it, since the route decides that"
+
+
+def test_the_upstream_body_is_read_rather_than_pasted_in_whole():
+    """Stripping the stream framing is the difference between a sentence and a dump.
+
+    Asserting only that the cause *appears* cannot see this: the unparsed body
+    contains the same sentence as a substring, so a client that pasted the whole
+    SSE frame in would satisfy that check while handing a curator a wall of JSON.
+    Found by `tools/mutation_sweep.py` — deleting the strip changed nothing until
+    this test named what the strip is for.
+    """
+    with pytest.raises(OpenRouterError) as raised:
+        client_over(responding(PROVIDER_400, status=400)).complete(prompt="anything")
+
+    message = str(raised.value)
+    assert "The content field is a required field." in message
+    assert "invalid_parameter_error" not in message, "the provider's envelope is read, not quoted"
+    assert "data:" not in message, "and its stream framing never reaches a human"
+
+
+def test_a_provider_refusal_with_no_body_still_says_which_provider_refused():
+    """Naming the provider is worth something even when it explained nothing.
+
+    The route decides which provider serves a request, so "Alibaba refused and
+    gave no reason" points at a retry on a different route; a bare "Provider
+    returned error" points nowhere at all.
+    """
+    payload = json.loads(json.dumps(PROVIDER_400))
+    payload["error"]["metadata"].pop("raw")
+
+    with pytest.raises(OpenRouterError) as raised:
+        client_over(responding(payload, status=400)).complete(prompt="anything")
+
+    assert "Alibaba" in str(raised.value)
+
+
+def test_an_edge_400_keeps_its_own_message_when_there_is_no_upstream_body():
+    """OpenRouter's own refusals say what is wrong in the place they always did.
+
+    The guard against fixing the provider shape by breaking this one: these
+    carry no `metadata`, and reading the upstream body must stay optional.
+    """
+    with pytest.raises(OpenRouterError) as raised:
+        client_over(responding(EDGE_400, status=400)).complete(prompt="anything")
+
+    assert 'Input required: specify "prompt" or "messages"' in str(raised.value)
+
+
+def test_an_upstream_body_in_an_unrecognised_framing_is_passed_through_not_dropped():
+    """The framing is the provider's own, so it is free to stop being JSON.
+
+    Passing it through unparsed is worse to read and strictly better than the
+    alternative, which is a caller told only that something returned an error.
+    """
+    payload = json.loads(json.dumps(PROVIDER_400))
+    payload["error"]["metadata"]["raw"] = "upstream exploded, and not in JSON"
+
+    with pytest.raises(OpenRouterError) as raised:
+        client_over(responding(payload, status=400)).complete(prompt="anything")
+
+    assert "upstream exploded" in str(raised.value)
+
+
+# -- the budget for connecting is not the budget for generating -----------------
+
+
+def timing(recorder, payload=UNSEARCHED):
+    """A transport that records the timeout httpx was handed for each request."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        recorder.append(request.extensions.get("timeout"))
+        return httpx.Response(200, json=payload)
+
+    return handler
+
+
+def test_a_dead_address_family_cannot_consume_the_whole_completion_budget():
+    """Connecting is bounded far more tightly than generating, and must be.
+
+    httpx has no Happy Eyeballs: it tries the addresses `getaddrinfo` returns in
+    order, and this provider publishes AAAA records. On a network whose IPv6 path
+    is black-holed the first attempt is to an address that will never answer, and
+    a single timeout value makes that attempt cost the *whole* generation budget
+    before IPv4 is tried at all — measured at ~150 seconds against 0.02 over IPv4.
+
+    So the contract is the split itself, not either number: generation keeps its
+    minutes, and a dead address is abandoned in seconds.
+    """
+    seen: list = []
+
+    client_over(timing(seen)).complete(prompt="anything")
+
+    timeout = seen[0]
+    assert timeout["read"] == COMPLETION_TIMEOUT_SECONDS, "generation keeps its full budget"
+    assert timeout["connect"] <= 10, "and a connection that will never answer is given up on in seconds"
+
+
+def test_the_key_endpoint_bounds_connecting_the_same_way():
+    """It backs a display figure, so it has even less business waiting minutes."""
+    seen: list = []
+    client = client_over(timing(seen, payload={"data": {"usage": 1}}))
+
+    client.key_status()
+
+    assert seen[0]["read"] == KEY_TIMEOUT_SECONDS
+    assert seen[0]["connect"] <= 10
 
 
 def test_an_answer_with_no_choices_is_returned_with_its_cost_rather_than_raised():
