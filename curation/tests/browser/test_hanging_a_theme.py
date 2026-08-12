@@ -117,6 +117,27 @@ def test_a_wall_with_nothing_hanging_says_so_instead_of_showing_an_empty_manifes
     assert "goes on showing what it was showing until a theme is hung" in ui.text()
 
 
+def test_the_take_down_note_is_said_once_however_many_walls_are_empty(ui, services):
+    """One fact about how taking down works, not a property of any wall.
+
+    It reads as a caption under the list of empty rooms; repeated per room it
+    reads as three separate warnings about three separate problems. Two empty
+    walls is the smallest state that can tell the two renderings apart, and
+    without this test the note could be moved back inside the loop with the
+    suite still green — which is exactly where it started.
+    """
+    services.display.add_wall(name="Study")
+
+    ui.open("#manifest")
+    ui.page.wait_for_selector("h2")
+
+    assert ui.page.locator("p", has_text="goes on showing what it was showing").count() == 1
+    # Both rooms are named, so the one note is standing for two walls rather
+    # than one of them having gone missing.
+    assert "Nothing is hanging on The wall" in ui.text()
+    assert "Nothing is hanging on Study" in ui.text()
+
+
 def test_each_walls_panels_nest_under_that_wall_rather_than_beside_it(ui, a_theme, services):
     """Two hung walls, and a reader navigating by heading can still tell the rooms apart.
 
@@ -128,9 +149,10 @@ def test_each_walls_panels_nest_under_that_wall_rather_than_beside_it(ui, a_them
     executes this markup: `accessibility-spec.md` states no heading rule, so this
     test is the rule.
     """
-    # Named rather than indexed: walls come back ordered by name, so the study
-    # displaces the migration's wall from position zero and an index would hang
-    # the theme on the same room twice.
+    # Read before the study exists, because walls come back ordered by name and
+    # "Study" would displace the migration's wall from position zero — after
+    # which this index would hang the theme in the same room twice and the test
+    # would assert nothing about nesting.
     the_wall = services.display.survey_walls()[0].wall
     study = services.display.add_wall(name="Study")
     services.display.activate_theme(a_theme.id, wall_id=the_wall.id)
