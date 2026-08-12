@@ -170,9 +170,12 @@ ones labelled as weak**:
 **Bounds 4–6 are materially weaker than "cannot" and are stated as such.** The
 honest summary: the realistic worst case is a poisoned page steering candidate
 selection, burning budget, or getting an unwanted image onto the wall until
-someone looks. **Annoying and visible, not a breach.** There is no PII to exfiltrate,
-no tenancy to cross, no payment surface to abuse, and no credential the agent can
-reach.
+someone looks. **Annoying and visible, not a breach.** There is no tenancy to
+cross, no payment surface to abuse, and no credential the agent can reach — and
+**nothing an injected page can reach reads a conversation turn back out**, which
+is the form this clause takes now that § The one exception below designates
+`ConversationTurn.text` as a record of a person. It said "no PII to exfiltrate"
+until 2026-08-12; the conclusion is unchanged and the premise is narrower.
 
 **What would change this assessment.** If any of the following land, this section
 must be re-derived rather than extended:
