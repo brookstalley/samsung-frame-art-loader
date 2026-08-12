@@ -1793,8 +1793,30 @@ affordance — it simply sends the ids, which is what a UI naturally has anyway.
 
 Worth stating plainly: the realistic worst case is a poisoned page steering
 candidate selection, burning budget, or getting an unwanted image onto the wall
-until someone looks. Annoying and visible, not a breach. There is no PII, no
-multi-tenancy, and no payment surface.
+until someone looks. Annoying and visible, not a breach. There is no
+multi-tenancy and no payment surface.
+
+> **The "no PII" half of that sentence was retired on 2026-08-12** and is struck
+> rather than quietly deleted, because the threat assessment above rests on it.
+> `security-model.md` § The one exception designates `ConversationTurn.text` as
+> the product's only retained free-text record of a person. **It does not change
+> this section's conclusion**: the vector reasoned about here is content coming
+> *inward* from a museum or search page into the candidate pipeline, and nothing
+> an injected page can reach reads a conversation turn back out. What it does
+> change is that "not a breach" can no longer be argued from the product holding
+> nothing personal — it is argued from what this particular vector reaches. That
+> is a narrower claim, and it is the true one.
+>
+> **The outward direction is real and is not this paragraph's**: `commit` passes
+> the curator's own committed sentence to `DiscoveryRunner.start(intent_text=…)`,
+> which is what a search provider is asked. That is by design — a run cannot be
+> explained without it — and it is why `observability-strategy.md` names the
+> words the one thing here whose logging is a decision rather than a freedom.
+>
+> This was the third file carrying the retired wording, found after the other two
+> were corrected. `observability-strategy.md` owns the logging consequence,
+> `security-model.md` is the authority on the record itself, and this paragraph
+> owns only what an injected page can get to.
 
 ## Conditional Patterns
 

@@ -639,8 +639,8 @@ split was made to end, and it will not announce itself as having done so.
 - **Deliverables:**
   - `index.html` and `app.js`: three destinations, flat, no drawer, no nesting
   - **`app.js` split into ES modules** — `index.html` loads it as `type="module"`;
-    `app.js` keeps boot and the router table; `core/` holds the fetch plumbing, the
-    `render`/generation guard and the shared badges; `screens/` holds one module per
+    `app.js` keeps boot and the router table; the shared `core` modules hold the fetch plumbing, the
+    `render`/generation guard and the shared badges; one `screens` module per
     screen. **Scope added deliberately on 2026-08-12, and the reason is not
     tidiness**: six chunks in this plan rewrite `app.js`, and one file is one writer,
     so the split is what converts them from a queue into two waves. Splitting here
@@ -649,7 +649,7 @@ split was made to end, and it will not announce itself as having done so.
     unpicked by the next chunk to touch them. The second reason stands on its own:
     measured on 2026-08-12, before any screen in this plan is written, the file is
     already 1,954 lines
-  - **The split is mechanical.** A screen's move into `screens/` and a change to what
+  - **The split is mechanical.** A screen's move into its own module and a change to what
     that screen does are two different acts, and this chunk performs only the first —
     a module that arrives already reshaped has no reviewable before-state. The
     destinations' own reshape is this chunk's other deliverables, above
@@ -677,7 +677,7 @@ split was made to end, and it will not announce itself as having done so.
   across the move or the move was not mechanical
 - **Acceptance criteria:** no destination in the navigation names a pipeline stage;
   Health is reachable and not navigable-to; every screen and consequential state has
-  a URL. **No module under `screens/` imports another** — they meet in `core/` and in
+  a URL. **No screen module imports another** — they meet in the shared modules and in
   the router table, which is what keeps a later wave's four agents to one shared line
   each; a screen that reaches sideways into another rebuilds the single writer this
   split exists to end.
@@ -998,7 +998,8 @@ split was made to end, and it will not announce itself as having done so.
   with its derivation visible. And the one operation in this product that genuinely
   destroys a record.
 - **Depends on:** Chunk 10
-- **Parallelism:** wave 3, worktree agent, opus. Owns `screens/taste.js`. **Lands
+- **Parallelism:** wave 3, worktree agent, opus. Owns
+  `curation/src/curation/http/static/screens/taste.js`. **Lands
   last whatever else is in flight** — its `cumulative` review reads
   `merge-base...HEAD`, so it is only the whole-branch review this plan wants if every
   other chunk is already in
