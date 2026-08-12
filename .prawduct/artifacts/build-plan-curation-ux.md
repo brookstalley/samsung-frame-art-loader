@@ -205,6 +205,26 @@ plan; a branch named `curation-ux/chunk-NN-<slug>` needs no `--scope` override.
 `--chunk NN` is still passed by hand, for the reason recorded at the head of this
 plan.
 
+### A fresh worktree does not have the browser group
+
+**Measured 2026-08-12, before the first dispatch: the curation suite reports
+`1957 passed, 4 skipped` in a fresh worktree against `1957 passed, 1 skipped` in the
+main checkout.** The three extra skips are `tests/browser/` — the group is a
+per-venv install and a new worktree has its own venv, so the modules skip with the
+command that fixes them and the run stays green.
+
+**This is the trap `CLAUDE.md` describes, arriving by a route it does not cover.** A
+screen-chunk agent writes browser tests, runs the suite, sees green, and reports a
+covered chunk — having executed not one line of what it wrote. Every chunk in waves
+2 and 3 ships browser tests, so every one of those agents is exposed.
+
+**So a worktree agent that writes browser tests runs `uv sync --group browser` in its
+own worktree first, and states its skip count.** The Chromium binaries are cached per
+user, not per worktree, so this is a package install and not the ~200MB download —
+one command, no meaningful cost. **The agent asserts the count rather than the
+colour**: green with its own tests skipped is the failure this note exists to catch,
+and it looks exactly like success.
+
 ### What stays in the main agent
 
 **Critic, reflection, and every `.prawduct/` write.** Subagents are told not to write
