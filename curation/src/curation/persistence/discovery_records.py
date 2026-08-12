@@ -15,11 +15,12 @@ exactly is a rounding error in a running total that nobody will ever reconcile
 against the provider's own figure.
 """
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Final
+from typing import Any, Final
 
 from curation.persistence.records import AcquisitionMethod, RightsStatus, SourceClass
 
@@ -243,12 +244,20 @@ class SpendCategory(StrEnum):
     token, so a token-only breakdown would misattribute it. `IMAGE_RESEARCH` is
     re-search spend and attributes to the resolve run that incurred it, rolling
     up to the original intent through the run's parent.
+
+    `CONVERSATION_TOKENS` is intent-forming spend, and it is deliberately **not**
+    attributed to the run a conversation eventually seeds. "What did talking
+    cost" and "what did asking for Kandinsky cost" are separate questions, and
+    folding the first into the second would make a run's `estimated_cost_usd`
+    unfalsifiable against its actuals — the estimate never covered the
+    conversation.
     """
 
     DISCOVERY_TOKENS = "discovery_tokens"
     WEB_SEARCH = "web_search"
     IMAGE_RESEARCH = "image_research"
     MAT_COLOR_VISION = "mat_color_vision"
+    CONVERSATION_TOKENS = "conversation_tokens"
 
 
 @dataclass(frozen=True, slots=True)
@@ -428,6 +437,11 @@ class SpendRecord:
     input_tokens: int | None = None
     output_tokens: int | None = None
     units: int | None = None
+    #: Set for intent-forming spend, and **nulled rather than cascaded when the
+    #: conversation is deleted**: the money was spent whatever became of the
+    #: thread, and a ledger whose totals fall when somebody tidies a transcript
+    #: is the under-reporting this table exists to prevent.
+    conversation_turn_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -444,3 +458,76 @@ class ResolveRunWork:
 
     resolve_run_id: str
     candidate_work_id: str
+
+
+class TurnRole(StrEnum):
+    """Who spoke a turn — the product's own two words, not the provider's.
+
+    `CURATOR` and `SYSTEM`, never `user`/`assistant`. The distinction is not
+    pedantry: the provider refuses a role it does not know (measured — *"curator
+    is not one of ['system', 'assistant', 'user', 'tool', 'function']"*), so the
+    translation to its vocabulary happens once, at the client seam, and the
+    transcript a curator reads back is in the product's terms rather than in a
+    chat API's.
+    """
+
+    CURATOR = "curator"
+    SYSTEM = "system"
+
+
+@dataclass(frozen=True, slots=True)
+class Conversation:
+    """One intent-forming session.
+
+    **Not a run, and never confused with one:** it acquires nothing, writes no
+    `Artwork`, and reaches no museum API to *resolve* anything. It ends by
+    seeding a `DiscoveryRun` or by ending.
+
+    `summary` is a short account of where the conversation got to, written at
+    rest for the list. **Never read back as taste** — `Affinity` is the only
+    thing the product consults for that, and a summary consulted as one would be
+    a second, prose-shaped opinion about a curator free to drift from the
+    recorded one.
+    """
+
+    id: str
+    started_at: datetime
+    #: Orders the conversation list, and indexed for it. Distinct from
+    #: `started_at` because a thread returned to a week later is the one a
+    #: curator is looking for, and the day it began says nothing about that.
+    last_turn_at: datetime
+    summary: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationTurn:
+    """One thing said in a conversation, and what it offered.
+
+    `ordinal` orders the thread and is unique per conversation. **Not a
+    timestamp**: two turns can share a second — the curator's question and the
+    answer to it routinely do, since the answer is written in the same request —
+    and an order derived from time would then be a coin toss.
+
+    `text` is verbatim and required. A model turn that was cut off arrives from
+    the provider as `content: null`, and storing that null is what would make the
+    *next* turn fail with a refusal about a required content field rather than
+    about anything that went wrong. So the column cannot hold one, and the empty
+    string is what a turn with nothing in it holds.
+
+    `committed_run_id` is the seam. It is set on the turn where the curator
+    committed a direction, and it is the only edge from this side of the product
+    to a `DiscoveryRun`.
+    """
+
+    id: str
+    conversation_id: str
+    ordinal: int
+    role: TurnRole
+    text: str
+    created_at: datetime
+    #: What this turn offered, as `[{kind, value, samples}]`. Denormalised on
+    #: purpose: a record of *what was said*, not a live index — so a thread read
+    #: back next month shows the pictures it showed at the time rather than
+    #: whatever the collection would answer today.
+    suggested: Sequence[Mapping[str, Any]] | None = None
+    committed_run_id: str | None = None

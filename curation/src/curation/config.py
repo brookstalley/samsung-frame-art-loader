@@ -325,6 +325,28 @@ DEFAULT_MAT_MODEL: Final[str] = "qwen/qwen3.7-flash"
 #: failure with a different remedy.
 DEFAULT_MAT_MAX_OUTPUT_TOKENS: Final[int] = 8_000
 
+#: Which model answers a conversational turn. **Its own setting, and the reason
+#: is measured rather than symmetric**: `DEFAULT_DISCOVERY_MODEL` lists
+#: `input_modalities: ["text"]`, so a thread that ever carries a picture the
+#: curator points at cannot use it. The same argument `mat_model` records, and
+#: the same model answers it — vision-capable, cheapest of those that cleared the
+#: mat bar, and the one the 2026-08-12 multi-turn probe was measured against.
+DEFAULT_CONVERSATION_MODEL: Final[str] = DEFAULT_MAT_MODEL
+
+#: The conversational turn's output reservation, in tokens. **Deliberately small,
+#: and it is the one reservation in this file that is not sized for reasoning.**
+#:
+#: The other two are large because a reasoning model must be allowed to finish
+#: thinking before it answers. A conversational turn does the opposite: reasoning
+#: is switched off on the request, because on an open-ended prompt the routed
+#: model consumed its entire reservation on reasoning before emitting a character
+#: — measured at 16, 200 and 900 tokens alike, ten calls in a row, every one
+#: returning empty content and every one billed. With reasoning off the answers
+#: measured 19 to 28 completion tokens, so 2,000 is roughly seventy times a
+#: typical reply: room for a long answer, and small enough that the reservation
+#: the provider prices stays a rounding error against a monthly limit.
+DEFAULT_CONVERSATION_MAX_OUTPUT_TOKENS: Final[int] = 2_000
+
 #: The longest edge, in pixels, of the copy of the artwork the mat model sees.
 #: Images bill inside `prompt_tokens`, so this is the one dial on what a mat call
 #: costs. 768 is enough for a model to read a palette and a composition, and a
@@ -417,6 +439,13 @@ class Settings:
     mat_model: str = DEFAULT_MAT_MODEL
     mat_max_output_tokens: int = DEFAULT_MAT_MAX_OUTPUT_TOKENS
     mat_image_max_edge: int = DEFAULT_MAT_IMAGE_MAX_EDGE
+    #: How intent-forming reaches its provider. A third model rather than either
+    #: of the two above: discovery's is text-only and cannot see a picture, and
+    #: the mat's reservation is sized for a reasoning budget this call switches
+    #: off. One setting for all three would make each choice a constraint on the
+    #: others.
+    conversation_model: str = DEFAULT_CONVERSATION_MODEL
+    conversation_max_output_tokens: int = DEFAULT_CONVERSATION_MAX_OUTPUT_TOKENS
     #: The key everything paid runs through. Optional: a deployment without one
     #: serves the whole catalogue and refuses only to *start* a discovery run,
     #: which is a far better failure than refusing to boot.
@@ -655,6 +684,12 @@ class Settings:
             # request reserving nothing is refused by the provider, not run free.
             mat_max_output_tokens=_positive_int("MAT_MAX_OUTPUT_TOKENS", DEFAULT_MAT_MAX_OUTPUT_TOKENS),
             mat_image_max_edge=_positive_int("MAT_IMAGE_MAX_EDGE", DEFAULT_MAT_IMAGE_MAX_EDGE),
+            conversation_model=os.environ.get("CONVERSATION_MODEL") or DEFAULT_CONVERSATION_MODEL,
+            # Positive for the same reason the other two reservations are: a
+            # request reserving nothing is refused by the provider, not run free.
+            conversation_max_output_tokens=_positive_int(
+                "CONVERSATION_MAX_OUTPUT_TOKENS", DEFAULT_CONVERSATION_MAX_OUTPUT_TOKENS
+            ),
             openrouter_api_key=os.environ.get("OPENROUTER_API_KEY") or None,
             artic_user_agent=os.environ.get("ARTIC_USER_AGENT") or None,
         )

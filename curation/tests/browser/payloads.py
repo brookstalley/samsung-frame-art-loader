@@ -16,6 +16,10 @@ from curation.http.models import (
     CandidateCardOut,
     CandidatePageOut,
     CandidateWorkOut,
+    ConversationListOut,
+    ConversationOut,
+    ConversationTurnOut,
+    ConversationViewOut,
     EstimateOut,
     FitOut,
     ImageOut,
@@ -24,8 +28,10 @@ from curation.http.models import (
     RunOut,
     RunTallyOut,
     RunViewOut,
+    SampleOut,
     SearchUsageOut,
     SpendOut,
+    SuggestionOut,
     VerdictOut,
     WorkOut,
     WorkPageOut,
@@ -35,6 +41,7 @@ from curation.persistence.discovery_records import (
     ResolutionStatus,
     RunKind,
     RunStatus,
+    TurnRole,
     Verdict,
     WorkProvenance,
 )
@@ -273,3 +280,69 @@ def a_spend(**overrides) -> dict:
         "month": None,
     }
     return SpendOut(**(fields | overrides)).model_dump(mode="json")
+
+
+def a_sample(title="Untitled No. 5", **overrides) -> SampleOut:
+    """One picture beside a name, defaulting to one the collection can show."""
+    fields = {
+        "title": title,
+        "artist": "Agnes Martin",
+        "image_url": f"https://www.artic.edu/iiif/2/{abs(hash(title)) % 100000}/full/843,/0/default.jpg",
+    }
+    return SampleOut(**(fields | overrides))
+
+
+def a_suggestion(value="Agnes Martin", *, kind="artist", samples=None) -> SuggestionOut:
+    return SuggestionOut(kind=kind, value=value, samples=list(samples or []))
+
+
+def a_turn(text="Something calm for the living room.", **overrides) -> ConversationTurnOut:
+    """One turn, defaulting to the curator's own and offering nothing."""
+    fields = {
+        "turn_id": "turn-1",
+        "ordinal": 0,
+        "role": TurnRole.CURATOR.value,
+        "text": text,
+        "suggested": [],
+        "committed_run_id": None,
+        "created_at": "2026-08-12T10:00:00+00:00",
+    }
+    return ConversationTurnOut(**(fields | overrides))
+
+
+def a_conversation(**overrides) -> ConversationOut:
+    fields = {
+        "conversation_id": "conversation-under-test",
+        "started_at": "2026-08-12T10:00:00+00:00",
+        "last_turn_at": "2026-08-12T10:01:00+00:00",
+        "summary": None,
+    }
+    return ConversationOut(**(fields | overrides))
+
+
+def a_thread(turns=None, **overrides) -> dict:
+    """A whole conversation as `/api/conversations/{id}` answers it.
+
+    `committed_run_id` and `unanswered_turn_id` are derived from the turns rather
+    than passed in, exactly as the server derives them. A fixture free to
+    disagree with itself could assert a screen no server could ever have
+    produced — a commit card polling a run no turn committed, or a retry button
+    over a question that was answered.
+    """
+    turns = [a_turn()] if turns is None else list(turns)
+    committed = next((turn.committed_run_id for turn in reversed(turns) if turn.committed_run_id), None)
+    last = turns[-1] if turns else None
+    unanswered = last.turn_id if last is not None and last.role == TurnRole.CURATOR.value and not last.committed_run_id else None
+    fields = {
+        "conversation": a_conversation(),
+        "turns": turns,
+        "committed_run_id": committed,
+        "failure": None,
+        "unanswered_turn_id": unanswered,
+    }
+    return ConversationViewOut(**(fields | overrides)).model_dump(mode="json")
+
+
+def a_conversation_list(conversations=None) -> dict:
+    conversations = [a_conversation()] if conversations is None else list(conversations)
+    return ConversationListOut(conversations=conversations, count=len(conversations)).model_dump(mode="json")

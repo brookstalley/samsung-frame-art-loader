@@ -866,3 +866,80 @@ dialog.confirm::backdrop {
     animation: none !important;
   }
 }
+
+/* -- the conversation thread ------------------------------------------------
+ *
+ * A transcript, not a chat app: no bubbles, no tails, no alternating alignment.
+ * The two speakers are told apart by a named label and a rule down the left of
+ * the curator's own turns, because a layout that carried the distinction in
+ * position alone loses it the moment the window is narrow — and because this is
+ * a page of paintings, where a second visual language competing with them is the
+ * thing the whole palette is arranged to avoid. */
+.turn + .turn {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.turn-speaker {
+  margin: 0 0 var(--space-1);
+  font: 600 var(--text-sm) / 1.2 var(--font-label);
+  color: var(--text-muted);
+}
+
+/* The curator's own words, marked by a rule rather than by a fill: a tinted
+   block behind text is a second background for a reader to judge a picture
+   against. */
+.turn[data-role="curator"] {
+  border-left: 3px solid var(--border-strong);
+  padding-left: var(--space-3);
+}
+
+.turn p {
+  margin: 0 0 var(--space-2);
+}
+
+.suggestions {
+  margin-top: var(--space-3);
+}
+
+.suggestion + .suggestion {
+  margin-top: var(--space-3);
+}
+
+.suggestion-name {
+  display: flex;
+  gap: var(--space-1);
+  align-items: baseline;
+  font-size: var(--text-sm);
+}
+
+/* Wrapping rather than scrolling: three pictures fit on a laptop and stack on a
+   phone, and a horizontal scroller hides the third one behind a gesture nobody
+   is told about. */
+.samples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-2) 0 0;
+}
+
+.sample {
+  margin: 0;
+  max-width: 12rem;
+}
+
+.sample img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.sample figcaption {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}

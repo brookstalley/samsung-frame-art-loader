@@ -1,0 +1,4 @@
+{
+  "status": 400,
+  "body": "{\"error\":{\"message\":\"Input required: specify \\\"prompt\\\" or \\\"messages\\\"\",\"code\":400},\"user_id\":\"user_2ntxh0NpizEmB5iVBypPZ31HMAN\"}"
+}
