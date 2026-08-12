@@ -21,6 +21,8 @@ from curation.http.models import (
     ConversationTurnOut,
     ConversationViewOut,
     EstimateOut,
+    FacetGroupOut,
+    FacetOptionOut,
     FitOut,
     ImageOut,
     InstanceListingOut,
@@ -69,8 +71,14 @@ def a_catalogue_work(**overrides) -> WorkOut:
     return WorkOut(**(fields | overrides))
 
 
-def a_listing(works, *, total=None, truncated=False, offset=0) -> dict:
-    """One page of the catalogue, as `/api/works` answers it."""
+def a_listing(works, *, total=None, truncated=False, offset=0, facets=()) -> dict:
+    """One page of the catalogue, as `/api/works` answers it.
+
+    `facets` defaults to none rather than to all six kinds. The server always
+    returns all six, and a builder that invented them would put a vocabulary in
+    the test that no catalogue produced — a facet rail asserted against values
+    nobody holds. A test about the rail passes the groups it means.
+    """
     works = list(works)
     return WorkPageOut(
         works=works,
@@ -78,7 +86,35 @@ def a_listing(works, *, total=None, truncated=False, offset=0) -> dict:
         limit=100,
         offset=offset,
         truncated=truncated,
+        facets=list(facets),
     ).model_dump(mode="json")
+
+
+def a_facet_option(value, count, *, selected=False, disabled=None) -> FacetOptionOut:
+    """One value a facet control offers.
+
+    `disabled` follows the count unless a test names it, because that is the
+    service's own rule — an option that would select nothing is returned disabled
+    rather than omitted — and a fixture free to disagree with it could assert a
+    rail state no server could produce.
+    """
+    return FacetOptionOut(
+        value=value,
+        count=count,
+        selected=selected,
+        disabled=(count == 0) if disabled is None else disabled,
+    )
+
+
+def a_facet_group(kind, options, *, total_values=None, truncated=False) -> FacetGroupOut:
+    """One facet kind as the rail renders it."""
+    options = list(options)
+    return FacetGroupOut(
+        kind=kind,
+        options=options,
+        total_values=len(options) if total_values is None else total_values,
+        truncated=truncated,
+    )
 
 
 def a_run(**overrides) -> RunOut:

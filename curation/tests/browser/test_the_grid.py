@@ -50,7 +50,11 @@ def test_the_grid_pages_through_a_catalogue_larger_than_one_page(ui, a_catalogue
     progress every time, and stops having collected everything.
     """
     ui.open("#collection")
-    ui.page.wait_for_selector("h2")
+    # Waited on the tiles, not on the heading. The screen now says it is loading
+    # in an `h2` of its own — the placeholder holds the real heading's place so
+    # nothing jumps when the count arrives — so `h2` stopped meaning "the grid has
+    # painted". The assertion below is unchanged; only what it waits for is.
+    ui.page.wait_for_selector("ul.grid li.card")
 
     assert ui.page.inner_text("h2") == f"{a_catalogue_past_one_page} works"
     assert ui.page.locator("ul.grid li.card").count() == a_catalogue_past_one_page

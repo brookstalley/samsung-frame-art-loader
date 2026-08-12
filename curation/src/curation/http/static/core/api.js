@@ -58,29 +58,65 @@ export async function api(path, options) {
  * omission this product exists to refuse. */
 export const PAGE_CEILING = 50;
 
-export async function fetchAllWorks(query = "") {
+/* The chosen facet values, as `GET /api/works` spells them.
+ *
+ * **One repeated parameter per kind, never comma-joined.** That is the route's
+ * own rule and its reason is the data: a facet value may itself contain a comma,
+ * and a separator a value can hold is a parser that goes wrong on the catalogue
+ * rather than on the request. A kind with nothing chosen contributes nothing, so
+ * an unfiltered grid sends the request it always sent. */
+function facetQuery(chosen) {
+  let query = "";
+  for (const kind of Object.keys(chosen || {})) {
+    for (const value of chosen[kind] || []) {
+      query += `&${encodeURIComponent(kind)}=${encodeURIComponent(value)}`;
+    }
+  }
+  return query;
+}
+
+/* `onFirstPage(body)` is called once, with the first page, before the loop asks
+ * for a second — so a caller can act on `total` and `truncated` while the rest is
+ * still arriving. The grid's loading placeholder needs exactly that: its geometry
+ * depends on how much there is, which nothing knows until this page lands, and a
+ * placeholder painted before it can only guess. Optional, and the two other
+ * callers pass nothing. */
+export async function fetchAllWorks(query = "", chosen = null, onFirstPage = null) {
   const works = [];
   let total = 0;
   let truncated = false;
+  // The facet groups come from the first page only. Every page recomputes them
+  // identically — `list_artworks` answers the works and their counts in one read
+  // scope precisely so the two cannot disagree — so keeping a later page's copy
+  // would be the same numbers arrived at more slowly.
+  let facets = [];
   // Sent to the server rather than filtered here. `GET /api/works` takes `q` and
   // searches the work's own text and its artist's name word-wise, over the whole
   // catalogue — where a client-side filter can only ever search what this screen
   // happened to load, and reports its count as though it had searched
-  // everything.
+  // everything. The facets are sent for the same reason, and for one more: the
+  // counts beside the grid are computed by the service against exactly this
+  // filter, and a client that narrowed locally would print them beside a
+  // different set of works.
   const search = query ? `&q=${encodeURIComponent(query)}` : "";
+  const narrowing = facetQuery(chosen);
   for (let page = 0; page < PAGE_CEILING; page += 1) {
-    const body = await api(`/api/works?offset=${works.length}${search}`);
+    const body = await api(`/api/works?offset=${works.length}${search}${narrowing}`);
     total = body.total;
+    if (page === 0) {
+      facets = body.facets || [];
+      if (onFirstPage) onFirstPage(body);
+    }
     works.push(...body.works);
     // The stopping condition is what actually arrived, not what the server says
     // is left. A page that reports more while carrying nothing makes no
     // progress — the offset is derived from what came back, so asking again
     // sends the identical request. `PAGE_CEILING` would stop it either way, so
     // what this saves is forty-nine pointless round trips rather than a hang.
-    if (!body.truncated || body.works.length === 0) return { works, total, truncated };
+    if (!body.truncated || body.works.length === 0) return { works, total, truncated, facets };
     truncated = true;
   }
-  return { works, total, truncated: works.length < total };
+  return { works, total, truncated: works.length < total, facets };
 }
 
 /* Every work a run holds, paged through to the end.

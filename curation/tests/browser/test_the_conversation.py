@@ -172,7 +172,15 @@ def test_a_failed_turn_stays_in_the_thread_and_can_be_asked_again(ui):
     open_thread(ui)
 
     ui.page.click("text=Say it")
-    ui.page.wait_for_selector("#view [role=alert]")
+    # Waited on the reason, not on the bare live region. This thread opens on a
+    # question nothing has answered, so the unanswered panel — `role="alert"`,
+    # "Ask again" and all — is on the page *before* the click; a wait on the role
+    # alone therefore returns without the POST having been answered, and the
+    # assertions below read the screen as it was beforehand. It passed for as
+    # long as the fetch happened to win that race and stopped the day a heavier
+    # test ran ahead of it. The `role` stays in the selector because announcing
+    # the reason, rather than only showing it, is half of what this pins.
+    ui.page.wait_for_selector("#view [role=alert]:has-text('the content field is required')")
 
     # The question is still on screen, the reason is stated, and there is a way on.
     assert "Something calm for the living room." in ui.text()

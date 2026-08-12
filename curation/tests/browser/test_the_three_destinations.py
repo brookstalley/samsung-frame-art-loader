@@ -364,7 +364,12 @@ def test_a_work_opened_from_collection_returns_to_collection(ui, one_work):
     ui.page.wait_for_selector("ul.grid li.card")
 
     ui.page.click("ul.grid li.card .card-title button")
-    ui.page.wait_for_selector("#view h2")
+    # The back link, not a heading: Collection has an `h2` of its own, so waiting
+    # for one after the click waits for nothing and everything below reads the
+    # grid rather than the work. Only a contextual screen draws a way back, which
+    # makes its arrival the fact that the work opened — and what it *says* is
+    # still the assertion.
+    ui.page.wait_for_selector("#view button:has-text('←')")
 
     back = ui.page.locator("#view button", has_text="←").first
     assert back.inner_text() == "← Collection"
@@ -509,7 +514,10 @@ def test_the_search_is_the_catalogue_s_and_not_this_screen_s(ui, service, seeded
     ui.page.wait_for_selector("#view h2:has-text('matching')")
 
     assert ui.page.locator("ul.grid li.card").count() == 1
-    assert ui.page.inner_text("#view h2") == "1 works matching \u201cTempera\u201d"
+    # "1 work", not "1 works". The heading pluralises as of the chunk that gave
+    # the grid its rails: a theme holding one work made the old wording visible
+    # often enough to fix, and this line is the copy it was asserting.
+    assert ui.page.inner_text("#view h2") == "1 work matching \u201cTempera\u201d"
 
 
 def test_a_search_finds_a_work_by_its_artist(ui, seeded_service):
@@ -529,7 +537,10 @@ def test_a_search_finds_a_work_by_its_artist(ui, seeded_service):
 def test_a_search_that_matches_nothing_says_so_and_offers_the_way_back(ui, seeded_service):
     """An empty grid with no sentence reads as an empty collection."""
     ui.open("#collection?q=nothingwhatevermatchesthis")
-    ui.page.wait_for_selector("#view h2")
+    # The empty state itself, rather than the heading above it: Collection's
+    # loading placeholder is an `h2` too, so waiting on one could return before
+    # the search had answered. Same assertion, sounder wait.
+    ui.page.wait_for_selector("#view .empty")
 
     assert "Nothing held matches" in ui.text()
     ui.page.click("#view button:has-text('Show everything')")

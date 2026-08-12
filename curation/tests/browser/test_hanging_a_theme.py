@@ -69,7 +69,13 @@ def test_hanging_reports_back_by_naming_the_wall_rather_than_a_colour(ui, a_them
     ui.page.wait_for_selector(".panel")
 
     ui.page.click("text=Hang on Study")
-    ui.page.wait_for_selector("h2")
+    # Waited on the wall view the hang lands on, not on a heading. The theme
+    # screen already has an `h2`, so waiting for one waits for nothing — and the
+    # reload below is then free to overtake the POST, after which the theme is
+    # not hanging anywhere and the badge this test is about never appears. The
+    # walls screen is painted only once the activate has come back, which is
+    # exactly the fact the reload needs to be true.
+    ui.page.wait_for_selector("section.wall")
 
     ui.open("#theme")
     ui.page.wait_for_selector(".badge")

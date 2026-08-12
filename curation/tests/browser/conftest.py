@@ -26,6 +26,20 @@ a server cannot be asked to do on purpose.
 Payload builders live in `payloads.py` beside this file, and the rule they follow
 — build from the API's own response models, never a hand-written dict — is
 stated there.
+
+**A wait must name something that is true only in the state being waited for.**
+`wait_for_selector("h2")` after a click that leaves a screen already carrying an
+`h2`, or `[role=alert]` on a screen whose first paint puts one there, matches
+instantly and waits for nothing — after which the assertions under it read the
+state that was there beforehand, and the test passes for exactly as long as the
+write happens to win a race nothing is holding open. Four have been found here:
+two heading waits that stopped meaning "the grid painted" once Collection grew a
+loading placeholder with an `h2` of its own, one over the live region the
+unanswered-turn panel puts up at first paint, and one over a heading the hang
+navigates away from. Every one passed alone and failed in the full suite, where a
+heavier test ran ahead of it and moved the timing. Wait for the *new* thing — the
+text the write produced, the section the navigation lands on — and let the
+assertions be about the rest.
 """
 
 import io

@@ -150,6 +150,14 @@ honest, but two shared files decide the schedule:
   two migration-carrying chunks at the same time — that is a scheduling constraint,
   not a coincidence, and a new chunk that adds a migration inherits it.
 
+  **The rule stands; its application to wave 2 did not.** That wave was scheduled
+  around the claim that one of its chunks carried a migration, and built, none of
+  them did — the schema changes involved were all things `durable.py` widens in
+  place. So the constraint was satisfied vacuously rather than by the scheduling,
+  which is worth separating: a rule that happens to hold teaches nothing about
+  whether the schedule that cited it was right. **Check what a chunk actually
+  needs against `durable.py` before letting a migration claim shape a wave.**
+
 **Build in parallel, land in series.** Concurrency buys wall-clock on the building;
 it buys nothing on the reviewing, and trying to make it would cost the per-chunk
 scoping this plan's governance rests on. Chunks are built by worktree-isolated
@@ -172,7 +180,7 @@ waiting on chunks that never needed each other.
 |---|---|---|---|
 | 0 | **01** (keystone), **03** (palette), the **Chunk 10 `verify-api` probe**, the **Chunk 06 corpus seed** | 01 opus · 03 sonnet · probe opus · seed sonnet | 03 writes `app.css` and nothing else. The probe writes no product code at all — it captures request and response shapes. The seed builds a fixture. Only 01 touches the schema. |
 | 1 | **02** (per-wall manifest), **04** (navigation + the `app.js` split), **06** (`WorkFacet`, search) | opus | 02 owns `manifest/builder.py`, the display plane and `GET /api/health`; 04 owns `index.html` and the whole of `static/`; 06 owns the schema and `GET /api/works`. They meet only in `api.py`, in different route functions. |
-| 2 | **05** (Walls), **07** (Collection), **08** (Work), **10** (Conversation) | opus | Post-split, each owns one file under `screens/`. Only 10 carries a migration. |
+| 2 | **05** (Walls), **07** (Collection), **08** (Work), **10** (Conversation) | opus | Post-split, each owns one file under `screens/`. ~~Only 10 carries a migration.~~ **None of them did** — see Chunk 10. |
 | 3 | **09** (Theme), **11** (Taste) | opus | Two more `screens/` modules. 11 lands last regardless — it is `cumulative-final`. |
 
 **The `verify-api` probe is the one wave-0 agent that does NOT get a worktree.** It
@@ -864,10 +872,20 @@ split was made to end, and it will not announce itself as having done so.
   a polish item** — the commit card becomes the run's progress card becomes "12
   works ready to review", with the transcript above it the whole time.
 - **Depends on:** Chunk 04
-- **Parallelism:** wave 2, worktree agent, opus. Owns `curation/src/curation/http/static/screens/conversation.js`, and
-  is the **only** wave-2 chunk carrying a migration — which is what lets the other
-  three run beside it. **Its `verify-api` step runs in wave 0**, as its own opus
-  agent: see Done-when step 0
+- **Parallelism:** wave 2, worktree agent, opus. Owns `curation/src/curation/http/static/screens/conversation.js`.
+  **Its `verify-api` step runs in wave 0**, as its own opus agent: see Done-when
+  step 0
+  <!-- This line claimed until 2026-08-12 that this chunk was the only wave-2
+       chunk carrying a migration, and that this was "what lets the other three
+       run beside it". Built, it carries none: both new tables are CREATE TABLE
+       IF NOT EXISTS, the new nullable column is exactly what durable.py widens
+       in place, and the ordinal uniqueness is a CREATE UNIQUE INDEX IF NOT
+       EXISTS — which reaches an existing file where a column clause would not.
+       migrations.py is for changes that cannot be widened, and none of this is
+       one. The scheduling argument was therefore load-bearing and false: the
+       wave was safe, but not for the reason given. Worth knowing before a later
+       plan copies the reasoning. -->
+  
 - **Artifacts consumed:** `data-model.md` §§ Conversation, ConversationTurn;
   `information-architecture.md` flow 1; `api-contract.md` (the conversation routes)
 - **Deliverables:** `Conversation` and `ConversationTurn`; `GET`/`POST

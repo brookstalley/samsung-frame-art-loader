@@ -29,7 +29,15 @@ export function el(tag, attrs = {}, children = []) {
     if (key === "text") node.textContent = value;
     else if (key === "class") node.className = value;
     else if (key === "onclick") node.addEventListener("click", value);
-    else node.setAttribute(key, value === true ? "" : String(value));
+    // `true` spells itself differently either side of the ARIA boundary, and
+    // getting it wrong is silent. An HTML boolean attribute — `checked`,
+    // `disabled`, `hidden` — is true by being present, so the empty string is
+    // right. An `aria-*` state takes the literal word: `aria-hidden=""` is not a
+    // valid token, so it is treated as unset and the thing stays announced.
+    // Every glyph in this client was written `"aria-hidden": true`, so until this
+    // line every badge read its shape aloud beside the word it accompanies —
+    // "black circle native", "circled division slash archived".
+    else node.setAttribute(key, value === true ? (key.startsWith("aria-") ? "true" : "") : String(value));
   }
   for (const child of [].concat(children)) {
     if (child) node.append(child);
