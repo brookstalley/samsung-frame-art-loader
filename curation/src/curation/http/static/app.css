@@ -66,6 +66,18 @@
   --text-lg: 1.125rem;
   --text-xl: 1.375rem;
   --text-2xl: 1.75rem;
+  /* The one step above the 1.25 scale, added for the Walls screen's single large
+     heading and used nowhere else.
+
+     **2.25rem is derived, not chosen.** The scale is nominally 1.25 but is not
+     one in fact: rounded to whole pixels it runs 1.167, 1.143, 1.125, 1.222,
+     1.273 — the ratios widen towards the display end, which is what a type scale
+     rounded onto a pixel grid does. Continuing that widening from 1.75rem gives
+     roughly 1.29, and 2.25rem (36px) is where that lands on the same 4px base
+     the spacing scale is built on. The nominal ratio would give 2.1875rem, which
+     is 35px: half a pixel off the grid every other value in this block sits on,
+     for a difference no reader could see. */
+  --text-3xl: 2.25rem;
 
   /* Spacing, 4px base. */
   --space-1: 0.25rem;
@@ -657,6 +669,63 @@ th {
   margin: 0 0 var(--space-1);
   font: 400 var(--text-md) / 1.3 var(--font-label);
   color: var(--text-strong);
+}
+
+/* -- the walls -------------------------------------------------------------
+
+   The product's home, and the one screen whose primary content is the art
+   itself rather than a report about it. */
+
+/* The single large heading on this surface, and the only use of `--text-3xl`.
+   It is the product's home saying so — the one place the type is allowed to be
+   the size a gallery's own name is, and a size nothing else reaches so that it
+   stays that. Every other `h2` on this client keeps `--text-lg`. */
+.walls-heading {
+  font-size: var(--text-3xl);
+}
+
+/* One wall's whole section. Separated by space rather than by a rule: with three
+   walls a reader has to be able to see where one room's account ends, and a line
+   between them would draw a border across a page of paintings. */
+section.wall {
+  margin-bottom: var(--space-8);
+}
+
+/* What is hanging, at the size the IA asks for: the artwork is the primary
+   content on every screen that shows one, and this is the screen that shows the
+   most of them. A wider minimum than the collection grid's 15rem, because this
+   is a handful of works being looked at rather than a catalogue being scanned. */
+.hanging {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: var(--space-5);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* No card, no border, no shadow. A work on this screen is hung, not filed, and
+   the fixed-aspect image box above it is doing the alignment a card would
+   otherwise be doing. */
+.hung {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* A work's own title inside the Showing panel. The panel's heading rule sets a
+   paragraph's worth of space under a heading, which is right for a section title
+   and wrong under a picture whose artist line belongs with it. */
+.hung .card-title {
+  margin: 0;
+}
+
+/* The wall's controls, held apart from the account of what is on it: hanging a
+   different theme is the one act on this screen that other people in the house
+   see, and it should not read as another row of facts. */
+.wall-controls {
+  margin-bottom: var(--space-5);
 }
 
 /* One query's offered works, under the sentence that describes that query.

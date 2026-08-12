@@ -44,6 +44,7 @@ from curation.http.models import (
     CandidateWorkOut,
     CreateTheme,
     CreateWall,
+    DirectiveOut,
     EstimateOut,
     ExclusionOut,
     FacetGroupOut,
@@ -73,6 +74,7 @@ from curation.http.models import (
     SpendOut,
     StartResolve,
     StartRun,
+    StepDisplay,
     ThemeDetailOut,
     ThemeListOut,
     ThemeOut,
@@ -91,7 +93,7 @@ from curation.manifest.builder import ManifestBuild
 from curation.manifest.heartbeat import HeartbeatReading
 from curation.persistence.backup import BackupReading
 from curation.persistence.discovery_records import CandidateImage, CandidateWork, DiscoveryRun, InitiatedBy
-from curation.persistence.records import Artist, MatColor, Original, Source, Theme, WorkFacet
+from curation.persistence.records import Artist, Directive, MatColor, Original, Source, Theme, WorkFacet
 from curation.services.catalogue import FacetGroup, RenditionView
 from curation.services.container import Services
 from curation.services.discovery import VerdictOutcome
@@ -295,6 +297,27 @@ def clear_wall(request: Request, wall_id: str) -> WallOut:
     services = _services(request)
     services.display.clear_wall(wall_id)
     return _wall(services.display.get_wall_view(wall_id))
+
+
+@router.post("/directives")
+def step_display(request: Request, body: StepDisplay) -> DirectiveOut:
+    """Tell the display serving one wall to move on to the next work.
+
+    **The Walls screen's `next`, and until now the one screen action with an MCP
+    action and no HTTP route at all.** `art_display(action='next')` has stepped a
+    wall since the tool surface was built; the browser could only ever *read*
+    `directive_sequence` off a manifest, so a curator standing in front of the
+    television had no way to do the one thing they were most likely to want.
+
+    The shape was left open while a directive was still a singleton, on the
+    grounds that writing an installation-wide route would be writing the shape
+    that had to change. It is per wall now, so the wall is named here as it is
+    named in every other act that changes one.
+
+    It returns the directive rather than the wall: what a step changes is what
+    the wall was told to do, and nothing about what hangs there.
+    """
+    return _directive(_services(request).display.step_display(body.wall_id))
 
 
 # -- the wall -----------------------------------------------------------------
@@ -768,6 +791,14 @@ def _wall(view: WallView) -> WallOut:
         theme=None if view.hanging is None else _theme(view.hanging),
         directive_sequence=view.directive.sequence,
         pinned_work_id=view.directive.pinned_work_id,
+    )
+
+
+def _directive(directive: Directive) -> DirectiveOut:
+    return DirectiveOut(
+        wall_id=directive.wall_id,
+        sequence=directive.sequence,
+        pinned_work_id=directive.pinned_work_id,
     )
 
 
