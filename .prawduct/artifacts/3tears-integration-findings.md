@@ -364,3 +364,32 @@ contract-discipline suite forbids layer names — `Adapter`, `Call`, `Aggregate`
 `Extract`, `Select`, `Bind` — inside type names, so that re-cutting the layers stays
 cheap. Their result type is `Shortlist` rather than `Selection` for that reason, and
 their names will keep reading that way.
+
+**Consuming the seam would not mean taking the framework — and that is a different
+package from the one this file spent July refusing.** The dependency argument
+recorded above is about **`3tears-models`**, which pulls `3tears-observe`,
+`3tears-media-contracts`, `anthropic`, three langchain adapters and `jsonschema`
+into a default install on the Pi. **`3tears-search` is a separate, leaf package**:
+they report that `threetears.search.aggregate` and `threetears.search.select` import
+only `threetears.media` and `threetears.search` — no core, no agent, no `httpx`, no
+`torch` — and that `3tears-search` does not depend on `3tears-core` at all. So the
+July refusal does not automatically transfer to this seam, and the decision would
+have to be made on its own footprint rather than inherited.
+
+**Their own caveat, which is the load-bearing half: that is a fact verified once,
+not a test that holds it.** Their import-cost suite probes `threetears.search.contracts`
+alone, and extending it to the stage modules is owed rather than done. An allowlist
+that does not cover the module you import is not evidence about that module. **So
+re-verify the footprint at the point of adopting, rather than citing this
+paragraph** — it records what was true on 2026-08-12 and names who would have to
+break it, which is anyone adding an innocent-looking import upstream of us.
+
+**And the schedule was corrected in their direction, not ours.** Their case for
+building the seam now was that a seam with one implementer ships inert, and that this
+product was available to be that second implementer. Told that this product is
+available to *elicit* a contract but not to *consume* one, they split step 4 —
+sketch and review now, build when there is a consumer — on the grounds that building
+it now produces exactly the inert seam the argument was meant to prevent. The
+elicitation half was kept and has already paid: two of the four answers above
+contradict what they would otherwise have specified. Nothing here waits on a build
+date, and their release gate never depended on this repo.
