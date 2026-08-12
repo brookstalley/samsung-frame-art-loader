@@ -629,10 +629,20 @@ _THEME_ID = Param(
     required=True,
 )
 
+#: One description across `add` and `reorder`, because every action's parameters
+#: flatten onto a single wire schema and only the first description survives —
+#: which is why the two actions were made to mean the same thing by the word.
+#: They did not: an add wrote this number into a column as a sort key while a
+#: reorder had become an index, and one sentence could not say both.
 _POSITION = Param(
     name="position",
     type="integer",
-    description="Where the work sits in the theme's order. Omit to leave it unplaced, which sorts after placed works.",
+    description=(
+        "Where the work goes in the theme's order, counting from zero — an index into the list "
+        "action='works' returns, not a number stored on the work: the works around it make room. "
+        "Past the end means last. Omit on add to put the work at the end; omit on reorder to return "
+        "it to unplaced, which sorts after placed works."
+    ),
     minimum=0,
 )
 

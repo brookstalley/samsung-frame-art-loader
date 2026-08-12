@@ -696,6 +696,21 @@ convenient".
   computes. Focus visibility is therefore not a matter of care.
 - Icon-only controls carry `aria-label` naming the work they act on — *"Move
   Composition VIII earlier"*, not *"Move earlier"*.
+- **So do labelled controls whose visible words repeat across sibling panels** —
+  *"Delete Winter"*, not *"Delete"*. Amended 2026-08-12 after Critic review found
+  the Theme screen emitting an identical `Name` field and bare `Rename`/`Delete`
+  buttons once per theme: the words were not the problem, the repetition was.
+  Somebody moving through the form controls one at a time hears the same three
+  announcements N times and can only reconstruct which panel they are in from
+  reading order — on a control that destroys something. The original rule said
+  *icon-only* because that is where the product had met the problem; the thing it
+  was protecting is a control being distinguishable from its siblings, and a
+  visible word shared by every sibling fails that as completely as no word at all.
+  *(My reading of what the rule was for, ratified by nobody — challenge it if the
+  repetition ever turns out to be the cheaper thing to live with.)*
+  Where the name can change under the control, re-apply it when it does: a button
+  announcing a theme by its old name is worse than one announcing no theme, and
+  nothing on screen shows it going stale because the visible words never move.
 
 **The one focus rule that is about correctness rather than convention: a poll must
 never move focus.** The built surface shipped a two-second poll that stole focus on

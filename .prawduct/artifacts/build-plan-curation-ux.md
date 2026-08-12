@@ -865,7 +865,8 @@ split was made to end, and it will not announce itself as having done so.
     on sight; it removes a work from a *theme* rather than from the catalogue, so
     the fix is a label that says which ("Remove from Winter"), not a rename to
     Archive. And its "hang on {wall}" button fires with no confirmation at all,
-    while flow 6 requires one; it adopts `core/confirm.js`, built for wave 2
+    while flow 6 requires one; it adopts
+  `curation/src/curation/http/static/core/confirm.js`, built for wave 2
 - **Tests:** integration — delete refuses a theme hung on any wall and permits the
   last unhung one; the refusal message is the normative sentence. Browser — reorder
   persists and repaints from the response

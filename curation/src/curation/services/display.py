@@ -442,17 +442,46 @@ class DisplayService:
         )
 
     def add_to_theme(self, *, theme_id: str, artwork_id: str, position: int | None = None) -> ThemeMembership:
-        """Place a work in a theme, optionally at a curated position."""
+        """Put a work in a theme, at a place in the order or at the end of it.
+
+        **`position` is an index here for the same reason it is one on a move**,
+        and saying nothing means the end rather than nowhere. Ruled by the
+        operator on 2026-08-12, when the two had drifted apart: an add wrote the
+        number it was handed into the column as a sort key while a move had
+        become an index, so one MCP parameter description was covering two
+        meanings — and, worse, every work added through a screen or a tool came
+        out *unplaced*, because nothing a curator touches sends a number. The
+        list a surface renders is placed-then-unplaced; the list a move renumbers
+        was the placed ones alone. Two different lists, indexed against each
+        other, which is a reorder that does nothing or moves the work the way it
+        was not asked to go.
+
+        Making an add place the work is what collapses them into one list, for
+        every caller rather than for the one screen that noticed. `position=None`
+        on a *move* still means unplaced — that is a curator saying they have no
+        opinion, which is a thing to be able to say; an add has no opinion to
+        express yet, and the end of the order is where a work with nothing said
+        about it goes.
+
+        The insert renumbers what it displaces, in one transaction: writing the
+        number and stopping is what left two rows tied on a position with
+        `added_at` picking the winner, and an add can produce that tie exactly as
+        a move could.
+        """
         self.get_theme(theme_id)
         self._catalogue.get_artwork(artwork_id)
+        target = self._require_position(position)
         membership = ThemeMembership(
             theme_id=theme_id,
             artwork_id=artwork_id,
             added_at=datetime.now(UTC),
-            position=self._require_position(position),
+            position=None,
         )
-        store_write(self._store.add_membership, membership)
-        return membership
+        with self._store.transaction():
+            others = list(self._store.list_memberships(theme_id))
+            index = len(others) if target is None else min(target, len(others))
+            self._renumber(others[:index] + [membership] + others[index:], new=membership)
+        return replace(membership, position=index)
 
     def move_in_theme(self, *, theme_id: str, artwork_id: str, position: int | None) -> ThemeMembership:
         """Move a work to a place in the curated order, or return it to unplaced.
@@ -468,44 +497,68 @@ class DisplayService:
         nothing renumbers — and the Theme screen's ↓ button had never once
         reordered anything.
 
-        The renumber leaves the placed works dense from zero, so the index a
-        surface reads off the list it was given is the index it can send back.
-        An index past the end lands at the end rather than being refused: the
-        list a curator is looking at is the one they are moving within, and there
-        is no wrong answer to "put this last" worth a refusal.
+        The renumber leaves the order dense from zero, so the index a surface
+        reads off the list it was given is the index it can send back. An index
+        past the end lands at the end rather than being refused: the list a
+        curator is looking at is the one they are moving within, and there is no
+        wrong answer to "put this last" worth a refusal.
+
+        **The whole list is renumbered, not the placed part of it.** `theme_works`
+        hands a surface the placed works and then the unplaced ones as one list,
+        and a surface can only index against what it was handed — so renumbering
+        the placed subset alone made the index mean something the sender never
+        meant. Anything sitting unplaced therefore acquires the place it was
+        already being shown at, which changes no order anybody can see.
 
         **Unplaced is still a real destination**, and it is not the same as last.
         `None` means the curator has said nothing about where this work goes;
         `theme_works` puts those after the placed ones, and returning a work to
         it renumbers what is left rather than leaving a hole in the sequence.
 
-        One transaction, because a partial renumber is an order no curator asked
-        for and no error message would describe.
+        One transaction, and the read of the order is inside it: a partial
+        renumber is an order no curator asked for and no error message would
+        describe, and an order read before the lock is one another move may
+        already have replaced.
         """
-        membership = self._store.get_membership(theme_id, artwork_id)
-        if membership is None:
-            raise ServiceError(f"Artwork {artwork_id!r} is not in theme {theme_id!r}.")
         target = self._require_position(position)
-        # Everything else that has been placed, in the order it is read in.
-        others = [
-            entry
-            for entry in self._store.list_memberships(theme_id)
-            if entry.artwork_id != artwork_id and entry.position is not None
-        ]
-        if target is None:
-            placed, moved = others, replace(membership, position=None)
-        else:
-            index = min(target, len(others))
-            placed, moved = others[:index] + [membership] + others[index:], replace(membership, position=index)
         with self._store.transaction():
-            for place, entry in enumerate(placed):
-                if entry.position != place:
-                    store_write(self._store.update_membership, replace(entry, position=place))
-            # The moved row is in `placed` unless it is on its way to unplaced,
-            # where nothing above would write it.
+            membership = self._store.get_membership(theme_id, artwork_id)
+            if membership is None:
+                raise ServiceError(f"Artwork {artwork_id!r} is not in theme {theme_id!r}.")
+            # Everything else, in the order a surface would have been handed it.
+            others = [entry for entry in self._store.list_memberships(theme_id) if entry.artwork_id != artwork_id]
             if target is None:
+                moved = replace(membership, position=None)
+                self._renumber(others)
+                # The moved row is not in that list, so nothing above writes it.
                 store_write(self._store.update_membership, moved)
+            else:
+                index = min(target, len(others))
+                self._renumber(others[:index] + [membership] + others[index:])
+                moved = replace(membership, position=index)
         return moved
+
+    def _renumber(self, order: Sequence[ThemeMembership], *, new: ThemeMembership | None = None) -> None:
+        """Write a theme's entries out as dense positions from zero.
+
+        Dense is what makes an index a round trip: a gap or a repeat still reads
+        as a sensible order for a while and then loses a tie to `added_at`, which
+        looks like a move that did nothing rather than like a corrupted sequence.
+
+        `new` is the one entry that has never been stored, told apart by identity
+        rather than by id because a duplicate add puts *two* entries here with the
+        same `artwork_id` — the row already in the theme and the row being added.
+        Either match refuses that add, since one of the two inserts always
+        collides; identity is used because it describes which row is meant rather
+        than relying on the refusal to make the ambiguity moot. Callers hold this
+        inside a transaction, which is what turns that refusal into a rollback
+        rather than a half-renumbered order.
+        """
+        for place, entry in enumerate(order):
+            if entry is new:
+                store_write(self._store.add_membership, replace(entry, position=place))
+            elif entry.position != place:
+                store_write(self._store.update_membership, replace(entry, position=place))
 
     def remove_from_theme(self, *, theme_id: str, artwork_id: str) -> None:
         """Take a work out of a theme. The work itself is untouched."""

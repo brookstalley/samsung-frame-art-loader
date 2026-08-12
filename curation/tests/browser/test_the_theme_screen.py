@@ -1,10 +1,10 @@
 """The four acts that are a theme's own, in a real browser against a real server.
 
-Membership is edited from the grid, against the works being organised. What is
-left on this screen is what is genuinely about the theme rather than about a
-work — its name, the order its works reach the wall in, where it hangs, and
-whether it exists — and none of it is expressible as JSON, so neither Python
-suite runs a line of it.
+A theme's name, the order its works reach the wall in, where it hangs, and
+whether it exists — none of it expressible as JSON, so neither Python suite runs
+a line of it. Membership is edited here as well as from the grid: the grid is
+where a theme gets built, and this is where a curator already looking at the
+order drops one out of it.
 
 **Two of these are debts this screen carried into the chunk that owns it.** Its
 membership control read "Remove", which promises a *work* is gone when it is
@@ -72,6 +72,25 @@ def _first_row_becomes(ui, title):
     )
 
 
+def _row_becomes(ui, index, title):
+    """`_first_row_becomes` for a move that leaves the first row where it was."""
+    ui.page.wait_for_function(
+        "([index, title]) => { const cells = document.querySelectorAll('tbody tr td:nth-child(2)');"
+        " return cells[index] && cells[index].textContent === title; }",
+        arg=[index, title],
+    )
+
+
+def _count(ui):
+    """The member count on the panel that has a member table — Winter's, in every fixture here."""
+    return ui.page.locator(".panel", has=ui.page.locator("tbody tr")).locator("p.muted").first.inner_text()
+
+
+def _labels(ui, selector):
+    """Every accessible name matching the selector, which Playwright has no one call for."""
+    return sorted(ui.page.locator(selector).evaluate_all("els => els.map((el) => el.getAttribute('aria-label'))"))
+
+
 def _confirm(ui, label):
     ui.page.wait_for_selector("dialog.confirm[open]")
     ui.page.click(f"dialog.confirm .confirm-actions button:has-text('{label}')")
@@ -95,6 +114,38 @@ class TestReordering:
         ui.open("#theme")
         _painted(ui)
         assert _titles(ui) == ["Blue Poles", "Autumn Rhythm", "Convergence"]
+
+    def test_a_work_added_through_this_screen_can_then_be_moved(self, ui, winter, service):
+        """The whole round trip through the doors a curator actually uses.
+
+        Every other test here starts from a fixture that hands `add_to_theme` an
+        explicit dense position, and the Add button posts an artwork and nothing
+        else — so the shape those fixtures build is one no browser can produce.
+        While an add left the work unplaced, the list this table renders and the
+        list the service renumbered were different lists, and a move against a
+        theme built this way either did nothing or sent the work the wrong way.
+        Adding first is what makes this test able to see that.
+        """
+        service.add_artwork(title="Number 1")
+        ui.open("#theme")
+        _painted(ui)
+
+        ui.page.select_option(f"#add-{winter.id}", label="Number 1")
+        ui.page.click("button:has-text('Add')")
+        ui.page.wait_for_function("() => document.querySelectorAll('tbody tr').length === 4")
+        assert _titles(ui) == [*POLLOCKS, "Number 1"]
+
+        # Waiting on a row that is *not* already what it will become — the first
+        # row never changes here, so waiting on it would wait for nothing and the
+        # assertion below would read the order that was already on screen.
+        ui.page.click("button[aria-label='Move Number 1 earlier']")
+        _row_becomes(ui, 2, "Number 1")
+        assert _titles(ui) == ["Autumn Rhythm", "Blue Poles", "Number 1", "Convergence"]
+
+        # And back down, which is the direction that had never worked.
+        ui.page.click("button[aria-label='Move Number 1 later']")
+        _row_becomes(ui, 2, "Convergence")
+        assert _titles(ui) == ["Autumn Rhythm", "Blue Poles", "Convergence", "Number 1"]
 
     def test_the_table_is_painted_from_the_answer_and_not_from_the_move_it_sent(self, ui, winter):
         """`POST .../position` answers with the resulting order precisely so this is possible.
@@ -172,8 +223,73 @@ class TestTheMembershipControl:
 
         assert _titles(ui) == ["Autumn Rhythm", "Convergence"]
 
+    def test_the_theme_says_how_many_works_it_holds(self, ui, winter):
+        """The count `information-architecture.md` makes this screen's secondary content.
+
+        The numbered column is not it: reading the last row's number is
+        arithmetic performed on a table, and a curator deciding whether a theme
+        is worth hanging wants the size stated. It follows a removal because an
+        add and a remove both answer with the new order, so a count painted once
+        would be wrong on the second glance rather than absent.
+        """
+        ui.open("#theme")
+        _painted(ui)
+        assert _count(ui) == "3 works"
+
+        ui.page.click("button[aria-label='Remove Blue Poles from Winter']")
+        ui.page.wait_for_function("() => document.querySelectorAll('tbody tr').length === 2")
+
+        assert _count(ui) == "2 works"
+
+    def test_one_work_is_not_one_works(self, ui, winter):
+        """The count is read, so it is written the way it is read."""
+        ui.open("#theme")
+        _painted(ui)
+
+        for title in ("Blue Poles", "Convergence"):
+            ui.page.click(f"button[aria-label='Remove {title} from Winter']")
+        ui.page.wait_for_function("() => document.querySelectorAll('tbody tr').length === 1")
+
+        assert _count(ui) == "1 work"
+
 
 class TestRenaming:
+    def test_the_controls_that_act_on_a_theme_say_which_theme(self, ui, winter, services):
+        """Three themes, three identical panels, and one of these buttons destroys something.
+
+        `accessibility-spec.md` asks a control to name what it acts on, and the
+        membership table in this same panel already does. These three did not:
+        somebody moving through the form controls one at a time heard "Name, edit
+        text", "Rename", "Delete" once per theme with nothing distinguishing
+        them, and had to reconstruct which panel they were in from reading order.
+        Two themes rather than one, because with one theme every naming scheme
+        including no scheme at all announces unambiguously.
+        """
+        services.display.add_theme(name="Late night")
+        ui.open("#theme")
+        _painted(ui)
+
+        assert _labels(ui, "button[aria-label^='Rename ']") == ["Rename Late night", "Rename Winter"]
+        assert _labels(ui, "button[aria-label^='Delete ']") == ["Delete Late night", "Delete Winter"]
+        assert ui.page.get_attribute(f"#rename-{winter.id}", "aria-label") == "Name of Winter"
+
+    def test_the_accessible_names_follow_the_new_name_too(self, ui, winter):
+        """A control announcing a theme by its old name is worse than one naming none.
+
+        The visible words on these three never change, so nothing on screen shows
+        this going stale — which is exactly why it would.
+        """
+        ui.open("#theme")
+        _painted(ui)
+
+        ui.page.fill("#rename-" + winter.id, "Late night")
+        ui.page.click("button[aria-label='Rename Winter']")
+        ui.page.wait_for_selector("h3:has-text('Late night')")
+
+        assert ui.page.locator("button[aria-label='Delete Late night']").count() == 1
+        assert ui.page.locator("button[aria-label='Delete Winter']").count() == 0
+        assert ui.page.get_attribute(f"#rename-{winter.id}", "aria-label") == "Name of Late night"
+
     def test_the_heading_and_the_membership_controls_both_follow_the_new_name(self, ui, winter):
         """Two places name the theme, and a rename that moved one is worse than neither.
 
@@ -352,10 +468,9 @@ class TestDeleting:
         _painted(ui)
         assert sorted(ui.page.locator(".panel h3").all_inner_texts()) == ["Late night", "New theme", "Winter"]
 
-        # Winter's panel, not Late night's: there is a Delete per theme, and the
-        # rename field is what tells one panel from another.
-        winters = ui.page.locator(".panel").filter(has=ui.page.locator(f"#rename-{winter.id}"))
-        winters.locator("button:has-text('Delete')").click()
+        # Winter's Delete, not Late night's — named, so choosing it needs nothing
+        # about the panel it sits in.
+        ui.page.click("button[aria-label='Delete Winter']")
         _confirm(ui, "Delete")
         ui.page.wait_for_selector("h3:has-text('Winter')", state="detached")
 

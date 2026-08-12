@@ -459,25 +459,29 @@ Join entity. Explicit rather than implicit so ordering can be curated.
 |---|---|---|---|
 | `theme_id` | UUID | FK → Theme, PK part | |
 | `artwork_id` | UUID | FK → Artwork, PK part | |
-| `position` | integer | nullable | Curator-defined order; null ⇒ unordered/shuffle. |
+| `position` | integer | nullable | Curator-defined order, dense from zero. Null ⇒ the curator has said nothing about where this work goes, and it sorts after the placed ones. Reachable only by asking for it on a *move* — an add places the work. |
 | `added_at` | datetime | auto | |
 
 > **Q1.**
 
-> **The column is a sort key; a *move* is an index — and the two being different is
-> now a contract rather than an implementation detail.** Recorded 2026-08-12, when
-> the Theme screen's reorder was built and the existing one turned out never to have
-> worked downward. `move_in_theme` renumbers the placed works densely so the index a
-> surface reads off the list it was handed is the index it can send back, which is
-> what makes a ↓ button possible at all: writing the number and stopping left the
-> moved row tied with its neighbour, and `list_memberships` breaks a tie on
-> `added_at`, so the older row won and nothing appeared to happen.
+> **The column holds a place in the order; every caller states an *index* and the
+> service computes the column.** Recorded 2026-08-12, when the Theme screen's reorder
+> was built and the existing one turned out never to have worked downward; completed
+> the same day by the operator's ruling on #132, which brought `add_to_theme` into
+> line after Critic review found the reorder still wrong for every theme the product
+> could actually build. `add_to_theme` and `move_in_theme` both insert at the index
+> and renumber densely around it, so the index a surface reads off the list it was
+> handed is the index it can send back — which is what makes a ↓ button possible at
+> all. Writing the number and stopping left the moved row tied with its neighbour,
+> and `list_memberships` breaks a tie on `added_at`, so the older row won and nothing
+> appeared to happen.
 >
-> The row above stays accurate — this is about who computes the number, not what the
-> column holds. **`add_to_theme` has not been brought into line and is a filed
-> question**, so until it is ruled on, `position` means an index on `reorder` and a
-> sort key on `add`. Reasoning and the test that pins the old semantics are in
-> `api-contract.md` § the theme routes.
+> **An add therefore places the work**, at the end unless it says otherwise, and the
+> renumber on a move spans the whole listing rather than its placed prefix. Both
+> exist to keep the list a surface renders and the list the service renumbers the
+> same list; a null position survives as something a curator can ask for on a move
+> and as something no add produces. Reasoning is in `api-contract.md` § the theme
+> routes.
 
 ### Wall
 

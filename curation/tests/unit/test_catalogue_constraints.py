@@ -611,13 +611,25 @@ def test_a_negative_position_is_refused(service, display):
         display.add_to_theme(theme_id=theme.id, artwork_id=work.id, position=-1)
 
 
-def test_placing_a_work_in_a_theme_twice_is_refused(service, display):
+def test_placing_a_work_in_a_theme_twice_is_refused(service, display, store):
+    """And refused whole: an add now renumbers the works it displaces.
+
+    The insert and the renumber are one transaction precisely so a refused add
+    cannot leave the order rearranged around a work that was never added — which
+    would be a reorder nobody asked for, reported as an error about something
+    else.
+    """
     work = _work(service)
+    other = _work(service, "Chop Suey")
     theme = display.add_theme(name="Hopper")
     display.add_to_theme(theme_id=theme.id, artwork_id=work.id)
+    display.add_to_theme(theme_id=theme.id, artwork_id=other.id)
 
     with pytest.raises(ServiceError, match="Could not store"):
-        display.add_to_theme(theme_id=theme.id, artwork_id=work.id)
+        display.add_to_theme(theme_id=theme.id, artwork_id=work.id, position=0)
+
+    assert [membership.artwork_id for membership in store.list_memberships(theme.id)] == [work.id, other.id]
+    assert [membership.position for membership in store.list_memberships(theme.id)] == [0, 1]
 
 
 def test_moving_or_removing_a_work_that_is_not_in_the_theme_is_refused(service, display):

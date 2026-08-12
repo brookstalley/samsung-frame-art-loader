@@ -895,9 +895,12 @@ class StepDisplay(BaseModel):
 
 
 class AddWork(BaseModel):
-    """A work to place in a theme, optionally at a chosen position."""
+    """A work to place in a theme, at a chosen index or at the end of the order."""
 
     artwork_id: str
+    #: An index into the order the theme is displayed in, not a number stored on
+    #: the work. Null puts it last — the screens send nothing, and a work nobody
+    #: has placed belongs at the end rather than outside the order.
     position: int | None = None
 
 

@@ -1398,24 +1398,39 @@ least likely to be looking at pace. A route that can only rename cannot do that.
 day a screen genuinely edits pace, it earns a model that says so explicitly rather
 than inheriting one that can.
 
-**`POST .../position` takes an index, not a sort key — settled 2026-08-12, and it
-was a defect until then.** The work lands *at* that place and the placed works
-renumber densely around it. What it replaced wrote the number into the column and
-stopped, which sounds equivalent and is not: `list_memberships` breaks a tie on
-`added_at`, so a work sent from 0 to 1 landed level with the work already there and
-sorted ahead of it again, being the older row. Moving a work **up** worked; moving it
-**down** did nothing at all, and the Theme screen's ↓ button had never once
+**`position` is an index on both `add` and `POST .../position`, never a sort key —
+settled 2026-08-12, and it was a defect until then.** The work lands *at* that place
+and the works renumber densely around it. What it replaced wrote the number into the
+column and stopped, which sounds equivalent and is not: `list_memberships` breaks a
+tie on `added_at`, so a work sent from 0 to 1 landed level with the work already
+there and sorted ahead of it again, being the older row. Moving a work **up** worked;
+moving it **down** did nothing at all, and the Theme screen's ↓ button had never once
 reordered anything. An index past the end lands at the end rather than refusing —
-there is no wrong answer to "put this last" worth an error — and `null` still means
-unplaced, which is a real destination and is not the same as last.
+there is no wrong answer to "put this last" worth an error.
 
-> **`add` has not been changed to match, and the inconsistency is real.**
-> `add_to_theme(position=N)` still writes a sort key, so one parameter now means two
-> things on two actions and `_POSITION`'s single wire description covers both. Making
-> them agree would change what `test_q1_which_works_belong_to_a_theme…` asserts, and
-> a test is a contract — so this is a ruling to take, not a tidy-up to perform. It
-> also decides insert-before versus insert-after for `add`, which no artifact
-> states. Filed rather than folded into the chunk that found it.
+**Omitting it means the end on an add and unplaced on a reorder, and the asymmetry
+is the point.** A curator returning a work to unplaced is saying they have no opinion
+about where it goes, which is a thing worth being able to say; a curator adding a
+work has no opinion to express yet, and the end is where a work nobody has placed
+belongs. This is what makes the list a surface renders and the list the service
+renumbers **one list**: nothing a curator or a tool can reach sends a position, so
+when an add left the work unplaced, every theme the product could actually build had
+a placed prefix the renumber walked and an unplaced tail the surface still indexed
+against. Two lists indexed against each other is a reorder that does nothing, or one
+that moves the work the way it was not asked to go.
+
+> **The operator ruled this on 2026-08-12**, closing #132, after Critic review found
+> the reorder shipped in this chunk still broken for every theme built through the
+> screen that shipped with it. The alternatives were renumbering the full list on a
+> move while leaving `add` alone — which reaches the same end state by drift, since
+> the first move places everything — and having the Theme screen send an index,
+> which fixes one screen and leaves the same defect reachable from a conversation.
+>
+> It changes what `test_q1_which_works_belong_to_a_theme…` sets up. The claim that
+> test makes — `theme_works` returns the curated order — is unchanged and still
+> asserted; the two adds that expressed an order by writing sort keys express the
+> same order by index instead. A test is a contract here, and a ruling is how a
+> contract changes.
 
 > **The question was put to the operator as though nothing were built, and that
 > framing was wrong** — found by Critic review, R-8, on the commit that recorded the

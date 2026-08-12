@@ -3,10 +3,17 @@
  * **Contextual, not a destination.** `information-architecture.md` records the
  * change and the reason: a theme is a saved selection over the collection, not a
  * parallel noun, and promoting it to a peer of the collection is what forces a
- * curator to hold the mapping between the two in their head. Membership is
- * edited from the grid, against the works being organised; what is left here is
- * what is genuinely about the theme rather than about a work — its name, the
+ * curator to hold the mapping between the two in their head. What belongs here
+ * is what is genuinely about the theme rather than about a work — its name, the
  * order its works reach the wall in, where it hangs, and whether it exists.
+ *
+ * **Membership is edited from the grid *and* here, and the duplication is
+ * deliberate.** Putting works into a theme is organising, and organising happens
+ * against the works being organised, which is why the collection screen carries
+ * a selection and an "Add to theme" — that is the path a curator building a
+ * theme takes. The picker and the per-row remove below are the other job: a
+ * curator already looking at this theme's order, deciding one of these does not
+ * belong, should not have to go and find it in a grid of everything to say so.
  *
  * **Every write repaints from the answer it was given.** `POST`/`DELETE` on a
  * theme's works return the resulting order and the delete returns the themes
@@ -94,49 +101,83 @@ function themePanel(placement, walls, allWorks, repaintThemes) {
   }
 
   const body = el("div", { class: "stack" }, [el("p", { class: "muted", text: "Loading works…" })]);
+  /* **How many works are in here, said in words rather than left to be counted.**
+   * `information-architecture.md` § Information Hierarchy makes the count this
+   * screen's secondary content, and the numbered column is not it: a curator
+   * deciding whether a theme is worth hanging wants the size, and reading the
+   * last row's number is arithmetic performed on a table that may not be on
+   * screen. Repainted with the list rather than rendered once, because an add
+   * and a remove both change it and both answer with the new order. */
+  const count = el("span", { class: "muted" });
   // Held rather than only rendered, so a rename can relabel the membership
   // controls without asking the server for an order it has already been given.
   let members = [];
   const paintMembers = (works) => {
     members = works;
+    count.textContent = members.length === 1 ? "1 work" : `${members.length} works`;
     body.replaceChildren(memberList(theme.theme_id, currentName, members, paintMembers));
   };
   // The one read here that is a read: nothing has answered with this theme's
   // works yet, because the listing this panel was built from does not carry them.
   guard(async () => paintMembers((await api(`/api/themes/${encodeURIComponent(theme.theme_id)}`)).works));
 
-  const rename = el("input", { type: "text", id: `rename-${theme.theme_id}`, value: currentName });
+  const rename = el("input", {
+    type: "text",
+    id: `rename-${theme.theme_id}`,
+    value: currentName,
+    "aria-label": `Name of ${currentName}`,
+  });
+  const renameButton = el("button", {
+    class: "action quiet",
+    type: "button",
+    text: "Rename",
+    "aria-label": `Rename ${currentName}`,
+    onclick: () =>
+      guard(async () => {
+        const renamed = await api(`/api/themes/${encodeURIComponent(theme.theme_id)}`, {
+          method: "POST",
+          body: JSON.stringify({ name: rename.value }),
+        });
+        currentName = renamed.name;
+        heading.textContent = currentName;
+        rename.value = currentName;
+        nameTheControls();
+        // The membership controls name the theme they remove from, so they
+        // are repainted too — a table still offering "Remove from Winter"
+        // under a heading that reads "Late night" is one a curator has to
+        // work out which of the two to believe.
+        paintMembers(members);
+      }),
+  });
+  const deleteButton = el("button", {
+    class: "action quiet",
+    type: "button",
+    text: "Delete",
+    "aria-label": `Delete ${currentName}`,
+    onclick: () => guard(() => remove(theme.theme_id, currentName, repaintThemes)),
+  });
+  /* **Every theme on this screen renders the same three controls, so the visible
+   * words cannot tell them apart.** A curator reading the panel has the heading
+   * above to go on; somebody moving through the form controls one at a time hears
+   * "Name, edit text" and "Rename" and "Delete" once per theme, with the panel
+   * they belong to reconstructible only from the reading order — on a control that
+   * destroys something. `accessibility-spec.md` asks a control to name what it acts
+   * on, and the membership table in this same panel already does ("Remove Blue
+   * Poles from Winter"). Re-applied after a rename for the reason the membership
+   * controls are repainted: a label naming a theme by its old name is worse than
+   * one naming no theme at all. */
+  const nameTheControls = () => {
+    rename.setAttribute("aria-label", `Name of ${currentName}`);
+    renameButton.setAttribute("aria-label", `Rename ${currentName}`);
+    deleteButton.setAttribute("aria-label", `Delete ${currentName}`);
+  };
   const renameRow = el("div", { class: "row" }, [
     el("div", { class: "field" }, [
       el("label", { for: `rename-${theme.theme_id}`, text: "Name" }),
       rename,
     ]),
-    el("button", {
-      class: "action quiet",
-      type: "button",
-      text: "Rename",
-      onclick: () =>
-        guard(async () => {
-          const renamed = await api(`/api/themes/${encodeURIComponent(theme.theme_id)}`, {
-            method: "POST",
-            body: JSON.stringify({ name: rename.value }),
-          });
-          currentName = renamed.name;
-          heading.textContent = currentName;
-          rename.value = currentName;
-          // The membership controls name the theme they remove from, so they
-          // are repainted too — a table still offering "Remove from Winter"
-          // under a heading that reads "Late night" is one a curator has to
-          // work out which of the two to believe.
-          paintMembers(members);
-        }),
-    }),
-    el("button", {
-      class: "action quiet",
-      type: "button",
-      text: "Delete",
-      onclick: () => guard(() => remove(theme.theme_id, currentName, repaintThemes)),
-    }),
+    renameButton,
+    deleteButton,
   ]);
 
   return el("div", { class: "panel" }, [
@@ -152,6 +193,10 @@ function themePanel(placement, walls, allWorks, repaintThemes) {
           ])
         : null,
     ]),
+    // Below the heading rather than inside it: the heading is the theme's name,
+    // and a count spliced into it becomes part of the name everywhere a heading
+    // is read back — including by anything listing the themes on this screen.
+    el("p", { class: "muted" }, [count]),
     theme.description ? el("p", { class: "muted", text: theme.description }) : null,
     renameRow,
     el("div", { class: "row" }, [
