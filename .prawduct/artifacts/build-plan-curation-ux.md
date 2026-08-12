@@ -240,6 +240,26 @@ by the main agent.
 worktree. What the agent needs is **inlined in its prompt** — which is what the brief
 described under § Model tiers produces — and the prompt outranks any file it finds.
 
+**And it cannot read this plan either. Measured 2026-08-12, on the first dispatch:
+an isolated worktree is branched from the DEFAULT BRANCH, not from the dispatching
+agent's HEAD.** Chunk 03's agent forked at `ed68653` while the branch that dispatched
+it stood at `4ae0130`, so every commit on the feature branch — this plan and every
+amendment to it — was simply absent. The agent noticed and said so; that was its
+diligence, not the design working.
+
+**Committing the plan is therefore NOT sufficient**, which is the opposite of what a
+builder would reasonably assume. Two remedies, and prefer the first:
+
+- **Inline the chunk's spec in the prompt.** Self-contained, and the prompt is the one
+  thing an agent cannot fail to receive.
+- Or give the agent the retrieval command, which needs no checkout and no merge:
+  `git show <feature-branch>:.prawduct/artifacts/build-plan-curation-ux.md`.
+
+Everything under `.prawduct/artifacts/` that was already on the default branch — the
+data model, the API contract, the preferences — is present and current. It is only
+work committed on the feature branch that vanishes, which is exactly the work most
+likely to matter to the chunk being built.
+
 ### Model tiers
 
 **opus builds every chunk.** Each one writes product code against ratified norms,
@@ -388,9 +408,36 @@ split was made to end, and it will not announce itself as having done so.
     requirement in `product-brief.md` item 8
   - `DisplayService.delete_theme`'s refusal generalised from "the active theme while
     another exists" to "a theme hung on any wall"
+  - **An unhang — `DisplayService.clear_wall`, its route and its `art_theme` action.**
+    Added 2026-08-12, during the build, by the agent building this chunk; recorded
+    here because it was missing rather than because it is new. **This chunk's own test
+    below says the refusal "permits the last *unhung* theme"**, and that word
+    presupposes an operation no chunk built. Without it the generalised refusal
+    reinstates the deadlock the 2026-08-11 ruling was made to avoid — that ruling
+    permitted deleting the last theme precisely *because* there was no way to take one
+    down. Supplying the operation is the honest fix; keeping the exception is not,
+    because "the last theme" hung in three rooms would be freely deletable and would
+    blank three walls at once. **Clearing a wall does not advance its directive
+    sequence** — taking a theme down is not an instruction to the display plane, and
+    an advance would fire a directive nobody issued, which is the reasoning
+    `data-model.md` § Directive already records for archiving a pinned work. The
+    *screen* for this belongs to Chunks 05 and 09; this chunk builds the operation
+  - **A wall creator — service method, thin route, `art_wall` action.** Added on the
+    same round and for a plainer reason: **nothing else in this plan creates a wall**,
+    the migration makes exactly one, and this chunk's own tests require a theme on two
+    walls and a `next` on one wall not advancing another's. A service method whose only
+    caller is a test is the smell that names the gap. **Create only** — wall deletion
+    and rename are deliberately out, because deleting a wall raises consequences
+    (its assignment, its directive row, a display configured to serve it) that nothing
+    has ruled on
 - **Tests:** unit — the assignment key rejects a second theme on a wall; the
   migration assigns the active theme and creates exactly one wall; the generalised
-  refusal fires for a theme on two walls and permits the last unhung theme.
+  refusal fires for a theme on two walls and permits the last unhung theme; unhang
+  clears the assignment **without advancing the wall's directive sequence**, and the
+  theme it took down becomes deletable. **The `art_theme` and `art_wall` tips name
+  every refusal their actions can raise** — the tips are the one text with no
+  assertion behind them and a model reads them rather than the docstring, which is
+  drift this repo has taken twice in one chunk.
   Integration — activate names a wall and the published manifest reflects only that
   wall; a `next` on one wall does not advance another's sequence
 - **Acceptance criteria:** the existing single-wall installation behaves identically
