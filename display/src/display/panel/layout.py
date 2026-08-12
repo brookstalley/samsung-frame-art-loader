@@ -163,10 +163,12 @@ class Layout:
 def lay_out(lines: tuple[str, ...], surface: Geometry, measure: Measure, scale: TypeScale) -> Layout:
     """Place the label's lines top-down, dropping from the bottom what will not fit.
 
-    `lines` arrives in wall-label order — title, artist, nationality, dates,
-    date, medium, dimensions — which is also least-droppable first. That ordering
-    is `LabelText.lines`' responsibility and this function's assumption: it drops
-    from the end, so the ordering *is* the priority.
+    `lines` arrives least-droppable first — who made it, what it is called, when,
+    out of what, how big, and any commentary. That ordering is `LabelText.lines`'
+    responsibility and this function's assumption: it drops from the end, so the
+    ordering *is* the priority. **Named by role rather than by field**, because
+    the leading line is composed from four of them and a list of field names here
+    went stale the moment the identification block was collapsed into one line.
 
     `scale` is the device's, not this module's. **The sizes cannot be constants
     here** because how large type has to be is a fact about the reader's distance

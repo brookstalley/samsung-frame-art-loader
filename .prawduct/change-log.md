@@ -54,6 +54,64 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-11: The label leads with the name it can actually set (13B-3)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** The panel spent three lines on a tombstone under a title that consumed
+half the surface, and the artist's name was one undivided string with no way to
+say which part of it a reader scans from across a room. 13B-3 gives the catalogue
+that fact and reorganises the label around it. It was built ahead of 13B-2 and
+13B-4 at the operator's call, because the tombstone collapse reclaims ~260 px
+against a measured slack of ~66 px — a fill model tuned before it would have been
+tuned against figures about to move by four times the slack.
+
+**The catalogue gained three fields, and the manifest carries all three.**
+`Artist.family_name` and `Artist.given_name`, `Artwork.commentary`; manifest
+schema minor 0 → 1, additive, so a display plane that predates them keeps
+working. Files already on disk widen themselves through the store's existing
+additive-column step, which the legacy-file test now asserts for these columns —
+that is the deployed catalogue's actual upgrade path.
+
+**The name split is a written table, not a rule** (`curation/src/curation/seed/names.py`). The
+31 seeded names alone defeat last-word ("Frank Lloyd Wright"), first-word
+("Georgia O'Keeffe") and Western order ("Katsushika Hokusai"), and one record is
+a culture rather than a person. A table can also say *nothing* about a name it
+does not carry, which is the behaviour a guess cannot have: seeding reports such
+an artist and leaves the row unsplit, and the panel prints the whole name. The
+backfill rides the ordinary seeding run — the documented way to fill in what an
+earlier run could not — compares before writing, and touches only the two fields
+no source ever supplied.
+
+**The label's content model changed, and it departs from wall-label convention
+twice, knowingly.** The artist leads the work, and identification, nationality
+and dates arrive as one line. Both were written in `accessibility-spec.md` with
+no chunk against them; both belong to the tier that decides what the lines *are*,
+so both landed here. `LabelText.identification` composes rather than
+concatenates — a missing part shortens the line instead of leaving a hole in it,
+and a work with no artist at all opens with its title rather than an empty line.
+
+**Running it against the real index found the spec wrong about its own data.**
+`accessibility-spec.md` asserted that no data change follows from the demonym
+convention, "because the Art Institute's `artist_display` already supplies the
+adjectival form". It does for 29 of the 31: Moche stores `North coast, Peru` and
+Kandinsky stores a birthplace clause. Left as the institutions published them —
+correcting them is curation content and needs its own ruling — and recorded where
+the wrong claim was. The claim had been read past by every review it went
+through, which is the argument for running a thing rather than reading it.
+
+**Coverage was proven rather than assumed.** Nineteen mutations across both
+planes — the inverted join, the fallback, the part filter, the ordering, the
+backfill's two skip conditions, the report's two branches, the manifest carriage,
+the row mappers — and every one was caught.
+
+**Two things stated rather than shipped.** `commentary` has no writer: seeding
+and acquisition have none to supply, and a curation-surface editor is unplanned,
+so it is null on every work and the line simply does not appear. And the
+four-part identification line is held together by a bold weight **13B-2 has not
+built yet** — until it does, the panel shows four undifferentiated parts, which
+is in `operator-verification.md` so it is not read as a defect.
+
 ## 2026-08-11: The label's type is sized for the reader, not chosen for the panel (13B-1)
 
 <!-- prawduct: chunks=13B | scope=v1-build -->

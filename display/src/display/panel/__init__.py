@@ -3,8 +3,8 @@
 **A display device renders its own label** (`architecture.md` § Direction). What
 crosses from curation is text; everything about how that text is arranged and
 what it lands on is decided here, by the device that owns the surface. This
-package is that decision split into the three parts the norm names, because they
-have genuinely different lifetimes:
+package is that decision split into the parts the norm names — three tiers, and
+the derivation that sizes them — because they have genuinely different lifetimes:
 
 * **`metadata`** — what a label says, read off the manifest entry. Shared by
   every device, knows nothing about geometry or pixels, and changes only when

@@ -57,14 +57,28 @@ from display.panel.pango import PangoRasterizer
 #: label that fits is not interesting, and this is the one the drop rule acts on.
 #: Real values from the corpus rather than lorem, because line breaking depends on
 #: the actual words and "Artist Name" wraps differently from "Katsushika Hokusai".
+#:
+#: **The name parts are here, and leaving them out would be the one omission that
+#: makes this tool lie.** A label with no parts falls back to the whole name
+#: unstyled — correct behaviour, and *not* what a seeded catalogue produces — so a
+#: sample missing them would show the operator the fallback while the wall showed
+#: the real thing. Hokusai is also the case where the parts matter most: the
+#: family name leads in Japanese order, so the wrong split is legible as a
+#: mistake rather than merely different.
 SAMPLE = {
     "title": "Under the Well of the Great Wave off Kanagawa",
     "artist": "Katsushika Hokusai",
+    "artist_family_name": "Katsushika",
+    "artist_given_name": "Hokusai",
     "artist_nationality": "Japanese",
     "artist_dates": "1760–1849",
     "date_created": "c. 1830–32",
     "medium": "Colour woodblock print on paper",
     "dimensions": "25.7 × 37.9 cm (10 1/8 × 14 15/16 in.)",
+    # Present so the preview shows the panel's last-and-first-dropped line
+    # actually being dropped, which is the half of the drop rule that is
+    # invisible in the image and only appears in what this tool prints.
+    "commentary": "One of thirty-six views, and the one that outran the series.",
 }
 
 

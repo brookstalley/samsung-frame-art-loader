@@ -98,7 +98,7 @@ _DETAIL: Final[dict[SeedNote, str]] = {
     ),
     SeedNote.ARTIST_NAME_PARTS_ABSENT: (
         "Nothing says which part of {name} is the family name, so its label sets the whole name unstyled; "
-        "add a line to curation/seed/names.py to have the panel lead with it."
+        "add a line to curation/src/curation/seed/names.py to have the panel lead with it."
     ),
 }
 
@@ -207,6 +207,15 @@ def _name_stored_artists(catalogue: CatalogueService) -> int:
     third writes nothing either. Artists the table does not cover are left alone
     entirely — `_label_notes` reports them per work, which is where a curator is
     already reading.
+
+    **It re-asserts rather than gap-fills, and the difference matters the day
+    something else writes these fields.** A row whose parts disagree with the
+    table is rewritten, not skipped — which is what makes correcting a wrong
+    split a one-line edit here followed by a re-run, and is the only way a
+    correction reaches a catalogue that is already seeded. The same rule would
+    revert a hand-edited split, which nothing can produce today because no
+    surface writes these two fields. Whatever gains one has to rule on which
+    outranks the other; until then this table is the sole author.
     """
     named = 0
     for artist in catalogue.list_artists():

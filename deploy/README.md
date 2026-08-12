@@ -108,11 +108,43 @@ correctly do nothing, which looks like a fault and is not one. Seeding is a
 separate hand-run step and it neither spends nor renders — it carries the mat
 colour from the 2024 index and adopts the renders already in the tree:
 
-    sudo -u tvpi /usr/local/bin/uv run python -m curation.seed <path to all.json>
+    cd /opt/samsung-frame-art-loader/curation && sudo -u tvpi /usr/local/bin/uv run python -m curation.seed <path to all.json>
 
 Then create a theme and activate it, over the JSON API or the browser interface —
 **activation is what publishes the manifest**, and until one is published the
 display plane has nothing to rotate and says so.
+
+**Re-run the same command on a machine that is already seeded, whenever the
+catalogue gains a field.** It creates no works the second time; what it does is
+carry across what an earlier run could not, and it is the only step that does.
+The catalogue *file* upgrades itself — the store adds nullable columns on open —
+but a column is not the same as a value, and the two arrive by different roads:
+
+    cd /opt/samsung-frame-art-loader/curation && sudo -u tvpi /usr/local/bin/uv run python -m curation.seed <path to all.json>
+    sudo systemctl restart curation.service     # republish the manifest
+    sudo systemctl restart display.service      # redraw the label
+
+**Skipping it costs a quieter label rather than an error**, which is why it is
+written here: the artists' family and given names arrived as fields on
+2026-08-11, and until this runs every row still has null ones. The panel then
+prints each artist's whole name unstyled instead of leading with the family name
+— correct behaviour for a record nobody has split, and indistinguishable by eye
+from the feature not working. The command reports which artists it named, and
+names any it could not.
+
+**The name table wins over what is stored, for the names it carries.** A re-run
+does not merely fill blanks: where the table and the row disagree, the row is
+rewritten. That is deliberate and it is how a *wrong* split gets fixed — correct
+the line in the table, re-run, and the wall follows. The cost of the same rule is
+that a hand-edited split would be reverted, which nothing can do today because no
+surface writes those two fields. Anything that gains one has to decide whether it
+outranks the table; until then the table is the only author and the only
+authority. Names the table does not carry are never touched.
+
+Then **check the manifest actually carries the new fields**, because a restart
+that republished nothing looks identical to one that did:
+
+    sudo -u tvpi jq '.schema, .entries[0].label' /srv/art/theme-manifest.json
 
 ### What the first start actually did, and what to expect
 

@@ -830,8 +830,9 @@ def _artist_fields(artist: Artist) -> dict[str, Any]:
         "died": artist.died,
         "lifespan_text": artist.lifespan_text,
         "biography": artist.biography,
-        # Which part of the name the e-paper label sets in bold capitals. Null
-        # where nobody has said, and on a record that is not a person at all.
+        # Which part of the name is the family name — the part the e-paper label
+        # leads with. Null where nobody has said, and on a record that is not a
+        # person at all.
         "family_name": artist.family_name,
         "given_name": artist.given_name,
     }

@@ -217,7 +217,7 @@ def entry_for(inputs: WorkInputs) -> ManifestEntry:
     **The artist's name crosses three times over, and that is not redundancy.**
     `artist` is what the source called them, `artist_family_name` and
     `artist_given_name` are which part is which. A display plane setting the
-    family name in bold capitals needs the parts; one drawing a plain line needs
+    family name apart needs the parts; one drawing a plain line needs
     the whole; and a work whose artist has no recorded parts has only the whole.
     Sending the parts alone would make the third case unlabelable, and sending
     the whole alone would put the split back where it was refused — in a rule

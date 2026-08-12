@@ -259,7 +259,7 @@ class CatalogueService:
         **The only edit an artist row has, and it exists because the parts
         arrived after the rows did.** Every artist in a seeded catalogue was
         written from a source that gave one undivided name string, and the
-        e-paper label needs to set the family part in bold capitals — a fact no
+        e-paper label needs to lead with the family part — a fact no
         rule over that string can recover for "van Gogh" or "Frank Lloyd Wright".
         So the parts are supplied by whoever knows, to rows that already exist.
 

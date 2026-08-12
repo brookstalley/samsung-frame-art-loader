@@ -232,7 +232,7 @@ re-parsing a blob, and so two works by the same artist agree.
 | `died` | integer | nullable | Year only. |
 | `lifespan_text` | string | nullable | Fallback free text when `born`/`died` cannot be parsed, e.g. "active 1620s". |
 | `biography` | text | nullable | |
-| `family_name` | string | nullable | Which part of the name the e-paper label sets in bold capitals, e.g. "Katsushika" for Katsushika Hokusai. |
+| `family_name` | string | nullable | Which part of the name is the family name — the part the e-paper label leads with, e.g. "Katsushika" for Katsushika Hokusai. |
 | `given_name` | string | nullable | The rest of the person's name, e.g. "Frank Lloyd" for Frank Lloyd Wright. |
 
 > Directly replaces the 2024 `artist_details` blob
@@ -241,13 +241,13 @@ re-parsing a blob, and so two works by the same artist agree.
 > and runs once. **Q9.**
 >
 > **The two name parts are stored rather than derived, added 2026-08-11.** The
-> e-paper label leads with the family name in bold capitals, so something has to
+> e-paper label leads with the family name, so something has to
 > know which part that is, and no rule over `name` can say: the 31 seeded artists
 > alone break last-word ("Frank Lloyd Wright"), first-word ("Georgia O'Keeffe")
 > and Western order ("Katsushika Hokusai"), and one of them is a culture rather
 > than a person. Both are nullable and the two ways of being null are the same
 > fact downstream — the label falls back to `name`, unstyled. Supplied for the
-> seeded corpus by a written table (`curation/seed/names.py`), never by a
+> seeded corpus by a written table (`curation/src/curation/seed/names.py`), never by a
 > heuristic; `discovery/artic.py` documents its own surname guess as unreliable.
 > Nothing derives one part from the other, and nothing derives `name` from them.
 

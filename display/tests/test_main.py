@@ -177,10 +177,18 @@ class TestWhetherThisDeviceHasALabelSurface:
         no way to see the numbers. Whether the border was derived or overridden is
         named for the same reason — nothing else in the journal distinguishes them.
 
-        Driven on the path where the text stack is *missing*, which is this
-        machine's real state and the reason the line sits above the driver import:
-        a device that cannot draw still reports what it would have set, and that
-        is precisely when somebody is already reading the journal.
+        Driven on the path where the surface cannot be opened, which is the reason
+        the line sits above the driver import: a device that cannot draw still
+        reports what it would have set, and that is precisely when somebody is
+        already reading the journal.
+
+        **Which road reaches that path depends on the machine, and the assertion
+        holds on both.** Without the `raster` group the text stack import fails
+        first; with it — on the Pi, and in the `typesetting` CI job — the import
+        succeeds and `open_panel("no_such_vendor…")` raises the same type a step
+        later. Saying "the text stack is missing" named one machine's state as
+        though it were the test's subject, which is a claim that goes stale by
+        being run somewhere else.
         """
         import dataclasses
         import logging

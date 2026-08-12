@@ -21,6 +21,16 @@ a rule if its recency matters; never infer recency from where it sits.
 
 **Reading a rule is not applying it.** The failure mode of a learnings file is not absence, it is assent: a rule arrives at the right moment, is read, is agreed with, and changes nothing, because nothing made you recognize the case in hand as an instance of it. So for any rule you read here, name the decision you are about to make and say what the rule changes about it — or say that it does not apply, which is also an answer.
 
+## An instrument a human judges by must exercise the SHIPPED branch, not a legal fallback — when a preview tool, sample or fixture feeds the path a person uses to make a call, assert it produces what production produces, because a fallback renders cleanly and reports cleanly and shows the wrong thing, which is worse than the crash a missing field would have caused
+
+## A directory no suite imports is code with no tests, and a signature change breaks it silently — when you delete a constant or add a required parameter, grep `tools/` and `scripts/` for consumers, because the linter, the type checker and a green suite are all silent about a file nothing imports
+
+## A guard that is badly SHAPED is a reason to reshape it, not a licence to drop it quietly — when you delete a test because it asserts the wrong thing, replace it with one asserting the right thing in the same commit and record why, because reasoning that lives only in your head reads to every later reader as carelessness
+
+## A requirement about human perception is under-specified until the artifact carries the PHYSICAL quantity it depends on — record viewing distance, angular size or luminance beside any rendered number (px, pt), because pixels are a fact about a panel while legibility is a fact about a person at a distance
+
+## A test asserting that a producer STORED a value does not pin a producer-to-consumer seam — assert on the consumer's own output, because a fixture that feeds the consumer the same number by both routes cannot tell the two expressions apart
+
 ## Before putting a decision to the owner, check whether the code already made it
 
 **When** an artifact records a question as open — a fork, a "recommendation:", a
@@ -1109,11 +1119,3 @@ filenames encode identity in at least three mutually inconsistent conventions
 ## A regression corpus is its INPUTS, not its recorded answers — when a corpus exists, run the producer you are judging over the images/rows the corpus was derived FROM and compare pairwise, because checking only the stored answers against a bar leaves the producer unmeasured, and a substitute input that has no cluster competition and no pale regions (synthetic flat colours here) passes a test whose docstring already admits it says "most" while asserting "every"
 
 ## A decision's stated PREMISE is checkable at the moment you build on it, and that moment is the last cheap one — before implementing a recorded decision, run the measurement its justifying clause asserts, because a premise written in prose during a walkthrough reads afterwards as an observation, and here "the mechanical derivation lands in the region the corpus occupies" was false by +15.2 L* on 31 of 40 works
-
-## A directory no suite imports is code with no tests, and a signature change breaks it silently — when you delete a constant or add a required parameter, grep `tools/` and `scripts/` for consumers, because the linter, the type checker and a green suite are all silent about a file nothing imports
-
-## A guard that is badly SHAPED is a reason to reshape it, not a licence to drop it quietly — when you delete a test because it asserts the wrong thing, replace it with one asserting the right thing in the same commit and record why, because reasoning that lives only in your head reads to every later reader as carelessness
-
-## A requirement about human perception is under-specified until the artifact carries the PHYSICAL quantity it depends on — record viewing distance, angular size or luminance beside any rendered number (px, pt), because pixels are a fact about a panel while legibility is a fact about a person at a distance
-
-## A test asserting that a producer STORED a value does not pin a producer-to-consumer seam — assert on the consumer's own output, because a fixture that feeds the consumer the same number by both routes cannot tell the two expressions apart

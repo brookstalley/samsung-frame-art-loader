@@ -19,6 +19,58 @@ found, and what it cost — is the part worth keeping, and editing them to match
 today would destroy the evidence while making the rule look like it had always
 been obvious. This note is here so nobody follows one of them as a procedure.
 
+## An instrument a human judges by must exercise the SHIPPED branch, not a legal fallback — when a preview tool, sample or fixture feeds the path a person uses to make a call, assert it produces what production produces, because a fallback renders cleanly and reports cleanly and shows the wrong thing, which is worse than the crash a missing field would have caused
+
+2026-08-11, found twice in the same round — once in a self-scrub and once,
+independently, by the Critic, which is the tell that it was not obvious.
+
+`display/tools/label_preview.py` is the instrument the operator uses at the panel
+to settle the calibrated cap-height angle and to see what the drop rule took off.
+Its `SAMPLE` dict predated the family and given name fields. Nothing broke:
+`LabelText.identification` has a **legal** fallback for an artist whose parts are
+unknown, so the tool rendered `Katsushika Hokusai, …` where the daemon now sets
+`Katsushika, Hokusai, …` — a clean render, a clean report, and a picture of a
+label the wall does not produce.
+
+**What makes this its own rule rather than an instance of stale-fixture drift is
+the direction of the failure.** A missing *required* field would have raised on
+the first invocation and been fixed in a minute. What the fallback bought was
+silence, on the one surface whose entire purpose is to let a person judge by eye —
+and the person judging has no way to know the instrument is showing them the
+wrong branch. The cost was small this round (one comma of width) and grows the
+moment styled runs land, because the preview is then the only place the styling
+can be looked at before the panel itself.
+
+**The guard is on the tool's own output, not on the dict** — asserting the
+report contains `Katsushika, Hokusai` holds however the sample is built, where an
+assertion about `SAMPLE.keys()` would pass against a sample that carried the keys
+and used them wrongly. A second guard pins that the report shows the drop rule
+taking something off, because the mutation sweep found the first one alone left
+the sample's lowest-priority line undefended: removing it changed nothing any
+test noticed.
+
+## A decision's stated PREMISE is checkable at the moment you build on it, and that moment is the last cheap one — before implementing a recorded decision, run the measurement its justifying clause asserts, because a premise written in prose during a walkthrough reads afterwards as an observation, and here "the mechanical derivation lands in the region the corpus occupies" was false by +15.2 L* on 31 of 40 works
+
+**Recurred 2026-08-11, one round after the rule was minted, in the same
+artifact — which is why this rule now has a detail entry at all.**
+`accessibility-spec.md` settled the museum convention that nationality is the
+adjectival demonym, then asserted **"No data change follows"** on the stated
+premise that "the Art Institute's `artist_display` already supplies the
+adjectival form, so the stored `artist_nationality` is correct as it stands".
+Reading all 31 seeded artists back out of a freshly seeded catalogue — one query,
+seconds — falsified it for **two**: Moche stores `North coast, Peru`, which is a
+place, and Vasily Kandinsky stores `Born Moscow (formerly Russian Empire, now
+Russia)`, a birthplace clause with no demonym in it at all.
+
+**The generalisation the first instance did not carry: the cheap check is not
+always a measurement — sometimes it is a query.** Here the premise was about the
+*shape of stored data* and had been checked against the *source that populates
+it*, by reading the museum's field documentation rather than the rows. The tell
+is identical in both instances: a justifying clause phrased as an observation
+about something nobody looked at. So is the second half of the pattern — the
+claim had been read past by every review it went through, because prose asserting
+a fact about data reads as evidence rather than as a hypothesis.
+
 ## Before putting a decision to the owner, check whether the code already made it
 
 2026-08-11. `api-contract.md` § The routes the interface design requires recorded

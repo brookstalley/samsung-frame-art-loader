@@ -1,10 +1,10 @@
 """Which part of a seeded artist's name is the family name.
 
-**Authored data, not a rule.** The e-paper label leads with the family name in
-bold capitals, so it has to know which part that is — and the 2024 index stores
-one undivided string per artist. Every heuristic over that string is wrong for
-some name in this very corpus: "Frank Lloyd Wright" defeats last-word, "Georgia
-O'Keeffe" defeats first-word, "Katsushika Hokusai" inverts the Western order it
+**Authored data, not a rule.** The e-paper label leads with the family name and
+sets it apart from the rest, so it has to know which part that is — and the 2024
+index stores one undivided string per artist. Every heuristic over that string is
+wrong for some name in this very corpus: "Frank Lloyd Wright" defeats last-word,
+"Georgia O'Keeffe" defeats first-word, "Katsushika Hokusai" inverts the order it
 looks like it follows, and "Moche" is not a person. The surname heuristic in
 `discovery/artic.py` documents the same unreliability from the other end.
 

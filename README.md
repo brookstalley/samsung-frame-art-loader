@@ -49,7 +49,7 @@ hardware at all. The operator read a type ladder from the viewing position and
 settled the floor at **12.4 arcminutes** of cap height, with 8.8′ as the absolute
 minimum for content a reader steps closer for.
 
-**13B-1 landed the same day, and the provisional sizes are gone.** The label's
+**The derived type floor landed the same day, and the provisional sizes are gone.** The label's
 type is now derived from two values a deployment states — the panel's diagonal
 and the distance it is read from — against that calibrated cap height, so a
 second device with a different panel at a different distance gets a correct

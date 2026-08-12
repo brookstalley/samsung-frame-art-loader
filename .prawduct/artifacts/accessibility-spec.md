@@ -123,11 +123,38 @@ instead of picking a winner:
 | **Mandatory** | The artist's family name, the artist's given name, and the work's title when it has one | **Shrinks, as far as needed, below the floor if that is what it takes.** Never dropped, never wrapped where a size reduction can be avoided |
 | **Optional** | Nationality, life dates, the work's date, medium, dimensions, commentary — **and nothing here is mandatory** | **Dropped, at full size.** Never set below the floor |
 
+> **This table is the norm and it is not what runs today — two gaps, both
+> widened rather than opened by 13B-3, and both closed by the fill model.**
+> Recorded here, against the table itself, because a reader who takes the table
+> for a description of the code will design the fill model against a starting
+> point that does not exist.
+>
+> - **Nothing shrinks. The mandatory tier has no guard at all** — the engine
+>   drops from the end at a fixed size, so a title that will not fit comes off
+>   rather than reducing. That was true before this round and is the half of the
+>   ruling recorded as unbuilt.
+> - **Two optional facts became undroppable and are set at the *primary* tier.**
+>   Nationality and life dates are now joined into the identification line, which
+>   is index 0 — the one line the engine never drops, and the one it sizes
+>   largest. So the table says "dropped, at full size, never below the floor"
+>   about two facts that are in practice never dropped and never at the floor.
+>   The collapse is still the right trade (it returns ~260 px and the wrapped
+>   line costs ~90), but the discrepancy is the fill model's to resolve: sizing
+>   and dropping have to follow a run's *role* rather than its position, which is
+>   exactly what a candidate model with priorities and roles provides.
+> - **The title moved into the droppable region.** `lay_out` protects only the
+>   first line; before this round that was the title, and now it is the
+>   identification block. A mandatory fact is therefore exposed where it was not
+>   — which the mandatory tier will cover once it exists, and which nothing
+>   covers meanwhile.
+
 Four properties of the rule, all of them load-bearing:
 
-- **The ordering is the priority.** Lines arrive in wall-label order — which is
-  also least-droppable first, so dropping from the end needs no second ranking to
-  go stale against the first.
+- **The ordering is the priority.** Lines arrive least-droppable first, so
+  dropping from the end needs no second ranking to go stale against the first.
+  (This said "in wall-label order" until 13B-3, which is no longer the same
+  thing: the artist leads and the identification block is one line, both
+  departures from wall-label convention recorded in § The label's content model.)
 - **The mandatory tier is what a label is for.** A label that cannot say who made
   the work and what it is called identifies nothing, and an unreadably small name
   is still a name somebody can walk closer to read. That is the trade the operator

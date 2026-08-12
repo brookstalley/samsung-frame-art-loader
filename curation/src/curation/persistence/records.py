@@ -122,7 +122,7 @@ class Artist:
 
     **`name` is what a source called the artist; the two name parts are what a
     label sets them as, and neither is derived from the other.** The e-paper
-    label leads with the family name in bold capitals, which needs to know which
+    label leads with the family name and sets it apart, which needs to know which
     part of the name that is — and no rule over `name` can say. "Titian (Tiziano
     Vecellio)", "van Gogh" and "Frank Lloyd Wright" each break a different
     last-word heuristic, and the heuristic in `discovery/artic.py` documents its

@@ -34,10 +34,10 @@ class ArtistOut(BaseModel):
     #: parsed year are different claims.
     lifespan_text: str | None
     biography: str | None
-    #: Which part of the name the e-paper label sets in bold capitals. Stored
-    #: rather than derived from `name`, because no rule over one string is right
-    #: for both "van Gogh" and "Frank Lloyd Wright"; null on a record that is not
-    #: a person, and on one nobody has said yet.
+    #: Which part of the name is the family name — the part the e-paper label
+    #: leads with. Stored rather than derived from `name`, because no rule over
+    #: one string is right for both "van Gogh" and "Frank Lloyd Wright"; null on
+    #: a record that is not a person, and on one nobody has said yet.
     family_name: str | None
     given_name: str | None
 

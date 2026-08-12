@@ -49,10 +49,11 @@ class LabelText:
     #: below are known, because a display that sets a plain line needs the whole
     #: and a work whose artist has no recorded parts has nothing else.
     artist: str | None = None
-    #: Which part of the name a panel sets in bold capitals. Supplied by the
-    #: catalogue rather than split out of `artist` here: no rule over one string
-    #: is right for both "van Gogh" and "Frank Lloyd Wright", and a display plane
-    #: guessing at it would be inventing a fact about a person.
+    #: Which part of the name is the family name — the part a panel leads with
+    #: and sets apart from the rest. Supplied by the catalogue rather than split
+    #: out of `artist` here: no rule over one string is right for both "van Gogh"
+    #: and "Frank Lloyd Wright", and a display plane guessing at it would be
+    #: inventing a fact about a person.
     artist_family_name: str | None = None
     artist_given_name: str | None = None
     artist_nationality: str | None = None
@@ -84,7 +85,11 @@ class LabelText:
         return not any(self.lines())
 
     def lines(self) -> tuple[str, ...]:
-        """The non-empty values, in wall-label order: least-droppable first.
+        """The non-empty values, least-droppable first.
+
+        Not "wall-label order" — this label departs from it twice, knowingly: the
+        artist leads the work, and the identification block is one line rather
+        than three.
 
         Whitespace-only values count as absent. They arrive: a museum record with
         a `medium` of `" "` is common enough that treating it as present puts a
@@ -115,11 +120,20 @@ class LabelText:
         rather than a wall-label one, and was chosen knowingly.** On a rotating
         display the family name is the token a passer-by scans from across the
         room, so it leads. The comma after it does double duty — inversion marker
-        and list separator — and what disambiguates the two is weight rather than
-        punctuation: the family name is set in bold capitals, so a reader sees
-        `ANDERS` and then everything else, not four equal comma-separated parts.
-        That styling is the renderer's job; the ordering is settled here so both
-        tiers cannot disagree about which run is which.
+        and list separator — and what is meant to disambiguate the two is weight
+        rather than punctuation: with the family name set in bold capitals a
+        reader takes `ANDERS` and then everything else, instead of four equal
+        comma-separated parts.
+
+        **That weight is not rendered today, and this line is the one place a
+        reader would assume otherwise.** Nothing downstream applies a style: the
+        contract from here is a flat string per line and one size per block, so
+        the panel currently shows four undifferentiated parts. Which is a real
+        cost of the collapse rather than a detail — it is recorded as the thing to
+        look at in `accessibility-spec.md` § The label's content model, and the
+        styled runs it waits on are a deliverable of their own. The ordering is
+        settled here regardless, so that whatever applies the weight and whatever
+        decides the sizes cannot disagree about which run is which.
 
         **Falls back to the whole name, unstyled, when neither part is known.**
         An artist with no recorded parts is a fact about the record — an

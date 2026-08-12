@@ -1,7 +1,7 @@
 """The tools directory is code, and nothing was executing it.
 
-**This file exists because of a specific failure.** 13B-1 moved three contract
-surfaces at once — `lay_out` gained a required parameter, `LabelSurface` gained a
+**This file exists because of a specific failure.** The type-floor derivation
+moved three contract surfaces at once — `lay_out` gained a required parameter, `LabelSurface` gained a
 required property, and three module constants were deleted — and
 `tools/label_preview.py` used all three. Every invocation raised. The suite stayed
 green, the linters stayed green, and the only thing that would have discovered it
@@ -108,6 +108,35 @@ class TestTheLabelPreviewStillRuns:
         placed = [line for line in capsys.readouterr().out.splitlines() if "px =" in line]
         assert placed, "no line reported a placed block"
         assert all("' cap at y=" in line for line in placed)
+
+    def test_the_sample_shows_the_label_a_seeded_catalogue_produces(self, label_preview, tmp_path, capsys):
+        """**The one omission that would make this tool lie rather than break.**
+
+        A label with no family and given parts is legal and falls back to the
+        whole name unstyled — so a sample missing them renders cleanly, reports
+        cleanly, and shows the operator a label the wall does not produce. That
+        is worse than a crash, because the operator's whole reason for running
+        this is to judge what the panel will show. Asserted on the tool's own
+        output rather than on the dict, so it holds however the sample is built.
+        """
+        label_preview.main([str(tmp_path / "label.png")])
+
+        printed = capsys.readouterr().out
+        assert "Katsushika, Hokusai" in printed, "the sample no longer carries the name parts the panel sets"
+
+    def test_the_report_shows_the_drop_rule_taking_something_off(self, label_preview, tmp_path, capsys):
+        """**The half of the label that is invisible in the image.**
+
+        The drop rule's whole failure mode is silence: a label that lost its
+        dimensions looks like a label that never had any. So the sample has to be
+        a work the panel genuinely cannot hold — a fully populated one, down to
+        the commentary that is first to go — or the tool renders a comfortable
+        label and never exercises the line it exists to make visible.
+        """
+        label_preview.main([str(tmp_path / "label.png")])
+
+        (dropped,) = [line for line in capsys.readouterr().out.splitlines() if "DROPPED" in line]
+        assert "outran the series" in dropped, "the sample no longer overflows far enough to drop its last line"
 
     def test_the_calibration_override_changes_the_type(self, label_preview, tmp_path, capsys):
         """`--cap-arcmin` is the one judgement the operator still makes, so it is

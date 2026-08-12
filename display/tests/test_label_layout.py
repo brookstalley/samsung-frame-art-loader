@@ -157,9 +157,13 @@ class TestPlacement:
 
         layout = lay_out((long_title, "Frank Lloyd Wright"), PANEL, measured, SCALE)
 
-        title, artist = layout.blocks
-        assert title.height_px > SCALE.primary_px, "the title was not measured as wrapping"
-        assert artist.y_px >= title.y_px + title.height_px
+        # Named for position rather than for field: this tier is handed strings
+        # and never a record, and the label's own ordering has since put the
+        # artist first — which would make `title, artist` here describe a label
+        # the product no longer produces while testing something else entirely.
+        leading, following = layout.blocks
+        assert leading.height_px > SCALE.primary_px, "the leading line was not measured as wrapping"
+        assert following.y_px >= leading.y_px + leading.height_px
 
 
 class TestWhatComesOffWhenItWillNotFit:

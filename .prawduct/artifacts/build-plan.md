@@ -1967,6 +1967,17 @@ hardware.
     byte ranges — never markup**, because `metadata.py` escapes nothing on purpose
     and `<b>`-wrapping would reintroduce the 2024 injection on the surface it was
     fixed for.
+    **Start at `LabelText.identification`, which is where the boundaries were
+    lost.** 13B-3 joins four fields — two mandatory-tier, two optional-tier — into
+    one string with `", ".join`, at the point furthest from where the distinction
+    is needed: the tier each fact belongs to and the run each style would apply to
+    are both discarded inside `metadata.py` and cannot be recovered downstream by
+    splitting on commas, because a name or a nationality may contain one. So this
+    sub-chunk's first move is to make that property yield runs rather than a
+    string, and the flat-string contract (`tuple[str, ...]` out of `lines()`) is
+    what has to give. **13B-4 needs the same thing for a different reason** —
+    sizing by role rather than by position — so whichever lands first should build
+    the structure both use rather than a weight-only one.
   - **13B-3 — the catalogue fields, and the content model they exist for. Built
     2026-08-11.** `family_name` and `given_name` on `Artist`, `commentary` on the
     work, all three carried by `entry_for` into the manifest (schema minor 0 → 1,
@@ -1983,7 +1994,7 @@ hardware.
     before it would have been tuned against figures about to move by four times
     the slack.
     **The backfill of the 31 seeded artists is a written table**
-    (`curation/seed/names.py`), not a rule — this corpus alone defeats last-word,
+    (`curation/src/curation/seed/names.py`), not a rule — this corpus alone defeats last-word,
     first-word and Western-order heuristics, and one of its records is a culture
     rather than a person. It is applied by the ordinary seeding run, which
     compares before writing and touches only the two fields no source supplied.
