@@ -3017,6 +3017,15 @@ build_state:
 #
 # active_build_plan: artifacts/build-plan-my-scope.md
 
+# Set 2026-08-12. Unset, governance resolved every chunk of the curation-ux work
+# against `artifacts/build-plan.md` — the v1 plan — so the Critic's chunk-ref
+# verification was answering about a different plan's Chunk 01 and reporting it
+# as a pass. `build-plan.md` is not finished: its Chunk 13A waits on hardware,
+# and that wait is tracked by `operator-verification.md` and the session
+# briefing, neither of which reads this pointer. Move it back when curation-ux
+# lands and v1's remaining chunk becomes the active work again.
+active_build_plan: artifacts/build-plan-curation-ux.md
+
 # =============================================================================
 # DERIVED VIEWS — RETIRED, and deliberately absent
 # =============================================================================

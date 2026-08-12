@@ -166,3 +166,7 @@ def test_each_walls_panels_nest_under_that_wall_rather_than_beside_it(ui, a_them
     assert ui.page.locator("h3.wall-title").count() == 2
     assert ui.page.locator(".panel h3").count() == 0
     assert ui.page.locator(".panel h4").count() == 6
+    # And with nothing empty there is no take-down note: a caption with nothing
+    # to caption. This is the other half of the guard the sibling test above
+    # exercises, and without it the guard could be deleted with the suite green.
+    assert ui.page.locator("p", has_text="goes on showing what it was showing").count() == 0

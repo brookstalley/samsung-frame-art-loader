@@ -307,6 +307,12 @@ def test_a_catalogue_of_unhung_themes_stays_that_way_across_a_restart(tmp_path, 
     """
     path = tmp_path / "catalogue.sqlite"
     _catalogue_with_unhung_themes(path).close()
+    # The restart is the moment under test, and `caplog` has been capturing since
+    # the call phase began — including the line the migration writes when the
+    # helper above creates the file, which is a different event with its own
+    # tests. Without this, the assertion below is about everything this function
+    # has said rather than about opening the file.
+    caplog.clear()
 
     with caplog.at_level(logging.WARNING, logger="curation"):
         catalogue = SqliteCatalogue(open_catalogue_file(path))
