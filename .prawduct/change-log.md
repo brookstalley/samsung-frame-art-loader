@@ -112,6 +112,54 @@ four-part identification line is held together by a bold weight **13B-2 has not
 built yet** — until it does, the panel shows four undifferentiated parts, which
 is in `operator-verification.md` so it is not read as a defect.
 
+## 2026-08-11: The Pi gets a service account, two units, and a catalogue (13B)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** The wall had been driven by hand since the card was rebuilt on
+2026-08-04, and no unit of this product was installed on the Pi at all. This is
+the machine half of Chunk 13B: the account both planes run as, the paths they
+run from, the units themselves, and the catalogue without which they come up
+healthy and correctly do nothing.
+
+**Three paths were requirements nobody had written down**, and all three are
+settled off any home directory — `ART_ROOT=/srv/art`, the checkout at
+`/opt/samsung-frame-art-loader`, `uv` at `/usr/local/bin/uv` and named absolutely
+in both units. That is not tidiness: `tvpi` is a `--system` account with
+`/usr/sbin/nologin`, and the machine's only checkout and only `uv` both sat under
+a home directory at mode `0700`, which such an account cannot traverse at all.
+The account, its `spi` and `gpio` groups, the tree move and both unit files land
+together, because any of them arriving alone leaves a machine that is neither the
+old arrangement nor the new one.
+
+**It is a first install, not a swap, and the plan said otherwise.** The chunk had
+been described as the moment `tvart.py` stops being the production entry point —
+a replacement that did not exist. Corrected in `deploy/README.md` rather than
+quietly, because it read as a statement about the machine and was one; it also
+removes the rollback pressure a real cutover would carry.
+
+**`--no-create-home` then `usermod --home` is the finding, not a detour.** An
+account with `HOME=/nonexistent` cannot run `uv` at all — it fails on its own
+cache directory before doing any work.
+
+**The Pi had no catalogue**, which the chunk entry never named. Seeding it from
+the 2024 index was run here rather than copied from a dev machine; it spends
+nothing, carries the mat colours the wall is already running, and adopts the
+renders already in the tree.
+
+**Four guards in `tests/test_repo_hygiene.py` now assert on the units that
+actually run.** They covered only the retired 2024 loader, so the two units the
+product is being rebuilt onto had nothing checking their paths or their
+`ExecStart` — a unit file is code that only executes on one machine, which is the
+worst place to discover a typo.
+
+**What the first start did, recorded as evidence rather than as a promise:** the
+curation plane marked the art root on its own, the display plane adopted the
+40-entry manifest, disabled the television's own slideshow, and re-uploaded all
+40 works in about three and a half minutes because it had no prior state. The set
+was in standby and the plane logged that it was leaving the wall alone rather
+than acting on it.
+
 ## 2026-08-11: The label's type is sized for the reader, not chosen for the panel (13B-1)
 
 <!-- prawduct: chunks=13B | scope=v1-build -->

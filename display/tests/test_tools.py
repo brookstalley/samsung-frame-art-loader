@@ -84,6 +84,19 @@ def label_preview(monkeypatch):
     return module
 
 
+#: The two physical facts the tool refuses to guess, as the reference wall's.
+#: **Stated by every invocation below rather than defaulted**, which is the
+#: behaviour under test as much as a fixture detail: the tool used to carry these
+#: numbers itself, so an operator at a different panel calibrated against this
+#: wall's geometry and the report echoed figures nobody supplied.
+WALL = ["--diagonal-inches", "6.0", "--viewing-distance-inches", "84"]
+
+
+def run(module, *arguments):
+    """Drive the tool with the viewing conditions supplied, as a real caller must."""
+    return module.main([*arguments, *WALL])
+
+
 class TestTheLabelPreviewStillRuns:
     """**Behavioural, not an import check.** An import alone would have caught two
     of the four ways this tool broke and missed the other two: `_report` reads the
@@ -93,7 +106,7 @@ class TestTheLabelPreviewStillRuns:
     def test_it_renders_a_png_through_the_whole_chain(self, label_preview, tmp_path, capsys):
         output = tmp_path / "label.png"
 
-        assert label_preview.main([str(output)]) == 0
+        assert run(label_preview, str(output)) == 0
         assert output.exists() and output.stat().st_size > 0
 
         printed = capsys.readouterr().out
@@ -103,7 +116,7 @@ class TestTheLabelPreviewStillRuns:
         """The whole point of the tool's output. A pixel size at a terminal says
         nothing about whether the person at the wall can read it — which is how a
         body size at half the resolvable cap height passed every check there was."""
-        label_preview.main([str(tmp_path / "label.png")])
+        run(label_preview, str(tmp_path / "label.png"))
 
         placed = [line for line in capsys.readouterr().out.splitlines() if "px =" in line]
         assert placed, "no line reported a placed block"
@@ -119,7 +132,7 @@ class TestTheLabelPreviewStillRuns:
         this is to judge what the panel will show. Asserted on the tool's own
         output rather than on the dict, so it holds however the sample is built.
         """
-        label_preview.main([str(tmp_path / "label.png")])
+        run(label_preview, str(tmp_path / "label.png"))
 
         printed = capsys.readouterr().out
         assert "Katsushika, Hokusai" in printed, "the sample no longer carries the name parts the panel sets"
@@ -141,7 +154,7 @@ class TestTheLabelPreviewStillRuns:
         drop rule at all, and the lowest-priority line is the one it takes. A
         sample trimmed back to something comfortable fails here first.
         """
-        label_preview.main([str(tmp_path / "label.png")])
+        run(label_preview, str(tmp_path / "label.png"))
 
         (dropped,) = [line for line in capsys.readouterr().out.splitlines() if "DROPPED" in line]
         # `Layout.dropped` keeps label order, so the LAST name here is the
@@ -156,19 +169,19 @@ class TestTheLabelPreviewStillRuns:
     def test_the_calibration_override_changes_the_type(self, label_preview, tmp_path, capsys):
         """`--cap-arcmin` is the one judgement the operator still makes, so it is
         the one flag that must actually reach the derivation."""
-        label_preview.main([str(tmp_path / "a.png")])
+        run(label_preview, str(tmp_path / "a.png"))
         default = capsys.readouterr().out
 
-        label_preview.main([str(tmp_path / "b.png"), "--cap-arcmin", "20"])
+        run(label_preview, str(tmp_path / "b.png"), "--cap-arcmin", "20")
         larger = capsys.readouterr().out
 
         assert _primary_of(default) < _primary_of(larger)
 
     def test_a_further_viewing_distance_asks_for_larger_type(self, label_preview, tmp_path, capsys):
-        label_preview.main([str(tmp_path / "near.png"), "--viewing-distance-inches", "42"])
+        label_preview.main([str(tmp_path / "near.png"), "--diagonal-inches", "6.0", "--viewing-distance-inches", "42"])
         near = capsys.readouterr().out
 
-        label_preview.main([str(tmp_path / "far.png"), "--viewing-distance-inches", "168"])
+        label_preview.main([str(tmp_path / "far.png"), "--diagonal-inches", "6.0", "--viewing-distance-inches", "168"])
         far = capsys.readouterr().out
 
         assert _primary_of(near) < _primary_of(far)
@@ -177,6 +190,80 @@ class TestTheLabelPreviewStillRuns:
         """Argparse's own error path, which exits rather than returning."""
         with pytest.raises(SystemExit):
             label_preview.main([])
+
+    def test_it_refuses_to_guess_the_viewing_conditions(self, label_preview, tmp_path, monkeypatch, capsys):
+        """**The instrument must not answer for a wall it was not pointed at.**
+
+        This tool carried the reference wall's 6 inches and 7 feet as argument
+        defaults, which meant an operator at a *different* panel who ran it
+        without flags calibrated `--cap-arcmin` against somebody else's geometry
+        — and the report echoed two numbers nobody had supplied, so it read as
+        confirmation. It is the same failure `.env.example` was emptied to
+        prevent, arriving on the surface that exists to expose it.
+
+        Refusing names both environment variables and both flags, because the
+        person who hits this needs to know which two facts are missing.
+        """
+        monkeypatch.delenv("EPD_PANEL_DIAGONAL_INCHES", raising=False)
+        monkeypatch.delenv("EPD_VIEWING_DISTANCE_INCHES", raising=False)
+
+        with pytest.raises(SystemExit):
+            label_preview.main([str(tmp_path / "label.png")])
+
+        complaint = capsys.readouterr().err
+        assert "EPD_PANEL_DIAGONAL_INCHES" in complaint and "EPD_VIEWING_DISTANCE_INCHES" in complaint
+        assert "--diagonal-inches" in complaint and "--viewing-distance-inches" in complaint
+
+    def test_it_takes_the_conditions_from_the_deployment_when_no_flag_gives_them(
+        self, label_preview, tmp_path, monkeypatch, capsys
+    ):
+        """**The convenience half of the refusal above, and the half the Pi uses.**
+
+        Both documented short invocations — this file's own docstring, and
+        `deploy/README.md` — pass no geometry, because on the machine that owns
+        the panel the `.env` already states it. So the `.env` road is not a
+        fallback for tidiness; it is the road the operator actually walks, and it
+        must be the *same* two settings the daemon reads rather than a second
+        spelling of them.
+
+        **This test exists because the mutation sweep found that road dead.** The
+        first version called a constructor the config module does not have; the
+        broad catch printed the `AttributeError` and carried on with no settings,
+        so every run refused and the refusal tests all passed. Deleting the whole
+        lookup changed nothing any test noticed — which is exactly what "green
+        suite, undefended branch" looks like.
+        """
+        monkeypatch.setenv("EPD_PANEL_DIAGONAL_INCHES", "10.3")
+        monkeypatch.setenv("EPD_VIEWING_DISTANCE_INCHES", "120")
+
+        assert label_preview.main([str(tmp_path / "label.png")]) == 0
+
+        printed = capsys.readouterr().out
+        # Both numbers, and a floor that is NOT the reference wall's 92 px —
+        # echoing the geometry proves it was read, and the derived size proves it
+        # was used rather than merely printed.
+        assert '10.3" panel read from 120.0"' in printed, "the report did not echo the deployment's own geometry"
+        assert _floor_of(printed) != 92, "the deployment's geometry was echoed but not derived from"
+
+    def test_one_stated_fact_does_not_let_the_other_be_guessed(self, label_preview, tmp_path, monkeypatch, capsys):
+        """Half-known conditions are the dangerous case: a run with a real diagonal
+        and an invented distance looks more trustworthy than one with neither."""
+        monkeypatch.delenv("EPD_VIEWING_DISTANCE_INCHES", raising=False)
+
+        with pytest.raises(SystemExit):
+            label_preview.main([str(tmp_path / "label.png"), "--diagonal-inches", "6.0"])
+
+        complaint = capsys.readouterr().err
+        assert "EPD_VIEWING_DISTANCE_INCHES" in complaint
+        assert "EPD_PANEL_DIAGONAL_INCHES" not in complaint, "it named a fact the caller had supplied"
+
+
+def _floor_of(printed: str) -> int:
+    """The floor tier out of the tool's own report line."""
+    for line in printed.splitlines():
+        if "tiers:" in line:
+            return int(line.split("over a")[1].split("px")[0].strip())
+    raise AssertionError(f"the report named no tiers:\n{printed}")
 
 
 def _primary_of(printed: str) -> int:

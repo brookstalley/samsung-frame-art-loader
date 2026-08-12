@@ -23,11 +23,22 @@ a terminal says nothing about whether the person at the wall can read it. That
 gap is not hypothetical: it is what let a body size at half the resolvable cap
 height pass a hardware probe, a review and a cutover.
 
+**It will not guess the panel's diagonal or its reading distance.** Both come
+from this deployment's `.env` — the same two settings the daemon reads, by the
+same road — and a flag overrides either. On the machine that owns the panel the
+short form below is therefore both convenient and correct; on a machine that owns
+no panel it refuses and names the two variables, rather than answering for
+somebody else's wall.
+
 It needs the text stack (`uv sync --group raster`); `--panel` additionally needs
 the panel driver (`--group epaper`) and a device to draw on:
 
     cd display && uv run --group raster python tools/label_preview.py label.png
     cd display && uv run --group raster python tools/label_preview.py label.png --cap-arcmin 11
+
+    # away from the deployment, or trying a different wall on for size:
+    cd display && uv run --group raster python tools/label_preview.py label.png \\
+        --diagonal-inches 10.3 --viewing-distance-inches 120
 
 **`--panel` takes the SPI device, which `display.service` holds while it runs.**
 Stop the unit for the pass and start it again afterwards, or the two contend for
@@ -103,17 +114,26 @@ def main(argv: list[str] | None = None) -> int:
     parsed.add_argument("--rotate-degrees", type=int, default=180)
     parsed.add_argument("--width-px", type=int, default=1448)
     parsed.add_argument("--height-px", type=int, default=1072)
+    # **No defaults, and this file names neither number.** They are the two
+    # settings the display plane deliberately ships without a fallback, because a
+    # guessed viewing distance gives silently illegible type — the one failure the
+    # whole derivation exists to prevent, and the one that looks like success from
+    # every direction. Defaulting them here would reintroduce it by the back door
+    # on the very instrument an operator uses to judge the result: a second wall
+    # would be calibrated against the reference wall's geometry, and the report
+    # would echo numbers nobody supplied. `.env.example` ships both empty for the
+    # same reason. Where they come from instead is `_viewing_conditions` below.
     parsed.add_argument(
         "--diagonal-inches",
         type=float,
-        default=6.0,
+        default=None,
         help="the label panel's diagonal; with the distance below it decides every type size",
     )
     parsed.add_argument(
         "--viewing-distance-inches",
         type=float,
-        default=84.0,
-        help="how far away the panel is read from — 84 is the reference wall's 7 feet",
+        default=None,
+        help="how far away the panel is read from; overrides EPD_VIEWING_DISTANCE_INCHES",
     )
     parsed.add_argument(
         "--cap-arcmin",
@@ -139,6 +159,7 @@ def main(argv: list[str] | None = None) -> int:
         parsed.error("give an output path, or --panel to draw on the panel")
 
     _apply_overrides(args)
+    _viewing_conditions(args, parsed)
 
     scale = type_scale_for(
         width_px=args.width_px,
@@ -160,6 +181,66 @@ def main(argv: list[str] | None = None) -> int:
 
     _report(laid_out, scale, args)
     return 0
+
+
+def _viewing_conditions(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
+    """Fill in the panel's geometry from the deployment, and refuse to guess it.
+
+    **The same two values the daemon reads, by the same road.** A flag wins where
+    one is given — trying out a different distance is the point of the tool — and
+    anything it does not give comes from this deployment's `.env`, exactly as
+    `__main__` takes it. So on the machine that owns the panel the short
+    invocation is both convenient and correct, while on a machine that owns no
+    panel it says so instead of quietly answering for someone else's wall.
+
+    **Nothing falls back to a number.** This file naming a diagonal or a distance
+    would put the reference wall's geometry inside the instrument used to judge a
+    *different* wall, and the report would then echo figures nobody supplied —
+    which is the failure the derivation exists to prevent, arriving on the one
+    surface that is supposed to expose it.
+
+    Refuses through `parser.error`, like the other bad-invocation path above it:
+    this is a hand-run tool, and an operator who has not set two environment
+    variables needs their two names and the two flags, not a traceback.
+    """
+    if args.diagonal_inches is not None and args.viewing_distance_inches is not None:
+        return
+
+    # Imported here rather than at module scope: reading a deployment's settings
+    # is not something this tool should do merely by being imported, and the
+    # suite drives `main` without an `.env` in front of it.
+    from display.config import load
+
+    try:
+        settings = load()
+    # prawduct:allow prawduct/broad-except -- every way an .env can be unreadable
+    # arrives here, and one printed line plus the refusal below answers all of
+    # them; a traceback would bury the two variable names that actually fix it.
+    # Not swallowed: the reason is printed, and a run with no other source for
+    # the two numbers still refuses rather than continuing.
+    except Exception as exc:
+        print(f"could not read this deployment's settings: {exc}")  # noqa: T201 -- the report is this tool's output
+        settings = None
+
+    if args.diagonal_inches is None and settings is not None:
+        args.diagonal_inches = settings.epd_panel_diagonal_inches
+    if args.viewing_distance_inches is None and settings is not None:
+        args.viewing_distance_inches = settings.epd_viewing_distance_inches
+
+    missing = [
+        (name, flag)
+        for name, value, flag in (
+            ("EPD_PANEL_DIAGONAL_INCHES", args.diagonal_inches, "--diagonal-inches"),
+            ("EPD_VIEWING_DISTANCE_INCHES", args.viewing_distance_inches, "--viewing-distance-inches"),
+        )
+        if value is None
+    ]
+    if missing:
+        parser.error(
+            "this panel's viewing conditions are not known, and guessing them is the one thing that must not happen: "
+            f"set {' and '.join(name for name, _ in missing)} in this deployment's .env, "
+            f"or pass {' and '.join(flag for _, flag in missing)}."
+        )
 
 
 def _apply_overrides(args: argparse.Namespace) -> None:

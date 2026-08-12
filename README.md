@@ -34,14 +34,17 @@ cutover. Those modules are still present and are deleted at the legacy retiremen
 a second subscriber attached, and an unattended run across a television
 power-cycle. Both need the television, not the panel.
 
-**What remains in software** is the label itself, which the panel visit turned
-from three numbers into a redesign: the artist set above the work with a styled
-family name, `family_name`/`given_name` and a commentary field in the catalogue,
-and a fill model that admits optional content in priority order. The type floor
-is done. All of it is specified in `accessibility-spec.md` — § Type never shrinks
-to fit for the two content tiers, § The label's content model for the ordering,
-the name ladder and the fill rule — which is where it stays after the build plan
-that schedules it is archived.
+**What remains in software** is the label's *typography*. The panel visit turned
+three numbers into a redesign, and most of it has landed: the type floor derives
+from the panel's geometry and its reading distance, the catalogue carries
+`family_name`/`given_name` and a commentary field, the artist is set above the
+work, and the identification block is one line rather than three. What is left is
+the part that needs styled runs — the family name set apart in bold capitals, the
+title in italic — and the fill model that admits optional content in priority
+order and never sets a mandatory line below the floor. All of it is specified in
+`accessibility-spec.md` — § Type never shrinks to fit for the two content tiers,
+§ The label's content model for the ordering, the name ladder and the fill rule —
+which is where it stays after the build plan that schedules it is archived.
 
 **The label reached e-ink on 2026-08-11**, which it never had before: rotation
 does not run while the set is in standby, so the label path had never executed on
