@@ -196,6 +196,46 @@ def get_work(request: Request, artwork_id: str) -> WorkDetailOut:
     return _dossier(_services(request).survey.get_work(artwork_id))
 
 
+@router.post("/works/{artwork_id}/archive")
+def archive_work(request: Request, artwork_id: str) -> WorkDetailOut:
+    """Take a work out of circulation, keeping its record and its mat history.
+
+    **Archive rather than delete, and the noun in the path is the whole point.**
+    `Artwork.status` has two values and restoration is permitted, so there is no
+    route here that destroys a work; `information-architecture.md` argues the
+    label follows the route, and the control this binds to reads *Archive*.
+
+    The work stays in every theme that holds it — membership is curatorial and
+    readiness is technical — so what changes is what the next manifest build puts
+    on a wall. A standing pin naming this work is withdrawn in the same
+    transaction, without advancing the sequence; both rules belong to the
+    catalogue service and are not restated here.
+
+    Returns the dossier, which is the same shape `GET /api/works/{id}` answers
+    with: the interesting change is the work's whole state, the screen that
+    archives is the screen that shows it, and a slimmer body would send that
+    screen straight back for the rest. The read-back-after-mutate departure the
+    theme routes take, for the same reason.
+    """
+    services = _services(request)
+    services.catalogue.archive_artwork(artwork_id)
+    return _dossier(services.survey.get_work(artwork_id))
+
+
+@router.post("/works/{artwork_id}/restore")
+def restore_work(request: Request, artwork_id: str) -> WorkDetailOut:
+    """Return an archived work to circulation.
+
+    The undo of the route above, and its existence is what makes archiving an
+    ordinary act rather than a destructive one. Nothing is republished: a theme
+    holding this work carries it again at the next manifest build, so the wall
+    goes on showing what it was showing until then.
+    """
+    services = _services(request)
+    services.catalogue.restore_artwork(artwork_id)
+    return _dossier(services.survey.get_work(artwork_id))
+
+
 # -- themes -------------------------------------------------------------------
 
 

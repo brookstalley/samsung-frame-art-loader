@@ -929,6 +929,40 @@ dialog.confirm::backdrop {
   justify-content: flex-end;
 }
 
+/* -- the work screen ------------------------------------------------------- */
+
+/* The mark on the rare facet a source actually published.
+
+   Quieter than the value it qualifies, and after it, because an annotation that
+   outranks its subject makes the reader search for the mark instead of reading
+   the fact. It was a bordered word before it was a tick, and the word is still
+   there for a screen reader — see `.visually-hidden` above — so neither the
+   shape nor the colour is carrying this alone. The footnote under the block is
+   what says what an unticked value means, which is "inferred", which is nearly
+   all of them. */
+.sourced .tick {
+  margin-left: var(--space-2);
+  color: var(--text-muted);
+}
+
+/* The mat, showing its colour and nothing else. The hex is printed beside the
+   swatch rather than behind a tooltip: a square of colour with no name is not
+   something a curator can quote, compare or ask about. */
+.mat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.mat-swatch {
+  width: var(--space-6);
+  height: var(--space-6);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

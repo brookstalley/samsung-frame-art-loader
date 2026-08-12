@@ -27,6 +27,7 @@ from curation.persistence.discovery_records import (
     Verdict,
     WorkProvenance,
 )
+from curation.persistence.records import VocabularyKind
 
 #: Every module the client is made of, boot and `core/` and `screens/` alike.
 #:
@@ -228,3 +229,25 @@ def test_provenance_is_still_the_two_values_the_client_renders_as_a_pair():
     offered work believing they asked for it.
     """
     assert {str(provenance) for provenance in WorkProvenance} == {"proposed", "offered"}
+
+
+def test_every_facet_kind_has_a_word_the_work_screen_can_label_it_with():
+    """The typed vocabulary reaches a museum label, so every kind needs one.
+
+    `VocabularyKind` is shared with `Affinity.kind` precisely so that what a work
+    *is* and what a curator *likes* are said in one set of terms — which means a
+    seventh member arrives for reasons that have nothing to do with this screen,
+    and reaches it as its raw token. The Work screen falls through to that token
+    rather than dropping the fact, so nothing on the page would look broken; it
+    would simply read `date_range` where a label belongs.
+    """
+    assert _object_keys("FACET_KIND_WORDS") == {str(kind) for kind in VocabularyKind}
+
+
+def test_every_facet_kind_label_actually_has_a_word_in_it():
+    """Right keys, empty value: a term with nothing in it, and every keys test green."""
+    values = _object_values("FACET_KIND_WORDS")
+    assert values, "`FACET_KIND_WORDS` parsed to no string values at all — this guard would pass vacuously"
+
+    empty = sorted(key for key, phrase in values.items() if not phrase.strip())
+    assert not empty, f"`FACET_KIND_WORDS` has keys with no words behind them: {empty}"
