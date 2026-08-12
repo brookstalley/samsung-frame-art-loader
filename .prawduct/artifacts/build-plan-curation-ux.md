@@ -105,7 +105,7 @@ named assumption into a recorded fact, and neither blocks the chunks before it.
 
 - [ ] Chunk 01: Wall, ThemeAssignment, and the end of `Theme.is_active`
 - [ ] Chunk 02: One manifest per wall — the inter-plane half
-- [ ] Chunk 03: The revised palette lands in the stylesheet
+- [x] Chunk 03: The revised palette lands in the stylesheet
 - [ ] Chunk 04: Three destinations — the navigation reshape
 - [ ] Chunk 05: The Walls screen — the product's home
 - [ ] Chunk 06: `WorkFacet`, text search, and facet counts
@@ -198,12 +198,18 @@ staged puts exactly this chunk's delta where the reviewer looks, which is the sa
 place a serially-built chunk would have put it. The per-chunk commit that
 § Governance Checkpoints requires is the commit that closes this sequence.
 
-**Branch names carry the scope.** `critic-begin` derives `--scope` by matching the
-branch name against the scopes build plans declare, and this plan declares
-`curation-ux`. A chunk branch named outside that prefix gets attributed to the wrong
-plan; a branch named `curation-ux/chunk-NN-<slug>` needs no `--scope` override.
-`--chunk NN` is still passed by hand, for the reason recorded at the head of this
-plan.
+**Pass `--scope curation-ux` and `--chunk NN` on every dispatch. Neither is
+derivable here.** `--chunk` for the reason recorded at the head of this plan. And
+`--scope` because branch-name derivation does not reach this case: **the review runs
+on the branch you land *into*, not on the chunk branch** — the chunk branch is merged
+and gone by the time the reviewer looks. Chunk 03's review was dispatched without it
+and record-lint graded chunk 03 of `build-plan.md`, the other plan, resolved from the
+`active_build_plan` pointer. Every count was zero, so it read as a clean grade of a
+chunk nobody built.
+
+*(This paragraph replaces a claim that a `curation-ux/chunk-NN-<slug>` branch needed
+no override. That was wrong, and it was wrong in the direction that produces a green
+grade rather than an error.)*
 
 ### A fresh worktree does not have the browser group
 
@@ -606,7 +612,10 @@ split was made to end, and it will not announce itself as having done so.
   migration.
 - **Artifacts consumed:** `information-architecture.md` §§ More than one wall,
   Information Hierarchy, Screen States; flow 6
-- **Deliverables:** the Walls screen; the per-wall theme control and `next`; the
+- **Deliverables:** `--text-3xl`, the fifth of the five tokens the prototype marks as
+  new and absent from `app.css`; the other four landed in Chunk 03, whose deliverable
+  list omitted this one. It is inert until something sets a heading at that size, and
+  this screen is the first that does. The Walls screen; the per-wall theme control and `next`; the
   activation confirmation that **names the wall and the consequence** — "Hang Winter
   in the living room" — even with one wall; the four named empty reasons (no theme
   hung / empty theme / display plane silent / cannot reach a plane) each offering

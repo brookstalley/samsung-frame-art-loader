@@ -10,6 +10,60 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The revised palette, now that it is in the stylesheet — added 2026-08-12
+
+**Every pair passes AA in both schemes and that settles nothing you care about.**
+The contrast test computes ratios; it cannot tell you whether the surface looks like
+a gallery or like a beige office. `build-plan-curation-ux.md` Chunk 03 says as much
+in one line — "a palette is the one thing a contrast test cannot approve on its own;
+the question is whether it looks like a museum" — and that question is yours.
+
+The light scheme is warm off-white with a near-black brown accent; the dark is a
+warm near-black with an old-gold accent. Both were designed in the committed
+prototype and had lived only there, hand-checked and ungoverned, since 2026-08-11.
+Nothing was adjusted on the way in: every value is the prototype's.
+
+Look at both, since the browser's own setting picks and there is no in-app toggle:
+
+```sh
+cd curation && uv run python -m curation
+```
+
+Open the prototype beside it — it is the reference for what this was supposed to
+feel like, and it carries a 2,000-work corpus where the real collection is 41:
+
+```
+.prawduct/artifacts/prototypes/curation-ia-prototype.html
+```
+
+**Three things worth an opinion, because each is a judgement a test cannot make:**
+
+1. **The accent in each scheme.** Light uses a near-black brown; dark uses an old
+   gold. They are not the same hue rotated — the dark scheme's accent is doing more
+   work, because a warm near-black surface gives it more room. Whether they read as
+   one product in two lights is exactly the thing only a person can say.
+2. **The status trio and its quiet backgrounds.** `--good`, `--warn`, `--crit` and
+   their `-quiet` variants are new; nothing consumes them yet. They arrive for the
+   masthead health indicator, which is the control that makes demoting Health from a
+   tab to an indicator safe. They were verified against every surface by hand rather
+   than by the test, because no rule references them — so they are the least-proven
+   values here and the most worth a look once the indicator exists.
+3. **The scrim.** A translucent black at 62% in light and 70% in dark, carrying
+   `--scrim-text` over whatever image sits behind it. Worst case measured 4.96:1 in
+   light. That clears AA over the extremes tested, but a scrim sits over *pictures*,
+   and a painting is not a grey card.
+4. **The error callout's marker, which is the one rule that changed rather than
+   just its values.** It drew its left border from the accent, which worked while the
+   accent was blue and body text was not. The revised palette is warm throughout, so
+   that marker became a hairline in the text's own family — 1.05:1 against body text.
+   It now draws from `--crit` instead, which is what that token is for and what the
+   palette's own comment says status must do. **This is the one place the built
+   surface looks different for a reason other than the new colours**, so it is the
+   one worth checking reads as a warning rather than as decoration.
+
+**Nothing on your wall changed.** This is the browser surface only; no rendition, no
+mat, no manifest, no television.
+
 ### The clamped mats, on the seven works that were over the bar — added 2026-08-11
 
 **The numbers are settled; the look is not, and only you can settle it.** Issue

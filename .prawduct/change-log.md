@@ -54,6 +54,50 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-12: The revised palette lands in the stylesheet, and the plan learns to run in parallel
+
+<!-- prawduct: chunks=03 | scope=curation-ux -->
+
+**Why:** The revised light and dark palettes had lived only in the committed
+prototype since 2026-08-11. `project-preferences.md`'s token row said in its own
+words that this made every revised colour hand-checked and ungoverned, and that it
+would become a true strict Test row "when they land in `app.css`, and not before".
+This is that moment. Every value transcribed unchanged; the ten tokens the built
+stylesheet never had — the status trio and its quiet variants, the scrim pair,
+`--rail`, `--masthead` — arrive with them, and no token was lost.
+
+**One rule changed rather than just its values.** The error callout drew its left
+border from the accent, which carried a signal while the accent was blue and body
+text was not. The revised palette is warm throughout, so that marker became a
+hairline in the text's own family at 1.05:1 against body text. It draws from
+`--crit` now, which is what that token shipped for and what the palette's own
+comment says status must do. Found by the Critic, fixed in the same commit.
+
+**The residue is recorded rather than smoothed over:** the status trio and the scrim
+pair landed with no rule referencing them, so the contrast test's pair computation
+does not reach them and they were verified by hand. They come under the mechanism
+when the masthead health indicator and the scrim consume them. `--text-3xl`, the
+fifth of the five tokens the prototype marks as new, is not here — it is inert until
+something sets a heading at that size, and it is now a named deliverable of the
+Walls-screen chunk.
+
+**The plan behind this gained a parallel-execution design and then three corrections
+to it**, all found by running it rather than by reading it. An isolated worktree is
+branched from the default branch, not from the dispatching agent's HEAD, so
+committing a plan does not make it visible to the agents built to follow it. A fresh
+worktree lacks the browser dependency group, so `tests/browser/` skips there and a
+green suite can mean an agent executed none of the browser tests it just wrote. And
+the review runs on the branch landed *into*, not the chunk branch, so `--scope` is
+not derivable and this chunk's own review graded the wrong plan's chunk with every
+count at zero. Each is now written where the next builder meets it.
+
+**Also recovered: an operation the plan required and never named.** Chunk 01's
+acceptance test says the generalised delete refusal "permits the last *unhung*
+theme" — a word that presupposes an unhang no chunk built. Without one the refusal
+reinstates exactly the deadlock the 2026-08-11 ruling was made to avoid. The plan now
+names the unhang, and a wall creator, which nothing but the migration provided while
+Chunk 01's own tests need two walls.
+
 ## 2026-08-12: Three rulings close the curation surface's open questions, and it gets a plan
 
 <!-- prawduct: scope=curation-ux -->

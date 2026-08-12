@@ -221,3 +221,8 @@ all.json.backup2
 
 # Prawduct session files
 .prawduct/.critic-partials-archive/
+
+# Agent worktrees. Real git worktrees of this clone, created per subagent by
+# the harness and removed with them -- never repo content, and they register as
+# embedded repositories if staged.
+.claude/worktrees/
