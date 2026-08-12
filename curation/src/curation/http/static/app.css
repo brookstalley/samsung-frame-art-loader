@@ -538,8 +538,14 @@ h2 {
 }
 
 /* The tick sits over the picture rather than beside it, so a tile stays the
-   shape of its own box at both densities. */
-.card,
+   shape of its own box at both densities.
+
+   Scoped to `.collection`, and that is not tidiness: `screens/review.js` builds
+   its candidate cards out of the same `.card` class, and giving every card on
+   that screen a new containing block would change where any absolutely
+   positioned descendant of one resolves against. This chunk owns the collection
+   grid; it does not own Review's. */
+.collection .card,
 .tile {
   position: relative;
 }
@@ -684,11 +690,14 @@ h2 {
   }
 }
 
+/* Two columns of pictures on the narrowest shape. Scoped for the same reason as
+   the rule above: `.grid` is Review's grid too, and this chunk is not the place
+   a decision about the review grid's breakpoints gets made. */
 @media (max-width: 40rem) {
-  .grid,
-  .grid-skeleton,
-  .grid.contact-sheet,
-  .grid-skeleton.contact-sheet {
+  .collection .grid,
+  .collection .grid-skeleton,
+  .collection .grid.contact-sheet,
+  .collection .grid-skeleton.contact-sheet {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

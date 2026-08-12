@@ -14,6 +14,8 @@ that reads as coverage and is not: conflating the first two tells a curator with
 reports the expected result of following a suggestion as a failed query.
 """
 
+import json
+
 import pytest
 from payloads import (
     a_catalogue_work,
@@ -181,33 +183,146 @@ def test_choosing_a_density_writes_it_into_the_address(ui):
     assert "density=contact" in ui.page.url
 
 
+PROTOTYPE_SCALE = 2000
+
+
+def test_the_prototype_scale_opens_as_a_contact_sheet_and_stays_legible(ui, service, seed_the_served_catalogue):
+    """The chunk's acceptance criterion, against a real catalogue rather than a number.
+
+    The threshold test above stubs `total` behind one work, which is the right
+    shape for pinning a branch and cannot answer this: legibility is a claim about
+    two thousand tiles actually laid out by a real browser, and a stub renders
+    one. `build_large_catalogue` exists precisely so the claim can be measured.
+
+    **It also reports what a stub hid.** `fetchAllWorks` stops at `PAGE_CEILING`
+    pages and the server's default page is `DEFAULT_LIST_LIMIT`, so the grid can
+    reach 1,250 works and no further — at the prototype's scale the runaway guard
+    bites. That is a known debt, recorded in `core/api.js`, and the thing this
+    test pins is that it bites *audibly*: the heading says how many of how many,
+    and the note says how many are held and not shown. A grid that stopped short
+    in silence is the failure this product exists to refuse, and it would look
+    exactly like a collection of 1,250.
+    """
+    seed_the_served_catalogue(size=PROTOTYPE_SCALE)
+    # Asked rather than assumed: `server_url` boots on `seeded_service`, so the
+    # catalogue this server holds is the seeded three plus what was just built.
+    # A hard-coded total would be a test asserting against its own arithmetic.
+    held = service.list_artworks(limit=1).total
+    assert held >= PROTOTYPE_SCALE
+
+    ui.open("#collection")
+    ui.page.wait_for_selector("ul.grid li.tile")
+
+    # The default at this scale is the contact sheet — image only, uniform tiles.
+    assert ui.page.locator("ul.grid.contact-sheet").count() == 1
+    assert ui.page.locator("li.card").count() == 0
+
+    shown = ui.page.locator("ul.grid li.tile").count()
+    assert 0 < shown < held, "the guard did not bite, so this test is no longer about what it says"
+    assert ui.page.inner_text("h2") == f"{shown} of {held} works"
+    assert f"{held - shown} more are held and are not on this page" in ui.text()
+
+    # Legible: every tile the same size, and big enough to judge a picture in.
+    # Sampled rather than measured over every tile — a thousand
+    # `getBoundingClientRect` calls tell you nothing the first fifty do not.
+    boxes = ui.page.eval_on_selector_all(
+        "ul.grid li.tile .card-image",
+        "nodes => nodes.slice(0, 50).map(n => { const r = n.getBoundingClientRect();"
+        " return [Math.round(r.width), Math.round(r.height)]; })",
+    )
+    widths = {box[0] for box in boxes}
+    heights = {box[1] for box in boxes}
+    assert max(widths) - min(widths) <= 1, f"tiles were not uniform across a row: {sorted(widths)}"
+    assert max(heights) - min(heights) <= 1, f"tiles were not uniform down the grid: {sorted(heights)}"
+    assert min(widths) >= 100, f"a contact sheet at this scale collapsed to {min(widths)}px tiles"
+
+
 # -- the loading state and the grid's geometry --------------------------------
 
 
-def test_the_loading_state_stands_in_at_the_grid_s_own_geometry(ui):
-    """Skeleton tiles, at the size of the tiles they are standing in for.
+def test_the_loading_state_does_not_guess_a_geometry_it_cannot_know(ui):
+    """No skeleton until the total is in, because the total is what sizes it.
 
-    Held open rather than raced: the placeholder exists for a slow answer, and a
-    test that had to win a race would report a green meaning only that the
-    machine was slow enough that time.
+    The density default is a function of how many works there are, and nothing
+    knows that until the first page answers. A placeholder painted before then can
+    only guess — and an earlier draft of this screen guessed contact sheet, which
+    is wrong for every collection under a few hundred works and so jumped from
+    twelve small tiles to N wide cards on the commonest path there is.
     """
     held = []
     ui.page.route("**/api/works?*", lambda route: held.append(route))
 
     ui.open("#collection")
-    ui.page.wait_for_selector("ul.grid-skeleton")
+    ui.page.wait_for_selector("#view h2")
 
-    tiles = ui.page.locator("ul.grid-skeleton > li")
-    assert tiles.count() > 0
-    # It stands in for the grid; it must not answer to the grid's own name, or
-    # every wait in this suite would be satisfied by a page holding no works.
+    assert "Loading the collection" in ui.text()
+    assert ui.page.locator("ul.grid-skeleton").count() == 0, "the placeholder guessed a geometry it could not know"
     assert ui.page.locator("ul.grid").count() == 0
-    # And it says nothing to a screen reader: twelve empty tiles announced as
-    # list items is noise over the announcement that matters.
-    assert ui.page.get_attribute("ul.grid-skeleton", "aria-hidden") == "true"
 
     for route in held:
         route.abort()
+
+
+def test_the_skeleton_stands_at_the_tile_geometry_the_grid_will_have(ui):
+    """ "Skeletons occupy the final geometry" — asserted as tile boxes, not as classes.
+
+    Two pages, the second held open, so the placeholder is on screen long enough
+    to be measured against the grid that replaces it. Held rather than raced: the
+    skeleton exists for a slow answer, and a test that had to win a race would
+    report a green meaning only that the machine was slow that time.
+
+    The tile's own width and height are what is compared. A placeholder that drew
+    faithful tiles and then spanned the whole page while the grid sat beside a
+    13rem rail would pass a class check and fail a reader's eyes.
+    """
+    answered = {"count": 0}
+    held = []
+    first = a_listing(
+        [a_catalogue_work(artwork_id="a", title="First")],
+        total=2000,
+        truncated=True,
+    )
+
+    def handler(route):
+        answered["count"] += 1
+        if answered["count"] == 1:
+            route.fulfill(status=200, content_type="application/json", body=json.dumps(first))
+        else:
+            held.append(route)
+
+    ui.page.route("**/api/works?*", handler)
+
+    ui.open("#collection")
+    ui.page.wait_for_selector("ul.grid-skeleton > li")
+    # 2,000 works is above the threshold, so the placeholder is the contact sheet
+    # the grid will be — the density is read from the same total by the same
+    # function, which is what makes the two agree by construction.
+    assert ui.page.locator("ul.grid-skeleton.contact-sheet").count() == 1
+    # It says nothing to a screen reader: twelve empty tiles announced as list
+    # items is noise over the announcement that matters.
+    assert ui.page.get_attribute("ul.grid-skeleton", "aria-hidden") == "true"
+
+    box = "n => { const r = n.getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }"
+    skeleton_tile = ui.page.eval_on_selector("ul.grid-skeleton > li", box)
+
+    # The paging loop has to have asked for a second page before it can be
+    # released; waiting on the condition rather than on a duration.
+    for _ in range(200):
+        if held:
+            break
+        ui.page.wait_for_timeout(50)
+    assert held, "the paging loop never asked for a second page"
+
+    for route in held:
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(a_listing([], total=2000, truncated=False, offset=1)),
+        )
+    ui.page.wait_for_selector("ul.grid > li")
+
+    grid_tile = ui.page.eval_on_selector("ul.grid > li", box)
+    assert skeleton_tile == grid_tile, f"the skeleton stood at {skeleton_tile} and the grid arrived at {grid_tile}"
 
 
 def test_the_tiles_do_not_reflow_as_the_pictures_arrive(ui, work_with_an_image):
@@ -247,14 +362,14 @@ def test_the_tiles_do_not_reflow_as_the_pictures_arrive(ui, work_with_an_image):
 # -- the facet rail -----------------------------------------------------------
 
 
-def a_page_with_facets():
+def a_page_with_facets(*options):
     return a_listing(
         [a_catalogue_work(artwork_id="a", title="Nighthawks")],
         total=1,
         facets=[
             a_facet_group(
                 "movement",
-                [a_facet_option("Baroque", 51), a_facet_option("Rococo", 0)],
+                list(options) or [a_facet_option("Baroque", 51), a_facet_option("Rococo", 0)],
             ),
         ],
     )
@@ -294,12 +409,61 @@ def test_choosing_a_facet_narrows_at_the_server_as_its_own_parameter(ui):
 
     ui.open("#collection")
     ui.page.wait_for_selector(".facet-option")
-    ui.page.click("button.facet-option:has-text('Baroque')")
-    ui.page.wait_for_function("() => window.location.hash.includes('movement=Baroque')")
 
-    narrowed = [url for url in ui.requests_matching("/api/works?") if "movement=" in url]
-    assert narrowed, "choosing a facet sent no narrowed request"
-    assert all("movement=Baroque" in url for url in narrowed)
+    # **Armed before the click, and waited on.** This asserted on the recorded
+    # request list after waiting for the address bar, which is a different event:
+    # `go` writes `location.hash` synchronously and the fetch is issued from the
+    # `hashchange` task after it, so the wait could return before the request
+    # existed. It did — reliably at module scope and not at suite scope, which is
+    # the worst kind of green. Waiting for the request itself is both correct and
+    # a stronger claim: the test now fails if no narrowed request is ever sent,
+    # rather than if none had been sent yet.
+    def a_narrowed_works_request(request):
+        return "/api/works?" in request.url and "movement=" in request.url
+
+    with ui.page.expect_request(a_narrowed_works_request) as narrowed:
+        ui.page.click("button.facet-option:has-text('Baroque')")
+
+    assert "movement=Baroque" in narrowed.value.url
+    assert all("movement=Baroque" in url for url in ui.requests_matching("/api/works?") if "movement=" in url)
+
+
+def test_a_facet_value_holding_the_separator_survives_the_address(ui):
+    """The fragment joins several values with a pipe; a value may contain one.
+
+    That is the failure the wire's own rule is about — a facet value may hold a
+    comma, so the route takes one repeated parameter per kind rather than a
+    comma-joined list — and picking a rarer character for the fragment would only
+    have made the same bet at longer odds. The values are escaped before they are
+    joined, so the separator is the only bare pipe the string can hold, and this
+    is the test that says so: one value, one parameter, both halves intact.
+    """
+    ui.serve("**/api/works?*", a_page_with_facets(a_facet_option("Ochre | Umber", 7)))
+
+    ui.open("#collection")
+    ui.page.wait_for_selector(".facet-option")
+
+    def a_narrowed_works_request(request):
+        return "/api/works?" in request.url and "movement=" in request.url
+
+    with ui.page.expect_request(a_narrowed_works_request) as narrowed:
+        ui.page.click("button.facet-option:has-text('Ochre')")
+
+    # One parameter carrying the whole value, not two carrying half each.
+    assert narrowed.value.url.count("movement=") == 1
+    assert "movement=Ochre%20%7C%20Umber" in narrowed.value.url
+
+    # And the address round-trips it: pressing the same option again *removes* it.
+    # That is the assertion that actually exercises the escaping — if the pipe had
+    # been lost the client would read two values back out of one, not recognise
+    # the option as chosen, and add a second copy instead of clearing it.
+    def a_works_request(request):
+        return "/api/works?" in request.url
+
+    with ui.page.expect_request(a_works_request) as again:
+        ui.page.click("button.facet-option:has-text('Ochre')")
+
+    assert "movement=" not in again.value.url, "choosing the value twice added a second copy instead of clearing it"
 
 
 # -- the theme rail, and membership edited in place ---------------------------
@@ -383,6 +547,72 @@ def test_removing_from_a_theme_takes_the_tiles_out_and_says_what_is_left(ui, dis
 
     assert ui.page.inner_text("h2") == "1 work in “Baroque”"
     assert len(display.theme_works(theme.id)) == 1
+
+
+def test_a_collection_with_no_themes_draws_no_tick_it_cannot_act_on(ui, seeded_service):
+    """A control with nothing behind it is the dead end the facet rules forbid.
+
+    With no theme to put a work into, a selection can do nothing — so there is no
+    toolbar for it and no checkbox on every tile. The paired positive is every
+    membership test above, each of which has a theme and finds the tick.
+    """
+    ui.open("#collection")
+    ui.page.wait_for_selector("ul.grid li.card")
+
+    assert ui.page.locator("input.tile-select").count() == 0
+    assert ui.page.locator(".selection").count() == 0
+
+
+def test_the_theme_being_shown_is_not_offered_as_somewhere_to_add(ui, a_theme_holding_one_work):
+    """Every work on screen is already in it, so that control could only refuse.
+
+    The picker defaulting to the first theme is what made this reachable in one
+    move: showing a theme, pressing Add, and being told the work is already there.
+    """
+    theme, _works = a_theme_holding_one_work
+
+    ui.open(f"#collection?theme={theme.id}")
+    ui.page.wait_for_selector("ul.grid li.card")
+
+    assert ui.page.locator("#add-to-theme").count() == 0
+    assert ui.page.locator("button:has-text('Remove from this theme')").count() == 1
+
+
+def test_adding_a_work_the_theme_already_holds_is_not_an_error(ui, display, a_theme_holding_one_work):
+    """The store refuses a duplicate, so the loop must not walk into one.
+
+    Selecting a work already in the theme alongside one that is not would, with a
+    naive loop, apply part of the edit and then report a refusal — a half-applied
+    change with nothing saying which half. What the theme already holds is read
+    first and skipped, and the sentence says so rather than staying quiet about it.
+    """
+    theme, works = a_theme_holding_one_work
+
+    ui.open("#collection")
+    ui.page.wait_for_selector("ul.grid li.card")
+    ui.page.check(f"li.card[data-artwork='{works[0].id}'] input.tile-select")
+    ui.page.check(f"li.card[data-artwork='{works[1].id}'] input.tile-select")
+    ui.page.select_option("#add-to-theme", theme.id)
+    ui.page.click("button:has-text('Add to theme')")
+    ui.page.wait_for_selector(".selection-status:has-text('Added 1 work to Baroque. 1 was already in it.')")
+
+    assert ui.page.locator("#error").is_hidden(), "a duplicate in the selection was reported as a failure"
+    assert len(display.theme_works(theme.id)) == 2
+
+
+def test_removing_a_theme_s_last_member_leaves_a_sentence_not_a_blank(ui, a_theme_holding_one_work):
+    """An empty grid with nothing said is indistinguishable from a broken screen."""
+    theme, works = a_theme_holding_one_work
+
+    ui.open(f"#collection?theme={theme.id}")
+    ui.page.wait_for_selector("ul.grid li.card")
+    ui.page.check(f"li.card[data-artwork='{works[0].id}'] input.tile-select")
+    ui.page.click("button:has-text('Remove from this theme')")
+    ui.page.wait_for_selector(".empty")
+
+    assert NOTHING_MATCHES in ui.text()
+    assert "the theme \u201cBaroque\u201d" in ui.text()
+    assert ui.page.inner_text("h2") == "0 works in \u201cBaroque\u201d"
 
 
 def test_a_repaint_that_is_not_a_navigation_does_not_move_focus(ui):

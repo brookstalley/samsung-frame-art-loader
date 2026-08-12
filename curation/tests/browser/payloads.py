@@ -28,12 +28,7 @@ from curation.http.models import (
     RunViewOut,
     SearchUsageOut,
     SpendOut,
-    ThemeDetailOut,
-    ThemeListOut,
-    ThemeOut,
-    ThemePlacementOut,
     VerdictOut,
-    WallRefOut,
     WorkOut,
     WorkPageOut,
 )
@@ -113,32 +108,6 @@ def a_facet_group(kind, options, *, total_values=None, truncated=False) -> Facet
         total_values=len(options) if total_values is None else total_values,
         truncated=truncated,
     )
-
-
-def a_theme(**overrides) -> ThemeOut:
-    fields = {
-        "theme_id": "theme-1",
-        "name": "Baroque",
-        "description": None,
-        "rotation_interval_seconds": None,
-        "shuffle": None,
-        "created_at": "2026-08-12T09:00:00+00:00",
-    }
-    return ThemeOut(**(fields | overrides))
-
-
-def a_theme_list(themes=None, *, hanging_on=()) -> dict:
-    """Every theme and where each hangs, as `/api/themes` answers it."""
-    themes = [a_theme()] if themes is None else list(themes)
-    walls = [WallRefOut(**wall) for wall in hanging_on]
-    return ThemeListOut(
-        themes=[ThemePlacementOut(theme=theme, hanging_on=walls) for theme in themes],
-    ).model_dump(mode="json")
-
-
-def a_theme_detail(works=(), *, theme: ThemeOut | None = None) -> dict:
-    """A theme and its works in curated order, as `/api/themes/{id}` answers it."""
-    return ThemeDetailOut(theme=theme or a_theme(), works=list(works)).model_dump(mode="json")
 
 
 def a_run(**overrides) -> RunOut:

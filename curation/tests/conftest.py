@@ -804,6 +804,30 @@ def _open_seeded_catalogue(path, *, size: int, seed: int) -> tuple[SqliteDurable
     return catalogue_file, service, works
 
 
+@pytest.fixture
+def seed_the_served_catalogue(catalogue_file: SqliteDurableStore, service: CatalogueService):
+    """Fill the catalogue the `services`/`server_url` fixtures already read: `(size=)` -> works.
+
+    The three fixtures above hand back a *separate* store, which is right for a
+    query measured in isolation and useless to a test that drives the real server:
+    `server_url` boots on `services`, and `services` is wired to `catalogue_file`.
+    This seeds that one, so a browser test can ask what the shipped client does at
+    a scale the client was designed for rather than at the three works
+    `seeded_service` provides.
+
+    Inside one `transaction()`, like every other bulk write here — see
+    `_open_seeded_catalogue`. Committing per row instead is most of the difference
+    between "a second" and "a minute", which is the difference between a test that
+    runs by default and one nobody runs.
+    """
+
+    def _seed(*, size: int, seed: int = _LARGE_CORPUS_SEED) -> Sequence[Artwork]:
+        with catalogue_file.transaction():
+            return build_large_catalogue(service, size=size, seed=seed)
+
+    return _seed
+
+
 @pytest.fixture(scope="session")
 def _large_catalogue(tmp_path_factory) -> Iterator[tuple[CatalogueService, Sequence[Artwork]]]:
     """The service and the works `build_large_catalogue` put in it, built once per session.

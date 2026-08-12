@@ -75,7 +75,13 @@ function facetQuery(chosen) {
   return query;
 }
 
-export async function fetchAllWorks(query = "", chosen = null) {
+/* `onFirstPage(body)` is called once, with the first page, before the loop asks
+ * for a second — so a caller can act on `total` and `truncated` while the rest is
+ * still arriving. The grid's loading placeholder needs exactly that: its geometry
+ * depends on how much there is, which nothing knows until this page lands, and a
+ * placeholder painted before it can only guess. Optional, and the two other
+ * callers pass nothing. */
+export async function fetchAllWorks(query = "", chosen = null, onFirstPage = null) {
   const works = [];
   let total = 0;
   let truncated = false;
@@ -97,7 +103,10 @@ export async function fetchAllWorks(query = "", chosen = null) {
   for (let page = 0; page < PAGE_CEILING; page += 1) {
     const body = await api(`/api/works?offset=${works.length}${search}${narrowing}`);
     total = body.total;
-    if (page === 0) facets = body.facets || [];
+    if (page === 0) {
+      facets = body.facets || [];
+      if (onFirstPage) onFirstPage(body);
+    }
     works.push(...body.works);
     // The stopping condition is what actually arrived, not what the server says
     // is left. A page that reports more while carrying nothing makes no

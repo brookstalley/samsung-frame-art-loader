@@ -532,7 +532,10 @@ def test_a_search_finds_a_work_by_its_artist(ui, seeded_service):
 def test_a_search_that_matches_nothing_says_so_and_offers_the_way_back(ui, seeded_service):
     """An empty grid with no sentence reads as an empty collection."""
     ui.open("#collection?q=nothingwhatevermatchesthis")
-    ui.page.wait_for_selector("#view h2")
+    # The empty state itself, rather than the heading above it: Collection's
+    # loading placeholder is an `h2` too, so waiting on one could return before
+    # the search had answered. Same assertion, sounder wait.
+    ui.page.wait_for_selector("#view .empty")
 
     assert "Nothing held matches" in ui.text()
     ui.page.click("#view button:has-text('Show everything')")

@@ -73,9 +73,16 @@ const CATALOGUE_CEILING = 300;
  * repeated parameter per kind (`?movement=Baroque&movement=Rococo`) precisely
  * because a facet value may contain a comma, and a separator a value can hold is
  * a parser that goes wrong on the data rather than on the request. The fragment
- * has no repeated keys to use: `state.params` is a flat string map. A pipe is
- * chosen over a comma for the same reason the wire refuses one, and it is a
- * fragment-level spelling only — nothing downstream of `facetsFor` sees it. */
+ * has no repeated keys to use: `state.params` is a flat string map.
+ *
+ * **So the values are escaped before they are joined**, and unescaped after they
+ * are split — which is what makes the pipe safe where the comma was not. A value
+ * holding a literal pipe arrives here as `%7C` and survives the split whole; the
+ * separator is the only bare pipe the string can contain. Choosing a rarer
+ * character instead would have been the same bet the comma lost, just at longer
+ * odds, and this needs no bet at all. `formatRoute` escapes the joined string
+ * again on the way into the address and `parseRoute` unescapes it once on the way
+ * out, so what `splitValues` sees is exactly what `joinValues` wrote. */
 const FACET_SEPARATOR = "|";
 
 /* How many skeleton tiles stand in for the grid while it loads. About a
@@ -96,12 +103,34 @@ let selectionGeneration = -1;
 
 /* -- reading the address ---------------------------------------------------- */
 
+/* One escaped piece, or what was there.
+ *
+ * `decodeURIComponent` throws `URIError` on a malformed escape, and a hand-typed
+ * or hand-truncated address is exactly where one comes from. A piece that will
+ * not decode is used verbatim, which is wrong in a way the curator can see rather
+ * than fatal in a way they cannot — the same trade `core/route.js` makes for the
+ * same reason. Only `URIError` is swallowed. */
+function decodeValue(piece) {
+  try {
+    return decodeURIComponent(piece);
+  } catch (failure) {
+    if (!(failure instanceof URIError)) throw failure;
+    return piece;
+  }
+}
+
+function splitValues(raw) {
+  if (!raw) return [];
+  return raw.split(FACET_SEPARATOR).filter(Boolean).map(decodeValue);
+}
+
+function joinValues(values) {
+  return values.map((value) => encodeURIComponent(value)).join(FACET_SEPARATOR);
+}
+
 function facetsFor(params) {
   const chosen = {};
-  for (const kind of FACET_KINDS) {
-    const raw = params[kind];
-    chosen[kind] = raw ? raw.split(FACET_SEPARATOR).filter(Boolean) : [];
-  }
+  for (const kind of FACET_KINDS) chosen[kind] = splitValues(params[kind]);
   return chosen;
 }
 
@@ -118,7 +147,7 @@ function withFacet(chosen, kind, value) {
   const values = chosen[kind].includes(value)
     ? chosen[kind].filter((held) => held !== value)
     : [...chosen[kind], value];
-  return { ...state.params, theme: "", [kind]: values.join(FACET_SEPARATOR) };
+  return { ...state.params, theme: "", [kind]: joinValues(values) };
 }
 
 /* Whether the theme rail's filter is the one actually in force.
@@ -186,11 +215,12 @@ function cardImage(work) {
 
 /* The tick that puts a work in a selection.
  *
- * Always drawn, at both densities, rather than revealed on hover with the rest of
- * the contact sheet's metadata. A control that only exists once you are pointing
- * at it is a control a keyboard cannot find and a curator does not know is there,
- * and hidden controls are the accessibility failure this surface keeps a rule
- * about. The caption may hide; the control may not. */
+ * Always drawn where it can do something, at both densities, rather than revealed
+ * on hover with the rest of the contact sheet's metadata: a control that only
+ * exists once you are pointing at it is one a keyboard cannot find. And **not
+ * drawn at all where it cannot** — with no theme to put a work into, a tick on
+ * every tile is a control with nothing behind it, which is the same dead end the
+ * facet rail is forbidden from offering. */
 function selectBox(work, onChange) {
   const box = el("input", {
     type: "checkbox",
@@ -207,9 +237,9 @@ function selectBox(work, onChange) {
 }
 
 /* The catalogue tile: the built card, unchanged in shape. */
-function workCard(work, onChange) {
+function workCard(work, selection) {
   return el("li", { class: "card", "data-artwork": work.artwork_id }, [
-    selectBox(work, onChange),
+    selection ? selectBox(work, selection.settle) : null,
     cardImage(work),
     el("div", { class: "card-body" }, [
       el("h3", { class: "card-title" }, [
@@ -235,10 +265,10 @@ function workCard(work, onChange) {
  * badge is not metadata about the work, it is a mark on an exception: a work out
  * of circulation that looks identical to one on the wall until you point at it is
  * the silence `statusBadge` was written to end. */
-function contactTile(work, onChange) {
+function contactTile(work, selection) {
   const status = statusBadge(work);
   return el("li", { class: "tile", "data-artwork": work.artwork_id }, [
-    selectBox(work, onChange),
+    selection ? selectBox(work, selection.settle) : null,
     status ? el("div", { class: "tile-status" }, [status]) : null,
     cardImage(work),
     el("div", { class: "tile-caption" }, [
@@ -250,12 +280,20 @@ function contactTile(work, onChange) {
 
 /* -- the loading state ------------------------------------------------------ */
 
-/* Tiles at the geometry the real ones will have, so nothing moves when they
- * arrive. The skeleton reads the density from the address alone: the computed
- * default needs the total, which is what has not arrived yet. That costs nothing
- * where it would be visible — a skeleton is on screen for as long as the paging
- * loop runs, which is many round trips at the scale whose default is the contact
- * sheet, and a single round trip at the scale whose default is not. */
+/* Tiles at the geometry the real ones will have — which means this is painted
+ * only once that geometry is known.
+ *
+ * **The skeleton never guesses the density**, and an earlier draft of this screen
+ * did: it drew a contact sheet whenever the address named nothing, while the
+ * default below a few hundred works resolves to the catalogue. Every visit to a
+ * small collection then jumped from twelve small tiles to N wide cards — the
+ * reflow the rule exists to prevent, on the commonest path.
+ *
+ * The total is what decides the density and the first page is what carries it, so
+ * the placeholder waits for that page. What it costs is that a collection
+ * arriving in one round trip gets no skeleton at all, which is right: there is
+ * nothing to wait through. What it buys is that the skeleton, whenever it is on
+ * screen, is standing at the geometry the grid will occupy. */
 function skeletonGrid(density) {
   const tiles = [];
   for (let index = 0; index < SKELETON_TILES; index += 1) {
@@ -266,13 +304,42 @@ function skeletonGrid(density) {
       ]),
     );
   }
-  return el("ul", {
-    // Not `.grid`, though it lays out identically: a loading placeholder that
-    // answers the selector the real grid answers is one every test and every
-    // reader has to tell apart by its contents.
-    class: density === CONTACT ? "grid-skeleton contact-sheet" : "grid-skeleton",
-    "aria-hidden": true,
-  }, tiles);
+  return el(
+    "ul",
+    {
+      // Not `.grid`, though it lays out identically: a loading placeholder that
+      // answers the selector the real grid answers is one every test and every
+      // reader has to tell apart by its contents.
+      class: density === CONTACT ? "grid-skeleton contact-sheet" : "grid-skeleton",
+      "aria-hidden": true,
+    },
+    tiles,
+  );
+}
+
+/* The whole screen, with the parts that are not known yet left blank.
+ *
+ * **The tiles are inside the same two-column layout the grid will be inside**,
+ * which is the other half of standing at the final geometry: a placeholder that
+ * spans the full page and is then replaced by a grid beside a 13rem rail has
+ * tiles of a different size, however faithfully the tiles themselves were drawn.
+ * The rail is empty because the vocabulary is a request that has not answered;
+ * its column is a fixed width, so its contents arriving move nothing.
+ *
+ * The density control is real rather than a placeholder — the density is the one
+ * thing that *is* known here, and a control that works while the pictures load is
+ * better than a grey rectangle the same size. */
+function skeletonScreen(density) {
+  return [
+    el("h2", { text: "Loading the collection…" }),
+    el("div", { class: "collection" }, [
+      el("aside", { class: "rails", "aria-hidden": true }),
+      el("div", { class: "collection-main" }, [
+        el("div", { class: "toolbar" }, [densityControl(density)]),
+        skeletonGrid(density),
+      ]),
+    ]),
+  ];
 }
 
 /* -- the rails -------------------------------------------------------------- */
@@ -380,19 +447,41 @@ function densityControl(density) {
   ]);
 }
 
+function uncheck(grid, artworkId) {
+  const box = grid.querySelector(`[data-artwork="${CSS.escape(artworkId)}"] input.tile-select`);
+  if (box) box.checked = false;
+}
+
+function clearSelection(grid) {
+  selected.clear();
+  for (const box of grid.querySelectorAll("input.tile-select")) box.checked = false;
+}
+
 /* Adding and removing membership from the grid, with the selection multi-select.
  *
  * **Nothing here repaints the screen**, and that is the rule rather than an
  * optimisation: a curator standing on "Add to theme" who is handed a new page has
- * lost their place and their focus, and a poll or an update that moves focus is a
- * defect this surface has already shipped once. The outcome is announced in a
- * live region and the tiles that left are taken out one at a time.
+ * lost their place and their focus. The outcome is announced in a live region and
+ * the tiles that left are taken out one at a time.
  *
- * There is no bulk route. `POST /api/themes/{id}/works` takes one work, so a
- * selection of six is six calls, in order, and the first refusal stops the rest
- * and is shown — a half-applied edit reported as success is not something this
- * product does. */
-function membershipControls(themes, showingTheme, grid, heading, recount) {
+ * **There is no bulk route, so this is a loop, and a loop can stop halfway.**
+ * `POST /api/themes/{id}/works` takes one work and the store refuses a work the
+ * theme already holds, so the two things that make a partial edit unrecoverable
+ * are both dealt with before the loop starts: what the theme already has is read
+ * and skipped, and each work leaves the selection as it lands. A refusal partway
+ * therefore leaves exactly the works that did not go still ticked, with the
+ * button still live — the retry is pressing it again, and it does not re-send
+ * what already succeeded.
+ *
+ * Returns `null` when there is nothing a selection could be used for, which is
+ * what keeps the tick off every tile in a collection with no themes. */
+function membershipControls({ themes, showingTheme, grid, heading, recount, whenEmpty }) {
+  // The theme being shown is not offered: every work on screen is already in it,
+  // so the only thing that control could do is refuse. Excluding it is also what
+  // stops the picker's own default being a one-click error.
+  const addable = themes.filter((placement) => !(showingTheme && placement.theme.theme_id === state.params.theme));
+  if (!addable.length && !showingTheme) return null;
+
   // Focusable, and focused when an edit completes. Finishing the edit disables
   // the button the curator is standing on, and a browser blurs a control it
   // disables — which drops the keyboard to the top of the document, several
@@ -400,12 +489,15 @@ function membershipControls(themes, showingTheme, grid, heading, recount) {
   // where focus belongs: it is what just happened, and Tab continues from the
   // toolbar into the grid.
   const announcement = el("p", { class: "muted selection-status", "aria-live": "polite", tabindex: "-1" });
-  const picker = el("select", { id: "add-to-theme", "aria-label": "Theme to add the selected works to" });
-  for (const placement of themes) {
+
+  const picker = addable.length
+    ? el("select", { id: "add-to-theme", "aria-label": "Theme to add the selected works to" })
+    : null;
+  for (const placement of addable) {
     picker.append(el("option", { value: placement.theme.theme_id, text: placement.theme.name }));
   }
 
-  const add = el("button", { class: "action", type: "button", text: "Add to theme" });
+  const add = picker ? el("button", { class: "action", type: "button", text: "Add to theme" }) : null;
   const remove = showingTheme
     ? el("button", { class: "action quiet", type: "button", text: "Remove from this theme" })
     : null;
@@ -417,52 +509,85 @@ function membershipControls(themes, showingTheme, grid, heading, recount) {
   };
 
   const settle = () => {
-    add.disabled = selected.size === 0;
+    if (add) add.disabled = selected.size === 0;
     if (remove) remove.disabled = selected.size === 0;
     say(selected.size === 0 ? "No works selected." : `${selected.size} selected.`);
   };
 
-  add.addEventListener("click", () =>
-    guard(async () => {
-      const themeId = picker.value;
-      const name = picker.options[picker.selectedIndex].text;
-      const count = selected.size;
-      for (const artworkId of [...selected]) {
-        await api(`/api/themes/${encodeURIComponent(themeId)}/works`, {
-          method: "POST",
-          body: JSON.stringify({ artwork_id: artworkId }),
-        });
-      }
-      clearSelection(grid);
-      settle();
-      say(`Added ${count} ${count === 1 ? "work" : "works"} to ${name}.`);
-      announcement.focus();
-    }),
-  );
+  if (add) {
+    add.addEventListener("click", () =>
+      guard(async () => {
+        const themeId = picker.value;
+        const name = picker.options[picker.selectedIndex].text;
+        const asked = selected.size;
+        // Read before writing. The store refuses a work the theme already holds,
+        // and a loop that discovered that halfway through would have applied half
+        // the edit and reported a refusal.
+        const detail = await api(`/api/themes/${encodeURIComponent(themeId)}`);
+        const held = new Set(detail.works.map((work) => work.artwork_id));
+        const wanted = [...selected].filter((artworkId) => !held.has(artworkId));
+        const already = asked - wanted.length;
+        let added = 0;
+        try {
+          for (const artworkId of wanted) {
+            await api(`/api/themes/${encodeURIComponent(themeId)}/works`, {
+              method: "POST",
+              body: JSON.stringify({ artwork_id: artworkId }),
+            });
+            added += 1;
+            selected.delete(artworkId);
+            uncheck(grid, artworkId);
+          }
+        } catch (failure) {
+          settle();
+          say(`Added ${added} of ${wanted.length} to ${name}. The rest are still selected, so pressing Add again retries only those.`);
+          announcement.focus();
+          // Rethrown so `guard` shows the server's own words for the refusal.
+          // The sentence above says how far it got; only the server can say why
+          // it stopped.
+          throw failure;
+        }
+        clearSelection(grid);
+        settle();
+        if (!wanted.length) say(`All ${already} ${already === 1 ? "was" : "were"} already in ${name}.`);
+        else {
+          const carried = already ? ` ${already} ${already === 1 ? "was" : "were"} already in it.` : "";
+          say(`Added ${added} ${added === 1 ? "work" : "works"} to ${name}.${carried}`);
+        }
+        announcement.focus();
+      }),
+    );
+  }
 
   if (remove) {
     remove.addEventListener("click", () =>
       guard(async () => {
         const themeId = state.params.theme;
         const going = [...selected];
-        for (const artworkId of going) {
-          await api(
-            `/api/themes/${encodeURIComponent(themeId)}/works/${encodeURIComponent(artworkId)}`,
-            { method: "DELETE" },
-          );
+        let removed = 0;
+        try {
+          for (const artworkId of going) {
+            await api(`/api/themes/${encodeURIComponent(themeId)}/works/${encodeURIComponent(artworkId)}`, {
+              method: "DELETE",
+            });
+            removed += 1;
+            selected.delete(artworkId);
+            const tile = grid.querySelector(`[data-artwork="${CSS.escape(artworkId)}"]`);
+            if (tile) tile.remove();
+          }
+        } finally {
+          settle();
+          // The heading counted what was there before the removal, and a count
+          // that no longer matches the tiles under it is the silent lie this
+          // surface exists to refuse. Both figures are the tile count: a theme
+          // comes whole rather than paged, so shown and held cannot differ.
+          heading.textContent = recount(grid.children.length);
+          // A theme whose last member has just gone is empty, and an empty grid
+          // with no sentence reads as a broken screen rather than as a theme
+          // holding nothing.
+          if (!grid.children.length) whenEmpty();
         }
-        for (const artworkId of going) {
-          const tile = grid.querySelector(`[data-artwork="${CSS.escape(artworkId)}"]`);
-          if (tile) tile.remove();
-        }
-        selected.clear();
-        settle();
-        // The heading counted what was there before the removal, and a count that
-        // no longer matches the tiles under it is the silent lie this surface
-        // exists to refuse. Both figures are the tile count: a theme comes whole
-        // rather than paged, so what is shown and what is held cannot differ.
-        heading.textContent = recount(grid.children.length);
-        say(`Removed ${going.length} ${going.length === 1 ? "work" : "works"} from this theme.`);
+        say(`Removed ${removed} ${removed === 1 ? "work" : "works"} from this theme.`);
         announcement.focus();
       }),
     );
@@ -470,11 +595,6 @@ function membershipControls(themes, showingTheme, grid, heading, recount) {
 
   settle();
   return { settle, node: el("div", { class: "selection" }, [announcement, picker, add, remove]) };
-}
-
-function clearSelection(grid) {
-  selected.clear();
-  for (const box of grid.querySelectorAll("input.tile-select")) box.checked = false;
 }
 
 /* -- the three empty states -------------------------------------------------- */
@@ -490,7 +610,10 @@ function clearSelection(grid) {
 function emptyState(query, chosen, showingTheme, themeName) {
   const artists = chosen.artist;
   const onlyAnArtist =
-    !query && !showingTheme && artists.length === 1 && !FACET_KINDS.filter((kind) => kind !== "artist").some((kind) => chosen[kind].length);
+    !query &&
+    !showingTheme &&
+    artists.length === 1 &&
+    !FACET_KINDS.filter((kind) => kind !== "artist").some((kind) => chosen[kind].length);
 
   if (onlyAnArtist) {
     return el("div", { class: "stack empty" }, [
@@ -503,7 +626,12 @@ function emptyState(query, chosen, showingTheme, themeName) {
       }),
       el("div", { class: "row" }, [
         el("button", { class: "action", type: "button", text: "Look for some in Discover", onclick: () => go("discover") }),
-        el("button", { class: "action quiet", type: "button", text: "Show everything", onclick: () => go("collection", null, { density: state.params.density }) }),
+        el("button", {
+          class: "action quiet",
+          type: "button",
+          text: "Show everything",
+          onclick: () => go("collection", null, { density: state.params.density }),
+        }),
       ]),
     ]);
   }
@@ -532,7 +660,12 @@ function emptyState(query, chosen, showingTheme, themeName) {
       // been called since the search landed, and it says where the control goes
       // rather than what it undoes. It drops every narrowing, which is the only
       // honest reading of the words.
-      el("button", { class: "action", type: "button", text: "Show everything", onclick: () => go("collection", null, { density: state.params.density }) }),
+      el("button", {
+        class: "action",
+        type: "button",
+        text: "Show everything",
+        onclick: () => go("collection", null, { density: state.params.density }),
+      }),
       query ? clearSearchLink("Clear only the search") : null,
     ]),
   ]);
@@ -543,7 +676,9 @@ function filterPhrase(query, chosen, showingTheme, themeName) {
   if (query) parts.push(`the search “${query}”`);
   if (showingTheme) parts.push(`the theme “${themeName}”`);
   for (const kind of FACET_KINDS) {
-    if (chosen[kind].length) parts.push(`${FACET_LABELS[kind].toLowerCase()} ${chosen[kind].map((value) => `“${value}”`).join(" or ")}`);
+    if (chosen[kind].length) {
+      parts.push(`${FACET_LABELS[kind].toLowerCase()} ${chosen[kind].map((value) => `“${value}”`).join(" or ")}`);
+    }
   }
   return parts.join(", and ");
 }
@@ -585,8 +720,12 @@ export async function viewCollection(generation) {
   const chosen = facetsFor(state.params);
   const showingTheme = themeIsShowing(query, chosen);
 
-  // Painted before anything is asked for, at the geometry the answer will have.
-  render(generation, skeletonGrid(state.params.density === CATALOGUE ? CATALOGUE : CONTACT));
+  // Said, not drawn. How much there is decides the density and the density
+  // decides the geometry, so a placeholder painted before the first page has
+  // answered can only guess — see `skeletonGrid` for what that cost when it did.
+  // The heading is the one thing that can be painted now, and it is the same
+  // element the real heading replaces, so it holds its own place.
+  render(generation, el("h2", { text: "Loading the collection…" }));
 
   // The themes come along on every paint because the rail is part of the screen,
   // not part of the theme filter: a curator has to see the themes in order to
@@ -596,7 +735,14 @@ export async function viewCollection(generation) {
     // The search and the facets go to the server, which is what makes the count
     // in the heading a statement about the catalogue rather than about this
     // screen's first page.
-    showingTheme ? themePage(state.params.theme) : fetchAllWorks(query, chosen),
+    showingTheme
+      ? themePage(state.params.theme)
+      : fetchAllWorks(query, chosen, (first) => {
+          // Only when there is more to come. A collection that arrives whole in
+          // one round trip has nothing to wait through, and the tiles it would
+          // stand in for are already on their way.
+          if (first.truncated) render(generation, ...skeletonScreen(resolveDensity(first.total)));
+        }),
   ]);
 
   // `ThemeListOut` wraps its list; the rail wants the placements themselves.
@@ -618,17 +764,21 @@ export async function viewCollection(generation) {
   }
 
   const grid = el("ul", { class: density === CONTACT ? "grid contact-sheet" : "grid" });
-  const membership = themes.length
-    ? membershipControls(themes, showingTheme, grid, heading, recount)
-    : null;
-  const onChange = membership ? membership.settle : () => {};
+  const selection = membershipControls({
+    themes,
+    showingTheme,
+    grid,
+    heading,
+    recount,
+    whenEmpty: () => grid.replaceWith(emptyState(query, chosen, showingTheme, themeName)),
+  });
   for (const work of page.works) {
-    grid.append(density === CONTACT ? contactTile(work, onChange) : workCard(work, onChange));
+    grid.append(density === CONTACT ? contactTile(work, selection) : workCard(work, selection));
   }
   render(
     generation,
     heading,
-    collectionLayout(themes, page, chosen, showingTheme, density, membership, [shortfallNote(page), grid]),
+    collectionLayout(themes, page, chosen, showingTheme, density, selection, [shortfallNote(page), grid]),
   );
 }
 
@@ -636,7 +786,7 @@ export async function viewCollection(generation) {
  * populated screen and each empty one cannot come to disagree about where the
  * controls live — an empty grid that also loses its filters is an empty state a
  * curator cannot get out of. */
-function collectionLayout(themes, page, chosen, showingTheme, density, membership, main) {
+function collectionLayout(themes, page, chosen, showingTheme, density, selection, main) {
   const rails = [themeRail(themes, showingTheme)];
   if (showingTheme) {
     rails.push(
@@ -661,7 +811,7 @@ function collectionLayout(themes, page, chosen, showingTheme, density, membershi
   return el("div", { class: "collection" }, [
     el("aside", { class: "rails", "aria-label": "Filters" }, rails),
     el("div", { class: "collection-main" }, [
-      el("div", { class: "toolbar" }, [densityControl(density), membership ? membership.node : null]),
+      el("div", { class: "toolbar" }, [densityControl(density), selection ? selection.node : null]),
       ...main,
     ]),
   ]);
