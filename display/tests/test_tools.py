@@ -84,6 +84,40 @@ def label_preview(monkeypatch):
     return module
 
 
+@pytest.fixture
+def deployment(monkeypatch, tmp_path):
+    """A complete, hermetic environment for the tool's `.env` road.
+
+    **Every test touching that road needs this, and the reason is a defect these
+    tests shipped with.** `display.config.load` calls `load_dotenv()`, which reads
+    the repo-root `.env` — gitignored, so absent in CI and present with different
+    contents on the Pi and on a developer's machine. Tests that merely set or
+    deleted the two `EPD_*` variables therefore passed on exactly one machine:
+    CI has no `ART_ROOT` so `load` raised and the tool refused where a test
+    expected success, and the Pi's `.env` re-injected the two values so the tool
+    proceeded where a test expected refusal. Three tests, three different results,
+    none of them a statement about the code.
+
+    So this stubs `load_dotenv` to a no-op and supplies the full required set
+    itself. Nothing here reads the ambient filesystem, and every fact a test
+    depends on is stated where the test can see it.
+    """
+    from display import config
+
+    monkeypatch.setattr(config, "load_dotenv", lambda *a, **k: None)
+    for name, value in (
+        ("ART_ROOT", str(tmp_path)),
+        ("TV_ADDRESS", "10.0.0.2"),
+        ("LATITUDE", "45.68"),
+        ("LONGITUDE", "-111.04"),
+        ("LOCATION_NAME", "Bozeman"),
+    ):
+        monkeypatch.setenv(name, value)
+    # The two under test start absent on every machine, whatever its own .env says.
+    monkeypatch.delenv("EPD_PANEL_DIAGONAL_INCHES", raising=False)
+    monkeypatch.delenv("EPD_VIEWING_DISTANCE_INCHES", raising=False)
+
+
 #: The two physical facts the tool refuses to guess, as the reference wall's.
 #: **Stated by every invocation below rather than defaulted**, which is the
 #: behaviour under test as much as a fixture detail: the tool used to carry these
@@ -191,7 +225,7 @@ class TestTheLabelPreviewStillRuns:
         with pytest.raises(SystemExit):
             label_preview.main([])
 
-    def test_it_refuses_to_guess_the_viewing_conditions(self, label_preview, tmp_path, monkeypatch, capsys):
+    def test_it_refuses_to_guess_the_viewing_conditions(self, label_preview, deployment, tmp_path, capsys):
         """**The instrument must not answer for a wall it was not pointed at.**
 
         This tool carried the reference wall's 6 inches and 7 feet as argument
@@ -204,9 +238,6 @@ class TestTheLabelPreviewStillRuns:
         Refusing names both environment variables and both flags, because the
         person who hits this needs to know which two facts are missing.
         """
-        monkeypatch.delenv("EPD_PANEL_DIAGONAL_INCHES", raising=False)
-        monkeypatch.delenv("EPD_VIEWING_DISTANCE_INCHES", raising=False)
-
         with pytest.raises(SystemExit):
             label_preview.main([str(tmp_path / "label.png")])
 
@@ -215,7 +246,7 @@ class TestTheLabelPreviewStillRuns:
         assert "--diagonal-inches" in complaint and "--viewing-distance-inches" in complaint
 
     def test_it_takes_the_conditions_from_the_deployment_when_no_flag_gives_them(
-        self, label_preview, tmp_path, monkeypatch, capsys
+        self, label_preview, deployment, tmp_path, monkeypatch, capsys
     ):
         """**The convenience half of the refusal above, and the half the Pi uses.**
 
@@ -245,11 +276,9 @@ class TestTheLabelPreviewStillRuns:
         assert '10.3" panel read from 120.0"' in printed, "the report did not echo the deployment's own geometry"
         assert _floor_of(printed) != 92, "the deployment's geometry was echoed but not derived from"
 
-    def test_one_stated_fact_does_not_let_the_other_be_guessed(self, label_preview, tmp_path, monkeypatch, capsys):
+    def test_one_stated_fact_does_not_let_the_other_be_guessed(self, label_preview, deployment, tmp_path, capsys):
         """Half-known conditions are the dangerous case: a run with a real diagonal
         and an invented distance looks more trustworthy than one with neither."""
-        monkeypatch.delenv("EPD_VIEWING_DISTANCE_INCHES", raising=False)
-
         with pytest.raises(SystemExit):
             label_preview.main([str(tmp_path / "label.png"), "--diagonal-inches", "6.0"])
 

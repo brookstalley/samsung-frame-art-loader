@@ -1978,7 +1978,8 @@ hardware.
     what has to give. **Two comments ride this commit** rather than earning a
     review round of their own: `curation/tests/unit/test_manifest.py` and
     `test_seed_ingest.py` still describe the panel setting a name in bold
-    capitals as present behaviour, which is true only once this lands. **13B-4 needs the same thing for a different reason** —
+    capitals as present behaviour, which is true only once this lands.
+    **13B-4 needs the same thing for a different reason** —
     sizing by role rather than by position — so whichever lands first should build
     the structure both use rather than a weight-only one.
   - **13B-3 — the catalogue fields, and the content model they exist for. Built

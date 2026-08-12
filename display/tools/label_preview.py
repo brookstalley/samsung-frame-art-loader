@@ -127,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         "--diagonal-inches",
         type=float,
         default=None,
-        help="the label panel's diagonal; with the distance below it decides every type size",
+        help="the label panel's diagonal; overrides EPD_PANEL_DIAGONAL_INCHES",
     )
     parsed.add_argument(
         "--viewing-distance-inches",
