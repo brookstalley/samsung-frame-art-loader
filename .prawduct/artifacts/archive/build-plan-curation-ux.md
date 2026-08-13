@@ -47,7 +47,12 @@ governed_by:
       - "**the theme manifest file is the only channel from curation to display** (Test, `tests/preferences/test_plane_isolation.py`) → conforms; Chunk 02 is the chunk it guards and the test is a Done-when step there"
       - "**the two planes agree on the heartbeat's filename and its instant's key by construction** (Test, `tests/preferences/test_heartbeat_contract.py`) → **ruling needed, and Chunk 02 takes it.** That guard reads both planes' source with AST, compares two deliberately-duplicated string constants, and pins them literally against `observability-strategy.md`. Per-wall heartbeats change the filename on both sides at once — which is precisely the case the row says must still break the test. The guard is not weakened to accommodate the change: the chunk updates the pinned literal in `observability-strategy.md` first, and the test follows it"
 last_validated: null
+lifecycle: completed
+archived: 2026-08-12
+maintained: false
 ---
+
+> **Archived — no longer maintained.** This plan records what was built, not what will be. Do not edit it to reflect later changes; write those where they are true.
 
 # Build Plan — The Curation Surface
 
