@@ -357,21 +357,12 @@ function controls(wall, themes, reason, manifest) {
   ]);
 }
 
-/* Hanging: the one act in this product that changes what other people in the
- * house see, and the reason this screen has a confirmation at all.
+/* Repaints in place, because the result of this act is on this screen — and it
+ * repaints from the published manifest rather than from optimism: `refresh`
+ * re-reads everything, so nothing here assumes the activation put up what the
+ * preview said it would.
  *
- * **The consequence is evaluated, not predicted.** `GET /api/manifest` takes a
- * theme and answers what it would put on this wall without writing anything, so
- * the sentence in the dialog is the build's own summary rather than a guess
- * composed here — including the case where the answer is "this theme holds no
- * works yet", which is exactly the thing a curator would want to be told before
- * pressing the button rather than after.
- *
- * **The wall repaints from the published manifest rather than from optimism.**
- * The refresh after the write re-reads everything; nothing here assumes the
- * activation put up what the preview said it would. */
-/* Repaints in place, because the result of this act is on this screen. The
- * question, the preview and the request are `core/hanging.js`'s — the Theme
+ * The question, the preview and the request are `core/hanging.js`'s — the Theme
  * screen asks the same one, and one act must not have two wordings. */
 function hang(wall, themes, themeId) {
   const chosen = themes.find((placement) => placement.theme.theme_id === themeId);

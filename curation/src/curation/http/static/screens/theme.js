@@ -263,22 +263,6 @@ function themePanel(placement, walls, allWorks, repaintThemes) {
   ]);
 }
 
-/* Hanging, asked about before it happens.
- *
- * **The consequence is evaluated, not predicted.** `GET /api/manifest` takes a
- * wall and a theme and answers what that pairing would put up without writing
- * anything, so the sentence in the dialog is the build's own summary — including
- * the case where the answer is that the theme holds nothing displayable, which
- * is exactly what a curator wants to be told before pressing the button rather
- * than after.
- *
- * **Both the theme and the wall are named**, even in a house with one wall. A
- * question that reads correctly today only because there is one possible target
- * is the last place a mistake could have been caught.
- *
- * The wall view is where this lands, and it repaints from the manifest the
- * activation published rather than from the preview above it: the preview said
- * what *would* happen, and what did is a different question. */
 /* Leaves for the Walls screen, which is where the result of this act is. The
  * question, the preview and the request are `core/hanging.js`'s — the Walls
  * screen asks the same one, and one act must not have two wordings. */
