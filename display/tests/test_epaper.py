@@ -21,6 +21,7 @@ from display.panel.epaper import GREYSCALE_MODE, EpaperSurface, open_panel
 from display.panel.layout import Block, Geometry, Layout
 from display.panel.legibility import TypeScale
 from display.panel.raster import Raster, Rasterizer
+from display.panel.styling import Run
 
 GEOMETRY = Geometry(width_px=8, height_px=4, margin_px=1)
 
@@ -88,7 +89,7 @@ def a_surface(**kwargs) -> EpaperSurface:
 
 
 def a_layout() -> Layout:
-    block = Block(text="Cat Litter", size_px=4, x_px=1, y_px=1, width_px=6, height_px=2, wrap_px=6)
+    block = Block(runs=(Run("Cat Litter"),), size_px=4, x_px=1, y_px=1, width_px=6, height_px=2, wrap_px=6)
     return Layout(surface=GEOMETRY, blocks=(block,), dropped=())
 
 

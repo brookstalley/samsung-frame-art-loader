@@ -29,6 +29,7 @@ import pytest
 
 from display.panel.layout import Extent
 from display.panel.raster import Raster
+from display.panel.styling import Line, set_text
 
 TOOLS = Path(__file__).resolve().parent.parent / "tools"
 
@@ -38,7 +39,11 @@ class StubRasterizer:
 
     @property
     def measure(self):
-        def measure(text: str, size_px: int, wrap_px: int) -> Extent:
+        def measure(line: Line, size_px: int, wrap_px: int) -> Extent:
+            # `set_text`, not the recorded text: a stub that measured the runs
+            # themselves would count a handful of objects rather than a line of
+            # characters, and every label would fit.
+            text = set_text(line)
             glyph = max(1, size_px // 2)
             per_row = max(1, wrap_px // glyph)
             rows = max(1, math.ceil(len(text) / per_row))
@@ -166,11 +171,32 @@ class TestTheLabelPreviewStillRuns:
         is worse than a crash, because the operator's whole reason for running
         this is to judge what the panel will show. Asserted on the tool's own
         output rather than on the dict, so it holds however the sample is built.
+
+        **The report is checked in the form the panel sets, not the recorded
+        one**, which is what makes this an assertion about the label rather than
+        about the dict: a fallback name reaches the report as `Katsushika
+        Hokusai`, and only the split one is capitalised and set apart.
         """
         run(label_preview, str(tmp_path / "label.png"))
 
         printed = capsys.readouterr().out
-        assert "Katsushika, Hokusai" in printed, "the sample no longer carries the name parts the panel sets"
+        assert "KATSUSHIKA, Hokusai" in printed, "the sample no longer carries the name parts the panel sets"
+
+    def test_the_report_names_the_styled_runs(self, label_preview, tmp_path, capsys):
+        """**A terminal cannot show weight, and the styling is not decoration.**
+
+        The family name's bold capitals are the only thing telling a reader that
+        the first comma of `KATSUSHIKA, Hokusai, Japanese, 1760–1849` inverts a
+        name while the other two separate a list. Until somebody stands at the
+        panel this report is the only place that can be checked at all, so a
+        report that showed the words and not how they are set would leave the
+        operator judging a picture with the property under review invisible.
+        """
+        run(label_preview, str(tmp_path / "label.png"))
+
+        printed = capsys.readouterr().out
+        assert "bold capitals: 'Katsushika'" in printed, "the report does not say which run carries the weight"
+        assert "italic: 'Under the Well of the Great Wave off Kanagawa'" in printed, "the title's slant is unreported"
 
     def test_the_report_shows_the_drop_rule_taking_the_lowest_line_off(self, label_preview, tmp_path, capsys):
         """**The half of the label that is invisible in the image.**

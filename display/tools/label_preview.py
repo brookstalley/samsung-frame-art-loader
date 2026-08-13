@@ -60,7 +60,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from display.panel import Layout, TypeScale, lay_out, margin_for, read_label, type_scale_for
+from display.panel import Case, Layout, Run, Slant, TypeScale, Weight, lay_out, margin_for, read_label, set_text, type_scale_for
 from display.panel.layout import Geometry
 from display.panel.pango import PangoRasterizer
 
@@ -298,6 +298,20 @@ def _draw_on_the_panel(args: argparse.Namespace, surface: Geometry, scale: TypeS
         panel.close()
 
 
+def _styling_of(run: Run) -> str:
+    """How this run departs from plain type, or nothing when it does not."""
+    departures = [
+        name
+        for name, applies in (
+            ("bold", run.weight is Weight.BOLD),
+            ("italic", run.slant is Slant.ITALIC),
+            ("capitals", run.case is Case.CAPITALS),
+        )
+        if applies
+    ]
+    return " ".join(departures)
+
+
 def _report(laid_out: Layout, scale: TypeScale, args: argparse.Namespace) -> None:
     """Say what was placed, what was not, and what angle it all subtends.
 
@@ -305,6 +319,16 @@ def _report(laid_out: Layout, scale: TypeScale, args: argparse.Namespace) -> Non
     read off a terminal tells the operator nothing about whether the person at the
     wall can read it — that was exactly the gap that let a body size half the
     resolvable height pass every check this product had.
+
+    **Each line is printed as the panel sets it, and its styled runs are named
+    under it.** A terminal cannot show weight, and the styling is not decorative
+    here: the family name's bold capitals are the only thing distinguishing the
+    comma that inverts a name from the two that separate a list, so a report that
+    printed the recorded text would show the operator a line the panel does not
+    draw and hide the one property the collapsed tombstone rests on. Naming the
+    runs is also the only look anybody gets at the styling before the panel — a
+    PNG on a backlit monitor cannot settle legibility, but it can settle that the
+    right words are heavy.
     """
     from display.panel import layout as layout_module
     from display.panel.legibility import CAP_RATIO, pixels_per_arcminute, pixels_per_inch
@@ -319,7 +343,11 @@ def _report(laid_out: Layout, scale: TypeScale, args: argparse.Namespace) -> Non
     )
     for block in laid_out.blocks:
         arcmin = (block.size_px * CAP_RATIO) / per_arcmin
-        print(f"  {block.size_px:>3} px = {arcmin:>5.1f}' cap at y={block.y_px:<5} {block.text}")
+        print(f"  {block.size_px:>3} px = {arcmin:>5.1f}' cap at y={block.y_px:<5} {set_text(block.runs)}")
+        for run in block.runs:
+            how = _styling_of(run)
+            if how:
+                print(f"        {how}: {run.text!r}")
     print(f"  tiers: {scale.primary_px} px primary over a {scale.floor_px} px floor")
     if laid_out.dropped:
         # The drop rule is the thing this tool exists to make visible: it is

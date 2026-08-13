@@ -48,8 +48,12 @@ markers below, all of them run by hand.
 
 **`display/tests/raster` needs one optional group and skips itself without it.**
 The label is typeset with Pango through PyGObject, which a default `uv sync` does
-not install — and which **does not work on this Mac at all** (it builds under
-Homebrew and fails at import; do not spend time on it). Run it where Pango works:
+not install. **It does install and import on this Mac** — verified 2026-08-13,
+PyGObject 3.56.3 resolving as a wheel against Pango 1.57.1, rendering through
+PangoCairo. (This entry said the opposite for months, on the strength of an older
+Homebrew build that failed at import; the cost of believing it is that the
+product's most important accessibility surface goes unexercised locally and is
+first seen in CI.) So run it:
 
 ```sh
 cd display && uv run --group raster pytest tests/raster

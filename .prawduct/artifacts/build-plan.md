@@ -149,7 +149,7 @@ re-created the same silence one line further down.
 - [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [x] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13A: The panel, the label, the heartbeat and the two units — no hardware *(built and reviewed; the box waits on Done-when step 0b, which needs the set — see § The announcement reaches both subscribers in `operator-verification.md`)*
-- [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover *(the machine half is done and running: account, both trees, both units enabled, catalogue seeded, manifest published — 2026-08-11. The legibility norm was ratified 2026-08-11 once the floor existed, and amended into two tiers by the same ruling — which is what 13B-4 builds against. **13B-1 landed 2026-08-11**: the floor, the margin and the line-length bound are all derived from two stated physical facts now, so the settlement that needed a panel visit is down to one calibrated angle the operator already gave. **13B-3 landed 2026-08-11** and did the job it was moved ahead for: the artist leads, the tombstone is one line instead of three, and the catalogue can finally say which part of a name is the family name. The box now waits on **13B-2 then 13B-4** — start 13B-2 at `LabelText.identification`, whose join is what both of them need undone — and on the unattended run across a television power-cycle. It also waits on the Pi: the fields exist there the moment the file is opened, but the *values* need the seed re-run, which `deploy/README.md` § The cutover carries)*
+- [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover *(the machine half is done and running: account, both trees, both units enabled, catalogue seeded, manifest published — 2026-08-11. The legibility norm was ratified 2026-08-11 once the floor existed, and amended into two tiers by the same ruling — which is what 13B-4 builds against. **13B-1 landed 2026-08-11**: the floor, the margin and the line-length bound are all derived from two stated physical facts now, so the settlement that needed a panel visit is down to one calibrated angle the operator already gave. **13B-3 landed 2026-08-11** and did the job it was moved ahead for: the artist leads, the tombstone is one line instead of three, and the catalogue can finally say which part of a name is the family name. **13B-2 landed 2026-08-13**: a line is a tuple of styled runs, the family name is set bold and capitalised, titles are set in italic, and the renderer applies Pango attributes over byte ranges rather than markup. The box now waits on **13B-4** — the fill model and the name ladder, the latter now carrying a measured cost to answer — and on the unattended run across a television power-cycle. It also waits on the Pi: the fields exist there the moment the file is opened, but the *values* need the seed re-run, which `deploy/README.md` § The cutover carries)*
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
 Context: Plan authored 2026-07-20. Chunks 01, 02 and 06 landed 2026-07-27 in one
@@ -1962,11 +1962,12 @@ hardware.
     amendment said it derives and not by what rule), and three type sizes
     collapsing to two, since the calibration settled only two readings and the
     rung between them was recorded as the size that takes effort to read.
-  - **13B-2 — styled runs.** `Block` carries runs with their own weight and case
-    instead of one flat string, and the Pango renderer applies **attributes over
-    byte ranges — never markup**, because `metadata.py` escapes nothing on purpose
-    and `<b>`-wrapping would reintroduce the 2024 injection on the surface it was
-    fixed for.
+  - **13B-2 — styled runs. Built 2026-08-13**
+    (`display/src/display/panel/styling.py`). `Block` carries runs with their own
+    weight, slant and case instead of one flat string, and the Pango renderer
+    applies **attributes over byte ranges — never markup**, because `metadata.py`
+    escapes nothing on purpose and `<b>`-wrapping would reintroduce the 2024
+    injection on the surface it was fixed for.
     **Start at `LabelText.identification`, which is where the boundaries were
     lost.** 13B-3 joins four fields — two mandatory-tier, two optional-tier — into
     one string with `", ".join`, at the point furthest from where the distinction
@@ -1981,7 +1982,27 @@ hardware.
     capitals as present behaviour, which is true only once this lands.
     **13B-4 needs the same thing for a different reason** —
     sizing by role rather than by position — so whichever lands first should build
-    the structure both use rather than a weight-only one.
+    the structure both use rather than a weight-only one. It landed first, and the
+    structure carries slant and case as well as weight; what it deliberately does
+    *not* carry is a role, which is 13B-4's to add rather than this one's to guess.
+    **Three things this sub-chunk had to decide rather than inherit**, all now
+    recorded in `accessibility-spec.md`: the run vocabulary is its own module
+    rather than any one tier's, so the renderer does not import "what a label
+    says" to learn what bold means; `Measure` takes runs and not their text,
+    because bold capitals are wider and a measurer reading the plain string would
+    under-report the one line the label leads with; and **case is applied where
+    the string is built rather than asked of the renderer**, since Pango can
+    transform case only from 1.50 and `Run.text` keeping the recorded spelling is
+    what lets the journal and the preview report a name nobody shouted.
+    **Found by running it, and recorded rather than fixed:** the capitals cost
+    room. On the reference wall's Hokusai sample the identification line went from
+    262 px to 393 px and one further line dropped — which is the case the name
+    ladder answers, so it is 13B-4's to close and not a reason to withdraw the
+    weight.
+    **The two comments this bullet said would ride the commit needed no edit.**
+    Both describe the panel setting a family name in bold capitals as present
+    behaviour, which this sub-chunk makes true as written; checked rather than
+    assumed.
   - **13B-3 — the catalogue fields, and the content model they exist for. Built
     2026-08-11.** `family_name` and `given_name` on `Artist`, `commentary` on the
     work, all three carried by `entry_for` into the manifest (schema minor 0 → 1,

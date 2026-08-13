@@ -38,6 +38,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from display.panel.legibility import TypeScale
+from display.panel.styling import Line, plain
 
 #: Space between one block and the next, as a fraction of the block's own size.
 #: Proportional rather than absolute, so the whole label rescales coherently with
@@ -112,21 +113,29 @@ class Extent:
     height_px: int
 
 
-#: Measure `text` at `size_px`, wrapped to `wrap_px`. Supplied by whatever will
+#: Measure `line` at `size_px`, wrapped to `wrap_px`. Supplied by whatever will
 #: draw — Pango in the deployment, arithmetic of the test's own choosing in the
 #: suite.
-Measure = Callable[[str, int, int], Extent]
+#:
+#: **It takes the styled runs and not their text, because styling changes the
+#: answer.** Bold is wider than regular and capitals are wider than lower case, so
+#: a measurer handed the plain string would under-report the one line this label
+#: leads with — and the drop rule, which is driven entirely by measured height,
+#: would keep a line that runs off the panel. Nobody discovers that except the
+#: person standing in front of it.
+Measure = Callable[[Line, int, int], Extent]
 
 
 @dataclass(frozen=True, slots=True)
 class Block:
-    """One run of text, placed.
+    """One line of the label, placed.
 
     Carries its size rather than a style name so the renderer needs no table to
-    interpret it: a block is drawable from what it holds.
+    interpret it: a block is drawable from what it holds. Since the label styles
+    part of a line rather than a whole one, what it holds is runs.
     """
 
-    text: str
+    runs: Line
     size_px: int
     x_px: int
     y_px: int
@@ -141,6 +150,16 @@ class Block:
     #: would have held. Nothing about that is visible until somebody is standing
     #: in front of the panel.
     wrap_px: int
+
+    @property
+    def text(self) -> str:
+        """What this block says, as recorded — for a journal, a report or a test.
+
+        Not what the renderer sets: the capitals belong to how the panel sets a
+        name at 7 feet, and a log line shouting somebody's surname into a file
+        would be carrying a typographic decision somewhere it means nothing.
+        """
+        return plain(self.runs)
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,7 +179,7 @@ class Layout:
         return not self.blocks
 
 
-def lay_out(lines: tuple[str, ...], surface: Geometry, measure: Measure, scale: TypeScale) -> Layout:
+def lay_out(lines: tuple[Line, ...], surface: Geometry, measure: Measure, scale: TypeScale) -> Layout:
     """Place the label's lines top-down, dropping from the bottom what will not fit.
 
     `lines` arrives least-droppable first — who made it, what it is called, when,
@@ -183,7 +202,7 @@ def lay_out(lines: tuple[str, ...], surface: Geometry, measure: Measure, scale: 
     would be this plane hiding a deployment error behind a blank panel.
     """
     if surface.text_width_px <= 0 or surface.text_height_px <= 0:
-        return Layout(surface=surface, blocks=(), dropped=lines)
+        return Layout(surface=surface, blocks=(), dropped=_reported(lines))
 
     placed = _place(lines, surface, measure, scale)
     while _overflows(placed, surface) and len(placed) > 1:
@@ -192,21 +211,30 @@ def lay_out(lines: tuple[str, ...], surface: Geometry, measure: Measure, scale: 
     return Layout(
         surface=surface,
         blocks=tuple(placed),
-        dropped=lines[len(placed) :],
+        dropped=_reported(lines[len(placed) :]),
     )
 
 
-def _place(lines: tuple[str, ...], surface: Geometry, measure: Measure, scale: TypeScale) -> list[Block]:
+def _reported(lines: tuple[Line, ...]) -> tuple[str, ...]:
+    """What the journal is told came off, as text rather than as runs.
+
+    A dropped line is read by a person looking at a log, not set by a renderer,
+    so the styling has nothing to say to them — see `Block.text`.
+    """
+    return tuple(plain(line) for line in lines)
+
+
+def _place(lines: tuple[Line, ...], surface: Geometry, measure: Measure, scale: TypeScale) -> list[Block]:
     """Stack these lines from the top margin down, at the size each one earns."""
     blocks: list[Block] = []
     y = surface.margin_px
-    for index, text in enumerate(lines):
+    for index, runs in enumerate(lines):
         size = _size_for(index, scale)
         wrap = _wrap_width_for(size, surface)
-        extent = measure(text, size, wrap)
+        extent = measure(runs, size, wrap)
         blocks.append(
             Block(
-                text=text,
+                runs=runs,
                 size_px=size,
                 x_px=surface.margin_px,
                 y_px=y,

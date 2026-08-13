@@ -18,10 +18,26 @@ told to treat this as literal text, which is the fix for the injection that a
 so a title containing `<` produced either mangled type or a parse failure
 (`data-model.md`). Escaping here instead would push knowledge of one renderer's
 markup into the tier that is supposed to be renderer-agnostic.
+
+**This tier says how its text is set, and that is not the same as knowing a
+renderer.** A line arrives as styled runs (`styling.py`) because only here is it
+known which characters are the family name and which are the title — a boundary
+that is destroyed by joining them into a string and cannot be recovered by
+splitting on commas, since a name or a nationality may contain one. What the runs
+carry is weight, slant and case; how a device realises those is still entirely
+the renderer's business, and the vocabulary is deliberately not one renderer's.
 """
 
 from dataclasses import dataclass, fields
 from typing import Any
+
+from display.panel.styling import Case, Line, Run, Slant, Weight
+
+#: What separates the facts sharing the identification line. Its own run rather
+#: than punctuation glued to the fact after it, so that a tier deciding what to
+#: drop or how to size a run is never handed a nationality with a comma stuck to
+#: its front.
+SEPARATOR = ", "
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,10 +98,10 @@ class LabelText:
         road. This says the same thing about a `LabelText` that `lines()` does,
         in the form a reader asking the question would reach for.
         """
-        return not any(self.lines())
+        return not self.lines()
 
-    def lines(self) -> tuple[str, ...]:
-        """The non-empty values, least-droppable first.
+    def lines(self) -> tuple[Line, ...]:
+        """The non-empty values as styled runs, least-droppable first.
 
         Not "wall-label order" — this label departs from it twice, knowingly: the
         artist leads the work, and the identification block is one line rather
@@ -94,19 +110,25 @@ class LabelText:
         Whitespace-only values count as absent. They arrive: a museum record with
         a `medium` of `" "` is common enough that treating it as present puts a
         blank line in the middle of every label that has one.
+
+        **Runs rather than strings, and that contract had to give.** Two of the
+        three typographic decisions this label makes are about *part* of a line —
+        the family name set apart from the rest of the identification block, the
+        title set in italic — and a tuple of strings has nowhere to put either.
+        The tier below no longer receives text it could only set one way.
         """
         candidates = (
             self.identification,
-            self.title,
-            self.date_created,
-            self.medium,
-            self.dimensions,
-            self.commentary,
+            _styled(self.title, slant=Slant.ITALIC),
+            _styled(self.date_created),
+            _styled(self.medium),
+            _styled(self.dimensions),
+            _styled(self.commentary),
         )
-        return tuple(value.strip() for value in candidates if value is not None and value.strip())
+        return tuple(line for line in candidates if line is not None)
 
     @property
-    def identification(self) -> str | None:
+    def identification(self) -> Line | None:
         """Who made this, where they were from and when they lived — as one line.
 
         **Three lines became one, and on the reference panel that is worth about
@@ -120,39 +142,73 @@ class LabelText:
         rather than a wall-label one, and was chosen knowingly.** On a rotating
         display the family name is the token a passer-by scans from across the
         room, so it leads. The comma after it does double duty — inversion marker
-        and list separator — and what is meant to disambiguate the two is weight
-        rather than punctuation: with the family name set in bold capitals a
-        reader takes `ANDERS` and then everything else, instead of four equal
-        comma-separated parts.
+        and list separator — and what disambiguates the two is weight rather than
+        punctuation: with the family name set in bold capitals a reader takes
+        `ANDERS` and then everything else, instead of four equal comma-separated
+        parts.
 
-        **That weight is not rendered today, and this line is the one place a
-        reader would assume otherwise.** Nothing downstream applies a style: the
-        contract from here is a flat string per line and one size per block, so
-        the panel currently shows four undifferentiated parts. Which is a real
-        cost of the collapse rather than a detail — it is recorded as the thing to
-        look at in `accessibility-spec.md` § The label's content model, and the
-        styled runs it waits on are a deliverable of their own. The ordering is
-        settled here regardless, so that whatever applies the weight and whatever
-        decides the sizes cannot disagree about which run is which.
+        **The weight is why this returns runs and not a string.** The bold and the
+        capitals apply to a stretch of a line, and the line is composed here
+        because this is the last place the boundary is known: downstream, a
+        reader looking for where the family name ends has only commas to go on,
+        and a name or a nationality may contain one. So the boundary is carried
+        rather than re-derived, and whatever sets the weight and whatever decides
+        the sizes are looking at the same runs.
+
+        **Only the family name is styled.** A given name standing alone — the
+        record has one part and it is not the family one — is set as recorded,
+        because bold capitals here mean "this is the family name" and setting a
+        given name that way would be a claim about the person rather than about
+        the type.
 
         **Falls back to the whole name, unstyled, when neither part is known.**
         An artist with no recorded parts is a fact about the record — an
         anonymous master, a culture, a workshop, or simply a name nobody has
         split yet — and not a licence to guess which word is the family one.
         """
+        name = self._name_runs()
+        facts = [_present(self.artist_nationality), _present(self.artist_dates)]
+        runs = list(name)
+        for fact in facts:
+            if fact is None:
+                continue
+            # The separator is only ever *between* things, so it is appended with
+            # the fact that needs it rather than after the one before — which is
+            # what leaves an anonymous work's line opening with a stray comma.
+            if runs:
+                runs.append(Run(SEPARATOR))
+            runs.append(Run(fact))
+        # No name and no nationality and no dates is an anonymous work, which is
+        # a normal record here — the label simply opens with the title.
+        return tuple(runs) if runs else None
+
+    def _name_runs(self) -> Line:
+        """The artist's name, styled, or no runs at all when none is recorded."""
         family = _present(self.artist_family_name)
         given = _present(self.artist_given_name)
-        if family is not None and given is not None:
-            name: str | None = f"{family}, {given}"
-        else:
+        if family is None:
             # Whichever single part is known stands alone rather than being
             # padded out of `artist`: a label reading "Rembrandt" is correct,
             # and one reading "Rembrandt, Rembrandt Harmenszoon van Rijn" is not.
-            name = family or given or _present(self.artist)
-        parts = [part for part in (name, _present(self.artist_nationality), _present(self.artist_dates)) if part is not None]
-        # No name and no nationality and no dates is an anonymous work, which is
-        # a normal record here — the label simply opens with the title.
-        return ", ".join(parts) if parts else None
+            whole = given or _present(self.artist)
+            return (Run(whole),) if whole is not None else ()
+
+        surname = Run(family, weight=Weight.BOLD, case=Case.CAPITALS)
+        if given is None:
+            return (surname,)
+        return (surname, Run(SEPARATOR), Run(given))
+
+
+def _styled(value: str | None, *, slant: Slant = Slant.UPRIGHT) -> Line | None:
+    """One field as a line of its own, or nothing when the field is absent.
+
+    The title is the only caller that passes a slant — titles are set in italic,
+    including *Untitled*, which is a museum convention rather than a decision this
+    product took. Everything else on a label is a fact about the object and is set
+    as recorded.
+    """
+    present = _present(value)
+    return (Run(present, slant=slant),) if present is not None else None
 
 
 def _present(value: str | None) -> str | None:
