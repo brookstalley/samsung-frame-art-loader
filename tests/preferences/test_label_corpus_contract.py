@@ -61,10 +61,10 @@ def seeded_name_parts(source: pathlib.Path) -> dict[str, tuple[str | None, str |
             key.value: (_literal(value.elts[0]), _literal(value.elts[1]))
             for key, value in zip(node.value.keys, node.value.values, strict=True)
             if isinstance(key, ast.Constant) and isinstance(key.value, str) and isinstance(value, ast.Tuple)
-            # **The arity is part of the shape, and leaving it out made the
-            # promise above false**: a row of any other length reached the
-            # caller's two-name unpack and raised there, which reads as a broken
-            # test rather than as a table this reader does not understand.
+            # **The arity is part of the shape this reader models.** Callers
+            # unpack two names, so a row of any other length has to be left out
+            # here rather than raising there — a reader that half-understands a
+            # row reports a broken test instead of a table it does not model.
             and len(value.elts) == 2
         }
     return {}
@@ -200,8 +200,8 @@ class TestTheGuardCanFail:
         assert corpus_records(empty) == {}
 
     def test_a_row_of_the_wrong_arity_is_left_out_rather_than_raising(self, tmp_path: pathlib.Path):
-        """The reader promises to skip what it does not understand, and a row it
-        half-understood used to reach the caller's two-name unpack instead."""
+        """The reader skips what it does not model, rather than handing a row it
+        half-understands to a caller that unpacks two names from it."""
         table = tmp_path / "names.py"
         table.write_text('SEEDED_NAME_PARTS = {"Three Parts": ("A", "B", "C"), "Two Parts": ("D", "E")}\n')
 
@@ -239,7 +239,20 @@ def corpus_keys(source: pathlib.Path) -> set[str]:
 #: `deploy/README.md` and `operator-verification.md` give the operator commands
 #: naming the keys. A rename that updated the corpus and this suite together
 #: would pass every comparison above and orphan whichever half it missed.
-QUOTED_BY_THE_ARTIFACTS = (("HOKUSAI", "hokusai"), ("OKEEFFE", "okeeffe"), ("WRIGHT", "wright"), ("MOCHE", "moche"))
+#:
+#: **Every key the queue entries name, not a sample of them.** A pin that covered
+#: most of them would fail in exactly the way it exists to prevent, and the three
+#: sparse records are the ones a tidying pass is likeliest to rename — they are
+#: also the ones whose questions nothing else can ask.
+QUOTED_BY_THE_ARTIFACTS = (
+    ("HOKUSAI", "hokusai"),
+    ("OKEEFFE", "okeeffe"),
+    ("WRIGHT", "wright"),
+    ("MOCHE", "moche"),
+    ("UNATTRIBUTED", "unattributed"),
+    ("NATIONALITY_ONLY", "nationality-only"),
+    ("ANONYMOUS", "anonymous"),
+)
 
 
 @pytest.mark.parametrize(("constant", "key"), QUOTED_BY_THE_ARTIFACTS)
