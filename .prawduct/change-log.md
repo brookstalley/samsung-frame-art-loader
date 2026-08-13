@@ -119,27 +119,28 @@ an evidence command that never installed the group its most important tests need
 
 | Finding | Severity | State | Detail |
 |---|---|---|---|
-| R-1 | warning | accepted | Fixed in df8af1b. |
-| R-2 | warning | accepted | Fixed in df8af1b. |
+| R-1 | warning | fixed | Fixed in df8af1b. |
+| R-2 | warning | fixed | Fixed in df8af1b. |
 | R-3 | note | accepted | Fixed in df8af1b. |
 | R-4 | note | accepted | A process observation about the dispatch, not a defect in the work. The tree was clean at dispatch; the six modified files were artifact reconciliations written while the review ran, deliberately held back so they would land in one commit with the findings rather than buying an extra round. They are now committed. |
-| R-5 | warning | accepted | Fixed in df8af1b. |
-| R-6 | warning | accepted | Fixed in df8af1b. |
-| R-7 | warning | accepted | Fixed in df8af1b. |
+| R-5 | warning | fixed | Fixed in df8af1b. |
+| R-6 | warning | fixed | Fixed in df8af1b. |
+| R-7 | warning | fixed | Fixed in df8af1b. |
 | R-8 | warning | accepted | CLAUDE.md's length is a pre-existing overrun and trimming it is its own task with its own judgement calls. This change's contribution was replacing a false claim ('PyGObject does not work on this Mac at all') with a true one, which is a net +4 lines and the opposite of the harm the guidance protects against: the stale version was short AND wrong, and cost the product local coverage of its most important accessibility surface. |
-| R-9 | warning | accepted | Fixed in df8af1b. |
+| R-9 | warning | fixed | Fixed in df8af1b. |
 | R-10 | note | accepted | Fixed in df8af1b. |
 | R-11 | note | accepted | Naming 13B-4 as the closer of a deferred item is the pointer-to-a-plan case the durable-prose rule permits, not prose riding on an id. The alternative — describing the fill model without naming which chunk owns it — is what produces a deferral nobody can find the other end of. The plan is archived rather than deleted when complete, so the pointer resolves. |
 | R-12 | note | accepted | Fixed in df8af1b. |
 | R-13 | note | accepted | Real but not worth its fix. A fourth style axis would need editing both _attributes_for (pango) and _styling_of (the preview report), and nothing fails if one is missed. The candidate fix is a shared table the two derive from, which for three binary axes is more machinery than the duplication costs — and 13B-4's likely new axis is a ROLE, which is not a Pango attribute and would not live in either enumeration. Revisit if a fourth genuine style axis appears. |
 | R-14 | note | accepted | Fixed in df8af1b. |
-| R-15 | warning | accepted | Fixed in df8af1b. |
-| R-16 | warning | accepted | Fixed in df8af1b. |
+| R-15 | warning | fixed | Fixed in df8af1b. |
+| R-16 | warning | filed | `138` |
 | R-17 | note | accepted | Fixed in df8af1b. |
 | R-18 | note | accepted | Informational — the reviewer's own cross-check result, reporting nothing to action. |
 | R-19 | note | accepted | Informational — the reviewer's own cross-check result, reporting nothing to action. |
 
-**19 findings** (9 warning, 10 note) — accepted: 19.
+**19 findings** (9 warning, 10 note) — accepted: 11, filed: 1, fixed: 7.
+**7 answered twice** — recorded as both resolved and dispositioned; check which answer is current.
 
 **Ten mutations swept, one survived, now caught.** Forcing every attribute to
 start at byte 0 left the leading-run case unchanged and the trailing-run case
