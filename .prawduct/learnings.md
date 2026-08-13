@@ -33,6 +33,8 @@ a rule if its recency matters; never infer recency from where it sits.
 
 ## A directory no suite imports is code with no tests, and a signature change breaks it silently — when you delete a constant or add a required parameter, grep `tools/` and `scripts/` for consumers, because the linter, the type checker and a green suite are all silent about a file nothing imports
 
+## A demoted finding is dispositioned and ridden, never fixed on its own commit — when a review returns 0 blocking with cheap observations, accept them or carry them into the next commit that was happening anyway, because a one-line fix and a six-minute review round are not the same cost and each fix commit buys another round
+
 ## A mutation sweep that flips verdict between identical runs is a property test finding its case by luck, not flaky tooling — when a sweep's result changes with no source change, apply the mutation by hand and search the input space for a real difference; if one exists and is rare, the fix is an example test naming the case, because a property reaching it by chance defends nothing
 
 ## A surviving mutation says a branch is unexercised, not which of the two reasons it is — when a sweep flags a guard, construct the case you claim cannot reach it before deleting it, because "no test covers this" and "this branch is unreachable" look identical from outside and only one of them lets you delete code
