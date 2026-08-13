@@ -159,9 +159,16 @@ Deliberately minimal, because the topology does not need more.
   there is no work, so there is nothing else to tie the line to — and it is what
   joins a caption to the `rotation.selected` that preceded it. It is carried on
   `label.drawn`, `label.blanked` and `label.failed` for that reason, and
-  deliberately **not** on `label.truncated` or `label.recovered`, where `work_id`
-  already answers the question and a second id would be a field defended only by
-  the test written to defend it.
+  deliberately **not** on the other two — a second id there would be a field
+  defended only by the test written to defend it. The two are not silent for the
+  same reason, and whoever adds the next label event needs the difference:
+  `label.truncated` is unreachable without a work, because a blank label has no
+  lines to drop, so `work_id` is always bound under it. **`label.recovered`
+  carries neither id on the blank path** — it is emitted before the caption knows
+  whether it has a work, so a panel recovering on a blank caption logs a bare
+  recovery line. That is left alone deliberately: it is a statement about the
+  surface rather than about a work, and the very next line it emits is the
+  `label.drawn` or `label.blanked` that names what the recovery was drawing.
 - **`run_id` deliberately does not cross into display.** The manifest is a
   statement of *current state*, not a record of the run that produced it. Carrying
   a run id into it would imply a provenance relationship the manifest does not

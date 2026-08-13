@@ -67,7 +67,7 @@ class FlatRasterizer(Rasterizer):
 
     @property
     def measure(self):
-        return lambda text, size_px, wrap_px: None  # never called here
+        return lambda line, size_px, wrap_px: None  # never called here
 
     def render(self, layout: Layout) -> Raster:
         width, height = layout.surface.width_px, layout.surface.height_px

@@ -749,14 +749,15 @@ class Daemon:
         or slow leaves the television rotating; that is the whole posture of this
         loop applied to an annotation of it.
 
-        **The work id is bound here rather than at the callers.** One of the two
-        arrives inside a `work_context` already and the other does not — a label
-        drawn because somebody picked a work with the remote had no correlation
-        key on any line it emitted, so the journal could report a panel failing
-        and not say which work it failed to name. Binding at the single point both
-        paths pass through is the same argument the context variable itself rests
-        on: one forgotten call site defeats a discipline, and the lines that go
-        missing that way are the ones logged from inside a failure.
+        **The work id is bound here rather than at the callers.** The rotation
+        path arrives inside a `work_context` already and correlated by
+        inheritance; the path the *set* drives — somebody choosing a work with the
+        remote — arrived with nothing bound, so the journal could report a panel
+        failing and not say which work it failed to name. Binding at the single
+        point every caller passes through is the same argument the context
+        variable itself rests on: one forgotten call site defeats a discipline,
+        and the lines that go missing that way are the ones logged from inside a
+        failure.
         """
         surface = self._surface
         if surface is None:

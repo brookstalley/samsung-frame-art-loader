@@ -97,6 +97,42 @@ carry it. `label.truncated` and `label.recovered` do not: `work_id` already
 answers the question there, and a second id would be a field whose only defence
 is the test written to defend it.
 
+**The cumulative review returned 0 blocking, 2 warnings and 10 notes**
+(`rev-20260813T164833Z-36fab21e`, three reviewers over `f4b6bf3...3166323`), and
+eight of the twelve wanted an edit. **The one that bit hardest was against the
+prose above**: the paragraph justifying `tv_content_id`'s absence from
+`label.recovered` said `work_id` answers the question there, which is false on
+exactly the path this work added — the recovery is emitted before the caption
+knows whether it has a work, so a panel recovering on a blank caption logs a bare
+line. The code is right and the sentence was not; identity comes from the
+`label.blanked` immediately after it, and the paragraph now says so.
+`label.truncated` is a different case and is genuinely always under a work,
+because a blank label has no lines to drop.
+
+**Two reviewers found the same stale claim independently, in the file nobody
+changed.** `README.md` still told the front door that bold capitals and italic
+titles were *owed* work — 13B-2 having landed both — while the six other homes of
+that claim were all corrected. It is the paragraph an operator reads before going
+to look at the panel, which is the one thing they were being asked to judge.
+
+**A boundary row that should have existed two chunks ago.** `Measure` has five
+implementations across `src`, `tools` and `tests` and no row in
+`boundary-patterns.md`, whose own preamble says a missing row silently disarms the
+consumer-impact check — and 13B-4 retypes the same seam again to add a role axis.
+The row is written from the `FakeSurface` failure rather than from caution.
+
+| Finding | Severity | Disposition |
+|---|---|---|
+| R-1 / R-4 | warning | Fixed — README names the fill model and the name ladder as what remains |
+| R-10 | note | Fixed — the two silent events separated, with the real reason for each |
+| R-5 | note | Fixed — which drop count was measured, and which is arithmetic from it |
+| R-9 | note | Fixed — `Measure`/`Block` boundary row added |
+| R-7 | note | Fixed — CLAUDE.md's display cell carries `--group raster`, as the evidence does |
+| R-3 | note | Fixed — the last `Measure` double's parameter renamed |
+| R-2 | note | Fixed — learnings rule trimmed under 400 chars, evidence already in the detail file |
+| R-11 | note | Shipped — #138 closed on this branch, atomic with the merge |
+| R-6, R-8, R-12 | note | Accepted — already dispositioned, deliberate, or a mechanical false positive |
+
 **Seven mutations, all caught**, including the two that would have been silent —
 a blank redrawn on every poll (a journal nobody can read, on a plane whose only
 failure channel journald rate-limits) and a device with no panel claiming it

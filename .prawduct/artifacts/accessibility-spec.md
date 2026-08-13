@@ -547,9 +547,16 @@ to be corrected on these 2026-08-11, and was on the first one:
 than a tuning target.** With the identification block set at the floor there is
 no slack at all against the ~130 px a further line needs — the ~66 px this
 sentence quoted was measured before the family name was set in bold capitals,
-which took 131 px of it and then some, and on the reference record the medium and
-the dimensions now drop as well. The fill rule is what
-makes that a per-work answer instead of a global one: the works with short names
+which took 131 px of it and then some.
+
+**Two records, and only one of them was measured** — they read as a contradiction
+otherwise, and a 13B-4 builder cannot tell which figure the 2026-08-13
+measurement supports. What was *measured* is the reference record as it stands,
+carrying no commentary: the identification line went from 262 px to 393 px and
+**the medium** came off. Adding a commentary line to that same record is what
+takes **the dimensions** with it, and that second statement is arithmetic against
+the 131 px rather than a second trip to the panel. The fill rule is what
+makes it a per-work answer instead of a global one: the works with short names
 and no title will have room, and the ones that do not will drop it.
 
 **The field exists and nothing writes to it yet, which is stated here rather than

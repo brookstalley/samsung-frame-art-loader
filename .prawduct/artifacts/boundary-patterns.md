@@ -332,6 +332,34 @@
   nothing about this file. A mutation sweep once deleted the close-on-failure here
   with no test objecting, for exactly that reason.
 
+### display ↔ its label typesetter (`Measure` / `Block`)
+
+- **Exists:** **yes**, as of 2026-08-11 — `display/src/display/panel/layout.py`
+  declares `Measure` and returns `Block`s; the daemon hands a surface's own
+  measurer in and never supplies one of its own.
+- **Producer:** `layout.py`. **Consumers:** every surface that can be drawn to or
+  stood in for — the e-paper surface, `FakeSurface`, the `label_preview.py` tool,
+  and the doubles in `test_tools.py` and `test_epaper.py`. **In-process, and that
+  is what makes it dangerous rather than safe**: nothing at a machine boundary
+  fails silently on a shape mismatch, and this does.
+- **Contract:** `Callable[[Line, int, int], Extent]`, where a `Line` is a tuple of
+  styled runs rather than a string. **A change to this callable's signature must
+  enumerate every implementation in `src`, `tools` and `tests` in the same
+  commit** — grep the seam, do not rely on the type checker or on red tests.
+- **The enumeration rule is written from the failure, not from caution.** When
+  `Measure` was retyped from text to runs on 2026-08-13, one double was missed:
+  `FakeSurface._measure` kept calling `len()` on the argument, which now counts a
+  handful of `Run` objects instead of a line of characters. Every label then
+  measured one row tall however long the name was, so the drop rule could not
+  fire through that surface at all — **and nothing went red**, because no test
+  using it asserts a drop. All three Critic reviewers found it independently and
+  it was fixed the same day; the identical stub in `test_tools.py` had been
+  converted in the original commit, which is what made the miss invisible.
+- **The next crossing is already scheduled.** 13B-4 adds a *role* axis to `Run` —
+  a fact about what a line is for rather than how it is set, so it is not a Pango
+  attribute and does not belong in `_attributes_for`. That retypes this seam a
+  second time, which is why the row exists now rather than after.
+
 ### Configuration
 
 - **Exists:** **yes**, as of 2026-07-27 — every deployment value reads from `.env`

@@ -21,7 +21,7 @@ a rule if its recency matters; never infer recency from where it sits.
 
 **Reading a rule is not applying it.** The failure mode of a learnings file is not absence, it is assent: a rule arrives at the right moment, is read, is agreed with, and changes nothing, because nothing made you recognize the case in hand as an instance of it. So for any rule you read here, name the decision you are about to make and say what the rule changes about it — or say that it does not apply, which is also an answer.
 
-## Changing a contract closes on the implementations, not on the red tests — when you widen or retype a seam like `Measure`, enumerate every implementation of it and convert them together, because the ones a green run exercises without asserting anything (test doubles above all) go silently wrong, and knowing the failure mode well enough to write a comment about it in one file does not make you look for the second
+## Changing a contract closes on the implementations, not on the red tests — when you widen or retype a seam like `Measure`, enumerate every implementation and convert them together, because the ones a green run exercises without asserting anything (test doubles above all) go silently wrong
 
 ## A "do not spend time on this" note is one nobody ever re-tests — when a record says a tool or dependency cannot work here, re-verify it before building around the limitation, because such a note removes itself from every future check while the world moves under it, and the cost is paid as coverage silently routed away from whatever it excused
 
