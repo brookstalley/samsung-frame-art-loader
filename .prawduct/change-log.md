@@ -54,6 +54,63 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-13: The family name is heavy, and the bytes under it are counted (13B-2)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** 13B-3 collapsed the tombstone onto one line and spent three commas doing
+it, the first of which inverts a name while the other two separate a list. The
+only thing that was ever going to tell them apart is weight — and nothing
+downstream could apply any, because `LabelText.identification` joined four fields
+with `", ".join` at the point furthest from where the distinction is needed.
+Commas cannot recover the boundary: a name or a nationality may contain one.
+
+**A line is now a tuple of styled runs.** `display/src/display/panel/styling.py`
+holds the vocabulary — weight, slant, case — and is its own module rather than
+any one tier's, so the renderer does not import "what a label says" in order to
+learn what bold means. The family name is set bold and capitalised, titles are
+set in italic, and the flat `tuple[str, ...]` contract out of `lines()` is what
+gave.
+
+**Attributes over byte ranges, never markup.** `<b>`-wrapping a run would have
+reintroduced the 2024 injection on the exact surface it was fixed for, since the
+text either side of the tag is still museum-supplied. Pango's attribute indices
+are byte offsets into UTF-8, and a character count is invisible on `O'Keeffe` and
+wrong on everything else — every life date on this wall already contains an en
+dash, which spends three bytes. What it produces is a run of the wrong length in
+the wrong weight, with nothing raising.
+
+**Two decisions worth not re-deriving.** `Measure` takes runs and not their text:
+bold capitals are wider, and a measurer reading the plain string would
+under-report the one line the label leads with, on a panel where the drop rule is
+driven entirely by measured height. And **case is applied where the string is
+built rather than asked of the renderer** — Pango can transform case only from
+1.50, and `Run.text` keeping the recorded spelling is what lets the journal and
+the preview report a name nobody shouted.
+
+**The styling costs room, recorded rather than fixed.** On the reference wall's
+Hokusai record the identification line went from 262 px to 393 px — two wrapped
+rows to three — and the medium dropped. That is the case 13B-4's name ladder
+answers by giving the family name its own line before it gives up its size, so it
+is 13B-4's to close and not a reason to withdraw the weight. Queued for the
+operator, with the two questions only the panel can settle: whether the bold does
+the disambiguating at 7 feet, and whether italic is legible at the floor or
+merely different.
+
+**`CLAUDE.md` said PyGObject "does not work on this Mac at all" and it does** —
+3.56.3 against Pango 1.57.1, verified. The stale note had three other homes and
+all four are corrected. The cost was not hypothetical: a "do not spend time on
+it" line is one nobody re-tests, and the byte-offset work would otherwise have
+been first proved in CI. The typesetting CI job stays — the group is optional,
+which is a better reason than the one recorded.
+
+**Ten mutations swept, one survived, now caught.** Forcing every attribute to
+start at byte 0 left the leading-run case unchanged and the trailing-run case
+merely bold throughout, so both still differed from plain type; each one-run case
+is now asserted against the all-bold line as well. **Suites:** 185 root, 2308
+curation, 434 display plus 19 typesetting — the last of which ran locally for the
+first time.
+
 ## 2026-08-12: Wave 3 — the Theme screen, taste as a first-class record, and a position that means one thing
 
 <!-- prawduct: chunks=09,11 | scope=curation-ux -->

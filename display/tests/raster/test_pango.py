@@ -241,7 +241,7 @@ class TestMeasuringMovesInTheDirectionsTheLayoutTierRelieson:
         them. Under Pango's word wrapping those are drawn straight past the right
         margin; the label has to break mid-word instead, because ugly beats
         unreadable."""
-        measured = rasterizer.measure(one("A") * 200, 12, 80)
+        measured = rasterizer.measure(one("A" * 200), 12, 80)
 
         assert measured.width_px <= 80
 

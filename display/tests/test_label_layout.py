@@ -13,7 +13,7 @@ import math
 
 import pytest
 
-from display.panel import Case, Geometry, Line, Run, lay_out, plain, set_text, type_scale_for
+from display.panel import Case, Geometry, Line, Run, Weight, lay_out, plain, set_text, type_scale_for
 from display.panel.layout import (
     LEADING,
     MEASURE_EM,
@@ -230,6 +230,24 @@ class TestWhatComesOffWhenItWillNotFit:
         layout = lay_out(as_lines(*self.LINES), self.tall_enough_for(2), measured, SCALE)
 
         assert [block.size_px for block in layout.blocks] == [SCALE.primary_px, SCALE.floor_px]
+
+    def test_a_dropped_line_is_reported_as_it_was_recorded(self):
+        """**The one place a styled line becomes text again**, and it goes to a
+        journal rather than to a panel.
+
+        `label.truncated` is the only signal that a device's surface is too small
+        for the corpus, and it is read by a person looking at a log — so a family
+        name arrives there spelled as the catalogue holds it. A journal shouting
+        `KATSUSHIKA` would be carrying a decision about type at 7 feet into a file
+        where it means nothing, and the same conversion is what keeps the line
+        greppable against the catalogue it came from.
+        """
+        tiny = Geometry(width_px=200, height_px=50, margin_px=5)
+        surname = Run("Katsushika", weight=Weight.BOLD, case=Case.CAPITALS)
+
+        layout = lay_out(((Run("Silver Sun"),), (surname, Run(", "), Run("Hokusai"))), tiny, measured, SCALE)
+
+        assert layout.dropped == ("Katsushika, Hokusai",)
 
     def test_nothing_placed_runs_past_the_bottom_margin(self):
         short = Geometry(width_px=1448, height_px=300, margin_px=20)

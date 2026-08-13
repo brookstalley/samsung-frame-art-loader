@@ -10,6 +10,48 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The styled name, at the panel — added 2026-08-13
+
+**Why this needs eyes and not a test.** 13B-2 set the family name in bold
+capitals and the title in italic. The suite can prove the right bytes got the
+right attribute — it does, against real type — but it cannot say whether the
+weight *does the job it was chosen for* at 7 feet on a reflective panel: making
+a reader take `KATSUSHIKA` and then the rest, instead of four equal
+comma-separated parts. That was the whole argument for collapsing the tombstone
+onto one line, and it has never been looked at.
+
+```sh
+cd display && uv run --group raster python tools/label_preview.py /tmp/label.png
+```
+
+The report now prints each line as the panel sets it and names the styled runs
+under it, because a terminal cannot show weight.
+
+**Three things to look for, in this order:**
+
+1. **Does the bold do the disambiguating?** Stand where you read the wall. If the
+   first comma still reads like the other two, the collapse is not paying for
+   itself and the name wants its own line — which is the ladder 13B-4 builds, and
+   this is the observation that would settle how it should be tuned.
+2. **Is 12.4′ still right in bold?** This was already queued under § The label's
+   type sizes and is now answerable: the ladder was read in regular weight, and
+   stroke weight matters disproportionately where contrast rather than resolution
+   is the limit. If bold reaches the same comfort a step down, that size is room
+   the fill model can spend on content.
+3. **Is the italic title legible, or merely different?** Italic at the 8.8′ floor
+   on e-paper is the least certain thing here — it is a convention borrowed from
+   museum practice, where labels are read at 18 inches and not at 7 feet. A title
+   that is harder to read than its upright form is a reason to drop the
+   convention, and nothing but the panel can say so.
+
+**One measured consequence to expect, and it is not a regression.** Capitals are
+wider than the letters they replace, so on the reference wall's fully-populated
+Hokusai record the identification line went from 262 px to 393 px — two wrapped
+rows to three — and one further line (the medium) now drops. That is the case
+13B-4's name ladder answers by giving the family name its own line before it
+gives up its size; it is recorded here so it is not read as damage on first
+sight.
+
 ### The Theme screen, and the reorder that had never worked — added 2026-08-12
 
 **Chunk 09.** Run `cd curation && uv run python -m curation` and open Themes.
@@ -325,7 +367,7 @@ a size step down. Worth measuring before spending the panel's budget on size tha
 weight could have bought.
 
 ```sh
-cd display && uv sync --group raster            # once; the Pi and CI have it, this Mac cannot
+cd display && uv sync --group raster            # once; the Pi, CI and this Mac all take it
 cd display && uv run --group raster python tools/label_preview.py /tmp/label.png --cap-arcmin 11
 ```
 
@@ -363,10 +405,16 @@ cd display && uv run --group raster python tools/label_preview.py /tmp/label.png
 identification line reads `O'KEEFFE, Georgia, American, 1887–1986` — four
 comma-separated parts, where the first comma means "inverted" and the others mean
 "and". The argument for it holding together is that **weight** separates the
-family name from the rest, not punctuation — and **13B-2 has not landed, so
-nothing is bold yet.** What you will see is four undifferentiated parts. If it
-reads badly *with* the bold capitals in place, the fallback is the name on its
-own line, which costs about half the collapse's gain.
+family name from the rest, not punctuation. **13B-2 landed 2026-08-13, so the
+bold capitals are there now** — which turns this from a question you could not
+answer into the one this entry is really for, and it is asked in its own words
+under § The styled name, at the panel. Judge it there; if it reads badly *with*
+the bold capitals in place, the fallback is the name on its own line, which costs
+about half the collapse's gain.
+
+*(This paragraph said "13B-2 has not landed, so nothing is bold yet — what you
+will see is four undifferentiated parts", which was true when it was written and
+would have sent you looking for the wrong thing.)*
 
 **Also worth a glance, and it is data rather than type:** two of the 31 seeded
 artists carry something that is not a demonym in the nationality slot — Moche

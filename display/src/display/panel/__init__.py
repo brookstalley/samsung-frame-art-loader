@@ -41,7 +41,7 @@ from display.panel.layout import Block, Extent, Geometry, Layout, Measure, lay_o
 from display.panel.legibility import TypeScale, ViewingConditionsUnknown, margin_for, type_scale_for
 from display.panel.metadata import LabelText, read_label
 from display.panel.raster import Raster, Rasterizer
-from display.panel.styling import Case, Line, Run, Slant, Weight, byte_spans, plain, set_text
+from display.panel.styling import Case, Line, Run, Slant, Weight, plain, set_text
 from display.panel.surface import LabelSurface, SurfaceUnavailable
 
 #: **The drivers are deliberately absent from this list.** `panel.pango` needs a
@@ -68,7 +68,6 @@ __all__ = [
     "TypeScale",
     "ViewingConditionsUnknown",
     "Weight",
-    "byte_spans",
     "lay_out",
     "margin_for",
     "plain",

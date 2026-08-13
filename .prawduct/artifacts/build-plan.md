@@ -593,9 +593,13 @@ rather than assumed, which is what distinguishes it from the previous status
 where a fresh resolve landed on the right commit only because upstream's master
 still happened to be it.
 
-**The typesetter got a CI job of its own**, because PyGObject does not import on
-this project's development Mac and the alternative was leaving the product's most
-important accessibility surface tested by nobody. `tests/test_default_suite_ci_scope.py`
+**The typesetter got a CI job of its own**, because its dependency group is
+optional and a default `uv sync` does not install it, so the alternative was
+leaving the product's most important accessibility surface tested by nobody.
+*(The reason recorded here at the time was that PyGObject would not import on
+this project's development Mac. That stopped being true — see
+`platform-and-dependency-findings.md` — and the job is right either way, so the
+reason is restated rather than the job withdrawn.)* `tests/test_default_suite_ci_scope.py`
 grew the claim that no directory a leg ignores may go unrun by every other job —
 the failure mode an `--ignore` introduces and a green board hides.
 
@@ -1985,8 +1989,11 @@ hardware.
     the structure both use rather than a weight-only one. It landed first, and the
     structure carries slant and case as well as weight; what it deliberately does
     *not* carry is a role, which is 13B-4's to add rather than this one's to guess.
-    **Three things this sub-chunk had to decide rather than inherit**, all now
-    recorded in `accessibility-spec.md`: the run vocabulary is its own module
+    **Three things this sub-chunk had to decide rather than inherit.** Only the
+    third is written into `accessibility-spec.md`, because only it is a fact
+    about the label a reader of the spec needs; the other two are decisions about
+    this plane's internals and are carried where they bind, in the docstrings of
+    the modules that make them. They are: the run vocabulary is its own module
     rather than any one tier's, so the renderer does not import "what a label
     says" to learn what bold means; `Measure` takes runs and not their text,
     because bold capitals are wider and a measurer reading the plain string would

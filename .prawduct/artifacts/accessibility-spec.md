@@ -443,9 +443,13 @@ free.
   transform case only from 1.50, and pinning the label's most important run to a
   version floor for what `str.upper` does exactly would buy nothing — so the run
   declares `CAPITALS` and the transform is applied where the string is built.
-  `Run.text` keeps the recorded spelling, which is what the journal and the
-  preview's report read: a label is not the place a person's name loses its
-  capitals for good.
+  `Run.text` keeps the recorded spelling. What reads it today is the preview's
+  report, and `layout.dropped` — which is how a line that came off reaches the
+  `label.truncated` journal event as the catalogue spells it rather than in
+  capitals. **A line that was *placed* is not journalled at all**, so the claim
+  stops there deliberately: `Block.text` exists for the report and for tests, and
+  naming the journal as its reader would be describing a caller that does not
+  exist. A label is not the place a person's name loses its capitals for good.
 
 **The fill rule: everything above the floor, in priority order, and slack is
 spent on content.** A fixed hierarchy handles the corpus badly — an anonymous
@@ -460,8 +464,12 @@ overflows. So the engine is given candidates with a priority and a role, and:
   name, given name and the title when there is one are not candidates competing
   for room; they are the room the rest competes for what is left of. This is what
   makes "nothing else is mandatory" affordable — with four of the six tombstone
-  facts droppable, the ~66 px slack below stops being a crisis and becomes a
-  per-work answer.
+  facts droppable, the slack below stops being a crisis and becomes a per-work
+  answer. **The figure that slack was quoted at is gone** — see the note under
+  § The label's content model: the ~66 px was measured before the family name was
+  set in bold capitals, which cost 131 px on the reference record. What the fill
+  model tunes against is a measurement it takes after the ladder decides how many
+  lines the name gets, not a number written down here.
 - **Optional content is admitted only if it fits at the floor.** Commentary is the
   first thing to go and the last thing admitted, because it is the only line that
   identifies nothing.
@@ -515,7 +523,9 @@ to be corrected on these 2026-08-11, and was on the first one:
   nationality and life dates are conventionally set as a single run —
   `Katsushika Hokusai, Japanese, 1760–1849`. This product emitted them as three
   lines, which spent three line-boxes and their leading on one fact. **On the
-  reference panel that is worth ~260 px**, against a measured slack of ~66 px, so
+  reference panel that is worth ~260 px**, against the slack measured at the time
+  (~66 px, before the capitals took 131 px of it back — § The label's content
+  model carries the current figure), so
   it is the single change that decides whether optional content fits at all —
   which is why it was built *before* the fill model rather than as an input to
   it: tuning a fill rule against the un-collapsed numbers would have tuned it
@@ -535,7 +545,10 @@ to be corrected on these 2026-08-11, and was on the first one:
 
 **Commentary does not fit at 7 feet on this panel, and that is a finding rather
 than a tuning target.** With the identification block set at the floor there is
-~66 px of slack against the ~130 px a further line needs. The fill rule is what
+no slack at all against the ~130 px a further line needs — the ~66 px this
+sentence quoted was measured before the family name was set in bold capitals,
+which took 131 px of it and then some, and on the reference record the medium and
+the dimensions now drop as well. The fill rule is what
 makes that a per-work answer instead of a global one: the works with short names
 and no title will have room, and the ones that do not will drop it.
 
