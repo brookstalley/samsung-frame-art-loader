@@ -648,6 +648,46 @@ def test_a_not_null_column_with_no_default_is_refused_rather_than_half_applied(t
         SqliteDurableStore(path, widened)
 
 
+def test_a_file_predating_a_column_opens_when_the_schema_indexes_that_column(tmp_path):
+    """The schema declares indexes as well as tables, and one may name a new column.
+
+    **`CREATE INDEX IF NOT EXISTS ... ON t(c)` does not skip when `c` is absent —
+    it raises `no such column`.** So the widening step has to run *before* the
+    script rather than after it: run afterwards, it never runs at all on the one
+    file that needed it, and the open fails for every catalogue written before the
+    column existed. Every other widening test here adds a column and then writes
+    to it, which is why none of them saw this — the failure needs an index in the
+    schema, not just a column.
+
+    Found against the wall's own catalogue, where `spend_records` gained
+    `conversation_turn_id` together with an index over it, and the curation plane
+    then refused to start on a deployment that had been running for months.
+    """
+    path = tmp_path / "catalogue.sqlite"
+    connection = sqlite3.connect(path)
+    try:
+        connection.executescript("CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY);")
+        connection.execute("INSERT INTO notes (id) VALUES ('n1')")
+        connection.commit()
+    finally:
+        connection.close()
+
+    widened = (
+        "CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, turn_id TEXT);"
+        "CREATE INDEX IF NOT EXISTS notes_by_turn ON notes(turn_id);"
+    )
+    store = SqliteDurableStore(path, widened)
+    try:
+        # The row written before the column exists reads back with it null, and
+        # the column then takes a value — so the widening reached the file rather
+        # than merely letting the open succeed.
+        assert store.fetch_one("notes", {"id": "n1"}) == {"id": "n1", "turn_id": None}
+        store.upsert("notes", {"id": "n1", "turn_id": "t1"}, pk=("id",))
+        assert store.fetch_one("notes", {"id": "n1"})["turn_id"] == "t1"
+    finally:
+        store.close()
+
+
 def test_the_file_itself_refuses_a_second_wall_of_the_same_name(tmp_path):
     """A wall's name is how every confirmation identifies it, so two cannot share one.
 
