@@ -161,6 +161,27 @@ class TestWhatTheLabelPromises:
                 assert any(fact and fact in block.text for fact in mandatory), block.text
 
     @given(labels(), surfaces())
+    def test_no_line_is_set_above_the_floor_unless_it_identifies_the_work(self, label: dict[str, str], surface: Geometry):
+        """**The universal form of the rule the examples pin one shape of.**
+
+        An optional fact set at the identification tier is claiming to identify
+        the work, which is the two-distance label read backwards — and it shipped
+        exactly once, for records with no artist name, where the leading line is a
+        bare nationality. Sizing followed position while everything else followed
+        the tier; three hand-rolled examples now cover that shape, and this covers
+        the ones nobody thought to write.
+
+        A line carrying *any* mandatory fact earns the tier for the whole line —
+        that is what lets the nationality ride the family name — so the question
+        is only whether some mandatory fact is on it.
+        """
+        mandatory = [c.text for c in read_label(label).candidates() if c.tier is Tier.MANDATORY]
+
+        for block in laid(label, surface).blocks:
+            if block.size_px > SCALE.floor_px:
+                assert any(fact in block.text for fact in mandatory), f"{block.text!r} was set above the floor"
+
+    @given(labels(), surfaces())
     def test_every_fact_is_either_set_or_reported(self, label: dict[str, str], surface: Geometry):
         """**Nothing vanishes silently**, which is the property the journal rests
         on: an engine that adapts silently is one whose omissions nobody can
@@ -300,6 +321,18 @@ class TestTheCorpusItActuallyServes:
         layout = lay_out(read_label(moche).candidates(), self.PANEL, measured, SCALE)
 
         assert layout.blocks[0].text.startswith("Moche")
+
+    def test_a_record_with_no_artist_name_does_not_shout_its_demonym(self):
+        """`NATIONALITY_ONLY` is a real shape and it is what caught the defect: the
+        identification block composes from whatever of the three facts it has, so
+        a record with no name opens with a bare nationality. The tier is withheld
+        from the whole label rather than handed to the demonym."""
+        record = dict(CORPUS)["nationality-only"]
+
+        layout = lay_out(read_label(record).candidates(), self.PANEL, measured, SCALE)
+
+        assert {block.size_px for block in layout.blocks} == {SCALE.floor_px}
+        assert layout.blocks[0].text == "Japanese"
 
     def test_the_almost_empty_record_grows_rather_than_leaving_the_panel_blank(self):
         """The other end of the corpus, and half the reason the fill model exists:

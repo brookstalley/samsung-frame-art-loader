@@ -279,7 +279,7 @@ def _fact(
 def _present(value: str | None) -> str | None:
     """The value with its whitespace trimmed, or None if there was nothing in it.
 
-    The same rule `lines()` applies, hoisted so that a value which is
+    The same rule `candidates()` applies, hoisted so that a value which is
     whitespace-only cannot slip into the identification line as an empty
     fragment — which would surface as a stray comma rather than as a short label.
     """

@@ -39,9 +39,20 @@ things that are invisible in the image and are the whole point of the model.
    the thing to change is the tier the tail is set at, not the rule.
 3. **Is a label with only two facts on it too empty, or now too large?** Growth
    promotes an identifying line to 12.4′ when nothing more can be admitted, which
-   on an anonymous untitled work means two big lines and a lot of white. That was
-   a deliberate call — a fixed hierarchy wasted the panel here — and it is the one
-   most likely to look wrong in practice.
+   on a work with a name and a title and nothing else means two big lines and a
+   lot of white. That was a deliberate call — a fixed hierarchy wasted the panel
+   here — and it is the one most likely to look wrong in practice.
+4. **The two records with no artist name go the *other* way, and this is the
+   thing most likely to look like a bug.** `Water Jar` (nationality, no name) and
+   the anonymous photograph (medium and date only) are now set **small
+   throughout** — 8.8′ on every line, with most of the panel empty. That is
+   deliberate: the identification tier is withheld when nothing on the leading
+   line identifies the work, because the alternative was a demonym set larger
+   than the work's own title. **What it does not fix is the ordering** — `Water
+   Jar` still sits *beneath* `Japanese`, where a museum would print the title
+   first and the culture after it. Say whether that reads as wrong at the panel;
+   it is a content-model change rather than a tuning constant, so it is the one
+   item here that would need its own decision rather than a new number.
 
 **What it would take to change any of these:** all three are single constants or
 a single ordering in `display/src/display/panel/layout.py`, not a redesign. Say
@@ -445,9 +456,16 @@ cd display && uv run --group raster python tools/label_preview.py /tmp/label.png
    the ~260 px the collapse was for. Modelled against two real works it turns
    three dropped lines into one — but that was an arithmetic stand-in for the
    measurer, not Pango, so **the panel is what settles whether it is enough**.
-3. **The whole identification line is set at the primary 12.4′ tier**, because
+3. ~~**The whole identification line is set at the primary 12.4′ tier**, because
    the layout sizes by position and that line is now first. On a long name it
-   wraps to three rows and eats roughly 90 px the floor would not have.
+   wraps to three rows and eats roughly 90 px the floor would not have.~~
+   **Superseded 2026-08-13 by 13B-4 — do not go looking for this.** The name
+   ladder now gives a long family name its own line at 12.4′ and sets the rest of
+   the tombstone beneath it at the floor, so the three-row block this describes is
+   not what the panel shows any more. What you will see on the reference record is
+   `KATSUSHIKA` over `Hokusai, Japanese, 1760–1849`. Left struck through rather
+   than deleted because the ~90 px figure is what the ladder was built to answer,
+   and the entry below it is where the current question is asked.
 
 **The thing to judge, and it is a real question rather than a formality:** the
 identification line reads `O'KEEFFE, Georgia, American, 1887–1986` — four

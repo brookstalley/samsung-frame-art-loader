@@ -453,7 +453,7 @@ def _grow_into_the_slack(
         # than a higher one, which reads as a hierarchy nobody chose — and it is
         # reachable, since a leading line that identifies nothing stays at the
         # floor (see `_sizes_for`).
-        if not line.mandatory or placed.sizes[index - 1] != scale.primary_px or placed.sizes[index] == scale.primary_px:
+        if not line.mandatory or placed.sizes[index - 1] != scale.primary_px:
             break
         grown = (*placed.sizes[:index], scale.primary_px, *placed.sizes[index + 1 :])
         candidate_placement = _placed(placed.lines, grown, surface, measure, scale)

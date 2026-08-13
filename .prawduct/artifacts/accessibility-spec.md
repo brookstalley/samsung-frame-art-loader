@@ -244,11 +244,31 @@ text for whoever walks up; the operator reached the same split independently, by
 naming a size acceptable only when closer. The family name carries the primary
 tier at 12.4′ and everything else steps down to the 8.8′ floor.
 
-**The primary tier goes to the leading line, and since 13B-3 that line is the
-artist.** The layout tier sizes the first composed line at 12.4′ and everything
-below it at the 8.8′ floor, and `LabelText.candidates()` puts the identification
-block first — so the family name carries the primary tier and everything else
-steps down.
+**The primary tier goes to the leading line when that line identifies the work,
+and since 13B-3 that line is the artist.** The layout tier sets the first composed
+line at 12.4′ and everything below it at the 8.8′ floor, and
+`LabelText.candidates()` puts the identification block first — so the family name
+carries the primary tier and everything else steps down.
+
+**The condition is not decoration, and it was added 2026-08-13 because the
+unconditional form shipped a defect.** A record with *no name at all* still opens
+with an identification line — a bare nationality, or bare life dates — because
+that block composes from whatever of the three it has. Sizing by position alone
+therefore set a demonym at 12.4′ and demoted the work's own title to the floor
+beneath it: an optional fact claiming to identify the work, which is this
+section's own rule read backwards. So the tier is withheld when nothing on the
+leading line is mandatory, and such a label is set at the floor throughout.
+
+> **That leaves an open question, and it is the ordering rather than the
+> sizing.** A nameless identification line leading the title is a 13B-3 decision
+> the fill model did not revisit: `Water Jar` is set beneath `Japanese`, and
+> museums print the reverse for an unattributed work — title first, culture and
+> period after it. Withholding the tier stops the label claiming something false;
+> it does not make the order right. The consequence a reader should expect is
+> that a record like this shows small type and a lot of white. **Left to the
+> panel visit rather than decided here**, because it changes what the label
+> *says* and not how it fits, and because the corpus holds two of these against
+> thirty-one records that are unaffected.
 
 **What the primary tier lands on is the whole identification line, not the family
 name alone, and that costs height** — `FAMILY, Given, Nationality, Dates` at
