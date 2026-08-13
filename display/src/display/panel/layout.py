@@ -379,11 +379,14 @@ def _shrink_to_fit(
     other does not.
 
     **Both rungs of the ladder are shrunk and the larger answer wins**, rather
-    than the shorter arrangement being shrunk. Which rung is *shorter* at full
-    size is the wrong question here — breaking the name buys a smaller tail but
-    pays a whole line box for it, and the two come out within a few percent of
-    each other — while which rung ends up *larger* is the question the ladder
-    exists to answer, since giving up size last of all is the whole ordering.
+    than the shorter arrangement being shrunk. Which rung is shorter at full size
+    is the wrong question — giving up size last of all is the whole ordering — and
+    the two questions genuinely disagree. On a wide panel they land within a few
+    percent, because breaking the name buys a smaller tail and pays a line box for
+    it; on a **narrow** surface, which the architecture norm names as a supported
+    device, the joined line wraps far enough that the break wins by several sizes.
+    A rule chosen on the panel in front of us would have been wrong for the one
+    beside it.
     """
     attempts = [
         _shrink_one_arrangement(_compose(candidates, kept, break_first_join=broken), surface, measure, scale)
