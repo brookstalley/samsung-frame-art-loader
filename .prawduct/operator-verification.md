@@ -17,15 +17,23 @@ wall, and the two judgements behind it are both about how a label *reads* rather
 than about whether it fits. The suite proves the rules hold over every content
 shape there is; it cannot say whether the result looks like a wall label.
 
+**`--record` chooses which of the wall's eight records is set**, and every
+question below is comparative, so the sitting is a sequence of runs rather than
+one. At the panel, stop `display.service` once and draw each record against the
+stopped unit — the invocation with this deployment's paths is in
+`deploy/README.md` § The cutover.
+
 ```sh
 cd display && uv run --group raster python tools/label_preview.py /tmp/label.png
+cd display && uv run --group raster python tools/label_preview.py /tmp/short.png --record okeeffe
 ```
 
-The report prints the type sizes in arcminutes, names the styled runs, and now
-also prints anything **dropped** and anything **set below the floor** — the two
-things that are invisible in the image and are the whole point of the model.
+The report names the record first, then prints the type sizes in arcminutes,
+names the styled runs, and prints anything **dropped** and anything **set below
+the floor** — the two things that are invisible in the image and are the whole
+point of the model.
 
-**Three things to look for:**
+**Four things to look for:**
 
 1. **Does the two-line name read as one fact or as two?** `KATSUSHIKA` at 12.4′
    with `Hokusai, Japanese, 1760–1849` at 8.8′ beneath it is the ladder's second
@@ -34,29 +42,36 @@ things that are invisible in the image and are the whole point of the model.
    between the two wants to be tighter than the leading between ordinary lines —
    which is one constant, not a redesign.
 2. **Is the ladder taking its second rung too eagerly, or not eagerly enough?**
-   Look at a short name (`ANDERS, Joseph` should stay on one line) and a long one
-   in the same sitting. The rung is chosen by measurement, so if it looks wrong
-   the thing to change is the tier the tail is set at, not the rule.
-3. **Is a label with only two facts on it too empty, or now too large?** Growth
-   promotes an identifying line to 12.4′ when nothing more can be admitted, which
-   on a work with a name and a title and nothing else means two big lines and a
-   lot of white. That was a deliberate call — a fixed hierarchy wasted the panel
-   here — and it is the one most likely to look wrong in practice.
+   Draw `hokusai` and `okeeffe` in the same sitting. `O'KEEFFE, Georgia,
+   American, 1887–1986` stays on one line at 12.4′ and Hokusai's name does not,
+   so the two together are the rung being *chosen* rather than applied — and
+   `wright` is the third reading, a three-word name that also stays on one line.
+   The rung is chosen by measurement, so if it looks wrong the thing to change is
+   the tier the tail is set at, not the rule.
+3. **Is a sparse label too empty, or now too large?** `--record moche` is the one
+   to draw: growth promotes a second line to 12.4′ when nothing more can be
+   admitted, so `Moche, North coast, Peru` and `Stirrup Spout Vessel` are *both*
+   set large, and the rest of the panel is white. `--record unattributed` is the
+   milder version of the same call. That was deliberate — a fixed hierarchy
+   wasted the panel here — and it is the one most likely to look wrong in
+   practice.
 4. **The two records with no artist name go the *other* way, and this is the
-   thing most likely to look like a bug.** `Water Jar` (nationality, no name) and
-   the anonymous photograph (medium and date only) are now set **small
-   throughout** — 8.8′ on every line, with most of the panel empty. That is
-   deliberate: the identification tier is withheld when nothing on the leading
-   line identifies the work, because the alternative was a demonym set larger
-   than the work's own title. **What it does not fix is the ordering** — `Water
-   Jar` still sits *beneath* `Japanese`, where a museum would print the title
-   first and the culture after it. Say whether that reads as wrong at the panel;
-   it is a content-model change rather than a tuning constant, so it is the one
-   item here that would need its own decision rather than a new number.
+   thing most likely to look like a bug.** `--record nationality-only` (`Water
+   Jar`, a nationality and no name) and `--record anonymous` (medium and date
+   only) are set **small throughout** — 8.8′ on every line, with most of the
+   panel empty. That is deliberate: the identification tier is withheld when
+   nothing on the leading line identifies the work, because the alternative was a
+   demonym set larger than the work's own title. **What it does not fix is the
+   ordering** — `Water Jar` still sits *beneath* `Japanese`, where a museum would
+   print the title first and the culture after it. Say whether that reads as
+   wrong at the panel; it is a content-model change rather than a tuning
+   constant, so it is the one item here that would need its own decision rather
+   than a new number.
 
-**What it would take to change any of these:** all three are single constants or
-a single ordering in `display/src/display/panel/layout.py`, not a redesign. Say
-what you see and the tuning is cheap.
+**What it would take to change any of these:** the first three are single
+constants in `display/src/display/panel/layout.py`, not a redesign. The fourth is
+the ordering named in it, which is the one that needs a decision rather than a
+number. Say what you see and the tuning is cheap.
 
 ### The styled name, at the panel — added 2026-08-13
 
@@ -73,7 +88,10 @@ cd display && uv run --group raster python tools/label_preview.py /tmp/label.png
 ```
 
 The report now prints each line as the panel sets it and names the styled runs
-under it, because a terminal cannot show weight.
+under it, because a terminal cannot show weight. Question 1 below is about a
+comma that only the one-line arrangement has, so draw `--record okeeffe` or
+`--record wright` for it — those are the names that stay on one line, and the
+entry above explains why the reference record no longer does.
 
 **Three things to look for, in this order:**
 

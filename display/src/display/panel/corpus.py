@@ -10,14 +10,22 @@ looks correct.
 
 **Copied rather than imported, and the duplication is the architecture.** The
 display plane does not depend on the curation plane — it reads a manifest file and
-nothing else (`architecture.md` § Direction), and a test import across that seam
-would be the one place the two planes touched. What these records are *for* is
-being the manifest's label blocks, which is exactly what they are: the keys here
-are `LabelText`'s fields, so `read_label` takes them unchanged.
+nothing else (`architecture.md` § Direction), and an import across that seam would
+be the one place the two planes touched. What these records are *for* is being the
+manifest's label blocks, which is exactly what they are: the keys here are
+`LabelText`'s fields, so `read_label` takes them unchanged.
 
 The properties in `test_label_properties.py` cross the whole permutation space; these
 are the specific records a human would want to look at, and the ones whose
 measurements the artifacts quote.
+
+**It ships in the package rather than sitting in the test tree, and the reason is
+the second reader.** `tools/label_preview.py` draws these on the real panel — that
+is what "records a human would want to look at" means in practice, and it is the
+only instrument that can settle legibility. An operator instrument reaching into
+`tests/` for its content would break wherever the tests are not present, which is
+every deployment that installs the package rather than cloning it. Nothing in the
+daemon imports this; what it costs to carry is a few kilobytes of text.
 """
 
 from typing import Final

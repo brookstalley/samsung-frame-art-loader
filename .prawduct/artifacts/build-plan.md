@@ -2068,8 +2068,8 @@ hardware.
     promotion between the two tiers and only identifying facts take it; and when
     the shrink is reached, both rungs are shrunk and the larger answer wins.
     **The operator asked for a real corpus and property tests, and both landed**
-    — `display/tests/corpus.py` holds eight real records chosen for how they
-    break things, and `display/tests/test_label_properties.py` asserts the norm
+    — `display/src/display/panel/corpus.py` holds eight real records chosen for
+    how they break things, and `display/tests/test_label_properties.py` asserts the norm
     over every content shape with Hypothesis (added to the display plane's `dev`
     group; run derandomized so a property suite cannot flake a green commit red).
     It found one defect immediately — in the test rather than the engine: two

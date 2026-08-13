@@ -22,11 +22,11 @@ import math
 from collections import Counter
 
 import pytest
-from corpus import CORPUS
 from hypothesis import given
 from hypothesis import strategies as st
 
 from display.panel import Geometry, Line, Tier, lay_out, plain, read_label, set_text, type_scale_for
+from display.panel.corpus import CORPUS
 from display.panel.layout import Extent
 
 #: The reference wall: a 6-inch 1448×1072 panel read from 7 feet. Derived rather

@@ -30,11 +30,20 @@ short form below is therefore both convenient and correct; on a machine that own
 no panel it refuses and names the two variables, rather than answering for
 somebody else's wall.
 
+**It draws the wall's own records, and `--record` chooses which.** The judgements
+left here are comparative rather than absolute: whether the name ladder takes its
+second rung too eagerly is answered by putting `wright` and `okeeffe` on the panel
+in the same sitting, and whether the withheld identification tier reads as a bug
+is answered by `nationality-only`. An instrument locked to one record can render
+a label but cannot ask either question. `--record` with no argument draws the
+reference record the artifacts' measurements were taken against.
+
 It needs the text stack (`uv sync --group raster`); `--panel` additionally needs
 the panel driver (`--group epaper`) and a device to draw on:
 
     cd display && uv run --group raster python tools/label_preview.py label.png
     cd display && uv run --group raster python tools/label_preview.py label.png --cap-arcmin 11
+    cd display && uv run --group raster python tools/label_preview.py short.png --record okeeffe
 
     # away from the deployment, or trying a different wall on for size:
     cd display && uv run --group raster python tools/label_preview.py label.png \\
@@ -47,8 +56,12 @@ the same bus:
     sudo systemctl stop display.service
     cd <checkout>/display && sudo -u <service-user> env HOME=<service-home> \\
         uv run --group raster --group epaper \\
-        python tools/label_preview.py --panel --cap-arcmin 11
+        python tools/label_preview.py --panel --cap-arcmin 11 --record hokusai
     sudo systemctl start display.service
+
+Stop the unit once and draw each record you want to compare, rather than stopping
+and starting it around every one: the panel holds the last frame it was given, so
+the sitting is a sequence of `--record` runs against one stopped service.
 
 The reference deployment's actual paths for that invocation are in
 `deploy/README.md` § The cutover, which is where machine-specific values belong —
@@ -61,36 +74,30 @@ from pathlib import Path
 from PIL import Image
 
 from display.panel import Case, Layout, Run, Slant, TypeScale, Weight, lay_out, margin_for, read_label, set_text, type_scale_for
+from display.panel.corpus import CORPUS
 from display.panel.layout import Geometry
 from display.panel.pango import PangoRasterizer
 
-#: A work with every field populated, which is the case worth looking at: the
-#: label that fits is not interesting, and this is the one the drop rule acts on.
-#: Real values from the corpus rather than lorem, because line breaking depends on
-#: the actual words and "Artist Name" wraps differently from "Katsushika Hokusai".
+#: The records this tool can draw, by the name `--record` takes.
 #:
-#: **The name parts are here, and leaving them out would be the one omission that
-#: makes this tool lie.** A label with no parts falls back to the whole name
-#: unstyled — correct behaviour, and *not* what a seeded catalogue produces — so a
-#: sample missing them would show the operator the fallback while the wall showed
-#: the real thing. Hokusai is also the case where the parts matter most: the
-#: family name leads in Japanese order, so the wrong split is legible as a
-#: mistake rather than merely different.
-SAMPLE = {
-    "title": "Under the Well of the Great Wave off Kanagawa",
-    "artist": "Katsushika Hokusai",
-    "artist_family_name": "Katsushika",
-    "artist_given_name": "Hokusai",
-    "artist_nationality": "Japanese",
-    "artist_dates": "1760–1849",
-    "date_created": "c. 1830–32",
-    "medium": "Colour woodblock print on paper",
-    "dimensions": "25.7 × 37.9 cm (10 1/8 × 14 15/16 in.)",
-    # Present so the preview shows the panel's last-and-first-dropped line
-    # actually being dropped, which is the half of the drop rule that is
-    # invisible in the image and only appears in what this tool prints.
-    "commentary": "One of thirty-six views, and the one that outran the series.",
-}
+#: **The corpus itself, rather than a sample of this file's own.** A tool that
+#: carried its own specimen drifts from the one the tests measure and the
+#: artifacts quote, and it did: the specimen here was a verbatim copy of
+#: `HOKUSAI`, so the instrument and the suite agreed only for as long as somebody
+#: kept them in step by hand.
+#:
+#: It also decides what the operator is able to look at, which is the thing that
+#: matters more. The label's hardest judgements are comparative — whether the name
+#: ladder takes its second rung too eagerly can only be seen by putting a long
+#: name and a short one on the panel in the same sitting — and an instrument
+#: locked to one record cannot ask that question at all.
+RECORDS = dict(CORPUS)
+
+#: What `--record` draws when the operator names none: the reference record every
+#: panel measurement in `accessibility-spec.md` was taken against, every optional
+#: field populated, and the only one where the drop rule and the name ladder both
+#: have to act. The label that fits is not the interesting one.
+DEFAULT_RECORD = "hokusai"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -110,6 +117,12 @@ def main(argv: list[str] | None = None) -> int:
         "--device",
         default="waveshare_epd.it8951",
         help="omni-epd device name for --panel (omni_epd.mock draws nowhere)",
+    )
+    parsed.add_argument(
+        "--record",
+        choices=sorted(RECORDS),
+        default=DEFAULT_RECORD,
+        help="which of the wall's records to set; the judgements this tool exists for are comparative",
     )
     parsed.add_argument("--rotate-degrees", type=int, default=180)
     parsed.add_argument("--width-px", type=int, default=1448)
@@ -170,11 +183,12 @@ def main(argv: list[str] | None = None) -> int:
     margin = args.margin_px if args.margin_px is not None else margin_for(scale)
     surface = Geometry(width_px=args.width_px, height_px=args.height_px, margin_px=margin)
 
+    record = RECORDS[args.record]
     if args.panel:
-        laid_out = _draw_on_the_panel(args, surface, scale)
+        laid_out = _draw_on_the_panel(args, record, surface, scale)
     else:
         rasterizer = PangoRasterizer()
-        laid_out = lay_out(read_label(SAMPLE).candidates(), surface, rasterizer.measure, scale)
+        laid_out = lay_out(read_label(record).candidates(), surface, rasterizer.measure, scale)
         raster = rasterizer.render(laid_out)
         Image.frombytes("L", (raster.width_px, raster.height_px), raster.pixels).save(args.output)
         print(f"wrote {args.output} — {args.width_px}x{args.height_px}, margin {margin}")
@@ -265,7 +279,7 @@ def _apply_overrides(args: argparse.Namespace) -> None:
         layout_module.MEASURE_EM = args.measure_em
 
 
-def _draw_on_the_panel(args: argparse.Namespace, surface: Geometry, scale: TypeScale) -> Layout:
+def _draw_on_the_panel(args: argparse.Namespace, record: dict[str, str], surface: Geometry, scale: TypeScale) -> Layout:
     """Put one candidate on the real panel, through the daemon's own surface.
 
     **`EpaperSurface` rather than the driver**, so what the operator judges is
@@ -288,7 +302,7 @@ def _draw_on_the_panel(args: argparse.Namespace, surface: Geometry, scale: TypeS
         rotate_degrees=args.rotate_degrees,
     )
     try:
-        laid_out = lay_out(read_label(SAMPLE).candidates(), panel.geometry, panel.measure, panel.type_scale)
+        laid_out = lay_out(read_label(record).candidates(), panel.geometry, panel.measure, panel.type_scale)
         # Blocks for 1.5-1.9s: there is no partial refresh on this driver, so
         # every candidate is a whole frame.
         panel.show(laid_out)
@@ -337,6 +351,12 @@ def _report(laid_out: Layout, scale: TypeScale, args: argparse.Namespace) -> Non
         ppi=pixels_per_inch(width_px=args.width_px, height_px=args.height_px, diagonal_inches=args.diagonal_inches),
         viewing_distance_inches=args.viewing_distance_inches,
     )
+    # **Named first, and named on every run.** The judgements this instrument
+    # serves are comparative — a long name against a short one, a full record
+    # against a nearly empty one — so the operator is reading several of these
+    # reports side by side, and one that did not say which record it described
+    # would be evidence about nothing in particular.
+    print(f"  record: {args.record}")
     print(
         f'  {args.diagonal_inches}" panel read from {args.viewing_distance_inches}"'
         f" — {per_arcmin:.2f} px per arcminute, measure {layout_module.MEASURE_EM}em"
