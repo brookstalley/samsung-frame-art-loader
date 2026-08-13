@@ -254,13 +254,17 @@ def lay_out(
     kept = tuple(index for index, candidate in enumerate(candidates) if candidate.tier is Tier.MANDATORY)
     placed = _admit_the_mandatory_facts(candidates, kept, surface, measure, scale)
 
-    # **Nothing optional reaches a label that already had to shrink, and there is
-    # deliberately no guard saying so.** A surface too small for the artist's name
-    # at the floor has no slack to offer a medium — and `_arrange` is what
-    # enforces it, since it only ever admits at the derived sizes and adding a
-    # fact can only make an arrangement taller. A `if not placed.shrunk` here read
-    # as the rule and was a branch nothing could enter; the rule is asserted as
-    # behaviour instead, by `TestTheFactsThatIdentifyTheWorkShrinkInstead`.
+    # **A label that had to shrink is offered the same fill as any other, and
+    # that is deliberate.** There was a `if not placed.shrunk` guard here, on the
+    # reasoning that a surface too small for the artist's name has no slack for a
+    # medium and that adding a fact can only make an arrangement taller. The
+    # second half is false: a fact admitted onto the leading line can take the
+    # identification tier away from it (`_sizes_for`), and a whole label at the
+    # floor can be *shorter* than one line at 12.4′. So the trial can succeed —
+    # and when it does it is strictly the better label, since `_arrange` only ever
+    # admits at the derived sizes, which means the shrink is gone and the content
+    # is greater. Guarding that out would have preferred illegible type to legible
+    # type on the grounds of a rule about slack.
     for index, candidate in enumerate(candidates):
         if candidate.tier is Tier.MANDATORY:
             continue
@@ -441,14 +445,19 @@ def _grow_into_the_slack(
     a panel sized for six leaves most of the surface empty otherwise.
     """
     for index, line in enumerate(placed.lines):
-        if index == 0 or not line.mandatory or placed.sizes[index] == scale.primary_px:
+        if index == 0:
             continue
+        # **Every one of these is a `break` rather than a `continue`**, because
+        # each says the same thing: the line above this one is not at the
+        # identification tier. Promoting past it would set a lower line larger
+        # than a higher one, which reads as a hierarchy nobody chose — and it is
+        # reachable, since a leading line that identifies nothing stays at the
+        # floor (see `_sizes_for`).
+        if not line.mandatory or placed.sizes[index - 1] != scale.primary_px or placed.sizes[index] == scale.primary_px:
+            break
         grown = (*placed.sizes[:index], scale.primary_px, *placed.sizes[index + 1 :])
         candidate_placement = _placed(placed.lines, grown, surface, measure, scale)
         if _overflows(candidate_placement.blocks, surface):
-            # Growth stops at the first line that will not take it rather than
-            # skipping past: promoting a lower line while the one above stayed
-            # small would invert the hierarchy to fill space.
             break
         placed = candidate_placement
     return placed
@@ -500,7 +509,21 @@ def _sizes_for(lines: Sequence[_ComposedLine], scale: TypeScale) -> tuple[int, .
     the two readings the operator settled by eye; the rung between them is the
     size that was reported as taking effort to read, so interpolating a middle
     tier would be aiming type at a boundary somebody recorded to avoid.
+
+    **The identification tier is withheld when nothing on the leading line
+    identifies the work**, which is the one place this module sizes by tier rather
+    than by position — and it has to. A record with no name at all puts its
+    nationality on the leading line and its title beneath (`metadata.py` composes
+    the identification block whether or not a name reached it), so sizing by
+    position alone set a demonym at 12.4′ over a work's own title at the floor:
+    an optional fact claiming to identify the work, which is the two-distance
+    label read backwards. Such a label is simply set small throughout. It is the
+    honest answer — nothing here is the token a passer-by scans — and it is not a
+    comfortable one; see `accessibility-spec.md` § The label's content model for
+    the ordering question it leaves open.
     """
+    if not lines or not lines[0].mandatory:
+        return tuple(scale.floor_px for _ in lines)
     return tuple(scale.primary_px if index == 0 else scale.floor_px for index in range(len(lines)))
 
 

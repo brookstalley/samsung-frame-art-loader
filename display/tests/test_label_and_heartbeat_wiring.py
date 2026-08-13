@@ -719,6 +719,48 @@ class TestTheJournalSaysWhatThePanelCaptioned:
         assert shrunk[0]["smallest_px"] < shrunk[0]["floor_px"]
 
     @pytest.mark.asyncio
+    async def test_a_surface_with_no_usable_area_is_the_loudest_outcome_not_the_quietest(
+        self, settings, tv, state, clock, publish, journal
+    ):
+        """**The total failure of the accessibility surface, reported as one.**
+
+        A device whose margins consume its own panel places nothing at all, and
+        the frame that reaches it is blank. Claiming "the panel is captioning
+        *Cat Litter*" there would name a work whose label is not there — and would
+        report the complete failure one level quieter than a label set a few
+        percent too small, on a daemon whose recorded failure mode is silence.
+
+        Reachable rather than theoretical: the margin derives from the primary
+        tier, which grows with viewing distance, so a device configured to be read
+        from far enough away borders its own label out of existence.
+        """
+        swallowed = FakeSurface(width_px=100, height_px=100, margin_px=60)
+        daemon = _daemon_with(swallowed, settings, tv, state, clock)
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter", "artist": "Ed Ruscha"}})
+
+        try:
+            await daemon.tick()
+        finally:
+            swallowed.release.set()
+
+        lines = journal()
+        unusable = self._events(lines, "label.unusable")
+        assert [line["level"] for line in unusable] == ["WARNING"]
+        assert unusable[0]["tv_content_id"], "the line names nothing that was on the wall"
+        assert not self._events(lines, "label.drawn"), "it claimed a caption that is not on the panel"
+
+    @pytest.mark.asyncio
+    async def test_a_work_whose_institution_published_nothing_is_not_a_fault(self, labelled, publish, journal):
+        """The other way a label lays out to nothing, and it is a fact about the
+        record rather than about the device — so it must not reach the warning
+        above. `metadata.py` is explicit that a blank surface is right here."""
+        publish(["work-a"], labels={"work-a": {}})
+
+        await labelled.tick()
+
+        assert not self._events(journal(), "label.unusable")
+
+    @pytest.mark.asyncio
     async def test_a_label_that_fits_says_nothing_about_shrinking(self, labelled, publish, journal):
         """The event is an exception, like every other label event but one — a
         panel that reports a shrink on every rotation is one nobody reads."""

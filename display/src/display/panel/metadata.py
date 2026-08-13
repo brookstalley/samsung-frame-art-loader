@@ -54,11 +54,13 @@ class LabelText:
     for and the ordering the panel can hold turned out to be the same one
     (`accessibility-spec.md` § The label's content model).
 
-    **Field order here is no longer the label's order** — `lines()` is, and that
-    is the change worth noticing before moving a field. The layout tier still
-    sizes by position and drops from the end, so `lines()` remains the priority
-    ordering; what it stopped being is a straight read-off of these fields, since
-    the identification block is now composed from four of them.
+    **Field order here is no longer the label's order** — `candidates()` is, and
+    that is the change worth noticing before moving a field. What `candidates()`
+    yields is *reading* order, top of the label to the bottom; **priority is the
+    tier first and the reading position second**, which is why each fact carries
+    a `Tier`. The layout tier no longer sizes by position or drops from the end,
+    and a field moved here on the assumption that it does will change which facts
+    survive a small surface.
     """
 
     title: str | None = None
@@ -96,8 +98,8 @@ class LabelText:
         **Nothing branches on this**, and that is the design rather than an
         oversight: the empty case needs no special path, because laying out no
         lines and drawing the result reaches the blank surface by the ordinary
-        road. This says the same thing about a `LabelText` that `lines()` does,
-        in the form a reader asking the question would reach for.
+        road. This says the same thing about a `LabelText` that `candidates()`
+        does, in the form a reader asking the question would reach for.
         """
         return not self.candidates()
 

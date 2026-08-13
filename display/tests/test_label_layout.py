@@ -64,6 +64,19 @@ def identifying(*texts: str) -> tuple[Candidate, ...]:
     return tuple(Candidate(runs=(Run(text),), tier=Tier.MANDATORY) for text in texts)
 
 
+def a_label(*texts: str) -> tuple[Candidate, ...]:
+    """The shape every real record has: something identifying, then facts about it.
+
+    **Used wherever the leading line's *size* is part of the assertion.** The
+    identification tier is withheld from a leading line that identifies nothing
+    (`_sizes_for`), so a fixture of nothing but optional facts is set entirely at
+    the floor — correct, and not the label a test about placement, leading or the
+    measure means to be reading.
+    """
+    first, *rest = texts
+    return (*identifying(first), *droppable(*rest))
+
+
 PANEL = Geometry(width_px=1448, height_px=1072, margin_px=40)
 
 #: The reference wall's sizes — a 6-inch 1448×1072 panel read from 7 feet, giving
@@ -107,7 +120,7 @@ class TestTheHierarchy:
     """
 
     def test_the_leading_line_gets_the_primary_tier(self):
-        layout = lay_out(droppable("Chicago", "Georgia O'Keeffe", "American"), PANEL, measured, SCALE)
+        layout = lay_out(a_label("Chicago", "Georgia O'Keeffe", "American"), PANEL, measured, SCALE)
 
         assert layout.blocks[0].size_px == SCALE.primary_px
 
@@ -200,7 +213,7 @@ class TestPlacement:
         assert len(set(tops)) == 3, "two blocks were placed at the same height"
 
     def test_the_gap_between_blocks_is_proportional_to_the_upper_one(self):
-        layout = lay_out(droppable("The Banquet", "Jan Steen"), PANEL, measured, SCALE)
+        layout = lay_out(a_label("The Banquet", "Jan Steen"), PANEL, measured, SCALE)
 
         first, second = layout.blocks
         gap = second.y_px - (first.y_px + first.height_px)
@@ -236,9 +249,22 @@ class TestWhatComesOffWhenItWillNotFit:
 
     LINES = ("The Banquet", "Jan Steen", "Dutch", "1626–1679", "Oil on canvas")
 
+    #: The same lines with the leading one identifying the work, which is the shape
+    #: a real record has — needed wherever the assertion names a tier.
     @staticmethod
-    def tall_enough_for(count: int, *, margin_px: int = 20) -> Geometry:
+    def as_a_label() -> tuple[Candidate, ...]:
+        return a_label(*TestWhatComesOffWhenItWillNotFit.LINES)
+
+    @staticmethod
+    def tall_enough_for(count: int, *, margin_px: int = 20, facts: tuple[Candidate, ...] | None = None) -> Geometry:
         """A surface exactly tall enough to hold the first `count` of `LINES`.
+
+        `facts` is the set being sized for, and defaults to the all-optional one
+        most of these tests use. **A caller whose label leads with an identifying
+        fact must pass it**, because that line is set at the identification tier
+        and a surface measured against the floor-height version is a different
+        surface — which is not a subtlety worth rediscovering from a failure two
+        assertions later.
 
         **Taken from where the blocks actually land, not recomputed here.** These
         heights used to be four literals — 300, 200, 150, 120 — chosen against
@@ -251,7 +277,8 @@ class TestWhatComesOffWhenItWillNotFit:
         from an unbounded layout's own answer.
         """
         unbounded = Geometry(width_px=1448, height_px=100_000, margin_px=margin_px)
-        last = lay_out(droppable(*TestWhatComesOffWhenItWillNotFit.LINES), unbounded, measured, SCALE).blocks[count - 1]
+        chosen = facts if facts is not None else droppable(*TestWhatComesOffWhenItWillNotFit.LINES)
+        last = lay_out(chosen, unbounded, measured, SCALE).blocks[count - 1]
         return Geometry(width_px=1448, height_px=last.y_px + last.height_px + margin_px, margin_px=margin_px)
 
     @pytest.mark.parametrize("count", [5, 4, 3, 2, 1])
@@ -270,7 +297,8 @@ class TestWhatComesOffWhenItWillNotFit:
     def test_what_is_kept_stays_at_its_full_size(self):
         """The floor. Type that shrinks to fit has quietly stopped being an
         accessibility surface, and only the person who cannot read it finds out."""
-        layout = lay_out(droppable(*self.LINES), self.tall_enough_for(2), measured, SCALE)
+        facts = self.as_a_label()
+        layout = lay_out(facts, self.tall_enough_for(2, facts=facts), measured, SCALE)
 
         assert [block.size_px for block in layout.blocks] == [SCALE.primary_px, SCALE.floor_px]
 
@@ -393,7 +421,7 @@ class TestTheMeasure:
         supporting lines now share a size — the middle tier the old assertion
         stepped through was one of the provisional constants this replaced.
         """
-        layout = lay_out(droppable("Chicago", "Georgia O'Keeffe", "American"), self.UNBOUNDED, measured, SCALE)
+        layout = lay_out(a_label("Chicago", "Georgia O'Keeffe", "American"), self.UNBOUNDED, measured, SCALE)
 
         leading_wrap, *supporting_wraps = (block.wrap_px for block in layout.blocks)
         assert leading_wrap > supporting_wraps[0]
@@ -467,7 +495,7 @@ class TestGeometryIsAParameter:
         """The norm, asserted: the deployment may hold panels of several sizes."""
         wide = Geometry(width_px=1448, height_px=1072, margin_px=40)
         narrow = Geometry(width_px=400, height_px=1072, margin_px=40)
-        lines = droppable("Triptych Window from the Coonley Playhouse, Riverside, Illinois", "Frank Lloyd Wright")
+        lines = a_label("Triptych Window from the Coonley Playhouse, Riverside, Illinois", "Frank Lloyd Wright")
 
         on_wide = lay_out(lines, wide, measured, SCALE)
         on_narrow = lay_out(lines, narrow, measured, SCALE)
@@ -858,3 +886,77 @@ class TestSlackIsSpentOnContentBeforeType:
 
             between = [b.size_px for b in layout.blocks if SCALE.floor_px < b.size_px < SCALE.primary_px]
             assert not between, f"type was set at the squint boundary at {height} px: {between}"
+
+
+class TestALeadingLineThatIdentifiesNothing:
+    """A record with no artist name at all, which the corpus really contains.
+
+    `metadata.py` composes the identification block whether or not a name reached
+    it, so a work whose only artist fact is a nationality opens with that
+    nationality and sets its title beneath. **Sizing by position alone set the
+    demonym at the identification tier and demoted the title to the floor** — an
+    optional fact claiming to identify the work, which is the two-distance label
+    read backwards, and it is what `_sizes_for` now withholds the tier to prevent.
+    """
+
+    #: Room for a leading line at the identification tier and a second at the
+    #: floor, and not for two at the identification tier — which is the band where
+    #: the demotion was visible rather than repaired by growth.
+    BAND = Geometry(width_px=1448, height_px=340, margin_px=20)
+
+    @staticmethod
+    def nationality_then_title() -> tuple[Candidate, ...]:
+        return (
+            Candidate(runs=(Run("Japanese"),), tier=Tier.OPTIONAL, continues_line=(Run(", "),)),
+            Candidate(runs=(Run("Water Jar"),), tier=Tier.MANDATORY),
+        )
+
+    def test_no_optional_fact_is_ever_set_above_a_mandatory_one(self):
+        layout = lay_out(self.nationality_then_title(), self.BAND, measured, SCALE)
+
+        by_text = {block.text: block.size_px for block in layout.blocks}
+        assert by_text["Japanese"] <= by_text["Water Jar"], "a demonym was set larger than the work's title"
+
+    def test_the_identification_tier_is_withheld_from_the_whole_label(self):
+        """Not handed to the title instead, which would set a smaller line above a
+        larger one — a hierarchy nobody chose. The label is simply set small."""
+        layout = lay_out(self.nationality_then_title(), self.BAND, measured, SCALE)
+
+        assert {block.size_px for block in layout.blocks} == {SCALE.floor_px}
+
+    def test_growth_does_not_promote_underneath_it_either(self):
+        """Room to spare must not reintroduce the inversion from the other end."""
+        layout = lay_out(self.nationality_then_title(), PANEL, measured, SCALE)
+
+        sizes = [block.size_px for block in layout.blocks]
+        assert sizes == sorted(sizes, reverse=True), sizes
+        assert sizes[0] == SCALE.floor_px, "an optional leading line took the identification tier"
+
+    def test_admitting_it_makes_the_label_shorter_rather_than_taller(self):
+        """**Which is why there is no `if not placed.shrunk` guard on the fill.**
+
+        The guard that was briefly here rested on "adding a fact can only make an
+        arrangement taller", and this is the configuration that falsifies it: the
+        nationality takes the identification tier away from the title's line, and
+        a title set at the floor can occupy fewer rows *and* fewer pixels than the
+        same title at 12.4′. So a trial admission can genuinely succeed where the
+        mandatory facts alone did not, and the result is more content at a legible
+        size — which a guard would have refused on a rule about slack.
+        """
+        narrow = Geometry(width_px=300, height_px=1_000_000, margin_px=10)
+        title = "Water Jar with Pine Motif"
+        title_only = (Candidate(runs=(Run(title),), tier=Tier.MANDATORY),)
+
+        alone = lay_out(title_only, narrow, measured, SCALE)
+        with_nationality = lay_out(
+            (Candidate(runs=(Run("Japanese"),), tier=Tier.OPTIONAL, continues_line=(Run(", "),)), *title_only),
+            narrow,
+            measured,
+            SCALE,
+        )
+
+        def bottom(layout):
+            return layout.blocks[-1].y_px + layout.blocks[-1].height_px
+
+        assert bottom(with_nationality) < bottom(alone), "the extra fact did not shorten the label"
+        assert "Japanese" in [block.text for block in with_nationality.blocks]

@@ -158,12 +158,15 @@ Deliberately minimal, because the topology does not need more.
   identity available when the wall shows a picture the manifest cannot name —
   there is no work, so there is nothing else to tie the line to — and it is what
   joins a caption to the `rotation.selected` that preceded it. It is carried on
-  `label.drawn`, `label.blanked` and `label.failed` for that reason, and
-  deliberately **not** on the other two — a second id there would be a field
-  defended only by the test written to defend it. The two are not silent for the
-  same reason, and whoever adds the next label event needs the difference:
-  `label.truncated` is unreachable without a work, because a blank label has no
-  lines to drop, so `work_id` is always bound under it. **`label.recovered`
+  `label.drawn`, `label.blanked`, `label.failed` and — since 2026-08-13 —
+  `label.unusable`, for that reason, and deliberately **not** on the rest: a
+  second id there would be a field defended only by the test written to defend it.
+  They are not silent for the same reason, and whoever adds the next label event
+  needs the difference. `label.truncated` and `label.shrunk` are both unreachable
+  without a work — a blank label has no lines to drop and no type to reduce — so
+  `work_id` is always bound under them. `label.unusable` carries the content id
+  because it is a statement about the *device*: the surface has no usable area at
+  all, which is true of whatever the wall happens to be showing. **`label.recovered`
   carries neither id on the blank path** — it is emitted before the caption knows
   whether it has a work, so a panel recovering on a blank caption logs a bare
   recovery line. That is left alone deliberately: it is a statement about the
@@ -572,6 +575,8 @@ signal exists:
 | Display plane stalled or dead | Heartbeat stops advancing; panel shows its age |
 | TV unreachable | Heartbeat carries TV connectivity state; WARNING in the journal. **The panel renders the heartbeat's whole reported document as of 2026-08-05**, so this row and the two below it have a reader rather than naming a field nothing displayed |
 | E-paper panel not updating | Heartbeat carries its state, and the panel shows it — same mechanism as the row above, and no second contract. **The journal answers the question the heartbeat cannot**, added 2026-08-13: the heartbeat is a snapshot of current state, so it can say the surface is working and never say *what it captioned*, and its `current_work_id` is the rotation's rather than the label's — the two disagree exactly when the label is wrong, which is the failure that matters. `label.drawn` names the work per draw, so the panel's history is reconstructable after the fact and joinable to `rotation.selected` |
+| **The panel is captioning, and nobody can read it** | `label.shrunk` at WARNING per draw, carrying the lines set below the floor as the catalogue spells them, the derived `floor_px` and the `smallest_px` actually set. **The only WARNING this plane emits about legibility, and the condition an accessibility ruling rests on.** Type never shrinks to fit — except for the facts that identify the work, which shrink rather than vanishing, because a name too small to read at 7 feet can still be read by somebody who steps closer. That exception is only safe because this line exists: illegible type fails invisibly, and a panel routinely setting names below the floor is a misconfigured device — too small a panel, or one read from further than `EPD_VIEWING_DISTANCE_INCHES` claims — which nobody discovers by eye. **INFO would have been wrong**: a dropped medium is the engine working as designed and a name below the floor is a deployment that cannot show its corpus. **Not episode-gated, unlike `label.failed`**: the shrunk set is per work rather than per device, so a gate would swallow a different label's shrink to spare a repeat of the first |
+| **The label surface has no usable area at all** | `label.unusable` at WARNING, added 2026-08-13, replacing the `label.drawn` that would otherwise claim a caption that is not there. Reachable rather than theoretical: the margin derives from the primary tier, which grows with viewing distance, so a device configured to be read from far enough away borders its own label out of existence. **It is guarded on facts having existed and not been placed**, because a work whose institution published no label text also lays out to nothing — and that is a fact about the record rather than about the device |
 | **The panel captions the wrong work, or stops captioning** | `label.drawn` at INFO per draw, carrying `work_id` and `tv_content_id`. **The only positive label signal, and it exists because every other one is an exception** — `label.failed`, `label.truncated` and `label.recovered` all fire on something going wrong, so before 2026-08-13 a panel captioning correctly all day emitted nothing whatsoever and was indistinguishable in the journal from one that stopped at boot. Its *absence* over a rotation is what says the label stopped following the wall. **A picture no manifest can name is `label.blanked`, not a success and not a failure**: somebody choosing an art-store image with the remote gets a deliberately blank panel, and a success event there would answer *why is the label empty* by naming a work that is not on the wall. It carries the content id because there is no `work_id` on that path to carry |
 | Backup silently stopped succeeding | **`backup-status.json` stops advancing; the panel shows its age.** The receipt is written only on success, so a failing job goes stale rather than reporting fresh. Nothing has ever written one is itself an observation the panel states plainly |
 | Manifest references a missing file | WARNING per work, and the work is skipped — the run continues |

@@ -13,7 +13,6 @@ from pathlib import Path
 
 import pytest
 from fakes import FakeTv
-from hypothesis import HealthCheck
 from hypothesis import settings as hypothesis_settings
 
 from display.config import Settings
@@ -35,14 +34,18 @@ from display.state import DisplayState
 #: sampling a tail of it, and the fixed seed is choosing which surfaces to cross
 #: it with rather than which content to try.
 #:
-#: `function_scoped_fixture` is suppressed because the layout properties take no
-#: fixtures and the health check fires on the module-level ones this file defines
-#: for every other test in the plane.
+#: **No health check is suppressed, and that is worth stating because one was.**
+#: `function_scoped_fixture` was disarmed here on the reasoning that this file's
+#: fixtures would trip it — they cannot: that check fires only for a `@given` test
+#: that *requests* a function-scoped fixture, no property here takes one, and
+#: nothing in this file is autouse. Registered globally it would have bought
+#: nothing today and cost the next property test that takes `tmp_path` its
+#: warning, which is the exact failure the check exists for: one fixture instance
+#: silently shared across all 200 examples.
 hypothesis_settings.register_profile(
     "display",
     derandomize=True,
     max_examples=200,
-    suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 hypothesis_settings.load_profile("display")
 

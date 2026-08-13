@@ -824,6 +824,30 @@ class Daemon:
                 content_id,
                 extra={"event": "label.blanked", "tv_content_id": content_id},
             )
+        elif layout.is_empty and layout.dropped:
+            # **`and layout.dropped` is what separates the fault from the normal
+            # case.** A work whose institution published no label text lays out to
+            # nothing too, and that is a fact about the record rather than about
+            # the device — `metadata.py` is explicit that a blank surface is the
+            # right answer there. Facts that existed and were not placed is the
+            # other thing entirely.
+            #
+            # **The whole label had somewhere to be and nowhere to go.** A device
+            # whose margins consume its own surface places nothing at all, and the
+            # frame that reaches the panel is blank — so "the panel is captioning
+            # *Cat Litter*" would be this plane naming a work whose label is not
+            # there, and reporting the total failure of the accessibility surface
+            # one level quieter than a label set a few percent too small.
+            #
+            # It is reachable rather than theoretical: the margin derives from the
+            # primary tier, which grows with viewing distance, so a device
+            # configured to be read from far enough away borders its own label out
+            # of existence. Nothing about it stops the wall.
+            log.warning(
+                "the label surface has no usable area at this geometry, so %s was not captioned at all",
+                entry.label.get("title") or entry.work_id,
+                extra={"event": "label.unusable", "tv_content_id": content_id},
+            )
         else:
             # **The only line that says the panel is working.** Every other label
             # event is an exception — a failure, a truncation, a recovery — so a

@@ -10,6 +10,43 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The fill model and the name ladder, at the panel — added 2026-08-13
+
+**Why this needs eyes.** 13B-4 changed what the panel shows for every work on the
+wall, and the two judgements behind it are both about how a label *reads* rather
+than about whether it fits. The suite proves the rules hold over every content
+shape there is; it cannot say whether the result looks like a wall label.
+
+```sh
+cd display && uv run --group raster python tools/label_preview.py /tmp/label.png
+```
+
+The report prints the type sizes in arcminutes, names the styled runs, and now
+also prints anything **dropped** and anything **set below the floor** — the two
+things that are invisible in the image and are the whole point of the model.
+
+**Three things to look for:**
+
+1. **Does the two-line name read as one fact or as two?** `KATSUSHIKA` at 12.4′
+   with `Hokusai, Japanese, 1760–1849` at 8.8′ beneath it is the ladder's second
+   rung, and it is what most of this corpus will get. If the given name reads as
+   belonging to the *next* fact rather than to the name above it, the leading
+   between the two wants to be tighter than the leading between ordinary lines —
+   which is one constant, not a redesign.
+2. **Is the ladder taking its second rung too eagerly, or not eagerly enough?**
+   Look at a short name (`ANDERS, Joseph` should stay on one line) and a long one
+   in the same sitting. The rung is chosen by measurement, so if it looks wrong
+   the thing to change is the tier the tail is set at, not the rule.
+3. **Is a label with only two facts on it too empty, or now too large?** Growth
+   promotes an identifying line to 12.4′ when nothing more can be admitted, which
+   on an anonymous untitled work means two big lines and a lot of white. That was
+   a deliberate call — a fixed hierarchy wasted the panel here — and it is the one
+   most likely to look wrong in practice.
+
+**What it would take to change any of these:** all three are single constants or
+a single ordering in `display/src/display/panel/layout.py`, not a redesign. Say
+what you see and the tuning is cheap.
+
 ### The styled name, at the panel — added 2026-08-13
 
 **Why this needs eyes and not a test.** 13B-2 set the family name in bold
@@ -44,13 +81,16 @@ under it, because a terminal cannot show weight.
    that is harder to read than its upright form is a reason to drop the
    convention, and nothing but the panel can say so.
 
-**One measured consequence to expect, and it is not a regression.** Capitals are
-wider than the letters they replace, so on the reference wall's fully-populated
-Hokusai record the identification line went from 262 px to 393 px — two wrapped
-rows to three — and one further line (the medium) now drops. That is the case
-13B-4's name ladder answers by giving the family name its own line before it
-gives up its size; it is recorded here so it is not read as damage on first
-sight.
+**The consequence this entry warned about has been answered — read it with the
+entry below.** Capitals are wider than the letters they replace, so on the
+reference wall's fully-populated Hokusai record the identification line went from
+262 px to 393 px and the medium dropped. **13B-4's name ladder landed 2026-08-13
+and gave it back**: the same record now sets `KATSUSHIKA` on a line of its own
+and `Hokusai, Japanese, 1760–1849` beneath it, 269 px for the pair, with the
+medium back on the panel. So what you will be looking at is the *two-line*
+arrangement, not the three-row one described above — which also changes what
+question 1 is asking, since the bold no longer has to disambiguate a comma that
+is on a different line from the name.
 
 ### The Theme screen, and the reorder that had never worked — added 2026-08-12
 

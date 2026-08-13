@@ -15,7 +15,7 @@ would be the one place the two planes touched. What these records are *for* is
 being the manifest's label blocks, which is exactly what they are: the keys here
 are `LabelText`'s fields, so `read_label` takes them unchanged.
 
-The properties in `test_label_layout.py` cross the whole permutation space; these
+The properties in `test_label_properties.py` cross the whole permutation space; these
 are the specific records a human would want to look at, and the ones whose
 measurements the artifacts quote.
 """

@@ -227,6 +227,27 @@ class TestTheLabelPreviewStillRuns:
             "One of thirty-six views, and the one that outran the series."
         ), f"commentary was not the lowest line given up: {taken}"
 
+    def test_the_report_says_when_type_went_below_the_floor(self, label_preview, tmp_path, capsys):
+        """**Harder to see than a drop, and worse.**
+
+        A missing dimension is an absence anybody notices; type set below the
+        floor looks like a label until somebody tries to read it from the viewing
+        position. This tool is the operator's only instrument before a panel
+        visit, and the shrink is the one condition it was extended to surface — so
+        an unreported shrink is the same silence the drop line exists to break,
+        one level down.
+
+        **Forced with a small surface rather than with the sample**, because the
+        default sample drops rather than shrinks: the facts that identify the work
+        are the only ones that ever go below the floor, and on a panel-sized
+        surface they never have to.
+        """
+        run(label_preview, str(tmp_path / "label.png"), "--width-px", "1448", "--height-px", "200")
+
+        printed = capsys.readouterr().out
+        (shrunk,) = [line for line in printed.splitlines() if "SHRUNK" in line]
+        assert "Katsushika" in shrunk, f"the report did not name what was set below the floor: {shrunk}"
+
     def test_the_calibration_override_changes_the_type(self, label_preview, tmp_path, capsys):
         """`--cap-arcmin` is the one judgement the operator still makes, so it is
         the one flag that must actually reach the derivation."""
