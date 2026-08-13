@@ -104,6 +104,43 @@ it" line is one nobody re-tests, and the byte-offset work would otherwise have
 been first proved in CI. The typesetting CI job stays — the group is optional,
 which is a better reason than the one recorded.
 
+**Critic review: 0 blocking, 9 warnings, 10 notes across three reviewers.** All
+three independently reached the same defect from three different goals, and it is
+the one worth remembering: `FakeSurface._measure` was the single `Measure`
+implementation the refactor missed, so `len(line)` counted `Run` objects rather
+than characters — every label measured one row tall and the drop rule could never
+fire through the fake. Nothing went red, because no test using that surface
+asserts a drop, and the *identical* stub in `test_tools.py` had been fixed in the
+same commit with a comment naming the hazard. Fixed, along with a stale slack
+figure in three places, an operator entry that contradicted the one beside it, and
+an evidence command that never installed the group its most important tests need.
+
+**rev-20260813T142948Z-88916475** — chunk 13B, 2026-08-13T14:40:02Z
+
+| Finding | Severity | State | Detail |
+|---|---|---|---|
+| R-1 | warning | accepted | Fixed in df8af1b. |
+| R-2 | warning | accepted | Fixed in df8af1b. |
+| R-3 | note | accepted | Fixed in df8af1b. |
+| R-4 | note | accepted | A process observation about the dispatch, not a defect in the work. The tree was clean at dispatch; the six modified files were artifact reconciliations written while the review ran, deliberately held back so they would land in one commit with the findings rather than buying an extra round. They are now committed. |
+| R-5 | warning | accepted | Fixed in df8af1b. |
+| R-6 | warning | accepted | Fixed in df8af1b. |
+| R-7 | warning | accepted | Fixed in df8af1b. |
+| R-8 | warning | accepted | CLAUDE.md's length is a pre-existing overrun and trimming it is its own task with its own judgement calls. This change's contribution was replacing a false claim ('PyGObject does not work on this Mac at all') with a true one, which is a net +4 lines and the opposite of the harm the guidance protects against: the stale version was short AND wrong, and cost the product local coverage of its most important accessibility surface. |
+| R-9 | warning | accepted | Fixed in df8af1b. |
+| R-10 | note | accepted | Fixed in df8af1b. |
+| R-11 | note | accepted | Naming 13B-4 as the closer of a deferred item is the pointer-to-a-plan case the durable-prose rule permits, not prose riding on an id. The alternative — describing the fill model without naming which chunk owns it — is what produces a deferral nobody can find the other end of. The plan is archived rather than deleted when complete, so the pointer resolves. |
+| R-12 | note | accepted | Fixed in df8af1b. |
+| R-13 | note | accepted | Real but not worth its fix. A fourth style axis would need editing both _attributes_for (pango) and _styling_of (the preview report), and nothing fails if one is missed. The candidate fix is a shared table the two derive from, which for three binary axes is more machinery than the duplication costs — and 13B-4's likely new axis is a ROLE, which is not a Pango attribute and would not live in either enumeration. Revisit if a fourth genuine style axis appears. |
+| R-14 | note | accepted | Fixed in df8af1b. |
+| R-15 | warning | accepted | Fixed in df8af1b. |
+| R-16 | warning | accepted | Fixed in df8af1b. |
+| R-17 | note | accepted | Fixed in df8af1b. |
+| R-18 | note | accepted | Informational — the reviewer's own cross-check result, reporting nothing to action. |
+| R-19 | note | accepted | Informational — the reviewer's own cross-check result, reporting nothing to action. |
+
+**19 findings** (9 warning, 10 note) — accepted: 19.
+
 **Ten mutations swept, one survived, now caught.** Forcing every attribute to
 start at byte 0 left the leading-run case unchanged and the trailing-run case
 merely bold throughout, so both still differed from plain type; each one-run case
