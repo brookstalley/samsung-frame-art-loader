@@ -14,11 +14,14 @@ without failing it.
 """
 
 import json
+import pathlib
+import re
 from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
 
+from curation.http.pages import STATIC_DIR
 from curation.persistence.backup import BACKUP_RECEIPT_FILENAME
 from curation.persistence.records import (
     AcquisitionMethod,
@@ -30,11 +33,39 @@ from curation.persistence.records import (
 )
 
 
+def _contextual_and_destination_screens() -> set[str]:
+    """The screens whose address is a bare path, read off `app.js`'s route table.
+
+    Parsed rather than imported, because the table is JavaScript and nothing in
+    this suite executes it. The shape relied on is one screen per line —
+    `name: { … }` — with `detail: true` on exactly the screens keyed by an id,
+    which is the same key `core/route.js` branches on when it resolves a deep
+    link. A screen added to that table without a path fails here.
+    """
+    table = (STATIC_DIR / "app.js").read_text()
+    body = table.split("const ROUTES = {", 1)[1].split("\n};", 1)[0]
+    entries = re.findall(r"^  (\w+): \{(.*)\},$", body, flags=re.M)
+    return {name for name, fields in entries if "detail: true" not in fields}
+
+
 @pytest.fixture
 def http(server_url):
     """A client pointed at the booted server, with the timeout a Pi deserves."""
     with httpx.Client(base_url=server_url, timeout=30.0) as client:
         yield client
+
+
+@pytest.fixture
+def wall(http):
+    """The wall this deployment has, read off the surface rather than the store.
+
+    Every act that changes a wall names one, so a browser test that reached
+    around the API for the id would be exercising a flow no browser can take —
+    the client has to be able to get here from `GET /api/walls` alone.
+    """
+    walls = http.get("/api/walls").json()["walls"]
+    assert len(walls) == 1, f"a fresh deployment should serve exactly one wall, got {walls}"
+    return walls[0]
 
 
 def card_for(listing: dict, artwork_id: str) -> dict:
@@ -104,16 +135,49 @@ class TestTheClientIsServed:
         assert "<title>Curation</title>" in response.text
 
     def test_a_deep_link_survives_a_reload(self, http):
-        """In-page navigation writes a fragment, but a bookmark is a real path."""
-        for path in ("/works", "/themes", "/manifest", "/health"):
+        """In-page navigation writes a fragment, but a bookmark is a real path.
+
+        **Read off the client's route table rather than listed here**, because a
+        list restated in two files is a list that agrees until somebody adds a
+        screen — and `/taste` shipped without a path for exactly that reason,
+        with this test enumerating the same five names `pages.py` did and
+        therefore agreeing with the bug. The screens with a `detail` are excluded
+        on purpose: their address carries an id, which is not a path the server
+        answers to.
+        """
+        served = {f"/{name}" for name in _contextual_and_destination_screens()}
+        assert served, "no screens were parsed out of the route table — this guard would pass vacuously"
+
+        for path in sorted(served):
             assert http.get(path).status_code == 200, path
 
-    def test_the_stylesheet_and_script_are_served(self, http):
+    def test_the_addresses_the_surface_used_to_answer_to_still_answer(self, http):
+        """The three destinations renamed four paths, and the old ones were bookmarkable.
+
+        They have been real, reloadable URLs since the client was built, and the
+        client maps each onto the screen that took over its job. A 404 here is a
+        curator told their bookmark is gone when in fact the screen moved.
+        """
+        for path in ("/works", "/discovery", "/themes", "/manifest"):
+            assert http.get(path).status_code == 200, path
+
+    def test_the_stylesheet_and_every_client_module_are_served(self, http):
+        """The client is a tree of ES modules, and the browser fetches each by URL.
+
+        `app.js` alone passing means nothing now: it is an import list, and a
+        `core/` or `screens/` module the static mount does not serve is a page
+        that loads and renders nothing — the silent failure this suite exists to
+        catch, one directory lower than it used to live.
+        """
         css = http.get("/static/app.css")
-        script = http.get("/static/app.js")
         assert css.status_code == 200
-        assert script.status_code == 200
         assert "--surface-0" in css.text
+
+        static = pathlib.Path(STATIC_DIR)
+        modules = sorted(path.relative_to(static).as_posix() for path in static.rglob("*.js"))
+        assert len(modules) > 1, "the client was read as one file; this check would prove nothing"
+        for module in modules:
+            assert http.get(f"/static/{module}").status_code == 200, module
 
     def test_an_unknown_api_path_is_not_answered_with_the_shell(self, http):
         """A catch-all that returned HTML here would reach a client as unparseable JSON."""
@@ -249,11 +313,78 @@ class TestHealth:
 
     def test_the_panel_states_an_observation_and_never_a_verdict(self, http):
         health = http.get("/api/health").json()
-        assert health["heartbeat"]["absent"] is True
-        assert "has not reported yet" in health["heartbeat"]["description"]
-        assert set(health["heartbeat"]) == self.OBSERVATION_FIELDS | {"reported_at"}
+        [reading] = health["walls"]
+        assert reading["heartbeat"]["absent"] is True
+        assert "has not reported yet" in reading["heartbeat"]["description"]
+        assert set(reading["heartbeat"]) == self.OBSERVATION_FIELDS | {"reported_at"}
 
-    def test_the_panel_reports_what_the_display_plane_said_about_itself(self, http, settings):
+    def test_the_panel_names_the_wall_that_has_not_reported(self, http, wall):
+        """The reason the heartbeat became one file per wall.
+
+        A one-room installation could be told "the display plane has not
+        reported" and act on it; a two-room one cannot, and one shared heartbeat
+        had no way to say which room was dark — the second display would have
+        overwritten the first's report every minute.
+        """
+        second = http.post("/api/walls", json={"name": "The study"}).json()
+
+        health = http.get("/api/health").json()
+
+        assert {reading["wall_id"] for reading in health["walls"]} == {wall["wall_id"], second["wall_id"]}
+        # Named in the order walls are listed in, which is the order every other
+        # surface shows them in — so a reader is not asked to hold two orderings.
+        assert health["description"] == (
+            "2 of 2 walls have not reported: 'The study', 'The wall'. "
+            "Each wall's own reading says whether nothing was ever written or what could not be read."
+        )
+
+    def test_a_wall_that_has_reported_is_named_apart_from_one_that_has_not(self, http, settings, wall):
+        """The sentence a two-room installation is actually read for."""
+        http.post("/api/walls", json={"name": "The study"})
+        settings.heartbeat_path(wall["wall_id"]).write_text(
+            json.dumps({"reported_at": datetime.now(UTC).isoformat()}),
+            encoding="utf-8",
+        )
+
+        assert http.get("/api/health").json()["description"] == (
+            "'The study' has not reported. "
+            "Each wall's own reading says whether nothing was ever written or what could not be read."
+        )
+
+    def test_the_one_wall_installation_gets_a_sentence_about_its_wall(self, http, settings, wall):
+        """The sentence every deployment that exists today actually reads.
+
+        Four of this function's five branches were pinned to an exact string and
+        this one was not — the single-wall case, which is every installation in
+        the world right now. It must not borrow the plural branch's phrasing
+        either: "the least recent is" is a comparison, and there is nothing to
+        compare one wall against.
+        """
+        settings.heartbeat_path(wall["wall_id"]).write_text(
+            json.dumps({"reported_at": (datetime.now(UTC) - timedelta(minutes=3)).isoformat()}), encoding="utf-8"
+        )
+
+        assert http.get("/api/health").json()["description"] == "'The wall' last reported 3 minutes ago."
+
+    def test_a_summary_over_walls_that_have_all_reported_still_states_an_age(self, http, settings, wall):
+        """Never "well", and never a threshold: the age is the whole answer.
+
+        The *least* recent, deliberately. A summary quoting the freshest would
+        read as an all-clear bought from whichever wall happened to report last.
+        """
+        second = http.post("/api/walls", json={"name": "The study"}).json()
+        settings.heartbeat_path(wall["wall_id"]).write_text(
+            json.dumps({"reported_at": datetime.now(UTC).isoformat()}), encoding="utf-8"
+        )
+        settings.heartbeat_path(second["wall_id"]).write_text(
+            json.dumps({"reported_at": (datetime.now(UTC) - timedelta(days=4)).isoformat()}), encoding="utf-8"
+        )
+
+        assert http.get("/api/health").json()["description"] == (
+            "Every wall has reported; the least recent is 'The study', 4 days ago."
+        )
+
+    def test_the_panel_reports_what_the_display_plane_said_about_itself(self, http, settings, wall):
         """The failure table maps TV, panel and last-error state onto this document.
 
         Until it reached the payload those rows named a signal nothing displayed —
@@ -262,7 +393,7 @@ class TestHealth:
         `reported_at` is the only key the strategy makes contract and inventing
         more here would be a second contract the writer never agreed to.
         """
-        settings.heartbeat_path.write_text(
+        settings.heartbeat_path(wall["wall_id"]).write_text(
             json.dumps(
                 {
                     # The keys the display plane's writer actually emits. They were
@@ -283,23 +414,25 @@ class TestHealth:
             ),
             encoding="utf-8",
         )
-        heartbeat = http.get("/api/health").json()["heartbeat"]
+        [reading] = http.get("/api/health").json()["walls"]
+        assert reading["wall_name"] == wall["name"]
+        heartbeat = reading["heartbeat"]
         assert heartbeat["absent"] is False
         assert heartbeat["reported"]["television_reachable"] is False
         assert heartbeat["reported"]["last_error"] == "the television refused the pairing token"
         assert heartbeat["reported"]["some_future_field"] == 17
 
-    def test_an_age_is_stated_in_the_unit_a_person_reads_it_in(self, http, settings):
+    def test_an_age_is_stated_in_the_unit_a_person_reads_it_in(self, http, settings, wall):
         """ "345600 seconds ago" is a conversion the reader has to do themselves.
 
         On the one surface built so they would not have to, and for the failure it
         exists to catch — a plane that has been down since Tuesday.
         """
-        settings.heartbeat_path.write_text(
+        settings.heartbeat_path(wall["wall_id"]).write_text(
             json.dumps({"reported_at": (datetime.now(UTC) - timedelta(days=4)).isoformat()}),
             encoding="utf-8",
         )
-        assert "4 days ago" in http.get("/api/health").json()["heartbeat"]["description"]
+        assert "4 days ago" in http.get("/api/health").json()["walls"][0]["heartbeat"]["description"]
 
     def test_the_panel_says_plainly_that_no_backup_has_ever_been_recorded(self, http):
         """A true observation before the backup job exists, which is why it ships first.
@@ -350,7 +483,9 @@ class TestHealth:
         assert not [key for key in named if any(word in key for word in ("limit", "credit", "balance", "budget"))]
         # And the panel is three observations, not four. The check above would
         # pass for a balance carried under a name that dodges those four words.
-        assert set(http.get("/api/health").json()) == {"heartbeat", "backup", "artwork_box"}
+        # `description` is the walls' own summary rather than a fourth signal —
+        # it states nothing the readings beside it do not.
+        assert set(http.get("/api/health").json()) == {"walls", "description", "backup", "artwork_box"}
 
     def test_the_panel_shows_the_geometry_every_size_in_the_grid_is_judged_against(self, http):
         box = http.get("/api/health").json()["artwork_box"]
@@ -362,7 +497,7 @@ class TestHealth:
 
 
 class TestTheWholeLoop:
-    def test_the_whole_curatorial_loop_runs_over_http(self, http, hold):
+    def test_the_whole_curatorial_loop_runs_over_http(self, http, hold, wall):
         """Chunk 10B's acceptance criterion, start to finish.
 
         See the works, build a theme, put it on the wall, and read exactly why a
@@ -381,7 +516,7 @@ class TestTheWholeLoop:
             assert added.status_code == 200
         assert [work["artwork_id"] for work in added.json()["works"]] == [ready.id, no_mat.id, no_render.id]
 
-        activated = http.post(f"/api/themes/{theme['theme_id']}/activate")
+        activated = http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]})
         assert activated.status_code == 200
         published = activated.json()
 
@@ -396,19 +531,21 @@ class TestTheWholeLoop:
         assert published["summary"] == "1 of 3 works in this theme are on the wall; 2 are not currently displayable."
 
         # And the standing view of the wall agrees with what activation returned.
-        standing = http.get("/api/manifest").json()
+        standing = http.get("/api/manifest", params={"wall_id": wall["wall_id"]}).json()
         assert standing["theme"]["theme_id"] == theme["theme_id"]
-        assert standing["theme"]["is_active"] is True
+        # Named, so a confirmation built from this response says which room —
+        # even while there is one wall and the answer looks obvious.
+        assert (standing["wall_id"], standing["wall_name"]) == (wall["wall_id"], wall["name"])
         assert [entry["artwork_id"] for entry in standing["entries"]] == [ready.id]
         assert len(standing["exclusions"]) == 2
 
-    def test_activating_a_theme_publishes_the_manifest_the_display_plane_reads(self, http, hold, settings):
+    def test_activating_a_theme_publishes_the_manifest_the_display_plane_reads(self, http, hold, settings, wall):
         """Activation changes the wall, so it must write the file, not only the row."""
         artwork = hold("Automat", rendered=True, mat=True)
         theme = http.post("/api/themes", json={"name": "Late night"}).json()
         http.post(f"/api/themes/{theme['theme_id']}/works", json={"artwork_id": artwork.id})
-        http.post(f"/api/themes/{theme['theme_id']}/activate")
-        assert settings.manifest_path.is_file()
+        http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]})
+        assert settings.manifest_path(wall["wall_id"]).is_file()
 
 
 class TestThemeOrder:
@@ -430,11 +567,19 @@ class TestThemeOrder:
         response = http.request("DELETE", f"/api/themes/{theme_id}/works/{ids[1]}")
         assert [work["artwork_id"] for work in response.json()["works"]] == [ids[0], ids[2]]
 
-    def test_the_theme_listing_marks_which_one_is_on_the_wall(self, http, theme_with_three):
+    def test_the_theme_listing_names_the_walls_each_theme_hangs_on(self, http, theme_with_three, wall):
+        """A boolean could say "on the wall"; only a list can say which, and how many."""
         theme_id, _ = theme_with_three
-        http.post(f"/api/themes/{theme_id}/activate")
+        http.post(f"/api/themes/{theme_id}/activate", json={"wall_id": wall["wall_id"]})
+
         themes = http.get("/api/themes").json()["themes"]
-        assert [theme["is_active"] for theme in themes if theme["theme_id"] == theme_id] == [True]
+
+        hung = {entry["theme"]["theme_id"]: entry["hanging_on"] for entry in themes}
+        assert [where["wall_id"] for where in hung[theme_id]] == [wall["wall_id"]]
+        assert [where["name"] for where in hung[theme_id]] == [wall["name"]]
+        # And every other theme says plainly that it hangs nowhere, which is an
+        # ordinary state rather than an absent field.
+        assert all(hung[other] == [] for other in hung if other != theme_id)
 
 
 class TestRefusalsReachTheCurator:
@@ -443,8 +588,8 @@ class TestRefusalsReachTheCurator:
         assert response.status_code == 400
         assert "nope" in response.json()["error"]
 
-    def test_asking_for_the_wall_with_no_active_theme_says_so(self, http):
-        response = http.get("/api/manifest")
+    def test_asking_for_the_wall_with_no_active_theme_says_so(self, http, wall):
+        response = http.get("/api/manifest", params={"wall_id": wall["wall_id"]})
         assert response.status_code == 400
         assert response.json()["error"]
 
@@ -478,13 +623,13 @@ class TestStateThatIsEasyToHide:
         assert gone.id in ids
         assert live.id not in ids
 
-    def test_an_archived_work_leaves_the_wall_with_its_reason_stated(self, http, hold, service):
+    def test_an_archived_work_leaves_the_wall_with_its_reason_stated(self, http, hold, service, wall):
         artwork = hold("Withdrawn", rendered=True, mat=True)
         theme = http.post("/api/themes", json={"name": "Late night"}).json()
         http.post(f"/api/themes/{theme['theme_id']}/works", json={"artwork_id": artwork.id})
         service.archive_artwork(artwork.id)
 
-        published = http.post(f"/api/themes/{theme['theme_id']}/activate").json()
+        published = http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]}).json()
         assert published["entries"] == []
         assert published["exclusions"][0]["reason"] == "archived"
         # Membership is curatorial and survives archiving: the work stays in the
@@ -609,26 +754,26 @@ class TestWhatTheWallSummaryClaims:
     what a curator reads — and prose that ships to a caller is behaviour.
     """
 
-    def test_an_empty_theme_says_it_is_empty_rather_than_reporting_zero_of_zero(self, http):
+    def test_an_empty_theme_says_it_is_empty_rather_than_reporting_zero_of_zero(self, http, wall):
         theme = http.post("/api/themes", json={"name": "Nothing yet"}).json()
-        published = http.post(f"/api/themes/{theme['theme_id']}/activate").json()
+        published = http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]}).json()
 
         assert published["summary"] == "This theme holds no works yet, so nothing is on the wall."
         assert published["considered"] == 0
 
-    def test_a_theme_with_nothing_missing_states_the_full_count(self, http, hold):
+    def test_a_theme_with_nothing_missing_states_the_full_count(self, http, hold, wall):
         """ "2 of 2" is what makes "1 of 2" legible, so the clean case is stated too."""
         theme = http.post("/api/themes", json={"name": "All good"}).json()
         for title in ("Automat", "Chop Suey"):
             artwork = hold(title, rendered=True, mat=True)
             http.post(f"/api/themes/{theme['theme_id']}/works", json={"artwork_id": artwork.id})
 
-        published = http.post(f"/api/themes/{theme['theme_id']}/activate").json()
+        published = http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]}).json()
 
         assert published["summary"] == "All 2 works in this theme are on the wall."
         assert published["exclusions"] == []
 
-    def test_the_browser_summary_carries_no_pointer_at_a_tool_result_field(self, http, hold):
+    def test_the_browser_summary_carries_no_pointer_at_a_tool_result_field(self, http, hold, wall):
         """The shared sentence stops at the counts; `not_displayable` is the MCP surface's word.
 
         A browser has no field by that name, so a summary naming one would be
@@ -638,7 +783,7 @@ class TestWhatTheWallSummaryClaims:
         artwork = hold("Unrendered", mat=True)
         http.post(f"/api/themes/{theme['theme_id']}/works", json={"artwork_id": artwork.id})
 
-        published = http.post(f"/api/themes/{theme['theme_id']}/activate").json()
+        published = http.post(f"/api/themes/{theme['theme_id']}/activate", json={"wall_id": wall["wall_id"]}).json()
 
         assert "not_displayable" not in published["summary"]
         assert published["summary"] == "0 of 1 works in this theme are on the wall; 1 are not currently displayable."

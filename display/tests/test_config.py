@@ -16,6 +16,7 @@ from display.config import ConfigError, load
 def an_environment(art_root: Path, **overrides: str) -> dict[str, str]:
     environment = {
         "ART_ROOT": str(art_root),
+        "WALL_ID": "living-room",
         "TV_ADDRESS": "10.0.0.1",
         "LATITUDE": "45.68",
         "LONGITUDE": "-111.04",
@@ -26,12 +27,27 @@ def an_environment(art_root: Path, **overrides: str) -> dict[str, str]:
 
 
 class TestWhatMustBeSet:
-    @pytest.mark.parametrize("missing", ["ART_ROOT", "TV_ADDRESS", "LATITUDE", "LONGITUDE", "LOCATION_NAME"])
+    @pytest.mark.parametrize("missing", ["ART_ROOT", "WALL_ID", "TV_ADDRESS", "LATITUDE", "LONGITUDE", "LOCATION_NAME"])
     def test_a_missing_deployment_value_stops_the_process(self, art_root: Path, missing: str):
         environment = an_environment(art_root)
         del environment[missing]
 
         with pytest.raises(ConfigError, match=missing):
+            load(environment)
+
+    def test_the_refusal_over_a_missing_wall_says_where_a_wall_id_comes_from(self, art_root: Path):
+        """A wall id is the one required value an installer cannot invent.
+
+        It is a UUID minted by the other plane, so "fill it in" without saying
+        where it comes from is where somebody starts guessing — and the
+        consequence of a guess is the failure per-wall manifests removed: a
+        television showing another room's pictures while every log line reads
+        fine.
+        """
+        environment = an_environment(art_root)
+        del environment["WALL_ID"]
+
+        with pytest.raises(ConfigError, match="art_display"):
             load(environment)
 
     def test_an_art_root_that_is_not_a_directory_is_refused(self, tmp_path: Path):
@@ -133,11 +149,28 @@ class TestWhatDefaults:
 
     def test_the_two_paths_under_the_art_root_are_not_configurable(self, art_root: Path):
         """A setting is just a way for the writer and the reader to stop agreeing
-        about where the channel between them is."""
+        about where the channel between them is.
+
+        **The wall is configurable and the naming is not**, and the two are
+        different things: which room this device serves is a deployment fact, and
+        where that room's manifest is written is a contract between the planes.
+        """
         settings = load(an_environment(art_root))
 
-        assert settings.manifest_path == art_root / "theme-manifest.json"
+        assert settings.manifest_path == art_root / "theme-manifest-living-room.json"
         assert settings.state_path == art_root / "display-state.sqlite"
+
+    def test_the_manifest_this_device_waits_on_is_the_one_for_its_own_wall(self, art_root: Path):
+        """The property one file per wall was chosen for.
+
+        A display cannot read a wall it does not serve, because the other room's
+        manifest is a path it never stats — not because it opens the file and
+        declines to act on it.
+        """
+        study = load(an_environment(art_root, WALL_ID="study"))
+
+        assert study.manifest_path == art_root / "theme-manifest-study.json"
+        assert study.manifest_path != load(an_environment(art_root)).manifest_path
 
     @pytest.mark.parametrize(
         ("raw", "expected"),
@@ -158,6 +191,27 @@ class TestTheStartupLine:
 
         assert lines["art_root"] == str(art_root)
         assert lines["epd_panel_px"] == "1448x1072"
+
+    def test_it_names_the_wall_this_device_serves_and_both_files_that_follow_from_it(self, art_root: Path):
+        """**The value whose being wrong has no other symptom.**
+
+        A `WALL_ID` naming a wall nothing publishes for produces a manifest that
+        never arrives, which looks exactly like a curation plane that has not
+        published yet. A `WALL_ID` naming the *wrong* wall produces a television
+        showing another room's pictures while the daemon starts, the set answers,
+        the label draws and every suite passes. Neither is visible anywhere else,
+        so both are worth an assertion rather than resting on fields a refactor
+        can blank with nothing objecting.
+
+        Both derived paths as well as the id, because the id alone does not show a
+        reader that this is the file being waited on — and the heartbeat's path is
+        where an operator looks when the health panel says this wall is silent.
+        """
+        lines = load(an_environment(art_root, WALL_ID="study")).startup_lines()
+
+        assert lines["wall_id"] == "study"
+        assert lines["manifest_path"] == str(art_root / "theme-manifest-study.json")
+        assert lines["heartbeat_path"] == str(art_root / "display-heartbeat-study.json")
 
     def test_it_names_the_viewing_conditions_the_type_was_sized_from(self, art_root: Path):
         """**The line that would have caught the defect this pair exists for.**

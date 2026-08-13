@@ -50,6 +50,12 @@ REFERENCE_ROUTE = (
     "art_catalogue(action='list')",
     "art_theme(action='create')",
     "art_theme(action='add')",
+    # Added 2026-08-12, when hanging became an act against a named wall. It is a
+    # real extra round trip and it is recorded as one rather than hidden: the
+    # wall is a required argument, so a caller that cannot obtain a wall id
+    # cannot hang anything, and the surface has to hand it one. That is the cost
+    # of the confirmation naming the room, paid once per flow.
+    "art_display(action='walls')",
     "art_theme(action='activate')",
 )
 

@@ -115,10 +115,10 @@ class TestBothTieBreaksPickTheSameRender:
         assert newest_first[0].id != in_store_order[0].id, "this fixture no longer sets up the disagreement it exists to expose"
         return work
 
-    def test_the_wall_and_a_thumbnail_choose_the_same_file(self, two_renders, service, display, thumbnails, settings):
+    def test_the_wall_and_a_thumbnail_choose_the_same_file(self, two_renders, service, display, thumbnails, settings, wall_id):
         work = two_renders
 
-        entry_path = display.build_manifest(self._theme_holding(display, work.id)).entries[0].render_path
+        entry_path = display.build_manifest(wall_id, self._theme_holding(display, work.id)).entries[0].render_path
         thumbnail_source = thumbnails.source_for(work.id)
 
         assert thumbnail_source.kind == RenditionKind.TV_DISPLAY.value

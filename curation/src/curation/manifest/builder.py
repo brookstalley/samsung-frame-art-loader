@@ -36,15 +36,25 @@ from curation.persistence.records import (
     Original,
     Rendition,
     Theme,
+    Wall,
     is_current,
     tv_renditions_newest_first,
 )
 
 log = logging.getLogger(__name__)
 
-#: The manifest's filename under `ART_ROOT`. Not configurable: both planes have
-#: to agree where it is, and a setting is only a way for them to stop agreeing.
-MANIFEST_FILENAME: Final[str] = "theme-manifest.json"
+#: The manifest's filename under `ART_ROOT`, **one file per wall**. Not
+#: configurable: both planes have to agree where it is, and a setting is only a
+#: way for them to stop agreeing.
+#:
+#: One file per wall rather than one file carrying a section per wall. Change
+#: detection on the other side is an mtime poll at about a second, so a shared
+#: file would wake every wall's display on every other wall's change — and would
+#: make "the manifest's sequence" ambiguous exactly where the coalescing and
+#: sequence-regression rules need it to be singular. Per file also leaves a
+#: display plane structurally unable to read a wall it does not serve: it is
+#: configured with one wall's id and stats one path.
+MANIFEST_FILENAME_TEMPLATE: Final[str] = "theme-manifest-{wall_id}.json"
 
 #: Bumped only by a change that would stop an existing display plane reading a
 #: manifest correctly — a removed field, a changed meaning, a new required key.
@@ -55,6 +65,16 @@ SCHEMA_MAJOR: Final[int] = 1
 #: Bumped by additive changes. Display ignores a minor it does not know, which is
 #: what makes adding a field free.
 SCHEMA_MINOR: Final[int] = 1
+
+
+def manifest_path_in(art_root: Path, wall_id: str) -> Path:
+    """Where one wall's manifest lives under a given art root.
+
+    The one place the template is filled in on this side, so a caller cannot
+    spell the name a second way — and so the display plane's own copy of the
+    template has exactly one thing to agree with.
+    """
+    return art_root / MANIFEST_FILENAME_TEMPLATE.format(wall_id=wall_id)
 
 
 class ExclusionReason(StrEnum):
@@ -121,6 +141,16 @@ class ManifestEntry:
 class ManifestBuild:
     """What one build produced — including, deliberately, what it left out."""
 
+    #: Which wall this build is about. Carried so that a surface can name it in
+    #: the confirmation — "Hang Winter in the living room" — without asking a
+    #: second question; a confirmation that reads correctly only because there is
+    #: one possible target silently becomes wrong when a second display arrives.
+    #: It is deliberately **not** a field inside the document `as_document`
+    #: writes: the wall is carried by the *filename*, which is what makes a
+    #: display plane unable to open a wall it does not serve rather than merely
+    #: unwilling to act on it. A field would be a second answer to the same
+    #: question, and the two could disagree.
+    wall: Wall
     theme: Theme
     entries: Sequence[ManifestEntry]
     exclusions: Sequence[Exclusion]

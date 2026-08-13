@@ -419,6 +419,444 @@ This is why `MatColor.method` carries `dominant_color_fallback` as a first-class
 recorded value rather than the mat engine retrying until the model complies. An
 unparseable answer is a normal outcome of an unenforced schema, not an incident.
 
+## The conversation call: a longer `messages` array, and two defects it exposes (measured 2026-08-12)
+
+Probed against the live API, nine days after the vision call above, because the
+curation-UX build plan needed its least confident assumption tested before code
+was written against it:
+
+> [ASSUMPTION: the conversation's model turn can be served by the existing
+> OpenRouter client without a new abstraction | MED impact]
+
+Same model as the choice above, `qwen/qwen3.7-flash`, routed to **Alibaba** on
+every call — the cheapest vision-capable model this product has already chosen,
+and therefore representative rather than a stand-in. **Total spend: $0.00156**
+across 41 real calls in four rounds plus a latency probe.
+
+**The assumption holds, and the gap is one method's signature, not a new
+abstraction.** The *response* half of the client needs nothing at all. The
+*request* half cannot express a conversation, because `complete()`
+(`openrouter.py:235-291`) takes `prompt: str` and builds a one-message list from
+it at `openrouter.py:270`:
+
+```python
+"messages": [{"role": "user", "content": content}],
+```
+
+There is no parameter through which a caller can supply a history; reaching a
+multi-turn call means going around `complete()` into `_post()` directly, which is
+what this probe did. The narrowest honest fix is a second method on the same
+client taking a `Sequence[Message]` and sharing `_post`, `_read_body` and
+`_read_completion` — not a new abstraction. What is not settled by this probe is
+whether that method belongs directly on `OpenRouterClient` or behind a
+conversation-shaped engine above it; the wire tells what it needs, not which
+shape is right.
+
+### A conversation is just a longer `messages` array, and the provider keeps no state
+
+Every turn resends the whole history; there is no thread id, no
+`previous_response_id`, nothing server-side to reference. Two threads were driven
+four turns each, twice — once with reasoning on and once with it off — and a
+third round isolated the round-trip questions: twelve multi-turn calls in all,
+none of which needed anything the single-shot path does not already send.
+`usage: {"include": true}`, `max_tokens` and `model` are the same three keys the
+existing client sends today. A `system` message is accepted at the head of a
+thread, which is where a conversation's standing instruction would go, and two
+`user` turns in a row with no assistant between them are also accepted (HTTP
+200) — so a thread whose model turn failed does not have to be repaired before
+the next question can be asked.
+
+This did not establish whether a *long* thread behaves the same. The longest
+history probed was five messages and 628 prompt tokens, and nothing here measured
+prompt caching — `usage.prompt_tokens_details.cached_tokens` came back `0` on
+every single call, including the four that resent an identical 434-token image,
+so on this route the resent history is **not** discounted.
+
+### Everything downstream of the response was already correct — verified, not assumed
+
+Running the probe's payloads through the real `_read_completion` confirmed:
+`openrouter.py:393-395`'s `choices[0].message.content` with `or ""` in front of
+it is load-bearing on this route, because a truncated turn returns
+`"content": null`, not `""`, and the `or ""` is what keeps that from becoming a
+`None` in a `Completion`. `usage.cost`, `cost_details.upstream_inference_cost`,
+`prompt_tokens` and `completion_tokens` (`openrouter.py:397-410`) are all present
+and identically shaped on a multi-turn image call. `finish_reason`
+(`openrouter.py:413`) is present and is the only signal that separates a usable
+turn from a truncated one. `annotations` (`openrouter.py:412`) is correctly
+absent on every call here, since no search plugin was sent. `_money`'s
+`parse_float=Decimal` (`openrouter.py:358`, `436-453`) parsed costs arriving as
+both `0.00001896` and `4.78e-06` without incident.
+
+Two things the client sends that a conversational turn should not want, and
+neither is reachable to switch off: `schema` is optional, so a conversational
+turn simply omits it — fine. `reasoning` cannot be passed at all, because the
+body at `openrouter.py:268-278` has a fixed key set, which matters more than it
+looks — see below.
+
+### An assistant turn round-trips verbatim — unless its content is `null`, which is a 400
+
+This is the finding a retryable multi-turn conversation most needs, because the
+null case is exactly the failed turn such a feature has to keep in the thread.
+The response message object on this route carries four or five keys —
+`{"role": "assistant", "content": "…", "refusal": null, "reasoning": "…",
+"reasoning_details": [...]}` — and fed straight back into the next request's
+`messages`, including `reasoning`, `reasoning_details` and `refusal: null`, it is
+accepted (HTTP 200). Stripping the two reasoning keys is also accepted. So the
+extra keys are ignored, not rejected, and a caller may store and resend the
+message object as it came.
+
+**`content: null` is refused, by the provider, with a 400:**
+
+```
+{"error": {"message": "Provider returned error", "code": 400,
+  "metadata": {"raw": "data: {\"error\":{\"code\":\"invalid_parameter_error\",\"param\":null,
+                       \"message\":\"The content field is a required field.\",
+                       \"type\":\"invalid_request_error\"},…}",
+               "provider_name": "Alibaba", "is_byok": false}},
+ "user_id": "user_…"}
+```
+
+Measured twice, on two different histories. **`content: ""` is accepted** — HTTP
+200, and the model answered the following question sensibly. So a turn that
+failed must be stored and resent with `""`, never `null`: a conversation that
+stored the provider's `null` verbatim would 400 on the *next* turn, for a reason
+that has nothing to do with why the first turn failed. `data-model.md` already
+requires `ConversationTurn.text`, so the storage layer forbids null on its own —
+the risk is a handler that passes the provider's message object through
+untouched.
+
+This did not establish whether other providers accept `content: null`. The
+refusal came from Alibaba, not from OpenRouter's edge, so a route that lands on a
+different provider may be more forgiving. Building on `""` is the safe answer
+either way.
+
+### An image on an **assistant** turn is refused outright
+
+On the wire, a model's own reply cannot carry image content, only text:
+
+```
+POST with messages[1] = {"role": "assistant", "content": [
+  {"type": "text", …}, {"type": "image_url", …}]}
+
+400  "An incorrect modal `image` was entered, which may not be supported by the
+      model or was placed in the wrong position (e.g., in system/assistant)."
+```
+
+Images may appear **only on `user` turns**, as a list of content parts — the same
+shape the mat client already sends (`openrouter.py:262-267`). This decides the
+design of any surface that shows a curator inline samples alongside a model's
+reply: those samples are the product's own preview files, not pixels the model
+returned, and nothing requires them to have come from the model. What it forbids
+is the naive implementation where a stored assistant turn is replayed to the
+provider with its samples attached — if a later turn needs the model to *see* a
+sample it previously named, that image has to go on the **curator's** next turn,
+not the assistant's stored one.
+
+This did not establish whether a vision model exists on OpenRouter that accepts
+assistant-role images. One model was probed. The finding to carry forward is that
+the product must not depend on one existing.
+
+### An image on an earlier turn is re-sent, re-billed, and genuinely re-read — every turn, at full price
+
+Two four-turn threads, identical text, differing only in whether turn 2 carried
+an image: a 768-px JPEG of a real corpus preview (45,276 bytes, a
+60,391-character data URI). With every assistant turn forced to the empty string
+in both threads, so the prompt-token difference is the image and nothing else:
+
+| turn | thread A `prompt_tokens` (image) | thread B (control) | difference |
+|---|---|---|---|
+| 1 (no image yet) | 39 | 39 | **0** |
+| 2 (image sent) | 502 | 68 | **434** |
+| 3 (image in history) | 527 | 93 | **434** |
+| 4 (image in history) | 551 | 117 | **434** |
+
+**434 prompt tokens, to the token, on every turn the image remains in the
+history.** The provider re-bills it in full each time; `cached_tokens` was `0`
+throughout, so nothing discounts the repeat. `usage.completion_tokens_details.image_tokens`
+was **`0`** here, not `None` as the 2026-08-03 vision probe recorded above —
+either way the image bills inside `prompt_tokens`, and a cost model that added a
+separate image charge would double-count.
+
+What it costs, with reasoning disabled so the assistant turns carried real text:
+
+| turn | C in/out | C cost | D in/out | D cost |
+|---|---|---|---|---|
+| 1 | 41 / 24 | 0.00000435 | 41 / 24 | 0.00000435 |
+| 2 | 528 / 24 | 0.00001896 | 94 / 22 | 0.00000568 |
+| 3 | 576 / 28 | 0.00002092 | 141 / 22 | 0.00000709 |
+| 4 | 628 / 27 | 0.00002235 | 188 / 19 | 0.00000811 |
+| **thread** | | **0.00006658** | | **0.00002523** |
+
+One image carried through three further turns cost **$0.0000414** more than the
+same conversation without it — about **$0.0000138 per resend** on this model. At
+$0.03/M prompt tokens, an image is a rounding error; on a model priced like the
+discovery model it would be roughly five times that, and still a rounding error.
+The figure that would not be a rounding error is *many* images: a thread that
+accumulated a dozen samples would carry ~5,000 prompt tokens of image on every
+subsequent turn, growing without bound, so any surface that resends history has
+to deliberately bound how many images stay in it. The measurement says the cost
+is linear in (images × remaining turns).
+
+And the model actually re-reads it — not inferable from the token count, so it
+was asked directly. Turn 4 of both threads asked *"what colours dominate the work
+I showed you earlier?"*, two turns after the image was sent: thread C (image in
+history) answered *"The work is dominated by soft, muted tones of beige,
+off-white, and faint gray, with subtle charcoal or graphite shading"* — the work
+is a graphite portrait on aged paper, correct. Thread D (control) answered *"You
+have not yet provided the work you are considering, so I cannot identify its
+dominant colors."* So a resent image-bearing history is a working conversation,
+not merely an accepted one.
+
+This did not establish more than one image at one size on one model. The token
+count scales with the encoded image, and `MAT_IMAGE_MAX_EDGE` (768) is the dial.
+Nothing here measured two images in one turn, or an image on the first turn.
+
+### Per-turn cost is one number, immediately, and a thread's cost is their sum
+
+`usage.cost` is present on every turn, exactly as the single-shot path above
+already relies on. There is no thread-level total and no need for one — a
+`SpendRecord` per turn maps to `usage.cost` one-for-one, and a conversation's
+cost is the sum of its turns' rows. Thread C turn 2, the image-bearing turn, in
+full:
+
+```
+usage.prompt_tokens                                     528
+usage.completion_tokens                                 24
+usage.cost                                              0.00001896
+usage.cost_details.upstream_inference_cost              0.00001896   (identical: no search)
+usage.cost_details.upstream_inference_prompt_cost       0.00001584
+usage.cost_details.upstream_inference_completions_cost  0.00000312
+usage.prompt_tokens_details.cached_tokens               0
+usage.completion_tokens_details.reasoning_tokens        0            (900 with reasoning on)
+usage.completion_tokens_details.image_tokens            0
+```
+
+With no search plugin sent, `cost` and `upstream_inference_cost` are equal, so a
+search-cost figure computed from the difference is correctly zero. Costs arrived
+in both fixed and scientific notation — `0.00001896` on one call, `4.78e-06` and
+`6.6E-7` on others — and `Decimal(str(value))` handled both; a fake built only
+from fixed-notation numbers would not exercise that.
+
+This did not establish whether `/key`'s ledger moves by the summed figure across
+a thread. The 2026-08-02 measurement above established that for single calls and
+that `/key` lags by minutes; this round did not re-check it, and there is no
+reason to think a thread is different — each turn is an independent billed call.
+
+### Reasoning is the failure mode of a conversational turn, and it is invisible
+
+**The single most expensive thing this round found, and it is not what the build
+plan was looking for.** Every one of the first ten calls returned **empty
+content**, billed in full:
+
+```
+max_tokens=200   -> completion_tokens 202, reasoning_tokens 200, content null, finish_reason "length"
+max_tokens=900   -> completion_tokens 902, reasoning_tokens 900, content null, finish_reason "length"
+max_tokens=16    -> completion_tokens  18, reasoning_tokens  16, content null, finish_reason "length"
+```
+
+**`reasoning_tokens` came back exactly equal to `max_tokens` at every size
+tried** — the reservation was consumed entirely by reasoning, before a character
+of the answer was emitted. This is the same failure shape the mat call recorded
+above, but there it was ~160 reasoning tokens on a tightly-specified schema
+prompt at a reservation of 8,000, and it was recorded as solved. **An open-ended
+conversational prompt is a different animal**: "suggest a direction for a calm,
+contemplative wall" produced runaway reasoning at every budget offered.
+
+`reasoning: {"enabled": false}` fixes it completely:
+
+| | reasoning on | reasoning off |
+|---|---|---|
+| turn 1 content | `null`, `finish_reason: "length"` | *"Choose a single, large-scale piece with muted tones and ample negative space…"* |
+| `completion_tokens` | 902 (900 reasoning) | 24 |
+| cost | 0.00011843 | 0.00000435 |
+| wall-clock | seconds to minutes | under a second |
+
+**A 27-fold cost difference, and the difference between an answer and nothing.**
+The whole reasoning-on round cost $0.00139 and produced ten empty turns; the
+whole reasoning-off round cost $0.00013 and produced twelve good ones. **And the
+client cannot send that key** — the fixed body at `openrouter.py:268-278` has no
+`reasoning` parameter, so a conversational feature either passes it through
+(which the same signature change that adds `messages` can carry), or sets a
+reservation large enough that reasoning completes, which on this evidence is not
+a number anyone can name in advance.
+
+This did not establish whether reasoning-off is the right product answer. It is
+the right *probe* answer — it made the shapes measurable. A conversational turn
+might genuinely be better with reasoning on and a 16,000-token reservation, at
+~30x the cost. That is a product judgement with a measured price tag attached,
+not a fact this round settles.
+
+### What a failure looks like on the wire, and a defect that hides half of it
+
+Four kinds, and they arrive by three different routes. **Truncation** with
+reasoning off returns *partial content* — the resendable case:
+
+```
+{"choices": [{"finish_reason": "length", "native_finish_reason": "length",
+  "message": {"role": "assistant",
+              "content": "The Hudson River School was the first American art movement, emerging",
+              "refusal": null, "reasoning": null}}],
+ "usage": {"prompt_tokens": 22, "completion_tokens": 12, "cost": 0.00000222, …}}
+```
+
+With reasoning on it returns `"content": null` instead. Both are billed, both
+carry `finish_reason: "length"`, and only the second cannot be resent — the
+finding above, "An empty answer with `finish_reason: 'length'` is a client
+fault", **still holds**, and this round extends it: on a conversational prompt,
+it is the *default* outcome, not an edge case.
+
+**A refusal is not a failure at all.** Asked for sarin synthesis, the model
+returned a polite decline as ordinary content — `finish_reason: "stop"`,
+`refusal: null`, 174 completion tokens, $0.0000234. There is no wire signal that
+distinguishes a refusal from an answer, so a conversation surface has to treat it
+as a normal turn, which it is, and must not try to detect it.
+
+A bad request from the provider arrives as HTTP 400 with the cause buried:
+
+```
+{"error": {"message": "Provider returned error", "code": 400,
+  "metadata": {"raw": "…\"message\":\"curator is not one of ['system', 'assistant', 'user', 'tool', 'function']\"…",
+               "provider_name": "Alibaba", "is_byok": false}}}
+```
+
+A bad request from OpenRouter's own edge has no `metadata` and says what is wrong
+in `error.message` directly: `{"error": {"message": "Input required: specify
+\"prompt\" or \"messages\"", "code": 400}}`. Nothing is billed on either —
+`usage` is absent entirely.
+
+**The client discards the diagnosable half of a provider 400.**
+`openrouter.py:377-379`:
+
+```python
+error = body.get("error") if isinstance(body, dict) else None
+if isinstance(error, dict) and error.get("message"):
+    return str(error["message"])
+```
+
+For every provider-side 400 measured here, that returns the literal string
+**"Provider returned error"**, collapsing at least three distinct causes — a null
+content field, a misplaced image, an unknown role — into one string, while
+`error.metadata.raw` carries the real one: *"The content field is a required
+field"* or *"An incorrect modal `image` was entered"*. The user-facing message
+becomes `OpenRouter returned HTTP 400: Provider returned error`. That is
+tolerable for the two existing callers, which retry nothing and fall back. It is
+not tolerable for a feature whose requirement is a failed turn that stays in the
+thread and is retryable: the curator sees a failed turn with no account of why,
+and a developer debugging it gets the same string regardless of which of the
+three it was. **This is a pre-existing defect**, invisible while nothing
+retries, that a retryable conversation turn would make user-visible. Reading
+`error.metadata.raw` when present is a docstring-and-three-lines change in
+`_provider_message`.
+
+This did not re-establish the money refusals. 402 and 403 were not re-probed —
+doing so means burning a key to exhaustion, they are already recorded against a
+real key above, and `_read_body` discriminates them before any of this code is
+reached. A conversation turn inherits that behaviour unchanged.
+
+### A defect found by accident: the first request on an idle connection costs ~150 seconds, and the deployment shares the cause
+
+Calls of identical shape took 0.3 s and 158 s. The pattern is not the model:
+
+```
+call 0: 151.25s   cost=0.00000185
+call 1:   0.75s   cost=0.00000237
+call 2:   0.88s   cost=0.00000250
+call 3:   0.78s   cost=0.00000185
+```
+
+The cause, measured directly:
+
+```
+IPv4  104.18.3.115      connect 0.02s
+IPv6  2606:4700::6812:273  FAILED after 20.00s: timed out
+```
+
+**`openrouter.ai` resolves to an IPv6 address that black-holes on this machine.**
+httpx tries it first, waits out the connect timeout — which `_post` sets to
+`COMPLETION_TIMEOUT_SECONDS`, 180 s (`openrouter.py:52`, `319`) — and then
+succeeds over IPv4. httpx has no happy-eyeballs fallback and no connection
+warm-up, so a cold connection waits out the full 180-second connect timeout
+before falling back — measured at 151 s, then sub-second once warm. httpx's
+default `keepalive_expiry` is 5 seconds, so **any gap longer than five seconds
+between calls pays it again** — and a conversation, with a curator reading and
+typing between turns, is nothing but gaps longer than five seconds.
+
+Three consequences follow, and only the first is about this round: the round's
+own wall-clock was dominated by this, not by the API. **The 180-second timeout is
+the only reason anything works** — a shorter one, which a browser-facing turn
+would reasonably want, turns every turn into `OpenRouterError: Could not reach
+OpenRouter`. And it affects discovery and the mat engine **today**; it is
+invisible there because both run on a worker thread behind an already-returned
+run handle, while a conversation turn is a synchronous POST a curator is
+watching.
+
+**Traced afterwards, and the first reading was wrong in the way that mattered.**
+This is not one machine's LAN. IPv6 is configured correctly and works locally — a
+global SLAAC address, a valid default route, the router answering `ping6` in 5 ms.
+Packets leave the house and die four hops out, in the *provider's* transit:
+
+```
+traceroute6 → Cloudflare              traceroute6 → Google
+ 1-3  (local, then the ISP)            1-3  (same)
+ 4    edge8.denver1.level3.net  15ms   4    edge8.denver1.level3.net  16ms
+ 5-12 * * * * * * * *                  5-12 * * * * * * * *
+```
+
+Over IPv4 that same Level3 interface forwards fine. So it is IPv6-specific,
+**destination-independent** — Google and Cloudflare die identically — and
+upstream of the building: an advertised prefix with no working transit behind it.
+`openrouter.ai` is incidental; every AAAA on the internet black-holes from this
+address.
+
+**Which means the deployment shares it, and this stops being a dev-machine quirk
+to note and move past.** The panel runs on the same uplink.
+
+**The fix is one argument, and it does not wait on the ISP.** `_post` passes a
+*scalar* `timeout=` (`openrouter.py:319`), and httpx applies a scalar to connect,
+read, write and pool alike — so the dead socket gets the whole generation budget.
+Splitting it bounds the doomed attempt without touching the budget generation
+actually needs:
+
+```python
+httpx.Timeout(180.0, connect=5.0)
+```
+
+`discovery/artic.py` already carries exactly this shape; the mitigation this
+codebase had already chosen was applied to one client and not the other.
+
+**One number to be careful with, because two readings of this got it wrong in
+opposite directions.** `openrouter.ai` publishes **two** AAAA records and two A
+records (verified 2026-08-12) — not the ten an earlier arithmetic assumed. So
+`connect=5.0` costs about *ten* seconds on a cold connection, not five and not
+fifty: httpx walks the resolved list in order and each dead address costs the
+bound. That is still the difference between a turn a curator abandons and one
+they wait through. **And the measured 151 s does not decompose cleanly against
+two addresses** — it is recorded here as measured and unexplained, rather than
+fitted to a formula.
+
+The finding is not "the provider is slow"; it is that the client has no fallback
+path when the fast one is broken, on a network where the fast one is broken.
+
+### What this round left open
+
+One model, one provider, one day: every finding above is `qwen/qwen3.7-flash`
+routed to Alibaba on 2026-08-12. The `content: null` refusal, the assistant-image
+refusal and the runaway reasoning are all provider behaviours another route may
+not share; the shapes — `messages`, `usage`, `finish_reason` — are OpenRouter's
+own and are the same ones already recorded above. `DISCOVERY_MODEL` cannot do any
+of this: `deepseek/deepseek-v4-flash` lists `input_modalities: ["text"]`, so a
+conversation carrying images needs a vision model and its own model setting, the
+same argument `config.py:413-419` already records for `mat_model` — this round
+used the mat model because it was there, not because it was chosen. Nothing here
+covers a long thread, concurrency or cancellation: four turns is the longest
+measured, and nothing says what a fiftieth turn costs, whether two turns in
+flight on one conversation interleave safely, or what happens when a curator
+navigates away mid-turn. Nothing here is a caching measurement worth the name —
+`cached_tokens` was `0` everywhere, which is a fact about this route rather than
+a claim that caching is unavailable on OpenRouter. And nothing here is about the
+surface above the wire: whether a commit card transforms in place, whether a
+failed turn is visibly retryable, is outside what this probe can settle.
+
 ## Re-verification
 
 Prices and endpoint shapes both move, so **this file is no longer the durable

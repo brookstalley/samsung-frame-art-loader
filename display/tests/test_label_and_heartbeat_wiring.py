@@ -19,11 +19,12 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
+from conftest import WALL_ID
 from fakes import FakeSurface
 
 from display import daemon as daemon_module
 from display.daemon import Daemon
-from display.heartbeat import HEARTBEAT_FILENAME, INTERVAL_SECONDS
+from display.heartbeat import INTERVAL_SECONDS, path_in
 from display.manifest import Watcher
 from display.panel import TypeScale
 
@@ -283,7 +284,7 @@ class TestAPanelFailureNeverStopsTheWall:
         publish(["work-a", "work-b"], shuffle=False, labels={"work-a": {}, "work-b": {}})
         await labelled.tick()
         assert surface.shown, "the panel never worked, so this is not the mid-run case"
-        first = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        first = json.loads(path_in(art_root, WALL_ID).read_text())
         assert first["label_surface_working"] is True
 
         surface.refuses = True
@@ -293,7 +294,7 @@ class TestAPanelFailureNeverStopsTheWall:
 
         assert len(tv.selected) == 2, "the wall stopped when the panel did"
         assert len([r for r in caplog.records if getattr(r, "event", None) == "label.failed"]) == 1
-        document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        document = json.loads(path_in(art_root, WALL_ID).read_text())
         assert document["label_surface_working"] is False
 
 
@@ -513,7 +514,7 @@ class TestADeviceWithNoLabelSurface:
 
         await daemon.tick()
 
-        document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        document = json.loads(path_in(art_root, WALL_ID).read_text())
         assert document["label_surface_working"] is None
         assert document["has_label_surface"] is False
 
@@ -527,7 +528,7 @@ class TestADeviceWithNoLabelSurface:
         """
         await labelled.tick()  # no manifest yet, so nothing has been captioned
 
-        document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        document = json.loads(path_in(art_root, WALL_ID).read_text())
         assert document["has_label_surface"] is True
         assert document["label_surface_working"] is None
 
@@ -561,7 +562,7 @@ class TestADeviceWhosePanelWouldNotOpen:
 
         await broken.tick()
 
-        document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        document = json.loads(path_in(art_root, WALL_ID).read_text())
         assert document["has_label_surface"] is True, "a broken panel reported as a device that has none"
         assert document["label_surface_working"] is False, "a panel that never opened reported as one that has not been asked yet"
 
@@ -572,7 +573,7 @@ class TestADeviceWhosePanelWouldNotOpen:
 
         await broken.tick()
 
-        document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        document = json.loads(path_in(art_root, WALL_ID).read_text())
         assert "no SPI device" in (document["last_error"] or "")
 
     @pytest.mark.asyncio
@@ -613,7 +614,7 @@ class TestTheHeartbeat:
 
         await daemon.tick()
 
-        assert (art_root / HEARTBEAT_FILENAME).is_file()
+        assert path_in(art_root, WALL_ID).is_file()
 
     @pytest.mark.asyncio
     async def test_it_carries_what_the_wall_is_showing(self, daemon, publish, art_root: Path):
@@ -621,7 +622,7 @@ class TestTheHeartbeat:
 
         await daemon.tick()
 
-        document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        document = json.loads(path_in(art_root, WALL_ID).read_text())
         assert document["current_work_id"] == "work-a"
         assert document["television_reachable"] is True
         assert document["television_showing_art"] is True
@@ -636,7 +637,7 @@ class TestTheHeartbeat:
         clock.advance(INTERVAL_SECONDS * 1.5)
         await daemon.tick()
 
-        document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        document = json.loads(path_in(art_root, WALL_ID).read_text())
         assert document["announced_content_id"] == "SAM-F0222"
 
     @pytest.mark.asyncio
@@ -652,7 +653,7 @@ class TestTheHeartbeat:
 
         await daemon.tick()
 
-        document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        document = json.loads(path_in(art_root, WALL_ID).read_text())
         assert document["television_reachable"] is False
         assert document["last_error"]
 
@@ -661,7 +662,7 @@ class TestTheHeartbeat:
         """The state a fresh install sits in, and when 'is it alive' is asked most."""
         await daemon.tick()
 
-        document = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        document = json.loads(path_in(art_root, WALL_ID).read_text())
         assert document["manifest_schema"] is None
 
     @pytest.mark.asyncio
@@ -669,31 +670,31 @@ class TestTheHeartbeat:
         """At the one-second poll this would be ~86,400 writes a day, forever."""
         publish(["work-a"])
         await daemon.tick()
-        first = (art_root / HEARTBEAT_FILENAME).read_text()
+        first = path_in(art_root, WALL_ID).read_text()
 
         clock.advance(INTERVAL_SECONDS / 4)
         await daemon.tick()
 
-        assert (art_root / HEARTBEAT_FILENAME).read_text() == first
+        assert path_in(art_root, WALL_ID).read_text() == first
 
     @pytest.mark.asyncio
     async def test_it_is_rewritten_once_the_interval_has_run(self, daemon, publish, art_root: Path, clock):
         publish(["work-a"])
         await daemon.tick()
-        first = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        first = json.loads(path_in(art_root, WALL_ID).read_text())
 
         # Deliberately not a whole multiple of the interval: a clock stepped by
         # exactly the wait cannot tell `>=` from `>`.
         clock.advance(INTERVAL_SECONDS * 1.5)
         await daemon.tick()
 
-        second = json.loads((art_root / HEARTBEAT_FILENAME).read_text())
+        second = json.loads(path_in(art_root, WALL_ID).read_text())
         assert second["reported_at"] != first["reported_at"]
 
     @pytest.mark.asyncio
     async def test_an_unwritable_heartbeat_does_not_stop_the_wall(self, daemon, tv, publish, art_root: Path):
         """The disk is full or read-only. The television is unaffected."""
-        (art_root / HEARTBEAT_FILENAME).mkdir()
+        path_in(art_root, WALL_ID).mkdir()
         publish(["work-a"])
 
         await daemon.tick()

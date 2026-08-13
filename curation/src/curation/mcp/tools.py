@@ -1,12 +1,17 @@
-"""The five tools, declared once.
+"""The tools, declared once.
 
-**All five names are registered from the start, and they never change.** A tool
-name is the one part of this surface a client binds to that cannot be evolved
-additively, so they are all claimed at once rather than appearing one at a time
-and tempting a rename along the way. A tool whose actions have not been built
-carries `unavailable_note`: it answers `action='help'` and returns an error
-naming what is available for anything else. That is deliberately more useful
-than an absent tool, which a client discovers only as a missing name.
+**A tool's name never changes once it is registered.** A name is the one part of
+this surface a client binds to that cannot be evolved additively, which is why
+the original set was claimed all at once rather than appearing one at a time and
+tempting a rename along the way. A tool whose actions have not been built carries
+`unavailable_note`: it answers `action='help'` and returns an error naming what
+is available for anything else. That is deliberately more useful than an absent
+tool, which a client discovers only as a missing name.
+
+*This docstring opened "The five tools" until `art_taste` made it six. The
+claim worth making is the rule — names are frozen, and the set only ever grows —
+which `TOOLS` below can be read against; the tally was a copy of a tuple twenty
+lines away, and `api-contract.md` records the same lesson from two other counts.*
 
 **The annotations describe each tool as designed, not as currently built.**
 They are part of the frozen surface: a client that auto-approves on
@@ -22,8 +27,8 @@ service method answers it, and the service method does the work.
 from typing import Final
 
 from curation.mcp.registry import Action, Param, ToolRecord
-from curation.persistence.discovery_records import RunKind, RunStatus
-from curation.persistence.records import ArtworkStatus
+from curation.persistence.discovery_records import AffinityDerivation, AffinitySentiment, RunKind, RunStatus
+from curation.persistence.records import ArtworkStatus, VocabularyKind
 from curation.services.catalogue import MAX_LIST_LIMIT
 from curation.services.review import MAX_REVIEW_LIMIT
 
@@ -47,6 +52,41 @@ _OFFSET = Param(
     type="integer",
     description="How many works to skip, for paging through a large result.",
     minimum=0,
+)
+
+_QUERY = Param(
+    name="q",
+    type="string",
+    description=(
+        "Free text. Every word must appear somewhere in the work's title, description, commentary, medium, date or "
+        "artist name, so a second word narrows rather than widens."
+    ),
+)
+
+
+def _facet_param(name: str, description: str) -> Param:
+    """One facet kind's filter: an array of chosen values, several meaning either."""
+    return Param(name=name, type="array", items="string", description=description)
+
+
+#: One array parameter per facet kind, rather than one parameter carrying pairs.
+#: The kinds are a closed vocabulary, so naming them is what lets a model see the
+#: whole filter surface in the schema instead of learning a mini-language for it —
+#: and it is the same shape `GET /api/works` takes, which is the parity
+#: `product-brief.md` item 8 asks for.
+#:
+#: **Spelled out rather than generated from `VocabularyKind`**, because the useful
+#: half of each description is an example of that kind's *values*, which the enum
+#: does not carry. `tests/contract` holds the guard that the set here is exactly
+#: the vocabulary — a seventh kind that reached the enum and not this tuple would
+#: be a filter the browser offered and a model could not.
+_FACET_PARAMS: Final = (
+    _facet_param("artist", "Keep only works with these artist facets. Several mean either; combining kinds means both."),
+    _facet_param("movement", "Keep only works in these movements, e.g. ['Baroque', 'Cubism']."),
+    _facet_param("era", "Keep only works in these eras, as the catalogue names them."),
+    _facet_param("subject", "Keep only works with these subjects, e.g. ['Seascape']."),
+    _facet_param("medium", "Keep only works with these medium facets, e.g. ['Oil on canvas']."),
+    _facet_param("palette", "Keep only works with these palette facets."),
 )
 
 #: One description for `artwork_id`, because every action's parameters flatten
@@ -106,12 +146,16 @@ ART_CATALOGUE: Final = ToolRecord(
     actions=(
         Action(
             name="list",
-            description="Page through catalogued works, optionally filtered by status.",
-            example="art_catalogue(action='list', status='accepted', limit=20)",
-            params=(_STATUS, _LIMIT, _OFFSET),
+            description="Search and filter catalogued works, with the counts each further filter would select.",
+            example="art_catalogue(action='list', q='harbour', movement=['Impressionism'], limit=20)",
+            params=(_STATUS, _QUERY, *_FACET_PARAMS, _LIMIT, _OFFSET),
             tips=(
                 "A truncated result says so and reports the total, so a short list is never mistaken for a complete one.",
                 "Listings carry the fields needed to choose; use action='get' for the whole record.",
+                "Every result carries the facet vocabulary with counts, so call it once with no filter to see what "
+                "there is to filter by.",
+                "A facet's counts are computed with its OWN selection ignored, so an option showing 0 with another "
+                "facet chosen is an empty intersection rather than an empty catalogue.",
             ),
         ),
         Action(
@@ -590,26 +634,50 @@ _THEME_ID = Param(
     required=True,
 )
 
+#: One description across `add` and `reorder`, because every action's parameters
+#: flatten onto a single wire schema and only the first description survives —
+#: which is why the two actions were made to mean the same thing by the word.
+#: They did not: an add wrote this number into a column as a sort key while a
+#: reorder had become an index, and one sentence could not say both.
 _POSITION = Param(
     name="position",
     type="integer",
-    description="Where the work sits in the theme's order. Omit to leave it unplaced, which sorts after placed works.",
+    description=(
+        "Where the work goes in the theme's order, counting from zero — an index into the list "
+        "action='works' returns, not a number stored on the work: the works around it make room. "
+        "Past the end means last. Omit on add to put the work at the end; omit on reorder to return "
+        "it to unplaced, which sorts after placed works."
+    ),
     minimum=0,
+)
+
+#: One description across both tools, because every action's parameters flatten
+#: onto a single wire schema and only the first description survives. Required
+#: wherever it appears: an action that guessed the wall would be worse here than
+#: on the web surface, where at least a confirmation dialog could catch it.
+_WALL_ID = Param(
+    name="wall_id",
+    type="string",
+    description="Which wall to act on, as returned by art_display(action='walls'). Required even when there is one.",
+    required=True,
 )
 
 ART_THEME: Final = ToolRecord(
     name="art_theme",
     title="Art themes",
-    summary="Group works into themes and choose which one the wall is showing.",
+    summary="Group works into themes, and hang a theme on a named wall.",
     read_only=False,
     destructive=True,
     open_world=False,
     actions=(
         Action(
             name="list",
-            description="Return every theme, with which one is active.",
+            description="Return every theme, with the walls each is hanging on.",
             example="art_theme(action='list')",
-            tips=("Exactly one theme is active whenever any theme exists; that is the one the wall syncs from.",),
+            tips=(
+                "A theme is global and hangs nowhere until action='activate' puts it on a named wall. "
+                "The same theme may hang on several walls at once, and a theme hanging on none is normal.",
+            ),
         ),
         Action(
             name="get",
@@ -623,7 +691,7 @@ ART_THEME: Final = ToolRecord(
         ),
         Action(
             name="create",
-            description="Create a theme. It becomes active if no other theme currently is.",
+            description="Create a theme. It hangs nowhere until action='activate' puts it on a wall.",
             example="art_theme(action='create', name='American Modernists')",
             params=(
                 Param(name="name", type="string", description="What to call the theme. Must be unique.", required=True),
@@ -661,8 +729,9 @@ ART_THEME: Final = ToolRecord(
             example="art_theme(action='delete', theme_id='<a theme_id>')",
             params=(_THEME_ID,),
             tips=(
-                "The active theme is refused while another exists — activate the one that should replace it first, "
-                "so what lands on the wall is a choice.",
+                "A theme hanging on any wall is refused, and the refusal names those walls. Hang something else "
+                "there with action='activate', or take it down with action='unhang', and then delete. This holds "
+                "even when it is the only theme: a wall losing its picture has to be a choice.",
             ),
         ),
         Action(
@@ -701,15 +770,29 @@ ART_THEME: Final = ToolRecord(
         ),
         Action(
             name="activate",
-            description="Make this the theme the wall shows, and the only one.",
-            example="art_theme(action='activate', theme_id='<a theme_id>')",
-            params=(_THEME_ID,),
+            description="Hang this theme on a named wall, replacing whatever was hanging there.",
+            example="art_theme(action='activate', theme_id='<a theme_id>', wall_id='<a wall_id>')",
+            params=(_THEME_ID, _WALL_ID),
             tips=(
+                "The wall is required even when there is only one, so the confirmation you report names it. "
+                "Get wall ids from art_display(action='walls').",
                 "This publishes the theme: it rewrites the manifest, so the wall converges on it "
                 "within about a second. No separate sync is needed.",
                 "The result names every member that will NOT be on the wall and why, exactly as "
                 "art_display(action='sync') does — a theme can be half-displayable.",
                 "Switching costs no television writes: the whole library stays on the TV and rotation is driven from here.",
+            ),
+        ),
+        Action(
+            name="unhang",
+            description="Take down whatever is hanging on a wall, leaving it holding nothing.",
+            example="art_theme(action='unhang', wall_id='<a wall_id>')",
+            params=(_WALL_ID,),
+            tips=(
+                "Refused when nothing is hanging on that wall — there is nothing to take down.",
+                "The wall goes on showing what it was showing until something else is hung: no manifest is "
+                "rewritten, because publishing an empty one would blank the wall as a side effect of tidying up.",
+                "This is how a theme that is refused by action='delete' becomes deletable.",
             ),
         ),
     ),
@@ -718,7 +801,7 @@ ART_THEME: Final = ToolRecord(
 _SYNC_THEME_ID = Param(
     name="theme_id",
     type="string",
-    description="Which theme to publish. Omit to publish the active one, which is the usual case.",
+    description="Which theme to publish. Omit to publish the one already hanging on that wall, which is the usual case.",
 )
 
 ART_DISPLAY: Final = ToolRecord(
@@ -730,20 +813,49 @@ ART_DISPLAY: Final = ToolRecord(
     open_world=False,
     actions=(
         Action(
+            name="walls",
+            description="Return every wall, with the theme hanging on each and that wall's directive.",
+            example="art_display(action='walls')",
+            tips=(
+                "Start here: every other action on this tool and art_theme(action='activate') needs a wall_id, "
+                "and this is where they come from.",
+                "A wall with no theme hanging on it is an ordinary state, not a fault.",
+            ),
+        ),
+        Action(
+            name="add_wall",
+            description="Record a wall — a place where art hangs. It arrives with nothing on it.",
+            example="art_display(action='add_wall', name='Living room')",
+            params=(Param(name="name", type="string", description="What to call the wall. Must be unique.", required=True),),
+            tips=(
+                "A wall is a place and a name, never a device: which display serves it is that display's own "
+                "configuration, and nothing about a television is recorded here.",
+                "Refuses a name that is empty or already taken.",
+                "A new wall shows nothing until a display device is configured with the wall_id this "
+                "returns — each wall has its own manifest file, and a display serves the one wall it is "
+                "pointed at. Hanging a theme on a new wall disturbs no other wall.",
+            ),
+        ),
+        Action(
             name="status",
-            description="Report what the display plane last said about itself, and how long ago.",
+            description="Report what the display serving each wall last said about itself, and how long ago.",
             example="art_display(action='status')",
             tips=(
                 "This reports an observation and its age in seconds, never a verdict about health. "
-                "If the display plane has never run, it says so plainly rather than reporting a zero.",
+                "If no display has ever run for a wall, it says so plainly rather than reporting a zero.",
+                "It takes no wall and reports every one of them: each wall's display writes its own "
+                "heartbeat, so the answerable question is which wall has gone quiet — and an answer about "
+                "one room could be given while another was dark.",
             ),
         ),
         Action(
             name="sync",
-            description="Rebuild the theme manifest so the wall converges on the active theme.",
-            example="art_display(action='sync')",
-            params=(_SYNC_THEME_ID,),
+            description="Rebuild the theme manifest so a named wall converges on what is hanging there.",
+            example="art_display(action='sync', wall_id='<a wall_id>')",
+            params=(_WALL_ID, _SYNC_THEME_ID),
             tips=(
+                "Refused when nothing is hanging on that wall and no theme_id is given — there is nothing "
+                "to put on it. Hang one with art_theme(action='activate') first.",
                 "The result names every theme member that will NOT be on the wall and why. "
                 "A theme can be half-displayable, and this is the only place that says so.",
                 "Switching themes costs no television writes: the whole library stays on the TV "
@@ -752,9 +864,9 @@ ART_DISPLAY: Final = ToolRecord(
         ),
         Action(
             name="show_now",
-            description="Ask the wall to jump to one work and carry on rotating from there.",
-            example="art_display(action='show_now', artwork_id='<an artwork_id>')",
-            params=(Param(name="artwork_id", type="string", description="The work to jump to.", required=True),),
+            description="Ask a named wall to jump to one work and carry on rotating from there.",
+            example="art_display(action='show_now', wall_id='<a wall_id>', artwork_id='<an artwork_id>')",
+            params=(_WALL_ID, Param(name="artwork_id", type="string", description="The work to jump to.", required=True)),
             tips=(
                 "Any work that could not reach the wall is refused rather than pinned — archived, "
                 "missing its master image, mat colour or television render, or carrying a render "
@@ -765,21 +877,173 @@ ART_DISPLAY: Final = ToolRecord(
         ),
         Action(
             name="next",
-            description="Ask the wall to step to the next work in the current theme.",
-            example="art_display(action='next')",
-            tips=("Repeated calls inside one poll interval coalesce into a single step — latest wins.",),
+            description="Ask a named wall to step to the next work in the theme hanging on it.",
+            example="art_display(action='next', wall_id='<a wall_id>')",
+            params=(_WALL_ID,),
+            tips=(
+                "It steps that wall and no other: each wall carries its own counter, so a step in the living "
+                "room leaves the study where it was.",
+                "Repeated calls inside one poll interval coalesce into a single step — latest wins.",
+            ),
+        ),
+    ),
+)
+
+#: Every action's parameters flatten onto one wire schema per tool, so a name
+#: that appears on two actions is described once — the first description is the
+#: one that survives. `kind` is a filter on `list` and the handle on `set`, which
+#: is why this description says what the field *is* rather than what one action
+#: does with it.
+_TASTE_KIND_DESCRIPTION = (
+    "What sort of thing a judgment is about. The same closed vocabulary a work's facets use, so that what "
+    "the curator likes and what the catalogue holds can be matched at all."
+)
+_TASTE_KINDS: Final = tuple(str(kind) for kind in VocabularyKind)
+
+#: The required/optional pair the `run_id` parameters already model, and for the
+#: same reason: every action's parameters flatten onto one wire schema and only
+#: the first description survives, so the two share one that assumes neither
+#: arity. Which actions require it is in each action's own record.
+_TASTE_KIND = Param(name="kind", type="string", description=_TASTE_KIND_DESCRIPTION, choices=_TASTE_KINDS, required=True)
+_FILTER_KIND = Param(name="kind", type="string", description=_TASTE_KIND_DESCRIPTION, choices=_TASTE_KINDS)
+
+_SENTIMENT_DESCRIPTION = (
+    "How warmly the curator holds a thing: loves, likes, cool or declines. Read beside open_to_more rather "
+    "than instead of it — the pair is what lets a lukewarm judgment stay open to being shown more."
+)
+_SENTIMENTS: Final = tuple(str(member) for member in AffinitySentiment)
+
+_TASTE_SENTIMENT = Param(name="sentiment", type="string", description=_SENTIMENT_DESCRIPTION, choices=_SENTIMENTS, required=True)
+_FILTER_SENTIMENT = Param(name="sentiment", type="string", description=_SENTIMENT_DESCRIPTION, choices=_SENTIMENTS)
+
+#: **All three values, on both actions, and `set` refuses one of them at runtime
+#: rather than in the schema.** Narrowing the enum on `set` would be the cheaper
+#: guard and it is the wrong one twice over: the two actions would then declare
+#: `derivation` inconsistently — which the registry refuses at import, because a
+#: flattened wire schema can only publish one of them — and a caller reaching for
+#: `observed` would get "not a valid value" where what they need to be told is
+#: which path can honestly make that claim, and that it is not this one.
+_DERIVATION = Param(
+    name="derivation",
+    type="string",
+    description=(
+        "Where a judgment came from: 'stated' is the curator saying it, 'inferred' is a model reading it out "
+        "of what they said and needs the turn it read, 'observed' is the product reading it out of what was "
+        "accepted and rejected in review. action='set' writes the first two and refuses the third."
+    ),
+    choices=tuple(str(member) for member in AffinityDerivation),
+)
+
+ART_TASTE: Final = ToolRecord(
+    name="art_taste",
+    title="Art taste",
+    summary="Read and correct the curator's standing judgments about artists, movements and subjects.",
+    read_only=False,
+    # Destructive because `delete` drops a judgment and `set` overwrites one, and
+    # neither is recoverable — unlike `art_catalogue(action='archive')`, which is
+    # annotated non-destructive precisely because `restore` exists.
+    destructive=True,
+    open_world=False,
+    actions=(
+        Action(
+            name="list",
+            description="Return the curator's standing judgments, narrowed by kind, sentiment or derivation.",
+            example="art_taste(action='list', kind='artist')",
+            params=(
+                _FILTER_KIND,
+                _FILTER_SENTIMENT,
+                _DERIVATION,
+            ),
+            tips=(
+                "This returns the whole taste unpaged — tens of rows for a household — which is why there is "
+                "no action='get'. Read it once and work from what comes back.",
+                "Read `open_to_more` beside `sentiment` rather than instead of it: a cool judgment that is "
+                "still open to more means keep offering this, and treating it as a refusal blacklists an "
+                "artist the curator asked to keep hearing about.",
+                "A `stated` judgment carries no rationale and that is normal — the curator's own words are "
+                "the account. An `inferred` one whose `source_turn_id` is null had its conversation deleted; "
+                "its rationale is the evidence that survived.",
+            ),
+        ),
+        Action(
+            name="set",
+            description="Write one judgment over whatever was recorded about that thing, or record the first.",
+            example="art_taste(action='set', kind='artist', value='Kandinsky', sentiment='likes', open_to_more=True)",
+            params=(
+                _TASTE_KIND,
+                Param(
+                    name="value",
+                    type="string",
+                    description="The thing itself, as it is named — 'Kandinsky', 'Surrealism', '1920s', 'seascapes'.",
+                    required=True,
+                ),
+                _TASTE_SENTIMENT,
+                Param(
+                    name="open_to_more",
+                    type="boolean",
+                    description=(
+                        "Whether to keep offering this. Separate from sentiment and required with it: 'meh on "
+                        "Magritte, but open to learning more' is two facts, and no default is safe for the second."
+                    ),
+                    required=True,
+                ),
+                _DERIVATION,
+                Param(
+                    name="rationale",
+                    type="string",
+                    description=(
+                        "The account of the judgment in the curator's terms. Required for 'inferred'; normally "
+                        "absent for 'stated', where their own words are the account."
+                    ),
+                ),
+                Param(
+                    name="source_turn_id",
+                    type="string",
+                    description="The conversation turn an 'inferred' judgment was read out of. Required for it.",
+                ),
+            ),
+            tips=(
+                "An upsert, addressed by kind and value rather than by an id — one live judgment per thing, "
+                "corrected in place. There is nothing to fetch first.",
+                "It refuses derivation='observed'. That value is a claim only the review path can make, and a "
+                "row asserting behaviour that never happened cannot be audited afterwards.",
+                "It refuses to overwrite a stronger provenance with a weaker one: a reading of what the "
+                "curator said cannot overwrite what they said or did. Ask them, then write it as 'stated'.",
+                "Writing replaces the provenance as well as the judgment, so a correction cites the turn it "
+                "came from or none — never the turn the previous judgment cited.",
+            ),
+        ),
+        Action(
+            name="delete",
+            description="Forget one judgment entirely. Not recoverable.",
+            example="art_taste(action='delete', affinity_id='<an affinity_id from action=list>')",
+            params=(
+                Param(
+                    name="affinity_id",
+                    type="string",
+                    description="The judgment to forget, as returned by action='list'.",
+                    required=True,
+                ),
+            ),
+            tips=(
+                "Forgetting is not the same as recording a refusal: a deleted judgment leaves the product "
+                "knowing nothing about that thing, where sentiment='declines' tells it to stop offering it. "
+                "If the curator wants it left alone rather than forgotten, use action='set'.",
+            ),
         ),
     ),
 )
 
 #: Registration order, which is the order a client sees. Money first, then the
-#: gate that money runs through, then the collection it lands in.
+#: gate that money runs through, then the collection it lands in, and last what
+#: the product has come to know about the person it is all for.
 TOOLS: Final[tuple[ToolRecord, ...]] = (
     ART_DISCOVERY,
     ART_REVIEW,
     ART_CATALOGUE,
     ART_THEME,
     ART_DISPLAY,
+    ART_TASTE,
 )
 
 TOOLS_BY_NAME: Final[dict[str, ToolRecord]] = {tool.name: tool for tool in TOOLS}

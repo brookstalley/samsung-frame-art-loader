@@ -51,6 +51,7 @@ from curation.config import (
     TILE_CACHE_DIRNAME,
 )
 from curation.discovery.browse import CollectionBrowse
+from curation.discovery.conversation import NO_CONVERSATION_KEY, ConversationEngine, UnavailableConversation
 from curation.discovery.engine import DiscoveryEngine
 from curation.discovery.images import ImageSearch
 from curation.discovery.phase_two import PhaseTwoEngine
@@ -58,8 +59,9 @@ from curation.persistence.backup import BACKUP_RECEIPT_FILENAME
 from curation.persistence.catalogue import CatalogueStore
 from curation.persistence.discovery import DiscoveryStore
 from curation.services.catalogue import CatalogueService
+from curation.services.conversation import ConversationService
 from curation.services.discovery import DiscoveryService
-from curation.services.display import DisplayService, WallSettings
+from curation.services.display import DisplayService, DisplaySettings
 from curation.services.display_fit import ArtworkBox
 from curation.services.errors import ServiceError
 from curation.services.health import HealthService
@@ -68,6 +70,7 @@ from curation.services.review import ReviewService
 from curation.services.runner import DiscoveryRunner, DiscoverySettings
 from curation.services.survey import SurveyService
 from curation.services.sweep import PreviewSweep
+from curation.services.taste import TasteService
 from curation.services.thumbnails import ThumbnailService, ThumbnailSettings
 
 
@@ -120,6 +123,19 @@ class Services:
     #: goes stale — while it is acquired once. Folding the two together would make
     #: every re-render look like a re-fetch to whatever reads the journal.
     preparation: PreparationService
+    #: Intent-forming, upstream of every run. Beside `runner` rather than inside
+    #: it because a conversation is not a run and must never become one: it
+    #: acquires nothing, has no status to poll and nothing to approve. What it has
+    #: is one edge onto the runner, and that edge is the whole relationship.
+    conversation: ConversationService
+    #: The curator's standing judgments. Its own concern rather than a corner of
+    #: the conversation service, because taste outlives every thread that
+    #: contributed to it: an affinity is accumulated across conversations, is
+    #: correctable from a screen that has no conversation in front of it, and is
+    #: what discovery consults. Folding it into intent-forming would tie the
+    #: product's memory of its operator to the lifetime of a transcript, which is
+    #: precisely what deleting one must not do.
+    taste: TasteService
 
     @classmethod
     def bind(
@@ -127,7 +143,7 @@ class Services:
         *,
         catalogue: CatalogueStore,
         discovery: DiscoveryStore,
-        wall: WallSettings,
+        display_settings: DisplaySettings,
         thumbnails: ThumbnailSettings,
         artwork_box: ArtworkBox,
         engine: DiscoveryEngine,
@@ -147,6 +163,12 @@ class Services:
         resolve: Resolver | None = None,
         preparation: PreparationSettings | None = None,
         mat_engine: MatEngine | None = None,
+        #: Defaults to an engine that refuses and says why, exactly as phase 1's
+        #: does — and for the same reason. A stand-in that answered would put
+        #: invented replies in a transcript, indistinguishable from real ones, so
+        #: the curator's evidence that the product works would be the product
+        #: fabricating it.
+        conversation_engine: ConversationEngine | None = None,
     ) -> Services:
         """Assemble the services over an already-open file.
 
@@ -161,7 +183,7 @@ class Services:
         one every test that has no business reaching a museum uses.
         """
         catalogue_service = CatalogueService(catalogue)
-        display_service = DisplayService(catalogue, catalogue_service, wall)
+        display_service = DisplayService(catalogue, catalogue_service, display_settings)
         thumbnail_service = ThumbnailService(catalogue_service, thumbnails)
         # The artwork box reaches discovery for one reason: automatic selection
         # must withhold an instance that would render below the floor, and the
@@ -179,6 +201,17 @@ class Services:
                 "selects both with ARTIC_USER_AGENT — the preview directory is derived from ART_ROOT, so "
                 "passing one of these without the other is a wiring mistake rather than a configuration one."
             )
+        runner_service = DiscoveryRunner(
+            discovery_service,
+            engine,
+            discovery_settings,
+            images=None if image_search is None else PhaseTwoEngine(image_search, box=artwork_box),
+            previews=None if image_search is None or previews is None else PreviewCache(previews, image_search.fetch_preview),
+            # Independent of the phase-2 pair: a deployment may resolve images
+            # without supplementing, and a run with no collection simply offers
+            # nothing.
+            collection=collection,
+        )
         return cls(
             catalogue=catalogue_service,
             discovery=discovery_service,
@@ -192,25 +225,16 @@ class Services:
             # copies to disagree, and nothing would notice which was right.
             review=ReviewService(discovery_service, box=artwork_box, art_root=thumbnails.art_root),
             # The receipt is located the same way, and for the same reason. It is
-            # not a `WallSettings` field beside the heartbeat's path: that
-            # settings object carries what the *wall's* operations need, and the
-            # backup is this plane's own business rather than the display plane's.
+            # not a `DisplaySettings` field beside the art root the heartbeats are
+            # named from: that settings object carries what the *walls'*
+            # operations need, and the backup is this plane's own business rather
+            # than the display plane's.
             health=HealthService(
                 display_service,
                 backup_receipt_path=thumbnails.art_root / BACKUP_RECEIPT_FILENAME,
                 box=artwork_box,
             ),
-            runner=DiscoveryRunner(
-                discovery_service,
-                engine,
-                discovery_settings,
-                images=None if image_search is None else PhaseTwoEngine(image_search, box=artwork_box),
-                previews=None if image_search is None or previews is None else PreviewCache(previews, image_search.fetch_preview),
-                # Independent of the phase-2 pair: a deployment may resolve
-                # images without supplementing, and a run with no collection
-                # simply offers nothing.
-                collection=collection,
-            ),
+            runner=runner_service,
             # `art_root` off the thumbnail settings for the same reason `review`
             # takes it from there: it is one deployment value, already validated,
             # and a second copy is a second chance for the two to disagree.
@@ -251,6 +275,22 @@ class Services:
                 mat_engine or _default_mat_engine(),
                 preparation or _default_preparation(thumbnails.art_root, artwork_box),
             ),
+            conversation=ConversationService(
+                discovery,
+                conversation_engine or _default_conversation_engine(),
+                # The two foreign services this one needs, each through the one
+                # method it needs. `record_spend` lives on the discovery service
+                # and `start` on the runner; taking either whole would deepen the
+                # coupling the accounting split is filed to remove.
+                discovery_service,
+                runner_service,
+                collection=collection,
+            ),
+            # Over the same store the conversations live in, because a judgment's
+            # citation and the turn it cites have to be detachable in one
+            # transaction — the delete's whole correctness is that it commits or
+            # does not.
+            taste=TasteService(discovery),
         )
 
     def reconcile(self) -> None:
@@ -261,8 +301,15 @@ class Services:
         assumed of it. Each service owns the repairs for its own records; this is
         the one call a process start has to remember, so a service gaining a
         repair does not mean an entry point gaining a line.
+
+        **The display service had the other one until 2026-08-12**, and it was
+        dropped rather than made per-wall: it promoted the oldest theme when none
+        was active, which with more than one wall would hang the same theme in
+        every room unbidden. What the file may predate about hanging is a *shape*
+        rather than a rule now — the single-wall columns — and a shape is moved by
+        `persistence/migrations.py` when the file is opened, before any service
+        can read it.
         """
-        self.display.reconcile()
         self.discovery.reconcile()
 
 
@@ -295,6 +342,19 @@ def _default_mat_engine() -> MatEngine:
     that deployment rather than something that would fail if used.
     """
     return MatEngine(None, image_max_edge=DEFAULT_MAT_IMAGE_MAX_EDGE)
+
+
+def _default_conversation_engine() -> ConversationEngine:
+    """The conversation engine a caller that wired no model client gets.
+
+    **Unlike the mat engine's keyless default, this one refuses.** A mat has an
+    honest mechanical producer — the work's own dominant colour — and a
+    conversation does not: there is no non-model way to answer a curator asking
+    what would suit a calm wall, and anything written here that tried would be
+    the product inventing a reply and putting it in a transcript beside real
+    ones. So the keyless deployment gets a thread that says what is missing.
+    """
+    return UnavailableConversation(NO_CONVERSATION_KEY)
 
 
 def _default_preparation(art_root: Path, artwork_box: ArtworkBox) -> PreparationSettings:

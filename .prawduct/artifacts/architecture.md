@@ -134,7 +134,7 @@ recorded plan (curation on a desktop, NAS, or second Pi) — see Decision Log.
                     │  │    /mcp     MCP (SHTTP)  │   │  ART_ROOT (shared dir)   │ │
                     │  │                          │   │                          │ │
                     │  │  discovery · acquisition │   │   catalogue.sqlite  (C)  │ │
-                    │  │  image prep · mat colour │   │   theme-manifest.json(C) │ │
+                    │  │  image prep · mat colour │   │  theme-manifest-<wall>(C)│ │
                     │  └───────────┬──────────────┘   │   raw/ ready/ thumbs/    │ │
                     │              │                  │   tv-thumbs/ tile-cache/ │ │
                     │              │                  │   previews/              │ │
@@ -222,6 +222,26 @@ is no network between planes.
   cleanly. It takes the catalogue service alone rather than the container: it
   writes no discovery state and no directive, so it needs neither the services
   that own them nor the startup reconciliation that repairs them.
+- **Inside the browser client, one structural rule: no module under `screens/`
+  imports another** (established 2026-08-12, when `app.js` was split). The client
+  is `app.js` — boot and the route table — over `core/`, which holds the fetch
+  plumbing, the render/generation guard and the shared badges, over `screens/`,
+  one module per screen. Screens meet in `core/` and in the route table, and
+  nowhere else. `core/` knows no screen; the dependency runs one way.
+
+  **The reason is not tidiness.** One file is one writer, and the surface's build
+  plan has six separate pieces of work rewriting the client — a screen that
+  reaches sideways into another makes the second author a reader of the first's
+  unfinished work, which is the single-writer file the split exists to end. It
+  recurs on every screen added after this, which is why it is recorded here
+  rather than in the plan that produced it: a structural rule that lives only in
+  a build plan dies when the plan is archived.
+
+  A screen needing something another screen has is the signal that the thing is
+  shared, and the move is to `core/` — not an import across the boundary.
+  `curation/tests/unit/test_client_module_boundaries.py` enforces it, which it
+  can because — unlike the Direction norm the same work implements — this
+  violation is exactly an import and therefore greppable.
 - **Internal layering, inside that plane** (established 2026-07-27; `acquisition/`
   added 2026-08-03 — the fetch paths, the guards and the URL policy, sitting beside
   `discovery/` as the other package that reaches outside the machine, and extended
@@ -524,7 +544,7 @@ is no network between planes.
   once or not at all; a surface takes the container rather than a service, so a
   fourth concern changes the wiring and nothing else.
 
-  Two patterns are load-bearing enough to name here rather than leave in module
+  Three patterns are load-bearing enough to name here rather than leave in module
   docstrings:
 
   - **The persistence seam is split by schema knowledge, and its lower half is
@@ -539,6 +559,36 @@ is no network between planes.
     from a single registry entry, so a tool cannot declare one thing and do
     another. Generation carries no per-tool logic — that would be the
     thin-binding norm's stated failure mode arriving by a side door.
+  - **A schema change the file cannot be widened into is a migration, and there
+    is no version number anywhere in the mechanism** *(added 2026-08-12, with the
+    first such change this product has ever made — the walls one)*. The durable
+    store widens a file by adding columns the declared schema has and the file
+    lacks; that is the only change SQLite applies in place without losing data,
+    so a column that goes *away*, a table replaced by a differently-keyed one, or
+    rows carried between the two is written by hand in
+    `curation/src/curation/persistence/migrations.py`. The facts a later schema
+    change needs and cannot infer from reading one migration:
+    - Migrations are **handed to the store at construction** —
+      `SqliteDurableStore(path, schema, migrations=...)` — never reached for from
+      inside it. The tier that knows no domain concept goes on knowing none.
+    - They run **after widening and before the schema is read back**, in that
+      order and for that reason: widening must not be denied the columns a
+      migration will need, and the read-back must see the shape the migration
+      left, because one of them may take a column away.
+    - **Idempotent, and safe to interrupt.** Every step is guarded by what the
+      file actually holds rather than by a recorded version, and the order is
+      chosen so that any prefix leaves a file the next open finishes correctly —
+      rows are carried before anything holding them is dropped. A version table
+      was available and was deliberately not taken: it would be one more thing
+      the file has to be trusted to keep accurate, and a half-applied migration
+      is exactly the case where that trust is misplaced.
+    - **`migrations.py` may hold no domain concept the durable tier does not.**
+      It speaks in tables, columns and rows. The one exception is the default
+      wall's *name*, which is a deployment value the migration must apply at the
+      moment it creates the wall — declared there and read back down by
+      `config.py`, rather than reached upward for.
+    - **A migration makes the catalogue one-way**, which is a deployment fact
+      before it is a persistence one — see § Deployment & Version Skew.
 - **Must never:** talk to the TV, talk to the e-paper panel, know the **e-paper
   panel's** geometry, or know TV content ids. Every device fact belongs to display.
   Note the TV panel's *physical* geometry is not a device fact in this sense and
@@ -700,6 +750,58 @@ read by display.
 - **Versioned, despite the co-location exemption.** See Deployment & Version Skew
   — this is where a recorded contradiction gets resolved rather than inherited.
 
+### One manifest per wall — built 2026-08-12
+
+The operator's ruling that **themes are global and assigned per wall**
+(`data-model.md` § ThemeAssignment) reaches the inter-plane contract, because
+everything above was written in the singular: *the* active theme's identity, *the*
+sequence, *the* file. With more than one wall each of those is a per-wall fact.
+
+**The manifest is one file per wall**, `theme-manifest-{wall_id}.json` under
+`ART_ROOT`, and each display instance reads only the manifest for the wall it is
+configured to serve. The directive semantics above are unchanged — they simply
+became per wall, which is what the ruling already did to the counter itself.
+
+**The wall is carried by the filename and by nothing inside the document.** That
+is deliberate and it is what makes the guarantee structural: a display resolves
+one path from its `WALL_ID` and stats it, so another room's manifest is a file it
+never opens — not a file it opens and declines to act on. A `wall` field in the
+document would be a second answer to the same question, and two answers can
+disagree.
+
+`[DECISION: one manifest file per wall, rather than one file carrying a section
+per wall | change detection is an mtime poll at ~1 s, and a shared file makes
+every wall's display wake on every other wall's change while making "the
+manifest's sequence" ambiguous exactly where the coalescing and
+sequence-regression rules need it to be singular; per-file also keeps a display
+plane unable to read a wall it does not serve | user can veto/override]`
+
+**Two consequences, both taken:**
+
+- **The heartbeat took the same treatment**, for the same reason and in the other
+  direction — `information-architecture.md` requires health to name which wall is
+  silent, and one shared heartbeat file had no way to say it: the second display
+  would overwrite the first's report every minute, so a wall that had gone dark
+  would read exactly like a wall that was fine. It is
+  `display-heartbeat-{wall_id}.json`, and `GET /api/health` carries one reading
+  per wall under `walls[]` with a `description` across them.
+- **The single-writer table below generalises rather than growing rows.** One
+  writer per file still holds; the file set is now indexed by wall.
+
+**How the display plane knows which wall it is.** `WALL_ID` in its environment,
+required and with no default, exactly as `TV_ADDRESS` is — because there is no
+wall a second device could be guessed onto, and the consequence of a guess is the
+failure this whole arrangement removes: a television showing another room's
+pictures while every log line reads fine. The value is the id the curation
+catalogue minted, read off the Walls screen or `art_display(action='walls')`.
+
+**Built 2026-08-12** (`curation/src/curation/manifest/builder.py`,
+`display/src/display/config.py`). The one-wall installation is the degenerate
+case: one wall, one manifest, one heartbeat, and behaviour identical to the
+single-file form apart from the filename. Neither filename may be imported across
+the planes — the isolation norm forbids it — so both are declared twice and held
+equal by `tests/preferences/test_heartbeat_contract.py`.
+
 ## Data Ownership & Consistency
 
 **Single writer per store, with no exceptions and no shared tables.**
@@ -707,10 +809,10 @@ read by display.
 | Store | Sole writer | Readers |
 |---|---|---|
 | `catalogue.sqlite` | curation | curation |
-| `theme-manifest.json` | curation | display |
+| `theme-manifest-{wall_id}.json` — **one file per wall**, since 2026-08-12 | curation | display |
 | image tree (`raw/`, `ready/`, …) | curation | display |
 | `display-state.sqlite` | display | display |
-| `display-heartbeat.json` (heartbeat) | display | curation |
+| `display-heartbeat-{wall_id}.json` (heartbeat) — **likewise one per wall** | display | curation |
 
 There is no entity written by both planes, so there is no coordination protocol,
 no conflict resolution, and no distributed-transaction problem. That is the payoff
@@ -844,8 +946,26 @@ an unrecognised major is defined. `api-contract.md` now says exactly that
 (amended 2026-07-20) — the blanket exemption is retired there too, so this
 obligation reads as discharged, not outstanding.
 
-**Rollback** is `git checkout` plus two restarts. No data migration spans the
-planes, because no data is shared — the manifest is regenerated, never migrated.
+**No data migration spans the planes**, because no data is shared — the manifest
+is regenerated, never migrated. That half is unchanged and structural.
+
+**Rollback stopped being `git checkout` plus two restarts on 2026-08-12**, and
+the sentence said it for the whole life of the product before that. What changed
+is *within* the curation plane: the walls migration drops `themes.is_active` and
+the singleton `directive` table, and a previous release reopening that file hits
+the durable store's widening step, which refuses a NOT NULL column it cannot
+default. **The plane declines to start**, which is the good half — loud,
+immediate, and before anything is served, where the alternative is a release
+quietly reading a catalogue it does not understand. The missing half was the
+record.
+
+So a rollback **across a migration is a restore, not a checkout**: check out the
+previous commit, put back the `catalogue.sqlite` copied before the deploy, then
+restart both. **The backup is the rollback plan** — without one, rolling back
+across this migration is not possible, and re-creating what the migration removed
+by hand would reset the directive counter it was careful to carry. A rollback
+that crosses no migration is still the old two-step. `operational-spec.md`
+§ Routine Operations carries the operator-facing form.
 
 ## Scaling Model
 

@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from curation.persistence.catalogue import StorageError, StoreMisuseError
+from curation.persistence.catalogue import StorageError, StoreMisuseError, WorkQuery
 from curation.persistence.durable import SqliteDurableStore
 from curation.persistence.file import open_catalogue_file
 from curation.persistence.records import (
@@ -25,6 +25,7 @@ from curation.persistence.records import (
     Artist,
     Artwork,
     ArtworkStatus,
+    Directive,
     FetchStatus,
     MatColor,
     MatMethod,
@@ -33,6 +34,8 @@ from curation.persistence.records import (
     Source,
     SourceClass,
     Theme,
+    ThemeAssignment,
+    Wall,
 )
 from curation.persistence.sqlite import SqliteCatalogue
 
@@ -60,7 +63,14 @@ _EXPECTED_SCHEMA = {
     # Widened 2026-07-31 with the per-theme rotation settings. This was the first
     # change to a table files already on disk carried, so it is also what the
     # store's column-widening step exists for.
-    "themes": {"id", "name", "description", "is_active", "created_at", "rotation_interval_seconds", "shuffle"},
+    # `is_active` was here until 2026-08-12, when hanging became an act against a
+    # named wall. It is the first column this schema has *removed*, which the
+    # widening step cannot do — `migrations.py` does, and the test below watches
+    # a legacy file lose it.
+    "themes": {"id", "name", "description", "created_at", "rotation_interval_seconds", "shuffle"},
+    "walls": {"id", "name", "created_at"},
+    "theme_assignments": {"wall_id", "theme_id", "assigned_at"},
+    "directives": {"wall_id", "sequence", "pinned_work_id"},
     "sources": {
         "id",
         "artwork_id",
@@ -113,7 +123,6 @@ _EXPECTED_SCHEMA = {
         "chosen_at",
     },
     "theme_memberships": {"theme_id", "artwork_id", "position", "added_at"},
-    "directive": {"id", "sequence", "pinned_work_id"},
 }
 
 #: Columns no table may grow. `display_fit` was one once, computed at acquisition
@@ -163,9 +172,9 @@ def test_a_catalogue_survives_the_process_that_wrote_it(tmp_path):
 
         theme = reopened.get_theme("t1")
         assert theme is not None
-        assert (theme.name, theme.description, theme.is_active) == ("Late night", "After hours", False)
+        assert (theme.name, theme.description) == ("Late night", "After hours")
 
-        assert reopened.list_artworks(status=None, limit=10, offset=0).total == 1
+        assert reopened.list_artworks(WorkQuery(), limit=10, offset=0).total == 1
         assert [entry.name for entry in reopened.list_themes()] == ["Late night"]
     finally:
         reopened.close()
@@ -329,14 +338,15 @@ def test_a_catalogue_written_by_an_earlier_revision_still_reads(tmp_path):
         assert archived.accepted_at is None
 
         theme = catalogue.get_theme("t1")
-        assert (theme.name, theme.description, theme.is_active, theme.created_at) == ("Late night", "After hours", False, moment)
-        assert catalogue.get_theme("t2").is_active is False
+        assert (theme.name, theme.description, theme.created_at) == ("Late night", "After hours", moment)
 
         # Ordering is case-insensitive by title, so the lowercase entry leads.
-        listed = catalogue.list_artworks(status=None, limit=10, offset=0)
+        listed = catalogue.list_artworks(WorkQuery(), limit=10, offset=0)
         assert [work.id for work in listed.artworks] == ["w2", "w1"]
         assert listed.total == 2
-        assert [work.id for work in catalogue.list_artworks(status=ArtworkStatus.ACCEPTED, limit=10, offset=0).artworks] == ["w1"]
+        assert [
+            work.id for work in catalogue.list_artworks(WorkQuery(status=ArtworkStatus.ACCEPTED), limit=10, offset=0).artworks
+        ] == ["w1"]
         assert [entry.id for entry in catalogue.list_themes()] == ["t2", "t1"]
     finally:
         catalogue.close()
@@ -377,24 +387,109 @@ def test_no_table_stores_the_resolution_verdict(tmp_path):
         connection.close()
 
 
-def test_a_fresh_catalogue_carries_exactly_one_directive_row(tmp_path):
-    """The row is seeded by the schema, so no caller ever has to create it.
+def test_a_fresh_catalogue_carries_one_wall_and_one_directive_for_it(tmp_path):
+    """Both are established when the file is opened, so no caller ever makes either.
 
     A directive that had to be created on first use would have a window in which
-    reading it fails, and the read happens on every manifest build.
+    reading it fails, and the read happens on every manifest build. A wall that
+    had to be created on first use would leave a fresh deployment with nowhere to
+    hang anything and no operation able to name a wall.
     """
     path = tmp_path / "catalogue.sqlite"
-    catalogue = SqliteCatalogue(open_catalogue_file(path))
+    catalogue = SqliteCatalogue(open_catalogue_file(path, wall_name="Living room"))
     try:
-        assert catalogue.get_directive().sequence == 0
+        walls = catalogue.list_walls()
+        assert [wall.name for wall in walls] == ["Living room"]
+        assert catalogue.get_directive(walls[0].id) == Directive(wall_id=walls[0].id, sequence=0, pinned_work_id=None)
+        # Nothing is hanging on it: a theme is created globally and hung
+        # deliberately, and there are no themes here to hang.
+        assert catalogue.get_assignment(walls[0].id) is None
     finally:
         catalogue.close()
 
     connection = sqlite3.connect(path)
     try:
-        assert connection.execute("SELECT COUNT(*) FROM directive").fetchone()[0] == 1
+        assert connection.execute("SELECT COUNT(*) FROM directives").fetchone()[0] == 1
+        # The singleton it replaced is gone rather than left beside it, so
+        # nothing can read a counter no code writes.
+        assert connection.execute("SELECT COUNT(*) FROM sqlite_master WHERE name = 'directive'").fetchone()[0] == 0
     finally:
         connection.close()
+
+
+def test_a_second_theme_on_a_wall_is_a_row_that_cannot_be_inserted(tmp_path):
+    """One theme per wall is the primary key, not a rule anything checks.
+
+    Asserted against the file rather than the service, because the claim is about
+    the *key*: there is nothing here to detect or reconcile, which is the whole
+    difference from the partial index this replaced.
+    """
+    path = tmp_path / "catalogue.sqlite"
+    catalogue = SqliteCatalogue(open_catalogue_file(path))
+    try:
+        moment = datetime(2026, 8, 12, 9, 30, tzinfo=UTC)
+        wall = catalogue.list_walls()[0]
+        catalogue.add_theme(Theme(id="t1", name="Late night", created_at=moment))
+        catalogue.add_theme(Theme(id="t2", name="Daylight", created_at=moment))
+        catalogue.set_assignment(ThemeAssignment(wall_id=wall.id, theme_id="t1", assigned_at=moment))
+    finally:
+        catalogue.close()
+
+    connection = sqlite3.connect(path)
+    try:
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO theme_assignments (wall_id, theme_id, assigned_at) VALUES (?, ?, ?)",
+                (wall.id, "t2", moment.isoformat()),
+            )
+    finally:
+        connection.close()
+
+
+def test_hanging_a_second_theme_replaces_the_first_rather_than_refusing(tmp_path):
+    """The store's own write is an update, because that is what hanging means.
+
+    A curator hanging something else is not making a mistake to report; there is
+    no take-down-then-hang pair a reader could be caught between.
+    """
+    catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
+    try:
+        moment = datetime(2026, 8, 12, 9, 30, tzinfo=UTC)
+        wall = catalogue.list_walls()[0]
+        catalogue.add_theme(Theme(id="t1", name="Late night", created_at=moment))
+        catalogue.add_theme(Theme(id="t2", name="Daylight", created_at=moment))
+
+        catalogue.set_assignment(ThemeAssignment(wall_id=wall.id, theme_id="t1", assigned_at=moment))
+        catalogue.set_assignment(ThemeAssignment(wall_id=wall.id, theme_id="t2", assigned_at=moment))
+
+        assert catalogue.get_assignment(wall.id).theme_id == "t2"
+        assert [assignment.wall_id for assignment in catalogue.list_assignments()] == [wall.id]
+    finally:
+        catalogue.close()
+
+
+def test_two_walls_may_hang_the_same_theme_with_nothing_duplicated(tmp_path):
+    """The property the removed boolean could not have.
+
+    A column on the theme can say "on the wall" exactly once; a row per wall says
+    it once per wall, over the same theme row.
+    """
+    catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
+    try:
+        moment = datetime(2026, 8, 12, 9, 30, tzinfo=UTC)
+        first = catalogue.list_walls()[0]
+        catalogue.add_wall(Wall(id="w-study", name="Study", created_at=moment))
+        catalogue.add_directive(Directive(wall_id="w-study", sequence=0))
+        catalogue.add_theme(Theme(id="t1", name="Late night", created_at=moment))
+
+        catalogue.set_assignment(ThemeAssignment(wall_id=first.id, theme_id="t1", assigned_at=moment))
+        catalogue.set_assignment(ThemeAssignment(wall_id="w-study", theme_id="t1", assigned_at=moment))
+
+        assert {assignment.wall_id for assignment in catalogue.list_assignments()} == {first.id, "w-study"}
+        assert {assignment.theme_id for assignment in catalogue.list_assignments()} == {"t1"}
+        assert len(catalogue.list_themes()) == 1
+    finally:
+        catalogue.close()
 
 
 def test_an_earlier_catalogue_gains_the_tables_it_did_not_have(tmp_path):
@@ -411,9 +506,9 @@ def test_an_earlier_catalogue_gains_the_tables_it_did_not_have(tmp_path):
     try:
         # The rows the older revision wrote are untouched.
         assert catalogue.get_artwork("w1").title == "Nighthawks"
-        assert catalogue.get_theme("t1").is_active is False
+        assert catalogue.get_theme("t1").name == "Late night"
         # And the entities it never knew about are addressable.
-        assert catalogue.get_directive().sequence == 0
+        assert catalogue.get_directive(catalogue.list_walls()[0].id).sequence == 0
         assert catalogue.list_sources("w1") == []
         assert catalogue.get_original("w1") is None
         assert catalogue.list_renditions("w1") == []
@@ -553,21 +648,18 @@ def test_a_not_null_column_with_no_default_is_refused_rather_than_half_applied(t
         SqliteDurableStore(path, widened)
 
 
-def test_the_file_itself_refuses_a_second_active_theme(tmp_path):
-    """The rule is the service layer's; this is what catches a path that forgets it.
+def test_the_file_itself_refuses_a_second_wall_of_the_same_name(tmp_path):
+    """A wall's name is how every confirmation identifies it, so two cannot share one.
 
-    Enforcement in two places would be a defect if they could disagree. They
-    cannot: the index states strictly less than the rule does — at most one, where
-    the rule says exactly one — so it can only ever fire on a write the service
-    layer should already have refused.
+    The one rule about walls that is a uniqueness constraint rather than a key:
+    the id is the identity, and the name is what a curator reads.
     """
-    catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite"))
+    catalogue = SqliteCatalogue(open_catalogue_file(tmp_path / "catalogue.sqlite", wall_name="Living room"))
     try:
-        moment = datetime(2026, 7, 27, 9, 30, tzinfo=UTC)
-        catalogue.add_theme(Theme(id="t1", name="Late night", created_at=moment, is_active=True))
+        moment = datetime(2026, 8, 12, 9, 30, tzinfo=UTC)
 
         with pytest.raises(StorageError, match="already stored"):
-            catalogue.add_theme(Theme(id="t2", name="Daylight", created_at=moment, is_active=True))
+            catalogue.add_wall(Wall(id="w-second", name="Living room", created_at=moment))
     finally:
         catalogue.close()
 

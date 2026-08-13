@@ -31,9 +31,15 @@ from typing import Any, Final
 
 from curation import observations
 
-#: Written into `ART_ROOT` by the display plane. Not configurable, for the same
-#: reason the manifest's name is not: both planes must agree where it is.
-HEARTBEAT_FILENAME: Final[str] = "display-heartbeat.json"
+#: Written into `ART_ROOT` by the display plane, **one file per wall**. Not
+#: configurable, for the same reason the manifest's name is not: both planes must
+#: agree where it is.
+#:
+#: Per wall because health has to be able to name *which* wall is silent, and one
+#: shared file has no way to say it — the second display would simply overwrite
+#: the first's report, and a wall that had stopped reporting would look like a
+#: wall that was fine.
+HEARTBEAT_FILENAME_TEMPLATE: Final[str] = "display-heartbeat-{wall_id}.json"
 
 #: The key carrying the instant, and a contract rather than a preference. A writer
 #: that spells it `timestamp` produces a plane that looks *down* to curation while
@@ -80,6 +86,15 @@ class HeartbeatReading:
         if self.problem is not None:
             return f"The heartbeat file at {self.path} could not be read: {self.problem}"
         return f"The display plane last reported {observations.ago(self.age_seconds)}."
+
+
+def heartbeat_path_in(art_root: Path, wall_id: str) -> Path:
+    """Where one wall's heartbeat lives under a given art root.
+
+    The one place the template is filled in on this side, mirroring the display
+    plane's `path_in` — which is the only thing this has to agree with.
+    """
+    return art_root / HEARTBEAT_FILENAME_TEMPLATE.format(wall_id=wall_id)
 
 
 def read(path: Path, *, now: datetime | None = None) -> HeartbeatReading:

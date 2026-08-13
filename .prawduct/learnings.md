@@ -21,6 +21,8 @@ a rule if its recency matters; never infer recency from where it sits.
 
 **Reading a rule is not applying it.** The failure mode of a learnings file is not absence, it is assent: a rule arrives at the right moment, is read, is agreed with, and changes nothing, because nothing made you recognize the case in hand as an instance of it. So for any rule you read here, name the decision you are about to make and say what the rule changes about it — or say that it does not apply, which is also an answer.
 
+## A check that never reached its subject reports the same green as one that passed — when a test, linter or record check covers something you did not watch fail, make it fail on purpose once, because "not run", "ran against a state the product cannot produce" and "ran and passed" are one indistinguishable line of output
+
 ## An instrument a human judges by must exercise the SHIPPED branch, not a legal fallback — when a preview tool, sample or fixture feeds the path a person uses to make a call, assert it produces what production produces, because a fallback renders cleanly and reports cleanly and shows the wrong thing, which is worse than the crash a missing field would have caused
 
 ## A directory no suite imports is code with no tests, and a signature change breaks it silently — when you delete a constant or add a required parameter, grep `tools/` and `scripts/` for consumers, because the linter, the type checker and a green suite are all silent about a file nothing imports

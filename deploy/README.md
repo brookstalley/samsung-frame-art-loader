@@ -144,7 +144,11 @@ authority. Names the table does not carry are never touched.
 Then **check the manifest actually carries the new fields**, because a restart
 that republished nothing looks identical to one that did:
 
-    sudo -u tvpi jq '.schema, .entries[0].label' /srv/art/theme-manifest.json
+    sudo -u tvpi jq '.schema, .entries[0].label' /srv/art/theme-manifest-"$WALL_ID".json
+
+`WALL_ID` is the wall this device serves, out of `.env` — there is one manifest
+per wall, and the display stats only its own. `ls /srv/art/theme-manifest-*.json`
+lists every room the catalogue publishes for.
 
 ### Looking at the label without the daemon
 
@@ -217,7 +221,7 @@ differently from the others, which is the point of having four rather than one.
     # 4. The display plane's own account of itself. This is the honest one: it
     #    distinguishes a device with no panel from one whose panel will not open,
     #    and a set that is unreachable from one that is simply not showing art.
-    sudo cat /srv/art/display-heartbeat.json
+    sudo cat /srv/art/display-heartbeat-"$WALL_ID".json
 
 **Read the heartbeat rather than the wall.** `television_reachable: false` is a
 network or pairing problem; `television_showing_art: false` with the set awake
@@ -274,9 +278,17 @@ where people stand, not to where you stand while installing it.
 
 **Before the unit is enabled, the checkout needs its environment file.** Since
 2026-07-27 `config.py` raises at import unless `ART_ROOT`, `TV_ADDRESS`,
-`LATITUDE`, `LONGITUDE` and `LOCATION_NAME` all resolve — deliberately, so that a
-missing deployment value stops the process instead of quietly running against a
-plausible-looking default. The unit names that file in `EnvironmentFile=`, and
+`LATITUDE`, `LONGITUDE`, `LOCATION_NAME` and — since 2026-08-12 — `WALL_ID` all
+resolve, deliberately, so that a missing deployment value stops the process
+instead of quietly running against a plausible-looking default.
+
+**`WALL_ID` is the one value here that cannot be typed from this document**: it is
+the id the curation catalogue minted for the room this device serves, read off the
+Walls screen or `art_display(action='walls')`. Start the curation plane once first
+if this is a fresh install, since the id does not exist until the catalogue is
+opened. Each wall has its own manifest, so a display carrying another room's id
+shows that room's pictures with nothing anywhere reporting a fault — which is why
+the plane refuses to start rather than guess one. The unit names that file in `EnvironmentFile=`, and
 `load_dotenv` independently resolves it next to `config.py`; both point at the
 repository root, which is also the unit's `WorkingDirectory`. The two agree
 today because they read the same file, and if they are ever pointed at

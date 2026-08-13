@@ -137,6 +137,14 @@ def test_configuring_twice_does_not_double_every_line():
     """The entry point calls this once; a second call must replace, not stack."""
     root = logging.getLogger()
     before = list(root.handlers)
+    # The level as well as the handlers. `configure` sets the root level, and
+    # these two tests are the only place in the suite that calls it — so leaving
+    # it at INFO leaks the gate every other test's `caplog` depends on, into
+    # every test that runs after this one in the same worker. It cost one
+    # intermittent failure in `test_artwork_lifecycle.py`, which asserts that
+    # opening a catalogue says nothing and was reading an INFO line from a
+    # migration two calls earlier.
+    before_level = root.level
     try:
         logs.configure()
         logs.configure()
@@ -144,6 +152,7 @@ def test_configuring_twice_does_not_double_every_line():
         assert len(installed) == 1
     finally:
         root.handlers = before
+        root.setLevel(before_level)
 
 
 def test_configuring_leaves_handlers_it_did_not_install_alone():
@@ -152,6 +161,7 @@ def test_configuring_leaves_handlers_it_did_not_install_alone():
     than as "your logging setup removed my handler"."""
     root = logging.getLogger()
     before = list(root.handlers)
+    before_level = root.level  # See the test above: `configure` sets this too.
     someone_elses = logging.NullHandler()
     try:
         root.addHandler(someone_elses)
@@ -159,3 +169,4 @@ def test_configuring_leaves_handlers_it_did_not_install_alone():
         assert someone_elses in root.handlers
     finally:
         root.handlers = before
+        root.setLevel(before_level)

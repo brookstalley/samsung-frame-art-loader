@@ -44,6 +44,13 @@ class FakeClock:
         return Clock(now=lambda: self._now, monotonic=lambda: self._elapsed)
 
 
+#: The wall every fixture in this suite serves. A readable literal rather than a
+#: UUID because what the plane requires is *a* wall id, and the assertions that
+#: name a file are legible with this one. Module-level so a test that has an art
+#: root but no `Settings` can still say which wall's file it means.
+WALL_ID = "living-room"
+
+
 @pytest.fixture
 def art_root(tmp_path: Path) -> Path:
     root = tmp_path / "art"
@@ -56,6 +63,7 @@ def settings(art_root: Path) -> Settings:
     """A deployment whose every interval is a round number a test can reason about."""
     return Settings(
         art_root=art_root,
+        wall_id=WALL_ID,
         tv_address="10.0.0.1",
         tv_port=8002,
         tv_token_file=art_root / "token_file",
@@ -140,6 +148,7 @@ def publish(art_root: Path) -> Callable[..., dict]:
     def _publish(
         work_ids: list[str],
         *,
+        wall_id: str = WALL_ID,
         sequence: int = 0,
         pinned_work_id: str | None = None,
         major: int = 1,
@@ -179,19 +188,23 @@ def publish(art_root: Path) -> Callable[..., dict]:
                 render = art_root / "ready" / f"{work_id}.jpg"
                 if not render.exists():
                     render.write_bytes(b"not really a jpeg")
-        write_manifest(art_root, document)
+        write_manifest(art_root, document, wall_id=wall_id)
         return document
 
     return _publish
 
 
-def write_manifest(art_root: Path, document: object) -> None:
+def write_manifest(art_root: Path, document: object, *, wall_id: str = WALL_ID) -> None:
     """Publish atomically, exactly as the curation plane does.
 
     Temp file in the same directory then `os.replace`, so a reader never sees a
     partial document — and so the mtime the watcher keys on moves on every write.
+
+    **The wall defaults to the one the fixtures serve, and is an argument at
+    all** so a test can publish for a room this device does not serve — which is
+    the whole property one manifest per wall was built for.
     """
-    target = art_root / "theme-manifest.json"
+    target = art_root / f"theme-manifest-{wall_id}.json"
     temporary = target.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(document), encoding="utf-8")
     temporary.replace(target)

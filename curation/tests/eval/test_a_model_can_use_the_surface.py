@@ -103,7 +103,10 @@ async def test_a_model_puts_a_named_work_on_the_wall(server_url, ready_work, dis
     assert "Late van Gogh" in themes, f"no theme by that name was created. {outcome}"
 
     theme = themes["Late van Gogh"]
-    assert theme.is_active, f"the theme was created but never activated. {outcome}"
+    # Hanging is an act against a *named* wall now, so the model has to have
+    # found one off the surface as well — which is the part of this goal that
+    # got harder on 2026-08-12 and is worth measuring rather than assuming.
+    assert display.walls_hanging(theme.id), f"the theme was created but hung on no wall. {outcome}"
 
     held = [entry.artwork.id for entry in display.theme_works(theme.id)]
     assert held == [work.id], f"the theme does not hold exactly that work. {outcome}"

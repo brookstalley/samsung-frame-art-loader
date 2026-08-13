@@ -170,9 +170,12 @@ ones labelled as weak**:
 **Bounds 4–6 are materially weaker than "cannot" and are stated as such.** The
 honest summary: the realistic worst case is a poisoned page steering candidate
 selection, burning budget, or getting an unwanted image onto the wall until
-someone looks. **Annoying and visible, not a breach.** There is no PII to exfiltrate,
-no tenancy to cross, no payment surface to abuse, and no credential the agent can
-reach.
+someone looks. **Annoying and visible, not a breach.** There is no tenancy to
+cross, no payment surface to abuse, and no credential the agent can reach — and
+**nothing an injected page can reach reads a conversation turn back out**, which
+is the form this clause takes now that § The one exception below designates
+`ConversationTurn.text` as a record of a person. It said "no PII to exfiltrate"
+until 2026-08-12; the conclusion is unchanged and the premise is narrower.
 
 **What would change this assessment.** If any of the following land, this section
 must be re-derived rather than extended:
@@ -318,6 +321,58 @@ assume it was overlooked.
 - **Logs must not contain secrets.** The one live rule in this section, and it has
   teeth because the repo is public and log excerpts get pasted into issues. Owned
   by `observability-strategy.md`.
+
+### The one exception: the operator's own words
+
+**`ConversationTurn.text` is the product's only retained free-text record of a
+person**, and "no PII" above is true of everything else and not of it. Nobody
+else's data is in it; it is still the one store where a curator may reasonably
+want something gone, and it is retained deliberately — `data-model.md` records
+that affinities are derived and the derivation will improve, which is worthless
+without the turns to re-derive from.
+
+### Deleting a conversation
+
+*Ruled by the operator 2026-08-12. This closes issue #118, which
+`information-architecture.md` § Open questions had held at `stage: requirements`
+with three candidate rules.*
+
+**Deleting a conversation deletes its turns and nothing else.** The rule in one
+line: **deletion does not flow to what was derived from the thread.** Every row
+citing a turn keeps its own record and loses only the citation —
+`Affinity.source_turn_id` and `SpendRecord.conversation_turn_id` are set null.
+
+The two rows are nulled for different reasons, and both reasons matter:
+
+- **An affinity is a judgment, and the judgment is the product's memory of the
+  curator.** It is accumulated across conversations by design and cannot be
+  reconstructed from a thread that no longer exists. Cascading would mean deleting
+  a six-month-old transcript quietly resets what the product knows about its
+  operator's taste — a consequence no confirmation could state in a way anyone
+  would predict.
+- **A spend record is a ledger entry, and a ledger must not change retroactively.**
+  Q4 asks what was spent and on what. Cascading makes a month total *fall* because
+  somebody tidied — a number that lies about the past, which is worse than a
+  number with a gap in its provenance.
+
+**What the delete does cost is real and is not recoverable:** the ability to
+rebuild those affinities when the derivation improves. The confirmation says that
+in those terms.
+
+**Two consequences the builder must not resolve on their own:**
+
+- `api-contract.md` § `art_taste` requires a `source_turn_id` for
+  `derivation='inferred'`. That is an invariant on the **write path**, not a
+  stored constraint — enforced as the latter it makes this delete impossible.
+- `Affinity.rationale` is now **required** for `inferred` and `observed`
+  (`data-model.md`), because after a delete it is the only surviving evidence.
+
+**No other deletion in the product has this shape**, and the difference is worth
+naming so the rule is not generalised: archiving a work keeps the row and moves it
+out of circulation, and deleting a theme is refused while it is hung. This is the
+only place where a record is genuinely destroyed at the curator's request, which
+is precisely why the things standing on it are detached rather than destroyed
+with it.
 
 ## Abuse Prevention
 

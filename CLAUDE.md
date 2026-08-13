@@ -105,9 +105,11 @@ modules only, runs in a fraction of a second, and is left serial.
 
 ## The browser suite
 
-The client in `curation/src/curation/http/static/app.js` is the product's only
-human interface, and neither Python suite executes a line of it. `-m browser`
-does, in a real Chromium against a real booted server:
+The client under `curation/src/curation/http/static/` is the product's only
+human interface, and neither Python suite executes a line of it. **It is a tree
+of ES modules, not one file**: `app.js` is the boot and the route table,
+`core/*.js` is what every screen shares, and `screens/*.js` is one module per
+screen. `-m browser` runs it, in a real Chromium against a real booted server:
 
 ```sh
 cd curation && uv sync --group browser        # once
@@ -117,7 +119,8 @@ cd curation && uv run pytest -m browser -n0
 
 **Deselected by default for the browser download, not for anything about the
 tests** — they are deterministic, free, and reach no foreign API. Run them when
-you touch `app.js`; `.github/workflows/browser.yml` runs them on pull requests
+you touch anything under `static/` — `app.js`, a `core/` module or a `screens/`
+one; `.github/workflows/browser.yml` runs them on pull requests
 and on pushes to `main`. Without the group the modules skip with the command
 that fixes it, so a default `uv sync` is unaffected.
 
@@ -126,8 +129,8 @@ that fixes it, so a default `uv sync` is unaffected.
 flakes when workers contend for cores.
 
 **A behaviour is not covered because a browser test exercises it.** Prove it with
-`tools/mutation_sweep.py`, which drives `app.js` as happily as a Python file:
-delete the branch and watch a test go red.
+`tools/mutation_sweep.py`, which drives a JavaScript module as happily as a
+Python file: delete the branch and watch a test go red.
 
 **Sweeping this suite needs the marker passed through:**
 

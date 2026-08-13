@@ -15,11 +15,11 @@ rather than as an absent field — a card that shows no size because a work has 
 master must not look like a card whose work is small.
 """
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from curation.persistence.records import MatColor, Original, Source
-from curation.services.catalogue import ArtworkDetail, CatalogueService, RenditionView
+from curation.persistence.records import MatColor, Original, Source, WorkFacet
+from curation.services.catalogue import ArtworkDetail, CatalogueService, FacetGroup, RenditionView
 from curation.services.display import DisplayService
 from curation.services.display_fit import ArtworkBox, FitAssessment
 from curation.services.thumbnails import ThumbnailService, ThumbnailUnavailable
@@ -57,6 +57,11 @@ class WorkSurveyPage:
     limit: int
     offset: int
     truncated: bool
+    #: What the facet controls beside this grid should offer, with each option's
+    #: count over the *rest* of the filter. Travels with the page rather than
+    #: from a second route, so the numbers and the works cannot describe
+    #: different sets.
+    facets: Sequence[FacetGroup] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +73,11 @@ class WorkDossier:
     sources: Sequence[Source]
     renditions: Sequence[RenditionView]
     mat_colors: Sequence[MatColor]
+    #: What this work is said to be. On the dossier rather than on every grid
+    #: card: the Work screen states a work's facets, and a grid states the
+    #: collection's counts — one card carrying its own six kinds would be a read
+    #: per work per page for something no card shows.
+    facets: Sequence[WorkFacet] = ()
 
 
 class SurveyService:
@@ -90,15 +100,31 @@ class SurveyService:
         """The space this deployment renders a work into, as resolved at startup."""
         return self._box
 
-    def list_works(self, *, status: str | None = None, limit: int | None = None, offset: int = 0) -> WorkSurveyPage:
-        """A page of works, each with its fit verdict and its image state."""
-        listing = self._catalogue.list_artworks(status=status, limit=limit, offset=offset)
+    def list_works(
+        self,
+        *,
+        status: str | None = None,
+        q: str | None = None,
+        facets: Mapping[str, Sequence[str]] | None = None,
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> WorkSurveyPage:
+        """A page of works, each with its fit verdict and its image state.
+
+        The narrowing arguments are passed straight through: what `q` and
+        `facets` mean, and how the facet counts beside the page are computed, is
+        `CatalogueService.list_artworks`'s to decide. Restating any of it here
+        would be the second implementation of "list the catalogue" that the shared
+        service layer exists to prevent.
+        """
+        listing = self._catalogue.list_artworks(status=status, q=q, facets=facets, limit=limit, offset=offset)
         return WorkSurveyPage(
             entries=[self._survey(entry) for entry in listing.entries],
             total=listing.total,
             limit=listing.limit,
             offset=listing.offset,
             truncated=listing.truncated,
+            facets=listing.facets,
         )
 
     def theme_works(self, theme_id: str) -> Sequence[WorkSurvey]:
@@ -119,6 +145,7 @@ class SurveyService:
             sources=self._catalogue.list_sources(artwork_id),
             renditions=self._catalogue.list_renditions(artwork_id),
             mat_colors=self._catalogue.mat_color_history(artwork_id),
+            facets=self._catalogue.facets_for(artwork_id),
         )
 
     def _survey(self, detail: ArtworkDetail) -> WorkSurvey:

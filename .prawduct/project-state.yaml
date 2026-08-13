@@ -3017,6 +3017,20 @@ build_state:
 #
 # active_build_plan: artifacts/build-plan-my-scope.md
 
+# Moved back 2026-08-12, in the PR that lands curation-ux. That plan is archived
+# and complete, so it is no longer something governance can resolve a chunk
+# against; v1 is the live work again. `build-plan.md` is unfinished on three
+# boxes — 13A and 13B wait on the panel and the set, tracked by
+# `operator-verification.md` and the session briefing (neither of which reads
+# this pointer), and 20 is the backup exercise.
+#
+# It was pointed at curation-ux while that plan was live because, unset,
+# governance resolved every curation-ux chunk against this v1 plan — so the
+# Critic's chunk-ref verification answered about a *different* plan's Chunk 01
+# and reported it as a pass. A wrong pointer here is not a missing check; it is
+# a check that runs against the wrong subject and passes.
+active_build_plan: artifacts/build-plan.md
+
 # =============================================================================
 # DERIVED VIEWS — RETIRED, and deliberately absent
 # =============================================================================

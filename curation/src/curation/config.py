@@ -19,8 +19,9 @@ from typing import Final
 
 from dotenv import load_dotenv
 
-from curation.manifest.builder import MANIFEST_FILENAME
-from curation.manifest.heartbeat import HEARTBEAT_FILENAME
+from curation.manifest.builder import MANIFEST_FILENAME_TEMPLATE, manifest_path_in
+from curation.manifest.heartbeat import heartbeat_path_in
+from curation.persistence.migrations import DEFAULT_WALL_NAME
 from curation.services.display_fit import ArtworkBox
 from curation.services.runner import DiscoverySettings
 
@@ -324,6 +325,28 @@ DEFAULT_MAT_MODEL: Final[str] = "qwen/qwen3.7-flash"
 #: failure with a different remedy.
 DEFAULT_MAT_MAX_OUTPUT_TOKENS: Final[int] = 8_000
 
+#: Which model answers a conversational turn. **Its own setting, and the reason
+#: is measured rather than symmetric**: `DEFAULT_DISCOVERY_MODEL` lists
+#: `input_modalities: ["text"]`, so a thread that ever carries a picture the
+#: curator points at cannot use it. The same argument `mat_model` records, and
+#: the same model answers it — vision-capable, cheapest of those that cleared the
+#: mat bar, and the one the 2026-08-12 multi-turn probe was measured against.
+DEFAULT_CONVERSATION_MODEL: Final[str] = DEFAULT_MAT_MODEL
+
+#: The conversational turn's output reservation, in tokens. **Deliberately small,
+#: and it is the one reservation in this file that is not sized for reasoning.**
+#:
+#: The other two are large because a reasoning model must be allowed to finish
+#: thinking before it answers. A conversational turn does the opposite: reasoning
+#: is switched off on the request, because on an open-ended prompt the routed
+#: model consumed its entire reservation on reasoning before emitting a character
+#: — measured at 16, 200 and 900 tokens alike, ten calls in a row, every one
+#: returning empty content and every one billed. With reasoning off the answers
+#: measured 19 to 28 completion tokens, so 2,000 is roughly seventy times a
+#: typical reply: room for a long answer, and small enough that the reservation
+#: the provider prices stays a rounding error against a monthly limit.
+DEFAULT_CONVERSATION_MAX_OUTPUT_TOKENS: Final[int] = 2_000
+
 #: The longest edge, in pixels, of the copy of the artwork the mat model sees.
 #: Images bill inside `prompt_tokens`, so this is the one dial on what a mat call
 #: costs. 768 is enough for a model to read a palette and a composition, and a
@@ -348,10 +371,13 @@ class Settings:
 
     art_root: Path
     catalogue_path: Path
-    manifest_path: Path
-    heartbeat_path: Path
     host: str
     port: int
+    #: What this deployment's one wall is called, **used only when the catalogue
+    #: has no wall yet**. Once a wall exists the name is the curator's and this
+    #: value stops being consulted, so changing it later renames nothing — which
+    #: is why it is not simply read wherever a wall's name is wanted.
+    wall_name: str
     rotation_interval_seconds: int
     rotation_shuffle: bool
     #: How often the plane reclaims the previews of works the curator has
@@ -413,6 +439,13 @@ class Settings:
     mat_model: str = DEFAULT_MAT_MODEL
     mat_max_output_tokens: int = DEFAULT_MAT_MAX_OUTPUT_TOKENS
     mat_image_max_edge: int = DEFAULT_MAT_IMAGE_MAX_EDGE
+    #: How intent-forming reaches its provider. A third model rather than either
+    #: of the two above: discovery's is text-only and cannot see a picture, and
+    #: the mat's reservation is sized for a reasoning budget this call switches
+    #: off. One setting for all three would make each choice a constraint on the
+    #: others.
+    conversation_model: str = DEFAULT_CONVERSATION_MODEL
+    conversation_max_output_tokens: int = DEFAULT_CONVERSATION_MAX_OUTPUT_TOKENS
     #: The key everything paid runs through. Optional: a deployment without one
     #: serves the whole catalogue and refuses only to *start* a discovery run,
     #: which is a far better failure than refusing to boot.
@@ -445,6 +478,42 @@ class Settings:
             phase1_input_tokens=self.phase1_input_tokens,
             phase1_output_tokens=self.phase1_output_tokens,
         )
+
+    def manifest_path(self, wall_id: str) -> Path:
+        """Where one wall's manifest is published.
+
+        **A method taking a wall rather than a field**, because there is no such
+        thing as "the manifest path" any more: the file set is indexed by wall,
+        and a settings object holding one path is what let a second wall's theme
+        overwrite the first wall's file until 2026-08-12.
+
+        **Production reaches these paths through `DisplaySettings`, not here, and
+        this pair stays anyway.** Chunk 02's review flagged both as callerless
+        and they were briefly deleted — wrongly. The concern a callerless read
+        usually names is a second answer that can drift from the first, and there
+        is no second answer: this and `DisplaySettings` both delegate to
+        `manifest_path_in`, which is the one derivation. What is left is a
+        convenience on the object that owns `art_root`, which is where a reader
+        asking "where would this wall's manifest be" looks first.
+        """
+        return manifest_path_in(self.art_root, wall_id)
+
+    def heartbeat_path(self, wall_id: str) -> Path:
+        """Where the display serving one wall reports. Read here, never written.
+
+        Kept for the reason recorded on `manifest_path` above.
+        """
+        return heartbeat_path_in(self.art_root, wall_id)
+
+    @property
+    def manifest_pattern(self) -> str:
+        """What the manifests are called, with the wall id left standing.
+
+        For the startup line, which is read before any wall id is in anyone's
+        hand. The resolved root with the placeholder still standing puts a wrong
+        `ART_ROOT` one `journalctl` away without inventing a wall to name.
+        """
+        return str(self.art_root / MANIFEST_FILENAME_TEMPLATE)
 
     @property
     def thumbnails_path(self) -> Path:
@@ -556,13 +625,12 @@ class Settings:
         return cls(
             art_root=art_root,
             catalogue_path=art_root / CATALOGUE_FILENAME,
-            manifest_path=art_root / MANIFEST_FILENAME,
-            heartbeat_path=art_root / HEARTBEAT_FILENAME,
             # Loopback by default: the plane is reached over an overlay network
             # rather than by being exposed on the LAN, and a default that binds
             # every interface is a decision no one made.
             host=os.environ.get("CURATION_HOST") or DEFAULT_HOST,
             port=_port("CURATION_PORT", DEFAULT_PORT),
+            wall_name=os.environ.get("WALL_NAME") or DEFAULT_WALL_NAME,
             rotation_interval_seconds=_positive_int("ROTATION_INTERVAL_SECONDS", DEFAULT_ROTATION_INTERVAL_SECONDS),
             rotation_shuffle=_flag("ROTATION_SHUFFLE", DEFAULT_ROTATION_SHUFFLE),
             # `_counted` rather than `_positive_int`: zero means "do not sweep",
@@ -616,6 +684,12 @@ class Settings:
             # request reserving nothing is refused by the provider, not run free.
             mat_max_output_tokens=_positive_int("MAT_MAX_OUTPUT_TOKENS", DEFAULT_MAT_MAX_OUTPUT_TOKENS),
             mat_image_max_edge=_positive_int("MAT_IMAGE_MAX_EDGE", DEFAULT_MAT_IMAGE_MAX_EDGE),
+            conversation_model=os.environ.get("CONVERSATION_MODEL") or DEFAULT_CONVERSATION_MODEL,
+            # Positive for the same reason the other two reservations are: a
+            # request reserving nothing is refused by the provider, not run free.
+            conversation_max_output_tokens=_positive_int(
+                "CONVERSATION_MAX_OUTPUT_TOKENS", DEFAULT_CONVERSATION_MAX_OUTPUT_TOKENS
+            ),
             openrouter_api_key=os.environ.get("OPENROUTER_API_KEY") or None,
             artic_user_agent=os.environ.get("ARTIC_USER_AGENT") or None,
         )

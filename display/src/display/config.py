@@ -24,12 +24,26 @@ from typing import Final
 
 from dotenv import load_dotenv
 
-#: The manifest's filename under `ART_ROOT`. **Not configurable, deliberately**:
-#: this is the name of the only channel between the planes, and a setting is just
-#: a way for the writer and the reader to stop agreeing about where it is. It is
-#: written here as a literal rather than imported from the plane that writes it,
-#: because importing that plane is the thing the isolation norm forbids.
-MANIFEST_FILENAME: Final[str] = "theme-manifest.json"
+# The heartbeat's own module owns where it is written; this only reports it in
+# the startup line. It imports nothing from here, so there is no cycle, and
+# naming the file a second time in this module is exactly the duplication the
+# per-wall channel already has one copy of too many of.
+from display.heartbeat import path_in as heartbeat_path_in
+
+#: The manifest's filename under `ART_ROOT`, **one file per wall**. The name is
+#: **not configurable, deliberately**: this is the only channel between the
+#: planes, and a setting is just a way for the writer and the reader to stop
+#: agreeing about where it is. Which *wall* this process serves is configuration
+#: — see `WALL_ID` below — and that is a different thing from where a wall's file
+#: is.
+#:
+#: Written here as a literal rather than imported from the plane that writes it,
+#: because importing that plane is the thing the isolation norm forbids. The
+#: duplication is the price of the norm, and it is safe only because
+#: `tests/preferences/test_heartbeat_contract.py` compares the two copies —
+#: without it, a rename on one side is a display plane that waits for ever for a
+#: file that is already there under another name.
+MANIFEST_FILENAME_TEMPLATE: Final[str] = "theme-manifest-{wall_id}.json"
 
 #: This plane's own store, under `ART_ROOT` beside the manifest it reads. Display
 #: is its sole writer and nothing else ever opens it.
@@ -140,6 +154,15 @@ class Settings:
     """Everything this plane needs from its environment, resolved once."""
 
     art_root: Path
+    #: **Which wall this process serves**, as the curation catalogue ids it. It
+    #: has no default for the reason `TV_ADDRESS` has none: there is no wall a
+    #: second device could be guessed onto, and a guess here is the failure this
+    #: whole per-wall channel was built to remove — a display showing another
+    #: room's pictures while every log line says it is working.
+    #:
+    #: A wall id is a UUID minted by the curation plane. `art_display(action=
+    #: 'walls')`, or the Walls screen, is where to read it off.
+    wall_id: str
     tv_address: str
     tv_port: int
     tv_token_file: Path
@@ -209,8 +232,14 @@ class Settings:
 
     @property
     def manifest_path(self) -> Path:
-        """The one channel from curation, and the only file this plane waits on."""
-        return self.art_root / MANIFEST_FILENAME
+        """The one channel from curation, and the only file this plane waits on.
+
+        **One path, resolved once from the wall this process serves.** That is
+        the whole mechanism keeping a display out of a wall it does not serve:
+        there is no listing, no glob and no wall id read from a document — the
+        manifests for every other room are files this process never opens.
+        """
+        return self.art_root / MANIFEST_FILENAME_TEMPLATE.format(wall_id=self.wall_id)
 
     @property
     def state_path(self) -> Path:
@@ -242,7 +271,15 @@ class Settings:
         """
         return {
             "art_root": str(self.art_root),
+            # **The wall, first among the paths it decides.** A `WALL_ID` naming
+            # a wall the catalogue does not hold produces a manifest that never
+            # arrives, which is indistinguishable from a curation plane that has
+            # not published — and one naming the *wrong* wall produces a display
+            # that works perfectly and shows the wrong room. Neither is visible
+            # anywhere else, so both are one `journalctl` away from here.
+            "wall_id": self.wall_id,
             "manifest_path": str(self.manifest_path),
+            "heartbeat_path": str(heartbeat_path_in(self.art_root, self.wall_id)),
             "state_path": str(self.state_path),
             "epd_panel_px": f"{self.epd_panel_width_px}x{self.epd_panel_height_px}",
             # **The line that would have caught the defect this pair exists for.**
@@ -287,6 +324,9 @@ def load(environ: dict[str, str] | None = None) -> Settings:
     token_file = env.get("TV_TOKEN_FILE") or ""
     return Settings(
         art_root=art_root,
+        # Required, like `TV_ADDRESS` and for the same class of reason: this
+        # process serves one named room, and nothing may guess which.
+        wall_id=_require_wall(env),
         tv_address=_require(env, "TV_ADDRESS"),
         tv_port=_int(env, "TV_PORT", 8002),
         tv_token_file=Path(token_file).expanduser() if token_file else art_root / "token_file",
@@ -315,6 +355,27 @@ def load(environ: dict[str, str] | None = None) -> Settings:
         rotation_interval_fallback_seconds=_int(env, "ROTATION_INTERVAL_SECONDS", DEFAULT_ROTATION_INTERVAL_SECONDS),
         rotation_shuffle_fallback=_bool(env, "ROTATION_SHUFFLE", DEFAULT_ROTATION_SHUFFLE),
     )
+
+
+def _require_wall(env: dict[str, str]) -> str:
+    """The wall this process serves, refused rather than guessed.
+
+    Its own message rather than `_require`'s, because a wall id is the one
+    required value a fresh installer cannot invent or look up in a manual: it is
+    a UUID minted by the other plane, and being told to "fill it in" without
+    being told where it comes from is where an installer starts guessing. The
+    consequence of a guess is the failure this whole per-wall channel removed —
+    a display showing the wrong room's pictures while every log line reads fine.
+    """
+    value = env.get("WALL_ID")
+    if not value:
+        raise ConfigError(
+            "WALL_ID is not set, and there is no wall this display could be guessed onto. It is the id of "
+            "the wall in the curation catalogue that this device serves — read it from the Walls screen or "
+            "from art_display(action='walls'), and put it in .env. Each wall has its own manifest, so a "
+            "display with the wrong id shows another room's pictures without anything reporting a fault."
+        )
+    return value
 
 
 def _require(env: dict[str, str], name: str) -> str:

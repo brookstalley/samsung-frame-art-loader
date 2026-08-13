@@ -266,14 +266,28 @@ loaded, the work currently displayed, TV connectivity state, e-paper state, and
 the last error if any.
 
 **Two names in it are a contract, not a suggestion, because the reader is already
-built** (`curation/src/curation/manifest/heartbeat.py`): the file is `display-heartbeat.json`
-under `ART_ROOT`, and the timestamp key is **`reported_at`**, an ISO-8601 instant.
+built** (`curation/src/curation/manifest/heartbeat.py`): the file is named by the
+template **`display-heartbeat-{wall_id}.json`** under `ART_ROOT`, and the timestamp
+key is **`reported_at`**, an ISO-8601 instant.
 The reader treats any other spelling as an unreadable heartbeat and says so — so a
 writer that calls the field `timestamp` produces a plane that looks *down* to
 curation while running perfectly. That is this product's defining failure mode
 manufactured by the mechanism built to detect it, which is why the key is named
 here rather than left to the writer. Everything else in the document is the
 writer's to shape: the reader hands the whole object through untouched.
+
+**One heartbeat per wall, since 2026-08-12**, matching the manifest
+(`architecture.md` § One manifest per wall). The wall id is the one the curation
+catalogue minted, and the display plane takes it from `WALL_ID` in its
+environment exactly as it takes `TV_ADDRESS`. The reason is this section's own
+requirement read across two rooms: `information-architecture.md` asks health to
+name *which* wall is silent, and one shared file cannot — a second display would
+overwrite the first's report every minute, so a wall that had gone dark would
+read identically to a wall that was fine. The filename is a template rather than
+a constant on both sides, and the two copies are held equal by
+`tests/preferences/test_heartbeat_contract.py`, whose value is that **both sides
+moving together is still a break**: a rename that updated both planes would
+orphan every heartbeat already on disk and every line of this document.
 
 **The interval is 60 seconds, and it is a wear budget as much as a freshness one.**
 This file is rewritten forever, on the same medium as the catalogue, and the
@@ -317,6 +331,15 @@ the panel renders whatever keys it finds. That is what gives the TV, panel and
 last-error rows of the failure table below a reader — they had none until then,
 which made them a monitoring plan whose evidence existed only in a file no
 surface opened.
+
+**As of 2026-08-12 it carries one such reading per wall**, under `walls[]`, each
+with the wall's id and name beside it, plus one `description` across them all —
+which names the wall that has not reported rather than reporting that *a* wall
+has not. The sentence applies no threshold and uses no word like "healthy": a
+wall has written a heartbeat or it has not, and if it has, the age is stated in
+the unit a person reads it in. Deciding whether four minutes is late stays the
+reader's, because this plane does not know whether that television was switched
+off on purpose.
 
 Passed through rather than unpacked into named fields, and that is the same
 decision as naming `reported_at` here: exactly one key is contract, so inventing
@@ -487,9 +510,32 @@ repository is **public** and log excerpts are exactly what gets pasted into a
 GitHub issue. Concretely: no OpenRouter API key, no TV pairing token, no full
 `Authorization` header, no `.env` dump on startup.
 
-Beyond credentials there is very little to filter — no PII, no accounts, no user
+Beyond credentials there is very little to filter — no accounts and no user
 records. Prompts and model responses may be logged freely; they contain artwork
-metadata and curatorial intent, nothing personal.
+metadata and curatorial intent.
+
+> **"No PII" stopped being true on 2026-08-12 and this paragraph did not notice**
+> — found by Critic review, and corrected here rather than argued with.
+> `security-model.md` § The one exception designates `ConversationTurn.text` as
+> **the product's only retained free-text record of a person**, and rules that
+> deleting a conversation destroys it. That is a classification this section owns
+> the log-filtering consequences of, and the path is live: `ConversationService`
+> hands the curator's own words to `DiscoveryRunner.start(intent_text=...)`, and
+> § Correlation's stated reason for structured logging is that "an intent is the
+> curator's own words and goes in a log line".
+>
+> **So the delete does not reach the journal, and that is a limit rather than a
+> gap to close.** A log line is written once and shipped; a retraction mechanism
+> over journald would be a second, weaker copy of a deletion guarantee this
+> product does not otherwise make. What follows instead is that **the words are
+> the one thing here whose logging is a decision rather than a freedom**: an
+> intent is logged because a run cannot be explained without the sentence that
+> started it, and a turn's full text is not. That is the built shape rather than
+> an aspiration: `run.started` carries `intent_text`, and every line
+> `ConversationService` writes — `conversation.started`, `.failed`, `.committed`,
+> `.deleted` — carries ids and counts and no text at all. If that ever changes,
+> it changes here first. `security-model.md` is the authority on what the record is; this
+> section is the authority on where it may be repeated.
 
 ## What Each Failure Looks Like
 

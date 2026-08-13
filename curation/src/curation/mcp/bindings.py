@@ -32,22 +32,60 @@ from curation.manifest.builder import ManifestBuild
 from curation.mcp.envelope import ImageBlock, ok, with_images
 from curation.mcp.registry import HELP_ACTION, RegistryError
 from curation.mcp.tools import TOOLS
-from curation.persistence.discovery_records import CandidateWork, DiscoveryRun, InitiatedBy, RunKind, RunStatus
-from curation.persistence.records import Artist, Artwork, Directive, Source, Theme
-from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing
+from curation.persistence.discovery_records import (
+    AffinityDerivation,
+    CandidateWork,
+    DiscoveryRun,
+    InitiatedBy,
+    RunKind,
+    RunStatus,
+)
+from curation.persistence.records import Artist, Artwork, Directive, Source, Theme, VocabularyKind, Wall
+from curation.services.catalogue import MAX_LIST_LIMIT, ArtworkDetail, ArtworkListing, FacetGroup
 from curation.services.container import Services
 from curation.services.discovery import VerdictOutcome
-from curation.services.display import UNSET
+from curation.services.display import UNSET, ThemePlacement, WallView, describe_wall_status
 from curation.services.display_fit import DisplayFit
 from curation.services.errors import ServiceError
 from curation.services.previews import InlinePreview
 from curation.services.review import MAX_REVIEW_LIMIT, CandidatePage, CandidateView, InstanceListing, InstanceView
 from curation.services.runner import RunListing, RunView
+from curation.services.taste import AffinityView
 
 #: A bound action: validated arguments in, a result payload out. Every binding
 #: takes the whole container rather than the one service it happens to need, so
 #: an action moving between concerns is not also a change to the dispatcher.
 Binding = Callable[[Services, Mapping[str, Any]], dict[str, Any]]
+
+#: The facet filters `art_catalogue(action='list')` takes, one array parameter per
+#: kind. Read off the vocabulary rather than listed, so a seventh kind reaches this
+#: surface with the enum that declares it — `tools.py` declares the parameters and
+#: this is what unpacks them, and the two going out of step would be a filter a
+#: model could see in the schema and never have applied.
+_FACET_KINDS: Final[tuple[str, ...]] = tuple(str(kind) for kind in VocabularyKind)
+
+#: What restoring a work does at the wall, and when, and how to make it sooner.
+#:
+#: **A module constant because the browser says the identical sentence.**
+#: `screens/work.js` holds this text verbatim, and two surfaces stating one fact
+#: in different words is how a reader learns to trust neither. Nothing can make
+#: Python and JavaScript share a literal, so the next best thing holds them
+#: together: `tests/unit/test_client_vocabulary.py` asserts this string appears in
+#: the client, and a drift on either side fails there rather than in front of a
+#: curator. Naming it here rather than inline is what gives that test something
+#: to import.
+#:
+#: **The second sentence exists because of a ruling.** The operator ruled on
+#: 2026-08-12 that a work archived while hanging may stay on the television, on
+#: condition that some path exists to push the update — so the surfaces owe the
+#: path, not merely the timing. It is worded for both audiences: a curator
+#: re-hangs from the Walls screen, an agent calls `activate`, and
+#: `DisplayService.activate_theme` writes the assignment and syncs
+#: unconditionally, so hanging what is already hanging republishes.
+RESTORE_NOTICE: Final[str] = (
+    "It is eligible for the wall again; a theme holding it will carry it at the "
+    "next manifest build. Re-hanging a wall's current theme builds one."
+)
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +93,8 @@ log = logging.getLogger(__name__)
 def _list_artworks(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
     listing = services.catalogue.list_artworks(
         status=arguments.get("status"),
+        q=arguments.get("q"),
+        facets={kind: arguments[kind] for kind in _FACET_KINDS if arguments.get(kind)},
         limit=arguments.get("limit"),
         offset=arguments.get("offset", 0),
     )
@@ -67,8 +107,27 @@ def _list_artworks(services: Services, arguments: Mapping[str, Any]) -> dict[str
         limit=listing.limit,
         offset=listing.offset,
         truncated=listing.truncated,
+        # The same groups the browser gets, in the same response as the works, for
+        # the reason the HTTP surface carries them: they answer the question the
+        # listing answers, and a model that had to ask separately could be told
+        # about a different set. Zero-count options travel too — a model choosing
+        # a filter needs to see that a combination is empty rather than infer it
+        # from an absence.
+        facets=[_facet_group(group) for group in listing.facets],
         notice=_truncation_notice(listing),
     )
+
+
+def _facet_group(group: FacetGroup) -> dict[str, Any]:
+    return {
+        "kind": str(group.kind),
+        "values": [
+            {"value": option.value, "count": option.count, "selected": option.selected, "disabled": option.disabled}
+            for option in group.options
+        ],
+        "total_values": group.total_values,
+        "truncated": group.truncated,
+    }
 
 
 def _get_artwork(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -98,7 +157,7 @@ def _restore_artwork(services: Services, arguments: Mapping[str, Any]) -> dict[s
     artwork = services.catalogue.restore_artwork(arguments["artwork_id"])
     return ok(
         artwork=_artwork_fields(artwork),
-        notice="It is eligible for the wall again; a theme holding it will carry it at the next manifest build.",
+        notice=RESTORE_NOTICE,
     )
 
 
@@ -297,8 +356,12 @@ def _sources_notice(sources: Sequence[Source]) -> str | None:
 
 
 def _list_themes(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    themes = services.display.list_themes()
-    return ok(themes=[_theme_fields(theme) for theme in themes], count=len(themes))
+    # Where each theme hangs travels with it, because "which one is on the wall"
+    # is what this listing is read to answer — and a caller that had to ask per
+    # theme would ask once and guess after. The pairing is the service's, not
+    # this binding's: the browser surface states the same fact.
+    placements = services.display.survey_themes()
+    return ok(themes=[_placement_fields(placement) for placement in placements], count=len(placements))
 
 
 def _get_theme(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -356,9 +419,19 @@ def _reorder_in_theme(services: Services, arguments: Mapping[str, Any]) -> dict[
 
 
 def _activate_theme(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    # Activating publishes, so this answers with the same shape as `sync` — the
+    # Hanging publishes, so this answers with the same shape as `sync` — the
     # caller needs to know how much of the theme actually reached the wall.
-    return _built(services.display.activate_theme(arguments["theme_id"]))
+    return _built(services.display.activate_theme(arguments["theme_id"], wall_id=arguments["wall_id"]))
+
+
+def _unhang(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    services.display.clear_wall(arguments["wall_id"])
+    return ok(
+        wall_id=arguments["wall_id"],
+        # The contract's own words: nothing is republished, so a result implying
+        # the wall had gone blank would be wrong about the thing that matters.
+        notice="Nothing is hanging there now. The wall goes on showing what it was showing until a theme is hung.",
+    )
 
 
 def _estimate(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -612,19 +685,113 @@ def _verdict_notice(outcome: VerdictOutcome) -> str | None:
 
 
 def _wall_status(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    reading = services.display.wall_status()
+    """Every wall's heartbeat, and one sentence across them.
+
+    **All the walls rather than one**, and without a `wall_id` to narrow it. The
+    question this action is asked is "is anything wrong", and an action that
+    answered it about one room would let a model report a healthy installation
+    having looked at the room that was fine.
+    """
+    seen = services.display.survey_wall_status()
     return ok(
-        observation=reading.describe(),
-        display_plane_has_reported=not reading.absent,
-        reported_at=_moment(reading.reported_at),
-        age_seconds=reading.age_seconds,
-        problem=reading.problem,
-        reported=reading.contents,
+        # Composed from the readings just taken rather than from a second pass,
+        # so the sentence and the list below it cannot describe two different
+        # instants — and from the shared function, so it cannot differ in
+        # wording from what the browser panel states.
+        observation=describe_wall_status(seen),
+        walls=[
+            {
+                "wall_id": each.wall.id,
+                "wall_name": each.wall.name,
+                "observation": each.heartbeat.describe(),
+                "display_plane_has_reported": not each.heartbeat.absent,
+                "reported_at": _moment(each.heartbeat.reported_at),
+                "age_seconds": each.heartbeat.age_seconds,
+                "problem": each.heartbeat.problem,
+                "reported": each.heartbeat.contents,
+            }
+            for each in seen
+        ],
+        count=len(seen),
     )
 
 
 def _sync(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    return _built(services.display.sync(arguments.get("theme_id")))
+    return _built(services.display.sync(arguments["wall_id"], arguments.get("theme_id")))
+
+
+def _list_walls(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    views = services.display.survey_walls()
+    return ok(walls=[_wall_view_fields(view) for view in views], count=len(views))
+
+
+def _add_wall(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    return ok(wall=_wall_fields(services.display.add_wall(name=arguments["name"])))
+
+
+def _list_taste(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    affinities = services.taste.list_affinities(
+        kind=arguments.get("kind"),
+        sentiment=arguments.get("sentiment"),
+        derivation=arguments.get("derivation"),
+    )
+    return ok(affinities=[_affinity_fields(entry) for entry in affinities], count=len(affinities))
+
+
+def _set_taste(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    affinity = services.taste.set_affinity(
+        kind=arguments["kind"],
+        value=arguments["value"],
+        sentiment=arguments["sentiment"],
+        open_to_more=arguments["open_to_more"],
+        # Defaulted here and not in the service signature's absence, because the
+        # tool's own schema names `stated` as the default and a second spelling
+        # of that default is a second thing to keep agreeing.
+        derivation=arguments.get("derivation", str(AffinityDerivation.STATED)),
+        rationale=arguments.get("rationale"),
+        source_turn_id=arguments.get("source_turn_id"),
+    )
+    return ok(affinity=_affinity_fields(affinity))
+
+
+def _delete_taste(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    forgotten = services.taste.delete_affinity(arguments["affinity_id"])
+    return ok(
+        affinity=_affinity_fields(forgotten),
+        notice=(
+            "That judgment is gone and nothing restores it. The product now knows nothing about "
+            f"{forgotten.affinity.value!r} rather than knowing to leave it alone."
+        ),
+    )
+
+
+def _affinity_fields(view: AffinityView) -> dict[str, Any]:
+    """One judgment as the tool surface reports it.
+
+    Field names match `AffinityOut` on the browser surface exactly, because the
+    two carry the same fact and an agent and a click that call it two things is
+    how they come to disagree about the same taste.
+    """
+    affinity = view.affinity
+    return {
+        "affinity_id": affinity.id,
+        "kind": str(affinity.kind),
+        "value": affinity.value,
+        "sentiment": str(affinity.sentiment),
+        "open_to_more": affinity.open_to_more,
+        "derivation": str(affinity.derivation),
+        "rationale": affinity.rationale,
+        # Null on an `inferred` row whose conversation was deleted, which is a
+        # legal state: the judgment stands and the citation is gone.
+        "source_turn_id": affinity.source_turn_id,
+        # Resolved from the cited turn by the service, so a model following a
+        # judgment back to its thread and a curator clicking through reach the
+        # same one. Null wherever `source_turn_id` is.
+        "conversation_id": view.conversation_id,
+        "artist_id": affinity.artist_id,
+        "created_at": affinity.created_at.isoformat(),
+        "updated_at": affinity.updated_at.isoformat(),
+    }
 
 
 def _built(build: ManifestBuild) -> dict[str, Any]:
@@ -635,6 +802,10 @@ def _built(build: ManifestBuild) -> dict[str, Any]:
     exclusions from one path and not the other.
     """
     return ok(
+        # The wall by name, so a caller reporting back says "in the living room"
+        # rather than "on the wall" — a sentence that reads correctly today only
+        # because there is one wall is one that silently becomes wrong.
+        wall=_wall_fields(build.wall),
         theme=_theme_fields(build.theme),
         on_the_wall=[{"artwork_id": entry.work_id, "title": entry.label["title"]} for entry in build.entries],
         # Never omitted when empty: a caller that saw this key only sometimes
@@ -656,12 +827,12 @@ def _built(build: ManifestBuild) -> dict[str, Any]:
 
 
 def _show_now(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    directive = services.display.show_work_now(arguments["artwork_id"])
+    directive = services.display.show_work_now(arguments["wall_id"], arguments["artwork_id"])
     return ok(**_directive_fields(directive))
 
 
 def _next(services: Services, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    return ok(**_directive_fields(services.display.step_display()))
+    return ok(**_directive_fields(services.display.step_display(arguments["wall_id"])))
 
 
 #: Every built action, keyed by tool and action name. A tool absent from here
@@ -699,10 +870,16 @@ BINDINGS: Final[Mapping[tuple[str, str], Binding]] = {
     ("art_theme", "remove"): _remove_from_theme,
     ("art_theme", "reorder"): _reorder_in_theme,
     ("art_theme", "activate"): _activate_theme,
+    ("art_theme", "unhang"): _unhang,
+    ("art_display", "walls"): _list_walls,
+    ("art_display", "add_wall"): _add_wall,
     ("art_display", "status"): _wall_status,
     ("art_display", "sync"): _sync,
     ("art_display", "show_now"): _show_now,
     ("art_display", "next"): _next,
+    ("art_taste", "list"): _list_taste,
+    ("art_taste", "set"): _set_taste,
+    ("art_taste", "delete"): _delete_taste,
 }
 
 
@@ -847,7 +1024,6 @@ def _theme_fields(theme: Theme) -> dict[str, Any]:
         "theme_id": theme.id,
         "name": theme.name,
         "description": theme.description,
-        "is_active": theme.is_active,
         # Null means "inherit the deployment default" rather than "unset", so it
         # is reported as it is stored rather than resolved to a number that would
         # read as a choice the curator made.
@@ -857,8 +1033,31 @@ def _theme_fields(theme: Theme) -> dict[str, Any]:
     }
 
 
+def _wall_fields(wall: Wall) -> dict[str, Any]:
+    """One wall as a caller sees it: a place and a name, never a device."""
+    return {"wall_id": wall.id, "name": wall.name, "created_at": _moment(wall.created_at)}
+
+
+def _wall_view_fields(view: WallView) -> dict[str, Any]:
+    """One wall, what hangs on it, and what it was last told to do."""
+    return {
+        **_wall_fields(view.wall),
+        # Never omitted when nothing hangs: a key a caller saw only sometimes
+        # would be read as "there is always something", and an empty wall is an
+        # ordinary state this surface has to be able to state.
+        "hanging": None if view.hanging is None else _theme_fields(view.hanging),
+        "directive": _directive_fields(view.directive),
+    }
+
+
+def _placement_fields(placement: ThemePlacement) -> dict[str, Any]:
+    """One theme and every wall showing it."""
+    return {**_theme_fields(placement.theme), "hanging_on": [_wall_fields(wall) for wall in placement.walls]}
+
+
 def _directive_fields(directive: Directive) -> dict[str, Any]:
     return {
+        "wall_id": directive.wall_id,
         "sequence": directive.sequence,
         "pinned_work_id": directive.pinned_work_id,
         # The contract's own words. This action cannot observe the television, so

@@ -55,6 +55,38 @@ COMPLETION_TIMEOUT_SECONDS: Final[float] = 180.0
 #: budget readout that hangs is worse than one that says it could not be read.
 KEY_TIMEOUT_SECONDS: Final[float] = 15.0
 
+#: How long **one connection attempt** may take, as opposed to the whole request.
+#:
+#: **Not a subdivision of the budgets above, and the distinction is the point.**
+#: Those bound *generation*, which legitimately takes minutes; opening a socket to
+#: a host that is going to answer takes milliseconds. Handing httpx a single
+#: number sets both, which is what makes an unreachable address cost a whole
+#: completion budget.
+#:
+#: **It exists because httpx has no Happy Eyeballs.** Its transport walks the
+#: addresses `getaddrinfo` returns in order, and this provider publishes AAAA
+#: records — so on a network whose IPv6 path is black-holed, every connection
+#: begins with an attempt that will never be answered, and only then falls back to
+#: IPv4. Measured 2026-08-12 on such a network: ~150 seconds per connection
+#: against 0.02 seconds over IPv4, and httpx's keepalive expires after five
+#: seconds, so anything slower than a tight loop pays it on every single call. A
+#: browser on the same network falls back in about 250 milliseconds.
+#:
+#: **The measurement above is no longer reproducible from here, and the constant
+#: stays.** The operator disabled IPv6 at the router on 2026-08-12, after the fix
+#: landed, so a cold connection on this network now opens over IPv4 in
+#: milliseconds. That is a change to one network, not to httpx: the next one that
+#: advertises a black-holed prefix — a hotel, a phone hotspot, the ISP again —
+#: brings the whole 150 seconds back. Read a fast cold connect as the router doing
+#: its job, not as evidence this bound is dead weight.
+#:
+#: Five seconds is generous for a reachable host on a slow link and short enough
+#: that walking a dead address family is an inconvenience rather than an outage.
+#: The right long-term answer is a transport that races the two families; this is
+#: the one-value version of it, and it works without depending on any network
+#: being correctly configured.
+CONNECT_TIMEOUT_SECONDS: Final[float] = 5.0
+
 
 class OpenRouterError(Exception):
     """The provider could not be made to answer."""
@@ -113,6 +145,65 @@ class ImageAttachment:
     def data_uri(self) -> str:
         """The `data:` URI form the provider's `image_url` part expects."""
         return f"data:{self.media_type};base64,{self.base64_data}"
+
+
+@dataclass(frozen=True, slots=True)
+class Message:
+    """One turn of a thread, in the provider's vocabulary rather than the product's.
+
+    `role` is `"system"`, `"user"` or `"assistant"` — the names the API accepts,
+    and deliberately not the product's `curator`/`system` pair. Measured: a role
+    of `"curator"` is a 400 reading *"curator is not one of ['system',
+    'assistant', 'user', 'tool', 'function']"*, so the translation happens above
+    this seam or it happens at the provider's expense.
+
+    **`text` is a string and never `None`, and that is the load-bearing part.**
+    A truncated turn comes back with `content: null`, and feeding that object
+    straight back into the next request is refused — *"The content field is a
+    required field"* — while `content: ""` is accepted and answered normally.
+    Both measured, twice, on 2026-08-12. A caller that stored the provider's
+    message object untouched would therefore poison the thread one turn later,
+    which is why nothing here can express a null.
+
+    **An image may only ride a `user` turn.** An `image_url` part on an assistant
+    turn is a 400: *"An incorrect modal `image` was entered … or was placed in
+    the wrong position (e.g., in system/assistant)"*. Refused below, where the
+    mistake is made, rather than by the provider a network round trip later.
+    """
+
+    role: str
+    text: str
+    image: ImageAttachment | None = None
+
+    def __post_init__(self) -> None:
+        if self.role not in _ROLES:
+            raise ValueError(f"A message role is one of {sorted(_ROLES)}, got {self.role!r}.")
+        if self.image is not None and self.role != "user":
+            raise ValueError(
+                f"An image may only travel on a user turn, not on a {self.role!r} one. Measured against the live "
+                "API: the provider refuses an image part in a system or assistant message. A sample the model "
+                "should look at again rides the curator's next turn."
+            )
+
+    def wire(self) -> dict[str, Any]:
+        """This turn as the request body carries it."""
+        if self.image is None:
+            # A bare string rather than a one-element part list. Both are
+            # accepted; this is the shape every capture of a text-only turn
+            # holds, and matching what was measured is what makes the fakes
+            # built from those captures mean anything.
+            return {"role": self.role, "content": self.text}
+        return {
+            "role": self.role,
+            "content": [
+                {"type": "text", "text": self.text},
+                {"type": "image_url", "image_url": {"url": self.image.data_uri}},
+            ],
+        }
+
+
+#: The roles the provider accepts, quoted from its own refusal of one it does not.
+_ROLES: Final[frozenset[str]] = frozenset({"system", "user", "assistant"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,15 +350,49 @@ class OpenRouterClient:
         same choices, same `usage.cost`, same `finish_reason` — and the image
         bills inside `prompt_tokens` rather than as a separate charge.
         """
-        content: str | list[dict[str, Any]] = prompt
-        if image is not None:
-            content = [
-                {"type": "text", "text": prompt},
-                {"type": "image_url", "image_url": {"url": image.data_uri}},
-            ]
+        return self.complete_thread(
+            messages=[Message(role="user", text=prompt, image=image)],
+            schema=schema,
+            search_results=search_results,
+        )
+
+    def complete_thread(
+        self,
+        *,
+        messages: Sequence[Message],
+        schema: Mapping[str, Any] | None = None,
+        schema_name: str = "work_list",
+        search_results: int = 0,
+        reasoning: Mapping[str, Any] | None = None,
+    ) -> Completion:
+        """Ask the model with a history behind the question.
+
+        **The provider keeps no thread state.** Measured 2026-08-12 over twelve
+        multi-turn calls: there is no thread id and no `previous_response_id`, so
+        every turn resends the whole conversation and is billed for it. An image
+        left in the history is re-sent, re-billed and genuinely re-read — 434
+        prompt tokens on *every* subsequent turn for one 768-pixel preview, with
+        `cached_tokens` zero throughout — so a thread's cost is linear in
+        (images × remaining turns) and a caller deciding how much history to
+        carry is deciding what it spends.
+
+        `reasoning` is the parameter `complete` has no need of and a
+        conversational turn cannot do without. On an open-ended prompt the routed
+        model consumed its **entire** output reservation on reasoning before
+        emitting a character — measured at 16, 200 and 900 tokens alike, ten
+        calls in a row, each returning empty content and each billed in full.
+        `{"enabled": False}` produced an answer for a twenty-seventh of the cost.
+        Passed through rather than decided here: this client reports what a call
+        cost and does not hold opinions about how the model should think.
+        """
+        if not messages:
+            # Refused here rather than by the provider, which answers 400 with
+            # *"Input required: specify \"prompt\" or \"messages\""* — a true
+            # sentence about a request this method should never have sent.
+            raise ValueError("A thread needs at least one message; the provider refuses an empty one.")
         body: dict[str, Any] = {
             "model": self._model,
-            "messages": [{"role": "user", "content": content}],
+            "messages": [message.wire() for message in messages],
             # Deliberate, never omitted: this is the reservation the provider
             # prices, and leaving it out invites a 402 at full credit.
             "max_tokens": self._max_output_tokens,
@@ -279,13 +404,15 @@ class OpenRouterClient:
         if schema is not None:
             body["response_format"] = {
                 "type": "json_schema",
-                "json_schema": {"name": "work_list", "strict": True, "schema": dict(schema)},
+                "json_schema": {"name": schema_name, "strict": True, "schema": dict(schema)},
             }
         if search_results > 0:
             plugin: dict[str, Any] = {"id": "web", "max_results": search_results}
             if self._search_engine is not None:
                 plugin["engine"] = self._search_engine
             body["plugins"] = [plugin]
+        if reasoning is not None:
+            body["reasoning"] = dict(reasoning)
 
         payload = self._post("/chat/completions", body)
         return _read_completion(payload, fallback_model=self._model)
@@ -316,7 +443,7 @@ class OpenRouterClient:
     def _post(self, path: str, body: Mapping[str, Any]) -> Mapping[str, Any]:
         try:
             response = self._http.post(
-                f"{BASE_URL}{path}", headers=self._headers, json=dict(body), timeout=COMPLETION_TIMEOUT_SECONDS
+                f"{BASE_URL}{path}", headers=self._headers, json=dict(body), timeout=_timeout(COMPLETION_TIMEOUT_SECONDS)
             )
         except httpx.HTTPError as exc:
             raise OpenRouterError(f"Could not reach OpenRouter: {exc}") from exc
@@ -324,10 +451,20 @@ class OpenRouterClient:
 
     def _get(self, path: str) -> Mapping[str, Any]:
         try:
-            response = self._http.get(f"{BASE_URL}{path}", headers=self._headers, timeout=KEY_TIMEOUT_SECONDS)
+            response = self._http.get(f"{BASE_URL}{path}", headers=self._headers, timeout=_timeout(KEY_TIMEOUT_SECONDS))
         except httpx.HTTPError as exc:
             raise OpenRouterError(f"Could not reach OpenRouter: {exc}") from exc
         return _read_body(response)
+
+
+def _timeout(overall: float) -> httpx.Timeout:
+    """A budget that bounds connecting far more tightly than waiting for an answer.
+
+    Built here rather than at each call site so the two requests cannot drift into
+    disagreeing about how long a socket may take to open — which is the kind of
+    difference that shows up only on the one network that provokes it.
+    """
+    return httpx.Timeout(overall, connect=CONNECT_TIMEOUT_SECONDS)
 
 
 def _read_body(response: httpx.Response) -> Mapping[str, Any]:
@@ -369,15 +506,68 @@ def _provider_message(response: httpx.Response) -> str:
     Quoted through rather than replaced: the 402's text carries the arithmetic
     that explains it — what was requested against what is affordable — and no
     message written here could reconstruct that.
+
+    **A refusal has two possible authors, and reading only the outer one throws
+    away the half worth acting on.** OpenRouter's own refusals — the money codes,
+    a malformed request it rejects itself — put the reason in `error.message`.
+    A refusal from the *model provider* behind it puts the constant string
+    "Provider returned error" there instead, and the actual objection inside
+    `error.metadata.raw`. Measured 2026-08-12: a null content field, an image on
+    an assistant turn and an unknown role all arrived wearing that one string,
+    three different mistakes with three different fixes, indistinguishable to
+    whoever had to act on them.
     """
     try:
         body = response.json()
     except ValueError:
         return response.text[:300]
     error = body.get("error") if isinstance(body, dict) else None
+    if not isinstance(error, dict):
+        return response.text[:300]
+    message = str(error.get("message") or "").strip()
+    upstream = _upstream_message(error.get("metadata"))
+    if message and upstream:
+        return f"{message} ({upstream})"
+    return message or upstream or response.text[:300]
+
+
+def _upstream_message(metadata: object) -> str:
+    """What the provider behind OpenRouter said, attributed to which one said it.
+
+    The provider is named because the route decides it: the same request can be
+    refused by one provider and served by another, so "Alibaba objected" is a
+    materially different report from "the model objected".
+    """
+    if not isinstance(metadata, Mapping):
+        return ""
+    name = str(metadata.get("provider_name") or "").strip()
+    raw = metadata.get("raw")
+    if not isinstance(raw, str) or not raw.strip():
+        return f"{name} gave no reason" if name else ""
+    detail = _upstream_detail(raw) or raw.strip()[:300]
+    return f"{name}: {detail}" if name else detail
+
+
+def _upstream_detail(raw: str) -> str:
+    """The `message` out of an upstream error body, or nothing if it is not there.
+
+    `raw` is the provider's own response forwarded verbatim, still wearing the
+    SSE `data:` frame it was streamed in. That framing belongs to a third party
+    and is free to change, so a body this cannot parse falls back to being passed
+    through whole by the caller: harder to read, and strictly better than the
+    alternative of telling someone only that an error occurred.
+    """
+    text = raw.strip()
+    if text.startswith("data:"):
+        text = text[len("data:") :].strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return ""
+    error = payload.get("error") if isinstance(payload, dict) else None
     if isinstance(error, dict) and error.get("message"):
         return str(error["message"])
-    return response.text[:300]
+    return ""
 
 
 def _read_completion(payload: Mapping[str, Any], *, fallback_model: str) -> Completion:

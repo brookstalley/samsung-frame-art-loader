@@ -24,23 +24,40 @@
 :root {
   color-scheme: light dark;
 
-  /* Surfaces, recessive by design. */
-  --surface-0: #faf9f7;
-  --surface-1: #ffffff;
-  --surface-2: #efedea;
-  --border: #c9c4bc;
-  --border-strong: #6f6a62;
+  /* The light scheme is a gallery wall, not a page: no pure white anywhere —
+     the ground is warm plaster and the raised surface is paper. */
+  --surface-0: #eae6de;
+  --surface-1: #f6f3ed;
+  --surface-2: #dfdad0;
+  --border: #ccc5b8;
+  --border-strong: #67604f;
 
   /* Text. */
-  --text-strong: #1c1a17;
-  --text: #3a3733;
-  --text-muted: #635e57;
+  --text-strong: #1e1b16;
+  --text: #3b362d;
+  --text-muted: #635c4f;
 
-  /* The single accent: a muted ink blue, desaturated so it sits behind a
-     painting rather than in front of one. */
-  --accent: #2f5068;
-  --accent-text: #ffffff;
-  --focus: #1d4f7c;
+  /* The single accent: a warm bistre ink, the colour of a printed label, not
+     a hyperlink — blue reads as "interactive", and a museum's own accent is
+     ink. */
+  --accent: #3d3128;
+  --accent-text: #f6f3ed;
+  --focus: #1e1b16;
+
+  /* Semantic status. Deliberately not the accent: status must be
+     distinguishable from "this is a control". Saturation kept low so a
+     healthy appliance never shouts on a page full of paintings. */
+  --good: #2f5940;
+  --warn: #6f4e14;
+  --crit: #7d322b;
+  --good-quiet: #dde5dc;
+  --warn-quiet: #ece2cd;
+  --crit-quiet: #f0dfdb;
+
+  /* Type over artwork: the Walls screen and the contact sheet lay text on an
+     unknown image, so contrast comes from the scrim rather than the palette. */
+  --scrim: rgb(16 15 13 / 62%);
+  --scrim-text: #f7f5f1;
 
   /* Type scale, 1.25 from a 16px base. */
   --text-xs: 0.75rem;
@@ -49,6 +66,18 @@
   --text-lg: 1.125rem;
   --text-xl: 1.375rem;
   --text-2xl: 1.75rem;
+  /* The one step above the 1.25 scale, added for the Walls screen's single large
+     heading and used nowhere else.
+
+     **2.25rem is derived, not chosen.** The scale is nominally 1.25 but is not
+     one in fact: rounded to whole pixels it runs 1.167, 1.143, 1.125, 1.222,
+     1.273 — the ratios widen towards the display end, which is what a type scale
+     rounded onto a pixel grid does. Continuing that widening from 1.75rem gives
+     roughly 1.29, and 2.25rem (36px) is where that lands on the same 4px base
+     the spacing scale is built on. The nominal ratio would give 2.1875rem, which
+     is 35px: half a pixel off the grid every other value in this block sits on,
+     for a difference no reader could see. */
+  --text-3xl: 2.25rem;
 
   /* Spacing, 4px base. */
   --space-1: 0.25rem;
@@ -69,23 +98,38 @@
 
   --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-label: ui-serif, Georgia, "Times New Roman", serif;
+
+  /* Layout. */
+  --rail: 13rem;
+  --masthead: 3.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface-0: #161513;
-    --surface-1: #1f1e1b;
-    --surface-2: #2a2825;
-    --border: #4a463f;
-    --border-strong: #8a847a;
-    --text-strong: #f5f3ef;
-    --text: #ddd9d2;
-    --text-muted: #aaa49a;
-    --accent: #9dc0da;
-    --accent-text: #10202b;
-    --focus: #9dc0da;
-    --shadow-1: 0 1px 2px rgb(0 0 0 / 40%);
-    --shadow-2: 0 2px 8px rgb(0 0 0 / 50%);
+    /* A wood-panelled study under warm lamplight, not a dark dashboard: the
+       neutrals carry walnut rather than charcoal, and the interactive accent
+       is gilt rather than blue. */
+    --surface-0: #191310;
+    --surface-1: #221a15;
+    --surface-2: #2e241d;
+    --border: #453830;
+    --border-strong: #8b7b6c;
+    --text-strong: #f4ece0;
+    --text: #ded3c4;
+    --text-muted: #a99a88;
+    --accent: #ccad66;
+    --accent-text: #1a1410;
+    --focus: #dcc088;
+    --good: #8fbf9c;
+    --warn: #e0964a;
+    --crit: #e39a8f;
+    --good-quiet: #22302a;
+    --warn-quiet: #33251a;
+    --crit-quiet: #33211f;
+    --scrim: rgb(6 4 3 / 70%);
+    --scrim-text: #f6efe3;
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 45%);
+    --shadow-2: 0 2px 10px rgb(0 0 0 / 55%);
   }
 }
 
@@ -132,10 +176,19 @@ a {
 
 /* -- chrome ---------------------------------------------------------------- */
 
+/* The masthead carries four things and has to keep carrying them on a narrow
+   window: the brand, three destinations, a search box and a status indicator.
+   Wrapping rather than a fixed row, because the indicator is the one element
+   that must never be pushed off the page — it is the whole contract that makes
+   Health safe to demote. */
 header.masthead {
   border-bottom: 1px solid var(--border);
   background: var(--surface-1);
   padding: var(--space-4) var(--space-5) 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
 }
 
 .masthead h1 {
@@ -145,13 +198,73 @@ header.masthead {
   color: var(--text-strong);
 }
 
-nav.tabs {
-  display: flex;
-  gap: var(--space-1);
-  margin-top: var(--space-4);
+/* Available to a screen reader and to nobody else. Clipped rather than
+   `display: none`, which removes it from the accessibility tree as well and
+   would leave the search field with no label at all. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
-nav.tabs button {
+.masthead .search {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  /* Takes the slack, so the destinations stay left and the indicator right. */
+  margin-left: auto;
+}
+
+.masthead .search input {
+  font: var(--text-sm) / 1.4 var(--font-ui);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-0);
+  color: var(--text);
+  min-width: 12rem;
+}
+
+/* Glyph, words and colour — three carriers, of which colour is the last. The
+   `data-state` attribute is what this selects on rather than a class, so the
+   state is legible in the DOM to a reader who cannot see the hue. */
+.status-indicator {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font: var(--text-sm) / 1.2 var(--font-ui);
+  cursor: pointer;
+  background: var(--surface-0);
+  color: var(--text);
+  text-align: left;
+}
+
+.status-indicator[data-state="well"] {
+  background: var(--good-quiet);
+  color: var(--good);
+}
+
+.status-indicator[data-state="unwell"] {
+  background: var(--warn-quiet);
+  color: var(--warn);
+}
+
+nav.destinations {
+  display: flex;
+  gap: var(--space-1);
+  align-self: flex-end;
+}
+
+nav.destinations button {
   appearance: none;
   border: 1px solid transparent;
   border-bottom: none;
@@ -163,14 +276,14 @@ nav.tabs button {
   cursor: pointer;
 }
 
-nav.tabs button:hover {
+nav.destinations button:hover {
   color: var(--text-strong);
 }
 
-/* The selected tab is marked three ways — weight, an underline rule, and
-   aria-current — so the tab bar reads correctly in greyscale and to a screen
-   reader, not only to someone who can see the accent. */
-nav.tabs button[aria-current="page"] {
+/* The destination you are in is marked three ways — weight, an underline
+   rule, and aria-current — so the navigation reads correctly in greyscale and
+   to a screen reader, not only to someone who can see the accent. */
+nav.destinations button[aria-current="page"] {
   color: var(--text-strong);
   font-weight: 600;
   border-color: var(--border);
@@ -192,7 +305,12 @@ h2 {
 
 /* -- the work grid --------------------------------------------------------- */
 
-.grid {
+/* The skeleton lays out with the grid rather than beside it — "skeletons occupy
+   the final geometry" is only true if one selector decides that geometry. It
+   answers a name of its own so a reader, and a test, can tell a placeholder from
+   a painted grid. */
+.grid,
+.grid-skeleton {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
   gap: var(--space-5);
@@ -291,6 +409,309 @@ h2 {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* -- collection: the rails, the density control and the contact sheet -------
+   Written here, with the grid, rather than at the end of the file: this is what
+   the grid is embedded in, and the two are read together.
+
+   Every colour is a token. `tests/unit/test_design_tokens.py` reads the real
+   values out of this file and computes the ratios, so a literal here is a colour
+   nobody can check. */
+
+.collection {
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+/* Vertical and sticky, so a rail of six facets is still reachable from the
+   bottom of four thousand pictures. */
+.rails {
+  position: sticky;
+  top: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-height: calc(100vh - var(--space-8));
+  overflow-y: auto;
+}
+
+.rail h3 {
+  margin: 0 0 var(--space-2);
+  font: 600 var(--text-xs) / 1.2 var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.rail-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.rail-note {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.facet-option,
+.theme-chip,
+.density-option {
+  appearance: none;
+  font: var(--text-sm) / 1.3 var(--font-ui);
+  color: var(--text);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.facet-option {
+  width: 100%;
+}
+
+.facet-option:hover:enabled,
+.theme-chip:hover:enabled,
+.density-option:hover:enabled {
+  background: var(--surface-2);
+  color: var(--text-strong);
+}
+
+/* What is chosen is marked three ways — a boundary, a weight and
+   `aria-pressed` — so the rail reads in greyscale and to a screen reader, not
+   only to someone who can see the ground change. */
+.facet-option[aria-pressed="true"],
+.theme-chip[aria-pressed="true"],
+.density-option[aria-pressed="true"] {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+/* Disabled and still perceivable. The rule is disabled-not-hidden precisely so
+   the vocabulary does not appear to shrink as filters are applied, which would
+   read as the collection having lost values rather than as an empty
+   intersection. */
+.facet-option:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.theme-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.theme-chip {
+  border-color: var(--border);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.density {
+  display: inline-flex;
+  gap: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-1);
+}
+
+.selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.selection-status {
+  margin: 0;
+  /* Reserved rather than sized to its words. The sentence changes as works are
+     ticked, and a toolbar that grew and shrank would move the grid under the
+     pointer doing the ticking. */
+  min-width: 9rem;
+}
+
+/* The tick sits over the picture rather than beside it, so a tile stays the
+   shape of its own box at both densities.
+
+   Scoped to `.collection`, and that is not tidiness: `screens/review.js` builds
+   its candidate cards out of the same `.card` class, and giving every card on
+   that screen a new containing block would change where any absolutely
+   positioned descendant of one resolves against. This chunk owns the collection
+   grid; it does not own Review's. */
+.collection .card,
+.tile {
+  position: relative;
+}
+
+.tile-select {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 1;
+  width: 1.1rem;
+  height: 1.1rem;
+  cursor: pointer;
+}
+
+/* The contact sheet: image only, uniform tiles, the words behind hover AND
+   focus. A keyboard has no hover, so `:focus-within` is the rule and not a
+   refinement of it. */
+
+.grid.contact-sheet,
+.grid-skeleton.contact-sheet {
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: var(--space-3);
+}
+
+.tile {
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.tile .card-image {
+  /* Square and uniform, with the work letterboxed inside it: cropping an artwork
+     to fill a tile is the one thing an art tool must not do. */
+  aspect-ratio: 1 / 1;
+}
+
+/* The archived mark does not hide with the caption. A badge is not metadata
+   about the work, it is a mark on an exception — a work out of circulation that
+   looks identical to one on the wall until you point at it is exactly the
+   silence the badge was written to end. */
+.tile-status {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 1;
+}
+
+.tile-caption {
+  position: absolute;
+  inset: auto 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2);
+  background: var(--scrim);
+  color: var(--scrim-text);
+  font-size: var(--text-xs);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.tile:hover .tile-caption,
+.tile:focus-within .tile-caption {
+  opacity: 1;
+}
+
+.tile-title {
+  font-family: var(--font-label);
+}
+
+/* The loading state's job is to not move: the placeholders are the real tiles
+   with nothing in them. The pulse is the only ambient animation in the product,
+   and the `prefers-reduced-motion` rule at the end of this file collapses it
+   with everything else. */
+
+.skeleton .card-image {
+  background: var(--surface-2);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton.tile .card-image {
+  aspect-ratio: 1 / 1;
+}
+
+.skeleton-line {
+  height: var(--text-md);
+  margin: 0;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.empty {
+  padding: var(--space-8) 0;
+  max-width: 34rem;
+}
+
+.empty h3 {
+  margin: 0;
+  font: 400 var(--text-xl) / 1.3 var(--font-label);
+  color: var(--text-strong);
+}
+
+/* The IA's three shapes. The rail becomes a horizontal scroller rather than
+   disappearing: a filter you cannot reach on a narrow window is a collection
+   that got smaller. */
+@media (max-width: 60rem) {
+  .collection {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4);
+  }
+
+  .rails {
+    position: static;
+    flex-direction: row;
+    gap: var(--space-4);
+    max-height: none;
+    overflow-x: auto;
+    padding-bottom: var(--space-2);
+  }
+
+  .rail-options {
+    flex-direction: row;
+    gap: var(--space-1);
+  }
+
+  .facet-option {
+    width: auto;
+    white-space: nowrap;
+    border-color: var(--border);
+    border-radius: var(--radius-md);
+  }
+}
+
+/* Two columns of pictures on the narrowest shape. Scoped for the same reason as
+   the rule above: `.grid` is Review's grid too, and this chunk is not the place
+   a decision about the review grid's breakpoints gets made. */
+@media (max-width: 40rem) {
+  .collection .grid,
+  .collection .grid-skeleton,
+  .collection .grid.contact-sheet,
+  .collection .grid-skeleton.contact-sheet {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* -- state indicators ------------------------------------------------------
@@ -522,10 +943,97 @@ th {
   margin-bottom: var(--space-5);
 }
 
-.panel h3 {
+/* `h3`, `h4` or `h5`, one treatment. The rank of a panel's heading depends on
+ * what it sits under — at the top of a view it is an `h3`, inside a wall's own
+ * section on the walls view an `h4`, and inside one wall's heartbeat reading on
+ * the health view an `h5`, so that neither two hung walls nor two reporting ones
+ * present a reader navigating by heading with a flat run of siblings. That is a
+ * document-structure fact and not a typographic one: the panels look the same
+ * whichever rank is used, which is what this selector says. */
+.panel :is(h3, h4, h5) {
   margin: 0 0 var(--space-3);
   font: 400 var(--text-md) / 1.3 var(--font-label);
   color: var(--text-strong);
+}
+
+/* One wall's heartbeat on the health view. Separated by a rule rather than by
+ * spacing alone: with several walls the readings are runs of identically shaped
+ * label/value pairs, and a reader scanning for the room that has gone quiet has
+ * to be able to see where one wall's reading ends. The first has no rule above
+ * it, since the panel's own heading already bounds it. */
+.wall-reading + .wall-reading {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+/* One wall's section heading on the walls view. A direct child of the view root,
+ * so like `.offer-group > h3` above it would otherwise fall back to browser
+ * defaults — the failure the comment there names, and the one no browser test
+ * can see, since the text and the attributes are correct either way. It takes
+ * the same treatment because it is the same rank of thing: a titled block within
+ * a view, of which the client has exactly two. */
+.wall-title {
+  margin: 0 0 var(--space-1);
+  font: 400 var(--text-md) / 1.3 var(--font-label);
+  color: var(--text-strong);
+}
+
+/* -- the walls -------------------------------------------------------------
+
+   The product's home, and the one screen whose primary content is the art
+   itself rather than a report about it. */
+
+/* The single large heading on this surface, and the only use of `--text-3xl`.
+   It is the product's home saying so — the one place the type is allowed to be
+   the size a gallery's own name is, and a size nothing else reaches so that it
+   stays that. Every other `h2` on this client keeps `--text-lg`. */
+.walls-heading {
+  font-size: var(--text-3xl);
+}
+
+/* One wall's whole section. Separated by space rather than by a rule: with three
+   walls a reader has to be able to see where one room's account ends, and a line
+   between them would draw a border across a page of paintings. */
+section.wall {
+  margin-bottom: var(--space-8);
+}
+
+/* What is hanging, at the size the IA asks for: the artwork is the primary
+   content on every screen that shows one, and this is the screen that shows the
+   most of them. A wider minimum than the collection grid's 15rem, because this
+   is a handful of works being looked at rather than a catalogue being scanned. */
+.hanging {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: var(--space-5);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* No card, no border, no shadow. A work on this screen is hung, not filed, and
+   the fixed-aspect image box above it is doing the alignment a card would
+   otherwise be doing. */
+.hung {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* A work's own title inside the Showing panel. The panel's heading rule sets a
+   paragraph's worth of space under a heading, which is right for a section title
+   and wrong under a picture whose artist line belongs with it. */
+.hung .card-title {
+  margin: 0;
+}
+
+/* The wall's controls, held apart from the account of what is on it: hanging a
+   different theme is the one act on this screen that other people in the house
+   see, and it should not read as another row of facts. */
+.wall-controls {
+  margin-bottom: var(--space-5);
 }
 
 /* One query's offered works, under the sentence that describes that query.
@@ -628,9 +1136,16 @@ button.action:hover {
 }
 
 /* Announced as well as shown: a failure a curator only learns about by noticing
-   a colour is a failure that gets missed. */
+   a colour is a failure that gets missed.
+
+   The marker is the critical status colour rather than the accent, because the
+   accent stopped being a different hue from body text when the palette became
+   warm throughout — leaving this rule drawing a hairline in the text's own
+   family where it used to draw an unmistakably blue one. Status is deliberately
+   not the accent, as the token block above says; this is the rule that proves
+   it. */
 .error {
-  border-left-color: var(--accent);
+  border-left-color: var(--crit);
   font-weight: 600;
 }
 
@@ -676,9 +1191,216 @@ dl.facts dd {
   padding-top: 0;
 }
 
+/* -- confirmation ---------------------------------------------------------- */
+
+/* The question asked before a wall changes, and deliberately the plainest
+   surface in this stylesheet. It is a native `<dialog>`, so everything that
+   makes it a modal — the centring, the focus trap, the inert page behind it —
+   is the browser's; what is left here is a sheet of the same paper every panel
+   is made of, one step nearer the reader. Chrome yields to the artwork on this
+   surface, and a dialog is the one place a design is most tempted to forget
+   that. */
+dialog.confirm {
+  max-width: 32rem;
+  background: var(--surface-1);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-2);
+  padding: var(--space-5);
+  font: var(--text-md) / 1.55 var(--font-ui);
+}
+
+/* The page is still visible behind the question, because what the act is about
+   to change is usually on it — the wall, the theme, the work being archived.
+   `--scrim` is the token for exactly this: type-bearing chrome laid over
+   something whose colours are not ours to predict. */
+dialog.confirm::backdrop {
+  background: var(--scrim);
+}
+
+.confirm-title {
+  margin: 0 0 var(--space-3);
+}
+
+.confirm-consequence {
+  margin: 0 0 var(--space-5);
+  color: var(--text);
+}
+
+/* The verb sits last, where the eye finishes the sentence; Cancel is to its
+   left and is where the keyboard starts. */
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+/* -- the work screen ------------------------------------------------------- */
+
+/* The mark on the rare facet a source actually published.
+
+   Quieter than the value it qualifies, and after it, because an annotation that
+   outranks its subject makes the reader search for the mark instead of reading
+   the fact. It was a bordered word before it was a tick, and the word is still
+   there for a screen reader — see `.visually-hidden` above — so neither the
+   shape nor the colour is carrying this alone. The footnote under the block is
+   what says what an unticked value means, which is "inferred", which is nearly
+   all of them. */
+.sourced .tick {
+  margin-left: var(--space-2);
+  color: var(--text-muted);
+}
+
+/* The mat, showing its colour and nothing else. The hex is printed beside the
+   swatch rather than behind a tooltip: a square of colour with no name is not
+   something a curator can quote, compare or ask about. */
+.mat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.mat-swatch {
+  width: var(--space-6);
+  height: var(--space-6);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;
     animation: none !important;
   }
+}
+
+/* -- the conversation thread ------------------------------------------------
+ *
+ * A transcript, not a chat app: no bubbles, no tails, no alternating alignment.
+ * The two speakers are told apart by a named label and a rule down the left of
+ * the curator's own turns, because a layout that carried the distinction in
+ * position alone loses it the moment the window is narrow — and because this is
+ * a page of paintings, where a second visual language competing with them is the
+ * thing the whole palette is arranged to avoid. */
+.turn + .turn {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.turn-speaker {
+  margin: 0 0 var(--space-1);
+  font: 600 var(--text-sm) / 1.2 var(--font-label);
+  color: var(--text-muted);
+}
+
+/* The curator's own words, marked by a rule rather than by a fill: a tinted
+   block behind text is a second background for a reader to judge a picture
+   against. */
+.turn[data-role="curator"] {
+  border-left: 3px solid var(--border-strong);
+  padding-left: var(--space-3);
+}
+
+.turn p {
+  margin: 0 0 var(--space-2);
+}
+
+.suggestions {
+  margin-top: var(--space-3);
+}
+
+.suggestion + .suggestion {
+  margin-top: var(--space-3);
+}
+
+.suggestion-name {
+  display: flex;
+  gap: var(--space-1);
+  align-items: baseline;
+  font-size: var(--text-sm);
+}
+
+/* Wrapping rather than scrolling: three pictures fit on a laptop and stack on a
+   phone, and a horizontal scroller hides the third one behind a gesture nobody
+   is told about. */
+.samples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-2) 0 0;
+}
+
+.sample {
+  margin: 0;
+  max-width: 12rem;
+}
+
+.sample img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.sample figcaption {
+  margin-top: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* The three reactions, under the picture that prompted them. Wrapping, because
+   three controls and a 12rem picture do not share a line on a phone. */
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+/* "Go to <artist>'s work", set apart from the reactions above it — a rule and a
+   gap, because it is the one control in a turn that leaves the thread and a
+   curator should be able to see that before pressing it rather than after. */
+.departure {
+  margin-top: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+/* -- taste ------------------------------------------------------------------ */
+
+.taste-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.affinity + .affinity {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.affinity p {
+  margin: 0 0 var(--space-1);
+}
+
+.affinity-judgment {
+  display: flex;
+  gap: var(--space-1);
+  align-items: baseline;
+}
+
+/* Indented under the judgment it qualifies, so the page reads as a list of
+   judgments each carrying its provenance rather than as a list of alternating
+   facts. */
+.affinity-provenance {
+  margin: 0 0 var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
 }

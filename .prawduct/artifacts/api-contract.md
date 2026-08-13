@@ -126,8 +126,8 @@ lesson from a different count, which is why this one is stated as a shape.*
 | `art_discovery` | `estimate`, `start`, `status`, `approve`, `decline`, `cancel`, `resolve_images`, `list_runs`, `spend`, `help` | **The only tool that spends money in amounts worth authorising** — see the correction below. |
 | `art_review` | `list_works`, `get_work`, `list_images`, `set_canonical`, `set_verdict`, `reject_image`, `help` | Returns thumbnails; see Inputs & Outputs. Never spends. |
 | `art_catalogue` | `list`, `get`, `sources`, `archive`, `restore`, `retry_acquisition`, `set_mat_color`, `regenerate`, `help` | `sources` is the provenance read; see below. |
-| `art_theme` | `list`, `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`, `help` | `activate` changes the wall immediately. |
-| `art_display` | `status`, `sync`, `show_now`, `next`, `help` | Every action goes through the theme manifest — see below. |
+| `art_theme` | `list`, `get`, `create`, `update`, `delete`, `add`, `remove`, `reorder`, `activate`, `unhang`, `help` | `activate` changes the wall immediately; `unhang` leaves the wall showing what it was showing. |
+| `art_display` | `walls`, `add_wall`, `status`, `sync`, `show_now`, `next`, `help` | Every action goes through the theme manifest — see below. `walls` is where every other action's `wall_id` comes from. |
 | `art_taste` | `list`, `set`, `delete`, `help` | The curator's standing judgments about artists, movements and subjects. Never spends. Added 2026-08-11 by operator decision — see below, and § The routes the interface design requires. |
 
 **This table is the surface as designed, and no row states what is built.** That
@@ -200,9 +200,27 @@ display plane a command; it writes desired state, and display converges on it.**
 | Action | What curation does | What display does |
 |---|---|---|
 | `status` | Reads the display plane's heartbeat file | Nothing — it wrote the heartbeat already |
-| `sync` | Rebuilds and rewrites the manifest from the active theme | Picks up the new manifest on its next poll and reconciles |
-| `show_now(work_id)` | Increments the manifest's directive `sequence` and sets `pinned_work_id` | Jumps to that work, then continues rotating from there |
-| `next` | Increments the directive `sequence` with no pin | Steps to the next work in the list |
+| `sync` | Rebuilds and rewrites **that wall's** manifest from the theme hanging on it — `theme-manifest-{wall_id}.json` | Picks up the new manifest on its next poll and reconciles. Each display plane reads the one file its `WALL_ID` names, so syncing one wall cannot disturb another |
+| `show_now(wall_id, artwork_id)` | Increments **that wall's** directive `sequence` and sets its `pinned_work_id` | Jumps to that work, then continues rotating from there |
+| `next(wall_id)` | Increments **that wall's** directive `sequence` with no pin | Steps to the next work in the list |
+
+**Every action but `status` takes a required `wall_id`**, built 2026-08-12. The
+directive is a row per wall rather than a singleton, so a `next` in the living
+room does not step the study — which is the whole point of naming a wall, and
+which the earlier form of this table could not express. `status` is the exception
+and takes none, but for the opposite reason to the one it used to give: the
+heartbeat is per wall now, and `status` answers with `walls[]` — every wall's
+reading in one call — so a `wall_id` would narrow an answer that is cheap whole
+and is read by a screen showing all of them.
+
+> **Both this row and that paragraph described the pre-per-wall behaviour until
+> 2026-08-12**, when Critic review found them — after the split had landed, and
+> with the correction already written 1,150 lines further down this file. The
+> `sync` cell was the expensive one: it told an external consumer that a second
+> wall's sync overwrites the first wall's manifest, which is a data-loss
+> behaviour that no longer exists, in the table that is this tool's canonical
+> description. A correction placed after the claim does not reach a reader who
+> stopped at the claim.
 
 `show_now` **refuses any work that could not reach the wall**, rather than pinning
 one, and archiving the pinned work withdraws the pin without advancing the
@@ -326,13 +344,15 @@ is a claim only another path can honestly make.
 until discovery begins weighting `Affinity`. That section now records the decision
 and what the deferral would have bought; this one is the tool it obliges.
 
-**It stands on `Affinity`, which does not exist.** Nothing here is declared at
-runtime until the entity and its service method do — "unbuilt actions are never
-declared" governs it, and a tool serving none answers `action='help'` with its
-`unavailable_note`. The precedent is in this file: `art_display(show_now|next)` was
-specified before the manifest-only channel was ratified and was unimplementable as
-written the day the norm landed. So the paragraphs below fix meaning and rules, and
-leave field-level shapes to the chunk that builds the service method under them.
+**It stands on `Affinity`, and both were built on 2026-08-12.** Until then nothing
+here was declared at runtime — "unbuilt actions are never declared" governed it, and
+the tool answered `action='help'` with its `unavailable_note`. The paragraphs below
+fixed meaning and rules and left field-level shapes to the chunk that built the
+service method under them; that chunk has landed, all three actions are declared,
+and `FROZEN_TOOL_NAMES` now pins the name it could not reach before. The rules
+below are therefore descriptions of built behaviour rather than instructions to a
+future builder, with one exception marked where it occurs: the `inferred` invariant
+is enforced on the write path only, and deliberately not as a stored constraint.
 
 **Three actions and no `get`.** `list` returns the taste, narrowed by `kind`,
 `sentiment` or `derivation`; `set` writes one judgment; `delete` forgets one. The
@@ -872,9 +892,9 @@ them back to the model.
 > TOOLS]`, so the list is whatever is declared on the day rather than a number
 > written here. *(This read "the five real names" until 2026-08-11 — Critic R-10 —
 > which was the third stale tool count in this artifact and the only one stating
-> what a shipped payload contains. Note that "registered" is not the same set as
-> § The surface: `art_taste` is designed and undeclared, so it is Frozen in the
-> tiers table and absent from this enumeration until it ships.)* The same
+> what a shipped payload contains. Between 2026-08-11 and
+> 2026-08-12 "registered" was not the same set as § The surface, `art_taste` being
+> designed and undeclared; it shipped on the 12th and the two sets agree again.)* The same
 > teach-don't-guess shape as every
 > other error here. The exception's own reasoning is what makes this cheap: a
 > client only calls names `list_tools` returned, so the case is defensive
@@ -1048,7 +1068,7 @@ exemption's reasoning and must not be cited for the manifest contract.)*
 
 | Element | Tier | Meaning |
 |---|---|---|
-| Tool names (every row of § The surface) | **Frozen** | Never renamed or removed. **Pinned by test from the day the tool is declared, and frozen by decision until then** — `FROZEN_TOOL_NAMES` in `curation/tests/contract/test_mcp_surface.py` asserts set-equality against the live server, so it can only ever cover tools that exist. `art_taste` is Frozen from 2026-08-11 and is the one name nothing pins; its entry joins that set on the day it ships. *(The row said only "Pinned by test" until 2026-08-11 — Critic R-16 — while widening itself to cover exactly the name the pin cannot reach.)* |
+| Tool names (every row of § The surface) | **Frozen** | Never renamed or removed. **Pinned by test from the day the tool is declared, and frozen by decision until then** — `FROZEN_TOOL_NAMES` in `curation/tests/contract/test_mcp_surface.py` asserts set-equality against the live server, so it can only ever cover tools that exist. `art_taste` was Frozen from 2026-08-11 and, for one day, was the one name nothing pinned; it shipped on 2026-08-12 and its entry joined that set with it. *(The row said only "Pinned by test" until 2026-08-11 — Critic R-16 — while widening itself to cover exactly the name the pin cannot reach.)* |
 | `action` values | **Stable** | Additive; retirement is announced and annotated. |
 | Required parameters | **Stable** | New ones must be optional with a default. |
 | Optional parameters | **Additive** | May be added freely. |
@@ -1075,7 +1095,7 @@ the client with them.
 | `POST`/`DELETE /api/themes/{id}/works[/{work_id}]`, `POST .../position` | Membership and order. Each returns the resulting order, so the surface repaints from the response. |
 | `POST /api/themes/{id}/activate` | Change the wall. Returns the manifest that was published, exclusions included. |
 | `GET /api/manifest` | What a theme *would* put on the wall, evaluated without writing. |
-| `GET /api/health` | Every observation the panel states: the heartbeat and the document the display plane reported, the backup's age, and this deployment's resolved artwork box. **Three observations and no fourth** — there is deliberately no budget balance, settled 2026-08-04. |
+| `GET /api/health` | Every observation the panel states: **one heartbeat per wall** with the document that wall's display reported, the backup's age, and this deployment's resolved artwork box. **Three observations and no fourth** — there is deliberately no budget balance, settled 2026-08-04. Shape below. |
 
 Added 2026-08-05 with the run half of the browser surface, and exercised by
 `curation/tests/integration/test_browser_discovery.py`:
@@ -1172,19 +1192,19 @@ spellings for "change this" costs more than the orthodoxy is worth here.
 
 | Route | What it is | Stands on | MCP twin |
 |---|---|---|---|
-| `GET /api/works` — extended | Gains `q` for text search and one repeatable filter per facet `kind`. Additive to a built route. | `WorkFacet` — **unbuilt** | `art_catalogue(action='list')` gains the same filters |
-| `GET /api/works` — facet counts in the same response | The counts the IA's disabled-not-hidden rule needs. **Not a second route** — see below. | `WorkFacet` — **unbuilt** | as above |
-| `POST /api/works/{id}/archive`, `/restore` | Take a work out of circulation, and put it back. **Not a delete** — see below. | `Artwork.status`, built | `art_catalogue(action='archive'\|'restore')`, already designed |
-| `POST /api/themes/{id}` | Rename. | `Theme`, built | `art_theme(action='update')`, already designed |
-| `DELETE /api/themes/{id}` | Delete. **The refusal it must reuse is already built** — see below. | `Theme`, built, and `DisplayService.delete_theme`'s guard with it | `art_theme(action='delete')`, built and wired to that guard |
-| `GET`/`POST /api/conversations` | The thread list, ordered by `last_turn_at`; and starting one. | `Conversation` — **unbuilt** | none proposed — see below |
-| `GET /api/conversations/{id}` | One thread with its turns. | `ConversationTurn` — **unbuilt** | none proposed |
-| `POST /api/conversations/{id}/turns` | One exchange. **Spends** — `SpendRecord` category `conversation_tokens`. | `ConversationTurn` — **unbuilt** | none proposed |
-| `POST /api/conversations/{id}/commit` | Commit a direction: starts a `DiscoveryRun` and sets the turn's `committed_run_id`. | `ConversationTurn` — **unbuilt** | none proposed |
-| `DELETE /api/conversations/{id}` | **Deliberately shapeless — blocked on issue #118.** | — | — |
-| `GET`/`POST /api/affinities`, `DELETE /api/affinities/{id}` | The Taste screen, and every sample reaction in a conversation. | `Affinity` — **unbuilt** | `art_taste(action='list'\|'set'\|'delete')` — decided 2026-08-11, see below and § `art_taste` |
+| `GET /api/works` — extended | Gains `q` for text search and one repeatable filter per facet `kind`. Additive to a built route. **Built 2026-08-12** — see below for the parameter shapes. | `WorkFacet`, built | `art_catalogue(action='list')` takes the same filters |
+| `GET /api/works` — facet counts in the same response | The counts the IA's disabled-not-hidden rule needs. **Not a second route** — see below. **Built 2026-08-12**, with the latency measured. | `WorkFacet`, built | as above |
+| `POST /api/works/{id}/archive`, `/restore` | Take a work out of circulation, and put it back. **Not a delete** — see below. **Built 2026-08-12**; both read back the full `WorkDetailOut` dossier, because the screen that archives is the screen that shows the work and a slimmer body would only send it straight back for the rest. | `Artwork.status`, built | `art_catalogue(action='archive'\|'restore')`, already designed |
+| `POST /api/themes/{id}` | Rename. **Built 2026-08-12**; answers with `ThemeOut`, so the screen repaints the name the service *normalised* rather than the one it typed. Its body carries a name and **nothing else** — see below. | `Theme`, built | `art_theme(action='update')`, already designed |
+| `DELETE /api/themes/{id}` | Delete. **The refusal it must reuse is already built** — see below. **Built 2026-08-12**; answers with `ThemeListOut`, the themes that remain, so the list repaints from the response like every other membership act. | `Theme`, built, and `DisplayService.delete_theme`'s guard with it | `art_theme(action='delete')`, built and wired to that guard |
+| `GET`/`POST /api/conversations` | The thread list, ordered by `last_turn_at`; and starting one. **Built 2026-08-12.** | `Conversation`, built | none proposed — see below |
+| `GET /api/conversations/{id}` | One thread with its turns. **Built 2026-08-12.** | `ConversationTurn`, built | none proposed |
+| `POST /api/conversations/{id}/turns` | One exchange. **Spends** — `SpendRecord` category `conversation_tokens`. **Built 2026-08-12**; a retry sends no new text, so the transcript is the idempotency key and asking again spends nothing twice. | `ConversationTurn`, built | none proposed |
+| `POST /api/conversations/{id}/commit` | Commit a direction: starts a `DiscoveryRun` and sets the turn's `committed_run_id`. **Built 2026-08-12.** | `ConversationTurn`, built | none proposed |
+| `DELETE /api/conversations/{id}` | Deletes the thread and its turns. **Detaches rather than cascades** — see below. **Built 2026-08-12.** The detach is a loop over the citing rows rather than a schema rule, so its atomicity rests on the transaction it runs in and on reading the code — it is the one behaviour in this chunk no mutation could express. | `ConversationTurn`, built | none proposed |
+| `GET`/`POST /api/affinities`, `DELETE /api/affinities/{id}` | The Taste screen, and every sample reaction in a conversation. **Built 2026-08-12**; `POST` upserts on (`kind`, `value`) and refuses to overwrite a stronger provenance with a weaker one. | `Affinity`, built | `art_taste(action='list'\|'set'\|'delete')`, built — see below and § `art_taste` |
 | `POST /api/works/{id}/mat` | Re-derive a work's mat. **Owned by issue #91, not by this set** — see below. | `MatColor`, built | `art_catalogue(action='set_mat_color')`, built |
-| `POST /api/directives` (shape open) | The Walls screen's `next`. **The only screen action here with an MCP action and no HTTP route at all** — see below. | `Directive`, built | `art_display(action='next')`, built |
+| `POST /api/directives` | The Walls screen's `next`. **Shape settled and built 2026-08-12** — see below. | `Directive`, built | `art_display(action='next')`, built |
 | `GET /api/spend` | The Health screen's spend history, across runs. | `SpendRecord`, built | `art_discovery(action='spend')` already answers the cross-run question by calendar month — see below |
 
 **Facet counts ride on the works response rather than getting a route.** They are
@@ -1195,6 +1215,171 @@ review view's own source. The cost is that counts are recomputed on page 2 of a
 grid that did not change them. That is accepted rather than optimised away, on a
 loopback service serving one household; **revisit trigger:** the recompute shows
 up in the collection's response time on the real thousands-scale corpus.
+
+**How the filters are carried, and what comes back.** `q` is free text, split on
+whitespace, and every word must appear somewhere in the work's title, description,
+commentary, medium or date, or in its artist's name; a second word narrows rather
+than widens, and at most eight are accepted (more is refused, because dropping the
+surplus would silently *broaden* the answer). Each facet kind is its own repeatable
+parameter named for the kind — `?movement=Baroque&movement=Rococo&era=17th+c.` —
+repeated rather than comma-joined, because a facet value may contain a comma and a
+separator the data can hold is a parser that goes wrong on the data. **Values
+within one kind mean *either*; two kinds mean *both*.** The response carries a
+`facets` array of one group per kind, always all six and always in vocabulary
+order, each with its `options` (`value`, `count`, `selected`, `disabled`),
+`total_values` and `truncated`. Options are ordered commonest first and capped at
+fifty per kind — an `artist` rail on a thousands-work catalogue is a scroll rather
+than a choice — with any *selected* value kept whatever its count, since the
+control that removes a filter is the option itself. `art_catalogue(action='list')`
+takes the same six arrays and `q`, and returns the same groups.
+
+> **Measured 2026-08-12 on the 4,000-work corpus, and the FTS5 question is
+> settled: `LIKE`, and no full-text index.** Run
+> `cd curation && uv run python tools/search_latency.py` to reproduce; figures are
+> medians of 50 runs on an Apple-silicon laptop, and the tool prints p95 and worst
+> beside them.
+>
+> | | median |
+> |---|---|
+> | The whole response, unfiltered first page | **5.9 ms** |
+> | The whole response, one facet chosen | **17.9 ms** |
+> | The whole response, a search term | **24–33 ms** |
+> | The `LIKE` clause on its own | **1.0–1.7 ms** |
+> | The same term through an FTS5 index | **0.01–0.19 ms** |
+>
+> **FTS5 is genuinely two orders of magnitude faster and is still the wrong
+> answer, for two reasons and only the second is about speed.** It matches whole
+> tokens, so a search for `harb` finds nothing at all where `LIKE '%harb%'` finds
+> "harbour" — the contains-match a search box is expected to do would have to be
+> taught to the curator as a prefix operator, or given up. And the clause is not
+> where the time goes: 1.5 ms of a 30 ms answer. Replacing it would buy about 5%
+> of the response for a second copy of every searched column, kept in step by
+> triggers, on a file whose whole appeal is that it can be copied to a backup and
+> back. *(The measurement is the number; this paragraph's account of where the
+> time goes is inference from the per-part timings in the same tool run.)*
+>
+> **The revisit trigger above fired, and was answered by fixing the query rather
+> than by dropping the counts.** Recomputing them cost 57 ms unfiltered and 101 ms
+> with a search term — on a laptop, so several times that on the Pi this is
+> deployed to. Two changes took it to the table above: a facet count no longer
+> restricts itself to a set of works when nothing narrows that set (the collection's
+> *first* screen is exactly that case), and the kinds the curator has not filtered
+> on are counted in one statement instead of five, which is not an exception to the
+> exclusion rule but a consequence of it — dropping a kind's own selection leaves
+> the same query for every kind that has none. **Counts still ride on the works
+> response.** The trigger now reads: revisit if the recompute shows up again on the
+> real corpus, measured with the tool above rather than estimated.
+
+**Three built routes gain a wall, and this is the only change in this section to
+something that already ships.** The operator ruled on 2026-08-12 that themes are
+created globally and assigned per wall (`data-model.md` § ThemeAssignment), which
+makes three of the routes above singular where the product is not:
+
+| Route | Today | Becomes |
+|---|---|---|
+| `POST /api/themes/{id}/activate` | Changes *the* wall | Names which wall it hangs on. The wall is a required part of the request, **even while there is one and the answer is obvious** — the IA's rule that every act naming a wall keeps a confirmation from silently becoming wrong. |
+| `GET /api/manifest` | What a theme would put on *the* wall | Takes the wall as well as the theme: exclusions are per-wall once two walls can hang different themes, and this route's whole job is to state a consequence before it happens. |
+| `POST /api/directives` (built above) | An advance | Names the wall. `Directive` stops being a singleton and becomes one row per wall, so a `next` in the living room does not step the study. |
+
+**`art_theme(action='activate')` and `art_display` take the same parameter**, by
+the parity requirement in `product-brief.md` item 8 — a model that can hang a
+theme must be able to say where, and an action that guesses the wall is worse on
+the tool surface than on the web one, because there is no confirmation dialog to
+catch it.
+
+**Built 2026-08-12**, and the one-wall installation is the degenerate case
+throughout: one wall, one assignment, identical behaviour. **The inter-plane half
+landed the same day** — `architecture.md` § One manifest per wall: one
+`theme-manifest-{wall_id}.json` and one `display-heartbeat-{wall_id}.json` per
+wall, with the display plane taking `WALL_ID` from its environment as it takes
+`TV_ADDRESS`. No route carries a manifest's *bytes*, so nothing in the table above
+changed shape for it; `GET /api/health` did, and its new shape is below.
+
+### `GET /api/health` aggregates across walls — built 2026-08-12
+
+The heartbeat became one file per wall, so "has the display plane reported"
+stopped being a question with one answer and became "which wall has not". The
+response is:
+
+```json
+{
+  "walls": [
+    {
+      "wall_id": "…",
+      "wall_name": "The living room",
+      "heartbeat": {
+        "path": "/srv/art/display-heartbeat-….json",
+        "reported_at": "2026-08-12T09:14:02+00:00",
+        "age_seconds": 41.2,
+        "absent": false,
+        "problem": null,
+        "description": "The display plane last reported 41 seconds ago.",
+        "reported": { "…": "whatever that plane wrote, passed through" }
+      }
+    }
+  ],
+  "description": "Every wall has reported; the least recent is 'The study', 4 minutes ago.",
+  "backup": { "…": "unchanged" },
+  "artwork_box": { "…": "unchanged" }
+}
+```
+
+**`heartbeat` is gone from the top level and is not coming back**: one reading for
+an installation with two rooms is a reading that cannot name the room, which is
+the entire reason the file was split. `walls` is ordered as `GET /api/walls`
+orders them, so no surface has to hold two orderings.
+
+**`description` is a summary of the readings beside it, not a fourth signal.** It
+names the walls that have not reported — `"'The study' has not reported. …"` — or,
+when all of them have, states the *least recent* age, because a sentence quoting
+the freshest would read as an all-clear bought from whichever wall reported last.
+It applies **no threshold and uses no verdict word**: whether four minutes is late
+depends on whether that television was switched off on purpose, which this plane
+does not know. A client must not derive a colour from it.
+
+**The per-wall `heartbeat` object is byte-for-byte the shape the top-level one
+had**, including `reported` being passed through unread — exactly one key
+(`reported_at`) is contract, and inventing more on the reading side would be a
+second contract the writer never agreed to.
+
+`art_display(action='status')` mirrors this on the tool surface: it takes no wall,
+returns `walls[]` with `count`, and states the same `observation` sentence from the
+same readings.
+
+**How the wall is actually carried, since the table above says only that it is.**
+`POST /api/themes/{id}/activate` takes `{"wall_id": …}` as a request **body**;
+`GET /api/manifest` takes `wall_id` as a **required query parameter**, having no body
+to put it in. Stated because the two differ and a reader of the table above would have
+no way to tell which was which. `GET /api/manifest` also echoes `wall_id` and
+`wall_name` back, so a caller stating a consequence can name the room in words rather
+than in a UUID.
+
+**Four routes and three tool actions arrived with them**, none of which this section
+had designed:
+
+| Route | Tool | What it is for |
+|---|---|---|
+| `POST /api/walls` | `art_display(action='add_wall')` | Nothing else creates a wall. The migration makes the first one; a second room needs an operation. **Create only** — no delete and no rename, because deleting a wall raises consequences for its assignment, its directive row and any display configured to serve it that nothing has ruled on. |
+| `GET /api/walls` | `art_display(action='walls')` | What rooms exist, and what hangs in each. |
+| `DELETE /api/walls/{wall_id}/theme` | `art_theme(action='unhang')` | Takes the picture down. See § Deleting a theme for why this had to exist before the delete refusal could be made absolute. |
+| — | — | `GET /api/themes` reshaped to `{theme, hanging_on[]}` per entry, because `ThemeOut.is_active` had nothing to become: "is it active" is now "which walls is it on". The MCP listing stays flat with a `hanging_on` key added, since a model reads a list better than a nesting. |
+
+**`art_display(action='status')` still takes no wall, and the reason changed
+underneath it on 2026-08-12.** § `art_display` above once said a wall parameter
+would be a lie while the heartbeat was one file, and that the action would gain
+one when the inter-plane chunk landed. That chunk landed and the heartbeat *is*
+per wall now — so the old reason expired, and the action takes no wall anyway for
+a new one: what it answers is "has every wall reported". It returns `walls[]`
+with a count and one observation sentence, which is the aggregate question and
+not a per-wall one, and a caller wanting one room reads the entry it wants out of
+that list. See § `GET /api/health` aggregates across walls above, which this
+paragraph must not be read as contradicting.
+
+> **The reason above is now stated where the action is described, not only
+> here.** It was written only here for a day, 1,150 lines below the table that
+> still carried the expired claim — so the artifact contradicted itself in
+> reading order and the first statement won. Recorded because the lesson is about
+> placement rather than about heartbeats: a correction belongs at the claim.
 
 **"Work delete" was the wrong word, and the route is archive.** The IA § Status
 row asked for one; `data-model.md` gives `Artwork.status` exactly two values,
@@ -1215,13 +1400,56 @@ wall consequence, not merely which of archive and restore it is doing** —
 writing, so the route can state the consequence rather than predict it. The IA
 carries this rule for flow 6's activation and now carries it here too.
 
-**Deleting the active theme refuses — and this rule is built, not designed.** The
+**Deleting a theme that is hanging refuses — and this rule is built, not designed.** The
 operator settled the question on 2026-08-11, and the answer turned out to be what
-`DisplayService.delete_theme` has enforced all along, reached by
-`art_theme(action='delete')` today. **This paragraph therefore describes shipped
-behaviour**, and it is the one thing in this section that does: the HTTP route is
-still unbuilt, and what it owes is to call that method rather than to write a guard
-of its own.
+`DisplayService.delete_theme` had enforced all along, reached by
+`art_theme(action='delete')`. It was generalised from "the active theme" to "hanging on
+any wall" on 2026-08-12, when a theme stopped being active and started hanging somewhere. **This paragraph therefore describes shipped
+behaviour**, and the HTTP route now shares it: `DELETE /api/themes/{id}` calls that
+method and writes no guard of its own, which is what keeps one refusal sentence
+reaching a curator and an agent alike.
+
+**The rename body carries a name and nothing else, and that is a decision.**
+`update_theme` distinguishes "leave this alone" from "clear this" with a sentinel, so
+a request model whose other fields defaulted to `None` would reset a theme's rotation
+pace every time somebody fixed a typo in its name — silently, and on the surface
+least likely to be looking at pace. A route that can only rename cannot do that. The
+day a screen genuinely edits pace, it earns a model that says so explicitly rather
+than inheriting one that can.
+
+**`position` is an index on both `add` and `POST .../position`, never a sort key —
+settled 2026-08-12, and it was a defect until then.** The work lands *at* that place
+and the works renumber densely around it. What it replaced wrote the number into the
+column and stopped, which sounds equivalent and is not: `list_memberships` breaks a
+tie on `added_at`, so a work sent from 0 to 1 landed level with the work already
+there and sorted ahead of it again, being the older row. Moving a work **up** worked;
+moving it **down** did nothing at all, and the Theme screen's ↓ button had never once
+reordered anything. An index past the end lands at the end rather than refusing —
+there is no wrong answer to "put this last" worth an error.
+
+**Omitting it means the end on an add and unplaced on a reorder, and the asymmetry
+is the point.** A curator returning a work to unplaced is saying they have no opinion
+about where it goes, which is a thing worth being able to say; a curator adding a
+work has no opinion to express yet, and the end is where a work nobody has placed
+belongs. This is what makes the list a surface renders and the list the service
+renumbers **one list**: nothing a curator or a tool can reach sends a position, so
+when an add left the work unplaced, every theme the product could actually build had
+a placed prefix the renumber walked and an unplaced tail the surface still indexed
+against. Two lists indexed against each other is a reorder that does nothing, or one
+that moves the work the way it was not asked to go.
+
+> **The operator ruled this on 2026-08-12**, closing #132, after Critic review found
+> the reorder shipped in this chunk still broken for every theme built through the
+> screen that shipped with it. The alternatives were renumbering the full list on a
+> move while leaving `add` alone — which reaches the same end state by drift, since
+> the first move places everything — and having the Theme screen send an index,
+> which fixes one screen and leaves the same defect reachable from a conversation.
+>
+> It changes what `test_q1_which_works_belong_to_a_theme…` sets up. The claim that
+> test makes — `theme_works` returns the curated order — is unchanged and still
+> asserted; the two adds that expressed an order by writing sort keys express the
+> same order by index instead. A test is a contract here, and a ruling is how a
+> contract changes.
 
 > **The question was put to the operator as though nothing were built, and that
 > framing was wrong** — found by Critic review, R-8, on the commit that recorded the
@@ -1236,36 +1464,83 @@ of its own.
 > docstring, which matters because the two are worth different amounts to whoever
 > next proposes changing it.
 
-**The refusal is narrower than "while active", and the narrowing is the part worth
-reading.** `delete_theme` refuses the active theme **only while another theme
-exists**. Deleting the *last* theme is permitted even though it is active, because
-no themes at all is a normal empty state rather than the forbidden one — and it is
-what makes a theme deletable at all. **Ratified by the operator 2026-08-11**, put to
-them with the alternative stated: refusing unconditionally would make the last theme
-undeletable forever, since there is no deactivate operation, so a curator could never
-empty the catalogue. Deleting it deliberately does not rewrite the
-manifest: the wall keeps showing what it was showing, the same posture as curation
-being stopped entirely. Publishing an empty manifest would blank the wall as a side
-effect of tidying the catalogue.
+**The refusal is now absolute, and the exception that used to soften it is retired —
+replaced rather than dropped.** `delete_theme` refuses a theme **hanging on any
+wall**, and names the walls. Built 2026-08-12.
 
-**The message is normative and is already written.** "Theme *X* is the one the wall
-is showing. Activate another theme first, so that what replaces it on the wall is a
-choice rather than whichever is oldest." An earlier draft of this paragraph invented
-"or deactivate this one" — there is no deactivate action, no such route, and no
-state it could produce that the surface has a name for. § Errors teach is why a
-refusal must say what to do; the *principle* binds here, not the shape, because that
-section specifies the tool envelope's `valid_actions` / `example` / `hint` and the
-HTTP surface has one shape and one status — `{"error": "..."}` — which carries the
-sentence and nothing else.
+> **What this replaced, and why the replacement was owed.** Until then the refusal was
+> narrower: it refused the active theme *only while another theme existed*, so the
+> last theme was deletable even while hanging. That was **ratified by the operator on
+> 2026-08-11** for a specific and good reason — refusing unconditionally would have
+> made the last theme undeletable forever, because there was no way to take a theme
+> down, so a curator could never empty the catalogue.
+>
+> Generalising the refusal to "hanging on any wall" reinstates exactly that deadlock,
+> and with walls it gets worse rather than better: "the last theme" hanging in three
+> rooms would be freely deletable and would blank three rooms at once. **So the
+> operation the 2026-08-11 ruling was compensating for now exists** — see
+> `art_theme(action='unhang')` below — and the exception is retired because the thing
+> it worked around is gone. The ruling is honoured, not overturned: a curator can
+> still empty the catalogue, by taking the theme down first.
+>
+> The gap was found mid-build, from this plan's own acceptance test saying the refusal
+> "permits the last *unhung* theme" — a word that presupposed an operation nothing had
+> built.
 
-> **"Promote another theme, then delete" was the third option, and it is not
-> hypothetical — it is what happens by default if the guard is removed.**
-> `reconcile()` promotes the oldest remaining theme when none is active, so a
-> curator deleting what is on the wall would get *some* other theme on it without
-> having chosen one. That is the reason the built code refuses, and it is a better
-> reason than the one this document gave when it declined the option as a design
-> choice: the earlier draft argued it "collapses into a refusal anyway when the
-> theme being deleted is the only one", which is the opposite of what ships.
+Deleting a theme deliberately does not rewrite the manifest: a wall keeps showing what
+it was showing, the same posture as curation being stopped entirely. Publishing an
+empty manifest would blank a wall as a side effect of tidying the catalogue.
+
+**The message is normative and is already written.** "Theme *X* is hanging on *'Living
+room', 'Study'*. Hang another theme there first, or take this one down, so that what
+those walls show next is a choice rather than whatever was on them before."
+
+It names the walls, because with more than one wall "the wall" identifies nothing, and
+it offers **both** ways out. Hanging another theme there is a remedy in its own right
+rather than a longer road to the same place: `wall_id` alone is the assignment's
+primary key, so hanging something else *is* the unhanging. The remedy a refusal names
+has to be an operation that exists and that the curator can reach — that is the whole
+obligation § Errors teach places on it.
+
+> **The message changed when the refusal did, 2026-08-12, and the old one is recorded
+> because it was right for a shape that no longer exists.** It read: "Theme *X* is the
+> one the wall is showing. Activate another theme first, so that what replaces it on
+> the wall is a choice rather than whichever is oldest." Every clause of that has
+> stopped being true. There is more than one wall now, so "the wall" does not
+> identify anything. Activating another theme no longer resolves the refusal, because
+> the theme has to leave *every* wall. And "whichever is oldest" described
+> `reconcile()`'s promote-the-oldest behaviour, which was **removed in the same
+> change** — along with `add_theme`'s activate-if-none-else-is, the same rule reached
+> by a second route, which the plan had not noticed and which was equally
+> indefensible once a wall had to be named.
+>
+> An earlier draft had also invented "or deactivate this one", refused at the time
+> because no such action existed. **It does now** — `unhang` — which is worth noticing:
+> the draft was not wrong about what a curator would want, only about what was built,
+> and the honest fix was to build it rather than to keep steering people away from it.
+
+> **"Promote another theme, then delete" was the third option, and the reason it was
+> declined is now gone too.** `reconcile()` promoted the oldest remaining theme when
+> none was active, so a curator deleting what was on the wall would get *some* other
+> theme on it without having chosen one. That was the strongest argument for refusing.
+> With promotion removed, deleting a hung theme would simply leave the wall hanging
+> nothing — a named, designed empty state rather than an unbidden substitution. The
+> refusal survives on the remaining reason, which is enough on its own: a wall that
+> goes dark should do so because a curator took the picture down, not as a side effect
+> of tidying the catalogue.
+
+> **Both rules generalise once themes are assigned per wall, and neither survives
+> translation unexamined.** "Refuses the active theme while another exists" becomes
+> **refuses a theme hung on any wall** — a theme on two walls is two rooms that go
+> dark, so the count that matters is assignments and not themes. And the
+> reconcile-promotion this refusal was built to prevent is being **dropped**
+> rather than made per-wall (`data-model.md` § ThemeAssignment), which removes the
+> guard's original motivation while leaving the guard correct for a better reason:
+> a curator deleting what is hanging should choose the replacement, and with the
+> promotion gone the alternative is not a surprise theme but a blank wall. The
+> archive confirmation's wall consequence generalises the same way — it names
+> *which* walls lose the picture. Neither is built; both belong to the chunk that
+> builds the assignment.
 
 **Taste gets an MCP tool; conversation does not — settled by the operator
 2026-08-11, and the three cases came apart under the ruling.** `product-brief.md`
@@ -1280,9 +1555,13 @@ was taken **against the recommendation recorded here**, which argued for deferri
 until discovery began weighting `Affinity`, on the grounds that tool names are
 **Frozen** — never renamed or removed — so adding is cheap and retiring is not,
 which argues for deciding late. That reasoning is left standing rather than deleted,
-because it is what the decision cost: a name is now frozen over an unbuilt entity,
-and if `Affinity` is reshaped before it is built, `art_taste` is the part that
-cannot be reshaped with it. Set against that, the deferral had its own cost — item
+because it is what the decision cost: a name was frozen over an entity that did not
+yet exist, and had `Affinity` been reshaped before it was built, `art_taste` was the
+part that could not be reshaped with it. **The window closed on 2026-08-12**, one
+day later, when the entity and all three actions shipped together and nothing had
+been reshaped — so the risk was real and it did not land, which is worth recording
+as precisely that rather than as either vindication or a near miss. Set against
+that, the deferral had its own cost — item
 8's parity claim would have read as met while the surface knowingly withheld an
 operation the web UI has, and a "revisit trigger" is a promise nothing enforces.
 
@@ -1291,8 +1570,29 @@ weakening it.** The reasons were never the Frozen-tier argument: the in-UI agent
 *is* an MCP client, so a model conducting a conversation would be reading its own
 thread back through a tool; and the operation a model actually wants is the taste,
 not the transcript. Granting the first while withholding the second is precisely
-what that reasoning asked for. `DELETE /api/conversations/{id}` stays shapeless
-behind issue #118 on its own account.
+what that reasoning asked for. `DELETE /api/conversations/{id}` keeps its
+deferral on the *tool* side for the same reasons; what it no longer lacks is a
+shape.
+
+**`DELETE /api/conversations/{id}` has one now — ruled by the operator 2026-08-12,
+closing issue #118.** The rule and its reasoning live in `security-model.md`
+§ Deleting a conversation, which is the authority; what this section owes is the
+route's own obligations:
+
+- **It deletes the thread and its turns, and detaches everything derived from
+  them.** `Affinity.source_turn_id` and `SpendRecord.conversation_turn_id` are
+  nulled. Nothing else is touched.
+- **The response names what was detached**, because the confirmation has to state
+  a consequence rather than a row count: how many affinities keep their judgment
+  and lose their derivation, and that those can no longer be rebuilt when the
+  derivation improves. The IA's rule for archive and for activation — a
+  confirmation names the consequence in the curator's terms — binds here, and this
+  is the one operation in the product that genuinely destroys a record.
+- **It must not enforce `inferred ⇒ source_turn_id` as a stored constraint.** That
+  rule, stated in § `art_taste` above, is an invariant on the write path only;
+  built into the schema it makes this route impossible. This is the sentence a
+  builder needs, and it is why the constraint's *site* is named rather than left
+  to reading.
 
 **Spend history needs no new tool, and its row no longer borrows taste's reasoning.**
 Item 8 reaches content management, and a read of what was spent is not that under
@@ -1323,6 +1623,26 @@ violate. Everything else in this artifact still binds them, in particular the
 `limit`-and-report-the-total rule under § Conditional Patterns and the single
 `400` error shape.
 
+**The two conversation reads are unpaged, and by the same reasoning `art_taste`
+gives.** `GET /api/conversations` returns every thread and `GET
+/api/conversations/{id}` returns every turn with its frozen samples, with no
+`limit` and no total — because a household's threads and one thread's exchanges
+are tens of rows, on the same scale as its taste, and a page control over ten
+items is a control with nothing behind it. Recorded 2026-08-12 after Critic
+review observed that every other collection in the surface names what bounds it —
+`history_turns`, `SAMPLES_PER_SUGGESTION`, `PAGE_CEILING` with its shortfall note
+— and these two named nothing, which reads as an oversight rather than as the
+judgement it is.
+
+**What would change it, so the next reader can check rather than re-argue.** The
+threads accumulate on the curator's own rate and are deleted by hand, which is
+the ruled lifecycle rather than a retention policy; the turns within one thread
+are bounded by the conversation ending. If either stops being tens — a thread
+that runs for months, or a household that never deletes — the
+`limit`-and-report-the-total rule under § Conditional Patterns is what they take,
+and `POST /turns` answering with the whole thread is the call that will feel it
+first, since each exchange re-sends everything said before it.
+
 **The last three rows came from the screens, not from the debt list, and that is a
 correction worth recording.** The set above was first taken from
 `information-architecture.md` § Status's five-item enumeration — and an enumeration
@@ -1342,14 +1662,28 @@ than to bound a surface.
 > Work screen's builder finds it rather than inventing a route outside this set;
 > its shape is #91's.
 
-> **`next` is the one screen action with an MCP action and no HTTP route.**
-> `art_display(action='next')` increments the directive sequence; the built HTTP
-> surface only ever *reports* `directive_sequence` in the manifest payload and has
-> no directive write. So the Walls screen — flow 6, and this design's home screen —
-> has a control the browser cannot perform today. The shape is left open because
-> the multi-display blockers in § More than one wall land on exactly this route: a
-> directive is per-wall the moment there is more than one, and writing the
-> installation-wide shape now would be writing the shape that has to change.
+> **`next` was the one screen action with an MCP action and no HTTP route, and
+> the shape it was waiting on arrived. Settled and built 2026-08-12.**
+>
+> It was left open on purpose: `art_display(action='next')` incremented the
+> directive sequence while the built HTTP surface only ever *reported*
+> `directive_sequence` in the manifest payload, so the Walls screen had a control
+> the browser could not perform — and the multi-display blockers in § More than
+> one wall landed on exactly this route. A directive is per-wall the moment there
+> is more than one, so writing the installation-wide shape then would have been
+> writing the shape that had to change. Walls became first-class; the shape
+> followed.
+>
+> **`POST /api/directives`, body `{wall_id}`, returning `DirectiveOut {wall_id,
+> sequence, pinned_work_id}`.** One service call, no new domain logic — the
+> advance rule already lived in `DisplayService`.
+>
+> **It returns the directive rather than the wall**, which is the one part worth
+> stating here rather than leaving in a docstring. A directive is what the caller
+> changed and `sequence` is the thing that moved; returning the wall would answer
+> a question nobody asked and would make the caller diff two wall payloads to
+> discover whether the advance took. The read-back convention is honoured — the
+> response is the written row, re-read — and the *row* is the directive.
 
 **Still deliberately absent, so these omissions are not read as oversights:**
 nothing here writes an artwork's own metadata, a source or an original. Title,
@@ -1459,8 +1793,30 @@ affordance — it simply sends the ids, which is what a UI naturally has anyway.
 
 Worth stating plainly: the realistic worst case is a poisoned page steering
 candidate selection, burning budget, or getting an unwanted image onto the wall
-until someone looks. Annoying and visible, not a breach. There is no PII, no
-multi-tenancy, and no payment surface.
+until someone looks. Annoying and visible, not a breach. There is no
+multi-tenancy and no payment surface.
+
+> **The "no PII" half of that sentence was retired on 2026-08-12** and is struck
+> rather than quietly deleted, because the threat assessment above rests on it.
+> `security-model.md` § The one exception designates `ConversationTurn.text` as
+> the product's only retained free-text record of a person. **It does not change
+> this section's conclusion**: the vector reasoned about here is content coming
+> *inward* from a museum or search page into the candidate pipeline, and nothing
+> an injected page can reach reads a conversation turn back out. What it does
+> change is that "not a breach" can no longer be argued from the product holding
+> nothing personal — it is argued from what this particular vector reaches. That
+> is a narrower claim, and it is the true one.
+>
+> **The outward direction is real and is not this paragraph's**: `commit` passes
+> the curator's own committed sentence to `DiscoveryRunner.start(intent_text=…)`,
+> which is what a search provider is asked. That is by design — a run cannot be
+> explained without it — and it is why `observability-strategy.md` names the
+> words the one thing here whose logging is a decision rather than a freedom.
+>
+> This was the third file carrying the retired wording, found after the other two
+> were corrected. `observability-strategy.md` owns the logging consequence,
+> `security-model.md` is the authority on the record itself, and this paragraph
+> owns only what an injected page can get to.
 
 ## Conditional Patterns
 

@@ -9,7 +9,7 @@ whether to re-search.
 So the maps are checked against the enums rather than trusted. This is the same
 bargain `test_design_tokens.py` strikes with the stylesheet: the client is not a
 Python module and nothing else would notice the day a sixth reason is added, so
-the check reads the real file. A member added without a sentence fails here,
+the check reads the real files — every module the client is built from. A member added without a sentence fails here,
 which is the point at which it is cheap to write one.
 """
 
@@ -19,21 +19,53 @@ import subprocess
 
 import pytest
 
+from curation.discovery.conversation import SUGGESTION_KINDS
 from curation.http.pages import STATIC_DIR
+from curation.mcp.bindings import RESTORE_NOTICE
 from curation.persistence.discovery_records import (
+    AffinityDerivation,
+    AffinitySentiment,
     ResolutionStatus,
     RunStatus,
+    TurnRole,
     UnresolvedReason,
     Verdict,
     WorkProvenance,
 )
+from curation.persistence.records import VocabularyKind
 
-CLIENT_PATH = STATIC_DIR / "app.js"
-CLIENT = CLIENT_PATH.read_text(encoding="utf-8")
+#: Every module the client is made of, boot and `core/` and `screens/` alike.
+#:
+#: Sorted so the concatenation below is stable, and gathered by glob rather than
+#: listed: the client became a tree of ES modules when the navigation was
+#: reshaped, and a hand-written list is a list that stops including the newest
+#: screen — silently, since every check here would go on passing against the
+#: modules it still knew about.
+CLIENT_PATHS = sorted(STATIC_DIR.rglob("*.js"))
+
+#: The whole client as one text. Every check below asks "does the client say
+#: this", which was one file's question and is now the tree's; concatenating is
+#: what keeps the question the same one after the split.
+CLIENT = "\n".join(path.read_text(encoding="utf-8") for path in CLIENT_PATHS)
+
+
+def test_the_client_is_more_than_one_module():
+    """The glob found a tree, so every check below reads the whole client.
+
+    A `rglob` that matched one file — or none — would leave these checks passing
+    against whatever it happened to find, which is the failure mode that made the
+    hand-written list unacceptable in the first place. This is the assertion that
+    the gathering worked.
+    """
+    names = {path.relative_to(STATIC_DIR).as_posix() for path in CLIENT_PATHS}
+    assert "app.js" in names, "the client's boot module is missing from what these checks read"
+    assert any(name.startswith("core/") for name in names), "no core module was gathered"
+    assert any(name.startswith("screens/") for name in names), "no screen module was gathered"
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed; this check is opportunistic")
-def test_the_client_parses():
+@pytest.mark.parametrize("path", CLIENT_PATHS, ids=lambda path: path.name)
+def test_the_client_parses(path):
     """A syntax error here kills the entire browser surface and no other test notices.
 
     Every Python test asserts what the *server* sends and that the script is
@@ -42,21 +74,48 @@ def test_the_client_parses():
     forever, against a fully green suite — the shape of failure this product
     exists to refuse.
 
+    **Per module, not over the concatenation.** Two files joined end to end parse
+    as neither of them — an unbalanced brace in the first would be closed by the
+    second and the check would pass on a client that cannot load.
+
     **This is a check, not a toolchain.** It shells out to whatever `node`
     happens to be on the machine and skips when there is none, so it adds no
     dependency and no build step, and the deliberate decision against a Node
-    toolchain on a Pi (Chunk 10B) is untouched. It cannot say the client is
-    *correct* — only that it is parseable, which is the cheapest fact worth
-    having about a file nothing else executes.
+    toolchain on a Pi is untouched. It cannot say the client is *correct* — only
+    that it is parseable, which is the cheapest fact worth having about a file
+    nothing else executes.
     """
     result = subprocess.run(
-        ["node", "--check", str(CLIENT_PATH)],
+        ["node", "--check", str(path)],
         capture_output=True,
         text=True,
         check=False,
     )
 
-    assert result.returncode == 0, f"the browser client does not parse:\n{result.stderr}"
+    assert result.returncode == 0, f"{path.name} does not parse:\n{result.stderr}"
+
+
+def _literal_body(name: str) -> str:
+    """The raw text inside a top-level `const <name> = { ... }` object literal.
+
+    The two readers below both strip or extract before they answer; this is what
+    is left for a literal whose values are neither bare identifiers nor strings.
+    Brace-counted for the reason they are: a non-greedy pattern stops at the
+    first `}` and silently reads a truncated object, and a check that reads half
+    its input passes for the wrong reason.
+    """
+    opening = re.search(rf"^(?:export )?const {re.escape(name)} = (?={{)", CLIENT, re.MULTILINE)
+    assert opening, f"the client has no top-level `const {name} = {{`"
+    start = opening.end()
+    depth = 0
+    for index in range(start, len(CLIENT)):
+        if CLIENT[index] == "{":
+            depth += 1
+        elif CLIENT[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return CLIENT[start + 1 : index]
+    raise AssertionError(f"`{name}` is never closed")
 
 
 def _object_keys(name: str) -> set[str]:
@@ -67,7 +126,7 @@ def _object_keys(name: str) -> set[str]:
     silently reads a truncated object, and a check that reads half its input
     passes for the wrong reason.
     """
-    opening = re.search(rf"^const {re.escape(name)} = (?={{)", CLIENT, re.MULTILINE)
+    opening = re.search(rf"^(?:export )?const {re.escape(name)} = (?={{)", CLIENT, re.MULTILINE)
     assert opening, f"the client has no top-level `const {name} = {{`"
     start = opening.end()
     depth = 0
@@ -95,7 +154,7 @@ def _object_values(name: str) -> dict[str, str]:
     set and an empty value renders a badge with nothing in it, and every keys
     test stays green.
     """
-    opening = re.search(rf"^const {re.escape(name)} = (?={{)", CLIENT, re.MULTILINE)
+    opening = re.search(rf"^(?:export )?const {re.escape(name)} = (?={{)", CLIENT, re.MULTILINE)
     assert opening, f"the client has no top-level `const {name} = {{`"
     start = opening.end()
     depth = 0
@@ -167,6 +226,23 @@ def test_every_run_status_is_named_in_the_client():
         assert f'"{status}"' in CLIENT, f"the client has no sentence naming the {status} state"
 
 
+def test_every_turn_role_has_a_name_a_reader_would_recognise():
+    """The transcript labels each turn with who said it, and both roles need words.
+
+    Same bargain as the run statuses above: without it a third role would render
+    as its own enum value beside the sentence it introduces — `system` above a
+    reply, which reads as a fault rather than as an answer.
+    """
+    for role in TurnRole:
+        assert f"{role}:" in CLIENT or f'"{role}"' in CLIENT, f"the client has no name for a {role} turn"
+
+
+def test_every_suggestion_kind_has_words_for_a_curator():
+    """A kind with no entry renders as the enum's own token beside an artist's name."""
+    for kind in SUGGESTION_KINDS:
+        assert f"{kind}:" in CLIENT, f"the client has no word for a {kind} suggestion"
+
+
 def test_every_resolution_status_has_a_glyph():
     """Colour is never the sole carrier of state, so the glyph is not optional."""
     assert _object_keys("RESOLUTION_GLYPHS") == {str(status) for status in ResolutionStatus}
@@ -198,3 +274,125 @@ def test_provenance_is_still_the_two_values_the_client_renders_as_a_pair():
     offered work believing they asked for it.
     """
     assert {str(provenance) for provenance in WorkProvenance} == {"proposed", "offered"}
+
+
+def test_every_facet_kind_has_a_word_the_work_screen_can_label_it_with():
+    """The typed vocabulary reaches a museum label, so every kind needs one.
+
+    `VocabularyKind` is shared with `Affinity.kind` precisely so that what a work
+    *is* and what a curator *likes* are said in one set of terms — which means a
+    seventh member arrives for reasons that have nothing to do with this screen,
+    and reaches it as its raw token. The Work screen falls through to that token
+    rather than dropping the fact, so nothing on the page would look broken; it
+    would simply read `date_range` where a label belongs.
+    """
+    assert _object_keys("FACET_KIND_WORDS") == {str(kind) for kind in VocabularyKind}
+
+
+def test_every_facet_kind_label_actually_has_a_word_in_it():
+    """Right keys, empty value: a term with nothing in it, and every keys test green."""
+    values = _object_values("FACET_KIND_WORDS")
+    assert values, "`FACET_KIND_WORDS` parsed to no string values at all — this guard would pass vacuously"
+
+    empty = sorted(key for key, phrase in values.items() if not phrase.strip())
+    assert not empty, f"`FACET_KIND_WORDS` has keys with no words behind them: {empty}"
+
+
+def test_both_surfaces_say_the_same_sentence_about_a_restored_work():
+    """One fact, one wording, across a boundary no compiler checks.
+
+    The agent-facing notice and the Work screen's confirmation are the same
+    sentence deliberately: a curator who restores through the browser and an
+    agent that restores through `art_catalogue` are told the same thing about
+    when the wall catches up and how to make it sooner. Two surfaces stating one
+    fact in different words is how a reader learns to trust neither, and the
+    divergence is invisible from either side alone — each file reads fine.
+
+    Python and JavaScript cannot share a literal, so this is the join. It fails
+    the moment one side is reworded, which is the only moment the fix is cheap.
+    """
+    assert RESTORE_NOTICE in CLIENT, (
+        "The client no longer contains the restore notice verbatim. Either the browser was "
+        "reworded and `bindings.RESTORE_NOTICE` was not, or the reverse — the two surfaces "
+        "have started saying one fact in two wordings."
+    )
+
+
+def test_the_restore_sentence_says_how_to_make_the_wall_catch_up():
+    """The half the operator's ruling turns on, and the half easiest to drop.
+
+    Archiving and restoring are both silent at the wall — nothing in either path
+    republishes a manifest. The operator ruled that this is acceptable *because*
+    a path exists to force one, so a sentence that names the delay without naming
+    the remedy leaves the curator holding a fact they cannot act on. That remedy
+    is a whole clause; a tidying edit removes it without touching the grammar of
+    what remains.
+    """
+    assert "Re-hanging" in RESTORE_NOTICE, (
+        "The restore notice no longer tells the reader how to build a manifest now. "
+        "The operator's ruling that an archived work may stay on the wall depends on "
+        "the surfaces naming that path."
+    )
+
+
+def test_every_taste_kind_has_a_heading_the_screen_can_group_under():
+    """The Taste screen groups by kind, and a kind with no heading has no group.
+
+    Same shared vocabulary and the same failure as the Work screen's labels, one
+    screen along: a seventh member arrives for reasons that have nothing to do
+    with taste, and reaches this page as a raw token over a list of judgments.
+    The Taste screen renders only the kinds it has headings for, so an unlabelled
+    kind is worse than an ugly one — the judgments under it are *not drawn*, and
+    the curator sees no evidence they exist.
+    """
+    assert _object_keys("TASTE_KIND_WORDS") == {str(kind) for kind in VocabularyKind}
+
+
+@pytest.mark.parametrize("name", ["SENTIMENT_WORDS", "SENTIMENT_GLYPHS"])
+def test_every_sentiment_has_words_and_a_shape(name):
+    """Warmth is exactly the thing a first draft renders as a colour ramp.
+
+    `accessibility-spec.md` binds this surface and colour is never the sole
+    carrier of state, so each of the four gets a distinguishable glyph as well as
+    a word — and a fifth sentiment added to the enum fails here rather than
+    arriving on the page as its own token beside no shape at all.
+    """
+    assert _object_keys(name) == {str(member) for member in AffinitySentiment}
+
+
+def test_every_derivation_has_a_sentence_saying_what_the_claim_is():
+    """The Taste screen exists to make derivation visible, so a bare token defeats it.
+
+    "inferred" on its own tells a curator nothing about whether the product is
+    repeating them or guessing at them — which is precisely the thing they need
+    in order to decide whether to overrule the row.
+    """
+    assert _object_keys("DERIVATION_WORDS") == {str(member) for member in AffinityDerivation}
+
+
+@pytest.mark.parametrize("name", ["TASTE_KIND_WORDS", "SENTIMENT_WORDS", "SENTIMENT_GLYPHS", "DERIVATION_WORDS"])
+def test_every_taste_phrase_a_curator_reads_actually_has_words_in_it(name):
+    """Right keys, empty value — the hole the keys checks above cannot see."""
+    values = _object_values(name)
+    assert values, f"`{name}` parsed to no string values at all — this guard would pass vacuously"
+
+    empty = sorted(key for key, phrase in values.items() if not phrase.strip())
+    assert not empty, f"`{name}` carries {empty} with no words behind them"
+
+
+def test_the_three_reactions_are_the_pairs_of_fields_taste_is_held_in():
+    """Each reaction writes a `sentiment` and an `open_to_more`, and both are named.
+
+    The two-fields rule is only paid for at the point a control writes them, and
+    a reaction table that carried a sentiment alone would default the openness —
+    where the default that reads as safe is the one that silently blacklists an
+    artist the curator asked to keep hearing about. Read off the client rather
+    than agreed to, because nothing else in this repository executes it.
+    """
+    body = _literal_body("REACTIONS")
+
+    for reaction in ("more like this", "not this", "tell me more"):
+        assert f'"{reaction}"' in body, f"the client has no control writing {reaction!r}"
+    assert body.count("sentiment:") == body.count("open_to_more:") == 3
+    # And the pair that the whole design exists for: cool, and still open.
+    assert '"tell me more": { sentiment: "cool", open_to_more: true }' in body

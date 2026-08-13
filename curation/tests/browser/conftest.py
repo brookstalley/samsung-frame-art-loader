@@ -26,6 +26,20 @@ a server cannot be asked to do on purpose.
 Payload builders live in `payloads.py` beside this file, and the rule they follow
 — build from the API's own response models, never a hand-written dict — is
 stated there.
+
+**A wait must name something that is true only in the state being waited for.**
+`wait_for_selector("h2")` after a click that leaves a screen already carrying an
+`h2`, or `[role=alert]` on a screen whose first paint puts one there, matches
+instantly and waits for nothing — after which the assertions under it read the
+state that was there beforehand, and the test passes for exactly as long as the
+write happens to win a race nothing is holding open. Four have been found here:
+two heading waits that stopped meaning "the grid painted" once Collection grew a
+loading placeholder with an `h2` of its own, one over the live region the
+unanswered-turn panel puts up at first paint, and one over a heading the hang
+navigates away from. Every one passed alone and failed in the full suite, where a
+heavier test ran ahead of it and moved the timing. Wait for the *new* thing — the
+text the write produced, the section the navigation lands on — and let the
+assertions be about the rest.
 """
 
 import io
@@ -35,6 +49,7 @@ import pathlib
 import pytest
 from PIL import Image
 
+from curation.http.models import ArtworkBoxOut, BackupOut, HealthOut, WallHeartbeatOut
 from curation.persistence.records import (
     AcquisitionMethod,
     FetchStatus,
@@ -96,6 +111,77 @@ def work_with_an_image(service, settings, decodable_jpeg):
         return artwork
 
     return _work
+
+
+@pytest.fixture
+def a_health_reading():
+    """`GET /api/health` as the API's own models define it: one heartbeat per wall.
+
+    **Built from `HealthOut` and dumped, per `payloads.py`'s rule.** It was
+    hand-written for exactly as long as it had to be: the aggregate shape was
+    owned by the chunk making the manifest per-wall, `HealthOut` still carried
+    one top-level heartbeat, and a builder composed from it would have pinned the
+    old contract with the authority of the new one. That chunk has landed and
+    `HealthOut.walls` exists, which is the condition the departure was written
+    to end on.
+
+    Every field is overridable, because what these tests vary is exactly which
+    observation is wrong.
+    """
+
+    def _reading(*, walls=None, backup=None, description="Every wall has reported.", artwork_box=None):
+        return HealthOut(
+            walls=[WallHeartbeatOut(**wall) for wall in ([_a_wall()] if walls is None else walls)],
+            description=description,
+            backup=BackupOut(**(_a_backup() if backup is None else backup)),
+            artwork_box=ArtworkBoxOut(
+                **(artwork_box or {"width": 3840, "height": 2160, "pixels_per_inch": 72.0, "floor_inches": 20.0})
+            ),
+        ).model_dump()
+
+    return _reading
+
+
+def _a_wall(*, wall_id="wall-1", name="The living room", absent=False, problem=None, age_seconds=41.2):
+    return {
+        "wall_id": wall_id,
+        "wall_name": name,
+        "heartbeat": {
+            "path": f"/art/display-heartbeat-{wall_id}.json",
+            "reported_at": None if absent else "2026-08-12T09:14:02+00:00",
+            "age_seconds": None if absent else age_seconds,
+            "absent": absent,
+            "problem": problem,
+            "description": (
+                f"No heartbeat file exists for {name}; the display plane has not reported yet."
+                if absent
+                else f"The display plane last reported {age_seconds:.0f} seconds ago."
+            ),
+            "reported": None if absent else {"reported_at": "2026-08-12T09:14:02+00:00"},
+        },
+    }
+
+
+def _a_backup(*, absent=False, problem=None):
+    return {
+        "path": "/art/backup-receipt.json",
+        "completed_at": None if absent else "2026-08-12T03:00:00+00:00",
+        "age_seconds": None if absent else 22440.0,
+        "absent": absent,
+        "problem": problem,
+        "description": "No backup has been recorded." if absent else "The catalogue was last backed up 6 hours ago.",
+        "reported": None if absent else {"completed_at": "2026-08-12T03:00:00+00:00"},
+    }
+
+
+@pytest.fixture
+def a_wall_reading():
+    return _a_wall
+
+
+@pytest.fixture
+def a_backup_reading():
+    return _a_backup
 
 
 class Ui:

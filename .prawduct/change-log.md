@@ -54,6 +54,361 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-12: Wave 3 — the Theme screen, taste as a first-class record, and a position that means one thing
+
+<!-- prawduct: chunks=09,11 | scope=curation-ux -->
+
+**Why:** the last two chunks of the curation surface, built concurrently in two
+worktrees. Both landed; chunk 09 came back once, for a defect its own headline fix
+did not reach.
+
+**Chunk 09 — the Theme screen, and the reorder that had never worked downward.**
+Rename, reorder, hang and delete, with the delete refusing a theme hanging on any
+wall and naming the rooms. Underneath it, a defect no screen chunk was looking
+for: the service wrote the requested number into the position column and stopped,
+and because the listing breaks a tie on `added_at`, a work moved from 0 to 1 tied
+with its neighbour and sorted ahead of it again as the older row. Moving up
+worked; the ↓ button had never once reordered anything, on either surface. A
+screen chunk is the first thing that *drives* a service method a curator can see
+the result of, and three chunks of tests over that method never asked it to move
+something down.
+
+**The fix was wrong until Critic review, and the second fix is a ruling.** The
+renumber walked the *placed* memberships while the surface indexed into
+placed-then-unplaced — and nothing a curator or a tool touches sends a position,
+so every theme the product could actually build had two lists indexed against each
+other. Every test setup passed explicit dense positions, which is a state no
+browser can produce. The operator ruled #132 rather than patching the screen: a
+position is an index on an add as much as on a move, omitting it means the end,
+and the placed/unplaced split stops being reachable from any product path. One
+list, for MCP callers as much as for the screen.
+
+**Chunk 11 — taste, and the one delete that detaches instead of cascading.**
+`Affinity` lands as a table, a service, a screen and the sixth tool. Deleting a
+conversation nulls the citations on affinities and spend rather than taking them
+with it, per the operator's #118 ruling — so `rationale` becomes required for
+anything not stated, being the only evidence an inferred judgment is left with.
+Three things the specification did not decide and the build had to: what makes one
+provenance weaker than another, why `observed` is published on the schema and
+refused at runtime, and that a per-sample reaction writes a per-*artist* row —
+which is stated as a consequence rather than left to be discovered.
+
+**Two accessibility rules changed rather than being applied.** `accessibility-spec.md`
+said *icon-only* controls name what they act on; three theme panels emitting
+identical "Rename" and "Delete" showed that the thing being protected is a control
+being distinguishable from its siblings, which a word shared by every sibling
+fails as completely as no word at all.
+
+## 2026-08-12: Wave 2 — the Walls become home, a work is archived not removed, and intent becomes a conversation
+
+<!-- prawduct: chunks=05,07,08,10 | scope=curation-ux -->
+
+**Why:** four chunks built concurrently in four worktrees, landed one at a time.
+Three went straight in; Collection came back once, for a browser test that failed
+in its own worktree at the commit it had been reported green on.
+
+**Chunk 05 — the Walls, and four ways a wall can be dark.** The screen that says
+what is hanging was a table of render paths and is now the pictures, one section
+per wall. One wall and three walls are the same rendering with a different count,
+which is the point of fixing the shape while it is free. Every act names its wall
+even though there is one, because a sentence that reads correctly only because
+there is a single possible target silently becomes wrong. `POST /api/directives`
+closes a shape the contract deliberately left open pending walls becoming
+first-class. The four empty reasons are four branches, each offering the fix for
+its own reason, split structurally between the three that arrive inside a
+successful answer and the one that is a request which never came back.
+
+**Chunk 08 — archive as a label on a control.** There is no delete of a work in
+this product, and this is where that stopped being a rule in an artifact. The
+confirmation names which walls lose the picture, computed by building each hung
+wall's manifest rather than predicted — which is what separates a wall showing the
+work from one merely holding it in a theme where something else excludes it. A
+work's facets carry provenance the way a museum label does: the default stated
+once below the facts, and only the rare sourced value marked, with a tick rather
+than a word.
+
+**Chunk 10 — the thread, and the seam that keeps it from being a wizard.** The
+commit card becomes the progress card becomes works-ready-to-review, in place,
+transcript above it throughout. Everything about the provider was measured before
+it was built, and three measurements changed the code: reasoning left on spends
+the whole ceiling and returns nothing, billed in full; a truncated turn returns
+null content which is a hard refusal when fed back; and an image may not ride an
+assistant turn. Retrying spends nothing twice because asking again sends no text —
+the transcript is the idempotency key, which beats one we would have invented.
+
+**One confirmation, built before the wave forked.** Two chunks needed one, no
+artifact said what a confirmation was, and the module boundary forbade them
+sharing through each other — so `core/confirm.js` landed first, as the platform's
+`<dialog>`. Focus starts on Cancel, a backdrop click dismisses nothing, and
+overlapping dialogs mint their own ids because `aria-labelledby` resolves
+document-wide and a shared id announces the older question above the newer one's
+buttons.
+
+**Chunk 07 — the collection in one place, and three waits that waited on nothing.**
+It landed last because it came back once. Density is a control and part of the
+address; the facet rail carries counts inside each control's own text, because a
+disabled control is out of the tab order and a count in adjacent text is one a
+screen-reader user never hears; themes become a rail rather than a destination.
+Three empty states stay three, because telling a curator with three thousand
+works that they own nothing, or reporting the expected outcome of following a
+suggestion as a failed query, are different lies.
+
+**Two things it changed outside its own screen, which the plan said it owned
+alone.** `core/render.js`'s `el()` rendered a boolean `true` as the empty string —
+right for `checked` and `disabled`, invalid for ARIA, where `aria-hidden=""` is
+not a valid token and falls back to *not hidden*. Thirteen glyph sites across
+four modules had therefore been reading their shape aloud beside their word. And
+`fetchAllWorks` gained two optional parameters. Both were fixed at the shared
+helper rather than at the call sites, which is right, and both are recorded here
+because a chunk that edits `core/` under a plan that says it owns one screen file
+should not do so silently.
+
+**Replacing a stub with two thousand real works found what the stub could not.**
+The client's runaway guard caps the grid at 1,250, so at the scale this design was
+drawn for the collection is partly unreachable — filed as its own item. It says so
+out loud rather than stopping quietly, which is the difference between a limit and
+a defect.
+
+**What this wave cost, and it is all one lesson.** Every failure here looked
+green. A chunk reported a passing browser suite whose test fails in its own
+worktree at that commit. Two tests asserted over an empty fixture and were true of
+nothing — a sweep found seven mutations surviving them untouched, and all seven
+caught once the tests seeded a real thread. The evidence gate exited zero against
+a record naming none of a chunk's thirty-five files, because it checks the session
+rather than the tree. The findings file twice held the previous chunk's review
+while the current one ran, with plausible counts both times. And a shared
+`aria-hidden: true` rendered as the empty string, which is not a valid ARIA token
+and falls back to *not* hidden, so every badge glyph in the client had been
+reading its shape aloud. None of these were caught by the mechanism meant to catch
+them; they were caught by sweeping, by re-running somewhere else, and by reading
+evidence instead of exit codes.
+
+## 2026-08-12: Wave 1 — the manifest goes per wall, the surface gets three destinations, and the collection gets search
+
+<!-- prawduct: chunks=02,04,06 | scope=curation-ux -->
+
+**Why:** three chunks that needed each other only through artifacts, built at the
+same time in three worktrees and landed one at a time. The plan's own § Parallel
+Execution designed the wave; this is it running.
+
+**Chunk 02 — one manifest per wall.** `theme-manifest-{wall_id}.json` and
+`display-heartbeat-{wall_id}.json`, with the wall carried by the *filename* and
+by nothing inside either document — which is what makes "a display cannot open a
+room it does not serve" structural rather than defended. The display plane takes
+`WALL_ID` beside `TV_ADDRESS`; `GET /api/health` aggregates across walls;
+`WallSettings` became `DisplaySettings`. This closes the hazard Chunk 01 shipped
+documented and unguarded: hanging a theme on a second wall no longer overwrites
+the manifest the first wall's display is reading.
+
+**Chunk 04 — three destinations, and the client becomes modules.** Five
+pipeline-stage tabs became The Walls, Collection and Discover; Health left the
+navigation for a masthead indicator that names *which* wall went quiet; Review
+and Theme became contextual screens that return where they were opened from, on
+real URLs. `app.js` went from 1,954 lines to 94 over sixteen modules, with no
+module under `screens/` importing another — the split that converts the
+remaining screen chunks from a queue into two waves. The move was mechanical by
+design, and the review grid's 1,150-line browser test passing byte-for-byte is
+the evidence.
+
+**Chunk 06 — `WorkFacet`, search, and facet counts.** Counts computed over the
+results filtered by every *other* facet, so a curator can change their mind about
+Baroque without first clearing Baroque. **The plan's FTS5 assumption was settled
+against the corpus and the simpler option won**: `LIKE`, because FTS5 matches
+whole tokens — `harb` stops finding "harbour" — so it changes the search's
+semantics rather than its cost, and because the clause is 1.5 ms of a 30 ms
+answer. The measurement's real finding was elsewhere: the counts were 57 ms
+unfiltered and 101 ms with a term, fixed to 6 ms and 31 ms by asking the
+catalogue fewer questions rather than by moving counts to a second route.
+
+**What the wave cost, and it is worth recording.** Two chunks reworded the same
+sentence — "nothing has ever written a heartbeat *here*" versus *"for this
+wall"* — and each pinned its own wording in its own test, so the merge failed
+until one was chosen (the per-wall one: with a panel per room, "here" names
+nothing). Chunk 02's health tests selected markup Chunk 04 restructured. And
+Chunk 04, forked before Chunk 06 landed, justified a client-side search with "the
+retrieval layer is `GET /api/works`'s to grow" — a sentence that was true when
+written and false by the time it merged. **The contract seam held where it was
+written down and leaked where it was not**: `api-contract.md` was silent on the
+health shape, Chunk 02 filled it in, and the fix was to re-brief Chunk 04
+mid-build rather than to reconcile two implementations afterwards.
+
+**Review residue, fixed at landing:** a `ValueError` on an unknown facet kind
+that reached the surface as a 500; a listing whose page, total and counts were
+read under four separate locks while three artifacts cited their consistency;
+`work_facets.value` made COLLATE NOCASE while it is still free rather than a
+migration; a module-boundary guard blind to `../app.js`, the one import that
+couples a screen to every other screen at once; and an assertion this agent
+weakened while writing a comment claiming it had not.
+
+## 2026-08-12: A theme stops being active and starts hanging somewhere
+
+<!-- prawduct: chunks=01 | scope=curation-ux -->
+
+**Why:** `Theme.is_active` could only ever mean "on the one television". The
+product's own information architecture had argued since 2026-08-11 that fixing
+the shape while it is free is the whole point, and every screen chunk in this
+plan builds on top of it. So a wall is now a first-class entity — a place with a
+name — and hanging is a `ThemeAssignment` row keyed by `wall_id`, with a
+directive per wall so a `next` in the living room does not step the study.
+
+**The first migration this product has ever written.** `themes.is_active`, its
+partial unique index and the singleton `directive` table are dropped; the theme
+that was active is hung on a wall named from configuration, and the singleton's
+counter and pin are carried onto it so no deployment loses its picture and no
+advance is fired by the upgrade. It is idempotent, safe to interrupt, and
+carries no version number — every step is guarded by what the file actually
+holds, because a half-applied migration is exactly the case where a recorded
+version is not to be trusted. The mechanism is recorded in `architecture.md`
+§ Components rather than left in module docstrings, since the next schema change
+would otherwise be written from first principles.
+
+**Two removals, where the plan knew about one.** `reconcile()` promoted the
+oldest theme when none was active; `add_theme` activated a theme whenever no
+other was — the same rule by a second route, invisible to anyone searching for
+the first. Both are gone: with N walls there is no defensible answer to which
+theme belongs on a wall the curator has not hung anything on, so a wall with
+nothing on it is a designed empty state.
+
+**An unhang had to be built before the delete refusal could be made absolute**,
+and that is the ruling this chunk changed rather than followed. Refusing to
+delete a theme hanging on any wall reinstates the deadlock the 2026-08-11
+last-theme ruling was written to avoid — worse with walls, since "the last
+theme" hanging in three rooms would blank three rooms at once. So
+`art_theme(action='unhang')` and `DELETE /api/walls/{wall_id}/theme` exist, and
+the exception is retired because the thing it worked around is gone. The gap was
+found mid-build, from this plan's own acceptance test using the word "unhung"
+for an operation nothing had built.
+
+**Three build-time additions the plan had not designed**, all recorded where a
+reader meets them: a wall creator (`POST /api/walls`,
+`art_display(action='add_wall')`) because nothing else in the plan creates one,
+create-only because deleting a wall raises consequences nothing has ruled on; a
+wall listing; and `GET /api/themes` reshaped to `{theme, hanging_on[]}`, because
+`is_active` had nothing to become — "is it active" is now "which walls is it
+on".
+
+**Rollback stopped being `git checkout` plus two restarts, and both deploy
+documents now say so.** A previous release reopening a migrated catalogue
+refuses to start rather than running against a column it requires and cannot
+find — which is the good outcome, loud and before anything is served. But it
+makes a rollback across this migration a *restore*: the backup taken before the
+deploy is the rollback plan.
+
+**Known and deliberate: a second wall can be recorded and cannot yet be shown.**
+The inter-plane contract is still one manifest file, so `sync` writes the same
+path whatever wall it is handed. It is stated at `add_wall`, at `sync`, on
+`WallSettings.manifest_path`, in the `add_wall` tip and on the route — and not
+guarded, because a guard would have to forbid the two-wall state this chunk's
+own acceptance criteria require. Chunk 02 closes it, and that raises its
+priority above "next in the wave".
+
+**Review residue, fixed in the same commit:** the normative delete-refusal
+message is now pinned whole by a test rather than by a substring that happened
+to match the default wall's name; the `add_wall` tips name both refusals the
+service makes, with a test binding them; a duplicate wall name is refused by
+name rather than by a UUID nobody has seen; the browser surface states the fact
+about an unhang that only the MCP surface carried, so an empty wall does not
+read as a failed take-down; `get_wall_view` composes from the two single-fact
+reads instead of holding a second copy of each; and a twelve-mutation sweep over
+the assignment key, the migration and the generalised refusal caught all twelve.
+
+## 2026-08-12: The revised palette lands in the stylesheet, and the plan learns to run in parallel
+
+<!-- prawduct: chunks=03 | scope=curation-ux -->
+
+**Why:** The revised light and dark palettes had lived only in the committed
+prototype since 2026-08-11. `project-preferences.md`'s token row said in its own
+words that this made every revised colour hand-checked and ungoverned, and that it
+would become a true strict Test row "when they land in `app.css`, and not before".
+This is that moment. Every value transcribed unchanged; the ten tokens the built
+stylesheet never had — the status trio and its quiet variants, the scrim pair,
+`--rail`, `--masthead` — arrive with them, and no token was lost.
+
+**One rule changed rather than just its values.** The error callout drew its left
+border from the accent, which carried a signal while the accent was blue and body
+text was not. The revised palette is warm throughout, so that marker became a
+hairline in the text's own family at 1.05:1 against body text. It draws from
+`--crit` now, which is what that token shipped for and what the palette's own
+comment says status must do. Found by the Critic, fixed in the same commit.
+
+**The residue is recorded rather than smoothed over:** the status trio and the scrim
+pair landed with no rule referencing them, so the contrast test's pair computation
+does not reach them and they were verified by hand. They come under the mechanism
+when the masthead health indicator and the scrim consume them. `--text-3xl`, the
+fifth of the five tokens the prototype marks as new, is not here — it is inert until
+something sets a heading at that size, and it is now a named deliverable of the
+Walls-screen chunk.
+
+**The plan behind this gained a parallel-execution design and then three corrections
+to it**, all found by running it rather than by reading it. An isolated worktree is
+branched from the default branch, not from the dispatching agent's HEAD, so
+committing a plan does not make it visible to the agents built to follow it. A fresh
+worktree lacks the browser dependency group, so `tests/browser/` skips there and a
+green suite can mean an agent executed none of the browser tests it just wrote. And
+the review runs on the branch landed *into*, not the chunk branch, so `--scope` is
+not derivable and this chunk's own review graded the wrong plan's chunk with every
+count at zero. Each is now written where the next builder meets it.
+
+**Also recovered: an operation the plan required and never named.** Chunk 01's
+acceptance test says the generalised delete refusal "permits the last *unhung*
+theme" — a word that presupposes an unhang no chunk built. Without one the refusal
+reinstates exactly the deadlock the 2026-08-11 ruling was made to avoid. The plan now
+names the unhang, and a wall creator, which nothing but the migration provided while
+Chunk 01's own tests need two walls.
+
+## 2026-08-12: Three rulings close the curation surface's open questions, and it gets a plan
+
+<!-- prawduct: scope=curation-ux -->
+<!-- No `chunks=`: nothing was built. This entry records three operator rulings,
+     the artifact amendments they forced, and the authoring of a second live build
+     plan. The first chunk it describes is unstarted. -->
+
+**Why.** `information-architecture.md` had been complete and unbuilt since
+2026-08-11, held by three open questions and by a gate that queued the work behind
+Chunk 13A. The operator answered all three on 2026-08-12 and lifted the gate.
+
+**The three rulings.**
+
+1. **Conversation deletion does not flow to what was derived from it** — the first
+   of issue #118's three candidate rules. The turns go; `Affinity.source_turn_id`
+   and `SpendRecord.conversation_turn_id` are nulled. Written into
+   `security-model.md` § Deleting a conversation, which is the authority. Two
+   consequences a builder could not have derived: the `inferred ⇒ source_turn_id`
+   rule is an invariant on the **write path**, not a stored constraint — built as
+   the latter it makes the delete impossible — and `Affinity.rationale` becomes
+   **required** for `inferred` and `observed`, since after a delete it is the only
+   surviving evidence.
+2. **Artwork identity is independent of any per-renderer id, and themes are global
+   while assignment is per wall.** `tv_content_id` is a per-set cache key, not an
+   identity, so `TvBinding.artwork_id`'s global `unique` becomes a
+   (`wall_id`, `artwork_id`) key. New **Wall** and **ThemeAssignment** entities;
+   `Theme.is_active` retires; `Directive` stops being a singleton. Constraint 1 is
+   restated as what the key does rather than as an absolute — the same correction
+   this artifact already had to make once.
+3. **The gate on Chunk 13A is lifted** and the curation work is independent of the
+   display-plane chunks.
+
+**What the second ruling reached that the ruling did not mention.** The inter-plane
+contract: `architecture.md` § One manifest per wall records the manifest and the
+heartbeat becoming one file per wall, with the alternative (one file, sections per
+wall) rejected and the reason kept — mtime polling at ~1 s makes a shared file wake
+every display on every other wall's change, and makes "the manifest's sequence"
+ambiguous exactly where the coalescing and regression rules need it singular.
+
+**A `Wall` in the catalogue is a ruling against a `## Direction` norm**, not an
+oversight, and it is recorded at the entity: per-device runtime state stays
+forbidden there, permanently and by list. A wall is a place with a name; which
+device serves it is display-plane configuration.
+
+**New: `build-plan-curation-ux.md`** — eleven chunks, the wall structure first
+because it is underneath every screen and is the expensive retrofit.
+`build-plan.md` stays the `active_build_plan` pointer until its own chunks close,
+so chunk-close here runs `/prawduct:critic` explicitly rather than relying on the
+Stop gate.
+
+**Nothing built. All three suites green as a check that the amendments broke
+nothing** — 184 root, 1957 curation, 402 display.
+
 ## 2026-08-11: The label leads with the name it can actually set (13B-3)
 
 <!-- prawduct: chunks=13B | scope=v1-build -->

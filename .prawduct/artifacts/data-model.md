@@ -435,8 +435,21 @@ naming and grouping concept, not an accounts concept.
 | `id` | UUID | PK | |
 | `name` | string | required, unique | e.g. "American Modernists". |
 | `description` | text | nullable | |
-| `is_active` | boolean | required | At most one theme is active, and exactly one whenever any theme exists; see Constraints. |
 | `created_at` | datetime | auto | |
+
+> **A theme is global, and hanging it is a separate act** *(ruled by the operator
+> 2026-08-12)*. This entity carried `is_active` until that ruling — a boolean that
+> could only mean "active on the one television", which is the single-wall
+> assumption written into the noun. Activation now lives on **ThemeAssignment**
+> below. Two walls may hang the same theme, and that requires no duplication,
+> which is the property the boolean could not have.
+>
+> **Built 2026-08-12.** The column and the `themes_one_active` partial index are
+> gone from the schema and are dropped from files already on disk — the first
+> column this catalogue has ever removed. What hangs where is a
+> **ThemeAssignment** row; Constraint 1 records how it is enforced and by which
+> layer, and `architecture.md` § Components records the migration mechanism that
+> took the column away.
 
 ### ThemeMembership
 
@@ -446,21 +459,135 @@ Join entity. Explicit rather than implicit so ordering can be curated.
 |---|---|---|---|
 | `theme_id` | UUID | FK → Theme, PK part | |
 | `artwork_id` | UUID | FK → Artwork, PK part | |
-| `position` | integer | nullable | Curator-defined order; null ⇒ unordered/shuffle. |
+| `position` | integer | nullable | Curator-defined order, dense from zero. Null ⇒ the curator has said nothing about where this work goes, and it sorts after the placed ones. Reachable only by asking for it on a *move* — an add places the work. |
 | `added_at` | datetime | auto | |
 
 > **Q1.**
 
-### Directive
+> **The column holds a place in the order; every caller states an *index* and the
+> service computes the column.** Recorded 2026-08-12, when the Theme screen's reorder
+> was built and the existing one turned out never to have worked downward; completed
+> the same day by the operator's ruling on #132, which brought `add_to_theme` into
+> line after Critic review found the reorder still wrong for every theme the product
+> could actually build. `add_to_theme` and `move_in_theme` both insert at the index
+> and renumber densely around it, so the index a surface reads off the list it was
+> handed is the index it can send back — which is what makes a ↓ button possible at
+> all. Writing the number and stopping left the moved row tied with its neighbour,
+> and `list_memberships` breaks a tie on `added_at`, so the older row won and nothing
+> appeared to happen.
+>
+> **An add therefore places the work**, at the end unless it says otherwise, and the
+> renumber on a move spans the whole listing rather than its placed prefix. Both
+> exist to keep the list a surface renders and the list the service renumbers the
+> same list; a null position survives as something a curator can ask for on a move
+> and as something no add produces. Reasoning is in `api-contract.md` § the theme
+> routes.
 
-The standing instruction to the display plane. **Exactly one row, always** — a
-singleton, seeded when the catalogue file is created so that no caller ever has
-to make it.
+### Wall
+
+A place where art hangs. One display serves one wall. *(Added 2026-08-12, on the
+operator's ruling that themes are created globally and assigned per wall.)*
 
 | Field | Type | Constraints | Description |
 |---|---|---|---|
-| `sequence` | integer | required | Monotonically increasing for the life of the catalogue. The display plane acts once each time it observes this go up. |
+| `id` | UUID | PK | Stable identity, referenced across the plane boundary **by id only**, exactly as `TvBinding` already references an Artwork. |
+| `name` | string | required, unique | "Living room". The curator's own word, and the noun every confirmation names — "Hang Winter in the living room". |
+| `created_at` | datetime | auto | |
+
+**Three fields, and the shortness is the design.** A Wall is an identity and a
+name; it is not a device.
+
+> **This entity sits inside the catalogue, and that is a ruling against the third
+> Direction norm rather than an oversight.** "Per-device runtime state never lives
+> in the catalogue" exists because the 2024 record embedded `tv_content_id` and a
+> `label_file` encoding one panel's geometry, which made the catalogue
+> unmovable. Nothing on this table is per-device runtime state: a wall is a *place*
+> and its name is a *curatorial* fact, and the assignment of a theme to it is a
+> curatorial act — which is the whole reason it cannot live on the display side,
+> where the curator cannot reach it.
+>
+> **The test the norm actually cares about is whether the catalogue survives the
+> hardware, and this entity improves that answer rather than weakening it.**
+> Replace the television and the wall persists, keeps its name, keeps its theme,
+> and the new set binds to it — where a design that keyed assignment on a device
+> would lose the curation along with the device.
+>
+> **What is therefore forbidden here, permanently:** geometry, network address,
+> panel model, TV content ids, upload state, reachability, last-heartbeat. Every
+> one is per-device runtime state and belongs to the display plane's own store or
+> to the configuration both planes read. **Which display serves which wall is
+> display-plane configuration** — each instance is configured with the wall id it
+> renders, the same way it is already configured with `TV_ADDRESS`. The catalogue
+> never learns what kind of device is on the other end.
+>
+> `[DECISION: a Wall entity in the curation store, holding identity and name only |
+> theme assignment is a curatorial act and has to be reachable from the curation
+> surface, while everything device-shaped stays behind the plane boundary the third
+> Direction norm draws | user can veto/override]`
+
+### ThemeAssignment
+
+What is hanging on one wall. The act `information-architecture.md` flow 6 calls
+*hanging*, and the replacement for `Theme.is_active`.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `wall_id` | UUID | FK → Wall, **PK — the whole key** | |
+| `theme_id` | UUID | FK → Theme, required | |
+| `assigned_at` | datetime | auto | |
+
+> **`wall_id` alone is the primary key, which is what makes "one theme per wall"
+> structural.** The old rule needed a partial unique index plus a reconciliation
+> pass to approximate it, and this artifact has already been bitten once by
+> reading that arrangement as an absolute it never enforced (see Constraints).
+> Here nothing needs to claim anything: a second theme on a wall is not a
+> violation to detect, it is a row that cannot be inserted.
+>
+> **A wall with no row hangs nothing, and that is an ordinary state** — an empty
+> catalogue, or a curator who took everything down. `information-architecture.md`
+> § Screen States already designs it as one of the Walls screen's named empties.
+>
+> **Nothing promotes a theme automatically.** `reconcile()` promoted the oldest theme
+> when none was active, which was right when there was one wall and one possible
+> answer. With more than one wall the same rule hangs the same theme in every room
+> unbidden, on a schedule nobody asked for.
+>
+> **Built 2026-08-12, and it took two removals rather than one.** `add_theme` also
+> activated a theme whenever no other was active — the same rule by a second route,
+> which nothing had noticed and which a search for `reconcile` would never have found.
+> A wall a curator has not hung anything on now hangs nothing, and that empty state is
+> designed rather than defaulted.
+>
+> **A wall is emptied by `clear_wall`**, reached as `DELETE /api/walls/{wall_id}/theme`
+> and `art_theme(action='unhang')`. It exists because generalising the delete refusal
+> to "hanging on any wall" would otherwise have made a hung theme undeletable with no
+> way out — the deadlock the 2026-08-11 last-theme ruling was written to avoid. Taking
+> a theme down does **not** advance the wall's directive sequence, for the reason
+> recorded at **Directive**: it is not an instruction to the display plane, and an
+> advance would fire a directive nobody issued.
+>
+> `[DECISION: automatic promotion is dropped rather than made per-wall | with N
+> walls there is no defensible answer to "which theme should appear on a wall the
+> curator has not hung anything on", and the honest empty state is already
+> designed; the one-time migration assigns the currently-active theme to the single
+> existing wall so no deployment loses its picture | MED impact | user can veto/override]`
+
+### Directive
+
+The standing instruction to the display plane. **One row per Wall**, seeded when
+the wall is created so that no caller ever has to make it.
+
+| Field | Type | Constraints | Description |
+|---|---|---|---|
+| `wall_id` | UUID | FK → Wall, PK | |
+| `sequence` | integer | required | Monotonically increasing for the life of the wall. The display plane serving that wall acts once each time it observes this go up. |
 | `pinned_work_id` | UUID | FK → Artwork, nullable | The work an advance points at. Null means the advance is a plain step. |
+
+> **This was a singleton — "exactly one row, always" — until 2026-08-12**, and
+> per-wall assignment is what ends that. A `next` aimed at the living room would
+> otherwise step every wall in the house, because one counter cannot say which
+> display an advance was meant for. The counter stays *per wall* rather than per
+> theme for exactly the reason recorded below: it has to survive theme switching.
 
 > **This entity was added 2026-07-27, at build, to close a gap this artifact had
 > left open.** `architecture.md` § The theme manifest pins the directive sequence
@@ -569,6 +696,41 @@ Answers Q15. Added 2026-08-10 with the collection's retrieval surface
 > category in the same chunk that builds it — the rule this artifact already states
 > for `conversation_tokens`, for the reason `mat_color_vision` demonstrates.
 
+> **Built 2026-08-12, as the `work_facets` table with the retrieval that stands on
+> it.** Every field above is as designed. Three things the design left open were
+> decided by building it, and one thing it implies is still not built.
+>
+> **`kind` is a shared enum in code, not a matching pair of them.** The rule above
+> — that the two enums must move together — is carried by there being one:
+> `persistence/records.py` declares `VocabularyKind`, `WorkFacet.kind` is typed by
+> it, and `Affinity.kind` binds to the same type — which it now does, the entity
+> having landed on 2026-08-12. Two enums that must agree is a promise; one enum is
+> a fact.
+>
+> **`derivation` is a second, separate enum, and deliberately.** `FacetDerivation`
+> is `sourced | inferred`; `Affinity.derivation` is `stated | inferred | observed`.
+> Only the *vocabulary* is shared — where a claim about a work came from and where
+> a claim about a taste came from are different questions with different answers,
+> and folding them into one enum would offer `observed` to a facet and `sourced` to
+> a taste.
+>
+> **No migration was written, and that is the finding rather than an omission.**
+> `SqliteDurableStore` widens a file by adding *columns*, and `migrations.py`
+> exists for what cannot be inferred from comparing two schemas — but this is a new
+> table with a new unique index, and `CREATE TABLE IF NOT EXISTS` and `CREATE
+> UNIQUE INDEX IF NOT EXISTS` both reach a catalogue file written before either
+> existed. A file that predates facets gains them on its next open with no
+> version, no step and nothing to interrupt. `test_work_facets.py` opens exactly
+> such a file rather than leaving the claim to be read.
+>
+> **What is not built: nothing writes a facet on its own account yet.**
+> `CatalogueService.record_facet` and `remove_facet` exist and are how a facet
+> reaches the catalogue; no discovery path calls them, and neither the HTTP surface
+> nor the tool surface offers a write. So a real catalogue's facet vocabulary is
+> empty until inference lands, and the collection's rail is correspondingly empty —
+> which the retrieval treats as an ordinary state rather than an error, and which
+> the paid-path rule above still governs when it is filled.
+
 ### Affinity
 
 What the curator has reacted to, and how. Answers Q13; retained across
@@ -582,8 +744,8 @@ conversations, and the thing a new conversation opens knowing.
 | `sentiment` | enum | required | `loves` \| `likes` \| `cool` \| `declines`. |
 | `open_to_more` | boolean | required | Whether to keep offering this. **Independent of `sentiment`** — Q13's two-facts rule. |
 | `derivation` | enum | required | `stated` (the curator said it) \| `inferred` (the model read it from what they said) \| `observed` (read from accept/reject behaviour in review). Answers Q14. |
-| `rationale` | text | nullable | The model's own account of an `inferred` or `observed` judgment, in the curator's terms. Null is normal for `stated`. |
-| `source_turn_id` | UUID | FK → ConversationTurn, nullable | The turn this was derived from. Null for `observed`. |
+| `rationale` | text | **required when `derivation` is `inferred` or `observed`**, nullable otherwise | The model's own account of the judgment, in the curator's terms. Null is normal for `stated`, where the curator's own words are the account. Required for the other two since 2026-08-12: deleting a conversation nulls `source_turn_id`, so this is the only evidence an inferred judgment can be left with. |
+| `source_turn_id` | UUID | FK → ConversationTurn, nullable | The turn this was derived from. Null for `observed` — **and null for an `inferred` row whose conversation was deleted**, which is a legal state and not a corruption. See the Conversation entity. |
 | `artist_id` | UUID | FK → Artist, nullable | Set only where `kind='artist'` **and** the name resolves to a catalogue artist. Derived and re-derivable; never the identity. |
 | `created_at`, `updated_at` | datetime | auto | |
 
@@ -619,6 +781,32 @@ to arbitrate between. The history that matters is the turns, which are retained.
 > an artist they explicitly asked to keep hearing about — the same shape as
 > Q3-versus-Q11, where rejecting an image must not suppress the work.
 
+> **Built 2026-08-12**, as the `affinities` table, `services/taste.py`, the Taste
+> screen, and the `art_taste` tool. Every field above is as designed. Three things
+> the build decided that the design did not state:
+>
+> **What makes one provenance "weaker" than another was undefined, and `set`
+> refuses to overwrite with a weaker one.** The ranking built is `stated` >
+> `observed` > `inferred`, at `_PROVENANCE_RANK` in `services/taste.py`: what the
+> curator said outranks what their behaviour showed, which outranks what a model
+> read into their words. Equal ranks are permitted, so a re-inference can correct
+> an earlier inference and a second statement can correct a first. *This is the
+> builder's ruling rather than an artifact's, named by them as the thing most worth
+> challenging — and they were right to. It is a norm born mid-build.*
+>
+> **`observed` is refused at runtime by `art_taste`, while all three values are
+> published on `set`.** The registry permits one declaration of a parameter across
+> a tool's actions, so the schema cannot offer two of the three and hide the third;
+> the contract instead requires a refusal that names the path which *can* write an
+> observed affinity, which is review.
+>
+> **A reaction is keyed on (`kind`, `value`), so per-picture judgments are not
+> expressible.** The IA and the build plan both put the reaction controls on each
+> *sample*, and three samples of one artist therefore write the same row. Built as
+> specified because the upsert makes it harmless, and stated here rather than left
+> to be discovered: **if per-picture judgments are wanted, this entity changes, not
+> the screen.**
+
 ### Conversation
 
 One intent-forming session. **Not a run, and never confused with one:** it
@@ -644,7 +832,7 @@ changes — the second half of Q14.
 | `ordinal` | integer | required, unique per conversation | Order within the thread. Not a timestamp: two turns can share a second. |
 | `role` | enum | required | `curator` \| `system`. |
 | `text` | text | required | Verbatim. |
-| `suggested` | JSON | nullable | What this turn offered, as `[{kind, value}]` — the artists, movements or subjects named. Denormalised on purpose: it is a record of *what was said*, not a live index, and normalising it would let a later edit rewrite history. |
+| `suggested` | JSON | nullable | What this turn offered, as `[{kind, value, samples}]` — the artists, movements or subjects named, each with the sample pictures shown beside it. Denormalised on purpose: it is a record of *what was said*, not a live index, and normalising it would let a later edit rewrite history. **`samples` was added 2026-08-12, on building the thread**: the flow requires samples inline in the turn and no other structure gives them anywhere to live, and freezing them here is the same argument the rest of this row already makes — a sample re-fetched later is not the picture the curator reacted to. |
 | `committed_run_id` | UUID | FK → DiscoveryRun, nullable | Set on the turn where the curator committed a direction. **This is the seam** — it is what lets a run say which conversation produced it, and a conversation show what came of it. |
 | `created_at` | datetime | auto | |
 
@@ -655,10 +843,36 @@ changes — the second half of Q14.
 > existing judgment stays frozen at the quality of the prompt that produced it.
 >
 > **This is the product's first retained free-text record of the operator's own
-> words**, and `security-model.md` does not currently speak to retention or
-> deletion of one. That is a real gap, flagged rather than closed here — the
-> interface owes a curator the ability to delete a conversation, and deleting one
-> must have a stated effect on the affinities derived from it.
+> words.** The retention and deletion rule for one is now written, in
+> `security-model.md` § Deleting a conversation; the summary is below and that
+> section is the authority.
+
+> **Deleting a conversation deletes its turns and nothing else** *(ruled by the
+> operator 2026-08-12, closing issue #118)*. Every row that cites a turn keeps its
+> own record and loses only the citation: `Affinity.source_turn_id` and
+> `SpendRecord.conversation_turn_id` are set null, and
+> `ConversationTurn.committed_run_id` goes with the turn.
+>
+> Three things follow, and each is a real consequence rather than a restatement:
+>
+> - **An `inferred` affinity may legally have no source turn.** `api-contract.md`
+>   § `art_taste` states that `inferred` requires a `source_turn_id`; that is an
+>   invariant on the **write**, not on the row. Built as a stored constraint it
+>   would make the delete impossible, which is the opposite of the ruling.
+> - **`rationale` therefore becomes required for `inferred` and `observed`** — see
+>   the Affinity table, where the constraint now says so. It is the only evidence
+>   that survives a deleted thread, and an inferred judgment with neither turn nor
+>   rationale is one the product can neither explain nor revisit.
+> - **A run committed by a deleted turn becomes indistinguishable from one started
+>   directly**, because the seam is `committed_run_id` and the turn carried it.
+>   Nothing is orphaned — the Relationships section already makes a run with no
+>   committing turn ordinary — but the provenance is gone rather than degraded, and
+>   the confirmation says so.
+>
+> **What the curator loses is Q14's second half**: affinities can no longer be
+> rebuilt from this thread when the derivation improves. That is the cost of the
+> delete, it is not recoverable, and the confirmation names it in those terms
+> rather than reporting a row count.
 
 ### DiscoveryRun
 
@@ -1242,7 +1456,7 @@ path consults it before spending.
 | `id` | UUID | PK | |
 | `discovery_run_id` | UUID | FK → DiscoveryRun, nullable | Null for non-discovery spend, e.g. mat colour. |
 | `artwork_id` | UUID | FK → Artwork, nullable | Set for per-artwork spend. |
-| `conversation_turn_id` | UUID | FK → ConversationTurn, nullable | Set for intent-forming spend. Added 2026-08-10 — see below. |
+| `conversation_turn_id` | UUID | FK → ConversationTurn, nullable | Set for intent-forming spend. Added 2026-08-10 — see below. **Nulled, never cascaded, when the conversation is deleted** (2026-08-12): the money was spent whatever became of the thread, and a ledger whose totals fall when someone tidies a transcript is the failure the `conversation_tokens` rule below exists to prevent. |
 | `category` | enum | required | `discovery_tokens` \| `web_search` \| `image_research` \| `mat_color_vision` \| `conversation_tokens` — **`mat_color_vision` has a producer but writes no row today; see the deferral below.** |
 | `model_id` | string | nullable | |
 | `input_tokens`, `output_tokens` | integer | nullable | Null where the unit is not tokens. |
@@ -1354,8 +1568,9 @@ the entity that enforces the second Direction norm.
 | Field | Type | Constraints | Description |
 |---|---|---|---|
 | `id` | UUID | PK | |
-| `artwork_id` | UUID | required, unique | Reference to the catalogue's Artwork id. One television holds at most one image per work. |
-| `tv_content_id` | string | **required when `upload_status = 'uploaded'`, null otherwise** | The TV's own identifier for the uploaded image. |
+| `wall_id` | UUID | required | The wall this television serves, from the display plane's own configuration. **By id only, never a foreign key** — see Relationships. |
+| `artwork_id` | UUID | required, **unique per `wall_id`** | Reference to the catalogue's Artwork id. One television holds at most one image per work. |
+| `tv_content_id` | string | **required when `upload_status = 'uploaded'`, null otherwise** | The TV's own identifier for the uploaded image. **A per-set cache key, not an identity** — see below. |
 | `tv_thumb_md5` | string | nullable | **Modelled, and nothing writes it** (recorded 2026-08-06). It was to re-match after the TV loses or renames content; the display plane instead marks such a binding orphaned and uploads again, which costs one transfer and is correct even when nothing was renamed — fetching a thumbnail per work to compare hashes costs more than the re-upload it saves. The column stays because a future device driver may need it; the value is null on every row. |
 | `render_fingerprint` | string | nullable | The render file's modification time and size when it was sent, so a re-rendered work is sent again. `ready/{artwork_id}.jpg` is stable across re-renders, so without this a changed mat colour leaves the television showing the old composition indefinitely with every record agreeing. Null on rows written before this column existed, which counts as changed. |
 | `uploaded_at` | datetime | auto | |
@@ -1365,6 +1580,22 @@ the entity that enforces the second Direction norm.
 > exception, logged, and still reported success — recording `tv_content_id =
 > None` while the retry loop set `success = True`. A nullable id with no status
 > makes that failure indistinguishable from "not yet uploaded".
+>
+> **`artwork_id` was globally `unique` until 2026-08-12, and that one word was the
+> whole multi-display blocker.** `information-architecture.md` § More than one wall
+> found it: the constraint says one row per artwork *across the entire
+> installation*, so two televisions showing the same painting is a state the model
+> forbids — each needs its own `tv_content_id` and only one row may exist to hold
+> one.
+>
+> **The operator's ruling names why the fix is a widened key rather than a second
+> identity** (2026-08-12): *our* artwork id is the identity, and it is independent
+> of any per-renderer id. `tv_content_id` is closer to a **cache key** — it is
+> whatever this particular set called the bytes after we uploaded them, it varies
+> per television, and it is meaningless off that set. So the same work legitimately
+> carries a different one per wall, and the key that was doing the work of an
+> identity becomes (`wall_id`, `artwork_id`): what this row records is not "the
+> artwork" but "what one television currently knows about one artwork".
 >
 > **`tv_content_id`'s constraint was `required` until 2026-08-06, and that could
 > not be built.** A `failed` row has no id to record — that is what failed — so
@@ -1427,11 +1658,20 @@ the entity that enforces the second Direction norm.
   optionality is an edge case:** an `observed` affinity has no turn, and an
   affinity naming an artist the catalogue has never heard of has no Artist — which
   is the normal state for the artists this product exists to surface.
-- The **Directive** singleton may reference one **Artwork** as its pin. It belongs
-  to the catalogue rather than to any Theme, so that switching themes carries the
-  sequence forward instead of resetting it.
-- A **TvBinding** references an **Artwork** across the plane boundary — by id
-  only, never by foreign key, because the two planes do not share a database.
+- A **Wall** hangs at most one **Theme** (one-to-one, optional, via
+  **ThemeAssignment**), and a **Theme** may be hung on many **Walls**. **The
+  many side is the point:** two rooms showing the same theme is one theme and two
+  assignment rows, never a duplicated theme.
+- A **Wall** has one **Directive** (one-to-one, seeded with the wall). Advances are
+  per wall, so stepping one room does not step the others.
+- A **TvBinding** references an **Artwork** and a **Wall** across the plane
+  boundary — **by id only, never by foreign key**, because the two planes do not
+  share a database. This is why `wall_id` on that table carries no FK while the
+  identical column on **ThemeAssignment** does: the catalogue can enforce what it
+  owns, and the display plane holds a copy of an id it was configured with.
+- **Nothing in the catalogue points at a device.** A Wall is a place; which
+  television or panel serves it is display-plane configuration, and the catalogue
+  is rebuildable without knowing it.
 
 ## State Machines
 
@@ -1653,22 +1893,32 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
 
 ## Constraints
 
-1. **At most one Theme has `is_active = true`, and exactly one whenever any theme
-   exists.** The display plane's sync target is unambiguous. Enforced rather than
-   assumed, and by two different things: `themes_one_active`, a *partial* unique
-   index over `is_active = 1`, makes two active themes impossible; `reconcile()`
-   promotes the oldest theme when none is active, which is what makes the second
-   half true rather than merely intended.
+1. **At most one Theme hangs on a Wall, enforced by `ThemeAssignment.wall_id`
+   being the primary key.** There is nothing here to detect or reconcile: a second
+   theme on a wall is a row the store will not accept. A wall with no assignment
+   hangs nothing, which is an ordinary state and not a violation.
 
-   **Zero active themes is reachable and is not a violation** — it is the state of
-   an empty catalogue, and it is why the last theme can be deleted at all
-   (`DisplayService.delete_theme`; see `api-contract.md` § The routes the interface
-   design requires). *This constraint read "Exactly one Theme has `is_active =
-   true`" until 2026-08-11, which the index has never enforced and the empty
-   catalogue has always contradicted. It was found by Critic review (R-8) being
-   reasoned from — a decision about deleting the active theme argued from an
-   invariant the store does not have. An absolute here is not a stronger claim than
-   a bounded one; it is a claim a reader will act on.*
+   **Built 2026-08-12.** The single-wall predecessor is gone: `Theme.is_active` and
+   the `themes_one_active` partial index are dropped — the first column this schema
+   has ever removed — and the migration establishes a wall, names it from
+   configuration, hangs whatever was active and carries the singleton directive's
+   counter and pin onto it.
+
+   **Automatic promotion was removed twice, not once**, which is worth recording
+   because the plan only knew about one of them. `reconcile()`'s promote-the-oldest
+   was the known case. `add_theme` also activated a theme when no other was active —
+   the same rule reached by a second route, equally indefensible once a wall has to be
+   named, and invisible to anyone searching for the first. With N walls there is no
+   defensible answer to which theme should appear on a wall the curator has not hung
+   anything on, so the honest empty state is what a wall gets.
+
+   *This constraint read "Exactly one Theme has `is_active = true`" until
+   2026-08-11, which the index had never enforced and the empty catalogue had
+   always contradicted. It was found by Critic review (R-8) being reasoned from — a
+   decision about deleting the active theme argued from an invariant the store does
+   not have. An absolute here is not a stronger claim than a bounded one; it is a
+   claim a reader will act on. The replacement above is stated as what the key does,
+   which is the form that cannot drift from the store.*
 2. **Exactly one MatColor per Artwork has `is_current = true`.**
 3. **At most one Source per Artwork has `is_primary = true`.**
 4. **A Rendition is stale when its `source_content_hash` differs from its
@@ -1813,6 +2063,19 @@ judgement about the *instance*, and `set_verdict` is work-scoped.
     are written and displayed while no decision reads them, and the tool tip on
     `retry_acquisition` promising that a retry is safe is true only for the failure
     case it happens to name.
+17. **A work carries a given (`kind`, `value`) facet at most once, enforced by the
+    `work_facets_once_per_work` unique index.** *(Added 2026-08-12 with the
+    entity.)* A work is Baroque once. **Load-bearing rather than tidy:** the number
+    a curator reads beside a facet option is a plain `COUNT(*)` over this table,
+    chosen precisely because the index makes `COUNT(DISTINCT artwork_id)` the same
+    number — so a duplicate row would inflate the count while the grid it labels
+    still showed that work once, which is a wrong number with nothing on screen
+    contradicting it. Above the index, `CatalogueService.record_facet` returns the
+    row already held rather than writing a second, so re-recording a claim is a
+    no-op; the index is what protects a catalogue written by anything else. The
+    stored `derivation` is the *first* recording's and is never relabelled by a
+    later one, because a sweeping inference pass must not be able to quietly
+    restate a museum's own value as a guess.
 
     **The comparison is quality, not recency, and it is deliberately coarse.** Only
     the complete/partial distinction is read. Pixel count is *not* consulted: a

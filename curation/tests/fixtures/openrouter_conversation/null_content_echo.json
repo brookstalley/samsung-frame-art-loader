@@ -1,0 +1,4 @@
+{
+  "status": 400,
+  "body": "{\"error\":{\"message\":\"Provider returned error\",\"code\":400,\"metadata\":{\"raw\":\"data: {\\\"error\\\":{\\\"code\\\":\\\"invalid_parameter_error\\\",\\\"param\\\":null,\\\"message\\\":\\\"The content field is a required field.\\\",\\\"type\\\":\\\"invalid_request_error\\\"},\\\"id\\\":\\\"chatcmpl-1c1aada9-4cde-9eb6-8943-ca1ea6a7b709\\\"}\\n\\n\",\"provider_name\":\"Alibaba\",\"is_byok\":false}},\"user_id\":\"user_2ntxh0NpizEmB5iVBypPZ31HMAN\"}"
+}

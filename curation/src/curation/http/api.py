@@ -36,16 +36,29 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from curation.http.models import (
     AddWork,
+    AffinityListOut,
+    AffinityOut,
     ArtistOut,
     ArtworkBoxOut,
     BackupOut,
     CandidateCardOut,
     CandidatePageOut,
     CandidateWorkOut,
+    CommitDirection,
+    ConversationDeletionOut,
+    ConversationListOut,
+    ConversationOut,
+    ConversationTurnOut,
+    ConversationViewOut,
     CreateTheme,
+    CreateWall,
+    DirectiveOut,
     EstimateOut,
     ExclusionOut,
+    FacetGroupOut,
+    FacetOptionOut,
     FitOut,
+    HangTheme,
     HealthOut,
     HeartbeatOut,
     ImageOut,
@@ -56,40 +69,61 @@ from curation.http.models import (
     MatColorOut,
     MoveWork,
     OriginalOut,
+    RenameTheme,
     RenditionOut,
     RunListOut,
     RunOut,
     RunTallyOut,
     RunViewOut,
+    SampleOut,
     SearchUsageOut,
     SelectedImageOut,
     SelectImage,
+    SetAffinity,
     SetVerdict,
     SourceOut,
+    Speak,
     SpendOut,
     StartResolve,
     StartRun,
+    StepDisplay,
+    SuggestionOut,
     ThemeDetailOut,
     ThemeListOut,
     ThemeOut,
+    ThemePlacementOut,
     VerdictOut,
+    WallHeartbeatOut,
+    WallListOut,
+    WallOut,
+    WallRefOut,
     WorkDetailOut,
+    WorkFacetOut,
     WorkOut,
     WorkPageOut,
 )
 from curation.manifest.builder import ManifestBuild
 from curation.manifest.heartbeat import HeartbeatReading
 from curation.persistence.backup import BackupReading
-from curation.persistence.discovery_records import CandidateImage, CandidateWork, DiscoveryRun, InitiatedBy
-from curation.persistence.records import Artist, MatColor, Original, Source, Theme
-from curation.services.catalogue import RenditionView
+from curation.persistence.discovery_records import (
+    CandidateImage,
+    CandidateWork,
+    Conversation,
+    DiscoveryRun,
+    InitiatedBy,
+)
+from curation.persistence.records import Artist, Directive, MatColor, Original, Source, Theme, WorkFacet
+from curation.services.catalogue import FacetGroup, RenditionView
 from curation.services.container import Services
+from curation.services.conversation import ConversationDeletion, ConversationView, TurnView
 from curation.services.discovery import VerdictOutcome
+from curation.services.display import ThemePlacement, WallView
 from curation.services.display_fit import ArtworkBox
 from curation.services.health import HealthReading
 from curation.services.review import CandidatePage, CandidateView, InstanceListing, InstanceView
 from curation.services.runner import Estimate, RunView, SpendReport
 from curation.services.survey import WorkDossier, WorkSurvey
+from curation.services.taste import AffinityView
 
 log = logging.getLogger(__name__)
 
@@ -135,17 +169,45 @@ def _services(request: Request) -> Services:
 def list_works(
     request: Request,
     status: Annotated[str | None, Query()] = None,
+    q: Annotated[str | None, Query()] = None,
+    artist: Annotated[list[str] | None, Query()] = None,
+    movement: Annotated[list[str] | None, Query()] = None,
+    era: Annotated[list[str] | None, Query()] = None,
+    subject: Annotated[list[str] | None, Query()] = None,
+    medium: Annotated[list[str] | None, Query()] = None,
+    palette: Annotated[list[str] | None, Query()] = None,
     limit: Annotated[int | None, Query()] = None,
     offset: Annotated[int, Query()] = 0,
 ) -> WorkPageOut:
-    """A page of works, each with its fit verdict and its image state."""
-    page = _services(request).survey.list_works(status=status, limit=limit, offset=offset)
+    """A page of works with the facet controls for exactly this filter.
+
+    `q` is free text; every word must appear somewhere in the work's own text or
+    its artist's name. **One repeatable parameter per facet kind** — `?movement=
+    Baroque&movement=Rococo` means either, and adding `&era=17th+c.` means both.
+    Repeated rather than comma-joined because a facet value may itself contain a
+    comma, and a separator a value can hold is a parser that goes wrong on the
+    data rather than on the request.
+
+    The six are spelled out rather than gathered from the raw query string:
+    FastAPI generates this route's schema from the signature, so a named
+    parameter is what makes the filter set discoverable and an unknown one a
+    stated refusal instead of a silent no-op.
+    """
+    chosen = {"artist": artist, "movement": movement, "era": era, "subject": subject, "medium": medium, "palette": palette}
+    page = _services(request).survey.list_works(
+        status=status,
+        q=q,
+        facets={kind: values for kind, values in chosen.items() if values},
+        limit=limit,
+        offset=offset,
+    )
     return WorkPageOut(
         works=[_work(entry) for entry in page.entries],
         total=page.total,
         limit=page.limit,
         offset=page.offset,
         truncated=page.truncated,
+        facets=[_facet_group(group) for group in page.facets],
     )
 
 
@@ -155,13 +217,53 @@ def get_work(request: Request, artwork_id: str) -> WorkDetailOut:
     return _dossier(_services(request).survey.get_work(artwork_id))
 
 
+@router.post("/works/{artwork_id}/archive")
+def archive_work(request: Request, artwork_id: str) -> WorkDetailOut:
+    """Take a work out of circulation, keeping its record and its mat history.
+
+    **Archive rather than delete, and the noun in the path is the whole point.**
+    `Artwork.status` has two values and restoration is permitted, so there is no
+    route here that destroys a work; `information-architecture.md` argues the
+    label follows the route, and the control this binds to reads *Archive*.
+
+    The work stays in every theme that holds it — membership is curatorial and
+    readiness is technical — so what changes is what the next manifest build puts
+    on a wall. A standing pin naming this work is withdrawn in the same
+    transaction, without advancing the sequence; both rules belong to the
+    catalogue service and are not restated here.
+
+    Returns the dossier, which is the same shape `GET /api/works/{id}` answers
+    with: the interesting change is the work's whole state, the screen that
+    archives is the screen that shows it, and a slimmer body would send that
+    screen straight back for the rest. The read-back-after-mutate departure the
+    theme routes take, for the same reason.
+    """
+    services = _services(request)
+    services.catalogue.archive_artwork(artwork_id)
+    return _dossier(services.survey.get_work(artwork_id))
+
+
+@router.post("/works/{artwork_id}/restore")
+def restore_work(request: Request, artwork_id: str) -> WorkDetailOut:
+    """Return an archived work to circulation.
+
+    The undo of the route above, and its existence is what makes archiving an
+    ordinary act rather than a destructive one. Nothing is republished: a theme
+    holding this work carries it again at the next manifest build, so the wall
+    goes on showing what it was showing until then.
+    """
+    services = _services(request)
+    services.catalogue.restore_artwork(artwork_id)
+    return _dossier(services.survey.get_work(artwork_id))
+
+
 # -- themes -------------------------------------------------------------------
 
 
 @router.get("/themes")
 def list_themes(request: Request) -> ThemeListOut:
-    """Every theme."""
-    return ThemeListOut(themes=[_theme(theme) for theme in _services(request).display.list_themes()])
+    """Every theme, and the walls each is hanging on."""
+    return ThemeListOut(themes=[_placement(placement) for placement in _services(request).display.survey_themes()])
 
 
 @router.get("/themes/{theme_id}")
@@ -174,6 +276,41 @@ def get_theme(request: Request, theme_id: str) -> ThemeDetailOut:
 def create_theme(request: Request, body: CreateTheme) -> ThemeOut:
     """Record a theme."""
     return _theme(_services(request).display.add_theme(name=body.name, description=body.description))
+
+
+@router.post("/themes/{theme_id}")
+def rename_theme(request: Request, theme_id: str, body: RenameTheme) -> ThemeOut:
+    """Change a theme's name.
+
+    **`POST` rather than `PATCH`**, following this surface's own convention: it
+    writes with `POST` and removes with `DELETE`, and one surface with two
+    spellings for "change this" costs more than the orthodoxy is worth.
+
+    Answers with the theme, so the screen repaints the name it now has rather
+    than the one it sent. Those differ whenever the service normalises — a name
+    surrounded by whitespace comes back trimmed — and a screen painting its own
+    input would show a name the catalogue does not hold.
+    """
+    return _theme(_services(request).display.update_theme(theme_id, name=body.name))
+
+
+@router.delete("/themes/{theme_id}")
+def delete_theme(request: Request, theme_id: str) -> ThemeListOut:
+    """Remove a theme and its membership rows. The works themselves are untouched.
+
+    **The refusal is the service's, not this handler's.** `delete_theme` refuses
+    a theme hanging on any wall and names the walls, and the same rule reaches
+    `art_theme(action='delete')`; a guard written here would be a second copy for
+    a click and an agent to disagree over. What arrives is a 400 carrying a
+    sentence written to be shown, by the same path every other refusal takes.
+
+    Answers with the themes that remain, because what a delete changes is the
+    list it was performed from — and the alternative, an empty 204, would leave
+    the screen re-reading a listing it has just been told the shape of.
+    """
+    services = _services(request)
+    services.display.delete_theme(theme_id)
+    return ThemeListOut(themes=[_placement(placement) for placement in services.display.survey_themes()])
 
 
 @router.post("/themes/{theme_id}/works")
@@ -207,26 +344,95 @@ def move_in_theme(request: Request, theme_id: str, artwork_id: str, body: MoveWo
 
 
 @router.post("/themes/{theme_id}/activate")
-def activate_theme(request: Request, theme_id: str) -> ManifestOut:
-    """Make this the theme the wall shows, and publish the manifest that follows.
+def activate_theme(request: Request, theme_id: str, body: HangTheme) -> ManifestOut:
+    """Hang this theme on the named wall, and publish the manifest that follows.
 
-    Returns the build, so the curator sees what actually reached the wall in the
-    same response that put it there — including everything that did not.
+    Returns the build, so the curator sees what actually reached that wall in the
+    same response that put it there — including everything that did not, and
+    including the wall's own name.
     """
-    return _manifest(_services(request).display.activate_theme(theme_id))
+    return _manifest(_services(request).display.activate_theme(theme_id, wall_id=body.wall_id))
+
+
+# -- walls --------------------------------------------------------------------
+
+
+@router.get("/walls")
+def list_walls(request: Request) -> WallListOut:
+    """Every wall, and what is hanging on each."""
+    return WallListOut(walls=[_wall(view) for view in _services(request).display.survey_walls()])
+
+
+@router.post("/walls")
+def create_wall(request: Request, body: CreateWall) -> WallOut:
+    """Record a wall. It arrives with nothing hanging on it.
+
+    **A wall recorded here lights up once a display plane is pointed at it.**
+    Hanging a theme writes that wall's own manifest, named by the id this route
+    returns, and a display serves the one wall its `WALL_ID` names — so a second
+    room needs a second device configured with that id, and nothing about it
+    disturbs the first. Until 2026-08-12 there was one manifest for the
+    installation and a second wall overwrote it silently.
+    """
+    services = _services(request)
+    return _wall(services.display.get_wall_view(services.display.add_wall(name=body.name).id))
+
+
+@router.delete("/walls/{wall_id}/theme")
+def clear_wall(request: Request, wall_id: str) -> WallOut:
+    """Take down whatever is hanging, leaving the wall holding nothing.
+
+    Returns the wall, because the interesting change is what it now shows — the
+    read-back-after-mutate shape the theme-membership routes already take, for
+    the same reason and recorded as the same known departure.
+
+    The wall keeps showing what it was showing until something else is hung: no
+    manifest is rewritten, because publishing an empty one would blank the wall
+    as a side effect of tidying up.
+    """
+    services = _services(request)
+    services.display.clear_wall(wall_id)
+    return _wall(services.display.get_wall_view(wall_id))
+
+
+@router.post("/directives")
+def step_display(request: Request, body: StepDisplay) -> DirectiveOut:
+    """Tell the display serving one wall to move on to the next work.
+
+    **The Walls screen's `next`, and until now the one screen action with an MCP
+    action and no HTTP route at all.** `art_display(action='next')` has stepped a
+    wall since the tool surface was built; the browser could only ever *read*
+    `directive_sequence` off a manifest, so a curator standing in front of the
+    television had no way to do the one thing they were most likely to want.
+
+    The shape was left open while a directive was still a singleton, on the
+    grounds that writing an installation-wide route would be writing the shape
+    that had to change. It is per wall now, so the wall is named here as it is
+    named in every other act that changes one.
+
+    It returns the directive rather than the wall: what a step changes is what
+    the wall was told to do, and nothing about what hangs there.
+    """
+    return _directive(_services(request).display.step_display(body.wall_id))
 
 
 # -- the wall -----------------------------------------------------------------
 
 
 @router.get("/manifest")
-def get_manifest(request: Request, theme_id: Annotated[str | None, Query()] = None) -> ManifestOut:
-    """What a theme would put on the wall, and every work it would leave off.
+def get_manifest(
+    request: Request,
+    wall_id: Annotated[str, Query()],
+    theme_id: Annotated[str | None, Query()] = None,
+) -> ManifestOut:
+    """What a theme would put on one wall, and every work it would leave off.
 
     Evaluates without writing, so a curator can ask what would happen before
-    changing what is on the wall.
+    changing what is on the wall. The wall is required and the theme is not:
+    exclusions belong to a wall once two walls can hang different themes, and the
+    theme defaults to whatever is already hanging there.
     """
-    return _manifest(_services(request).display.build_manifest(theme_id))
+    return _manifest(_services(request).display.build_manifest(wall_id, theme_id))
 
 
 @router.get("/health")
@@ -571,6 +777,32 @@ def _dossier(dossier: WorkDossier) -> WorkDetailOut:
         sources=[_source(source) for source in dossier.sources],
         renditions=[_rendition(view) for view in dossier.renditions],
         mat_colors=[_mat_color(mat) for mat in dossier.mat_colors],
+        facets=[_facet(facet) for facet in dossier.facets],
+    )
+
+
+def _facet(facet: WorkFacet) -> WorkFacetOut:
+    return WorkFacetOut(
+        facet_id=facet.id,
+        kind=str(facet.kind),
+        value=facet.value,
+        derivation=str(facet.derivation),
+        source_note=facet.source_note,
+    )
+
+
+def _facet_group(group: FacetGroup) -> FacetGroupOut:
+    return FacetGroupOut(
+        kind=str(group.kind),
+        options=[
+            FacetOptionOut(value=option.value, count=option.count, selected=option.selected, disabled=option.disabled)
+            for option in group.options
+        ],
+        total_values=group.total_values,
+        # The group's own property rather than `len(options) < total_values`
+        # recomputed here, so a client and the service cannot disagree about
+        # whether a rail is showing everything.
+        truncated=group.truncated,
     )
 
 
@@ -641,15 +873,42 @@ def _theme(theme: Theme) -> ThemeOut:
         theme_id=theme.id,
         name=theme.name,
         description=theme.description,
-        is_active=theme.is_active,
         rotation_interval_seconds=theme.rotation_interval_seconds,
         shuffle=theme.shuffle,
         created_at=theme.created_at.isoformat(),
     )
 
 
+def _wall(view: WallView) -> WallOut:
+    return WallOut(
+        wall_id=view.wall.id,
+        name=view.wall.name,
+        created_at=view.wall.created_at.isoformat(),
+        theme=None if view.hanging is None else _theme(view.hanging),
+        directive_sequence=view.directive.sequence,
+        pinned_work_id=view.directive.pinned_work_id,
+    )
+
+
+def _directive(directive: Directive) -> DirectiveOut:
+    return DirectiveOut(
+        wall_id=directive.wall_id,
+        sequence=directive.sequence,
+        pinned_work_id=directive.pinned_work_id,
+    )
+
+
+def _placement(placement: ThemePlacement) -> ThemePlacementOut:
+    return ThemePlacementOut(
+        theme=_theme(placement.theme),
+        hanging_on=[WallRefOut(wall_id=wall.id, name=wall.name) for wall in placement.walls],
+    )
+
+
 def _manifest(build: ManifestBuild) -> ManifestOut:
     return ManifestOut(
+        wall_id=build.wall.id,
+        wall_name=build.wall.name,
         theme=_theme(build.theme),
         entries=[
             ManifestEntryOut(
@@ -895,7 +1154,11 @@ def _spend(report: SpendReport) -> SpendOut:
 
 def _health(reading: HealthReading) -> HealthOut:
     return HealthOut(
-        heartbeat=_heartbeat(reading.heartbeat),
+        walls=[
+            WallHeartbeatOut(wall_id=seen.wall.id, wall_name=seen.wall.name, heartbeat=_heartbeat(seen.heartbeat))
+            for seen in reading.walls
+        ],
+        description=reading.describe(),
         backup=_backup(reading.backup),
         artwork_box=_artwork_box(reading.artwork_box),
     )
@@ -931,4 +1194,210 @@ def _artwork_box(box: ArtworkBox) -> ArtworkBoxOut:
         height=box.height,
         pixels_per_inch=box.pixels_per_inch,
         floor_inches=box.floor_inches,
+    )
+
+
+# -- conversations ------------------------------------------------------------
+#
+# One block at the foot of the file rather than routes among the routes and
+# mappers among the mappers, and it is a merge decision rather than a taste one:
+# three chunks were appending to this module at once, and a block that touches no
+# existing line cannot conflict with the other two. Route registration is by
+# decorator at import, so position changes nothing about what is served.
+
+
+@router.get("/conversations")
+def list_conversations(request: Request) -> ConversationListOut:
+    conversations = _services(request).conversation.list_conversations()
+    return ConversationListOut(
+        conversations=[_conversation(conversation) for conversation in conversations],
+        count=len(conversations),
+    )
+
+
+@router.post("/conversations")
+def start_conversation(request: Request) -> ConversationViewOut:
+    """Open an empty thread.
+
+    No body, and nothing spent. A curator who opens a conversation and thinks
+    better of it has cost the household a row; the first question is a turn like
+    every other.
+    """
+    return _conversation_view(_services(request).conversation.start())
+
+
+@router.get("/conversations/{conversation_id}")
+def get_conversation(request: Request, conversation_id: str) -> ConversationViewOut:
+    return _conversation_view(_services(request).conversation.get(conversation_id))
+
+
+@router.post("/conversations/{conversation_id}/turns")
+def speak(request: Request, conversation_id: str, body: Speak) -> ConversationViewOut:
+    """Ask something, or — with no text — ask again for the last answer.
+
+    **A turn that could not be answered is a 200, not a 400.** The requirement is
+    that a failed turn stays in the thread and is retryable, and an error body
+    carries no thread: the client would show a sentence with the curator's
+    question nowhere on screen. So the refusal travels as `failure` on the view,
+    and only a request that recorded nothing at all — an unknown conversation,
+    empty text with nothing outstanding to retry — is a refusal.
+    """
+    return _conversation_view(_services(request).conversation.speak(conversation_id, body.text))
+
+
+@router.post("/conversations/{conversation_id}/commit")
+def commit_conversation(request: Request, conversation_id: str, body: CommitDirection) -> ConversationViewOut:
+    """Seed a discovery run from this thread, and stay in the thread.
+
+    Returns the conversation rather than the run, and the difference is the whole
+    seam: a response shaped like a run is a response a client navigates to. What
+    comes back is the transcript with a committed turn at the end of it, which is
+    what the commit card repaints itself from without going anywhere.
+    """
+    return _conversation_view(_services(request).conversation.commit(conversation_id, body.intent))
+
+
+def _conversation(conversation: Conversation) -> ConversationOut:
+    return ConversationOut(
+        conversation_id=conversation.id,
+        started_at=conversation.started_at.isoformat(),
+        last_turn_at=conversation.last_turn_at.isoformat(),
+        summary=conversation.summary,
+    )
+
+
+def _conversation_view(view: ConversationView) -> ConversationViewOut:
+    unanswered = view.unanswered
+    return ConversationViewOut(
+        conversation=_conversation(view.conversation),
+        turns=[_conversation_turn(turn) for turn in view.turns],
+        committed_run_id=view.committed_run_id,
+        failure=view.failure,
+        unanswered_turn_id=None if unanswered is None else unanswered.id,
+    )
+
+
+def _conversation_turn(view: TurnView) -> ConversationTurnOut:
+    return ConversationTurnOut(
+        turn_id=view.turn.id,
+        ordinal=view.turn.ordinal,
+        role=str(view.turn.role),
+        text=view.turn.text,
+        suggested=[
+            SuggestionOut(
+                kind=suggestion.kind,
+                value=suggestion.value,
+                samples=[SampleOut(title=sample.title, artist=sample.artist, image_url=sample.image_url) for sample in samples],
+            )
+            for suggestion, samples in view.suggested
+        ],
+        committed_run_id=view.turn.committed_run_id,
+        created_at=view.turn.created_at.isoformat(),
+    )
+
+
+@router.delete("/conversations/{conversation_id}")
+def delete_conversation(request: Request, conversation_id: str) -> ConversationDeletionOut:
+    """Destroy the thread and its turns, and detach everything derived from them.
+
+    **The one operation in this product that genuinely destroys a record**, which
+    is exactly why what stands on it is detached rather than destroyed with it:
+    `Affinity.source_turn_id` and `SpendRecord.conversation_turn_id` are nulled,
+    and nothing else is touched. An affinity is a judgment accumulated across
+    conversations and cannot be reconstructed from a thread that no longer exists;
+    a spend record is a ledger entry, and a month total that fell because somebody
+    tidied would be a number that lies about the past.
+
+    **The response names the consequence, not the row count.** What the curator
+    loses is the ability to rebuild those judgments when the derivation improves,
+    and `description` says so in those terms — the counts are there to qualify it.
+    """
+    return _conversation_deletion(_services(request).conversation.delete(conversation_id))
+
+
+def _conversation_deletion(deletion: ConversationDeletion) -> ConversationDeletionOut:
+    return ConversationDeletionOut(
+        conversation_id=deletion.conversation_id,
+        turns_deleted=deletion.turns_deleted,
+        affinities_detached=deletion.affinities_detached,
+        spend_records_detached=deletion.spend_records_detached,
+        runs_unattributed=deletion.runs_unattributed,
+        # Composed by the service so this surface and the tool one cannot come to
+        # describe the same destruction differently.
+        description=deletion.describe(),
+    )
+
+
+# -- taste --------------------------------------------------------------------
+
+
+@router.get("/affinities")
+def list_affinities(
+    request: Request,
+    kind: Annotated[str | None, Query()] = None,
+    sentiment: Annotated[str | None, Query()] = None,
+    derivation: Annotated[str | None, Query()] = None,
+) -> AffinityListOut:
+    """The curator's standing judgments, narrowed by any of the three.
+
+    Unpaged: this is a household's whole taste, which is tens of rows, and a page
+    over it would be a second way to read what one call hands back whole.
+    """
+    affinities = _services(request).taste.list_affinities(kind=kind, sentiment=sentiment, derivation=derivation)
+    return AffinityListOut(affinities=[_affinity(entry) for entry in affinities], count=len(affinities))
+
+
+@router.post("/affinities")
+def set_affinity(request: Request, body: SetAffinity) -> AffinityOut:
+    """Write one judgment over whatever was there, or write the first one.
+
+    `POST` rather than `PATCH` because this surface writes with `POST` everywhere
+    and one surface with two spellings for "change this" costs more than the
+    orthodoxy is worth. It is an upsert addressed by (`kind`, `value`), so a
+    correction needs no id — which is right for the caller that has a name in a
+    sentence rather than a row it fetched.
+    """
+    return _affinity(
+        _services(request).taste.set_affinity(
+            kind=body.kind,
+            value=body.value,
+            sentiment=body.sentiment,
+            open_to_more=body.open_to_more,
+            derivation=body.derivation,
+            rationale=body.rationale,
+            source_turn_id=body.source_turn_id,
+        )
+    )
+
+
+@router.delete("/affinities/{affinity_id}")
+def delete_affinity(request: Request, affinity_id: str) -> AffinityOut:
+    """Forget one judgment, and answer with what was forgotten.
+
+    The row rather than an acknowledgement of the id, because this is not
+    recoverable: a confirmation should name the thing that is gone rather than the
+    handle it was addressed by.
+    """
+    return _affinity(_services(request).taste.delete_affinity(affinity_id))
+
+
+def _affinity(view: AffinityView) -> AffinityOut:
+    affinity = view.affinity
+    return AffinityOut(
+        affinity_id=affinity.id,
+        kind=str(affinity.kind),
+        value=affinity.value,
+        sentiment=str(affinity.sentiment),
+        open_to_more=affinity.open_to_more,
+        derivation=str(affinity.derivation),
+        rationale=affinity.rationale,
+        source_turn_id=affinity.source_turn_id,
+        # Resolved by the service from the cited turn rather than stored, so the
+        # link and the citation cannot come apart — and absent for a judgment
+        # whose conversation was deleted, which is what stops the screen offering
+        # a way through to a thread that is not there.
+        conversation_id=view.conversation_id,
+        artist_id=affinity.artist_id,
+        created_at=affinity.created_at.isoformat(),
+        updated_at=affinity.updated_at.isoformat(),
     )

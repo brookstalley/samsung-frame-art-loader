@@ -174,25 +174,53 @@ Three consequences, all cheap to honour now and expensive to retrofit:
   the per-wall act. Two walls may hang the same theme, and that must not require
   duplicating it.
 
-### Two structural blockers, found 2026-08-10 and not fixed here
+### Two structural blockers, found 2026-08-10 — both ruled on 2026-08-12
 
-Both are in `data-model.md` and both need a decision before multi-display is
-planned. Recorded here because an interface designed against them unknowingly is
-the expensive kind of wrong.
+Both were in `data-model.md`, both needed a decision before multi-display could be
+planned, and both were answered by the operator on 2026-08-12. Recorded here
+because an interface designed against them unknowingly is the expensive kind of
+wrong — and kept rather than deleted, because the shape of this design was chosen
+while they were open.
 
-- **`TvBinding.artwork_id` is `required, unique`** — one row per artwork across the
-  whole installation. Two televisions showing the same work each need their own
-  `tv_content_id`, which the uniqueness constraint forbids. The entity is
-  per-television by its own docstring but carries no device identifier; the key
-  almost certainly becomes (`device_id`, `artwork_id`).
-- **Constraint 1 — "Exactly one Theme has `is_active = true`."** This is the
-  single-wall assumption stated as an invariant. It becomes one active theme *per
-  wall*, which moves activation off `Theme` and onto the binding between a theme
-  and a device.
+- **`TvBinding.artwork_id` was `required, unique`** — one row per artwork across
+  the whole installation, so two televisions showing the same work was a state the
+  model forbade. **Ruled:** our artwork id is the identity and is independent of
+  any per-renderer id; `tv_content_id` is a per-set cache key, not an identity, so
+  the same work legitimately carries a different one per wall. The key becomes
+  (`wall_id`, `artwork_id`).
+- **Constraint 1 — the single-wall assumption stated as an invariant.** **Ruled:**
+  themes are created globally and assigned per wall. Activation moves off
+  `Theme.is_active` onto a new **ThemeAssignment**, whose primary key *is* the wall
+  — so "one theme per wall" is a key rather than a claim, and two walls may hang
+  the same theme with no duplication. A new **Wall** entity holds the identity and
+  the name and nothing device-shaped.
 
-Neither changes anything in this artifact's layouts. Both change the routes beneath
-them: `POST /api/themes/{id}/activate` and `GET /api/manifest` are today
-installation-wide and become per-wall.
+**Neither changed anything in this artifact's layouts**, which is the evidence that
+fixing the shape early was worth it. What they changed is underneath: the routes
+(`POST /api/themes/{id}/activate` and `GET /api/manifest` become per-wall), the
+`Directive` singleton (one row per wall, so a `next` in the living room does not
+step the study), and the inter-plane contract (`architecture.md` § One manifest per
+wall).
+
+**The data half is built as of 2026-08-12** — walls, assignments, per-wall directives,
+the routes and tool actions that name a wall, and an unhang. **The inter-plane half
+landed the same day**: one manifest and one heartbeat per wall, and each display
+plane serves the one wall its `WALL_ID` names (`architecture.md` § One manifest per
+wall). That is what lets the health panel meet this artifact's requirement to name
+*which* wall is silent, which one shared heartbeat file could never have done.
+**The screens followed, and landed by 2026-08-12**: the Walls screen renders one
+section per wall with no single-wall layout underneath it, the Theme screen hangs
+on named walls and takes down from them, and Collection, Discover, Work, Review,
+Conversation and Taste all ship — with the navigation being the three
+destinations this section's Direction asks for rather than a list of screens.
+Every layout described in this artifact is built.
+
+**What is not built is named where it is described, not here.** A blanket "the
+screens are not" outlived its truth by a day and was still being read a chunk
+later, which is the failure this replacement is shaped to avoid: a claim about
+the whole surface goes stale the moment any part of it moves, so the remaining
+gaps belong beside the thing that has them. `build-plan-curation-ux.md` is the
+record of which chunk delivered what.
 
 ## Retrieval: search and facets
 
@@ -311,6 +339,19 @@ be traced means the inventory is wrong.
    > common.
 3. When a direction firms up, the system offers it as a **commit card** in the
    thread: what would be searched, how many works, what it would cost.
+
+   > **"How many works" is not available before the run, and the built card does
+   > not show it.** Recorded 2026-08-12, on building it. The estimate the card is
+   > drawn from carries no count, and the runner's own note says the number is
+   > only known once phase 1 has settled against a real work list — which is
+   > after committing, not before. So the card states what would be searched and
+   > what it would cost, and the count arrives on the progress card the commit
+   > transforms into.
+   >
+   > This line asked for a figure the pipeline cannot produce, which is the
+   > failure this artifact exists to catch — a design written against fields the
+   > system does not have. It is left in place rather than edited away, with the
+   > correction beneath it, for the same reason the facet section keeps its own.
 4. Committing starts a `DiscoveryRun`. **The curator does not leave the
    conversation.**
 
@@ -368,12 +409,23 @@ The governing rule, inherited from `product-brief.md` § Identity: **the artwork
 the primary content on every screen that shows one, and chrome yields to it.** What
 follows applies it per screen.
 
+**One row here per screen in § Screen Inventory, and the agreement is the check.**
+Stated as a rule rather than as a count on purpose: a number written here would
+have to be edited by whoever adds the tenth screen, which is exactly the person
+who did not edit this table. Read the two lists against each other and a screen
+with no row shows up in the reading. That is how the gap was eventually found —
+Conversation and Taste shipped into § Screen Inventory and this table stayed at
+seven rows until Critic review put the two side by side, a chunk later than the
+screens (#123, closed 2026-08-12).
+
 | Screen | Primary | Secondary | Actions | Status |
 |---|---|---|---|---|
 | The Walls | Each wall's hanging work, large | Title, artist, theme, which wall | Change theme, next, open work | Panel + TV health, quietly |
 | Collection | The grid of images | Counts, active filters | Search, filter, select, add to theme, archive | Total, and what is filtered out |
 | Work | The image at full size | Artist, facets, mat colour, rendition size | Theme membership, re-mat, archive | Fit verdict, image state |
 | Discover | The conversation, or the run list | Samples inline | Type, react, commit, start direct | Run progress, spend |
+| Conversation | The thread, newest exchange last | Each turn's suggestions, with their samples | Type, react to a sample, commit a direction, delete the thread | Whether a turn is in flight, and what the exchange cost |
+| Taste | The judgments, grouped by kind | Sentiment, openness, and how the claim was derived | React, correct, forget, follow a claim back to its turn | Which claims the product inferred rather than was told |
 | Review | The candidate picture | Title, artist, size on this wall | Accept, reject, choose scan, ask better | Verdict, provenance, resolution |
 | Theme | Members in wall order | Name, count | Reorder, rename, hang, delete | Whether it is the active theme |
 | Health | The three observations | Spend history | — | The whole screen is status |
@@ -397,7 +449,36 @@ work is still there will trust the next confirmation less.
 > rule about, arrived at while fixing its mirror image.
 
 **Archiving a work that is in the active theme takes a picture off the wall**, and
-the confirmation says so. `architecture.md` records that archiving removes a work
+the confirmation says so.
+
+> **Corrected 2026-08-12, while building it: it takes the picture off the wall at
+> the next manifest build, not at the moment of archiving.** Nothing in the archive
+> path republishes a manifest — only activation and sync do — so a work archived
+> while hanging stays on the television until something rebuilds. The confirmation
+> therefore says the room "loses it at the next manifest build", which is the true
+> sentence and a longer one.
+>
+> The alternative was to make archiving republish, and it was rejected on the
+> precedent that catalogue-side tidying does not reach across the plane boundary —
+> the same reason `clear_wall` does not. **That is a defensible ruling and it
+> leaves a real gap**: a curator who archives the picture they are looking at will
+> still be looking at it.
+>
+> **The operator ruled on that gap on 2026-08-12 (Brooks): the picture may stay up,
+> on the condition that some path exists to push the update, however clunky.** The
+> condition is met, and by a path that is not clunky at all — **re-hanging the same
+> theme on the same wall from the Walls screen.** `activate_theme` writes the
+> assignment and syncs unconditionally, so hanging what is already hanging
+> republishes; the Walls picker lists every theme including the one up, so nothing
+> filters the act out. `screens/theme.js` is the one that cannot do it: it offers a
+> hang button per wall the theme is *not* on, which is right for its own screen and
+> means the republish path lives on Walls alone. A later change that makes the
+> Walls picker skip the hanging theme would silently remove the only path this
+> ruling rests on.
+>
+> So the archive path still does not republish, and the plane boundary still holds:
+> a catalogue edit does not drive a display, and the curator who wants the wall to
+> catch up performs a display act to make it. `architecture.md` records that archiving removes a work
 from the manifest and leaves it in the theme, with `archived` the first of the five
 exclusion causes — and calls that silence "precisely this product's characteristic
 failure". Flow 6 already requires activation to name its consequence in
@@ -495,29 +576,34 @@ What this interface does **not** include, stated so the absences read as decisio
 ## Status — what this artifact is waiting on
 
 Recorded here rather than only in a session handoff file, because a handoff file is
-session-scoped and these obligations are not. **No build plan references this
-artifact yet**, and that is deliberate: `build-plan.md` is live with Chunk 13A
-waiting on hardware, so the work here belongs in a scope-named
-`build-plan-curation-ux.md` that is written once 13A resolves. Until someone writes
-it, this list is the only durable record that the round left debts.
+session-scoped and these obligations are not.
+
+**The plan exists: `build-plan-curation-ux.md`, written 2026-08-12.** This row
+used to say no build plan referenced this artifact, and that the work waited on
+Chunk 13A resolving. **The operator lifted that gate on 2026-08-12** and directed
+that the plan be independent of the display-plane chunks. It is: 13A and 13B are
+blocked on a television and a panel, this work is blocked on neither, and queuing
+it behind hardware bought nothing but delay. `build-plan.md` stays the
+`active_build_plan` pointer until its own remaining chunks close.
 
 | What | Owed to | State |
 |---|---|---|
 | The routes this design needs: text search and facet counts, theme rename and delete, work **archive** (not delete), the conversation surface, the taste surface | `api-contract.md` | **Amended 2026-08-11** — § The routes the interface design requires. The set and the rules are fixed; field-level shapes belong to the chunk that builds each. The two decisions that section held open for the operator were both taken the same day: deleting an active theme **refuses**, and taste **does** earn an MCP tool — `art_taste`, designed in that artifact's § `art_taste`. Nothing on this row is open |
 | `accessibility-spec.md` | the human-interface artifact set | **Written 2026-08-11.** It is *not* the browser-only codification this row used to describe — `design_decisions.accessibility_approach` records two surfaces with different profiles and says the important one is the physical label, so a spec scoped to this artifact's screens would have covered the lesser half |
-| The revised palettes | `app.css` and `test_design_tokens.py` | Proposed only. Live in the prototype and are ungoverned until they land |
-| Conversation deletion's effect on derived affinities | `security-model.md` | Tracked as **issue #118** (`stage: requirements`) — the rule has to be written before anything builds deletion |
-| Multi-display: `TvBinding.artwork_id` uniqueness, and one-active-theme-per-wall | `data-model.md` | Named in § More than one wall. Blocks planning, not this design |
+| The revised palettes | `app.css` and `test_design_tokens.py` | **Landed 2026-08-12.** In the stylesheet, read by the test, governed. The status tokens and the scrim are the exception until a rule consumes them — see the token row in `project-preferences.md` |
+| Conversation deletion's effect on derived affinities | `security-model.md` | **Closed 2026-08-12** (issue #118). Ruled: deletion does not flow to what was derived — the turns go, the affinities and the spend rows keep their judgment and lose their citation. Written in `security-model.md` § Deleting a conversation, which is the authority; two derived consequences landed in `data-model.md` and `api-contract.md` |
+| Multi-display: `TvBinding.artwork_id` uniqueness, and one-active-theme-per-wall | `data-model.md` | **Closed 2026-08-12.** Both ruled — see § More than one wall for the answers and what they changed underneath. New **Wall** and **ThemeAssignment** entities; `Directive` stops being a singleton |
 
 ## Open questions
 
-- **Deleting a conversation must have a stated effect on the affinities derived
-  from it**, and neither this artifact nor `security-model.md` states it yet. Three
-  candidate rules: orphan them (keep the judgment, lose the provenance), delete
-  them with the thread, or refuse the delete while they are cited. **Tracked as
-  issue #118**, at `stage: requirements` — the rule is the work; building deletion
-  is a later chunk. The sharp half is `Affinity.source_turn_id`: deletion has an
-  unstated effect on judgments the product still consults.
+- ~~**Deleting a conversation must have a stated effect on the affinities derived
+  from it.**~~ **Closed 2026-08-12 — the first of the three candidates.** The
+  affinities are orphaned: they keep the judgment and lose the provenance. The rule
+  is in `security-model.md` § Deleting a conversation. Kept rather than deleted
+  because the *second* sharp half was found while answering the first and is not
+  obvious from the outcome: `SpendRecord.conversation_turn_id` is the same
+  question asked about money, where the reason to orphan is not "the judgment is
+  worth keeping" but "a ledger must not change retroactively".
 - **The threshold at which Collection defaults to contact sheet** is written above
   as "a few hundred" and is a guess. It should be set from the first real
   thousands-scale corpus, not now.

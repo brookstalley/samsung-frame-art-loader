@@ -10,6 +10,214 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The Theme screen, and the reorder that had never worked — added 2026-08-12
+
+**Chunk 09.** Run `cd curation && uv run python -m curation` and open Themes.
+
+1. **The ↓ button now does something, and until this chunk it never had.** The
+   service wrote the requested number into the position column and stopped;
+   `list_memberships` breaks a tie on `added_at`, so a work sent from 0 to 1 tied
+   with its neighbour and sorted ahead again as the older row. Moving *up* worked,
+   on both surfaces, for as long as reordering has existed. Worth doing a few
+   moves in both directions and trusting your eyes rather than the fact that it is
+   now tested.
+2. **Adding a work now places it at the end, and that is your ruling from this
+   session (#132).** A position is an index everywhere — on an add as much as on
+   a move — and "unplaced" is no longer reachable from anything you can click. It
+   survives as something an agent can ask for on a reorder. If a theme ever wants
+   a "no opinion" pile again, this is the decision that removed it.
+3. **A theme hanging on any wall cannot be deleted, and the refusal names the
+   rooms.** Hang one in two rooms and try. The sentence is the server's own — the
+   screen predicts nothing — so judge it as a sentence: does it tell you what to
+   do next, or only what went wrong?
+4. **Rename, Delete and the name field carry accessible names saying which
+   theme.** Invisible unless you use a screen reader; the visible words are
+   unchanged. Mentioned because it changed `accessibility-spec.md`'s rule from
+   *icon-only controls* to *controls whose visible words repeat across sibling
+   panels*, which is my reading of what the rule was for and is challengeable.
+5. **Each theme states its member count**, which the IA has always asked for and
+   the screen never showed. Check it does not read as clutter above the table
+   that already numbers the rows.
+6. **"Take down from {wall}" asks no question, deliberately.** Flow 6 makes
+   *activation* the confirmed act; a take-down rewrites no manifest, the room goes
+   on showing what it was showing, and the undo is the hang button reappearing in
+   its place. That is a judgement call nobody has reviewed.
+
+**Visual change: yes.**
+
+### Taste, and the delete that detaches instead of cascading — added 2026-08-12
+
+**Chunk 11.** Run `cd curation && uv run python -m curation` and open Taste.
+
+1. **Reactions on a conversation sample are keyed on the artist, not the
+   picture.** The three controls sit under each sample, but an affinity is one row
+   per (kind, value) — so reacting to one Kandinsky and then to another writes the
+   same row, and the second overwrites the first. Built as specified. **If you
+   want per-picture judgments, say so: the data model changes, not the screen.**
+2. **"Tell me more" is cool *and* still open**, which is the pair the whole
+   two-field design exists for. Check that the three controls read as three
+   distinct things rather than as a warmth slider with gaps.
+3. **A stronger provenance is not overwritten by a weaker one** — `stated` beats
+   `observed` beats `inferred`, equal ranks permitted so a re-inference can correct
+   an inference. *That ranking is the builder's ruling, not an artifact's, and they
+   flagged it as the thing most worth challenging.* The visible effect: something
+   you said yourself cannot be silently replaced by something a model inferred.
+4. **Deleting a conversation detaches rather than cascades**, per your #118
+   ruling. The affinities it produced survive with their rationale and lose only
+   the citation; the spend stays on the books. The confirmation names what is lost
+   in those terms rather than reporting a row count — judge whether it does.
+
+**Visual change: yes.**
+
+### The Walls screen, and the Work screen's archive — added 2026-08-12
+
+**Two screens rebuilt, and the first confirmation dialog the product has ever
+had.** Run `cd curation && uv run python -m curation` and open The Walls.
+
+**Specific things worth an opinion, each a judgement call made while building:**
+
+1. **`--text-3xl` (2.25rem/36px) went to the screen's own `h2` — "The Walls" —
+   and not to a wall's name.** `design-direction.md` reserved the token for "the
+   Walls screen's single large heading" without saying which heading, and that
+   sits in tension with the Information Hierarchy row making *which wall*
+   secondary to the artwork. So the page title is the large thing and the walls
+   below it are not. The other reading — each wall's name set large, the screen
+   title small — is a different product and is one line to try.
+2. **The confirmation is a modal `<dialog>`**, and it is the pattern every
+   consequential act will now use. Focus lands on **Cancel**, a click on the
+   backdrop dismisses nothing, and `Escape` cancels. It names the wall even
+   though you have one: "Hang Winter in the living room?" That is deliberate and
+   it will read as over-explaining until there are two walls.
+3. **The Walls screen does not poll.** Nothing repaints behind you. The masthead
+   indicator is what carries liveness. If a wall feels stale, that is why.
+4. **Archive and Restore are styled as ordinary controls, not as danger.** The
+   argument is that archiving is cheap and reversible and dressing it as
+   destructive makes a curator hesitate over nothing. Check whether it now reads
+   as *too* quiet for an act that takes a picture off the wall.
+5. **The archive confirmation names which walls lose the picture**, computed from
+   each wall's real manifest rather than predicted — and it says the room "loses
+   it at the next manifest build", which is the honest sentence. ~~**Worth your
+   ruling:** archiving does not itself republish.~~ **RULED 2026-08-12: the
+   picture may stay up, provided a path exists to force a rebuild.** It does, and
+   it is re-hanging a wall's current theme — `activate_theme` syncs
+   unconditionally and the Walls picker lists the theme already up, so hanging
+   what is hanging republishes. The catalogue still does not drive the display.
+   **What changed as a result, and is what to look at:** both confirmations now
+   name the remedy as well as the timing — "Re-hanging a wall's current theme
+   builds one" — because a curator told only *when* holds a fact they cannot act
+   on. Judge whether that reads as helpful or as a second sentence in a dialog
+   that was already long. See `information-architecture.md` § the archive
+   correction.
+6. **A work's facets are listed with the rare `sourced` ones marked by a tick**,
+   under one footnote saying everything else is inferred. `artist` appears both
+   as its own fact row above and in the facet list, which duplicates it — the
+   alternative was a filtering rule no artifact states, which would silently drop
+   a sourced artist's provenance.
+
+### Three destinations, and the whole client rebuilt as modules — added 2026-08-12
+
+**The largest visual change since the surface was built, and none of it is a
+thing a test can approve.** Five pipeline-stage tabs became three destinations —
+**The Walls · Collection · Discover** — with Health demoted out of the navigation
+into a masthead indicator, and Review and Theme becoming contextual screens you
+open from somewhere and come back to. The product now opens on **The Walls**
+rather than on Works: the thing it exists to produce was the fourth item, behind
+three tabs about producing it.
+
+The browser suite holds what a test can hold — the navigation is those three and
+no more, every screen has a URL, a Work opened from Collection returns to
+Collection, the indicator announces a degraded state without colour being the sole
+carrier. **What it cannot hold is whether the reshape reads as one product**, and
+that is the question.
+
+```sh
+cd curation && uv run python -m curation
+```
+
+**Four things worth an opinion, each a judgement call the plan did not settle:**
+
+1. **Landing on The Walls.** It is the strongest claim this reshape makes about
+   what the product is for. If the first thing you want on opening is the
+   collection, that is worth saying now rather than after four more screens are
+   built on top of it.
+2. **The masthead status indicator.** It replaced a tab, and the demotion is only
+   safe because the indicator speaks — it names *which wall* has gone quiet rather
+   than reporting that a wall has. It is also the first consumer of the
+   `--good`/`--warn`/`--crit` tokens the palette entry above flagged as the
+   least-proven values in the scheme. This is the look they were waiting for.
+3. **The persistent search box is a stopgap and is written as one.** It navigates
+   to Collection and filters title and artist over what that screen already
+   fetched. Real search — `q` against the catalogue, with facet counts — landed in
+   the same wave but the two chunks could not see each other; wiring the box to it
+   is the next screen chunk's. A dead control would have taught you the collection
+   cannot be searched, which is worse than a partial one.
+4. **Contextual screens and browser Back.** A Work opened from the Walls returns
+   to the Walls, one opened from Collection returns to Collection, and the address
+   bar carries `?from=` only when it differs from the default. Try Back and
+   Forward, and try copying a URL into a fresh tab — that second one is what the
+   addressability criterion is actually for.
+
+**Not a visual question but worth knowing while you look:** `app.js` was 2,033
+lines and is now 16 modules — `app.js` boots and holds the route table, `core/`
+holds the plumbing, `screens/` holds one module per screen, and no module under
+`screens/` may import another. That split is what lets the next two waves build
+four screens at once. The move was mechanical by design: the review grid's
+1,150-line browser test passes byte-for-byte across it.
+
+### The revised palette, now that it is in the stylesheet — added 2026-08-12
+
+**Every pair passes AA in both schemes and that settles nothing you care about.**
+The contrast test computes ratios; it cannot tell you whether the surface looks like
+a gallery or like a beige office. `build-plan-curation-ux.md` Chunk 03 says as much
+in one line — "a palette is the one thing a contrast test cannot approve on its own;
+the question is whether it looks like a museum" — and that question is yours.
+
+The light scheme is warm off-white with a near-black brown accent; the dark is a
+warm near-black with an old-gold accent. Both were designed in the committed
+prototype and had lived only there, hand-checked and ungoverned, since 2026-08-11.
+Nothing was adjusted on the way in: every value is the prototype's.
+
+Look at both, since the browser's own setting picks and there is no in-app toggle:
+
+```sh
+cd curation && uv run python -m curation
+```
+
+Open the prototype beside it — it is the reference for what this was supposed to
+feel like, and it carries a 2,000-work corpus where the real collection is 41:
+
+```
+.prawduct/artifacts/prototypes/curation-ia-prototype.html
+```
+
+**Three things worth an opinion, because each is a judgement a test cannot make:**
+
+1. **The accent in each scheme.** Light uses a near-black brown; dark uses an old
+   gold. They are not the same hue rotated — the dark scheme's accent is doing more
+   work, because a warm near-black surface gives it more room. Whether they read as
+   one product in two lights is exactly the thing only a person can say.
+2. **The status trio and its quiet backgrounds.** `--good`, `--warn`, `--crit` and
+   their `-quiet` variants are new; nothing consumes them yet. They arrive for the
+   masthead health indicator, which is the control that makes demoting Health from a
+   tab to an indicator safe. They were verified against every surface by hand rather
+   than by the test, because no rule references them — so they are the least-proven
+   values here and the most worth a look once the indicator exists.
+3. **The scrim.** A translucent black at 62% in light and 70% in dark, carrying
+   `--scrim-text` over whatever image sits behind it. Worst case measured 4.96:1 in
+   light. That clears AA over the extremes tested, but a scrim sits over *pictures*,
+   and a painting is not a grey card.
+4. **The error callout's marker, which is the one rule that changed rather than
+   just its values.** It drew its left border from the accent, which worked while the
+   accent was blue and body text was not. The revised palette is warm throughout, so
+   that marker became a hairline in the text's own family — 1.05:1 against body text.
+   It now draws from `--crit` instead, which is what that token is for and what the
+   palette's own comment says status must do. **This is the one place the built
+   surface looks different for a reason other than the new colours**, so it is the
+   one worth checking reads as a warning rather than as decoration.
+
+**Nothing on your wall changed.** This is the browser surface only; no rendition, no
+mat, no manifest, no television.
+
 ### The clamped mats, on the seven works that were over the bar — added 2026-08-11
 
 **The numbers are settled; the look is not, and only you can settle it.** Issue
@@ -76,7 +284,8 @@ it. Three things to see:
    attached, which is the whole question.
 2. **The label follows.** The panel names the work the wall is showing. (With no
    panel attached, `label.failed` absent from the journal and
-   `label_surface_working` in `display-heartbeat.json` are the proxy.)
+   `label_surface_working` in that wall's `display-heartbeat-{wall_id}.json` are
+   the proxy — one file per wall since 2026-08-12.)
 3. **The remote is a curator too — added with the behaviour, 2026-08-08.** In art
    mode, pick a *different* work with the television's own remote, one the active
    theme carries. The label should follow within a poll interval rather than

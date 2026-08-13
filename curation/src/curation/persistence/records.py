@@ -112,6 +112,60 @@ class MatMethod(StrEnum):
     MANUAL = "manual"
 
 
+class VocabularyKind(StrEnum):
+    """The one typed vocabulary, used from both sides.
+
+    **This enum is deliberately shared rather than duplicated, and the sharing is
+    the reason `WorkFacet` exists at all.** One set of terms then serves three
+    purposes: what a work *is* (`WorkFacet.kind`), what the curator *likes*
+    (`Affinity.kind`), and what discovery weights when it proposes. Two
+    vocabularies for one idea is the drift being avoided — "Post-Impressionism"
+    as a taste and "post impressionist" as a catalogue value cannot be matched,
+    and nothing would report the mismatch.
+
+    **`Affinity` binds to this type rather than declaring its own**, which is
+    what makes the agreement structural. Widening one without the other would
+    silently break the join that makes taste useful, and the only way to stop
+    that being a promise is for there to be one enum to widen. `Affinity` itself
+    lives in `discovery_records.py`, beside the conversations a judgment is
+    derived from and inside the transaction its detachment has to hold.
+
+    Closed on purpose. A free-text kind turns a typo into a new dimension, and
+    nothing downstream can tell `subject` from `subjcet`; a seventh kind is a
+    schema change, which is the point.
+    """
+
+    ARTIST = "artist"
+    MOVEMENT = "movement"
+    ERA = "era"
+    SUBJECT = "subject"
+    MEDIUM = "medium"
+    PALETTE = "palette"
+
+
+class FacetDerivation(StrEnum):
+    """Where a facet's claim about a work came from.
+
+    Never absent — an unlabelled facet is a guess wearing a citation.
+
+    **The expected steady state is that most facets are `INFERRED`**, and that is
+    a fact about the providers rather than a defect: `discovery/browse.py` records
+    that for the Art Institute "style, classification and period were measured
+    missing on ordinary spellings", and that collection publishes no style field
+    at all. Which is exactly why every row has to say which it is — a facet the
+    museum published and a facet a model guessed carry different authority, and a
+    curator correcting the catalogue needs to know which one they are arguing
+    with.
+
+    Deliberately *not* `Affinity.derivation`, which is a different question with
+    three answers (`stated`, `inferred`, `observed`) about where a *taste* came
+    from. Only `kind` is the shared vocabulary.
+    """
+
+    SOURCED = "sourced"
+    INFERRED = "inferred"
+
+
 @dataclass(frozen=True, slots=True)
 class Artist:
     """A person a work is attributed to.
@@ -175,6 +229,36 @@ class Artwork:
     rights: str | None = None
     accepted_at: datetime | None = None
     commentary: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WorkFacet:
+    """What a work *is*, in the same typed vocabulary the curator's taste is expressed in.
+
+    Many per work, unique on (`artwork_id`, `kind`, `value`): a work is Baroque
+    once. The uniqueness is not decoration — the facet counts a curator reads off
+    the collection are a plain `COUNT(*)` per value, and a second Baroque row on
+    one work would inflate every one of them.
+
+    **`era` sits BESIDE `Artwork.date_created`, never over it.** `date_created` is
+    free text — "1931", "c. 1650", "1888-89" — because normalising would destroy
+    the distinction between a known year and an estimated one, and that decision
+    stands. An era facet is an additional, coarser, *lossy* reading of the same
+    fact, kept here where its derivation is recorded: the free text stays the
+    evidence and the facet is only the index. A surface showing "Late 19th c."
+    must still be able to show "1888-89".
+    """
+
+    id: str
+    artwork_id: str
+    kind: VocabularyKind
+    value: str
+    derivation: FacetDerivation
+    created_at: datetime
+    #: For `SOURCED`, which field of which provider — e.g. `artic:classification_title`.
+    #: For `INFERRED`, the model id. Null where nobody recorded it, which is
+    #: honest rather than tidy.
+    source_note: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -358,7 +442,13 @@ class ThemeMembership:
 
 @dataclass(frozen=True, slots=True)
 class Theme:
-    """A curator's grouping of works, and the unit the wall rotates through.
+    """A curator's grouping of works, and the unit a wall rotates through.
+
+    **Global, and hung rather than activated.** This record carried an
+    `is_active` boolean until 2026-08-12, which could only ever mean "active on
+    the one television" — the single-wall assumption written into the noun. What
+    is hanging where is `ThemeAssignment`'s to say, so two walls may hang the
+    same theme with nothing duplicated.
 
     Rotation is host-driven — the TV's own slideshow can only be scoped to a
     whole category, so timing is this product's data rather than the television's
@@ -371,14 +461,61 @@ class Theme:
     name: str
     created_at: datetime
     description: str | None = None
-    is_active: bool = False
     rotation_interval_seconds: int | None = None
     shuffle: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
+class Wall:
+    """A place where art hangs. One display serves one wall.
+
+    **Three fields, and the shortness is the design.** A wall is an identity and
+    a name; it is not a device. Geometry, network address, panel model, TV
+    content ids, upload state, reachability and last-heartbeat are all per-device
+    runtime state and are permanently forbidden here — they belong to the display
+    plane's own store or to the configuration both planes read. Which display
+    serves which wall is display-plane configuration, exactly as `TV_ADDRESS`
+    already is.
+
+    That this record lives in the catalogue at all is a ruling against
+    `data-model.md`'s "per-device runtime state never lives in the catalogue"
+    rather than an oversight: a wall is a *place* and its name is a *curatorial*
+    fact, and assigning a theme to it is a curatorial act, which is precisely why
+    it cannot live on the display side where the curator cannot reach it.
+    Replace the television and the wall persists, keeps its name and keeps its
+    theme — where a design keying assignment on a device would lose the curation
+    along with the device.
+    """
+
+    id: str
+    name: str
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ThemeAssignment:
+    """What is hanging on one wall — the act the interface calls *hanging*.
+
+    **`wall_id` alone is the primary key, which is what makes "one theme per
+    wall" structural.** The predecessor needed a partial unique index over
+    `Theme.is_active` plus a reconciliation pass to approximate it, and this
+    product has already been bitten once by reading that arrangement as an
+    absolute it never enforced. Nothing here has to claim anything: a second
+    theme on a wall is not a violation to detect, it is a row that cannot be
+    inserted.
+
+    **A wall with no row hangs nothing, and that is an ordinary state** — an
+    empty catalogue, or a curator who took everything down.
+    """
+
+    wall_id: str
+    theme_id: str
+    assigned_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class Directive:
-    """The standing instruction the display plane acts on, held catalogue-side.
+    """One wall's standing instruction to the display plane, held catalogue-side.
 
     The display plane is reached only through the theme manifest, so an
     interactive command — "show this work now", "step to the next one" — travels
@@ -386,12 +523,19 @@ class Directive:
     an optional work the sequence's advance points at. Display acts once each
     time it observes the sequence advance.
 
+    **One row per wall, seeded when the wall is created so no caller ever has to
+    make it.** This was a singleton until 2026-08-12, and a `next` aimed at the
+    living room would otherwise have stepped every wall in the house: one counter
+    cannot say which display an advance was meant for.
+
     The counter lives here, in the catalogue, because a manifest rebuild must
     carry it forward unchanged. A counter derived from the manifest would reset
     whenever the manifest was rewritten, and a reset reads to the display plane
-    as an advance — firing a directive nobody issued.
+    as an advance — firing a directive nobody issued. It stays *per wall* rather
+    than per theme for the same reason: it has to survive theme switching.
     """
 
+    wall_id: str
     sequence: int
     pinned_work_id: str | None = None
 

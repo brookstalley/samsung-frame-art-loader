@@ -57,53 +57,92 @@ def _original(service, artwork_id, source_id, *, content_hash="sha256:aaa", byte
     )
 
 
-# -- 1. Exactly one theme is active -------------------------------------------
+# -- 1. At most one theme hangs on a wall -------------------------------------
 #
-# The display plane syncs whatever the active theme holds. Two claimants, or
-# none, and its target is a guess.
+# Enforced by `ThemeAssignment.wall_id` being the whole primary key: a second
+# theme on a wall is a row the store will not accept, so there is nothing here to
+# detect or reconcile. A wall with no assignment hangs nothing, which is an
+# ordinary state and not a violation.
+#
+# This constraint read "exactly one Theme has is_active = true" until 2026-08-12.
+# The tests below are its replacement rather than a relaxation of it: what
+# changed is which entity carries the fact, and the operator ruled on it.
 
 
-def test_the_first_theme_is_active_because_a_catalogue_with_none_has_no_sync_target(display):
-    assert display.add_theme(name="American Modernists").is_active is True
+def test_a_new_theme_hangs_nowhere_until_it_is_put_somewhere(display):
+    """Nothing is promoted automatically.
+
+    `add_theme` used to activate a theme when no other was, which is the same
+    automatic promotion `reconcile` did — and with more than one wall neither has
+    a defensible answer to *which* wall.
+    """
+    theme = display.add_theme(name="American Modernists")
+
+    assert display.walls_hanging(theme.id) == []
 
 
-def test_a_second_theme_does_not_displace_the_active_one_by_arriving(display):
+def test_a_wall_with_nothing_hanging_is_an_ordinary_state(display, wall_id):
+    assert display.hanging_on(wall_id) is None
+
+
+def test_hanging_a_theme_puts_it_on_the_named_wall(display, wall_id):
+    theme = display.add_theme(name="American Modernists")
+
+    display.activate_theme(theme.id, wall_id=wall_id)
+
+    assert display.hanging_on(wall_id).id == theme.id
+    assert [wall.id for wall in display.walls_hanging(theme.id)] == [wall_id]
+
+
+def test_hanging_a_second_theme_replaces_the_first_rather_than_joining_it(display, wall_id):
     first = display.add_theme(name="American Modernists")
     second = display.add_theme(name="Surrealists")
 
-    assert display.get_theme(first.id).is_active is True
-    assert second.is_active is False
+    display.activate_theme(first.id, wall_id=wall_id)
+    display.activate_theme(second.id, wall_id=wall_id)
+
+    assert display.hanging_on(wall_id).id == second.id
+    assert display.walls_hanging(first.id) == []
 
 
-def test_activating_a_theme_stands_the_previous_one_down(display):
-    first = display.add_theme(name="American Modernists")
-    second = display.add_theme(name="Surrealists")
-
-    display.activate_theme(second.id)
-
-    assert display.get_theme(first.id).is_active is False
-    assert display.get_theme(second.id).is_active is True
-    assert [theme.is_active for theme in display.list_themes()].count(True) == 1
-
-
-def test_activating_the_already_active_theme_leaves_exactly_one_active(display):
+def test_hanging_the_theme_already_there_changes_nothing_about_where_it_hangs(display, wall_id):
     only = display.add_theme(name="American Modernists")
 
-    display.activate_theme(only.id)
+    display.activate_theme(only.id, wall_id=wall_id)
+    display.activate_theme(only.id, wall_id=wall_id)
 
-    assert [theme.is_active for theme in display.list_themes()] == [True]
-
-
-def test_the_active_theme_is_the_one_reported_as_active(display):
-    display.add_theme(name="American Modernists")
-    second = display.add_theme(name="Surrealists")
-    display.activate_theme(second.id)
-
-    assert display.active_theme().id == second.id
+    assert [wall.id for wall in display.walls_hanging(only.id)] == [wall_id]
 
 
-def test_a_catalogue_with_no_themes_has_no_active_one(display):
-    assert display.active_theme() is None
+def test_one_theme_may_hang_on_two_walls_at_once(display, wall_id):
+    """The property the boolean it replaced could not have, at any cost.
+
+    Two rooms showing the same theme is one theme row and two assignment rows —
+    never a duplicated theme, which would then have to be edited twice.
+    """
+    theme = display.add_theme(name="American Modernists")
+    study = display.add_wall(name="Study")
+
+    display.activate_theme(theme.id, wall_id=wall_id)
+    display.activate_theme(theme.id, wall_id=study.id)
+
+    assert {wall.id for wall in display.walls_hanging(theme.id)} == {wall_id, study.id}
+    assert len(display.list_themes()) == 1
+
+
+def test_taking_a_theme_down_leaves_the_wall_holding_nothing(display, wall_id):
+    theme = display.add_theme(name="American Modernists")
+    display.activate_theme(theme.id, wall_id=wall_id)
+
+    display.clear_wall(wall_id)
+
+    assert display.hanging_on(wall_id) is None
+    assert display.walls_hanging(theme.id) == []
+
+
+def test_taking_down_from_a_wall_holding_nothing_is_refused(display, wall_id):
+    with pytest.raises(ServiceError, match="nothing to take down"):
+        display.clear_wall(wall_id)
 
 
 # -- 2. Exactly one mat colour per work is current ----------------------------
@@ -572,13 +611,25 @@ def test_a_negative_position_is_refused(service, display):
         display.add_to_theme(theme_id=theme.id, artwork_id=work.id, position=-1)
 
 
-def test_placing_a_work_in_a_theme_twice_is_refused(service, display):
+def test_placing_a_work_in_a_theme_twice_is_refused(service, display, store):
+    """And refused whole: an add now renumbers the works it displaces.
+
+    The insert and the renumber are one transaction precisely so a refused add
+    cannot leave the order rearranged around a work that was never added — which
+    would be a reorder nobody asked for, reported as an error about something
+    else.
+    """
     work = _work(service)
+    other = _work(service, "Chop Suey")
     theme = display.add_theme(name="Hopper")
     display.add_to_theme(theme_id=theme.id, artwork_id=work.id)
+    display.add_to_theme(theme_id=theme.id, artwork_id=other.id)
 
     with pytest.raises(ServiceError, match="Could not store"):
-        display.add_to_theme(theme_id=theme.id, artwork_id=work.id)
+        display.add_to_theme(theme_id=theme.id, artwork_id=work.id, position=0)
+
+    assert [membership.artwork_id for membership in store.list_memberships(theme.id)] == [work.id, other.id]
+    assert [membership.position for membership in store.list_memberships(theme.id)] == [0, 1]
 
 
 def test_moving_or_removing_a_work_that_is_not_in_the_theme_is_refused(service, display):

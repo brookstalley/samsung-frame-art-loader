@@ -92,6 +92,53 @@ class WorkOut(BaseModel):
     image: ImageOut
 
 
+class WorkFacetOut(BaseModel):
+    """One thing a work is said to be."""
+
+    facet_id: str
+    #: One of the six shared vocabulary kinds — `artist`, `movement`, `era`,
+    #: `subject`, `medium`, `palette`.
+    kind: str
+    value: str
+    #: `sourced` or `inferred`. **Inferred is the rule rather than the exception**
+    #: for the wired collection, so a screen states that default once and marks
+    #: only the rare `sourced` value; badging every inferred row is a label on
+    #: almost everything, which is a label nobody reads.
+    derivation: str
+    #: Which field of which provider, or which model. Null where nobody recorded it.
+    source_note: str | None
+
+
+class FacetOptionOut(BaseModel):
+    """One value a facet control offers."""
+
+    value: str
+    #: Works this value would select **given every other facet but not this one**.
+    #: That is what lets a curator change their mind about a facet without first
+    #: clearing it.
+    count: int
+    selected: bool
+    #: True for an option that would select nothing. **Returned rather than
+    #: omitted**: a vocabulary that shrank as filters were applied would read as
+    #: data loss rather than as an empty intersection. A selected value is never
+    #: disabled, because the control that turns it off is the option itself.
+    disabled: bool
+
+
+class FacetGroupOut(BaseModel):
+    """One facet kind as a control renders it."""
+
+    kind: str
+    #: Commonest first, then alphabetically, capped — with every selected value
+    #: kept whatever its count.
+    options: list[FacetOptionOut]
+    #: How many values this kind offers in total, before the cap.
+    total_values: int
+    #: True when the cap left some out, so a control can say how much it is not
+    #: showing rather than implying the vocabulary is as long as the list.
+    truncated: bool
+
+
 class WorkPageOut(BaseModel):
     """A page of works that describes its own place in the set."""
 
@@ -100,6 +147,11 @@ class WorkPageOut(BaseModel):
     limit: int
     offset: int
     truncated: bool
+    #: The facet controls for exactly this filter, in the same response as the
+    #: works they label. **Not a second route** — they answer the same question
+    #: the grid answers, and two routes would give a curator two answers to it
+    #: with a write free to land in between.
+    facets: list[FacetGroupOut] = []
 
 
 class SourceOut(BaseModel):
@@ -166,15 +218,24 @@ class WorkDetailOut(BaseModel):
     sources: list[SourceOut]
     renditions: list[RenditionOut]
     mat_colors: list[MatColorOut]
+    #: What this work is, in the vocabulary the collection is filtered by. On the
+    #: detail rather than on `WorkOut`, because the grid shows the collection's
+    #: counts and the Work screen shows one work's facts.
+    facets: list[WorkFacetOut] = []
 
 
 class ThemeOut(BaseModel):
-    """A grouping of works, and the pace it runs at."""
+    """A grouping of works, and the pace it runs at.
+
+    **It does not say where it is hanging**, and that is the shape of the
+    2026-08-12 ruling rather than an omission: a theme is global, two walls may
+    hang the same one, and an `is_active` boolean here could only ever have meant
+    "active on the one television". `WallOut` is what says what is where.
+    """
 
     theme_id: str
     name: str
     description: str | None
-    is_active: bool
     #: Null means "inherit the deployment default" rather than "unset", so it is
     #: reported as stored rather than resolved to a number that would read as a
     #: choice the curator made.
@@ -183,10 +244,86 @@ class ThemeOut(BaseModel):
     created_at: str
 
 
-class ThemeListOut(BaseModel):
-    """Every theme."""
+class WallRefOut(BaseModel):
+    """A wall named from somewhere that is not about walls.
 
-    themes: list[ThemeOut]
+    Just enough to say which wall and to print its name. The full shape would
+    carry the theme hanging on it, and a theme listing that carried each wall's
+    theme would be answering a question nobody asked from inside the answer to
+    another one.
+    """
+
+    wall_id: str
+    name: str
+
+
+class ThemePlacementOut(BaseModel):
+    """A theme and every wall showing it.
+
+    A list rather than a single wall, because two walls may hang the same theme
+    — and a field with room for one would have re-made the single-wall
+    assumption one layer above the boolean that was removed. Empty is the
+    ordinary state of a theme nobody has hung.
+    """
+
+    theme: ThemeOut
+    hanging_on: list[WallRefOut]
+
+
+class ThemeListOut(BaseModel):
+    """Every theme, and where each is hanging."""
+
+    themes: list[ThemePlacementOut]
+
+
+class WallOut(BaseModel):
+    """A place where art hangs, and what is hanging there.
+
+    The theme travels with the wall rather than being a second request, because
+    every screen that shows a wall shows what is on it — and because the pair is
+    read at one instant here, where two requests could report a wall and a theme
+    that were never simultaneously true.
+
+    **`theme` is null when nothing is hanging**, which is an ordinary state: an
+    empty catalogue, or a curator who took everything down.
+    """
+
+    wall_id: str
+    name: str
+    created_at: str
+    theme: ThemeOut | None
+    #: What this wall was last told to do. Carried because the Walls screen shows
+    #: "what is next" beside "what is hanging", and because a per-wall counter is
+    #: the thing a reader has to be able to see is per-wall.
+    directive_sequence: int
+    pinned_work_id: str | None
+
+
+class WallListOut(BaseModel):
+    """Every wall, with what each is showing."""
+
+    walls: list[WallOut]
+
+
+class DirectiveOut(BaseModel):
+    """What one wall was last told to do.
+
+    **The wall is in the answer, not only in the request.** A directive is a row
+    per wall rather than a singleton, and an answer that reported only a counter
+    would leave a caller holding a number with nothing attached to it — which is
+    exactly the state the singleton was in before the split.
+
+    `WallOut` carries the same two facts beside the theme, and this is
+    deliberately not that: stepping a wall changes what it was told to do and
+    nothing about what hangs there, so an answer shaped like a wall would invite
+    a reader to look for a change in the rest of it.
+    """
+
+    wall_id: str
+    sequence: int
+    #: Null after a step, always: moving on and standing on a pinned work are
+    #: contradictory instructions, so the step clears any pin.
+    pinned_work_id: str | None
 
 
 class ThemeDetailOut(BaseModel):
@@ -224,6 +361,11 @@ class ManifestOut(BaseModel):
     whole reason the builder reports them.
     """
 
+    #: Which wall this build is about. Named in the response so a confirmation
+    #: can say "Hang Winter in the living room" without a second request, even
+    #: while there is one wall and the answer is obvious.
+    wall_id: str
+    wall_name: str
     theme: ThemeOut
     entries: list[ManifestEntryOut]
     exclusions: list[ExclusionOut]
@@ -312,8 +454,26 @@ class BackupOut(BaseModel):
     reported: dict[str, Any] | None
 
 
+class WallHeartbeatOut(BaseModel):
+    """One wall and what the display serving it last said about itself.
+
+    The wall's name travels with its reading rather than being looked up by the
+    client from a second call: a panel that has to join two responses to say
+    *which* room is silent is a panel that will say "a wall is silent" instead.
+    """
+
+    wall_id: str
+    wall_name: str
+    heartbeat: HeartbeatOut
+
+
 class HealthOut(BaseModel):
-    """Observations about the wall, the backup, and this deployment's geometry.
+    """Observations about the walls, the backup, and this deployment's geometry.
+
+    **The heartbeat is a list, one entry per wall**, since 2026-08-12. Each wall's
+    display writes its own file, so "has the display plane reported" stopped being
+    a question with one answer and became "which wall has not" — and a single
+    reading could not have carried the name of the room that went quiet.
 
     **There is no budget balance here, and its absence is a decision** (operator,
     2026-08-04). The provider's `limit_remaining` was observed reporting credit
@@ -324,7 +484,11 @@ class HealthOut(BaseModel):
     outcome, and both are on the run view.
     """
 
-    heartbeat: HeartbeatOut
+    walls: list[WallHeartbeatOut]
+    #: One sentence across every wall, naming the ones that have not reported.
+    #: An observation and never a verdict: no threshold is applied here, so this
+    #: says how long ago rather than whether that is too long.
+    description: str
     backup: BackupOut
     artwork_box: ArtworkBoxOut
 
@@ -687,10 +851,56 @@ class CreateTheme(BaseModel):
     description: str | None = None
 
 
+class RenameTheme(BaseModel):
+    """The new name, and deliberately nothing else.
+
+    `update_theme` can also change a description and a theme's pace, and this
+    body cannot reach either. That is the route's scope rather than an oversight:
+    the service distinguishes "leave this alone" from "clear it" with a sentinel,
+    and a request model whose optional fields default to `None` would erase a
+    theme's rotation settings every time a curator corrected a typo in its name.
+    A body that can only say one thing cannot say that one by accident.
+    """
+
+    name: str
+
+
+class CreateWall(BaseModel):
+    """Everything needed to record a wall: a name, and nothing device-shaped."""
+
+    name: str
+
+
+class HangTheme(BaseModel):
+    """Which wall a theme is being hung on.
+
+    **Required, even while there is one wall and the answer is obvious.** A
+    request that omitted it would produce a confirmation that reads correctly
+    today and silently becomes wrong the day a second display arrives.
+    """
+
+    wall_id: str
+
+
+class StepDisplay(BaseModel):
+    """Which wall is being told to move on to the next work.
+
+    **Required, for the reason `HangTheme` states.** A `next` aimed at the living
+    room that stepped the study is one counter being asked a question it cannot
+    answer, and a request that guessed would be indistinguishable from one that
+    meant it.
+    """
+
+    wall_id: str
+
+
 class AddWork(BaseModel):
-    """A work to place in a theme, optionally at a chosen position."""
+    """A work to place in a theme, at a chosen index or at the end of the order."""
 
     artwork_id: str
+    #: An index into the order the theme is displayed in, not a number stored on
+    #: the work. Null puts it last — the screens send nothing, and a work nobody
+    #: has placed belongs at the end rather than outside the order.
     position: int | None = None
 
 
@@ -699,3 +909,250 @@ class MoveWork(BaseModel):
 
     #: Null moves it behind everything a curator has placed deliberately.
     position: int | None = Field(default=None)
+
+
+class SampleOut(BaseModel):
+    """One picture shown beside a name a reply gave, to make the name concrete.
+
+    **Not a candidate and not on its way to becoming one.** Nothing here has been
+    proposed, judged, or acquired — it is a work the wired collection holds by an
+    artist the model named. `image_url` is the collection's own preview address,
+    loaded by the browser directly, because a conversation caches no files: a
+    picture nobody chose is not a preview of anything, and storing one would need
+    a sweep for files that were never candidates.
+    """
+
+    title: str
+    artist: str | None
+    #: Null when the deployment browses no collection, or when the collection's
+    #: record carries no preview. The name is still shown; a sample without a
+    #: picture is a fact stated plainly rather than a blank box.
+    image_url: str | None
+
+
+class SuggestionOut(BaseModel):
+    """One thing a turn named, and whatever pictures were found for it.
+
+    `kind` is drawn from the same closed set an affinity is recorded against —
+    artist, movement, era, subject, medium, palette — because a suggestion is
+    what an affinity would later be recorded *about*, and two vocabularies would
+    leave the thing said and the thing remembered unable to be matched up.
+    """
+
+    kind: str
+    value: str
+    #: Frozen at the moment the turn was written, never looked up on read. The
+    #: transcript is a record of what was said, so a thread re-read next month
+    #: shows the pictures it showed at the time rather than whatever the
+    #: collection would answer today. Empty for a kind the collection cannot be
+    #: browsed by, which today is everything but `artist`.
+    samples: list[SampleOut]
+
+
+class ConversationTurnOut(BaseModel):
+    """One thing said in a conversation.
+
+    `role` is `curator` or `system` — the product's own words, deliberately not
+    the provider's `user`/`assistant`. The transcript a curator reads back is in
+    the product's terms, and the translation to a chat API's happens once, far
+    below this surface.
+    """
+
+    turn_id: str
+    ordinal: int
+    role: str
+    #: Verbatim, and never null. A model turn that was cut off arrives from the
+    #: provider with no content at all; storing that null is what would make the
+    #: *next* turn fail over a missing content field rather than over anything
+    #: that went wrong, so a turn with nothing in it carries the empty string.
+    text: str
+    suggested: list[SuggestionOut]
+    #: The seam. Set on the turn where the curator committed a direction, and the
+    #: only edge from a conversation to a run. A run started from the Discover
+    #: box has none, and neither does any turn before the commit.
+    committed_run_id: str | None
+    created_at: str
+
+
+class ConversationOut(BaseModel):
+    """One conversation as a list row shows it."""
+
+    conversation_id: str
+    started_at: str
+    #: What the list is ordered by. Distinct from `started_at` because the thread
+    #: a curator is looking for is the one they last said something in, and the
+    #: day it began says nothing about that.
+    last_turn_at: str
+    #: A short account of where the conversation got to, for the list. **Never
+    #: read back as taste** — an affinity is the only thing the product consults
+    #: for that, and a summary consulted as one would be a second, prose-shaped
+    #: opinion free to drift from the recorded one.
+    summary: str | None
+
+
+class ConversationViewOut(BaseModel):
+    """A whole thread, and whatever is outstanding on it.
+
+    `failure` and `unanswered_turn_id` are the retryable failed turn, and they
+    are deliberately different kinds of fact. `unanswered_turn_id` is derived
+    from the transcript — a thread whose last turn is the curator's is one whose
+    question was not answered — so it survives a reload and cannot disagree with
+    what the thread says. `failure` is the account of why *this* attempt did not
+    answer, and it lives only on the response to that attempt: it is a fact about
+    a call rather than about the conversation, and a transcript that kept it
+    would report a provider's transient complaint as part of what was said.
+
+    **Every write returns this whole view rather than the turn it wrote.** A
+    failed turn must stay in the thread and be retryable, which a client cannot
+    render from an error body — so a turn that could not be answered is a 200
+    carrying the thread and the reason, and only a refusal that recorded nothing
+    at all is a 400.
+    """
+
+    conversation: ConversationOut
+    turns: list[ConversationTurnOut]
+    #: The run this conversation seeded, if it has seeded one — the most recent,
+    #: because a curator may commit a second direction from the same thread and
+    #: the card at the bottom is about the last thing they did. This is what the
+    #: commit card polls, and it is why committing never has to navigate.
+    committed_run_id: str | None
+    failure: str | None
+    unanswered_turn_id: str | None
+
+
+class ConversationListOut(BaseModel):
+    """Every conversation, the most recently spoken in first."""
+
+    conversations: list[ConversationOut]
+    count: int
+
+
+class Speak(BaseModel):
+    """Something to say, or nothing — which asks again for the last answer.
+
+    **Omitting the text is how a failed turn is retried, and that is what keeps a
+    spend-triggering POST safe to press twice.** Retrying asks for the answer to
+    the question already standing at the end of the thread rather than re-sending
+    the question, so a thread whose last turn *was* answered has nothing to retry
+    and is told so — which is exactly the case where the model was billed and the
+    response was lost on the way back to the browser. The transcript closes the
+    double-spend window, in place of an idempotency key a client would have to
+    remember to send.
+    """
+
+    text: str | None = None
+
+
+class CommitDirection(BaseModel):
+    """The direction to search for, in the words the curator is committing to.
+
+    Sent rather than derived on the server from the last turn's suggestions, for
+    the reason the direct-intent box exists at all: what gets searched for is the
+    curator's decision, and a commit button that sent something they had not read
+    would be the wizard this flow is arranged to avoid.
+    """
+
+    intent: str
+
+
+class ConversationDeletionOut(BaseModel):
+    """What deleting a conversation destroyed, and what it left standing.
+
+    **`description` is the response's point and the counts qualify it.** This is
+    the one operation in the product that genuinely destroys a record, and the
+    requirement is that the confirmation names a consequence — the ability to
+    rebuild those judgments when the derivation improves, which is gone — rather
+    than reporting how many rows moved.
+    """
+
+    conversation_id: str
+    turns_deleted: int
+    #: Judgments that kept their judgment and lost their derivation. Their rows
+    #: are untouched but for `source_turn_id`, which is now null.
+    affinities_detached: int
+    #: Ledger entries that kept their amount and lost their citation. **No month
+    #: total changes**, which is why these are detached rather than cascaded.
+    spend_records_detached: int
+    #: Searches this thread committed. They are untouched; what is gone is the
+    #: record that this conversation is where they came from.
+    runs_unattributed: int
+    description: str
+
+
+class AffinityOut(BaseModel):
+    """One standing judgment about a thing the curator has reacted to.
+
+    `sentiment` and `open_to_more` are two fields rather than one warmth score,
+    because "meh on Magritte, but open to learning more" is two facts and a single
+    scalar renders it as a low value indistinguishable from "never show me this
+    again".
+    """
+
+    affinity_id: str
+    #: One of the six shared vocabulary kinds — the same closed set a work's
+    #: facets are recorded in, so that what a work *is* and what the curator
+    #: *likes* can be matched at all.
+    kind: str
+    #: The thing itself, as it was named. A string and never a foreign key: the
+    #: artists a conversation surfaces are the ones the curator could not have
+    #: named, so most judgments are about a name this catalogue does not hold.
+    value: str
+    sentiment: str
+    open_to_more: bool
+    #: `stated`, `inferred` or `observed` — where the judgment came from, and the
+    #: thing the Taste screen shows beside every row so a curator knows which
+    #: claim they are arguing with.
+    derivation: str
+    #: The account of the judgment in the curator's terms. Null is normal for
+    #: `stated`; required on the write path for the other two, where it is the
+    #: only evidence a deleted conversation leaves behind.
+    rationale: str | None
+    #: The turn this was read out of, where one was cited and still exists.
+    #: **Null on an `inferred` row whose conversation was deleted**, which is a
+    #: legal state rather than a corruption.
+    source_turn_id: str | None
+    #: The thread that turn belongs to, resolved by the service rather than
+    #: stored — the affinity cites a turn, and a turn already knows its
+    #: conversation. This is what the Taste screen's way back to a judgment's
+    #: provenance is addressed by; null exactly where `source_turn_id` is.
+    conversation_id: str | None
+    artist_id: str | None
+    created_at: str
+    updated_at: str
+
+
+class AffinityListOut(BaseModel):
+    """The whole taste, or whatever narrowing was asked for.
+
+    Unpaged, deliberately: this is a household's entire taste, which is tens of
+    rows, and a page over it would be a second way to read what one call hands
+    back whole.
+    """
+
+    affinities: list[AffinityOut]
+    count: int
+
+
+class SetAffinity(BaseModel):
+    """One judgment to write over whatever was there.
+
+    Addressed by (`kind`, `value`) rather than by an id, because the thing being
+    judged is a name in a sentence rather than a row anybody fetched — which is
+    what makes this an upsert and not a create.
+
+    `sentiment` and `open_to_more` are both required, with no default for either:
+    the default that reads as safe — do not offer more — is the one that silently
+    blacklists an artist the curator asked to keep hearing about.
+    """
+
+    kind: str
+    value: str
+    sentiment: str
+    open_to_more: bool
+    #: Defaults to `stated`, which is what the Taste screen's correction and every
+    #: reaction in a thread are. `observed` is refused whoever sends it.
+    derivation: str = "stated"
+    rationale: str | None = None
+    #: Required by the service when `derivation` is `inferred`, and meaningless
+    #: otherwise: a curator saying a thing is the whole provenance.
+    source_turn_id: str | None = None

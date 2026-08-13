@@ -91,6 +91,15 @@ class TableAdapter:
         """
         return self._store.transaction()
 
+    def reading(self) -> AbstractContextManager[None]:
+        """Group several reads so they answer about one instant of the file.
+
+        Delegated for the same reason as `transaction` above, and it reaches the
+        same lock — so a composite read spanning both adapters is as consistent
+        as one inside either.
+        """
+        return self._store.reading()
+
     def close(self) -> None:
         """Release the file. Every adapter over the same file is closed with it.
 
@@ -135,6 +144,16 @@ class TableAdapter:
             except StorageError as exc:
                 log.warning("Refused to update %s: %s", subject, exc.reason)
                 raise StorageError(f"Could not update {subject}: {exc.reason}", reason=exc.reason) from exc
+
+    def _delete(self, table: str, pk: Mapping[str, Any]) -> None:
+        """Remove a record, saying nothing about whether it was there.
+
+        A missing row is not an error, which is right for the one thing on this
+        surface that genuinely destroys a record: the caller has already read what
+        it is about to remove, and a second refusal from underneath it would only
+        turn a re-entered delete into a failure with nothing left to fix.
+        """
+        self._store.delete(table, pk)
 
     def _get[R](self, table: str, pk: Mapping[str, Any], build: Callable[[Mapping[str, Any]], R]) -> R | None:
         row = self._store.fetch_one(table, pk)

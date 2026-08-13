@@ -17,6 +17,12 @@ from curation.app import create_app
 from curation.config import Settings
 from curation.discovery.artic import build_collection_browse, build_image_search
 from curation.discovery.browse import CollectionBrowse
+from curation.discovery.conversation import (
+    NO_CONVERSATION_KEY,
+    ConversationEngine,
+    UnavailableConversation,
+    build_conversation_engine,
+)
 from curation.discovery.engine import DiscoveryEngine, unavailable_engine
 from curation.discovery.images import ImageSearch
 from curation.discovery.openrouter import OpenRouterClient
@@ -25,7 +31,7 @@ from curation.persistence.file import open_catalogue_file
 from curation.persistence.sqlite import SqliteCatalogue
 from curation.persistence.sqlite_discovery import SqliteDiscovery
 from curation.services.container import Services
-from curation.services.display import WallSettings
+from curation.services.display import DisplaySettings
 from curation.services.previews import PreviewSettings
 from curation.services.thumbnails import ThumbnailSettings
 
@@ -77,6 +83,23 @@ def _mat_engine(settings: Settings) -> MatEngine:
             max_output_tokens=settings.mat_max_output_tokens,
         )
     return MatEngine(client, image_max_edge=settings.mat_image_max_edge)
+
+
+def _conversation_engine(settings: Settings) -> ConversationEngine:
+    """The engine intent-forming asks, or one that refuses and says why.
+
+    **Refuses like `_engine`, rather than falling back like `_mat_engine`.** A mat
+    has an honest mechanical producer; a reply to "what would suit a calm wall"
+    has none, and anything written here that tried would put an invented sentence
+    in a transcript beside real ones with nothing to tell them apart.
+    """
+    if not settings.openrouter_api_key:
+        return UnavailableConversation(NO_CONVERSATION_KEY)
+    return build_conversation_engine(
+        settings.openrouter_api_key,
+        model=settings.conversation_model,
+        max_output_tokens=settings.conversation_max_output_tokens,
+    )
 
 
 def _image_search(settings: Settings) -> ImageSearch | None:
@@ -143,9 +166,9 @@ def main(argv: Sequence[str] = ()) -> None:
     # panel — never the e-paper one, which belongs to the display plane.
     box = settings.tv_artwork_box
     log.info(
-        'art_root=%s manifest=%s tv_panel=%dx%dpx/%.1f" (%.1f px per inch) rotation=%ds shuffle=%s',
+        'art_root=%s manifests=%s tv_panel=%dx%dpx/%.1f" (%.1f px per inch) rotation=%ds shuffle=%s',
         settings.art_root,
-        settings.manifest_path,
+        settings.manifest_pattern,
         settings.tv_panel_width_px,
         settings.tv_panel_height_px,
         settings.tv_panel_diagonal_inches,
@@ -243,6 +266,19 @@ def main(argv: Sequence[str] = ()) -> None:
         settings.ready_path,
     )
 
+    # Which model answers a conversational turn, on its own line for the reason
+    # the mat model's is: it is a third model with a third reservation, and a
+    # deployment whose threads all refuse is a question best answered at startup.
+    log.info(
+        "conversation model=%s max_output_tokens=%d samples=%s",
+        settings.conversation_model if settings.openrouter_api_key else "none (no key; every turn refuses)",
+        settings.conversation_max_output_tokens,
+        # The sample pictures are the collection's, over the same free seam the
+        # run's supplement uses — so a deployment that has not named itself to
+        # the museum gets names without pictures, and says so here.
+        "artic" if settings.artic_user_agent else "none (ARTIC_USER_AGENT unset; names carry no pictures)",
+    )
+
     # Before anything is created, and before the catalogue is opened. The two
     # steps this replaces were individually reasonable and silent together: a
     # `mkdir(exist_ok=True)` followed by `CREATE TABLE IF NOT EXISTS` turned a
@@ -251,14 +287,13 @@ def main(argv: Sequence[str] = ()) -> None:
     # One connection behind both halves of the model: acceptance promotes a
     # candidate's image instances into a work's sources, and that has to commit
     # once or not at all.
-    catalogue_file = open_catalogue_file(settings.catalogue_path)
+    catalogue_file = open_catalogue_file(settings.catalogue_path, wall_name=settings.wall_name)
     try:
         services = Services.bind(
             catalogue=SqliteCatalogue(catalogue_file),
             discovery=SqliteDiscovery(catalogue_file),
-            wall=WallSettings(
-                manifest_path=settings.manifest_path,
-                heartbeat_path=settings.heartbeat_path,
+            display_settings=DisplaySettings(
+                art_root=settings.art_root,
                 rotation_interval_seconds=settings.rotation_interval_seconds,
                 shuffle=settings.rotation_shuffle,
             ),
@@ -299,6 +334,7 @@ def main(argv: Sequence[str] = ()) -> None:
                 box=box,
             ),
             mat_engine=_mat_engine(settings),
+            conversation_engine=_conversation_engine(settings),
         )
         # The catalogue file outlives any single version of this code, so rules
         # added since it was written are brought to it here rather than assumed

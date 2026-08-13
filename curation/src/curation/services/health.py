@@ -30,13 +30,13 @@ and its rules are testable without HTTP, and so the surface stays the thin
 binding the architecture requires.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from curation.manifest.heartbeat import HeartbeatReading
 from curation.persistence import backup
 from curation.persistence.backup import BackupReading
-from curation.services.display import DisplayService
+from curation.services.display import DisplayService, WallHeartbeat, describe_wall_status
 from curation.services.display_fit import ArtworkBox
 
 
@@ -44,11 +44,15 @@ from curation.services.display_fit import ArtworkBox
 class HealthReading:
     """Every observation the panel makes, gathered at one instant."""
 
-    #: What the display plane last said about itself, including whatever else it
-    #: chose to report. `observability-strategy.md`'s failure table maps TV
-    #: connectivity, panel state and the last error onto this document, and the
-    #: panel showing it is what gives those rows a reader.
-    heartbeat: HeartbeatReading
+    #: What the display serving each wall last said about itself, including
+    #: whatever else it chose to report. `observability-strategy.md`'s failure
+    #: table maps TV connectivity, panel state and the last error onto this
+    #: document, and the panel showing it is what gives those rows a reader.
+    #:
+    #: **A list rather than one reading**, because with a display per wall the
+    #: interesting question stopped being "has the display plane reported" and
+    #: became "which wall has not". One shared reading could not have answered it.
+    walls: Sequence[WallHeartbeat]
     #: When the catalogue was last safely copied, or that nothing has copied it.
     backup: BackupReading
     #: The space this deployment renders into. Not a failure signal — it is here
@@ -56,6 +60,16 @@ class HealthReading:
     #: the grid, which reads as a catalogue problem rather than a configuration
     #: one.
     artwork_box: ArtworkBox
+
+    def describe(self) -> str:
+        """One sentence across every wall, from the readings this panel holds.
+
+        Delegated rather than written here, because the tool surface states the
+        same fact from the same readings and two hand-written sentences drift —
+        a caller told "the study has not reported" by one surface and "every wall
+        has reported" by the other has no way to tell which is lying.
+        """
+        return describe_wall_status(self.walls)
 
 
 class HealthService:
@@ -79,7 +93,7 @@ class HealthService:
         in two places with nothing to notice if it reached only one.
         """
         return HealthReading(
-            heartbeat=self._display.wall_status(),
+            walls=self._display.survey_wall_status(),
             backup=backup.read(self._backup_receipt_path),
             artwork_box=self._box,
         )

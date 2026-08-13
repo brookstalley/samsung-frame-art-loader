@@ -15,7 +15,15 @@ import pathlib
 
 #: Modules that may bind to the storage driver directly. Everything else reaches
 #: storage through the `CatalogueStore` contract.
-_MAY_IMPORT_SQLITE = {"curation.persistence.durable"}
+_MAY_IMPORT_SQLITE = {
+    "curation.persistence.durable",
+    # A migration moves rows between shapes and takes columns and tables away.
+    # None of that is expressible through a contract over records — the whole
+    # point of the contract is that it does not know the file has tables — so
+    # this one reaches the driver by necessity rather than by convenience. It
+    # stays inside the persistence package, which is the line this guard draws.
+    "curation.persistence.migrations",
+}
 
 _DRIVER = "sqlite3"
 _SOURCE_ROOT = pathlib.Path(__file__).resolve().parents[2] / "src"
@@ -192,6 +200,15 @@ _MAY_IMPORT_A_DOMAIN_ADAPTER = {
     # The adapters themselves: a module cannot reach through itself.
     "curation.persistence.catalogue",
     "curation.persistence.sqlite_discovery",
+    # The catalogue's SQL implementation, importing the contract it implements.
+    # The set below names `catalogue.py` for the *catalogue* domain and
+    # `sqlite_discovery.py` for the *discovery* one — contract on one side,
+    # implementation on the other — so this module is the catalogue's missing
+    # half rather than a module beneath the line. It declares
+    # `CATALOGUE_SCHEMA`: it could not be domain-free if it tried. What the guard
+    # is actually about is the generic tier — `durable.py`, `adapter.py`,
+    # `errors.py` — and none of them is widened by this entry.
+    "curation.persistence.sqlite",
     # One open file serves both domains, and this is what opens it — so it holds
     # the discovery schema marker as well as the catalogue's.
     "curation.persistence.file",

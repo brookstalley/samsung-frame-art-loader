@@ -12,11 +12,19 @@ nothing the import does not.
 """
 
 from curation.http.models import (
+    AffinityListOut,
+    AffinityOut,
     ArtistOut,
     CandidateCardOut,
     CandidatePageOut,
     CandidateWorkOut,
+    ConversationListOut,
+    ConversationOut,
+    ConversationTurnOut,
+    ConversationViewOut,
     EstimateOut,
+    FacetGroupOut,
+    FacetOptionOut,
     FitOut,
     ImageOut,
     InstanceListingOut,
@@ -24,21 +32,28 @@ from curation.http.models import (
     RunOut,
     RunTallyOut,
     RunViewOut,
+    SampleOut,
     SearchUsageOut,
     SpendOut,
+    SuggestionOut,
+    ThemeDetailOut,
+    ThemeOut,
     VerdictOut,
     WorkOut,
     WorkPageOut,
 )
 from curation.persistence.discovery_records import (
+    AffinityDerivation,
+    AffinitySentiment,
     InitiatedBy,
     ResolutionStatus,
     RunKind,
     RunStatus,
+    TurnRole,
     Verdict,
     WorkProvenance,
 )
-from curation.persistence.records import ArtworkStatus
+from curation.persistence.records import ArtworkStatus, VocabularyKind
 from curation.services.display_fit import DisplayFit
 
 
@@ -62,8 +77,14 @@ def a_catalogue_work(**overrides) -> WorkOut:
     return WorkOut(**(fields | overrides))
 
 
-def a_listing(works, *, total=None, truncated=False, offset=0) -> dict:
-    """One page of the catalogue, as `/api/works` answers it."""
+def a_listing(works, *, total=None, truncated=False, offset=0, facets=()) -> dict:
+    """One page of the catalogue, as `/api/works` answers it.
+
+    `facets` defaults to none rather than to all six kinds. The server always
+    returns all six, and a builder that invented them would put a vocabulary in
+    the test that no catalogue produced — a facet rail asserted against values
+    nobody holds. A test about the rail passes the groups it means.
+    """
     works = list(works)
     return WorkPageOut(
         works=works,
@@ -71,7 +92,35 @@ def a_listing(works, *, total=None, truncated=False, offset=0) -> dict:
         limit=100,
         offset=offset,
         truncated=truncated,
+        facets=list(facets),
     ).model_dump(mode="json")
+
+
+def a_facet_option(value, count, *, selected=False, disabled=None) -> FacetOptionOut:
+    """One value a facet control offers.
+
+    `disabled` follows the count unless a test names it, because that is the
+    service's own rule — an option that would select nothing is returned disabled
+    rather than omitted — and a fixture free to disagree with it could assert a
+    rail state no server could produce.
+    """
+    return FacetOptionOut(
+        value=value,
+        count=count,
+        selected=selected,
+        disabled=(count == 0) if disabled is None else disabled,
+    )
+
+
+def a_facet_group(kind, options, *, total_values=None, truncated=False) -> FacetGroupOut:
+    """One facet kind as the rail renders it."""
+    options = list(options)
+    return FacetGroupOut(
+        kind=kind,
+        options=options,
+        total_values=len(options) if total_values is None else total_values,
+        truncated=truncated,
+    )
 
 
 def a_run(**overrides) -> RunOut:
@@ -254,6 +303,30 @@ def an_artist(**overrides) -> ArtistOut:
     return ArtistOut(**(fields | overrides))
 
 
+def a_theme(**overrides) -> ThemeOut:
+    fields = {
+        "theme_id": "theme-1",
+        "name": "Winter",
+        "description": None,
+        "rotation_interval_seconds": None,
+        "shuffle": None,
+        "created_at": "2026-08-12T09:00:00+00:00",
+    }
+    return ThemeOut(**(fields | overrides))
+
+
+def a_theme_detail(works, *, theme: ThemeOut | None = None) -> dict:
+    """A theme and its works in curated order, as every membership write answers.
+
+    The order in this body is the whole point of the shape: `POST`/`DELETE` on a
+    theme's works and the position route all answer with it, so the screen
+    repaints from what the write returned rather than reading the order back.
+    Which means a test can hand the client an order no catalogue would produce
+    and see whether the table shows it.
+    """
+    return ThemeDetailOut(theme=theme or a_theme(), works=list(works)).model_dump(mode="json")
+
+
 def an_estimate(**overrides) -> dict:
     fields = {
         "phase": "phase_2",
@@ -273,3 +346,106 @@ def a_spend(**overrides) -> dict:
         "month": None,
     }
     return SpendOut(**(fields | overrides)).model_dump(mode="json")
+
+
+def a_sample(title="Untitled No. 5", **overrides) -> SampleOut:
+    """One picture beside a name, defaulting to one the collection can show."""
+    fields = {
+        "title": title,
+        "artist": "Agnes Martin",
+        "image_url": f"https://www.artic.edu/iiif/2/{abs(hash(title)) % 100000}/full/843,/0/default.jpg",
+    }
+    return SampleOut(**(fields | overrides))
+
+
+def a_suggestion(value="Agnes Martin", *, kind="artist", samples=None) -> SuggestionOut:
+    return SuggestionOut(kind=kind, value=value, samples=list(samples or []))
+
+
+def a_turn(text="Something calm for the living room.", **overrides) -> ConversationTurnOut:
+    """One turn, defaulting to the curator's own and offering nothing."""
+    fields = {
+        "turn_id": "turn-1",
+        "ordinal": 0,
+        "role": TurnRole.CURATOR.value,
+        "text": text,
+        "suggested": [],
+        "committed_run_id": None,
+        "created_at": "2026-08-12T10:00:00+00:00",
+    }
+    return ConversationTurnOut(**(fields | overrides))
+
+
+def a_conversation(**overrides) -> ConversationOut:
+    fields = {
+        "conversation_id": "conversation-under-test",
+        "started_at": "2026-08-12T10:00:00+00:00",
+        "last_turn_at": "2026-08-12T10:01:00+00:00",
+        "summary": None,
+    }
+    return ConversationOut(**(fields | overrides))
+
+
+def a_thread(turns=None, **overrides) -> dict:
+    """A whole conversation as `/api/conversations/{id}` answers it.
+
+    `committed_run_id` and `unanswered_turn_id` are derived from the turns rather
+    than passed in, exactly as the server derives them. A fixture free to
+    disagree with itself could assert a screen no server could ever have
+    produced — a commit card polling a run no turn committed, or a retry button
+    over a question that was answered.
+    """
+    turns = [a_turn()] if turns is None else list(turns)
+    committed = next((turn.committed_run_id for turn in reversed(turns) if turn.committed_run_id), None)
+    last = turns[-1] if turns else None
+    unanswered = last.turn_id if last is not None and last.role == TurnRole.CURATOR.value and not last.committed_run_id else None
+    fields = {
+        "conversation": a_conversation(),
+        "turns": turns,
+        "committed_run_id": committed,
+        "failure": None,
+        "unanswered_turn_id": unanswered,
+    }
+    return ConversationViewOut(**(fields | overrides)).model_dump(mode="json")
+
+
+def a_conversation_list(conversations=None) -> dict:
+    conversations = [a_conversation()] if conversations is None else list(conversations)
+    return ConversationListOut(conversations=conversations, count=len(conversations)).model_dump(mode="json")
+
+
+def an_affinity(value="Agnes Martin", **overrides) -> AffinityOut:
+    """One judgment, defaulting to one the curator stated themselves.
+
+    `stated` is the default because it is what every reaction and every
+    correction writes, and because it is the one derivation that legitimately
+    carries neither a rationale nor a turn — a builder defaulting to `inferred`
+    would make every test that did not care about provenance assert against a
+    row the write path would refuse.
+    """
+    fields = {
+        "affinity_id": f"affinity-{abs(hash(value)) % 100000}",
+        "kind": VocabularyKind.ARTIST.value,
+        "value": value,
+        "sentiment": AffinitySentiment.LOVES.value,
+        "open_to_more": True,
+        "derivation": AffinityDerivation.STATED.value,
+        "rationale": None,
+        "source_turn_id": None,
+        "conversation_id": None,
+        "artist_id": None,
+        "created_at": "2026-08-12T10:00:00+00:00",
+        "updated_at": "2026-08-12T10:00:00+00:00",
+    }
+    return AffinityOut(**(fields | overrides))
+
+
+def a_taste(affinities=None) -> dict:
+    """The whole taste as `/api/affinities` answers it.
+
+    `count` is derived rather than passed, exactly as the server derives it: a
+    fixture free to disagree with itself could assert an empty state over a list
+    that holds rows, or a populated screen over none.
+    """
+    affinities = [] if affinities is None else list(affinities)
+    return AffinityListOut(affinities=affinities, count=len(affinities)).model_dump(mode="json")
