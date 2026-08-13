@@ -26,7 +26,7 @@ from corpus import CORPUS
 from hypothesis import given
 from hypothesis import strategies as st
 
-from display.panel import Geometry, Line, Tier, lay_out, read_label, set_text, type_scale_for
+from display.panel import Geometry, Line, Tier, lay_out, plain, read_label, set_text, type_scale_for
 from display.panel.layout import Extent
 
 #: The reference wall: a 6-inch 1448×1072 panel read from 7 feet. Derived rather
@@ -214,6 +214,28 @@ class TestWhatTheLabelPromises:
         sizes = [block.size_px for block in laid(label, surface).blocks]
 
         assert sizes == sorted(sizes, reverse=True), sizes
+
+    @given(labels())
+    def test_the_tombstone_reads_the_same_however_it_was_composed(self, label: dict[str, str]):
+        """**Two things compose the identification line and this is what stops
+        them drifting.** `LabelText.identification` joins the name, the
+        nationality and the dates for a report or a test; the layout tier joins
+        the same facts from the same candidates when it decides how many lines
+        they get. Nothing in production reads the first, so a change to the
+        second could diverge from it in silence — and the divergence would be a
+        stray comma or a missing demonym on the panel while every metadata test
+        stayed green.
+
+        Asserted where the ladder cannot interfere: a surface with room for
+        everything sets the whole block on one line, which is exactly what
+        `identification` claims to be.
+        """
+        text = read_label(label).identification
+        if text is None:
+            return
+        roomy = Geometry(width_px=4000, height_px=10_000, margin_px=10)
+
+        assert laid(label, roomy).blocks[0].text == plain(text)
 
     @given(labels(), st.integers(min_value=100, max_value=1400))
     def test_a_taller_surface_never_holds_less(self, label: dict[str, str], height: int):

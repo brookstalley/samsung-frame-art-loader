@@ -64,19 +64,6 @@ def identifying(*texts: str) -> tuple[Candidate, ...]:
     return tuple(Candidate(runs=(Run(text),), tier=Tier.MANDATORY) for text in texts)
 
 
-def joined(*texts: str) -> tuple[Candidate, ...]:
-    """These strings as facts set on one line, the way a tombstone is.
-
-    The first opens the line and the rest continue it — which is the shape the
-    name ladder breaks and the shape a nationality rides.
-    """
-    first, *rest = texts
-    return (
-        Candidate(runs=(Run(first),), tier=Tier.MANDATORY),
-        *(Candidate(runs=(Run(text),), tier=Tier.OPTIONAL, continues_line=(Run(", "),)) for text in rest),
-    )
-
-
 PANEL = Geometry(width_px=1448, height_px=1072, margin_px=40)
 
 #: The reference wall's sizes — a 6-inch 1448×1072 panel read from 7 feet, giving
