@@ -145,6 +145,23 @@ Deliberately minimal, because the topology does not need more.
 - **`work_id`** — the only identifier that spans both planes. It appears in
   curation logs, in the theme manifest, and in display logs. That is sufficient to
   answer "why is this artwork behaving oddly" across the process boundary.
+  **Bound, never passed — which is why it has to be bound where the paths meet.**
+  Display's label events inherited the id for free on the rotation path, because
+  the selection binds one around everything it does; the path that captions a work
+  somebody chose with the remote bound nothing, so the journal could report a
+  panel failing and not say which work it failed to name. Corrected 2026-08-13 by
+  binding inside the caption itself rather than at its two callers: one forgotten
+  call site defeats a discipline, and the lines lost that way are the ones logged
+  from inside a failure.
+- **`tv_content_id` on a label event is not a duplicate of `work_id`**, though it
+  looks like one on the path where both appear. The set's own id is the *only*
+  identity available when the wall shows a picture the manifest cannot name —
+  there is no work, so there is nothing else to tie the line to — and it is what
+  joins a caption to the `rotation.selected` that preceded it. It is carried on
+  `label.drawn`, `label.blanked` and `label.failed` for that reason, and
+  deliberately **not** on `label.truncated` or `label.recovered`, where `work_id`
+  already answers the question and a second id would be a field defended only by
+  the test written to defend it.
 - **`run_id` deliberately does not cross into display.** The manifest is a
   statement of *current state*, not a record of the run that produced it. Carrying
   a run id into it would imply a provenance relationship the manifest does not
@@ -547,7 +564,8 @@ signal exists:
 | The wired collection could not be browsed | `browse.unreachable` at WARNING, and nothing else — a supplement is swallowed so it cannot fail the run, which makes this line the only trace that one was attempted. **Distinguish it from a collection that answered and offered nothing**, which is `browse.offered` carrying `works_offered: 0` against a non-zero `collection_holds`: that is every candidate declined, and `browse.below_floor` / `work.suppressed` / `work.already_present` say which gate did it |
 | Display plane stalled or dead | Heartbeat stops advancing; panel shows its age |
 | TV unreachable | Heartbeat carries TV connectivity state; WARNING in the journal. **The panel renders the heartbeat's whole reported document as of 2026-08-05**, so this row and the two below it have a reader rather than naming a field nothing displayed |
-| E-paper panel not updating | Heartbeat carries its state, and the panel shows it — same mechanism as the row above, and no second contract |
+| E-paper panel not updating | Heartbeat carries its state, and the panel shows it — same mechanism as the row above, and no second contract. **The journal answers the question the heartbeat cannot**, added 2026-08-13: the heartbeat is a snapshot of current state, so it can say the surface is working and never say *what it captioned*, and its `current_work_id` is the rotation's rather than the label's — the two disagree exactly when the label is wrong, which is the failure that matters. `label.drawn` names the work per draw, so the panel's history is reconstructable after the fact and joinable to `rotation.selected` |
+| **The panel captions the wrong work, or stops captioning** | `label.drawn` at INFO per draw, carrying `work_id` and `tv_content_id`. **The only positive label signal, and it exists because every other one is an exception** — `label.failed`, `label.truncated` and `label.recovered` all fire on something going wrong, so before 2026-08-13 a panel captioning correctly all day emitted nothing whatsoever and was indistinguishable in the journal from one that stopped at boot. Its *absence* over a rotation is what says the label stopped following the wall. **A picture no manifest can name is `label.blanked`, not a success and not a failure**: somebody choosing an art-store image with the remote gets a deliberately blank panel, and a success event there would answer *why is the label empty* by naming a work that is not on the wall. It carries the content id because there is no `work_id` on that path to carry |
 | Backup silently stopped succeeding | **`backup-status.json` stops advancing; the panel shows its age.** The receipt is written only on success, so a failing job goes stale rather than reporting fresh. Nothing has ever written one is itself an observation the panel states plainly |
 | Manifest references a missing file | WARNING per work, and the work is skipped — the run continues |
 | **The TV takes selections and displays none of them** | `rotation.wall_unchanged` at WARNING **once**, carrying the id that was accepted and the set's own `art_mode` — then `rotation.wall_recovered` at INFO when the wall starts changing again. **The pairing is the design**, because the condition lasts as long as somebody leaves the panel off: a line per rotation would be a hundred a night saying the one thing that has not changed, and journald rate-limits by dropping the ERRORs this plane's only failure channel carries. The art-mode flag is read on this path for the operator's sake — it is the answer to *why is the wall not changing*, and it costs one call on a rotation that has already failed. It is read **separately, before every selection**, for a different purpose: the plane may not touch a television somebody is watching, and that gate asks whether it may act at all rather than why it did not. **The absence of `rotation.selected` is not itself the signal**: nothing distinguishes a wall that stopped changing from a daemon that stopped running, which is what this line exists to say |

@@ -324,17 +324,25 @@ it. Three things to see:
 1. **A rotation still completes.** The daemon logs `rotation.selected` and the
    wall changes — that is the confirmation path resolving with a second subscriber
    attached, which is the whole question.
-2. **The label follows.** The panel names the work the wall is showing. (With no
-   panel attached, `label.failed` absent from the journal and
+2. **The label follows.** The panel names the work the wall is showing. **In the
+   journal that is `label.drawn`, carrying the `work_id` and the `tv_content_id`
+   it captioned** — so this step can be checked against a recording rather than
+   only by standing there, and the id can be read against the `rotation.selected`
+   that preceded it. (With no panel attached, that event plus
    `label_surface_working` in that wall's `display-heartbeat-{wall_id}.json` are
-   the proxy — one file per wall since 2026-08-12.)
+   the proxy — one file per wall since 2026-08-12. Until 2026-08-13 the proxy was
+   `label.failed` *absent*, which a daemon that never tried to caption anything
+   satisfies just as well as a working one.)
 3. **The remote is a curator too — added with the behaviour, 2026-08-08.** In art
    mode, pick a *different* work with the television's own remote, one the active
    theme carries. The label should follow within a poll interval rather than
    waiting for the next rotation. Then pick something from the set's own art store
    that this product never uploaded: the label should go **blank**, not keep the
    previous work's text. A confidently wrong label is worse than a stale one
-   because the person in front of the wall cannot tell.
+   because the person in front of the wall cannot tell. **The blank has its own
+   journal line — `label.blanked`, carrying the content id nothing could name** —
+   so "the panel drew nothing on purpose" can be told apart from "the panel is
+   broken" without opening the case.
 
 `samsung-tv-state-findings.md` is the record — it currently says in its own words
 that this is not verified against the set, and that sentence is what this entry

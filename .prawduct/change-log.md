@@ -54,6 +54,57 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-13: The journal can say which work the panel captioned (#138)
+
+<!-- prawduct: scope=v1-build -->
+
+**Why:** every label event this plane emitted was an *exception* — `label.failed`,
+`label.truncated`, `label.recovered` — so a panel captioning correctly all day
+emitted nothing whatsoever, and in the journal that is indistinguishable from one
+that stopped captioning at boot. On a Pi nobody stands in front of, that is the
+whole question. Filed as #138 out of Chunk 13B-2's review, where it was the half
+of finding R-16 that the artifact fix did not touch.
+
+**`label.drawn` is the first positive signal the label ever had.** One line per
+draw, carrying the `work_id` and the `tv_content_id`, so the panel's history is
+reconstructable after the fact and joins to the `rotation.selected` before it.
+Its *absence* over a rotation is now what says the label stopped following the
+wall. It claims the surface accepted the frame and nothing about pixels — the
+driver reports no more than that, and a line implying legibility would be this
+plane asserting something it cannot see.
+
+**A picture nothing can name is `label.blanked`, a third outcome.** Somebody
+picking an art-store image with the remote gets a deliberately blank panel; a
+success event there would answer *why is the label empty* by naming a work that
+is not on the wall, and a failure would report a panel doing the right thing as
+broken. It carries the content id because there is no `work_id` on that path to
+carry.
+
+**The filed issue overstated half of itself, and the check was cheap.** It said
+no label event carried identity. Probed before designing anything: on the
+rotation path they already did — `_show` binds a `work_context` and `_caption` is
+awaited inside it, so correlation arrived by inheritance. What had none was the
+path where the *set* announces a change this plane did not make, which is
+precisely the path that exists because somebody is in the room with a remote.
+Fixed by binding inside `_caption` rather than at its two callers: the id is
+bound and not passed exactly because one forgotten call site defeats a
+discipline, and this was the forgotten call site.
+
+**`tv_content_id` is on three events and deliberately not on the other two.** It
+is the only identity that exists on the blank path, and it is what joins a
+caption to a rotation — so `label.drawn`, `label.blanked` and `label.failed`
+carry it. `label.truncated` and `label.recovered` do not: `work_id` already
+answers the question there, and a second id would be a field whose only defence
+is the test written to defend it.
+
+**Seven mutations, all caught**, including the two that would have been silent —
+a blank redrawn on every poll (a journal nobody can read, on a plane whose only
+failure channel journald rate-limits) and a device with no panel claiming it
+captioned something. The tests read the JSON `logs.configure()` actually writes
+rather than `caplog`'s records, because the work id is stamped by a filter on the
+installed handler: a caplog-based assertion would find no correlation on lines
+that carry it in production, and so could never fail for the right reason.
+
 ## 2026-08-13: The family name is heavy, and the bytes under it are counted (13B-2)
 
 <!-- prawduct: chunks=13B | scope=v1-build -->
