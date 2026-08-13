@@ -20,7 +20,18 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
-from display.panel import Extent, Geometry, LabelSurface, Layout, Measure, SurfaceUnavailable, TypeScale, type_scale_for
+from display.panel import (
+    Extent,
+    Geometry,
+    LabelSurface,
+    Layout,
+    Line,
+    Measure,
+    SurfaceUnavailable,
+    TypeScale,
+    set_text,
+    type_scale_for,
+)
 from display.tv import (
     RemovalOutcome,
     SelectionAnnouncement,
@@ -363,10 +374,20 @@ class FakeSurface(LabelSurface):
     def measure(self) -> Measure:
         return self._measure
 
-    def _measure(self, text: str, size_px: int, wrap_px: int) -> Extent:
-        """Predictable metrics — a stand-in for a rasterizer, not a font."""
+    def _measure(self, line: Line, size_px: int, wrap_px: int) -> Extent:
+        """Predictable metrics — a stand-in for a rasterizer, not a font.
+
+        **Measures `set_text`, and a version of this that did not was latent for
+        one commit.** A line is runs now, so `len()` over the argument counts a
+        handful of `Run` objects rather than a line of characters: every label
+        then measures one row tall however long the name is, and the drop rule
+        can never fire through this surface. Nothing went red, because no test
+        driving `FakeSurface` asserts a drop — which is exactly why the guard is
+        the conversion here rather than a test somewhere noticing.
+        """
         if self.measurement_explodes:
             raise RuntimeError("the text stack could not build a font map")
+        text = set_text(line)
         glyph = max(1, size_px // 2)
         per_row = max(1, wrap_px // glyph)
         rows = max(1, math.ceil(len(text) / per_row))
@@ -398,5 +419,13 @@ class FakeSurface(LabelSurface):
 
     @property
     def last_text(self) -> list[str]:
-        """The lines of the most recent label, for a test to read at a glance."""
+        """The lines of the most recent label, for a test to read at a glance.
+
+        **What each line says, not how it is set** — the family name arrives here
+        as recorded rather than in the capitals a panel would draw. That is right
+        for what these tests ask, which is whether the correct work got captioned;
+        a wiring test that had to spell `RUSCHA` would be asserting typography it
+        is not about. The styling is pinned in `test_label_metadata.py` and, on
+        real type, in `tests/raster/test_pango.py`.
+        """
         return [block.text for block in self.shown[-1].blocks] if self.shown else []

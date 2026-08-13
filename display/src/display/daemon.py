@@ -42,6 +42,7 @@ import logging
 import random
 import time
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -747,13 +748,28 @@ class Daemon:
         **Nothing in here may stop the wall.** A surface that is broken, missing
         or slow leaves the television rotating; that is the whole posture of this
         loop applied to an annotation of it.
+
+        **The work id is bound here rather than at the callers.** The rotation
+        path arrives inside a `work_context` already and correlated by
+        inheritance; the path the *set* drives — somebody choosing a work with the
+        remote — arrived with nothing bound, so the journal could report a panel
+        failing and not say which work it failed to name. Binding at the single
+        point every caller passes through is the same argument the context
+        variable itself rests on: one forgotten call site defeats a discipline,
+        and the lines that go missing that way are the ones logged from inside a
+        failure.
         """
         surface = self._surface
         if surface is None:
             return
+        with work_context(entry.work_id) if entry is not None else nullcontext():
+            await self._put_the_label_up(surface, entry, content_id)
+
+    async def _put_the_label_up(self, surface: LabelSurface, entry: Entry | None, content_id: str) -> None:
+        """The whole of a caption, with this work's id bound. See `_caption`."""
         self._captioned_content_id = content_id
         if self._label_draw is not None and not self._label_draw.done():
-            self._label_would_not_take_it("the previous label is still being drawn")
+            self._label_would_not_take_it("the previous label is still being drawn", content_id)
             return
 
         # **The gate is the draw's own state, not a flag somebody remembers to
@@ -774,7 +790,7 @@ class Daemon:
             # it opens the gate when the panel actually comes back, and its outcome
             # is collected so nothing warns about an exception nobody read.
             draw.add_done_callback(_forget)
-            self._label_would_not_take_it(f"the draw ran past the {LABEL_DRAW_BUDGET_SECONDS:g}s label budget")
+            self._label_would_not_take_it(f"the draw ran past the {LABEL_DRAW_BUDGET_SECONDS:g}s label budget", content_id)
             return
         try:
             layout = draw.result()
@@ -786,12 +802,44 @@ class Daemon:
         # nothing in here may stop the wall cannot be kept by a catch that lists
         # the exceptions somebody thought of.
         except Exception as exc:  # prawduct:allow prawduct/broad-except -- see above
-            self._label_would_not_take_it(str(exc))
+            self._label_would_not_take_it(str(exc), content_id)
             return
 
         self._label_working = True
         if self._label_failed.end():
             log.info("the label surface is taking labels again", extra={"event": "label.recovered"})
+        if entry is None:
+            # **A third outcome, and it needs its own name.** The set is showing a
+            # picture nothing on this device can name — an art-store image somebody
+            # chose with the remote — and the panel was drawn blank on purpose. A
+            # success event here would answer *why is the label empty* with the
+            # name of a work that is not on the wall, and a failure would report a
+            # panel doing exactly the right thing as broken.
+            #
+            # **The content id is the only identity there is on this path**, which
+            # is why it is carried: there is no work, so there is no `work_id` to
+            # bind, and without it the line cannot say what the wall was showing.
+            log.info(
+                "the panel was drawn blank: nothing here can name %s",
+                content_id,
+                extra={"event": "label.blanked", "tv_content_id": content_id},
+            )
+        else:
+            # **The only line that says the panel is working.** Every other label
+            # event is an exception — a failure, a truncation, a recovery — so a
+            # panel captioning correctly all day emitted nothing whatsoever, and
+            # in the journal that is indistinguishable from one that stopped
+            # captioning at boot. On a device nobody stands in front of, the
+            # difference is the whole question.
+            #
+            # **It claims the surface took the frame, and nothing about pixels.**
+            # The driver reports no more than that, and a line implying the label
+            # is legible would be this plane asserting something it cannot see.
+            log.info(
+                "the panel is captioning %s",
+                entry.label.get("title") or entry.work_id,
+                extra={"event": "label.drawn", "tv_content_id": content_id},
+            )
         if layout.dropped:
             # Not a failure — the drop rule working — but it is the only place
             # anyone would learn that this device's surface is too small for the
@@ -802,12 +850,18 @@ class Daemon:
                 extra={"event": "label.truncated", "dropped": list(layout.dropped)},
             )
 
-    def _label_would_not_take_it(self, why: str) -> None:
+    def _label_would_not_take_it(self, why: str, content_id: str) -> None:
         """One place for every way a label fails to reach the surface.
 
         They differ only in the sentence: the response is the same to all of them
         — say so once, keep rotating — for the reason `SurfaceUnavailable` is one
         type rather than a family.
+
+        **The content id is carried because a failure can happen with no work
+        bound.** The wall showing something this manifest cannot name is exactly
+        when a panel fault is hardest to read, and `work_id` is absent there by
+        construction — so the id of the picture on the wall is the only thing the
+        line can be tied to.
         """
         self._label_working = False
         self._record_error(f"the label surface refused a label ({why})")
@@ -817,7 +871,7 @@ class Daemon:
             log.warning(
                 "could not put the label on this device's surface (%s); the wall keeps rotating",
                 why,
-                extra={"event": "label.failed"},
+                extra={"event": "label.failed", "tv_content_id": content_id},
             )
 
     def _draw(self, surface: LabelSurface, entry: Entry | None) -> Layout:

@@ -14,16 +14,34 @@ machine where the label is perfectly legible. What is asserted instead is the se
 of properties the label's legibility actually rests on: the buffer is the shape it
 claims, the ground is white and the type is dark, the greys that make antialiased
 type readable are really there, size and wrap width change the extents in the
-directions they must, and museum text is set literally rather than parsed as
-markup.
+directions they must, the styled runs really change the type they name, and museum
+text is set literally rather than parsed as markup.
+
+**The one exception to "no stored image" is a computed one.** Proving that a style
+covers a whole non-ASCII run needs something to compare against, and the reference
+is rendered here from the same characters with the slant asked for on the *font*
+rather than over a byte range — an independent road to the same picture, computed
+on whatever machine is running, so it says nothing about which fonts are installed.
 """
 
 import pytest
 
 pytest.importorskip("gi", reason="the typesetter needs the `raster` group: uv sync --group raster")
 
-from display.panel.layout import Block, Geometry, Layout  # noqa: E402 -- after the group check above
+import gi  # noqa: E402 -- after the group check above
+
+# The oracle below reaches Pango directly, so this file pins the versions itself
+# rather than relying on `display.panel.pango` having been imported first — which
+# is an ordering the import block does not guarantee and the linter may reshuffle.
+gi.require_version("Pango", "1.0")
+gi.require_version("PangoCairo", "1.0")
+
+import cairo  # noqa: E402 -- same
+from gi.repository import Pango, PangoCairo  # noqa: E402 -- same
+
+from display.panel.layout import Block, Geometry, Layout  # noqa: E402 -- same
 from display.panel.pango import PangoRasterizer  # noqa: E402 -- importing it is what needs the group
+from display.panel.styling import Case, Line, Run, Slant, Weight  # noqa: E402 -- same
 
 #: **Deliberately not a multiple of four.** Cairo pads each row of an A8 surface
 #: out to a four-byte boundary, so a width of 1448 — the reference panel's, and
@@ -37,7 +55,7 @@ def rasterizer() -> PangoRasterizer:
 
 
 def a_layout(
-    text: str = "Cat Litter",
+    text: str | Line = "Cat Litter",
     *,
     size_px: int = 12,
     y_px: int = 5,
@@ -48,7 +66,7 @@ def a_layout(
         surface=surface,
         blocks=(
             Block(
-                text=text,
+                runs=(Run(text),) if isinstance(text, str) else text,
                 size_px=size_px,
                 x_px=surface.margin_px,
                 y_px=y_px,
@@ -59,6 +77,11 @@ def a_layout(
         ),
         dropped=(),
     )
+
+
+def one(text: str) -> Line:
+    """One unstyled run — what most of these tests are measuring."""
+    return (Run(text),)
 
 
 def _columns_with_ink(raster) -> set[int]:
@@ -190,7 +213,7 @@ class TestMeasuringMovesInTheDirectionsTheLayoutTierRelieson:
         ascent and descent, which is about 1.15–1.25× the size for the sans faces
         this resolves to; going through points would put it near 1.55×.
         """
-        measured = rasterizer.measure("Hg", 40, 400)
+        measured = rasterizer.measure(one("Hg"), 40, 400)
 
         assert 40 <= measured.height_px < 56, (
             f"a line asked for at 40 px measured {measured.height_px} px — outside what a face's "
@@ -198,8 +221,8 @@ class TestMeasuringMovesInTheDirectionsTheLayoutTierRelieson:
         )
 
     def test_bigger_type_measures_taller(self, rasterizer):
-        small = rasterizer.measure("Cat Litter", 12, 400)
-        large = rasterizer.measure("Cat Litter", 40, 400)
+        small = rasterizer.measure(one("Cat Litter"), 12, 400)
+        large = rasterizer.measure(one("Cat Litter"), 40, 400)
 
         assert large.height_px > small.height_px
         assert large.width_px > small.width_px
@@ -208,8 +231,8 @@ class TestMeasuringMovesInTheDirectionsTheLayoutTierRelieson:
         """The layout tier's drop rule is driven entirely by measured height, so a
         measurer that ignored the wrap width would report every label as fitting
         and the last lines would run off the panel."""
-        wide = rasterizer.measure("A rather long museum title that has to wrap somewhere", 12, 400)
-        narrow = rasterizer.measure("A rather long museum title that has to wrap somewhere", 12, 80)
+        wide = rasterizer.measure(one("A rather long museum title that has to wrap somewhere"), 12, 400)
+        narrow = rasterizer.measure(one("A rather long museum title that has to wrap somewhere"), 12, 80)
 
         assert narrow.height_px > wide.height_px
 
@@ -218,9 +241,124 @@ class TestMeasuringMovesInTheDirectionsTheLayoutTierRelieson:
         them. Under Pango's word wrapping those are drawn straight past the right
         margin; the label has to break mid-word instead, because ugly beats
         unreadable."""
-        measured = rasterizer.measure("A" * 200, 12, 80)
+        measured = rasterizer.measure(one("A" * 200), 12, 80)
 
         assert measured.width_px <= 80
+
+
+class TestTheStylingReachesTheType:
+    """**The runs, asserted where only real type can settle them.**
+
+    The tiers above can say a run carries `Weight.BOLD`; nothing there can say
+    that anything got heavier. These are the tests that fail if the attribute
+    list is built wrong, attached to the wrong layout, or silently dropped.
+    """
+
+    def test_a_bold_run_is_wider_than_the_same_characters_unstyled(self):
+        rasterizer = PangoRasterizer()
+
+        plain_run = rasterizer.measure(one("Katsushika"), 40, 4000)
+        bold_run = rasterizer.measure((Run("Katsushika", weight=Weight.BOLD),), 40, 4000)
+
+        assert bold_run.width_px > plain_run.width_px, "the weight attribute never reached the type"
+
+    def test_an_italic_run_is_set_differently_from_an_upright_one(self, rasterizer):
+        """Width is not the test here — an italic face need not be wider — so this
+        asks whether the ink moved at all."""
+        upright = rasterizer.render(a_layout(one("The Banquet"), size_px=20, y_px=2))
+        italic = rasterizer.render(a_layout((Run("The Banquet", slant=Slant.ITALIC),), size_px=20, y_px=2))
+
+        assert upright.pixels != italic.pixels, "the slant attribute never reached the type"
+
+    def test_only_the_styled_run_is_affected(self, rasterizer):
+        """**The claim the identification line rests on.** `KATSUSHIKA, Hokusai`
+        is one line with one bold stretch; an attribute applied to the whole
+        layout would look identical in every width assertion above and would set
+        the given name bold too, which is the thing the weight exists to deny.
+
+        **Both ends of the range are pinned, and the `both` comparison is what
+        pins them.** Without it a renderer that ignored `start_index` and began
+        every attribute at byte 0 passes: the leading case is unchanged, and the
+        trailing case still differs from the unstyled one — it just differs by
+        being *entirely* bold. The mutation sweep found exactly that gap, so the
+        two one-run cases are each asserted to differ from the all-bold line as
+        well as from the plain one.
+        """
+
+        def bold(*flags: bool):
+            runs = (
+                Run("AAAA", weight=Weight.BOLD if flags[0] else Weight.NORMAL),
+                Run(" BBBB", weight=Weight.BOLD if flags[1] else Weight.NORMAL),
+            )
+            return rasterizer.render(a_layout(runs, size_px=20, y_px=2)).pixels
+
+        leading, trailing, neither, both = bold(True, False), bold(False, True), bold(False, False), bold(True, True)
+
+        assert leading != neither
+        assert trailing != neither
+        assert leading != trailing, "the weight landed on the whole line rather than on one run"
+        assert leading != both, "the weight ran past the end of its run"
+        assert trailing != both, "the weight began before the start of its run"
+
+    def test_capitals_are_set_rather_than_merely_declared(self, rasterizer):
+        upper = rasterizer.render(a_layout((Run("hokusai", case=Case.CAPITALS),), size_px=20, y_px=2))
+        as_recorded = rasterizer.render(a_layout(one("hokusai"), size_px=20, y_px=2))
+
+        assert upper.pixels != as_recorded.pixels
+        assert upper.pixels == rasterizer.render(a_layout(one("HOKUSAI"), size_px=20, y_px=2)).pixels
+
+    def test_a_style_over_text_that_is_not_ascii_covers_all_of_it(self):
+        """**The byte-offset decision, and the only test that can catch it.**
+
+        Pango's attribute indices are byte offsets into the UTF-8 the layout was
+        set with. Counting characters instead is invisible on `O'Keeffe` and
+        wrong on everything else — an en dash spends three bytes, a Japanese
+        title three per glyph — and what it produces is a run of the wrong length
+        set in the wrong style rather than an error anybody sees.
+
+        Asserted against a reference that uses **no indices at all**: the same
+        characters set italic through the font description, which is a wholly
+        independent road to "all of this is italic". A character-counted end index
+        italicises the first half of these accented letters and the two renders
+        part company.
+        """
+        text = "ÉÉÉÉÉÉÉÉ"
+        assert len(text.encode("utf-8")) == 2 * len(text), "this case stopped being one where bytes differ from characters"
+
+        ours = PangoRasterizer().render(a_layout((Run(text, slant=Slant.ITALIC),), size_px=20, y_px=2))
+
+        assert ours.pixels == _wholly_italic(text, size_px=20, y_px=2), "the style did not cover the whole run"
+
+
+def _wholly_italic(text: str, *, size_px: int, y_px: int) -> bytes:
+    """The same drawing, with the slant asked for on the font rather than a range.
+
+    An oracle rather than a second implementation: it exists to answer "all of it
+    is italic" without going anywhere near a byte index, which is the thing under
+    test on the other side.
+    """
+    surface = cairo.ImageSurface(cairo.FORMAT_A8, AWKWARD.width_px, AWKWARD.height_px)
+    context = cairo.Context(surface)
+    layout = PangoCairo.create_layout(context)
+    layout.set_text(text, -1)
+
+    font = Pango.FontDescription()
+    font.set_family("Sans")
+    font.set_style(Pango.Style.ITALIC)
+    font.set_absolute_size(size_px * Pango.SCALE)
+    layout.set_font_description(font)
+    layout.set_width(AWKWARD.text_width_px * Pango.SCALE)
+    layout.set_wrap(Pango.WrapMode.WORD_CHAR)
+
+    context.move_to(AWKWARD.margin_px, y_px)
+    context.set_source_rgba(0, 0, 0, 1)
+    PangoCairo.show_layout(context, layout)
+    surface.flush()
+
+    stride, width = surface.get_stride(), surface.get_width()
+    data = bytes(surface.get_data())
+    rows = (data[row * stride : row * stride + width] for row in range(surface.get_height()))
+    return bytes(255 - coverage for row in rows for coverage in row)
 
 
 class TestMuseumTextIsSetLiterallyAndNeverAsMarkup:
@@ -229,8 +367,8 @@ class TestMuseumTextIsSetLiterallyAndNeverAsMarkup:
         title containing `<` produced mangled type or a parse failure. Set
         literally, the tags are characters and take room — which is exactly what
         distinguishes the two here."""
-        plain = rasterizer.measure("Untitled", 12, 400)
-        tagged = rasterizer.measure("<i>Untitled</i>", 12, 400)
+        plain = rasterizer.measure(one("Untitled"), 12, 400)
+        tagged = rasterizer.measure(one("<i>Untitled</i>"), 12, 400)
 
         assert tagged.width_px > plain.width_px, "the markup was parsed away instead of being drawn"
 

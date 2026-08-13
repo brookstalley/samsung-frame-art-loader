@@ -31,7 +31,7 @@ Three independent projects, three interpreters, three suites.
 
 | | 2024 modules (repo root) | curation plane | display plane |
 |---|---|---|---|
-| Test | `uv run pytest tests` | `cd curation && uv run pytest` | `cd display && uv run pytest` |
+| Test | `uv run pytest tests` | `cd curation && uv run pytest` | `cd display && uv run --group raster pytest` |
 | Lint | `uv run ruff check .` | `cd curation && uv run ruff check .` | `cd display && uv run ruff check .` |
 | Format | `uv run black .` | `cd curation && uv run black .` | `cd display && uv run black .` |
 
@@ -46,10 +46,20 @@ display suite drives a double behind the TV interface, which is why it runs on a
 GitHub runner; the hardware is exercised by `tv_api_check.py` and by the `live_*`
 markers below, all of them run by hand.
 
+**The display column carries `--group raster` because the recorded evidence
+does.** Without it `pytest` collects a strictly smaller suite than the one
+`test_commands` runs, so a developer following this table and a `.test-evidence.json`
+claiming a green display leg are talking about different suites — and the
+difference is the typesetter, the plane's most important accessibility surface.
+
 **`display/tests/raster` needs one optional group and skips itself without it.**
 The label is typeset with Pango through PyGObject, which a default `uv sync` does
-not install — and which **does not work on this Mac at all** (it builds under
-Homebrew and fails at import; do not spend time on it). Run it where Pango works:
+not install. **It does install and import on this Mac** — verified 2026-08-13,
+PyGObject 3.56.3 resolving as a wheel against Pango 1.57.1, rendering through
+PangoCairo. (This entry said the opposite for months, on the strength of an older
+Homebrew build that failed at import; the cost of believing it is that the
+product's most important accessibility surface goes unexercised locally and is
+first seen in CI.) So run it:
 
 ```sh
 cd display && uv run --group raster pytest tests/raster

@@ -3117,7 +3117,14 @@ coverage_required: false
 test_commands:
   - uv run pytest tests --junit-xml={junit_xml} -q
   - uv run --directory curation pytest --junit-xml={junit_xml} -q
-  - uv run --directory display pytest --junit-xml={junit_xml} -q
+  # `--group raster` because the typesetter is the plane's most important
+  # accessibility surface and the group is what makes it runnable. Without the
+  # flag `tests/raster` importorskips and the recorded evidence covers every tier
+  # of the label except the one that puts ink on the panel — a green record that
+  # executed no line of Pango. The group installs on any modern Linux and, since
+  # 2026-08-13, on this project's development Mac; where it genuinely cannot, CI's
+  # separate `typesetting` job is what holds the claim.
+  - uv run --directory display --group raster pytest --junit-xml={junit_xml} -q
 
 tests_dirs: tests curation/tests display/tests
 

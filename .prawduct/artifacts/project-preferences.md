@@ -258,9 +258,11 @@ Developer preferences for how code is written in this project. Captured during d
     the Pi", and named `display.py` — the 2024 module — as its only consumer.)*
   - `pycairo` + `PyGObject`/Pango — label typesetting, and the display plane's `raster`
     dependency group. **PyGObject 3.56 resolves as a wheel under uv** with no apt
-    prerequisites, measured on Trixie 2026-08-07; it does not import on this project's
-    development Mac, which is why its tests are a CI job of their own rather than part of
-    the display leg. *(Corrected 2026-08-08: this said "System-level GTK dependencies, not
+    prerequisites, measured on Trixie 2026-08-07, **and on this project's development
+    Mac too — corrected 2026-08-13**, where 3.56.3 imports against Pango 1.57.1 and the
+    typesetting tests pass. Its tests remain a CI job of their own, because the group is
+    optional and a default `uv sync` does not install it — not because no developer
+    machine can run them. *(Corrected 2026-08-08: this said "System-level GTK dependencies, not
     pure-Python wheels", and attributed them to `art.py`.)*
   - `openai` (`ai.py`) — mat-colour selection, currently calling `gpt-4o`. Real per-call spend.
   - `dezoomify-rs` (external binary) — tiled high-res image fetch. **Not configured in

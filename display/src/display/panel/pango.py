@@ -1,12 +1,12 @@
 """The typesetter: Pango and Cairo, measuring and drawing the label's text.
 
-**Isolated in its own module because it is the one part of this plane that will
-not import on every developer's machine.** Pango arrives through PyGObject, whose
-Homebrew toolchain on macOS builds and then fails at import; the layout tier above
-was split out precisely so the judgement about legibility could be written and
-tested anywhere, leaving only this file needing the real text stack. Nothing else
-in `display` imports it — the composition root names it, and a device that has no
-panel never touches it.
+**Isolated in its own module because it is the one part of this plane that needs
+something a default install does not provide.** Pango arrives through PyGObject,
+in the optional `raster` group: a device with a television and no panel installs
+neither it nor the driver. The layout tier above was split out so the judgement
+about legibility could be written and tested without any of that, leaving only
+this file needing the real text stack. Nothing else in `display` imports it — the
+composition root names it, and a device that has no panel never touches it.
 
 **Why Pango rather than a simpler drawing library.** This product's corpus comes
 from museum APIs: titles and artists' names arrive in whatever script the
@@ -24,6 +24,15 @@ interpolated museum-supplied description text into a markup string, so a title
 containing `<` produced either mangled type or a parse failure (`data-model.md`).
 The metadata tier deliberately does not escape, on the grounds that knowing one
 renderer's markup is this tier's business — and this tier's answer is to use none.
+
+**Which is also how the styling arrives: attributes over byte ranges, not tags.**
+The family name is set bold and the title italic, and the obvious way to say so —
+wrapping the run in `<b>` — would reintroduce exactly the defect above on exactly
+the surface it was fixed for, because the text either side of that tag is still
+museum-supplied. So the runs stay literal and a `Pango.AttrList` says which bytes
+are heavy. The one thing to know about that API is that `AttrList.insert` copies:
+an attribute whose range is set after it is inserted keeps the range it had, in
+the list, silently.
 """
 
 import gi
@@ -36,6 +45,7 @@ from gi.repository import Pango, PangoCairo  # noqa: E402 -- and ruff cannot see
 
 from display.panel.layout import Extent, Layout, Measure  # noqa: E402 -- same ordering constraint
 from display.panel.raster import Raster, Rasterizer  # noqa: E402 -- same ordering constraint
+from display.panel.styling import Line, Run, Slant, Weight, byte_spans, set_text  # noqa: E402 -- same ordering constraint
 
 #: The font family, as fontconfig resolves it. **A generic alias rather than a
 #: named face, and that is the accessibility decision**: `Sans` lets fontconfig
@@ -62,15 +72,22 @@ class PangoRasterizer(Rasterizer):
     def measure(self) -> Measure:
         return self._measure
 
-    def _measure(self, text: str, size_px: int, wrap_px: int) -> Extent:
-        """How much room this text takes, as this rasterizer will actually draw it.
+    def _measure(self, line: Line, size_px: int, wrap_px: int) -> Extent:
+        """How much room this line takes, as this rasterizer will actually draw it.
 
         Measured against a one-pixel scratch surface: Pango's extents come from the
         font metrics and the wrap width, not from the surface it would be drawn
         onto, so allocating a full-size one here would cost a megabyte per line
         measured and change no answer.
+
+        **Styled, because the styling is what makes it wide.** This goes through
+        the same `_layout_for` the drawing does rather than measuring the plain
+        characters: bold capitals are appreciably wider than the letters they
+        replace, and a measurement taken without them would under-report the one
+        line the label leads with — on the panel, where the whole drop rule is
+        driven by measured height.
         """
-        layout = self._layout_for(cairo.Context(cairo.ImageSurface(cairo.FORMAT_A8, 1, 1)), text, size_px, wrap_px)
+        layout = self._layout_for(cairo.Context(cairo.ImageSurface(cairo.FORMAT_A8, 1, 1)), line, size_px, wrap_px)
         width_px, height_px = layout.get_pixel_size()
         return Extent(width_px=width_px, height_px=height_px)
 
@@ -84,7 +101,7 @@ class PangoRasterizer(Rasterizer):
             # `block.wrap_px`, never the surface width: the block was measured at
             # its own bound, and wrapping differently here would draw a line the
             # layout tier never placed.
-            text = self._layout_for(context, block.text, block.size_px, block.wrap_px)
+            text = self._layout_for(context, block.runs, block.size_px, block.wrap_px)
             context.move_to(block.x_px, block.y_px)
             # A8 carries coverage and no colour, so this paints "how much ink is
             # here" rather than a shade. Which end of the scale that means is
@@ -99,12 +116,13 @@ class PangoRasterizer(Rasterizer):
             pixels=_greyscale(surface),
         )
 
-    def _layout_for(self, context: cairo.Context, text: str, size_px: int, wrap_px: int) -> Pango.Layout:
-        """One configured Pango layout: literal text, absolute size, wrapped to width."""
+    def _layout_for(self, context: cairo.Context, line: Line, size_px: int, wrap_px: int) -> Pango.Layout:
+        """One configured Pango layout: literal text, styled runs, absolute size, wrapped."""
         pango_layout = PangoCairo.create_layout(context)
         # Literal, never markup — see the module docstring. `-1` is Pango's "the
         # string is NUL-terminated, measure it yourself".
-        pango_layout.set_text(text, -1)
+        pango_layout.set_text(set_text(line), -1)
+        pango_layout.set_attributes(_attributes(line))
 
         font = Pango.FontDescription()
         font.set_family(self._font_family)
@@ -123,6 +141,49 @@ class PangoRasterizer(Rasterizer):
         # Breaking mid-word is ugly; running off the edge is unreadable.
         pango_layout.set_wrap(Pango.WrapMode.WORD_CHAR)
         return pango_layout
+
+
+def _attributes(line: Line) -> Pango.AttrList:
+    """Which bytes of this line are heavy, and which are slanted.
+
+    **Every range comes from `byte_spans`, which counts bytes and not
+    characters** — Pango's indices are byte offsets into the UTF-8 the layout was
+    set with, and this corpus is full of text where the two differ: an en dash in
+    a life-date spends three bytes, a Japanese title spends three per glyph. A
+    character offset puts the bold part-way through a name and nothing raises.
+
+    **The range is set before the attribute is inserted, and that order is
+    load-bearing.** `AttrList.insert` copies what it is given, so an attribute
+    mutated afterwards keeps its old range in the list while the Python object
+    reports the new one — a disagreement that is invisible from the calling side
+    and shows up only as the wrong word in bold.
+
+    An unstyled line contributes nothing and gets an empty list rather than
+    `None`, so there is one path through here rather than two.
+    """
+    attributes = Pango.AttrList()
+    for span in byte_spans(line):
+        for attribute in _attributes_for(span.run):
+            attribute.start_index = span.start_byte
+            attribute.end_index = span.end_byte
+            attributes.insert(attribute)
+    return attributes
+
+
+def _attributes_for(run: Run) -> list[Pango.Attribute]:
+    """The Pango attributes one run's styling asks for, rangeless as yet.
+
+    Case is absent on purpose: it is applied to the characters by `set_text`
+    rather than requested of the renderer, because Pango can transform case only
+    from 1.50 and `str.upper` does the same job with no version floor
+    (`styling.py`).
+    """
+    attributes: list[Pango.Attribute] = []
+    if run.weight is Weight.BOLD:
+        attributes.append(Pango.attr_weight_new(Pango.Weight.BOLD))
+    if run.slant is Slant.ITALIC:
+        attributes.append(Pango.attr_style_new(Pango.Style.ITALIC))
+    return attributes
 
 
 def _greyscale(surface: cairo.ImageSurface) -> bytes:

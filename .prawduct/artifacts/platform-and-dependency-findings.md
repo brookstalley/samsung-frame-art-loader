@@ -253,13 +253,28 @@ and `epaper` (`omni_epd`, which compiles Cython against the Broadcom SPI and GPI
 libraries and installs on a Pi and nowhere else). **The typesetting is therefore
 tested by CI rather than only by whoever last had a Pi in front of them.**
 
-**PyGObject does not work on this project's development Mac** and no time should
-be spent on it: it builds under Homebrew and then fails at import inside
-`gi/overrides/__init__.py`. Reinstalling `gobject-introspection`, clearing a
-duplicate glib keg and setting `GI_TYPELIB_PATH` all failed. It is a Homebrew
-toolchain skew, not a product problem — and it is why the label's *judgement*
-(what it says, where it goes) is a separate tier from its rasterization, so only
-the latter needs a machine that can run Pango.
+**PyGObject DOES work on this project's development Mac — corrected 2026-08-13.**
+It resolves as a uv wheel (PyGObject 3.56.3 against Pango 1.57.1) and imports,
+renders through PangoCairo and passes `display/tests/raster` there. What this
+paragraph said before, and said for months, was that it "does not work at all"
+and that no time should be spent on it: it built under Homebrew and then failed
+at import inside `gi/overrides/__init__.py`, and reinstalling
+`gobject-introspection`, clearing a duplicate glib keg and setting
+`GI_TYPELIB_PATH` all failed. That was a Homebrew toolchain skew, and the wheel
+route sidesteps it.
+
+**The correction is the finding, and the cost of the stale version was real.** A
+"do not spend time on it" note is one nobody re-tests, so the product's most
+important accessibility surface was believed unrunnable locally and was first
+seen in CI — which is where the byte-offset work for the styled runs would have
+been proved, if 13B-2 had not happened to check. **The CI job stays regardless**:
+it is what tests the typesetting on a machine nobody has to remember to use, and
+a runner is the only place the claim holds for everyone.
+
+None of this changes why the label's *judgement* (what it says, where it goes) is
+a separate tier from its rasterization: an optional dependency group is still
+optional, a device with a television and no panel installs neither half, and a
+tier that needs no text stack is testable in a plain `uv sync`.
 
 ### Type sizing was settled 2026-08-11, and the probe's range was wrong
 

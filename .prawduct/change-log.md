@@ -54,6 +54,188 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-13: The journal can say which work the panel captioned (#138)
+
+<!-- prawduct: scope=v1-build -->
+
+**Why:** every label event this plane emitted was an *exception* — `label.failed`,
+`label.truncated`, `label.recovered` — so a panel captioning correctly all day
+emitted nothing whatsoever, and in the journal that is indistinguishable from one
+that stopped captioning at boot. On a Pi nobody stands in front of, that is the
+whole question. Filed as #138 out of Chunk 13B-2's review, where it was the half
+of finding R-16 that the artifact fix did not touch.
+
+**`label.drawn` is the first positive signal the label ever had.** One line per
+draw, carrying the `work_id` and the `tv_content_id`, so the panel's history is
+reconstructable after the fact and joins to the `rotation.selected` before it.
+Its *absence* over a rotation is now what says the label stopped following the
+wall. It claims the surface accepted the frame and nothing about pixels — the
+driver reports no more than that, and a line implying legibility would be this
+plane asserting something it cannot see.
+
+**A picture nothing can name is `label.blanked`, a third outcome.** Somebody
+picking an art-store image with the remote gets a deliberately blank panel; a
+success event there would answer *why is the label empty* by naming a work that
+is not on the wall, and a failure would report a panel doing the right thing as
+broken. It carries the content id because there is no `work_id` on that path to
+carry.
+
+**The filed issue overstated half of itself, and the check was cheap.** It said
+no label event carried identity. Probed before designing anything: on the
+rotation path they already did — `_show` binds a `work_context` and `_caption` is
+awaited inside it, so correlation arrived by inheritance. What had none was the
+path where the *set* announces a change this plane did not make, which is
+precisely the path that exists because somebody is in the room with a remote.
+Fixed by binding inside `_caption` rather than at its two callers: the id is
+bound and not passed exactly because one forgotten call site defeats a
+discipline, and this was the forgotten call site.
+
+**`tv_content_id` is on three events and deliberately not on the other two.** It
+is the only identity that exists on the blank path, and it is what joins a
+caption to a rotation — so `label.drawn`, `label.blanked` and `label.failed`
+carry it. `label.truncated` and `label.recovered` do not: `work_id` already
+answers the question there, and a second id would be a field whose only defence
+is the test written to defend it.
+
+**The cumulative review returned 0 blocking, 2 warnings and 10 notes**
+(`rev-20260813T164833Z-36fab21e`, three reviewers over `f4b6bf3...3166323`), and
+eight of the twelve wanted an edit. **The one that bit hardest was against the
+prose above**: the paragraph justifying `tv_content_id`'s absence from
+`label.recovered` said `work_id` answers the question there, which is false on
+exactly the path this work added — the recovery is emitted before the caption
+knows whether it has a work, so a panel recovering on a blank caption logs a bare
+line. The code is right and the sentence was not; identity comes from the
+`label.blanked` immediately after it, and the paragraph now says so.
+`label.truncated` is a different case and is genuinely always under a work,
+because a blank label has no lines to drop.
+
+**Two reviewers found the same stale claim independently, in the file nobody
+changed.** `README.md` still told the front door that bold capitals and italic
+titles were *owed* work — 13B-2 having landed both — while the six other homes of
+that claim were all corrected. It is the paragraph an operator reads before going
+to look at the panel, which is the one thing they were being asked to judge.
+
+**A boundary row that should have existed two chunks ago.** `Measure` has five
+implementations across `src`, `tools` and `tests` and no row in
+`boundary-patterns.md`, whose own preamble says a missing row silently disarms the
+consumer-impact check — and 13B-4 retypes the same seam again to add a role axis.
+The row is written from the `FakeSurface` failure rather than from caution.
+
+| Finding | Severity | Disposition |
+|---|---|---|
+| R-1 / R-4 | warning | Fixed — README names the fill model and the name ladder as what remains |
+| R-10 | note | Fixed — the two silent events separated, with the real reason for each |
+| R-5 | note | Fixed — which drop count was measured, and which is arithmetic from it |
+| R-9 | note | Fixed — `Measure`/`Block` boundary row added |
+| R-7 | note | Fixed — CLAUDE.md's display cell carries `--group raster`, as the evidence does |
+| R-3 | note | Fixed — the last `Measure` double's parameter renamed |
+| R-2 | note | Fixed — learnings rule trimmed under 400 chars, evidence already in the detail file |
+| R-11 | note | Shipped — #138 closed on this branch, atomic with the merge |
+| R-6, R-8, R-12 | note | Accepted — already dispositioned, deliberate, or a mechanical false positive |
+
+**Seven mutations, all caught**, including the two that would have been silent —
+a blank redrawn on every poll (a journal nobody can read, on a plane whose only
+failure channel journald rate-limits) and a device with no panel claiming it
+captioned something. The tests read the JSON `logs.configure()` actually writes
+rather than `caplog`'s records, because the work id is stamped by a filter on the
+installed handler: a caplog-based assertion would find no correlation on lines
+that carry it in production, and so could never fail for the right reason.
+
+## 2026-08-13: The family name is heavy, and the bytes under it are counted (13B-2)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** 13B-3 collapsed the tombstone onto one line and spent three commas doing
+it, the first of which inverts a name while the other two separate a list. The
+only thing that was ever going to tell them apart is weight — and nothing
+downstream could apply any, because `LabelText.identification` joined four fields
+with `", ".join` at the point furthest from where the distinction is needed.
+Commas cannot recover the boundary: a name or a nationality may contain one.
+
+**A line is now a tuple of styled runs.** `display/src/display/panel/styling.py`
+holds the vocabulary — weight, slant, case — and is its own module rather than
+any one tier's, so the renderer does not import "what a label says" in order to
+learn what bold means. The family name is set bold and capitalised, titles are
+set in italic, and the flat `tuple[str, ...]` contract out of `lines()` is what
+gave.
+
+**Attributes over byte ranges, never markup.** `<b>`-wrapping a run would have
+reintroduced the 2024 injection on the exact surface it was fixed for, since the
+text either side of the tag is still museum-supplied. Pango's attribute indices
+are byte offsets into UTF-8, and a character count is invisible on `O'Keeffe` and
+wrong on everything else — every life date on this wall already contains an en
+dash, which spends three bytes. What it produces is a run of the wrong length in
+the wrong weight, with nothing raising.
+
+**Two decisions worth not re-deriving.** `Measure` takes runs and not their text:
+bold capitals are wider, and a measurer reading the plain string would
+under-report the one line the label leads with, on a panel where the drop rule is
+driven entirely by measured height. And **case is applied where the string is
+built rather than asked of the renderer** — Pango can transform case only from
+1.50, and `Run.text` keeping the recorded spelling is what lets the journal and
+the preview report a name nobody shouted.
+
+**The styling costs room, recorded rather than fixed.** On the reference wall's
+Hokusai record the identification line went from 262 px to 393 px — two wrapped
+rows to three — and the medium dropped. That is the case 13B-4's name ladder
+answers by giving the family name its own line before it gives up its size, so it
+is 13B-4's to close and not a reason to withdraw the weight. Queued for the
+operator, with the two questions only the panel can settle: whether the bold does
+the disambiguating at 7 feet, and whether italic is legible at the floor or
+merely different.
+
+**`CLAUDE.md` said PyGObject "does not work on this Mac at all" and it does** —
+3.56.3 against Pango 1.57.1, verified. The stale note had three other homes and
+all four are corrected. The cost was not hypothetical: a "do not spend time on
+it" line is one nobody re-tests, and the byte-offset work would otherwise have
+been first proved in CI. The typesetting CI job stays — the group is optional,
+which is a better reason than the one recorded.
+
+**Critic review: 0 blocking, 9 warnings, 10 notes across three reviewers.** All
+three independently reached the same defect from three different goals, and it is
+the one worth remembering: `FakeSurface._measure` was the single `Measure`
+implementation the refactor missed, so `len(line)` counted `Run` objects rather
+than characters — every label measured one row tall and the drop rule could never
+fire through the fake. Nothing went red, because no test using that surface
+asserts a drop, and the *identical* stub in `test_tools.py` had been fixed in the
+same commit with a comment naming the hazard. Fixed, along with a stale slack
+figure in three places, an operator entry that contradicted the one beside it, and
+an evidence command that never installed the group its most important tests need.
+
+**rev-20260813T142948Z-88916475** — chunk 13B, 2026-08-13T14:40:02Z
+
+| Finding | Severity | State | Detail |
+|---|---|---|---|
+| R-1 | warning | fixed | Fixed in df8af1b. |
+| R-2 | warning | fixed | Fixed in df8af1b. |
+| R-3 | note | accepted | Fixed in df8af1b. |
+| R-4 | note | accepted | A process observation about the dispatch, not a defect in the work. The tree was clean at dispatch; the six modified files were artifact reconciliations written while the review ran, deliberately held back so they would land in one commit with the findings rather than buying an extra round. They are now committed. |
+| R-5 | warning | fixed | Fixed in df8af1b. |
+| R-6 | warning | fixed | Fixed in df8af1b. |
+| R-7 | warning | fixed | Fixed in df8af1b. |
+| R-8 | warning | accepted | CLAUDE.md's length is a pre-existing overrun and trimming it is its own task with its own judgement calls. This change's contribution was replacing a false claim ('PyGObject does not work on this Mac at all') with a true one, which is a net +4 lines and the opposite of the harm the guidance protects against: the stale version was short AND wrong, and cost the product local coverage of its most important accessibility surface. |
+| R-9 | warning | fixed | Fixed in df8af1b. |
+| R-10 | note | accepted | Fixed in df8af1b. |
+| R-11 | note | accepted | Naming 13B-4 as the closer of a deferred item is the pointer-to-a-plan case the durable-prose rule permits, not prose riding on an id. The alternative — describing the fill model without naming which chunk owns it — is what produces a deferral nobody can find the other end of. The plan is archived rather than deleted when complete, so the pointer resolves. |
+| R-12 | note | accepted | Fixed in df8af1b. |
+| R-13 | note | accepted | Real but not worth its fix. A fourth style axis would need editing both _attributes_for (pango) and _styling_of (the preview report), and nothing fails if one is missed. The candidate fix is a shared table the two derive from, which for three binary axes is more machinery than the duplication costs — and 13B-4's likely new axis is a ROLE, which is not a Pango attribute and would not live in either enumeration. Revisit if a fourth genuine style axis appears. |
+| R-14 | note | accepted | Fixed in df8af1b. |
+| R-15 | warning | fixed | Fixed in df8af1b. |
+| R-16 | warning | filed | `138` |
+| R-17 | note | accepted | Fixed in df8af1b. |
+| R-18 | note | accepted | Informational — the reviewer's own cross-check result, reporting nothing to action. |
+| R-19 | note | accepted | Informational — the reviewer's own cross-check result, reporting nothing to action. |
+
+**19 findings** (9 warning, 10 note) — accepted: 11, filed: 1, fixed: 7.
+**7 answered twice** — recorded as both resolved and dispositioned; check which answer is current.
+
+**Ten mutations swept, one survived, now caught.** Forcing every attribute to
+start at byte 0 left the leading-run case unchanged and the trailing-run case
+merely bold throughout, so both still differed from plain type; each one-run case
+is now asserted against the all-bold line as well. **Suites:** 185 root, 2308
+curation, 434 display plus 19 typesetting — the last of which ran locally for the
+first time.
+
 ## 2026-08-12: Wave 3 — the Theme screen, taste as a first-class record, and a position that means one thing
 
 <!-- prawduct: chunks=09,11 | scope=curation-ux -->

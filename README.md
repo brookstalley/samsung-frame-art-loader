@@ -38,10 +38,12 @@ power-cycle. Both need the television, not the panel.
 three numbers into a redesign, and most of it has landed: the type floor derives
 from the panel's geometry and its reading distance, the catalogue carries
 `family_name`/`given_name` and a commentary field, the artist is set above the
-work, and the identification block is one line rather than three. What is left is
-the part that needs styled runs — the family name set apart in bold capitals, the
-title in italic — and the fill model that admits optional content in priority
-order and never sets a mandatory line below the floor. All of it is specified in
+work, the identification block is one line rather than three, and the family name
+is set in bold capitals with the title in italic — a line being a tuple of styled
+runs since 2026-08-13. What is left is
+the fill model that admits optional content in priority order and never sets a
+mandatory line below the floor, and the name ladder that gives a long name its
+own line before it gives up its size. All of it is specified in
 `accessibility-spec.md` — § Type never shrinks to fit for the two content tiers,
 § The label's content model for the ordering, the name ladder and the fill rule —
 which is where it stays after the build plan that schedules it is archived.

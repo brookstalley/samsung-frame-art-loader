@@ -1711,3 +1711,73 @@ survivor that was *not* a hole (an identity check whose id-based equivalent
 refuses the same call by another route). A survivor is a question, not a verdict:
 the honest response there was to correct the docstring that had overclaimed the
 defence, not to write a test for a mutation that was never a defect.
+
+## Changing a contract closes on the implementations, not on the red tests
+
+**2026-08-13, chunk 13B-2.** `Measure` went from `Callable[[str, int, int], Extent]`
+to taking a line of styled runs, because bold capitals are wider than the letters
+they replace and a measurer reading the plain string under-reports the line the
+label leads with. Four implementations existed: the Pango rasterizer, the layout
+tests' `measured`, `StubRasterizer` in `test_tools.py`, and `FakeSurface._measure`
+in `fakes.py`. Three were converted. The fourth was not, and **no test went red**,
+because `len(line)` over a tuple of `Run` objects still returns a number: every
+label measured one row tall however long the name was, and the drop rule could
+never fire through that surface. Nothing asserts a drop through `FakeSurface`, so
+the defect was invisible in a 453-test green run.
+
+**The detail that makes this a rule rather than an oversight.** The identical stub
+in `test_tools.py` was fixed in the *same commit*, with a comment spelling out the
+exact hazard — "would count a handful of objects rather than a line of characters,
+and every label would fit". Understanding the failure mode well enough to document
+it did not produce a search for its second instance. All three Critic reviewers
+reached it independently, from three different goals, which is what a defect looks
+like when it is structural rather than subtle.
+
+**What would have caught it cheaply:** `grep` for the type name and for the
+parameter shape across the plane, before the commit — the same move
+"A directory no suite imports is code with no tests" prescribes for `tools/`,
+applied to test doubles, which are the other category of code that runs without
+being asserted about.
+
+## A "do not spend time on this" note is one nobody ever re-tests
+
+**2026-08-13.** `CLAUDE.md` carried "PyGObject ... **does not work on this Mac at
+all** (it builds under Homebrew and fails at import; do not spend time on it)",
+with the same claim in `platform-and-dependency-findings.md`,
+`project-preferences.md`, `build-plan.md` and `operator-verification.md`. It was
+true when written — a Homebrew toolchain skew — and had stopped being true:
+PyGObject 3.56.3 resolves as a uv wheel and imports against Pango 1.57.1, renders
+through PangoCairo, and passes `display/tests/raster`.
+
+**The cost was specific.** The product's most important accessibility surface was
+believed unrunnable locally, so `display`'s recorded evidence command never
+installed the `raster` group and `tests/raster` `importorskip`ed — a green record
+that had executed no line of the typesetter. The byte-offset work in 13B-2 (Pango
+attribute indices are bytes, not characters, which is wrong for every life date on
+this wall) would have been first proved in CI. It was proved locally only because
+the note was checked.
+
+**The asymmetry that makes the rule.** A note saying "X is broken, don't try"
+exempts itself from every subsequent test, so it decays in exactly one direction:
+toward being wrong in a way nobody observes. Compare a note saying "X is required"
+— which fails loudly the moment it stops being true.
+
+## Distinguishing SOME styling from NONE does not pin a RANGE
+
+**2026-08-13, found by mutation sweep, not by review.** The test for "only the
+styled run is affected" rendered a line with the leading run bold, the same line
+with the trailing run bold, and the line unstyled, then asserted all three differ.
+The mutation `attribute.start_index = span.start_byte` → `= 0` **survived**: the
+leading case is unchanged by it, the trailing case still differs from unstyled —
+it merely becomes bold throughout — and the two styled cases still differ from
+each other.
+
+The missing comparison was the **saturated** one: a line with *both* runs bold.
+Against it, a start index forced to 0 makes the trailing case identical to
+all-bold, and an end index that overruns makes the leading case identical. Two
+assertions, and the mutation dies.
+
+**Generalises past styling** to anything applied over a span — a slice, a
+highlight, a permission scope, a date range. "It took effect" and "it took effect
+on the right extent" are different claims, and the first is what a difference from
+the null case proves.

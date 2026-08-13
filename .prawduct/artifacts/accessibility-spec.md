@@ -320,13 +320,25 @@ rotating.
 **Requested by the operator 2026-08-11 and written here before it was built,
 because it is a set of decisions and not a layout tweak.**
 
-**Half practised, half owed, and the seam runs between the content and the
-styling.** 13B-3 built the *content model* — the ordering, the one-line
-identification block, the stored name parts and the commentary field, all in
-`display/src/display/panel/metadata.py` and carried there by the manifest. What
-remains owed is the *typography*: the bold capitals, the italic title and the
-name ladder are 13B-2 and 13B-4, so today every line below is set in one weight
-at one of two sizes.
+**Practised, except for the fill model and the name ladder.** 13B-3 built the
+*content model* — the ordering, the one-line identification block, the stored
+name parts and the commentary field, all in
+`display/src/display/panel/metadata.py` and carried there by the manifest.
+**13B-2 built the typography on 2026-08-13**: a line is a tuple of styled runs
+(`display/src/display/panel/styling.py`), the family name is set bold and
+capitalised, titles are set in italic, and the renderer applies Pango attributes
+over byte ranges. What remains owed is the *fill model* and the **name ladder**
+— both 13B-4.
+
+**The styling costs room, and the figure is the reason the ladder is owed.**
+Measured on the reference wall 2026-08-13 with the preview's Hokusai sample: the
+identification line went from 262 px to **393 px** — two wrapped rows to three,
+because capitals are wider than the letters they replace — and one further line
+(the medium) dropped as a result. That is not a defect in the styling and not a
+reason to withdraw it: it is exactly the case the ladder in § One line is the
+preference, not the requirement exists to answer, by giving the family name its
+own line before it gives up its size. Until 13B-4 lands, a long name is paid for
+by the lines below it.
 
 **Two decisions this build had to make rather than inherit**, both consequences
 of composing two rules this section states separately:
@@ -340,10 +352,11 @@ of composing two rules this section states separately:
   own line — reclaims ~130 px instead of ~260 px, and the ~260 is the figure that
   makes optional content fit at all. **What disambiguates the first comma is
   weight, not punctuation**: the family name is set bold and capitalised, so the
-  eye takes `O'KEEFFE` and then the rest, rather than four equal parts. That puts
-  a load on 13B-2 worth stating plainly — **until the styled runs land, this line
-  is genuinely four undifferentiated parts on the panel**, and it is the first
-  thing to look at when the operator next stands in front of it.
+  eye takes `O'KEEFFE` and then the rest, rather than four equal parts. **Built
+  2026-08-13**, and it is still the first thing to look at when the operator next
+  stands in front of the panel — a PNG can show that the right words are heavy,
+  and only the panel can show whether the weight does the disambiguating work at
+  7 feet in reflected light.
 - **A single known name part stands alone rather than being padded out of
   `name`.** An artist with a family name and no given name sets just the family
   name; the whole string is used only when *neither* part is known. Combining
@@ -408,12 +421,35 @@ free.
   it touches only the two fields no source ever supplied — an artist's
   nationality, dates and biography came from the holding institution and are not
   this table's to overwrite.
-- **Bold is a Pango attribute over a byte range, never markup.** `metadata.py`
-  escapes nothing on purpose: a 2024 label passed description text to Pango markup
-  and a title containing `<` produced mangled type or a parse failure. Styling a
-  run by wrapping it in `<b>` would reintroduce that exact defect on the exact
-  surface it was fixed for. Runs carry their own weight and case; the renderer
-  applies attributes to ranges.
+- **Bold is a Pango attribute over a byte range, never markup. Built
+  2026-08-13.** `metadata.py` escapes nothing on purpose: a 2024 label passed
+  description text to Pango markup and a title containing `<` produced mangled
+  type or a parse failure. Styling a run by wrapping it in `<b>` would
+  reintroduce that exact defect on the exact surface it was fixed for. Runs carry
+  their own weight and case; the renderer applies attributes to ranges.
+
+  **Bytes, and the corpus is what makes that load-bearing.** Pango's attribute
+  indices are byte offsets into the UTF-8 the layout was set with, and a
+  character count is invisible on `O'Keeffe` and wrong on everything else — an en
+  dash spends three bytes, so every life date on this wall already contains one.
+  What a character offset produces is a run of the wrong length set in the wrong
+  weight, with nothing raising. Guarded by `display/tests/test_label_styling.py`
+  (the offsets, including a capital that changes byte length) and by
+  `display/tests/raster/test_pango.py` § TestTheStylingReachesTheType, which
+  checks a style over non-ASCII text against a reference that uses no indices at
+  all.
+
+  **Case is the one styling fact the renderer is not asked for.** Pango can
+  transform case only from 1.50, and pinning the label's most important run to a
+  version floor for what `str.upper` does exactly would buy nothing — so the run
+  declares `CAPITALS` and the transform is applied where the string is built.
+  `Run.text` keeps the recorded spelling. What reads it today is the preview's
+  report, and `layout.dropped` — which is how a line that came off reaches the
+  `label.truncated` journal event as the catalogue spells it rather than in
+  capitals. **A line that was *placed* is not journalled at all**, so the claim
+  stops there deliberately: `Block.text` exists for the report and for tests, and
+  naming the journal as its reader would be describing a caller that does not
+  exist. A label is not the place a person's name loses its capitals for good.
 
 **The fill rule: everything above the floor, in priority order, and slack is
 spent on content.** A fixed hierarchy handles the corpus badly — an anonymous
@@ -428,8 +464,12 @@ overflows. So the engine is given candidates with a priority and a role, and:
   name, given name and the title when there is one are not candidates competing
   for room; they are the room the rest competes for what is left of. This is what
   makes "nothing else is mandatory" affordable — with four of the six tombstone
-  facts droppable, the ~66 px slack below stops being a crisis and becomes a
-  per-work answer.
+  facts droppable, the slack below stops being a crisis and becomes a per-work
+  answer. **The figure that slack was quoted at is gone** — see the note under
+  § The label's content model: the ~66 px was measured before the family name was
+  set in bold capitals, which cost 131 px on the reference record. What the fill
+  model tunes against is a measurement it takes after the ladder decides how many
+  lines the name gets, not a number written down here.
 - **Optional content is admitted only if it fits at the floor.** Commentary is the
   first thing to go and the last thing admitted, because it is the only line that
   identifies nothing.
@@ -483,7 +523,9 @@ to be corrected on these 2026-08-11, and was on the first one:
   nationality and life dates are conventionally set as a single run —
   `Katsushika Hokusai, Japanese, 1760–1849`. This product emitted them as three
   lines, which spent three line-boxes and their leading on one fact. **On the
-  reference panel that is worth ~260 px**, against a measured slack of ~66 px, so
+  reference panel that is worth ~260 px**, against the slack measured at the time
+  (~66 px, before the capitals took 131 px of it back — § The label's content
+  model carries the current figure), so
   it is the single change that decides whether optional content fits at all —
   which is why it was built *before* the fill model rather than as an input to
   it: tuning a fill rule against the un-collapsed numbers would have tuned it
@@ -494,7 +536,7 @@ to be corrected on these 2026-08-11, and was on the first one:
   rather than a line with holes in it, and a work with none of the three yields
   no identification line at all and opens with its title.
 - **Titles are set in italic**, including *Untitled*. Another styled run, so it
-  belongs with the bold-capitals work rather than behind it.
+  landed with the bold-capitals work rather than behind it — **built 2026-08-13**.
 - **`FAMILY, Given` is an index convention, not a wall-label one.** Wall labels use
   natural order; inverted order belongs to catalogues and artist indexes. The
   operator chose it deliberately for a rotating display, where the family name is
@@ -503,8 +545,18 @@ to be corrected on these 2026-08-11, and was on the first one:
 
 **Commentary does not fit at 7 feet on this panel, and that is a finding rather
 than a tuning target.** With the identification block set at the floor there is
-~66 px of slack against the ~130 px a further line needs. The fill rule is what
-makes that a per-work answer instead of a global one: the works with short names
+no slack at all against the ~130 px a further line needs — the ~66 px this
+sentence quoted was measured before the family name was set in bold capitals,
+which took 131 px of it and then some.
+
+**Two records, and only one of them was measured** — they read as a contradiction
+otherwise, and a 13B-4 builder cannot tell which figure the 2026-08-13
+measurement supports. What was *measured* is the reference record as it stands,
+carrying no commentary: the identification line went from 262 px to 393 px and
+**the medium** came off. Adding a commentary line to that same record is what
+takes **the dimensions** with it, and that second statement is arithmetic against
+the 131 px rather than a second trip to the panel. The fill rule is what
+makes it a per-work answer instead of a global one: the works with short names
 and no title will have room, and the ones that do not will drop it.
 
 **The field exists and nothing writes to it yet, which is stated here rather than
