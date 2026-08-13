@@ -15,17 +15,22 @@ be the one place the two planes touched. What these records are *for* is being t
 manifest's label blocks, which is exactly what they are: the keys here are
 `LabelText`'s fields, so `read_label` takes them unchanged.
 
+**The splits are compared against that table rather than trusted to match it** —
+`tests/preferences/test_label_corpus_contract.py`, at the repository root, which
+reads both files without importing either plane. A promise that two files agree
+is worth what the thing checking it is worth, and the copy this one replaced
+drifted for exactly as long as somebody kept it in step by hand.
+
 The properties in `test_label_properties.py` cross the whole permutation space; these
 are the specific records a human would want to look at, and the ones whose
 measurements the artifacts quote.
 
-**It ships in the package rather than sitting in the test tree, and the reason is
-the second reader.** `tools/label_preview.py` draws these on the real panel — that
-is what "records a human would want to look at" means in practice, and it is the
-only instrument that can settle legibility. An operator instrument reaching into
-`tests/` for its content would break wherever the tests are not present, which is
-every deployment that installs the package rather than cloning it. Nothing in the
-daemon imports this; what it costs to carry is a few kilobytes of text.
+**It is in the package rather than in the test tree, and the reason is the second
+reader.** `tools/label_preview.py` draws these on the real panel — that is what
+"records a human would want to look at" means in practice, and it is the only
+instrument that can settle legibility. `display/tests/` is on nobody's import
+path when that tool runs; `display.panel.corpus` is importable for free. Nothing
+in the daemon imports it, and what it costs to carry is a few kilobytes of text.
 """
 
 from typing import Final

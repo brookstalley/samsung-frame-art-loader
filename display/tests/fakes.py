@@ -366,6 +366,16 @@ class FakeSurface(LabelSurface):
     def geometry(self) -> Geometry:
         return self._geometry
 
+    def resize(self, *, width_px: int, height_px: int, margin_px: int) -> None:
+        """Change the usable area under a running daemon.
+
+        **A geometry is a setting, so it can change while the process lives** —
+        an operator edits the margin or the viewing distance and restarts
+        nothing. That makes "the surface has no usable area" a condition that
+        clears, and a fake fixed at construction cannot express the clearing.
+        """
+        self._geometry = Geometry(width_px=width_px, height_px=height_px, margin_px=margin_px)
+
     @property
     def type_scale(self) -> TypeScale:
         return self._type_scale

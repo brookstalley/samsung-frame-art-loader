@@ -188,7 +188,10 @@ class Layout:
     surface: Geometry
     blocks: tuple[Block, ...]
     #: Facts that were left off because the surface could not hold them at a
-    #: legible size, least-droppable first. Empty is the normal case.
+    #: legible size, in the order they read on the label. Empty is the normal
+    #: case. **Reading order is not priority order** — that is this label's whole
+    #: thesis — and on the surface with no usable area at all, where every fact is
+    #: reported, the mandatory title lands after the optional facts above it.
     dropped: tuple[str, ...]
     #: Lines that had to be set below the legibility floor for the surface to hold
     #: them at all — the identifying facts, which shrink rather than vanish.
@@ -203,8 +206,15 @@ class Layout:
 
     @property
     def is_empty(self) -> bool:
-        """Whether this would put nothing on the surface. Nothing branches on it —
-        a blank frame is what drawing no blocks already produces."""
+        """Whether this would put nothing on the surface.
+
+        **The daemon branches on this together with `dropped`**, and the pair is
+        what tells the two blank frames apart: a work whose institution published
+        no label text lays out to nothing and that is right, while facts that
+        existed and were not placed is the accessibility surface failing
+        completely. Anything that changes what produces an empty layout has to
+        go and look at that warning.
+        """
         return not self.blocks
 
 
@@ -296,6 +306,19 @@ class _ComposedLine:
     #: mandatory if *any* of it is: the identification line carries a family name
     #: and may also carry a nationality, and the name is what decides its fate.
     mandatory: bool
+    #: Whether *every* fact on this line identifies the work — which is a
+    #: different question from the one above, and asking the one above in its
+    #: place is what let optional facts reach the identification tier.
+    #:
+    #: **Survival and size are decided by opposite quantifiers.** A line holding
+    #: one fact that may not be dropped must survive whole, because there is no
+    #: way to drop half a line. A line holding one fact that does *not* identify
+    #: the work must not be set at the identification tier, because at that size
+    #: it claims the work is identified by a medium or a date — the two-distance
+    #: label read backwards. On the name ladder's second rung this is exactly the
+    #: tail: `Hokusai, Japanese, 1760–1849` may not be dropped, and is not the
+    #: name.
+    wholly_identifying: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -453,7 +476,14 @@ def _grow_into_the_slack(
         # than a higher one, which reads as a hierarchy nobody chose — and it is
         # reachable, since a leading line that identifies nothing stays at the
         # floor (see `_sizes_for`).
-        if not line.mandatory or placed.sizes[index - 1] != scale.primary_px:
+        #
+        # **`wholly_identifying`, not `mandatory`**, and the two differ on exactly
+        # the line this ladder creates: the second rung's tail may not be dropped
+        # because the given name is on it, while the nationality and the life
+        # dates beside it are optional. Asking whether the line may be dropped
+        # would promote all three, which sets a demonym at the size reserved for
+        # identifying the work.
+        if not line.wholly_identifying or placed.sizes[index - 1] != scale.primary_px:
             break
         grown = (*placed.sizes[:index], scale.primary_px, *placed.sizes[index + 1 :])
         candidate_placement = _placed(placed.lines, grown, surface, measure, scale)
@@ -480,7 +510,7 @@ def _compose(
     ladder, which puts the family name on a line of its own and lets everything
     that shared it follow at the floor.
     """
-    lines: list[tuple[list[Run], bool]] = []
+    lines: list[tuple[list[Run], bool, bool]] = []
     broken = False
     for index in kept:
         candidate = candidates[index]
@@ -490,13 +520,19 @@ def _compose(
             joins = False
             broken = True
         if joins:
-            runs, was_mandatory = lines[-1]
+            runs, was_mandatory, was_wholly = lines[-1]
             runs.extend(candidate.continues_line)
             runs.extend(candidate.runs)
-            lines[-1] = (runs, was_mandatory or mandatory)
+            # **`or` for one, `and` for the other, and the asymmetry is the
+            # point.** One fact that may not be dropped commits the whole line to
+            # surviving; one fact that does not identify the work disqualifies the
+            # whole line from claiming that it does.
+            lines[-1] = (runs, was_mandatory or mandatory, was_wholly and mandatory)
         else:
-            lines.append(([*candidate.runs], mandatory))
-    return tuple(_ComposedLine(runs=tuple(runs), mandatory=mandatory) for runs, mandatory in lines)
+            lines.append(([*candidate.runs], mandatory, mandatory))
+    return tuple(
+        _ComposedLine(runs=tuple(runs), mandatory=mandatory, wholly_identifying=wholly) for runs, mandatory, wholly in lines
+    )
 
 
 def _sizes_for(lines: Sequence[_ComposedLine], scale: TypeScale) -> tuple[int, ...]:

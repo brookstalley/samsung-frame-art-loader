@@ -31,6 +31,11 @@ the derivation that sizes them — because they have genuinely different lifetim
   implement it. The e-paper panel is the first, not the only one: a display
   device may have a monitor and no e-ink at all, and draw its label into the mat
   area around the artwork instead.
+* **`corpus`** — real records off the wall, chosen for the ways they break the
+  rules above. **The one module here the daemon never imports**, and it is here
+  rather than beside the tests because the other reader is
+  `tools/label_preview.py`, which draws them on the panel and is the only
+  instrument that can settle legibility.
 
 **"This device has no label surface" is a configuration, not a fault.** A wall
 whose device drives a television and nothing else is a supported deployment, and

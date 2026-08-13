@@ -161,11 +161,19 @@ source file:
     sudo systemctl stop display.service
     cd /opt/samsung-frame-art-loader/display && sudo -u tvpi env HOME=/var/lib/tvpi \
         /usr/local/bin/uv run --group raster --group epaper \
-        python tools/label_preview.py --panel --cap-arcmin 11
+        python tools/label_preview.py --panel --cap-arcmin 11 --record hokusai
     sudo systemctl start display.service
 
 **Stopping the unit is not optional.** `--panel` takes the SPI device, and
 `display.service` holds it while it runs; the two contend for the same bus.
+
+**Stop it once and draw several records, rather than bracketing each one.**
+`--record` chooses which of the wall's records is set, and the questions this
+instrument answers are comparative — a long name against a short one, a full
+record against a nearly empty one. The panel holds the last frame it was given,
+so a sitting is a run per record against one stopped service, with the unit
+started again at the end. `--help` lists the records there are, and so does the
+refusal you get for naming one that does not exist.
 
 **It states no geometry, and that is correct here and only here.** The tool
 refuses to guess the panel's diagonal or its reading distance, and takes both

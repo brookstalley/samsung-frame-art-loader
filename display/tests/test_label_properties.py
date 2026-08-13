@@ -173,13 +173,53 @@ class TestWhatTheLabelPromises:
 
         A line carrying *any* mandatory fact earns the tier for the whole line —
         that is what lets the nationality ride the family name — so the question
-        is only whether some mandatory fact is on it.
+        is only whether some mandatory fact is on it. **That is the rule for the
+        leading line, and only for it**; the property below is the stricter one
+        that governs every line under it.
         """
         mandatory = [c.text for c in read_label(label).candidates() if c.tier is Tier.MANDATORY]
 
         for block in laid(label, surface).blocks:
             if block.size_px > SCALE.floor_px:
                 assert any(fact in block.text for fact in mandatory), f"{block.text!r} was set above the floor"
+
+    @given(labels(), surfaces())
+    def test_no_line_below_the_leading_one_is_grown_unless_all_of_it_identifies_the_work(
+        self, label: dict[str, str], surface: Geometry
+    ):
+        """**Where the two quantifiers come apart, and the ladder is what pulls
+        them apart.**
+
+        The leading line earns the identification tier if *any* fact on it
+        identifies the work — that is what lets a nationality ride a family name,
+        and it is the property above. Every line beneath it starts at the floor
+        and can only rise by growth, and there the question has to be whether
+        *every* fact on it identifies the work: at that size a line claims the
+        work is identified by what is on it, so a medium or a life date set there
+        is the two-distance label read backwards.
+
+        The name ladder's second rung is exactly the line that separates the two.
+        `Hokusai, Japanese, 1760–1849` may not be dropped, because the given name
+        is on it — and it is not the name. Asking whether the line was droppable
+        would promote the nationality and the dates with it, which is the gap
+        `accessibility-spec.md` records as closed by the ladder.
+
+        **Facts whose words are also some mandatory fact's words are left out of
+        the question**, for the reason the drop property counts rather than
+        comparing sets: a generated record can record `Moche` as its title, its
+        given name and its medium at once, and a line reading `Moche` cannot then
+        be asked which of the three is on it. The ambiguity is in the record and
+        not in the engine, and an assertion that cannot tell two facts apart
+        reports the wrong one.
+        """
+        candidates = read_label(label).candidates()
+        identifying = {c.text for c in candidates if c.tier is Tier.MANDATORY}
+        optional = [c.text for c in candidates if c.tier is Tier.OPTIONAL and c.text not in identifying]
+
+        for block in laid(label, surface).blocks[1:]:
+            if block.size_px > SCALE.floor_px:
+                riding = [fact for fact in optional if fact and fact in block.text]
+                assert not riding, f"{block.text!r} was grown while carrying optional facts {riding}"
 
     @given(labels(), surfaces())
     def test_every_fact_is_either_set_or_reported(self, label: dict[str, str], surface: Geometry):
@@ -334,12 +374,26 @@ class TestTheCorpusItActuallyServes:
         assert {block.size_px for block in layout.blocks} == {SCALE.floor_px}
         assert layout.blocks[0].text == "Japanese"
 
-    def test_the_almost_empty_record_grows_rather_than_leaving_the_panel_blank(self):
-        """The other end of the corpus, and half the reason the fill model exists:
-        a fixed hierarchy overflows on Hokusai and wastes the panel here."""
+    def test_the_almost_empty_record_keeps_both_its_facts_and_stays_at_the_floor(self):
+        """The other end of the corpus, and the case where the withheld tier and
+        the fill model meet.
+
+        **This record cannot grow, and the name says so now because it used to
+        claim otherwise.** Its only facts are a medium and a date — both optional
+        — so nothing on the leading line identifies the work, the identification
+        tier is withheld from the whole label, and growth stops at the first line
+        it looks at. What is worth pinning is the outcome that leaves: two facts,
+        neither dropped, all of it at the floor, and most of the panel white.
+        That is the arrangement § The fill model calls deliberate and the queued
+        panel entry warns will look most like a bug.
+
+        Growth firing is covered by `TestSlackIsSpentOnContentBeforeType` and by
+        the records that carry a mandatory fact.
+        """
         anonymous = dict(CORPUS)["anonymous"]
 
         layout = lay_out(read_label(anonymous).candidates(), self.PANEL, measured, SCALE)
 
         assert layout.blocks, "the label was blank"
         assert layout.dropped == ()
+        assert {block.size_px for block in layout.blocks} == {SCALE.floor_px}

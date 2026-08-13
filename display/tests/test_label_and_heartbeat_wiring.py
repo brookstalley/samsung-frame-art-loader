@@ -750,6 +750,90 @@ class TestTheJournalSaysWhatThePanelCaptioned:
         assert not self._events(lines, "label.drawn"), "it claimed a caption that is not on the panel"
 
     @pytest.mark.asyncio
+    async def test_the_unusable_surface_is_reported_once_and_not_every_rotation(
+        self, settings, tv, state, clock, publish, journal
+    ):
+        """**A geometry that borders the label out of existence holds until
+        somebody changes a setting**, so this condition is lived through rather
+        than met — and the response to a persistent condition here is the same
+        everywhere: say it at the edge, keep rotating. Ungated it is the same
+        WARNING roughly five hundred times a day at the default rotation, in the
+        only channel this plane reports failure through, which is how a real
+        fault becomes something nobody reads.
+
+        **The contrast that decides it is `label.shrunk`, which is deliberately
+        not gated.** A shrunk set belongs to one work and a gate would swallow
+        the next work's; an unusable surface belongs to the device and says the
+        same thing whatever the wall happens to be showing.
+
+        Three rotations rather than two, because a gate that reports on the first
+        and the third is a gate that resets, and two would not tell them apart.
+
+        **The clock has to move between them or there is only one draw**, and a
+        test that ticked three times without it passed against an ungated warning
+        — which the mutation sweep is what caught. Two works for the same reason:
+        the condition is about the device, so it has to survive the label changing
+        underneath it.
+        """
+        swallowed = FakeSurface(width_px=100, height_px=100, margin_px=60)
+        daemon = _daemon_with(swallowed, settings, tv, state, clock)
+        publish(
+            ["work-a", "work-b"],
+            shuffle=False,
+            labels={
+                "work-a": {"title": "Cat Litter", "artist": "Ed Ruscha"},
+                "work-b": {"title": "Another Work", "artist": "Someone Else"},
+            },
+        )
+
+        try:
+            for _ in range(3):
+                await daemon.tick()
+                clock.advance(10_000)
+        finally:
+            swallowed.release.set()
+
+        unusable = self._events(journal(), "label.unusable")
+        assert len(unusable) == 1, f"the persistent fault repeated per rotation: {len(unusable)} lines"
+
+    @pytest.mark.asyncio
+    async def test_a_surface_given_its_area_back_can_report_the_fault_again(self, settings, tv, state, clock, publish, journal):
+        """**The other half of a gate, and the half that fails silently.**
+
+        A gate that never re-arms is indistinguishable from a working one for as
+        long as the fault persists, and wrong the moment it clears: the geometry
+        is a setting, so an operator who widens the margin, sees the panel
+        caption, then narrows it again has a device whose accessibility surface
+        has failed and a journal that says nothing at all. That is a worse
+        outcome than the repetition the gate was added to stop, because the first
+        is noisy and this one is silent.
+
+        `label.drawn` is the edge that ends the episode — a label actually placed
+        is the proof the surface has usable area — so there is no recovery event
+        of its own to look for here.
+        """
+        swallowed = FakeSurface(width_px=100, height_px=100, margin_px=60)
+        daemon = _daemon_with(swallowed, settings, tv, state, clock)
+        publish(["work-a", "work-b"], shuffle=False, labels={"work-a": {"title": "Cat Litter"}, "work-b": {"title": "Another"}})
+
+        try:
+            await daemon.tick()
+            clock.advance(10_000)
+            # The operator widens the panel's usable area, and the label lands.
+            swallowed.resize(width_px=1448, height_px=1072, margin_px=40)
+            await daemon.tick()
+            clock.advance(10_000)
+            swallowed.resize(width_px=100, height_px=100, margin_px=60)
+            await daemon.tick()
+        finally:
+            swallowed.release.set()
+
+        lines = journal()
+        assert self._events(lines, "label.drawn"), "the widened surface never captioned, so nothing recovered"
+        unusable = self._events(lines, "label.unusable")
+        assert len(unusable) == 2, f"the episode never re-armed, so the returning fault was silent: {len(unusable)}"
+
+    @pytest.mark.asyncio
     async def test_a_work_whose_institution_published_nothing_is_not_a_fault(self, labelled, publish, journal):
         """The other way a label lays out to nothing, and it is a fact about the
         record rather than about the device — so it must not reach the warning

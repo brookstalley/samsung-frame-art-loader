@@ -157,6 +157,11 @@ class Daemon:
         #: open.
         self._surface = surface
         self._label_failed = ReportOnce()
+        #: The surface has area but not enough of it to place anything. A
+        #: different fault from the one above — the panel takes the frame and the
+        #: frame is blank — and persistent in the same way, because what causes it
+        #: is a geometry setting rather than an event.
+        self._label_unusable = ReportOnce()
         #: The draw handed to a worker thread, kept until it finishes. **A
         #: one-at-a-time gate rather than a queue**: the budget stops the loop
         #: waiting on a hung panel, but it cannot stop the thread, and dispatching
@@ -843,11 +848,21 @@ class Daemon:
             # primary tier, which grows with viewing distance, so a device
             # configured to be read from far enough away borders its own label out
             # of existence. Nothing about it stops the wall.
-            log.warning(
-                "the label surface has no usable area at this geometry, so %s was not captioned at all",
-                entry.label.get("title") or entry.work_id,
-                extra={"event": "label.unusable", "tv_content_id": content_id},
-            )
+            # **Once per episode, like every other condition that is about the
+            # device.** The geometry that borders a label out of existence is a
+            # setting, so it holds until somebody changes one — and at the default
+            # rotation an ungated line here is the same WARNING some five hundred
+            # times a day, forever, in the plane's only failure channel. Its
+            # sibling `label.shrunk` is deliberately *not* gated because a shrunk
+            # set belongs to one work and a gate would swallow the next work's;
+            # this one belongs to the surface and says the same thing whatever the
+            # wall is showing.
+            if self._label_unusable.begin():
+                log.warning(
+                    "the label surface has no usable area at this geometry, so %s was not captioned at all",
+                    entry.label.get("title") or entry.work_id,
+                    extra={"event": "label.unusable", "tv_content_id": content_id},
+                )
         else:
             # **The only line that says the panel is working.** Every other label
             # event is an exception — a failure, a truncation, a recovery — so a
@@ -859,6 +874,12 @@ class Daemon:
             # **It claims the surface took the frame, and nothing about pixels.**
             # The driver reports no more than that, and a line implying the label
             # is legible would be this plane asserting something it cannot see.
+            # **The edge that ends the unusable episode, and there is no separate
+            # recovery line for it.** A label actually placed is the proof the
+            # surface has usable area again, and this line already says so by
+            # name — where `label.recovered` exists because `label.failed`'s
+            # success path emits nothing at all.
+            self._label_unusable.end()
             log.info(
                 "the panel is captioning %s",
                 entry.label.get("title") or entry.work_id,

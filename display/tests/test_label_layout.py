@@ -662,6 +662,37 @@ class TestTheNameLadder:
         assert layout.blocks[1].size_px == SCALE.floor_px
         assert layout.shrunk == (), "it gave up its size before it had given up its line"
 
+    def test_the_second_rung_tail_is_not_grown_back_to_the_identification_tier(self):
+        """**Where "may not be dropped" and "identifies the work" come apart.**
+
+        Rung two puts the family name on its own line and everything that shared
+        it beneath. That tail may not be dropped — the given name is on it — and
+        it is not the name: the life dates riding with it are optional. Growth
+        asks the wrong question if it asks whether the line is droppable, and the
+        two questions differ on exactly this line and nowhere else, which is why
+        it has its own test rather than a property.
+
+        Set at the identification tier the tail would be claiming a work is
+        identified by when its maker died, which is the two-distance label read
+        backwards — the size the reader takes in on approach, spent on a fact for
+        whoever walks up.
+
+        **A narrow, tall surface is what makes it reachable, and it is not a
+        contrivance.** The break is chosen because the joined line will not hold
+        at this width, and the height is what leaves slack afterwards; a cramped
+        surface reaches rung two with nothing left to grow into, which is why
+        every other ladder test here is blind to this. Such a surface is the mat
+        strip beside an artwork rather than this wall's panel, and
+        `architecture.md` § Direction names that device.
+        """
+        narrow_and_tall = Geometry(width_px=275, height_px=1300, margin_px=40)
+
+        layout = lay_out(self.name(*self.KANDINSKY), narrow_and_tall, measured, SCALE)
+
+        assert [block.text for block in layout.blocks] == ["Kandinsky", "Vasily, 1866–1944"]
+        assert layout.blocks[0].size_px == SCALE.primary_px
+        assert layout.blocks[1].size_px == SCALE.floor_px, "an optional fact was set at the identification tier"
+
     def test_nothing_shrinks_on_a_surface_where_the_break_alone_would_have_done(self):
         """**The ladder's ordering, asserted as an ordering rather than at one
         surface.** Rung three is only reached when rung two has failed, so across
