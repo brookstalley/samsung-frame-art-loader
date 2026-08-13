@@ -54,6 +54,44 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-13: The instrument draws the whole corpus, and growth asks the right question (13B-4)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** The two panel sittings queued against 13B-2 and 13B-4 ask the operator
+to compare four records — a long name against a short one, a full record against
+a nearly empty one — and `label_preview.py` could draw exactly one. Every
+judgement left in the label design is comparative, so the pass as written could
+not be run at all. The specimen it drew was a verbatim copy of the corpus's
+reference record, kept in step by hand and drifting the moment nobody did.
+
+**What changed.** `--record` selects any of the wall's eight records, and the
+corpus moved out of the test tree into the package because the instrument is its
+second reader: `display/tests/` is on nobody's import path when the tool runs.
+The report names its record first, since a comparative sitting produces several
+reports read side by side. `--panel` — the invocation that settles legibility and
+the one no test had ever reached — is now driven against a stubbed driver.
+
+**The cumulative review over the bundle returned 0 blocking, and its one
+behavioural finding was a predicate serving two policies.** A line is mandatory
+if *any* fact on it may not be dropped, which is right for survival; growth
+reused it to mean "this line is the identification block", where the question is
+whether *every* fact on it identifies the work. On the name ladder's second rung
+those differ exactly: the tail may not be dropped because the given name is on
+it, and the nationality and life dates beside it are optional. Three artifacts
+and the function's own docstring already stated the strict rule, so the engine
+was corrected rather than the spec. It moves 46 narrow-and-tall geometries and
+not the reference wall.
+
+`label.unusable` is episode-gated now, like every other signal about the device —
+ungated it was one WARNING per rotation forever, in the plane's only failure
+channel — and the corpus's claim that its name splits are curation's is compared
+by AST at the root suite instead of promised.
+
+**Two artifact errors fixed on the way:** the queue entry sent the operator to
+look at `ANDERS, Joseph`, which exists only as a synthetic fixture inside a test
+and never on the wall, and it announced three things to look for over four items.
+
 ## 2026-08-13: The journal can say which work the panel captioned (#138)
 
 <!-- prawduct: scope=v1-build -->

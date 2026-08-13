@@ -378,11 +378,12 @@ class TestTheCorpusItActuallyServes:
         """The other end of the corpus, and the case where the withheld tier and
         the fill model meet.
 
-        **This record cannot grow, and the name says so now because it used to
-        claim otherwise.** Its only facts are a medium and a date — both optional
-        — so nothing on the leading line identifies the work, the identification
-        tier is withheld from the whole label, and growth stops at the first line
-        it looks at. What is worth pinning is the outcome that leaves: two facts,
+        **This record cannot grow, and the name says so.** Its only facts are a
+        medium and a date — both optional — so nothing on the leading line
+        identifies the work, the identification tier is withheld from the whole
+        label, and growth stops at the first line it looks at. A name promising
+        growth here would be describing a branch this record cannot reach.
+        What is worth pinning is the outcome that leaves: two facts,
         neither dropped, all of it at the floor, and most of the panel white.
         That is the arrangement § The fill model calls deliberate and the queued
         panel entry warns will look most like a bug.

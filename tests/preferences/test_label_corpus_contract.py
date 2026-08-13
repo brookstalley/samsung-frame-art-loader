@@ -58,9 +58,14 @@ def seeded_name_parts(source: pathlib.Path) -> dict[str, tuple[str | None, str |
         if target != SEEDED or not isinstance(node.value, ast.Dict):
             continue
         return {
-            key.value: tuple(_literal(part) for part in value.elts)
+            key.value: (_literal(value.elts[0]), _literal(value.elts[1]))
             for key, value in zip(node.value.keys, node.value.values, strict=True)
             if isinstance(key, ast.Constant) and isinstance(key.value, str) and isinstance(value, ast.Tuple)
+            # **The arity is part of the shape, and leaving it out made the
+            # promise above false**: a row of any other length reached the
+            # caller's two-name unpack and raised there, which reads as a broken
+            # test rather than as a table this reader does not understand.
+            and len(value.elts) == 2
         }
     return {}
 
@@ -113,9 +118,14 @@ def test_every_corpus_record_that_names_an_artist_quotes_the_seeded_split():
     """The claim itself, over every record that makes it.
 
     A corpus record is free to hold an artist the seed table says nothing about —
-    that is the fallback case, and `MOCHE` is deliberately one of them. What it
-    may not do is state a split that disagrees with the authored one, because the
+    that is the fallback case, and the test below covers it. What no record may
+    do is state a split that disagrees with the authored one, because the
     engine's hardest decisions are all decided by which part of a name leads.
+
+    **`MOCHE` is compared here like any other record, not exempted.** The table
+    carries it as `(None, None)` — a culture has no family name, which is an
+    authored answer rather than a silence — so the corpus stating no parts for
+    it is the agreement being checked, and inventing one would fail here.
     """
     splits = seeded_name_parts(SEED_TABLE)
 
@@ -136,12 +146,18 @@ def test_every_corpus_record_that_names_an_artist_quotes_the_seeded_split():
 
 
 def test_a_record_the_table_says_nothing_about_carries_no_split():
-    """The other half, and the behaviour a heuristic could not have.
+    """The other half: an artist absent from the table gets no parts invented.
 
-    `MOCHE` is a culture rather than a person and the seed table deliberately
-    omits it, so the label falls back to the whole name unstyled. A corpus record
-    that invented parts for such a name would be exercising the engine against a
-    manifest curation cannot produce.
+    **A forward guard rather than a live one, and saying so is the point.**
+    Every artist the corpus names is currently in the seed table — `Moche` among
+    them, carried as `(None, None)`, which is the table stating that a culture
+    has no family name rather than the table being silent. That row is compared
+    by the test above like any other. What this covers is the case where a
+    corpus record names somebody the table has never heard of: the label falls
+    back to the whole name unstyled, and a record that invented parts would be
+    exercising the engine against a manifest curation cannot produce.
+
+    An empty loop body here is therefore the expected state, not a gap.
     """
     splits = seeded_name_parts(SEED_TABLE)
 
@@ -183,14 +199,57 @@ class TestTheGuardCanFail:
 
         assert corpus_records(empty) == {}
 
+    def test_a_row_of_the_wrong_arity_is_left_out_rather_than_raising(self, tmp_path: pathlib.Path):
+        """The reader promises to skip what it does not understand, and a row it
+        half-understood used to reach the caller's two-name unpack instead."""
+        table = tmp_path / "names.py"
+        table.write_text('SEEDED_NAME_PARTS = {"Three Parts": ("A", "B", "C"), "Two Parts": ("D", "E")}\n')
 
-@pytest.mark.parametrize("record", ["HOKUSAI", "OKEEFFE", "WRIGHT"])
-def test_the_records_the_artifacts_quote_are_still_in_the_corpus(record: str):
-    """Pinned by name, because both sides moving together is still a break.
+        assert seeded_name_parts(table) == {"Two Parts": ("D", "E")}
 
-    `accessibility-spec.md` quotes measurements taken against these, and
-    `operator-verification.md` sends the operator to `--record` them by hand. A
-    rename that updated the corpus and the tests would pass every comparison
-    above while orphaning both documents.
+
+def corpus_keys(source: pathlib.Path) -> set[str]:
+    """The names `--record` takes, out of the `CORPUS` tuple's own first elements.
+
+    **The key, not the constant, is what the documents quote.** A record is
+    declared as `HOKUSAI` and selected as `--record hokusai`, and the two are
+    written down in different places — so a pin over the constants alone would
+    hold while every command an operator has been given stopped working.
     """
-    assert record in corpus_records(CORPUS)
+    tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+    for node in tree.body:
+        target = None
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            target = node.target.id
+        elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            target = node.targets[0].id
+        if target != "CORPUS" or not isinstance(node.value, ast.Tuple):
+            continue
+        return {
+            pair.elts[0].value
+            for pair in node.value.elts
+            if isinstance(pair, ast.Tuple) and pair.elts and isinstance(pair.elts[0], ast.Constant)
+        }
+    return set()
+
+
+#: The records the documents send a human to by hand, as `(constant, --record
+#: key)`. Both halves are pinned because they are written down separately:
+#: `accessibility-spec.md` quotes measurements taken against the constants, while
+#: `deploy/README.md` and `operator-verification.md` give the operator commands
+#: naming the keys. A rename that updated the corpus and this suite together
+#: would pass every comparison above and orphan whichever half it missed.
+QUOTED_BY_THE_ARTIFACTS = (("HOKUSAI", "hokusai"), ("OKEEFFE", "okeeffe"), ("WRIGHT", "wright"), ("MOCHE", "moche"))
+
+
+@pytest.mark.parametrize(("constant", "key"), QUOTED_BY_THE_ARTIFACTS)
+def test_the_records_the_artifacts_quote_are_still_in_the_corpus(constant: str, key: str):
+    assert constant in corpus_records(CORPUS), f"{constant} is quoted by the artifacts and is no longer declared"
+    assert key in corpus_keys(CORPUS), f"--record {key} is a documented command and the corpus no longer offers it"
+
+
+def test_the_corpus_keys_were_actually_read():
+    """The vacuity guard for the pin above: an unparsed `CORPUS` yields nothing,
+    and `x in set()` would then fail loudly rather than silently — but a *typo*
+    in this reader would make every key look missing, which reads as a rename."""
+    assert len(corpus_keys(CORPUS)) >= 8, "the CORPUS tuple parsed to almost nothing, so the keys were never checked"
