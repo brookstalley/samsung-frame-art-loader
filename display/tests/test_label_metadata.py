@@ -10,12 +10,26 @@ change to the other. Nothing here asserts what a renderer *does* with a weight �
 that is `tests/raster/test_pango.py`, against real type.
 """
 
-from display.panel import Case, LabelText, Run, Slant, Weight, plain, read_label
+from display.panel import Case, LabelText, Run, Slant, Tier, Weight, plain, read_label
 
 
 def said(label: LabelText) -> list[str]:
-    """What each of the label's lines says, styling aside."""
-    return [plain(line) for line in label.lines()]
+    """What each fact the label offers says, in reading order, styling aside.
+
+    **Facts rather than lines, and that is the contract change.** This tier used
+    to hand down composed lines, so the identification block arrived here as one
+    string; it now hands down the facts and their tiers, and *which* of them share
+    a line is decided by whatever knows how much room there is. What the composed
+    line reads as is still asserted — through `identification`, which is the
+    content rather than the layout — and where it breaks is asserted in
+    `test_label_layout.py`, where the breaking happens.
+    """
+    return [candidate.text for candidate in label.candidates()]
+
+
+def ranked(label: LabelText) -> list[tuple[str, Tier]]:
+    """What each fact says and whether the label may drop it."""
+    return [(candidate.text, candidate.tier) for candidate in label.candidates()]
 
 
 class TestReadingTheManifestBlock:
@@ -48,6 +62,7 @@ class TestReadingTheManifestBlock:
 
         assert plain(label.identification) == "Vasily Kandinsky"
         assert said(label) == ["Vasily Kandinsky", "Improvisation No. 30"]
+        assert all(tier is Tier.MANDATORY for _, tier in ranked(label)), "an unsplit name is still the artist's name"
 
     def test_a_field_curation_does_not_publish_is_simply_absent(self):
         """The corpus is full of these — a print with no dimensions, an anonymous work."""
@@ -78,37 +93,70 @@ class TestReadingTheManifestBlock:
         assert read_label("a title").is_empty  # type: ignore[arg-type]
 
 
-class TestTheLinesALabelOffers:
-    def test_they_come_in_wall_label_order(self):
-        """Least droppable first — the layout tier drops from the end.
+class TestTheFactsALabelOffers:
+    FULL = LabelText(
+        title="The Banquet",
+        artist="Jan Steen",
+        artist_family_name="Steen",
+        artist_given_name="Jan",
+        artist_nationality="Dutch",
+        artist_dates="1626–1679",
+        date_created="1660",
+        medium="Oil on canvas",
+        dimensions="100 × 80 cm",
+        commentary="Painted for a civic guild.",
+    )
 
-        The artist leads: on a 6-inch panel read from 7 feet a long title
+    def test_they_come_in_reading_order(self):
+        """Top of the label to the bottom, not most-important first.
+
+        The artist leads the work: on a 6-inch panel read from 7 feet a long title
         consumed over half the usable height and drove the year, the medium and
         the dimensions off the bottom, while the family name is a few characters.
-        Identification, nationality and dates arrive as **one** line, which is
-        what a museum prints and is worth ~260 px of the panel's ~66 px of slack.
+        The two name parts and the two tombstone facts come first because they
+        share the leading line, and the title follows because it is set below it.
         """
-        label = LabelText(
-            title="The Banquet",
-            artist="Jan Steen",
-            artist_family_name="Steen",
-            artist_given_name="Jan",
-            artist_nationality="Dutch",
-            artist_dates="1626–1679",
-            date_created="1660",
-            medium="Oil on canvas",
-            dimensions="100 × 80 cm",
-            commentary="Painted for a civic guild.",
-        )
-
-        assert said(label) == [
-            "Steen, Jan, Dutch, 1626–1679",
+        assert said(self.FULL) == [
+            "Steen",
+            "Jan",
+            "Dutch",
+            "1626–1679",
             "The Banquet",
             "1660",
             "Oil on canvas",
             "100 × 80 cm",
             "Painted for a civic guild.",
         ]
+
+    def test_reading_order_is_not_priority_order(self):
+        """**The change that made a tier necessary.** The title is set *below* the
+        nationality and admitted *before* it, because a label that cannot say what
+        the work is called identifies nothing while one missing a demonym is a
+        label with a demonym missing. Position alone cannot express that, and the
+        rule it replaced — drop from the end — made two droppable facts permanent
+        the moment the tombstone collapsed onto the leading line.
+        """
+        assert ranked(self.FULL) == [
+            ("Steen", Tier.MANDATORY),
+            ("Jan", Tier.MANDATORY),
+            ("Dutch", Tier.OPTIONAL),
+            ("1626–1679", Tier.OPTIONAL),
+            ("The Banquet", Tier.MANDATORY),
+            ("1660", Tier.OPTIONAL),
+            ("Oil on canvas", Tier.OPTIONAL),
+            ("100 × 80 cm", Tier.OPTIONAL),
+            ("Painted for a civic guild.", Tier.OPTIONAL),
+        ]
+
+    def test_the_name_is_two_facts_so_the_ladder_has_somewhere_to_break(self):
+        """A single candidate could only be wrapped or shrunk. Two lets the family
+        name take a line of its own and the given name follow at the floor, which
+        is what makes a long family name cost only itself."""
+        family, given = self.FULL.candidates()[:2]
+
+        assert (family.text, given.text) == ("Steen", "Jan")
+        assert family.continues_line == (), "the family name opens the line"
+        assert given.continues_line == (Run(", "),), "the given name continues it, or opens one of its own"
 
     def test_missing_fields_close_up_rather_than_leaving_gaps(self):
         label = LabelText(title="Golden Bird", medium="Bronze")
@@ -234,9 +282,9 @@ class TestHowTheLabelIsSet:
 
     def test_the_title_is_set_in_italic(self):
         """Museum convention rather than a decision this product took."""
-        (title,) = LabelText(title="The Banquet").lines()
+        (title,) = LabelText(title="The Banquet").candidates()
 
-        assert title == (Run("The Banquet", slant=Slant.ITALIC),)
+        assert title.runs == (Run("The Banquet", slant=Slant.ITALIC),)
 
     def test_a_name_with_no_recorded_parts_is_set_as_recorded(self):
         """Bold capitals assert "this is the family name". A whole name nobody has
@@ -256,7 +304,7 @@ class TestHowTheLabelIsSet:
         """They are facts about the object, and the label sets them as recorded."""
         label = LabelText(date_created="1660", medium="Oil on canvas", dimensions="100 × 80 cm")
 
-        assert label.lines() == ((Run("1660"),), (Run("Oil on canvas"),), (Run("100 × 80 cm"),))
+        assert [c.runs for c in label.candidates()] == [(Run("1660"),), (Run("Oil on canvas"),), (Run("100 × 80 cm"),)]
 
 
 class TestMarkupIsNotThisTiersProblem:

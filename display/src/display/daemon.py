@@ -849,6 +849,29 @@ class Daemon:
                 len(layout.dropped),
                 extra={"event": "label.truncated", "dropped": list(layout.dropped)},
             )
+        if layout.shrunk:
+            # **The condition the type floor's one exception rests on.** The rule
+            # that nothing shrinks exists because illegible type fails invisibly;
+            # letting the facts that identify the work shrink rather than vanish
+            # re-opens that hole unless something says so. A panel setting names
+            # below the floor is a misconfigured device — too small, or read from
+            # too far — and nobody would ever discover that by eye at 7 feet.
+            #
+            # **Warning rather than info, unlike a drop.** A dropped medium is the
+            # engine working as designed; type below the floor is a deployment
+            # that cannot show this corpus legibly, and the operator is the only
+            # one who can fix it.
+            log.warning(
+                "the label surface is too small for this label at a legible size; %d line(s) " "were set below the %d px floor",
+                len(layout.shrunk),
+                surface.type_scale.floor_px,
+                extra={
+                    "event": "label.shrunk",
+                    "shrunk": list(layout.shrunk),
+                    "floor_px": surface.type_scale.floor_px,
+                    "smallest_px": min(block.size_px for block in layout.blocks),
+                },
+            )
 
     def _label_would_not_take_it(self, why: str, content_id: str) -> None:
         """One place for every way a label fails to reach the surface.
@@ -886,8 +909,8 @@ class Daemon:
         run off the loop: the caller reads the outcome through the task it holds,
         and that task finishing is also what opens the gate on the next draw.
         """
-        lines = read_label(entry.label).lines() if entry is not None else ()
-        layout = lay_out(lines, surface.geometry, surface.measure, surface.type_scale)
+        facts = read_label(entry.label).candidates() if entry is not None else ()
+        layout = lay_out(facts, surface.geometry, surface.measure, surface.type_scale)
         surface.show(layout)
         return layout
 

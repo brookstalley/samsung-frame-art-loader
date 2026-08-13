@@ -13,11 +13,38 @@ from pathlib import Path
 
 import pytest
 from fakes import FakeTv
+from hypothesis import HealthCheck
+from hypothesis import settings as hypothesis_settings
 
 from display.config import Settings
 from display.daemon import Clock, Daemon
 from display.manifest import Watcher
 from display.state import DisplayState
+
+#: **The property suite is derandomized, and that is a decision rather than a
+#: default.** Hypothesis normally draws fresh examples per run, so a property
+#: suite can go red on a commit that touched nothing near it — and a suite that
+#: does that is one people learn to re-run until it passes, which is worse than
+#: not having it at all. Pinned, a failure means the code changed, and the
+#: examples it explores still number in the hundreds per property.
+#:
+#: **What is given up is real and is bought back deliberately**: a fixed corpus
+#: stops finding new counterexamples once it has been seen green. The label
+#: engine's inputs are enumerable in the dimension that matters — which fields a
+#: work has — so the properties below draw from the *whole* space rather than
+#: sampling a tail of it, and the fixed seed is choosing which surfaces to cross
+#: it with rather than which content to try.
+#:
+#: `function_scoped_fixture` is suppressed because the layout properties take no
+#: fixtures and the health check fires on the module-level ones this file defines
+#: for every other test in the plane.
+hypothesis_settings.register_profile(
+    "display",
+    derandomize=True,
+    max_examples=200,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+)
+hypothesis_settings.load_profile("display")
 
 
 class FakeClock:

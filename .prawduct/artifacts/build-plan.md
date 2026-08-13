@@ -149,7 +149,7 @@ re-created the same silence one line further down.
 - [x] Chunk 03: Pi operational hardening and the vendor-risk answer (issues #15, #16, #13)
 - [x] Chunk 12: Display daemon core — poll, rotate, TvBinding, directive semantics *(+ plane isolation, from 11)*
 - [ ] Chunk 13A: The panel, the label, the heartbeat and the two units — no hardware *(built and reviewed; the box waits on Done-when step 0b, which needs the set — see § The announcement reaches both subscribers in `operator-verification.md`)*
-- [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover *(the machine half is done and running: account, both trees, both units enabled, catalogue seeded, manifest published — 2026-08-11. The legibility norm was ratified 2026-08-11 once the floor existed, and amended into two tiers by the same ruling — which is what 13B-4 builds against. **13B-1 landed 2026-08-11**: the floor, the margin and the line-length bound are all derived from two stated physical facts now, so the settlement that needed a panel visit is down to one calibrated angle the operator already gave. **13B-3 landed 2026-08-11** and did the job it was moved ahead for: the artist leads, the tombstone is one line instead of three, and the catalogue can finally say which part of a name is the family name. **13B-2 landed 2026-08-13**: a line is a tuple of styled runs, the family name is set bold and capitalised, titles are set in italic, and the renderer applies Pango attributes over byte ranges rather than markup. The box now waits on **13B-4** — the fill model and the name ladder, the latter now carrying a measured cost to answer — and on the unattended run across a television power-cycle. It also waits on the Pi: the fields exist there the moment the file is opened, but the *values* need the seed re-run, which `deploy/README.md` § The cutover carries)*
+- [ ] Chunk 13B: The Pi — service account, units installed, legibility, cutover *(the machine half is done and running: account, both trees, both units enabled, catalogue seeded, manifest published — 2026-08-11. The legibility norm was ratified 2026-08-11 once the floor existed, and amended into two tiers by the same ruling — which is what 13B-4 builds against. **13B-1 landed 2026-08-11**: the floor, the margin and the line-length bound are all derived from two stated physical facts now, so the settlement that needed a panel visit is down to one calibrated angle the operator already gave. **13B-3 landed 2026-08-11** and did the job it was moved ahead for: the artist leads, the tombstone is one line instead of three, and the catalogue can finally say which part of a name is the family name. **13B-2 landed 2026-08-13**: a line is a tuple of styled runs, the family name is set bold and capitalised, titles are set in italic, and the renderer applies Pango attributes over byte ranges rather than markup. **13B-4 landed 2026-08-13**: a fact carries its tier, the identifying ones shrink and are journalled for it instead of being dropped, optional ones are admitted from the top while they fit at the floor, and the name ladder gives the family name its own line before it gives up its size — which put the medium back on the reference record that the bold capitals had cost it. The plane also gained property tests over the whole permutation space and a corpus of eight real records, at the operator's ask. All four sub-chunks are built, so what the box now waits on is the unattended run across a television power-cycle. It also waits on the Pi: the fields exist there the moment the file is opened, but the *values* need the seed re-run, which `deploy/README.md` § The cutover carries)*
 - [ ] Chunk 20: Backup/restore exercise (issue #14), ops close-out, legacy retirement
 
 Context: Plan authored 2026-07-20. Chunks 01, 02 and 06 landed 2026-07-27 in one
@@ -2042,17 +2042,42 @@ hardware.
     acquisition have none to supply, and a curation-surface editor is unplanned.
     It is built now so 13B-4 models the fill rule against the candidate list it
     will actually have.
-  - **13B-4 — the fill model.** Candidates with priority and role; optional
-    content admitted only if it fits at the floor and never set below it; slack
-    spent on content before type; drops still reported. **Carries the norm
-    amendment ratified 2026-08-11**, which is the half with no guard today: a
-    mandatory tier — family name, given name, and the title when there is one —
-    that shrinks below the floor rather than dropping, with the shrink journalled
-    exactly like a drop. That reporting is the condition the operator's ruling
-    rests on, not a nicety: the flat rule existed because illegible type fails
-    invisibly, and admitting a shrink re-opens that hole unless the journal names
-    it. Also the name ladder — one line, then two, then smaller — from
-    `accessibility-spec.md` § The label's content model.
+  - **13B-4 — the fill model. Built 2026-08-13**
+    (`display/src/display/panel/content.py`, and `layout.py` rewritten around
+    it). Facts carry their tier; optional content is admitted only if it fits at
+    the floor and is never set below it; slack goes to content before type; drops
+    and shrinks are both reported. **Carries the norm amendment ratified
+    2026-08-11**, which was the half with no guard: a mandatory tier — family
+    name, given name, and the title when there is one — that shrinks below the
+    floor rather than dropping, journalled as `label.shrunk`. That reporting is
+    the condition the operator's ruling rests on, not a nicety: the flat rule
+    existed because illegible type fails invisibly, and admitting a shrink
+    re-opens that hole unless the journal names it. Also the name ladder — one
+    line, then two, then smaller.
+    **Priority had to stop being position**, which is the change that made a
+    tier necessary rather than convenient: `LabelText` yields facts in *reading*
+    order now, and the title is set below the nationality while being admitted
+    before it. `lines()` became `candidates()` and the flat `tuple[Line, ...]`
+    contract went with it.
+    **Four things this sub-chunk decided rather than inherited**, all four
+    written into `accessibility-spec.md` where the rule lives: the sizing half of
+    the role problem is closed by the ladder rather than by per-run sizes (a
+    renderer change for a case arrangement already answers); a fact that will not
+    fit is passed over rather than ending the fill (Kandinsky's 48-character
+    birthplace clause would otherwise drop four facts behind it); growth is a
+    promotion between the two tiers and only identifying facts take it; and when
+    the shrink is reached, both rungs are shrunk and the larger answer wins.
+    **The operator asked for a real corpus and property tests, and both landed**
+    — `display/tests/corpus.py` holds eight real records chosen for how they
+    break things, and `display/tests/test_label_properties.py` asserts the norm
+    over every content shape with Hypothesis (added to the display plane's `dev`
+    group; run derandomized so a property suite cannot flake a green commit red).
+    It found one defect immediately — in the test rather than the engine: two
+    facts on one label can say the same words, and a set comparison reported the
+    optional one's drop as the mandatory one's.
+    **Found by running it:** the ladder gives back what the capitals cost. On the
+    reference record the identification block goes from 393 px to 269 px and the
+    medium is back on the panel; only the dimensions and the commentary drop.
 - **Depends on:** Chunk 13A
 - **Carries a number the unit must not be written without.** `TimeoutStopSec`
   has to clear this daemon's worst-case pass, which is a television connection

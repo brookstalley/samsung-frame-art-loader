@@ -174,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
         laid_out = _draw_on_the_panel(args, surface, scale)
     else:
         rasterizer = PangoRasterizer()
-        laid_out = lay_out(read_label(SAMPLE).lines(), surface, rasterizer.measure, scale)
+        laid_out = lay_out(read_label(SAMPLE).candidates(), surface, rasterizer.measure, scale)
         raster = rasterizer.render(laid_out)
         Image.frombytes("L", (raster.width_px, raster.height_px), raster.pixels).save(args.output)
         print(f"wrote {args.output} — {args.width_px}x{args.height_px}, margin {margin}")
@@ -288,7 +288,7 @@ def _draw_on_the_panel(args: argparse.Namespace, surface: Geometry, scale: TypeS
         rotate_degrees=args.rotate_degrees,
     )
     try:
-        laid_out = lay_out(read_label(SAMPLE).lines(), panel.geometry, panel.measure, panel.type_scale)
+        laid_out = lay_out(read_label(SAMPLE).candidates(), panel.geometry, panel.measure, panel.type_scale)
         # Blocks for 1.5-1.9s: there is no partial refresh on this driver, so
         # every candidate is a whole frame.
         panel.show(laid_out)
@@ -353,6 +353,11 @@ def _report(laid_out: Layout, scale: TypeScale, args: argparse.Namespace) -> Non
         # The drop rule is the thing this tool exists to make visible: it is
         # invisible in the image, which is precisely the point of it.
         print(f"  DROPPED (no room at these sizes): {', '.join(laid_out.dropped)}")
+    if laid_out.shrunk:
+        # **Harder to see in the image than a drop, and worse.** A missing
+        # dimension is an absence anybody notices; type set below the floor looks
+        # like a label until somebody tries to read it from the viewing position.
+        print(f"  SHRUNK BELOW THE {scale.floor_px} px FLOOR: {', '.join(laid_out.shrunk)}")
 
 
 if __name__ == "__main__":

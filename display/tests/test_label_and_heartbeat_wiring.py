@@ -667,10 +667,17 @@ class TestTheJournalSaysWhatThePanelCaptioned:
     @pytest.mark.asyncio
     async def test_a_truncated_label_names_the_work_whose_lines_came_off(self, settings, tv, state, clock, publish, journal):
         """`label.truncated` is the only signal that a device's surface is too small
-        for the corpus, and it could not say which work provoked it."""
+        for the corpus, and it could not say which work provoked it.
+
+        **The facts that come off have to be optional ones**, which they are here:
+        a title and an artist are what the label may not drop, so a record of only
+        those would shrink and never truncate — a distinction this test did not
+        have to make until the two tiers existed.
+        """
         cramped = FakeSurface(width_px=200, height_px=60, margin_px=5)
         daemon = _daemon_with(cramped, settings, tv, state, clock)
-        publish(["work-a"], labels={"work-a": {"title": "Cat Litter", "artist": "Ed Ruscha", "year": "1969"}})
+        label = {"title": "Cat Litter", "artist": "Ed Ruscha", "medium": "Oil on canvas", "dimensions": "50 × 50 cm"}
+        publish(["work-a"], labels={"work-a": label})
 
         try:
             await daemon.tick()
@@ -679,6 +686,47 @@ class TestTheJournalSaysWhatThePanelCaptioned:
 
         truncated = self._events(journal(), "label.truncated")
         assert [line["work_id"] for line in truncated] == ["work-a"]
+        assert set(truncated[0]["dropped"]) == {"Oil on canvas", "50 × 50 cm"}
+
+    @pytest.mark.asyncio
+    async def test_a_label_set_below_the_floor_says_so_and_names_the_floor(self, settings, tv, state, clock, publish, journal):
+        """**The condition the type floor's one exception rests on.**
+
+        The rule that nothing shrinks exists because illegible type fails
+        invisibly; letting the facts that identify the work shrink rather than
+        vanish re-opens that hole unless something says so. A panel setting names
+        below the floor is a misconfigured device — too small, or read from too
+        far — and nobody discovers that by eye at 7 feet.
+
+        **A warning rather than an info line, unlike a drop.** A dropped medium is
+        the engine working as designed; type below the floor is a deployment that
+        cannot show this corpus legibly, and the operator is the only one who can
+        fix it.
+        """
+        cramped = FakeSurface(width_px=200, height_px=60, margin_px=5)
+        daemon = _daemon_with(cramped, settings, tv, state, clock)
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter", "artist": "Ed Ruscha"}})
+
+        try:
+            await daemon.tick()
+        finally:
+            cramped.release.set()
+
+        shrunk = self._events(journal(), "label.shrunk")
+        assert [line["work_id"] for line in shrunk] == ["work-a"]
+        assert shrunk[0]["level"] == "WARNING"
+        assert set(shrunk[0]["shrunk"]) == {"Ed Ruscha", "Cat Litter"}
+        assert shrunk[0]["smallest_px"] < shrunk[0]["floor_px"]
+
+    @pytest.mark.asyncio
+    async def test_a_label_that_fits_says_nothing_about_shrinking(self, labelled, publish, journal):
+        """The event is an exception, like every other label event but one — a
+        panel that reports a shrink on every rotation is one nobody reads."""
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter"}})
+
+        await labelled.tick()
+
+        assert not self._events(journal(), "label.shrunk")
 
     @pytest.mark.asyncio
     async def test_a_device_with_no_panel_claims_nothing_about_a_label(self, daemon, publish, journal):

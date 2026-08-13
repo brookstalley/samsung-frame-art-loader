@@ -101,6 +101,20 @@ dev = [
     "pytest-asyncio>=0.24",
     "ruff>=0.6",
     "black>=24",
+    # **The label engine is defined by invariants over a space too large to
+    # enumerate**, which is what this is here for and the only thing it is used
+    # for. Nine of a work's fields are independently present or absent, giving 512
+    # content shapes before any surface size is crossed with them — and the
+    # properties that matter are universal rather than exemplary: no fact that
+    # identifies the work is ever dropped, no optional fact is ever set below the
+    # legibility floor, and every fact is either placed or reported. Examples
+    # cover the shapes somebody thought of; this covers the ones that decide
+    # whether an accessibility norm actually holds.
+    #
+    # **Run derandomized** — see `tests/conftest.py`. A property suite that finds
+    # a new failure on an unrelated commit is a suite people learn to re-run
+    # until it passes, which is worse than not having it.
+    "hypothesis>=6",
 ]
 
 # **Two groups rather than one, and the seam between them is which machines can
