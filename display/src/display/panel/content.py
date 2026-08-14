@@ -67,8 +67,8 @@ class Candidate:
 
     **Reading order and priority order genuinely differ**, which is why the old
     "the ordering *is* the priority" shortcut had to give: the title is set
-    *below* the identification line and is admitted *before* the nationality that
-    shares that line, because the title is mandatory and the nationality is not.
+    *below* the name and is admitted *before* the biography line beneath it,
+    because the title is mandatory and where the artist was from is not.
     """
 
     runs: Line

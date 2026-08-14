@@ -216,8 +216,11 @@ refuses to guess the panel's diagonal or its reading distance, and takes both
 from this deployment's `.env` — the same two settings the daemon reads. So the
 short form above is right on this machine and would be wrong anywhere else, where
 `--diagonal-inches` and `--viewing-distance-inches` have to be passed. Running it
-before the two `.env` lines above are in place gets a refusal naming them, not a
-guess.
+before `EPD_PANEL_DIAGONAL_INCHES` and `EPD_VIEWING_DISTANCE_INCHES` are in
+place gets a refusal naming them, not a guess. (This used to say "the two `.env`
+lines above"; they are set out under § Moving a running deployment onto a newer
+revision, which is above this only in the file and below it in the order anybody
+does things.)
 
 Read as evidence that the arrangement works, not as a promise about your machine:
 

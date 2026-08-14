@@ -99,9 +99,10 @@ CAP_RATIO: Final[float] = 0.70
 #: type clear of the bezel and reasoned from that alone. Looked at again with the
 #: label drawn at 0 and at 65, the operator's reading was that the panel's own
 #: bezel already does most of that work and the software border wants to be about
-#: half what it was. A quarter em is 33 px at the reference panel's ~130 px
-#: primary tier, and it returns 130 px of width and 130 px of height to the label
-#: — over a full extra line at this panel's row height.
+#: half what it was. A quarter em is **32 px** at the reference panel's 130 px
+#: primary tier — `round(32.5)` banker's-rounds down — which returns **66 px** in
+#: each dimension, taking the usable area from 1318x942 to 1384x1008. That is
+#: about 60% of a row at the wall's 108 px row height: real, and less than a line.
 #:
 #: **It is a fact about a bezel, and nothing typographic may depend on it.** Until
 #: 2026-08-13 it silently did: the name ladder engaged only on vertical overflow,

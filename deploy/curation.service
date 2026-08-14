@@ -53,7 +53,13 @@ RestartSec=5
 # rather than copying: it installs its own SIGTERM handler and exits 0, because it
 # has a television connection to close on the way out. This plane hands signal
 # handling to uvicorn and has nothing of its own to unwind.
-SuccessExitStatus=143
+# **Both forms, because they are different events.** `143` matches a process that
+# exited with that status; `SIGTERM` matches one that died *of* the signal without
+# handling it. uvicorn does the first today, and a future revision — or a shutdown
+# that hangs past the stop timeout — produces the second. Matching only the exit
+# code would leave the unit `failed` again, which is the exact state this line was
+# added to stop appearing after a clean stop.
+SuccessExitStatus=143 SIGTERM
 
 # **The one non-obvious setting in this file, and it exists because of
 # co-location.** A runaway acquisition — a genuine gigapixel scan is 20–40x the

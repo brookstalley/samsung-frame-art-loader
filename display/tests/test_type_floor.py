@@ -213,4 +213,4 @@ class TestTheMargin:
         rather than from a comparison, and it cost the label a full line of height
         at this panel's row size.
         """
-        assert margin_for(type_scale_for(**REFERENCE)) == pytest.approx(33, abs=4)
+        assert margin_for(type_scale_for(**REFERENCE)) == 32

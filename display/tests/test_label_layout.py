@@ -14,7 +14,20 @@ from dataclasses import replace
 
 import pytest
 
-from display.panel import Candidate, Case, Geometry, Line, Run, Tier, Weight, lay_out, plain, set_text, type_scale_for
+from display.panel import (
+    Candidate,
+    Case,
+    Geometry,
+    Line,
+    Run,
+    Tier,
+    TypeScale,
+    Weight,
+    lay_out,
+    plain,
+    set_text,
+    type_scale_for,
+)
 from display.panel.layout import (
     LEADING,
     MEASURE_EM,
@@ -780,6 +793,72 @@ class TestTheNameLadder:
         assert laddered.shrunk, "this surface was meant to force a shrink"
         assert no_break_available.shrunk
         assert laddered.blocks[0].size_px > no_break_available.blocks[0].size_px
+
+    def test_a_name_the_breaker_split_is_reported_rather_than_drawn_in_silence(self):
+        """**The fault a person found by eye, given the channel it never had.**
+
+        The ladder prevents this and normally does, but it cannot always win: on a
+        surface where no rung fits, a wrapped name still beats giving up the
+        family name's size, and `_arrange` takes that trade deliberately. What
+        made the trade invisible is that nothing said so — the type is at its
+        tier, so `shrunk` is empty; every fact is placed, so `dropped` is empty;
+        and the daemon logs that the label was drawn.
+
+        A wrapped name is a fact about the *device* — too narrow a panel, or type
+        calibrated for a reader further away than this one — so it belongs beside
+        the shrink report, which exists for exactly that reason.
+        """
+        no_rung_fits = Geometry(width_px=300, height_px=250, margin_px=10)
+
+        layout = lay_out(self.name("Toulouse-Lautrec", "Henri Marie Raymond"), no_rung_fits, measured, SCALE)
+
+        assert layout.blocks[0].rows > 1, "this surface was meant to force a wrap"
+        assert layout.wrapped == (layout.blocks[0].text,), "a name broken across rows was reported by nothing"
+
+    def test_an_ordinary_title_wrapping_is_not_reported_as_a_broken_name(self):
+        """The measure exists so that long lines wrap; only the leading line
+        wrapping is the name broken where nothing chose to break it. A report that
+        fired on every title would be one nobody reads."""
+        layout = lay_out(
+            (*self.name("Anders", "Joseph"), *droppable("A title long enough that it certainly has to wrap somewhere")),
+            PANEL,
+            measured,
+            SCALE,
+        )
+
+        assert any(block.rows > 1 for block in layout.blocks[1:]), "no line below the leading one wrapped"
+        assert layout.wrapped == ()
+
+    def test_an_optional_fact_is_never_bought_by_breaking_the_name(self):
+        """**`_arrange` returning a wrapped-but-fitting arrangement means opposite
+        things to its two callers.**
+
+        For the mandatory pass, a wrapped name beats giving up the family name's
+        size, so it is preferred to returning nothing. For the optional-admission
+        loop, `None` means "leave this fact off" — so accepting the same
+        arrangement says a medium is worth breaking a name for, which inverts the
+        ratified ordering.
+
+        **Set at a scale where the branch is reachable, deliberately, because at
+        this wall's it is not.** Rung three costs `1.35*(primary+floor)` against
+        the joined-wrapped `2.35*primary`, so rung three wins whenever `floor <
+        0.74*primary`; the calibrated 8.8′/12.4′ gives 0.710, a 3% margin. The
+        queue's own question asks the operator whether 12.4′ can come down, and
+        below about 11.9′ the branch flips. A test written at the wall's numbers
+        would assert the coincidence and pass whatever this loop did.
+        """
+        # A floor close to the primary tier — ratio 0.85, over the 0.74 threshold —
+        # so the joined-wrapped arrangement is genuinely the shorter one and the
+        # loop has to refuse it on the rule rather than on the arithmetic.
+        crowded = TypeScale(primary_px=130, floor_px=110)
+        surface = Geometry(width_px=1200, height_px=500, margin_px=40)
+        name = self.name("Toulouse-Lautrec", "Henri")
+
+        without = lay_out(name, surface, measured, crowded)
+        with_optional = lay_out((*name, *droppable("Oil on canvas")), surface, measured, crowded)
+
+        assert without.wrapped == (), "the name already wrapped without the optional fact, so nothing is being tested"
+        assert with_optional.wrapped == (), "an optional fact was admitted at the price of breaking the name"
 
     def test_the_given_name_gives_up_its_tier_before_anything_shrinks(self):
         """**Rung three, and the ordering the operator stated: the family name

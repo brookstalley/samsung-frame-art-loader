@@ -32,7 +32,7 @@ from dataclasses import dataclass, fields
 from typing import Any
 
 from display.panel.content import Candidate, Tier
-from display.panel.styling import Case, Line, Run, Slant, Weight
+from display.panel.styling import Case, Run, Slant, Weight
 
 #: What separates the facts sharing the identification line. Its own run rather
 #: than punctuation glued to the fact after it, so that a tier deciding what to
@@ -106,18 +106,18 @@ class LabelText:
     def candidates(self) -> tuple[Candidate, ...]:
         """The non-empty values as styled runs, in reading order, each with its tier.
 
-        Not "wall-label order" — this label departs from it twice, knowingly: the
-        artist leads the work, and the identification block is one line rather
-        than three.
+        Not "wall-label order" — this label departs from it knowingly: the artist
+        leads the work.
 
         **Reading order, and no longer priority order.** This used to return the
         lines least-droppable first, so that a layout dropping from the end needed
         no second ranking. That shortcut broke when the tombstone collapsed into
-        one line: nationality and life dates now *share* the leading line, which
-        made two droppable facts undroppable and set them at the largest size on
-        the label. Priority is a fact's tier first and its position second, which
-        is what `Tier` carries and what the engine composes — so the title is set
-        below the identification line and admitted before the nationality on it.
+        one line: nationality and life dates *shared* the leading line, which made
+        two droppable facts undroppable and set them at the largest size on the
+        label. They have their own line since 2026-08-13, and the ranking outlived
+        the arrangement that forced it — priority is a fact's tier first and its
+        position second, which is what `Tier` carries and what the engine
+        composes, so the title is set below the biography and admitted before it.
 
         Whitespace-only values count as absent. They arrive: a museum record with
         a `medium` of `" "` is common enough that treating it as present puts a
@@ -125,7 +125,7 @@ class LabelText:
 
         **Runs rather than strings, and that contract had to give.** Two of the
         three typographic decisions this label makes are about *part* of a line —
-        the family name set apart from the rest of the identification block, the
+        the family name set apart from the rest of the name, the
         title set in italic — and a tuple of strings has nowhere to put either.
         The tier below no longer receives text it could only set one way.
 
@@ -145,80 +145,6 @@ class LabelText:
             _fact(self.commentary, Tier.OPTIONAL),
         )
         return tuple(fact for fact in facts if fact is not None)
-
-    @property
-    def identification(self) -> Line | None:
-        """Who made this, where they were from and when they lived — as one line.
-
-        **The line as it is set when it all fits**, which is what a caller wanting
-        to read the tombstone means by it. The engine composes the same facts from
-        `candidates()` and may set them across two lines or drop the tail, so this
-        is the content rather than the layout.
-
-        **Three lines became one, and on the reference panel that is worth about
-        260 px** against a measured slack of roughly 66 px, which makes it the
-        single change deciding whether anything optional fits at all. It is also
-        what a museum actually prints: name, nationality and life dates are set
-        as a single run — "Katsushika Hokusai, Japanese, 1760–1849" — and this
-        product spent three line-boxes and their leading saying it.
-
-        **The name is inverted to `FAMILY, Given`, which is an index convention
-        rather than a wall-label one, and was chosen knowingly.** On a rotating
-        display the family name is the token a passer-by scans from across the
-        room, so it leads. The comma after it does double duty — inversion marker
-        and list separator — and what disambiguates the two is weight rather than
-        punctuation: with the family name set in bold capitals a reader takes
-        `ANDERS` and then everything else, instead of four equal comma-separated
-        parts.
-
-        **The weight is why this returns runs and not a string.** The bold and the
-        capitals apply to a stretch of a line, and the line is composed here
-        because this is the last place the boundary is known: downstream, a
-        reader looking for where the family name ends has only commas to go on,
-        and a name or a nationality may contain one. So the boundary is carried
-        rather than re-derived, and whatever sets the weight and whatever decides
-        the sizes are looking at the same runs.
-
-        **Only the family name is styled.** A given name standing alone — the
-        record has one part and it is not the family one — is set as recorded,
-        because bold capitals here mean "this is the family name" and setting a
-        given name that way would be a claim about the person rather than about
-        the type.
-
-        **Falls back to the whole name, unstyled, when neither part is known.**
-        An artist with no recorded parts is a fact about the record — an
-        anonymous master, a culture, a workshop, or simply a name nobody has
-        split yet — and not a licence to guess which word is the family one.
-        """
-        name = self._name_runs()
-        facts = [_present(self.artist_nationality), _present(self.artist_dates)]
-        runs = list(name)
-        for fact in facts:
-            if fact is None:
-                continue
-            # The separator is only ever *between* things, so it is appended with
-            # the fact that needs it rather than after the one before — which is
-            # what leaves an anonymous work's line opening with a stray comma.
-            if runs:
-                runs.append(Run(SEPARATOR))
-            runs.append(Run(fact))
-        # No name and no nationality and no dates is an anonymous work, which is
-        # a normal record here — the label simply opens with the title.
-        return tuple(runs) if runs else None
-
-    def _name_runs(self) -> Line:
-        """The artist's name, styled, as it reads when it all fits on one line.
-
-        Composed from the candidates rather than beside them, so the two cannot
-        drift: the one-line reading and the two-line one are the same facts and
-        the same separator, differing only in whether the engine took the break.
-        """
-        runs: list[Run] = []
-        for candidate in self._name_candidates():
-            if runs:
-                runs.extend(candidate.continues_line)
-            runs.extend(candidate.runs)
-        return tuple(runs)
 
     def _name_candidates(self) -> tuple[Candidate, ...]:
         """The artist's name, as the one or two facts the ladder may break between.
@@ -283,7 +209,6 @@ def _fact(
     tier: Tier,
     *,
     slant: Slant = Slant.UPRIGHT,
-    continues_line: Line = (),
 ) -> Candidate | None:
     """One field as a candidate, or nothing when the field is absent.
 
@@ -292,15 +217,16 @@ def _fact(
     product took. Everything else on a label is a fact about the object and is set
     as recorded.
 
-    `continues_line` is passed by the two facts that share the identification
-    line, and is what they are set *after* rather than a claim that they will be:
-    an engine that could not fit them starts their line instead, and the
-    separator is never set.
+    **Every fact this builds takes a line of its own**, so it passes no
+    `continues_line`. The only joining this label still does is the given name
+    onto the family name, which `_name_candidates` composes; the nationality and
+    the dates joined here until 2026-08-13, when they moved onto a line of their
+    own and became a single candidate.
     """
     present = _present(value)
     if present is None:
         return None
-    return Candidate(runs=(Run(present, slant=slant),), tier=tier, continues_line=continues_line)
+    return Candidate(runs=(Run(present, slant=slant),), tier=tier)
 
 
 def _present(value: str | None) -> str | None:

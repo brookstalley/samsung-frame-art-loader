@@ -121,6 +121,16 @@
   (`rotation_interval_seconds`, `shuffle`), a directive block (`sequence`,
   optional `pinned_work_id`), and an ordered list of entries — work id, render
   path, and the label fields.
+- **`artist_nationality` is resolved by the producer, and that is the seam's one
+  content decision. Recorded 2026-08-13.** The catalogue holds two strings — what
+  the institution printed, and a curator's short display form where one was worth
+  writing — and the builder sends `display_nationality or nationality`, so the
+  consumer receives one string and never chooses. The reasoning is in
+  `data-model.md` under `display_nationality`, including why this is content
+  rather than a device reasoning about its own geometry, and what a device drawing
+  into a mat area gets. **The alternative was carrying both and letting the device
+  choose**, which is the shape to reach for if a surface ever appears whose reader
+  is close enough for the provenance clause to earn its room.
 - **Stability obligation: bounded, not absent.** Additive changes are free; a
   breaking change bumps the major, and display refuses an unrecognised major and
   keeps the manifest it has. See `api-contract.md` → Surface Inventory.

@@ -19,12 +19,29 @@ def said(label: LabelText) -> list[str]:
     **Facts rather than lines, and that is the contract change.** This tier used
     to hand down composed lines, so the identification block arrived here as one
     string; it now hands down the facts and their tiers, and *which* of them share
-    a line is decided by whatever knows how much room there is. What the composed
-    line reads as is still asserted — through `identification`, which is the
-    content rather than the layout — and where it breaks is asserted in
-    `test_label_layout.py`, where the breaking happens.
+    a line is decided by whatever knows how much room there is. Which facts end up
+    sharing a line, and where one breaks, is asserted in `test_label_layout.py`,
+    where the composing happens.
     """
     return [candidate.text for candidate in label.candidates()]
+
+
+def name_runs(label: LabelText) -> tuple[Run, ...]:
+    """The artist's name as styled runs, composed the way the layout composes it.
+
+    **A test convenience, and it lives here for a reason.** `LabelText` carried an
+    `identification` property that did this until 2026-08-13, when it lost its
+    last production reader: `candidates()` hands the layout the name as one or two
+    facts, and the joining is the layout's. A property nothing ships is one nobody
+    maintains — its docstring had already gone false about where the nationality
+    sits — so the composition moved to the only place that wanted it.
+    """
+    runs: list[Run] = []
+    for candidate in label._name_candidates():
+        if runs:
+            runs.extend(candidate.continues_line)
+        runs.extend(candidate.runs)
+    return tuple(runs)
 
 
 def ranked(label: LabelText) -> list[tuple[str, Tier]]:
@@ -60,7 +77,6 @@ class TestReadingTheManifestBlock:
         wall that went blank over an additive change would be the worse failure."""
         label = read_label({"title": "Improvisation No. 30", "artist": "Vasily Kandinsky"})
 
-        assert plain(label.identification) == "Vasily Kandinsky"
         assert said(label) == ["Vasily Kandinsky", "Improvisation No. 30"]
         assert all(tier is Tier.MANDATORY for _, tier in ranked(label)), "an unsplit name is still the artist's name"
 
@@ -192,14 +208,14 @@ class TestWhoMadeIt:
         on a rotating display the family name is what a passer-by scans at 7 feet."""
         label = LabelText(artist="Vasily Kandinsky", artist_family_name="Kandinsky", artist_given_name="Vasily")
 
-        assert plain(label.identification) == "Kandinsky, Vasily"
+        assert said(label) == ["Kandinsky", "Vasily"]
 
     def test_the_whole_name_is_used_when_neither_part_is_known(self):
         """An artist with no recorded parts is a fact about the record — a culture, a
         workshop, an anonymous master — and not a licence to guess which word is which."""
         label = LabelText(artist="Moche", artist_nationality="Peruvian")
 
-        assert plain(label.identification) == "Moche, Peruvian"
+        assert said(label) == ["Moche", "Peruvian"]
 
     def test_the_stored_name_is_never_split_here_to_manufacture_parts(self):
         """The split is a stored fact because no rule over one string gets both
@@ -207,31 +223,35 @@ class TestWhoMadeIt:
         would be asserting something about a person it has no way to know."""
         label = LabelText(artist="Frank Lloyd Wright")
 
-        assert plain(label.identification) == "Frank Lloyd Wright"
+        assert said(label) == ["Frank Lloyd Wright"]
 
     def test_one_known_part_stands_alone_rather_than_being_padded_from_the_whole_name(self):
         """ "Rembrandt" is a correct label; "Rembrandt, Rembrandt Harmenszoon van Rijn" is not."""
         label = LabelText(artist="Rembrandt Harmenszoon van Rijn", artist_family_name="Rembrandt")
 
-        assert plain(label.identification) == "Rembrandt"
+        assert said(label) == ["Rembrandt"]
 
     def test_an_anonymous_work_has_no_identification_line_at_all(self):
         """Not an empty line and not the word "unknown" — the label opens with the title."""
         label = LabelText(title="Untitled")
 
-        assert label.identification is None
         assert said(label) == ["Untitled"]
 
-    def test_nationality_and_dates_ride_the_name_rather_than_taking_lines_of_their_own(self):
+    def test_nationality_and_dates_are_one_fact_on_a_line_below_the_name(self):
+        """**This test asserted the opposite until 2026-08-13**, and it stayed green
+        for three commits after the product stopped doing it — because it read
+        `identification`, a property nothing shipped, rather than the facts the
+        tier hands down. Read at the panel, riding the name's line is what set a
+        demonym as large as the name."""
         label = LabelText(artist_family_name="Hokusai", artist_nationality="Japanese", artist_dates="1760–1849")
 
-        assert plain(label.identification) == "Hokusai, Japanese, 1760–1849"
+        assert said(label) == ["Hokusai", "Japanese, 1760–1849"]
 
     def test_a_whitespace_only_part_does_not_become_a_stray_comma(self):
         """Museum records carry these; an empty fragment here reads as a punctuation bug."""
         label = LabelText(artist_family_name="Klee", artist_given_name="  ", artist_nationality="Swiss")
 
-        assert plain(label.identification) == "Klee, Swiss"
+        assert plain(name_runs(label)) == "Klee"
 
     def test_nationality_and_dates_alone_still_say_something(self):
         """A work whose artist is unrecorded but whose period is not."""
@@ -260,7 +280,7 @@ class TestHowTheLabelIsSet:
     )
 
     def test_the_family_name_is_set_bold_and_in_capitals(self):
-        surname = self.HOKUSAI.identification[0]
+        surname = name_runs(self.HOKUSAI)[0]
 
         assert surname.text == "Katsushika"
         assert (surname.weight, surname.case) == (Weight.BOLD, Case.CAPITALS)
@@ -268,7 +288,7 @@ class TestHowTheLabelIsSet:
     def test_nothing_else_on_that_line_is(self):
         """The weight means "this is the family name"; a second bold run would say
         the same thing about a nationality."""
-        rest = self.HOKUSAI.identification[1:]
+        rest = name_runs(self.HOKUSAI)[1:]
 
         assert all(run.weight is Weight.NORMAL for run in rest)
         assert all(run.case is Case.AS_RECORDED for run in rest)
@@ -277,12 +297,12 @@ class TestHowTheLabelIsSet:
         """A person's name keeps its spelling here. The capitals belong to how a
         panel sets it at 7 feet, and `plain` is what everything that is not a
         panel — a journal line, this assertion — reads."""
-        assert plain(self.HOKUSAI.identification) == "Katsushika, Hokusai, Japanese, 1760–1849"
+        assert plain(name_runs(self.HOKUSAI)) == "Katsushika, Hokusai"
 
     def test_the_separator_is_a_run_of_its_own(self):
         """So that a tier deciding what to drop, or how large to set a fact, is
         never handed a nationality with a comma stuck to its front."""
-        assert Run(", ") in self.HOKUSAI.identification
+        assert Run(", ") in name_runs(self.HOKUSAI)
 
     def test_the_title_is_set_in_italic(self):
         """Museum convention rather than a decision this product took."""
@@ -295,14 +315,14 @@ class TestHowTheLabelIsSet:
         split is exactly the case where that is not known."""
         label = LabelText(artist="Frank Lloyd Wright")
 
-        assert label.identification == (Run("Frank Lloyd Wright"),)
+        assert name_runs(label) == (Run("Frank Lloyd Wright"),)
 
     def test_a_given_name_standing_alone_is_not_set_as_a_family_name(self):
         """The degenerate record — one part, and it is the wrong one. Setting it
         bold would be this plane claiming which part of a name it is."""
         label = LabelText(artist_given_name="Rembrandt")
 
-        assert label.identification == (Run("Rembrandt"),)
+        assert name_runs(label) == (Run("Rembrandt"),)
 
     def test_the_facts_below_the_name_carry_no_styling_at_all(self):
         """They are facts about the object, and the label sets them as recorded."""

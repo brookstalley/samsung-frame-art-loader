@@ -25,10 +25,9 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from display.panel import Geometry, Line, Tier, lay_out, plain, read_label, set_text, type_scale_for
+from display.panel import Geometry, Line, Tier, lay_out, read_label, set_text, type_scale_for
 from display.panel.corpus import CORPUS
 from display.panel.layout import Extent
-from display.panel.metadata import SEPARATOR
 
 #: The reference wall: a 6-inch 1448×1072 panel read from 7 feet. Derived rather
 #: than written down, for the reason `test_label_layout.py` gives.
@@ -277,39 +276,6 @@ class TestWhatTheLabelPromises:
 
         assert sizes == sorted(sizes, reverse=True), sizes
 
-    @given(labels())
-    def test_the_tombstone_reads_the_same_however_it_was_composed(self, label: dict[str, str]):
-        """**Two things compose the identification line and this is what stops
-        them drifting.** `LabelText.identification` joins the name, the
-        nationality and the dates for a report or a test; the layout tier joins
-        the same facts from the same candidates when it decides how many lines
-        they get. Nothing in production reads the first, so a change to the
-        second could diverge from it in silence — and the divergence would be a
-        stray comma or a missing demonym on the panel while every metadata test
-        stayed green.
-
-        Asserted where the ladder cannot interfere: a surface with room for
-        everything takes no rung, so the block spans as few lines as the content
-        model allows.
-
-        **That is two lines rather than one since 2026-08-13**, when the biography
-        left the name's line — so the comparison spans the name and the biography
-        beneath it rather than reading one block. The drift this guards against is
-        unchanged, and so is the reason it would be invisible: nothing in
-        production reads `identification`, so the two can only be held together by
-        something that checks.
-        """
-        described = read_label(label)
-        text = described.identification
-        if text is None:
-            return
-        roomy = Geometry(width_px=4000, height_px=10_000, margin_px=10)
-        blocks = laid(label, roomy).blocks
-
-        biography = described._biography_candidate()
-        spans = 2 if biography is not None and described._name_runs() else 1
-        assert SEPARATOR.join(block.text for block in blocks[:spans]) == plain(text)
-
     @given(labels(), st.integers(min_value=100, max_value=1400))
     def test_a_taller_surface_never_holds_less(self, label: dict[str, str], height: int):
         """**Monotonicity, which a greedy fill could plausibly break.** Growing the
@@ -359,7 +325,7 @@ class TestTheCorpusItActuallyServes:
         forty-four."""
         layout = lay_out(read_label(record).candidates(), self.PANEL, measured, SCALE)
         label = read_label(record)
-        if label.identification is None or not label.title:
+        if not (label.artist or label.artist_family_name or label.artist_given_name) or not label.title:
             return
 
         texts = [block.text for block in layout.blocks]

@@ -215,6 +215,20 @@ class Layout:
     #: filling this is misconfigured — too small a panel, or read from too far —
     #: and this is the only place that says so.
     shrunk: tuple[str, ...] = ()
+    #: Lines the line breaker had to split across rows — which for the leading
+    #: line means a name broken where nothing chose to break it.
+    #:
+    #: **Reported for the same reason `shrunk` is, and it was found the same
+    #: way.** The 2026-08-13 panel sitting read `KATSUSHIKA,` / `Hokusai,
+    #: Japanese` / `1760–1849` off the wall: every fact split mid-phrase, the
+    #: comma that inverts the name stranded at the end of a row. Nothing reported
+    #: it — the type was at its tier so `shrunk` was empty, every fact was placed
+    #: so `dropped` was empty, and the journal said the label had been drawn. The
+    #: name ladder exists to prevent exactly this, and the ladder cannot always
+    #: win: on a surface where no rung fits, a wrapped name still beats giving up
+    #: the size of the family name. When that is the trade taken, this is what
+    #: says so.
+    wrapped: tuple[str, ...] = ()
 
     @property
     def is_empty(self) -> bool:
@@ -243,8 +257,7 @@ def lay_out(
     commentary. **Reading order is not priority order**, which is the change from
     the rule this replaced: each fact carries its tier, and the engine admits
     every mandatory fact before it considers any optional one. So the title is
-    set below the identification line and admitted before the nationality that
-    shares it.
+    set below the name and admitted before the biography line beneath it.
 
     Four things happen, in this order, and the order is the policy:
 
@@ -292,6 +305,17 @@ def lay_out(
             continue
         trial = tuple(sorted((*kept, index)))
         attempt = _arrange(candidates, trial, surface, measure, scale)
+        if attempt is not None and attempt.name_wrapped and not placed.name_wrapped:
+            # **`_arrange` returning a wrapped-but-fitting arrangement means
+            # opposite things to its two callers, and this is the one it must not
+            # mean it to.** For the mandatory pass, a wrapped name beats giving up
+            # the family name's size, so `_arrange` prefers it to returning
+            # nothing. Here, `None` means "leave this fact off" — so accepting the
+            # same arrangement would say a medium is worth breaking a name for,
+            # which inverts the ratified ordering (`accessibility-spec.md`, the
+            # name block gives up its line as soon as keeping it would break the
+            # name across rows). Admitting a fact may never introduce a wrap.
+            continue
         if attempt is None:
             # **Tried rather than abandoned**, so a one-word date is not lost to a
             # three-line medium that was merely earlier in the list. The facts
@@ -306,6 +330,10 @@ def lay_out(
         blocks=placed.blocks,
         dropped=tuple(c.text for index, c in enumerate(candidates) if index not in kept),
         shrunk=placed.shrunk,
+        # The leading line only. A title or a medium wrapping is ordinary — that is
+        # what the measure is for — while the leading line wrapping is the name
+        # broken where nothing chose to break it.
+        wrapped=(placed.blocks[0].text,) if placed.name_wrapped else (),
     )
 
 
@@ -316,7 +344,7 @@ class _ComposedLine:
     runs: Line
     #: Whether any fact on this line is one the label may not drop. A line is
     #: mandatory if *any* of it is: the identification line carries a family name
-    #: and may also carry a nationality, and the name is what decides its fate.
+    #: may also carry the given name, and the name is what decides its fate.
     mandatory: bool
     #: Whether *every* fact on this line identifies the work — which is a
     #: different question from the one above, and asking the one above in its
@@ -347,6 +375,26 @@ class _Placement:
     sizes: tuple[int, ...]
     blocks: tuple[Block, ...]
     shrunk: tuple[str, ...]
+
+    @property
+    def name_wrapped(self) -> bool:
+        """Whether the line that identifies the work was split across rows.
+
+        **Carried as a property rather than a flag because it is derived**, and a
+        flag would be a second place the same fact lives. Two callers ask it and
+        they want opposite things from the answer: `lay_out`'s optional-admission
+        loop refuses to buy a fact with it, and the report says so when nothing
+        could avoid it.
+
+        **Gated on the leading line being one the label may not drop**, which is
+        what makes this about the name rather than about wrapping. A label whose
+        leading line is an *optional* fact — a work with no artist and no title,
+        where a medium opens the label — has no ladder to take and no name to
+        break, and its long line wrapping is the measure working. Reporting that
+        would fire the warning on ordinary labels, which is how a warning stops
+        being read.
+        """
+        return bool(self.blocks) and self.lines[0].mandatory and self.blocks[0].rows > 1
 
 
 def _admit_the_mandatory_facts(
@@ -519,11 +567,13 @@ def _grow_into_the_slack(
         # floor (see `_sizes_for`).
         #
         # **`wholly_identifying`, not `mandatory`**, and the two differ on exactly
-        # the line this ladder creates: the second rung's tail may not be dropped
-        # because the given name is on it, while the nationality and the life
-        # dates beside it are optional. Asking whether the line may be dropped
-        # would promote all three, which sets a demonym at the size reserved for
-        # identifying the work.
+        # the line beneath the name: the biography may not be dropped as a whole
+        # when the name is on the same line, and it does not identify the work.
+        # Asking whether a line may be *dropped* would promote a demonym and a
+        # pair of life dates to the size reserved for identifying the work. Since
+        # 2026-08-13 the biography has its own line, so the two questions differ
+        # here rather than on the ladder's tail — the tail is the given name now,
+        # and it is wholly identifying, which is why it *is* promoted.
         if not line.wholly_identifying or placed.sizes[index - 1] != scale.primary_px:
             break
         grown = (*placed.sizes[:index], scale.primary_px, *placed.sizes[index + 1 :])

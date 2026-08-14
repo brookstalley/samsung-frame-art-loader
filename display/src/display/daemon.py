@@ -863,6 +863,25 @@ class Daemon:
                     entry.label.get("title") or entry.work_id,
                     extra={"event": "label.unusable", "tv_content_id": content_id},
                 )
+        elif layout.is_empty:
+            # **A record with no label text at all, which is normal and is not
+            # this.** The branch above is the device bordering a label out of
+            # existence; this is a work whose institution published nothing to
+            # print, where a blank surface is the right answer (`metadata.py`).
+            #
+            # **It gets its own line for two reasons, and the second is the one
+            # that bites.** Saying "the panel is captioning X" of a frame with no
+            # ink is a claim nobody could check against the wall. And the line
+            # below ends the `label.unusable` episode — on the reasoning that a
+            # label actually placed proves the surface has usable area again —
+            # which a label with nothing in it does not prove at all. Ending the
+            # episode here would silence the warning for every later work until
+            # the geometry changed again.
+            log.info(
+                "%s carries no label text, so the panel was left blank",
+                entry.label.get("title") or entry.work_id,
+                extra={"event": "label.absent", "tv_content_id": content_id},
+            )
         else:
             # **The only line that says the panel is working.** Every other label
             # event is an exception — a failure, a truncation, a recovery — so a
@@ -915,6 +934,32 @@ class Daemon:
                     "shrunk": list(layout.shrunk),
                     "floor_px": surface.type_scale.floor_px,
                     "smallest_px": min(block.size_px for block in layout.blocks),
+                },
+            )
+        if layout.wrapped:
+            # **The fault a person found by standing in front of the panel, and
+            # the one channel that would have said it.** On 2026-08-13 the wall
+            # drew `KATSUSHIKA,` / `Hokusai, Japanese` / `1760–1849` — the name
+            # broken mid-phrase by the line breaker, the comma that inverts it
+            # stranded at the end of a row — and nothing anywhere reported it: the
+            # type was at its tier so `label.shrunk` was silent, every fact was
+            # placed so `label.truncated` was silent, and this method logged
+            # `label.drawn`.
+            #
+            # **Warning for the same reason a shrink is.** The ladder exists to
+            # prevent this and normally does; reaching here means no arrangement
+            # of the name fitted, which is a fact about the device rather than
+            # about the work — and the next change to the margin, the viewing
+            # distance or the panel can reintroduce it, which is precisely what
+            # `legibility.MARGIN_TO_PRIMARY_RATIO` now cites the ladder to allow.
+            log.warning(
+                "the label surface is too narrow for this name; the line breaker split %r across rows",
+                layout.wrapped[0],
+                extra={
+                    "event": "label.name_wrapped",
+                    "wrapped": list(layout.wrapped),
+                    "rows": layout.blocks[0].rows,
+                    "wrap_px": layout.blocks[0].wrap_px,
                 },
             )
 

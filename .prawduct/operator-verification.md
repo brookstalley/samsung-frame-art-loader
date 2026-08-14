@@ -28,7 +28,7 @@ no reading of its output had ever shown this.
 
 The block is now: `FAMILY, Given` at 12.4′ when it fits, broken to `FAMILY` /
 `Given` — both still at 12.4′ — when it would wrap, with `Nationality, dates`
-always on its own line at the 8.8′ floor. The border halved to 33 px, and four
+always on its own line at the 8.8′ floor. The border halved to 32 px, and four
 artists gained a short nationality (`Born Moscow (formerly Russian Empire, now
 Russia)` → `Russian`).
 
@@ -53,7 +53,7 @@ terms of the calibrated 12.4′ and the 8.8′ floor.
    its line instead of three, so the weight is no longer competing with a list —
    which was the original argument for it. Draw `okeeffe` and `wright`, which stay
    on one line, against `hokusai`, which breaks.
-3. **Is 33 px of border right?** You judged this from 0 and 65 without seeing the
+3. **Is 32 px of border right?** You judged this from 0 and 65 without seeing the
    rebuilt block. It is the number most likely to want a nudge now that the label
    holds more.
 4. **`Water Jar` still sits beneath `Japanese`**, and that has not changed — it is

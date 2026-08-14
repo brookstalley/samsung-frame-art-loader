@@ -335,8 +335,11 @@ why it could be.** The 0.46 figure came from a session that ran a 60 px border
 and reasoned from that single number; drawn side by side at 0 px and at 65 px in
 front of the operator, the reading was that the panel's own bezel already does
 most of the clearing and the software border wants to be about half what it was.
-A quarter em is **33 px** here, and it returns 130 px of width and 130 px of
-height to the label — over a full extra line at this panel's row height.
+A quarter em is **32 px** here — `round(32.5)` banker's-rounds down — and it
+returns **66 px** in each dimension, taking the usable area from 1318x942 to
+1384x1008. Against the wall's 108 px row height that is about 60% of a row:
+worth having, and less than the full line an earlier draft of this paragraph
+claimed.
 
 **What made it safe to move is a separate fix, and before that fix it was not
 safe.** The name ladder engaged only on vertical overflow, so 20 px of border
@@ -682,7 +685,7 @@ overflows. So the engine is given candidates with a priority and a role, and:
 > described a margin the deployment did not run. **Reconciled 2026-08-11 by
 > 13B-1**, which retired both: the border derived at half the primary tier, which
 > was 65 px on this panel and left 942 px usable. **Halved again 2026-08-13** to a
-> quarter em — 33 px, 1006 px usable — on the operator's reading at the panel; the
+> quarter em — 32 px, 1008 px usable — on the operator's reading at the panel; the
 > amendment above carries why. The figures in this
 > section are therefore within ~1% of what the deployment actually runs — close
 > enough that the reasoning built on them stands, and stated so that the 952 is

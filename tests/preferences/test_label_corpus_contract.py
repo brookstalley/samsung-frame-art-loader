@@ -304,11 +304,20 @@ def corpus_keys(source: pathlib.Path) -> set[str]:
 #: most of them would fail in exactly the way it exists to prevent, and the three
 #: sparse records are the ones a tidying pass is likeliest to rename — they are
 #: also the ones whose questions nothing else can ask.
+#:
+#: **`kandinsky` was the one it missed, which is the shape of failure this comment
+#: was already describing.** The list said "every key the queue entries name" and
+#: covered seven of eight; the sitting queued on 2026-08-13 sends the operator to
+#: draw `kandinsky` by name, and it is the record that motivated
+#: `display_nationality` at all. A claim of completeness is only worth the
+#: enumeration under it, so `test_every_corpus_key_is_pinned` below now derives
+#: the completeness rather than leaving it to this comment.
 QUOTED_BY_THE_ARTIFACTS = (
     ("HOKUSAI", "hokusai"),
     ("OKEEFFE", "okeeffe"),
     ("WRIGHT", "wright"),
     ("MOCHE", "moche"),
+    ("KANDINSKY", "kandinsky"),
     ("UNATTRIBUTED", "unattributed"),
     ("NATIONALITY_ONLY", "nationality-only"),
     ("ANONYMOUS", "anonymous"),
@@ -319,6 +328,25 @@ QUOTED_BY_THE_ARTIFACTS = (
 def test_the_records_the_artifacts_quote_are_still_in_the_corpus(constant: str, key: str):
     assert constant in corpus_records(CORPUS), f"{constant} is quoted by the artifacts and is no longer declared"
     assert key in corpus_keys(CORPUS), f"--record {key} is a documented command and the corpus no longer offers it"
+
+
+def test_every_corpus_key_is_pinned():
+    """**The completeness the comment above claims, derived rather than asserted
+    in prose.**
+
+    That comment said "every key the queue entries name" while the list held seven
+    of eight — `kandinsky` was missing, and it is the record a queued sitting names
+    and the one that motivated a catalogue field. A sentence cannot notice a new
+    record; this can.
+
+    Pinning *every* key rather than only the documented ones is the deliberate
+    stronger rule: this corpus exists so a human can look at its records, so a
+    record nothing sends anybody to is either about to be documented or should not
+    be here. Either way a rename should stop and be looked at.
+    """
+    pinned = {key for _, key in QUOTED_BY_THE_ARTIFACTS}
+
+    assert corpus_keys(CORPUS) - pinned == set(), "a corpus record is not pinned, so a rename of it would go unnoticed"
 
 
 def test_the_corpus_keys_were_actually_read():

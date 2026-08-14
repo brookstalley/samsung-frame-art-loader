@@ -564,14 +564,46 @@ class TestTheJournalSaysWhatThePanelCaptioned:
     async def test_a_panel_captioning_correctly_is_not_silent_across_rotations(self, labelled, publish, clock, journal):
         """**The defect itself.** One success line proves the event exists; two
         prove the panel is still being heard from, which is the question an
-        unattended Pi is actually asked."""
-        publish(["work-a", "work-b"], shuffle=False, labels={"work-a": {}, "work-b": {}})
+        unattended Pi is actually asked.
+
+        **The works carry label text, and until 2026-08-13 they did not.** An
+        empty label block laid out to nothing and this event fired anyway, so the
+        test passed against a panel that had drawn no ink — which was the defect
+        `label.absent` was added for, asserted here as the success case.
+        """
+        publish(
+            ["work-a", "work-b"],
+            shuffle=False,
+            labels={"work-a": {"title": "Cat Litter"}, "work-b": {"title": "PH-129"}},
+        )
 
         await labelled.tick()
         clock.advance(10_000)
         await labelled.tick()
 
         assert [line["work_id"] for line in self._events(journal(), "label.drawn")] == ["work-a", "work-b"]
+
+    @pytest.mark.asyncio
+    async def test_a_work_with_no_label_text_is_not_reported_as_captioned(self, labelled, publish, journal):
+        """**A blank frame is the right answer here, and saying it was captioned
+        is not.** A work whose institution published no label text lays out to
+        nothing — `metadata.py` is explicit that the panel is left blank rather
+        than apologising — but until 2026-08-13 that fell through to the success
+        line, so the journal claimed the panel was captioning a work whose label
+        had no ink in it. Nothing could have checked that against the wall.
+
+        The distinction matters beyond the wording: the success line also ends the
+        `label.unusable` episode, on the reasoning that a label actually placed
+        proves the surface has usable area again. A label with nothing in it
+        proves no such thing, and ending the episode there would silence the
+        warning for every later work until the geometry changed.
+        """
+        publish(["work-a"], labels={"work-a": {}})
+
+        await labelled.tick()
+
+        assert [line["work_id"] for line in self._events(journal(), "label.drawn")] == []
+        assert [line["work_id"] for line in self._events(journal(), "label.absent")] == ["work-a"]
 
     @pytest.mark.asyncio
     async def test_a_label_the_remote_asked_for_carries_the_work_too(self, labelled, tv, state, publish, journal):
@@ -583,7 +615,11 @@ class TestTheJournalSaysWhatThePanelCaptioned:
         path that exists precisely because somebody is in the room with a remote,
         which is when a wrong label is seen soonest.
         """
-        publish(["work-a", "work-b"], shuffle=False, labels={"work-a": {}, "work-b": {}})
+        publish(
+            ["work-a", "work-b"],
+            shuffle=False,
+            labels={"work-a": {"title": "Cat Litter"}, "work-b": {"title": "PH-129"}},
+        )
         await labelled.tick()
         binding = state.binding_for("work-b")
         assert binding is not None and binding.tv_content_id, "work-b never reached the set to be chosen"
