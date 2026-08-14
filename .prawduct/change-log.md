@@ -54,6 +54,248 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-14: The label is tuned at the panel, and learns to fill it (13B)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** the second sitting at the wall. The rebuilt identification block was
+judged good and the operator asked three things of it, two of which were tunings
+and one of which was a norm amendment. All three are built, and the sitting also
+answered the last open question in a third queue entry — the italic title at the
+floor — so every panel entry this plan carries is now verified.
+
+**The family name takes a size above the identification tier**, 1.2×, on the rung
+where the ladder has given it a line of its own. That is a departure from the
+two-tier model the accessibility spec ratified and is recorded as one: the
+calibration derives two sizes and warns against interpolating a third, and this
+one is *above* both rather than between them, so it aims at nothing the warning is
+about. Fixed multiple rather than fit-to-width, on the operator's own failure mode
+— a name scaled to fill its line would set the shortest names largest. Rung 3 is
+excluded, since it exists precisely because the surface could not pay for two
+full-size lines.
+
+**A line that continues the line above it is bound tighter**, 0.28 against 0.35,
+because one constant was doing two jobs: the space between `KATSUSHIKA` and
+`Hokusai` — two halves of one fact — was identical to the space between `Hokusai`
+and the biography. **The first build of it moved the whitespace by 2 px**, since
+the gap was charged to the line above and that line had just grown 20%. The rule
+was wrong and not only the number: a gap charged to the emphasised half grows with
+the emphasis, so making a name larger buys distance between its halves. It is the
+tail's now.
+
+**The label fills the panel it was given.** It was top-aligned with all the slack
+falling to the bottom — 129 px of white under the reference record against 32
+above. Every gap is now scaled by a capped multiplier and what the cap will not
+take is split above and below, so the margins match on every record. A multiplier
+rather than a constant added to each, which the operator named and which is
+load-bearing: the gaps stand in a tuned ratio and a flat addition would fill the
+panel just as well while flattening it. Capped because a sparse label has more
+slack than gaps to spend it in — unbounded, two facts would sit at opposite edges
+and the engine would call it even spacing.
+
+**The sweep found what the tests did not, and then found a defect in the fix.**
+Two of thirteen mutations survived the first pass: nothing covered the no-slack
+guard, and nothing covered growth's `<` — an emphasised family name reads as a
+reason to stop under an equality test, pinning every line beneath a broken name to
+the floor. Chasing the first surfaced a real defect rather than a missing test:
+rounding each gap to nearest overshoots the budget by up to half a pixel per gap
+and pushes the last line *past* the bottom margin, measured at a 40×10 surface.
+Invisible to the existing margin property, which exempts labels that shrank. The
+gaps are floored now and a property covers every surface including overflowing
+ones.
+
+**One queued prediction was struck rather than answered**, and it is the reason to
+re-read a queue entry before a sitting rather than after. It had `moche` setting
+two lines at the identification tier with the panel mostly white and called it the
+likeliest to look wrong; the previous round's growth fix means a place of origin
+stops growth before the title, so what drew was `Moche` alone at the tier with all
+six facts placed and the panel nearly full — the culture-attributed tombstone the
+findings document records.
+
+**Two findings the questions were not looking for are filed rather than fixed**,
+both curation-plane and both blocked on decisions rather than on effort: **#142**,
+dimensions reaching the label as source prose carrying two unit systems across
+five grammars — with every sourced imperial value using a binary fraction, so a
+derived one needs a stated rounding convention before it can look like a museum's
+number; and **#143**, the catalogue storing the same two nulls for a culture that
+it stores for a person nobody has split, which is why `Moche` leads at the
+identification tier unstyled where a family name is bold. #143 is distinct from
+#140 and neither fixes the other.
+
+## 2026-08-13: The name ladder's second line gets the report the first had (13B)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** the cumulative review came back 0 blocking and four warnings, and the
+first was a defect in the fix that had just landed. `label.name_wrapped` gated on
+the *leading* line carrying the name — but the ladder exists to spread a name
+across two lines, so a family name that held while the given name broke beneath it
+was journalled as drawn with nothing said. That is the fault the panel sitting
+found, one rung down, on the arrangement the ladder takes precisely to avoid it;
+the broken rung is chosen for fitting in height and nothing re-checked the measure
+afterwards. An existing fixture turned out to have been wrapping both its lines
+all along and reporting one.
+
+**`Layout.wrapped` carries blocks rather than text now**, because the journal
+needs the row count and the wrap width beside the words and was reading those off
+`blocks[0]` while the text came from the report — two sources for one fact, which
+disagreed exactly when the ladder had broken the name.
+
+**A bordered-out label reaches the health panel.** `label.unusable` is
+episode-gated, correctly, because the geometry that causes it is a setting rather
+than an event — but that meant its single WARNING could be hours scrolled away on
+a headless Pi while the panel stayed blank, and the heartbeat published
+`label_surface_working: true` with no error beside it. `last_error` carries it
+now; `label_surface_working` deliberately does not change, because the driver took
+the frame and sending somebody to the panel wiring for a margin in a config file
+is the wrong callout.
+
+**Two claims stopped over-reaching.** The property suite's reference panel held
+the pre-halving 65 px border against the 32 the ratio yields — failing safe, so
+nothing was falsely green, but the class calling itself the wall's own panel was
+measuring on a different one; it derives the margin now as it already derived the
+scale. And `corpus.py` claimed every record was a real catalogue row: the artists
+and splits are and the contract test guards them, the other fields are not, and
+three titles are different works entirely. The gap that bites is `dimensions` —
+one of the index's thirty-nine rows carries an embedded newline that Pango
+hard-breaks and no arithmetic measurer in the suite models, so a real record is
+taller on the panel than in any suite measuring it. Realigning would move every
+measurement the spec quotes and would *lose* coverage, these values having been
+chosen as failure modes, so it is filed rather than done in passing.
+
+**One thing was searched for and deliberately not guarded.** Growth promotes a
+line to the primary tier against a wrap bound that does not move, so in principle
+it could split a name that fact-admission would have refused to buy. It cannot
+today, because the name is at that tier by allocation before any optional fact is
+admitted — some seventy-eight thousand surface-and-name combinations produced no
+case — and a guard would have been a branch no test could reach. The invariant is
+recorded where it binds instead.
+
+## 2026-08-13: The museum convention is looked up rather than re-derived (13B)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** an "open question" in `accessibility-spec.md` said museums print a title
+before a culture for an unattributed work, and the ordering was queued for the
+operator to judge at the panel. They do not. The tombstone for a
+culture-attributed work leads with the **Culture**, then place of origin, then
+date — the title after it, which is where this engine already puts it. The
+question had been carried since 13B-3 and was about to be answered by eye at the
+wall, which is an expensive way to look something up.
+
+**So the convention has a document now** — `museum-label-findings.md` — because
+this is the third time the product has reasoned its way to a museum practice from
+first principles, and the first two both landed correctly by luck rather than by
+reading. It records the two tombstone orderings verbatim, the rule they share
+(the maker leads, and a culture *is* a maker rather than a fallback for one), and
+where each source collection puts the culture: the Art Institute in the maker
+slot, the Met in a field of its own, either of which may be empty.
+
+**It found a live defect upstream of the label.** The acquisition path reads only
+the Art Institute's personal-name field, so for every object with no
+`artist_title` the culture in `artist_display` is discarded and the catalogue
+records no maker at all — filed rather than fixed here, because it is
+curation-plane work and this is a display-plane branch.
+
+**Two owed observations from the cumulative review landed with it**, both carried
+since the review rather than earning a round of their own:
+
+- **`label.name_wrapped` reported a wrapping title as a broken name.** The gate
+  asked whether the leading line could be *dropped* where it had to ask whether
+  the leading line was the *name* — and the title is mandatory too, so a record
+  with no maker diluted a WARNING channel `observability-strategy.md` calls
+  load-bearing. A fact now declares whether it names the maker, a composed line
+  carries whether any of its facts does, and the report gates on that.
+- **`name_runs` in `test_label_metadata.py` re-implemented the layout's join.** It
+  delegates to `_compose` instead — a helper that re-states the behaviour it is
+  used to check cannot fail when that behaviour changes.
+
+**The sweep found three undefended branches and all three were real**: nothing
+asserted that `metadata` marks a name at all, in either the split or the unsplit
+shape, so the wiring between the two tiers was untested in the direction that
+matters. Six mutations, six caught after the tests were written.
+
+## 2026-08-13: The first sitting at the panel, and what it found (13B)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** the label engine had never been read on the wall. It was, and the
+reference record came back as `KATSUSHIKA,` / `Hokusai, Japanese` / `1760–1849` —
+every fact broken across a row boundary. Four faults sat behind that, and only the
+panel could have surfaced any of them.
+
+- **The name ladder engaged on vertical overflow and never on wrapping**, so a
+  name that merely wrapped mid-phrase read as a fit. The border decided the
+  typography as a side effect: 20 px either way flipped it.
+- **Nationality and dates rode the name's line**, and so took the identification
+  tier — a demonym set as large as the name. They are one clause on a line of
+  their own now, at the floor.
+- **The given name's size was left to the growth step**, which runs after optional
+  facts are admitted, so a medium outranked a person's name. It is allocated with
+  the name now, and the ladder gained a third rung — the given name gives up its
+  tier before the family name gives up any size.
+- **The preview's report collapsed wrapped rows into the logical line**, while its
+  docstring claimed each line was printed as the panel sets it. That is why no
+  reading of its output had caught any of the above.
+
+**Also:** the catalogue gained `display_nationality`, because what a museum prints
+is prose — `Born Moscow (formerly Russian Empire, now Russia)` sets a line nearly
+three times the panel. Four of 27 seeded nationalities needed one; the rest read
+unchanged. The border halved to 32 px on the operator's reading, which the ladder
+fix made safe to move.
+
+**And three deployment findings, all from taking a running wall onto this
+revision:** `curation.service` reported every clean stop as `failed`; the
+label-preview example in `deploy/README.md` passed a `--cap-arcmin` override that
+would have answered the queued questions against type the wall never draws; and
+the cutover procedure described a first install only, so upgrading a machine
+already serving a wall took it down for the better part of an hour. All fixed,
+and the upgrade path is now written down.
+
+**The measurements in `accessibility-spec.md` older than this entry describe a
+development Mac's typeface, not the wall's** — 93 px rows against the panel's 108
+at the same declared size. That alone decided whether the ladder was taken, and it
+is why an arrangement that measured correctly everywhere it was checked reached
+the panel wrong.
+
+## 2026-08-13: The instrument draws the whole corpus, and growth asks the right question (13B-4)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** The two panel sittings queued against 13B-2 and 13B-4 ask the operator
+to compare four records — a long name against a short one, a full record against
+a nearly empty one — and `label_preview.py` could draw exactly one. Every
+judgement left in the label design is comparative, so the pass as written could
+not be run at all. The specimen it drew was a verbatim copy of the corpus's
+reference record, kept in step by hand and drifting the moment nobody did.
+
+**What changed.** `--record` selects any of the wall's eight records, and the
+corpus moved out of the test tree into the package because the instrument is its
+second reader: `display/tests/` is on nobody's import path when the tool runs.
+The report names its record first, since a comparative sitting produces several
+reports read side by side. `--panel` — the invocation that settles legibility and
+the one no test had ever reached — is now driven against a stubbed driver.
+
+**The cumulative review over the bundle returned 0 blocking, and its one
+behavioural finding was a predicate serving two policies.** A line is mandatory
+if *any* fact on it may not be dropped, which is right for survival; growth
+reused it to mean "this line is the identification block", where the question is
+whether *every* fact on it identifies the work. On the name ladder's second rung
+those differ exactly: the tail may not be dropped because the given name is on
+it, and the nationality and life dates beside it are optional. Three artifacts
+and the function's own docstring already stated the strict rule, so the engine
+was corrected rather than the spec. It moves 46 narrow-and-tall geometries and
+not the reference wall.
+
+`label.unusable` is episode-gated now, like every other signal about the device —
+ungated it was one WARNING per rotation forever, in the plane's only failure
+channel — and the corpus's claim that its name splits are curation's is compared
+by AST at the root suite instead of promised.
+
+**Two artifact errors fixed on the way:** the queue entry sent the operator to
+look at `ANDERS, Joseph`, which exists only as a synthetic fixture inside a test
+and never on the wall, and it announced three things to look for over four items.
+
 ## 2026-08-13: The journal can say which work the panel captioned (#138)
 
 <!-- prawduct: scope=v1-build -->

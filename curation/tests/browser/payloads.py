@@ -299,6 +299,11 @@ def an_artist(**overrides) -> ArtistOut:
         "biography": None,
         "family_name": None,
         "given_name": None,
+        # Required-but-nullable, like the two name parts above it: `ArtistOut`
+        # gives none of these a default, so the model refuses a payload that
+        # omits one rather than inventing a null. That is what caught this
+        # fixture when the field landed.
+        "display_nationality": None,
     }
     return ArtistOut(**(fields | overrides))
 

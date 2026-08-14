@@ -268,7 +268,13 @@ def entry_for(inputs: WorkInputs) -> ManifestEntry:
             "artist": None if artist is None else artist.name,
             "artist_family_name": None if artist is None else artist.family_name,
             "artist_given_name": None if artist is None else artist.given_name,
-            "artist_nationality": None if artist is None else artist.nationality,
+            # **The short form wins, and the fallback resolves here rather than at
+            # the panel.** The manifest is what the display plane parses, not a
+            # catalogue export, so it carries the string the label should set;
+            # which of two recorded strings that is, is a question about content,
+            # and content is this plane's. A display told to choose would be
+            # re-deciding curation policy from the far side of the seam.
+            "artist_nationality": None if artist is None else (artist.display_nationality or artist.nationality),
             "artist_dates": None if artist is None else _artist_dates(artist),
             "date_created": inputs.artwork.date_created,
             "medium": inputs.artwork.medium,

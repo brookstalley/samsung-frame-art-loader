@@ -227,7 +227,8 @@ re-parsing a blob, and so two works by the same artist agree.
 |---|---|---|---|
 | `id` | UUID | PK | |
 | `name` | string | required | Display name, e.g. "Charles Demuth". |
-| `nationality` | string | nullable | e.g. "American". |
+| `nationality` | string | nullable | As the holding institution printed it, which is prose and not always a demonym — e.g. "American", but also "North coast, Peru". |
+| `display_nationality` | string | nullable | The short form the e-paper label sets, e.g. "Russian". Falls back to `nationality` when unset. |
 | `born` | integer | nullable | Year only. |
 | `died` | integer | nullable | Year only. |
 | `lifespan_text` | string | nullable | Fallback free text when `born`/`died` cannot be parsed, e.g. "active 1620s". |
@@ -250,6 +251,39 @@ re-parsing a blob, and so two works by the same artist agree.
 > seeded corpus by a written table (`curation/src/curation/seed/names.py`), never by a
 > heuristic; `discovery/artic.py` documents its own surname guess as unreliable.
 > Nothing derives one part from the other, and nothing derives `name` from them.
+>
+> **`display_nationality` is the same decision one field over, added 2026-08-13.**
+> `nationality` carries what the institution printed, and on this corpus that
+> includes "Born Moscow (formerly Russian Empire, now Russia)" — a biography line
+> more than twice the panel's width, which no layout rule can rescue. The label
+> needs a short form and the catalogue is where a curator decides one. It is a
+> *display* form and not a correction: the long string stays, because it is the
+> provenance, and the short one is typography. **Nothing derives it** — a rule
+> that turned that clause into "Russian" would be inventing a fact about a person,
+> which is exactly what the name table exists so that nothing does. Null means the
+> label uses `nationality` unchanged, so a record nobody has shortened reads today
+> as it read yesterday.
+>
+> **[DECISION: this is content, not geometry, and the norm it sits next to is
+> "A display device renders its own label, and the label travels as metadata"
+> (`project-preferences.md`).]** That norm names its own violation shape —
+> "curation growing a field" — so growing one here needs the applicability
+> recorded rather than assumed. It conforms: what is stored is a curator's
+> editorial judgement about a *record* ("Kandinsky is just Russian by any
+> reasonable definition"), which is the same kind of fact as the name split
+> beside it, and no panel dimension is consulted to produce or to store it. The
+> panel's width is what *prompted* the question; it is not what answers it.
+>
+> **What a non-panel device gets, stated because the norm names one.** The
+> manifest builder resolves the fallback, so a device drawing into a mat area
+> receives the short form for the four records that have one and the institution's
+> prose for the other 22 — it never sees both. That is the deliberate reading: the
+> short form is the better label at any size rather than a concession to a small
+> panel, so a roomier device has nothing to gain from the long string. **If that
+> ever stops being true** — a device whose label is read at 18 inches, where the
+> provenance clause is worth its room — the change is to carry both strings in the
+> manifest and let the device choose, which is the shape this decision is
+> deliberately not taking yet.
 
 ### Source
 

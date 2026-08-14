@@ -31,7 +31,8 @@ the renderer's business, and the vocabulary is deliberately not one renderer's.
 from dataclasses import dataclass, fields
 from typing import Any
 
-from display.panel.styling import Case, Line, Run, Slant, Weight
+from display.panel.content import Candidate, Tier
+from display.panel.styling import Case, Run, Slant, Weight
 
 #: What separates the facts sharing the identification line. Its own run rather
 #: than punctuation glued to the fact after it, so that a tier deciding what to
@@ -53,11 +54,13 @@ class LabelText:
     for and the ordering the panel can hold turned out to be the same one
     (`accessibility-spec.md` § The label's content model).
 
-    **Field order here is no longer the label's order** — `lines()` is, and that
-    is the change worth noticing before moving a field. The layout tier still
-    sizes by position and drops from the end, so `lines()` remains the priority
-    ordering; what it stopped being is a straight read-off of these fields, since
-    the identification block is now composed from four of them.
+    **Field order here is no longer the label's order** — `candidates()` is, and
+    that is the change worth noticing before moving a field. What `candidates()`
+    yields is *reading* order, top of the label to the bottom; **priority is the
+    tier first and the reading position second**, which is why each fact carries
+    a `Tier`. The layout tier no longer sizes by position or drops from the end,
+    and a field moved here on the assumption that it does will change which facts
+    survive a small surface.
     """
 
     title: str | None = None
@@ -95,17 +98,26 @@ class LabelText:
         **Nothing branches on this**, and that is the design rather than an
         oversight: the empty case needs no special path, because laying out no
         lines and drawing the result reaches the blank surface by the ordinary
-        road. This says the same thing about a `LabelText` that `lines()` does,
-        in the form a reader asking the question would reach for.
+        road. This says the same thing about a `LabelText` that `candidates()`
+        does, in the form a reader asking the question would reach for.
         """
-        return not self.lines()
+        return not self.candidates()
 
-    def lines(self) -> tuple[Line, ...]:
-        """The non-empty values as styled runs, least-droppable first.
+    def candidates(self) -> tuple[Candidate, ...]:
+        """The non-empty values as styled runs, in reading order, each with its tier.
 
-        Not "wall-label order" — this label departs from it twice, knowingly: the
-        artist leads the work, and the identification block is one line rather
-        than three.
+        Not "wall-label order" — this label departs from it knowingly: the artist
+        leads the work.
+
+        **Reading order, and no longer priority order.** This used to return the
+        lines least-droppable first, so that a layout dropping from the end needed
+        no second ranking. That shortcut broke when the tombstone collapsed into
+        one line: nationality and life dates *shared* the leading line, which made
+        two droppable facts undroppable and set them at the largest size on the
+        label. They have their own line since 2026-08-13, and the ranking outlived
+        the arrangement that forced it — priority is a fact's tier first and its
+        position second, which is what `Tier` carries and what the engine
+        composes, so the title is set below the biography and admitted before it.
 
         Whitespace-only values count as absent. They arrive: a museum record with
         a `medium` of `" "` is common enough that treating it as present puts a
@@ -113,77 +125,41 @@ class LabelText:
 
         **Runs rather than strings, and that contract had to give.** Two of the
         three typographic decisions this label makes are about *part* of a line —
-        the family name set apart from the rest of the identification block, the
+        the family name set apart from the rest of the name, the
         title set in italic — and a tuple of strings has nowhere to put either.
         The tier below no longer receives text it could only set one way.
+
+        **The mandatory facts are the artist's name and the work's title**, and
+        nothing else — the ruling recorded in `content.Tier`. The name is two
+        candidates rather than one because the ladder breaks between them: a long
+        family name takes a line of its own and lets the given name follow at the
+        floor, which costs less height than wrapping the pair at the larger size.
         """
-        candidates = (
-            self.identification,
-            _styled(self.title, slant=Slant.ITALIC),
-            _styled(self.date_created),
-            _styled(self.medium),
-            _styled(self.dimensions),
-            _styled(self.commentary),
+        facts = (
+            *self._name_candidates(),
+            self._biography_candidate(),
+            _fact(self.title, Tier.MANDATORY, slant=Slant.ITALIC),
+            _fact(self.date_created, Tier.OPTIONAL),
+            _fact(self.medium, Tier.OPTIONAL),
+            _fact(self.dimensions, Tier.OPTIONAL),
+            _fact(self.commentary, Tier.OPTIONAL),
         )
-        return tuple(line for line in candidates if line is not None)
+        return tuple(fact for fact in facts if fact is not None)
 
-    @property
-    def identification(self) -> Line | None:
-        """Who made this, where they were from and when they lived — as one line.
+    def _name_candidates(self) -> tuple[Candidate, ...]:
+        """The artist's name, as the one or two facts the ladder may break between.
 
-        **Three lines became one, and on the reference panel that is worth about
-        260 px** against a measured slack of roughly 66 px, which makes it the
-        single change deciding whether anything optional fits at all. It is also
-        what a museum actually prints: name, nationality and life dates are set
-        as a single run — "Katsushika Hokusai, Japanese, 1760–1849" — and this
-        product spent three line-boxes and their leading saying it.
+        **Two candidates rather than one, and that is what the ladder needs.**
+        The name gives up its line before it gives up its size: when
+        `KATSUSHIKA, Hokusai` will not hold at the identification tier, the family
+        name takes a line of its own and the given name follows at the floor,
+        which is cheaper in height than wrapping the pair at the larger size. A
+        single candidate could only be wrapped or shrunk.
 
-        **The name is inverted to `FAMILY, Given`, which is an index convention
-        rather than a wall-label one, and was chosen knowingly.** On a rotating
-        display the family name is the token a passer-by scans from across the
-        room, so it leads. The comma after it does double duty — inversion marker
-        and list separator — and what disambiguates the two is weight rather than
-        punctuation: with the family name set in bold capitals a reader takes
-        `ANDERS` and then everything else, instead of four equal comma-separated
-        parts.
-
-        **The weight is why this returns runs and not a string.** The bold and the
-        capitals apply to a stretch of a line, and the line is composed here
-        because this is the last place the boundary is known: downstream, a
-        reader looking for where the family name ends has only commas to go on,
-        and a name or a nationality may contain one. So the boundary is carried
-        rather than re-derived, and whatever sets the weight and whatever decides
-        the sizes are looking at the same runs.
-
-        **Only the family name is styled.** A given name standing alone — the
-        record has one part and it is not the family one — is set as recorded,
-        because bold capitals here mean "this is the family name" and setting a
-        given name that way would be a claim about the person rather than about
-        the type.
-
-        **Falls back to the whole name, unstyled, when neither part is known.**
-        An artist with no recorded parts is a fact about the record — an
-        anonymous master, a culture, a workshop, or simply a name nobody has
-        split yet — and not a licence to guess which word is the family one.
+        **Both parts are mandatory**, so neither is ever dropped — an engine free
+        to drop the given name would have a cheaper move available than shrinking,
+        and would take it.
         """
-        name = self._name_runs()
-        facts = [_present(self.artist_nationality), _present(self.artist_dates)]
-        runs = list(name)
-        for fact in facts:
-            if fact is None:
-                continue
-            # The separator is only ever *between* things, so it is appended with
-            # the fact that needs it rather than after the one before — which is
-            # what leaves an anonymous work's line opening with a stray comma.
-            if runs:
-                runs.append(Run(SEPARATOR))
-            runs.append(Run(fact))
-        # No name and no nationality and no dates is an anonymous work, which is
-        # a normal record here — the label simply opens with the title.
-        return tuple(runs) if runs else None
-
-    def _name_runs(self) -> Line:
-        """The artist's name, styled, or no runs at all when none is recorded."""
         family = _present(self.artist_family_name)
         given = _present(self.artist_given_name)
         if family is None:
@@ -191,30 +167,77 @@ class LabelText:
             # padded out of `artist`: a label reading "Rembrandt" is correct,
             # and one reading "Rembrandt, Rembrandt Harmenszoon van Rijn" is not.
             whole = given or _present(self.artist)
-            return (Run(whole),) if whole is not None else ()
+            return () if whole is None else (Candidate(runs=(Run(whole),), tier=Tier.MANDATORY, names_the_maker=True),)
 
-        surname = Run(family, weight=Weight.BOLD, case=Case.CAPITALS)
+        surname = Candidate(
+            runs=(Run(family, weight=Weight.BOLD, case=Case.CAPITALS),), tier=Tier.MANDATORY, names_the_maker=True
+        )
         if given is None:
             return (surname,)
-        return (surname, Run(SEPARATOR), Run(given))
+        return (
+            surname,
+            Candidate(runs=(Run(given),), tier=Tier.MANDATORY, continues_line=(Run(SEPARATOR),), names_the_maker=True),
+        )
+
+    def _biography_candidate(self) -> Candidate | None:
+        """Where the artist was from and when they lived, as one line of its own.
+
+        **One fact rather than two, and off the name's line entirely.** Until
+        2026-08-13 the nationality and the dates joined the name, which made the
+        identification line four comma-separated parts and — because the leading
+        line takes the identification tier — set a demonym and a pair of years as
+        large as the name itself. Read at the panel, the lifespan came back as
+        "too large, equal with the name", and the line breaker split it mid-fact:
+        `KATSUSHIKA,` / `Hokusai, Japanese` / `1760–1849`. On its own line it sits
+        at the floor by position, which is the museum tombstone and what
+        `accessibility-spec.md` § The label's content model now specifies.
+
+        **Joined here rather than left as two joinable candidates**, because a
+        joinable fact attaches to whatever line is under construction: with the
+        nationality absent or dropped, the dates would have found the *name's*
+        line and re-created exactly the arrangement this moved away from. One
+        candidate cannot do that. What it costs is the ability to drop half the
+        clause, which is a trade worth making — the two are one clause in the
+        practice this label follows, and half of one reads as a fault rather than
+        as an abbreviation.
+        """
+        nationality = _present(self.artist_nationality)
+        dates = _present(self.artist_dates)
+        parts = [part for part in (nationality, dates) if part is not None]
+        if not parts:
+            return None
+        return Candidate(runs=(Run(SEPARATOR.join(parts)),), tier=Tier.OPTIONAL)
 
 
-def _styled(value: str | None, *, slant: Slant = Slant.UPRIGHT) -> Line | None:
-    """One field as a line of its own, or nothing when the field is absent.
+def _fact(
+    value: str | None,
+    tier: Tier,
+    *,
+    slant: Slant = Slant.UPRIGHT,
+) -> Candidate | None:
+    """One field as a candidate, or nothing when the field is absent.
 
     The title is the only caller that passes a slant — titles are set in italic,
     including *Untitled*, which is a museum convention rather than a decision this
     product took. Everything else on a label is a fact about the object and is set
     as recorded.
+
+    **Every fact this builds takes a line of its own**, so it passes no
+    `continues_line`. The only joining this label still does is the given name
+    onto the family name, which `_name_candidates` composes; the nationality and
+    the dates joined here until 2026-08-13, when they moved onto a line of their
+    own and became a single candidate.
     """
     present = _present(value)
-    return (Run(present, slant=slant),) if present is not None else None
+    if present is None:
+        return None
+    return Candidate(runs=(Run(present, slant=slant),), tier=tier)
 
 
 def _present(value: str | None) -> str | None:
     """The value with its whitespace trimmed, or None if there was nothing in it.
 
-    The same rule `lines()` applies, hoisted so that a value which is
+    The same rule `candidates()` applies, hoisted so that a value which is
     whitespace-only cannot slip into the identification line as an empty
     fragment — which would surface as a stray comma rather than as a short label.
     """

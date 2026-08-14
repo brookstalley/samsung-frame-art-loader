@@ -157,6 +157,11 @@ class Daemon:
         #: open.
         self._surface = surface
         self._label_failed = ReportOnce()
+        #: The surface has area but not enough of it to place anything. A
+        #: different fault from the one above — the panel takes the frame and the
+        #: frame is blank — and persistent in the same way, because what causes it
+        #: is a geometry setting rather than an event.
+        self._label_unusable = ReportOnce()
         #: The draw handed to a worker thread, kept until it finishes. **A
         #: one-at-a-time gate rather than a queue**: the budget stops the loop
         #: waiting on a hung panel, but it cannot stop the thread, and dispatching
@@ -824,6 +829,72 @@ class Daemon:
                 content_id,
                 extra={"event": "label.blanked", "tv_content_id": content_id},
             )
+        elif layout.is_empty and layout.dropped:
+            # **`and layout.dropped` is what separates the fault from the normal
+            # case.** A work whose institution published no label text lays out to
+            # nothing too, and that is a fact about the record rather than about
+            # the device — `metadata.py` is explicit that a blank surface is the
+            # right answer there. Facts that existed and were not placed is the
+            # other thing entirely.
+            #
+            # **The whole label had somewhere to be and nowhere to go.** A device
+            # whose margins consume its own surface places nothing at all, and the
+            # frame that reaches the panel is blank — so "the panel is captioning
+            # *Cat Litter*" would be this plane naming a work whose label is not
+            # there, and reporting the total failure of the accessibility surface
+            # one level quieter than a label set a few percent too small.
+            #
+            # It is reachable rather than theoretical: the margin derives from the
+            # primary tier, which grows with viewing distance, so a device
+            # configured to be read from far enough away borders its own label out
+            # of existence. Nothing about it stops the wall.
+            # **Once per episode, like every other condition that is about the
+            # device.** The geometry that borders a label out of existence is a
+            # setting, so it holds until somebody changes one — and at the default
+            # rotation an ungated line here is the same WARNING some five hundred
+            # times a day, forever, in the plane's only failure channel. Its
+            # sibling `label.shrunk` is deliberately *not* gated because a shrunk
+            # set belongs to one work and a gate would swallow the next work's;
+            # this one belongs to the surface and says the same thing whatever the
+            # wall is showing.
+            # **Recorded for the heartbeat as well as logged, and the episode gate
+            # is exactly why it has to be.** `observability-strategy.md` names the
+            # health panel as the only alerting surface a running deployment has;
+            # the journal on a headless Pi is read when somebody already suspects
+            # something. Left to the log alone this condition published
+            # `label_surface_working: true` with no error beside it — a device
+            # whose margins had bordered its own label out of existence,
+            # describing itself as fine, on the one screen anybody looks at.
+            #
+            # **`_label_working` stays true**, because it is a statement about the
+            # driver and the driver did take the frame. What failed is the
+            # geometry, and `last_error` is where that belongs.
+            self._record_error("the label surface has no usable area at this geometry")
+            if self._label_unusable.begin():
+                log.warning(
+                    "the label surface has no usable area at this geometry, so %s was not captioned at all",
+                    entry.label.get("title") or entry.work_id,
+                    extra={"event": "label.unusable", "tv_content_id": content_id},
+                )
+        elif layout.is_empty:
+            # **A record with no label text at all, which is normal and is not
+            # this.** The branch above is the device bordering a label out of
+            # existence; this is a work whose institution published nothing to
+            # print, where a blank surface is the right answer (`metadata.py`).
+            #
+            # **It gets its own line for two reasons, and the second is the one
+            # that bites.** Saying "the panel is captioning X" of a frame with no
+            # ink is a claim nobody could check against the wall. And the line
+            # below ends the `label.unusable` episode — on the reasoning that a
+            # label actually placed proves the surface has usable area again —
+            # which a label with nothing in it does not prove at all. Ending the
+            # episode here would silence the warning for every later work until
+            # the geometry changed again.
+            log.info(
+                "%s carries no label text, so the panel was left blank",
+                entry.label.get("title") or entry.work_id,
+                extra={"event": "label.absent", "tv_content_id": content_id},
+            )
         else:
             # **The only line that says the panel is working.** Every other label
             # event is an exception — a failure, a truncation, a recovery — so a
@@ -835,6 +906,12 @@ class Daemon:
             # **It claims the surface took the frame, and nothing about pixels.**
             # The driver reports no more than that, and a line implying the label
             # is legible would be this plane asserting something it cannot see.
+            # **The edge that ends the unusable episode, and there is no separate
+            # recovery line for it.** A label actually placed is the proof the
+            # surface has usable area again, and this line already says so by
+            # name — where `label.recovered` exists because `label.failed`'s
+            # success path emits nothing at all.
+            self._label_unusable.end()
             log.info(
                 "the panel is captioning %s",
                 entry.label.get("title") or entry.work_id,
@@ -848,6 +925,60 @@ class Daemon:
                 "the label surface had no room for %d line(s) of this label",
                 len(layout.dropped),
                 extra={"event": "label.truncated", "dropped": list(layout.dropped)},
+            )
+        if layout.shrunk:
+            # **The condition the type floor's one exception rests on.** The rule
+            # that nothing shrinks exists because illegible type fails invisibly;
+            # letting the facts that identify the work shrink rather than vanish
+            # re-opens that hole unless something says so. A panel setting names
+            # below the floor is a misconfigured device — too small, or read from
+            # too far — and nobody would ever discover that by eye at 7 feet.
+            #
+            # **Warning rather than info, unlike a drop.** A dropped medium is the
+            # engine working as designed; type below the floor is a deployment
+            # that cannot show this corpus legibly, and the operator is the only
+            # one who can fix it.
+            log.warning(
+                "the label surface is too small for this label at a legible size; %d line(s) " "were set below the %d px floor",
+                len(layout.shrunk),
+                surface.type_scale.floor_px,
+                extra={
+                    "event": "label.shrunk",
+                    "shrunk": list(layout.shrunk),
+                    "floor_px": surface.type_scale.floor_px,
+                    "smallest_px": min(block.size_px for block in layout.blocks),
+                },
+            )
+        if layout.wrapped:
+            # **The fault a person found by standing in front of the panel, and
+            # the one channel that would have said it.** On 2026-08-13 the wall
+            # drew `KATSUSHIKA,` / `Hokusai, Japanese` / `1760–1849` — the name
+            # broken mid-phrase by the line breaker, the comma that inverts it
+            # stranded at the end of a row — and nothing anywhere reported it: the
+            # type was at its tier so `label.shrunk` was silent, every fact was
+            # placed so `label.truncated` was silent, and this method logged
+            # `label.drawn`.
+            #
+            # **Warning for the same reason a shrink is.** The ladder exists to
+            # prevent this and normally does; reaching here means no arrangement
+            # of the name fitted, which is a fact about the device rather than
+            # about the work — and the next change to the margin, the viewing
+            # distance or the panel can reintroduce it, which is precisely what
+            # `legibility.MARGIN_TO_PRIMARY_RATIO` now cites the ladder to allow.
+            log.warning(
+                "the label surface is too narrow for this name; the line breaker split %r across rows",
+                layout.wrapped[0].text,
+                extra={
+                    "event": "label.name_wrapped",
+                    "wrapped": [block.text for block in layout.wrapped],
+                    # **Both read off the line that actually broke.** Once the
+                    # ladder has given the family name a line of its own, a given
+                    # name the measure splits wraps on the *second* line, and a
+                    # row count taken from the first reported 1 beside a warning
+                    # saying the line had been split.
+                    "rows": layout.wrapped[0].rows,
+                    "wrap_px": layout.wrapped[0].wrap_px,
+                },
             )
 
     def _label_would_not_take_it(self, why: str, content_id: str) -> None:
@@ -886,8 +1017,8 @@ class Daemon:
         run off the loop: the caller reads the outcome through the task it holds,
         and that task finishing is also what opens the gate on the next draw.
         """
-        lines = read_label(entry.label).lines() if entry is not None else ()
-        layout = lay_out(lines, surface.geometry, surface.measure, surface.type_scale)
+        facts = read_label(entry.label).candidates() if entry is not None else ()
+        layout = lay_out(facts, surface.geometry, surface.measure, surface.type_scale)
         surface.show(layout)
         return layout
 

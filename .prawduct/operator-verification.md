@@ -10,7 +10,228 @@ each entry, which is the durable form.
 
 ## Pending
 
-### The styled name, at the panel — added 2026-08-13
+### ✅ The rebuilt identification block, at the panel — added 2026-08-13, VERIFIED 2026-08-14
+
+**Verified at the panel on 2026-08-14**, together with the entry below it — one
+sitting answered both, and the two tunings it asked for are built, swept and
+drawn. Six records were set: `hokusai`, `okeeffe`, `moche`, `nationality-only`,
+and `hokusai` twice more as the tunings landed. `anonymous`, `unattributed`,
+`wright` and `kandinsky` were deliberately not drawn — each is a milder reading of
+one already judged, and the operator's panel time is the scarce thing here.
+
+**What the sitting settled, question by question.**
+
+1. **`KATSUSHIKA` over `Hokusai` reads as one name — after a change.** It did not
+   at first: the gap inside the name was 46 px and the gap below it was 46 px, so
+   nothing told the eye which two lines belonged together. Both are now charged to
+   different lines, at 0.28 against 0.35 of the size. **Judged good.**
+2. **The family name is set larger, at the operator's ask** — 1.2× the
+   identification tier, 156 px against 130, on the rung where the ladder has given
+   it its own line. **Judged good**, and the asymmetry it creates was accepted
+   knowingly: `KATSUSHIKA` is larger than `O'KEEFFE` because his name earned a
+   line and hers did not.
+3. **32 px of border stands.** Seen against the fullest label in the corpus
+   (`okeeffe`, six facts, nothing dropped) and not questioned.
+4. **The bold still earns its place.** Seen on a broken name and an unbroken one a
+   minute apart; the one comma on its line is doing the work the weight was chosen
+   for.
+
+**Three findings the questions were not looking for.**
+
+- **The label was top-aligned and the slack all fell to the bottom** — 129 px of
+  white under the reference record against 32 above. It now spends the leftover on
+  the gaps by a capped multiplier and centres the residual, so the margins match on
+  every record. Built and drawn in the sitting; `accessibility-spec.md` § Amended
+  2026-08-14 carries the rule.
+- **`Moche` is set at the identification tier but unstyled**, where a family name
+  in the same position is bold capitals. Filed as **#143** — the catalogue stores
+  the same two nulls for a culture that it stores for a person nobody has split,
+  so the panel has nothing to style on. Distinct from **#140**, which is why the
+  culture never arrives; both must land before a culture-attributed record reads
+  as one.
+- **Dimensions reach the label as source prose carrying both metric and
+  imperial.** Filed as **#142**, at `stage: requirements` — 34 of 39 rows carry
+  both systems, five carry one, in five different grammars, and every sourced
+  imperial value uses a binary fraction, so a derived value needs a stated
+  rounding convention before it can look like a museum's number.
+
+**What the panel drew is not what any suite measures.** The three green suites
+model type arithmetically; the wall resolves a different face. Every number quoted
+above is from the panel's own machine.
+
+---
+
+**This entry replaces the two below it for the questions they asked about the
+name.** Those were written against a Mac's font metrics and predicted an
+arrangement the wall never drew; the sitting on 2026-08-13 found out why, and the
+block has been rebuilt since. What is on the wall now is different enough that
+the old questions no longer describe it.
+
+**What the sitting found, so the next one starts from the truth.** The panel drew
+`KATSUSHIKA,` / `Hokusai, Japanese` / `1760–1849` — every fact broken across a row
+boundary. Three separate faults, all now fixed: the ladder engaged only on
+vertical *overflow*, so a name that merely wrapped never triggered it; the
+nationality and dates rode the name's line and took its tier, setting a demonym as
+large as the name; and the preview's report collapsed wrapped rows, which is why
+no reading of its output had ever shown this.
+
+The block is now: `FAMILY, Given` at 12.4′ when it fits, broken to `FAMILY` /
+`Given` — both still at 12.4′ — when it would wrap, with `Nationality, dates`
+always on its own line at the 8.8′ floor. The border halved to 32 px, and four
+artists gained a short nationality (`Born Moscow (formerly Russian Empire, now
+Russia)` → `Russian`).
+
+```sh
+sudo systemctl stop display.service
+cd /opt/samsung-frame-art-loader/display
+draw() { sudo -u tvpi env HOME=/var/lib/tvpi /usr/local/bin/uv run \
+    --group raster --group epaper python tools/label_preview.py --panel --record "$1"; }
+draw hokusai; draw okeeffe; draw wright; draw kandinsky; draw moche; draw nationality-only
+sudo systemctl start display.service
+```
+
+**No `--cap-arcmin`** — it is an override, and everything below is written in
+terms of the calibrated 12.4′ and the 8.8′ floor.
+
+**Four things to look for:**
+
+1. **Does `KATSUSHIKA` over `Hokusai` read as one name?** Both are at 12.4′ now
+   and the biography is a size below. If the two lines read as two facts rather
+   than one name, the leading between them is one constant.
+2. **Does the bold still earn its place?** `KATSUSHIKA, Hokusai` has one comma on
+   its line instead of three, so the weight is no longer competing with a list —
+   which was the original argument for it. Draw `okeeffe` and `wright`, which stay
+   on one line, against `hokusai`, which breaks.
+3. **Is 32 px of border right?** You judged this from 0 and 65 without seeing the
+   rebuilt block. It is the number most likely to want a nudge now that the label
+   holds more.
+4. ~~**`Water Jar` still sits beneath `Japanese`**~~ — **struck 2026-08-13, and
+   nothing here needs your eyes on it.** This asked you to judge an ordering that
+   turned out to be the museum convention already: a culture-attributed work
+   leads with the culture, and the title follows it
+   (`museum-label-findings.md`). What is actually wrong is upstream — the culture
+   should be in the *maker* field rather than arriving as a nationality, which is
+   an acquisition-path defect now in the backlog. **Three questions at the panel,
+   not four.**
+
+**What the suite cannot tell you, and this is why the entry exists.** The wall
+resolves a different typeface from the development Mac — 108 px rows against 93 at
+the same declared size — so every measurement in `accessibility-spec.md` older
+than this entry describes type the wall does not set. The panel is the only
+authority on how any of this reads.
+
+### ✅ The fill model and the name ladder, at the panel — added 2026-08-13, VERIFIED 2026-08-14 (see the entry above)
+
+**Why this needs eyes.** 13B-4 changed what the panel shows for every work on the
+wall, and the two judgements behind it are both about how a label *reads* rather
+than about whether it fits. The suite proves the rules hold over every content
+shape there is; it cannot say whether the result looks like a wall label.
+
+**`--record` chooses which of the wall's eight records is set**, and every
+question below is comparative, so the sitting is a sequence of runs rather than
+one. At the panel, stop `display.service` once and draw each record against the
+stopped unit — the invocation with this deployment's paths is in
+`deploy/README.md` § The cutover.
+
+```sh
+cd display && uv run --group raster python tools/label_preview.py /tmp/label.png
+cd display && uv run --group raster python tools/label_preview.py /tmp/short.png --record okeeffe
+```
+
+The report names the record first, then prints the type sizes in arcminutes,
+names the styled runs, and prints anything **dropped** and anything **set below
+the floor** — the two things that are invisible in the image and are the whole
+point of the model.
+
+**Four things to look for:**
+
+1. **Does the two-line name read as one fact or as two?** `KATSUSHIKA` at 12.4′
+   with `Hokusai, Japanese, 1760–1849` at 8.8′ beneath it is the ladder's second
+   rung, and it is what most of this corpus will get. If the given name reads as
+   belonging to the *next* fact rather than to the name above it, the leading
+   between the two wants to be tighter than the leading between ordinary lines —
+   which is one constant, not a redesign.
+2. **Is the ladder taking its second rung too eagerly, or not eagerly enough?**
+   Draw `hokusai` and `okeeffe` in the same sitting. `O'KEEFFE, Georgia,
+   American, 1887–1986` stays on one line at 12.4′ and Hokusai's name does not,
+   so the two together are the rung being *chosen* rather than applied — and
+   `wright` is the third reading, a three-word name that also stays on one line.
+   The rung is chosen by measurement, so if it looks wrong the thing to change is
+   the tier the tail is set at, not the rule.
+3. ~~**Is a sparse label too empty, or now too large?**~~ — **struck 2026-08-14:
+   this predicted an arrangement the engine no longer produces, and the sitting
+   drew the corrected one.** It warned that `--record moche` would set both
+   `Moche, North coast, Peru` and `Stirrup Spout Vessel` at 12.4′ with the rest of
+   the panel white, and called it the likeliest to look wrong. None of that
+   happens now. The cumulative review's behavioural finding changed growth from
+   asking whether a line may be *dropped* to asking whether *every* fact on it
+   identifies the work, so `North coast, Peru` — a place of origin, and optional —
+   stops growth before it reaches the title. What drew instead is `Moche` alone at
+   12.4′, everything else at the floor, all six facts placed and the panel nearly
+   full, which is the culture-attributed tombstone `museum-label-findings.md`
+   records. **Judged good at the panel.**
+
+   **What the sitting found here instead**, and it is not what this question was
+   looking for: `Moche` is set at the identification tier but **unstyled**, where
+   a family name in the same position is bold capitals. The size is right — 130 px
+   is what every unbroken name gets, and the 156 px emphasis is rung-2-only — but
+   the weight is withheld because the bold is applied to the *family name* run and
+   a culture has no name parts. The seed table knows `"Moche": (None, None)` means
+   a culture; the catalogue does not, storing the same nulls a person's unsplit
+   name would. In the backlog.
+4. **The two records with no artist name go the *other* way, and this is the
+   thing most likely to look like a bug.** `--record nationality-only` (`Water
+   Jar`, a nationality and no name) and `--record anonymous` (medium and date
+   only) are set **small throughout** — 8.8′ on every line, with most of the
+   panel empty. That is deliberate: the identification tier is withheld when
+   nothing on the leading line identifies the work, because the alternative was a
+   demonym set larger than the work's own title. ~~**What it does not fix is the
+   ordering**~~ — **struck 2026-08-13**: the ordering was already the museum's,
+   and the culture leading the title is the convention rather than a defect
+   (`museum-label-findings.md`). The real fault is that the culture reaches the
+   panel as a nationality at all, which is an acquisition-path defect and is in
+   the backlog.
+
+**What it would take to change any of these:** the first two are single constants
+in `display/src/display/panel/layout.py`, not a redesign. Say what you see and the
+tuning is cheap. **The third is struck and its replacement finding is not cheap** —
+styling a culture like a maker needs the catalogue to record that it is one.
+
+### ✅ The styled name, at the panel — added 2026-08-13, VERIFIED 2026-08-14
+
+**Answered by the 2026-08-14 sitting, question 3 last and only when asked for
+directly.** That sitting set six records and the operator judged the styling as it
+went, which covered questions 1 and 2; question 3 had been on the panel the whole
+time without being spoken about, and was put to the operator explicitly rather
+than inferred from their silence. Absence of complaint is not a judgement, and an
+entry ticked on two of three would have retired an unlooked-at question — which is
+the failure this queue exists to prevent.
+
+- **Question 1 — the bold does the disambiguating. Answered.** Seen on a broken
+  name and an unbroken one within a minute of each other; the one comma on its
+  line is doing the work the weight was chosen for, and the operator judged it
+  good without prompting on the second reading.
+- **Question 2 — 12.4′ is not too large in bold. Answered, in the opposite
+  direction to the one this entry anticipated.** It asked whether bold reaches the
+  same comfort a step *down*, freeing size for content. Standing at the wall the
+  operator asked for the family name to go **up** — "could go even bigger and be
+  more readable from across the room" — which is now 1.2× on the ladder's second
+  rung. There is no size here for the fill model to reclaim.
+- **Question 3 — the italic title at the 8.8′ floor. Answered: the convention
+  stays.** Asked with `Water Jar` in italic on the panel. The italic is visible
+  and reads; what the operator noted is that a title at the floor is not a size
+  meant to be taken in from the couch, and accepted that.
+
+  **Recorded in the scale's own terms, because the sitting's phrasing would
+  contradict the section above it.** The operator described the floor as
+  "intentionally too small for the 7 foot view"; the floor *is* a 7-foot size —
+  § The type floor is derived from viewing distance derives 8.8′ from the 84-inch
+  distance as the **threshold** of legibility, where 12.4′ is the comfortable
+  reading. So what was accepted is that a title sits at the effortful size and is
+  read by whoever walks up, which is the two-distance label this spec argues for
+  working as designed — not that the floor is below its own derivation. The
+  decision is the same under either wording; only this artifact's agreement with
+  itself depends on which is written down.
 
 **Why this needs eyes and not a test.** 13B-2 set the family name in bold
 capitals and the title in italic. The suite can prove the right bytes got the
@@ -25,7 +246,10 @@ cd display && uv run --group raster python tools/label_preview.py /tmp/label.png
 ```
 
 The report now prints each line as the panel sets it and names the styled runs
-under it, because a terminal cannot show weight.
+under it, because a terminal cannot show weight. Question 1 below is about a
+comma that only the one-line arrangement has, so draw `--record okeeffe` or
+`--record wright` for it — those are the names that stay on one line, and the
+entry above explains why the reference record no longer does.
 
 **Three things to look for, in this order:**
 
@@ -44,13 +268,16 @@ under it, because a terminal cannot show weight.
    that is harder to read than its upright form is a reason to drop the
    convention, and nothing but the panel can say so.
 
-**One measured consequence to expect, and it is not a regression.** Capitals are
-wider than the letters they replace, so on the reference wall's fully-populated
-Hokusai record the identification line went from 262 px to 393 px — two wrapped
-rows to three — and one further line (the medium) now drops. That is the case
-13B-4's name ladder answers by giving the family name its own line before it
-gives up its size; it is recorded here so it is not read as damage on first
-sight.
+**The consequence this entry warned about has been answered — read it with the
+entry below.** Capitals are wider than the letters they replace, so on the
+reference wall's fully-populated Hokusai record the identification line went from
+262 px to 393 px and the medium dropped. **13B-4's name ladder landed 2026-08-13
+and gave it back**: the same record now sets `KATSUSHIKA` on a line of its own
+and `Hokusai, Japanese, 1760–1849` beneath it, 269 px for the pair, with the
+medium back on the panel. So what you will be looking at is the *two-line*
+arrangement, not the three-row one described above — which also changes what
+question 1 is asking, since the bold no longer has to disambiguate a comma that
+is on a different line from the name.
 
 ### The Theme screen, and the reorder that had never worked — added 2026-08-12
 
@@ -405,9 +632,16 @@ cd display && uv run --group raster python tools/label_preview.py /tmp/label.png
    the ~260 px the collapse was for. Modelled against two real works it turns
    three dropped lines into one — but that was an arithmetic stand-in for the
    measurer, not Pango, so **the panel is what settles whether it is enough**.
-3. **The whole identification line is set at the primary 12.4′ tier**, because
+3. ~~**The whole identification line is set at the primary 12.4′ tier**, because
    the layout sizes by position and that line is now first. On a long name it
-   wraps to three rows and eats roughly 90 px the floor would not have.
+   wraps to three rows and eats roughly 90 px the floor would not have.~~
+   **Superseded 2026-08-13 by 13B-4 — do not go looking for this.** The name
+   ladder now gives a long family name its own line at 12.4′ and sets the rest of
+   the tombstone beneath it at the floor, so the three-row block this describes is
+   not what the panel shows any more. What you will see on the reference record is
+   `KATSUSHIKA` over `Hokusai, Japanese, 1760–1849`. Left struck through rather
+   than deleted because the ~90 px figure is what the ladder was built to answer,
+   and the entry below it is where the current question is asked.
 
 **The thing to judge, and it is a real question rather than a formality:** the
 identification line reads `O'KEEFFE, Georgia, American, 1887–1986` — four

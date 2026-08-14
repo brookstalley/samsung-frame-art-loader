@@ -195,6 +195,12 @@ class Artist:
     biography: str | None = None
     family_name: str | None = None
     given_name: str | None = None
+    #: The short form of `nationality` the e-paper label sets, when the recorded
+    #: one is too long or too discursive for a wall label. Null means the label
+    #: uses `nationality` unchanged. A *display* form and not a correction: the
+    #: recorded string is the provenance and stays whatever the institution
+    #: printed.
+    display_nationality: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -23,8 +23,8 @@ data[].\_score                    float   relevance, see the warning below
 data[].id                        int
 data[].api_link                  string
 data[].title                     string
-data[].artist_title              string   e.g. "Grant Wood"
-data[].artist_display            string   e.g. "Grant Wood (American, 1891-1942)"
+data[].artist_title              str?    e.g. "Grant Wood" — NULL where no individual is known
+data[].artist_display            string   e.g. "Grant Wood (American, 1891-1942)"; the culture where artist_title is null
 data[].date_display              string   e.g. "1930"
 data[].dimensions                string   free text, physical, e.g. "78 x 65.3 cm (30 3/4 x 25 3/4 in.)"
 data[].medium_display            string
@@ -222,6 +222,29 @@ fetches `info.json` under the resolved base rather than trusting the URL's shape
 `image_id`. That is a sample, not a guarantee, and both fields are documented as
 nullable; a work with no image cannot become a `CandidateImage` and is skipped
 rather than recorded with absent dimensions.
+
+**A work with no individual maker returns `artist_title: null` and carries the
+culture in `artist_display`** — measured 2026-08-13, and the shape this table's
+`e.g. "Grant Wood"` line does not describe:
+
+```json
+{"artist_title": null, "artist_display": "Japan"}
+{"artist_title": null, "artist_display": "India\nNagapattinam, Tamil Nadu"}
+{"artist_title": null, "artist_display": "Central Ethiopia\nEastern and Southern Africa"}
+{"artist_title": null, "artist_display": "Greek; possibly Apulia or Campania, Italy"}
+```
+
+**The field is `null` rather than absent or empty**, so `entry.get("artist_title")`
+returns `None` and any truthiness test reads it as "no maker" — which is what the
+acquisition path does. **`artist_display` is a newline-separated stack, not a
+clause**: the culture is the first line and the place of origin the second, so a
+consumer wanting either must split rather than parse commas.
+
+**A `must_not exists artist_title` query returned 17,144 objects** on that date —
+most of Arts of Asia and Arts of Africa. Re-run it rather than trusting the
+figure; the order of magnitude is the point, not the number. The museum has
+recorded a maker for every one of them, in the slot its own label leads with
+(`museum-label-findings.md`).
 
 **No rate-limit headers are exposed.** No `X-RateLimit-*`, no `Retry-After` on
 any probe. Responses pass through CloudFront (`x-cache`, `x-amz-cf-*`) with

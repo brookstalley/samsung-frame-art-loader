@@ -212,6 +212,41 @@ def test_the_manifest_carries_the_label_text_but_no_label_geometry(service, disp
     assert not any(key in label for key in ("font", "font_size", "panel_width", "panel_height"))
 
 
+def test_the_manifest_carries_the_short_nationality_when_a_curator_has_set_one(service, display, ready_work, theme_of, wall_id):
+    """**The resolution happens here, not at the panel.** The manifest is what the
+    display plane parses rather than a catalogue export, so it carries the string
+    the label should set; choosing between two recorded strings is a question
+    about content, and content is this plane's. A display told to choose would be
+    re-deciding curation policy from the far side of the seam.
+    """
+    kandinsky = service.add_artist(
+        name="Vasily Kandinsky",
+        nationality="Born Moscow (formerly Russian Empire, now Russia)",
+        display_nationality="Russian",
+        born=1866,
+        died=1944,
+    )
+    theme = theme_of(ready_work(artist_id=kandinsky.id))
+
+    label = display.build_manifest(wall_id, theme.id).entries[0].label
+
+    assert label["artist_nationality"] == "Russian"
+
+
+def test_the_manifest_carries_the_recorded_nationality_when_nobody_has_shortened_it(
+    service, display, ready_work, theme_of, wall_id
+):
+    """Null means "set what the catalogue recorded", so a record nobody has
+    shortened reads exactly as it did before the column existed. Most of this
+    corpus is already a demonym and needs nothing."""
+    moche = service.add_artist(name="Moche", nationality="North coast, Peru")
+    theme = theme_of(ready_work(artist_id=moche.id))
+
+    label = display.build_manifest(wall_id, theme.id).entries[0].label
+
+    assert label["artist_nationality"] == "North coast, Peru"
+
+
 def test_a_work_with_no_artist_still_produces_a_legible_label(display, ready_work, theme_of, wall_id):
     """Unattributed works are real; a label that failed on one would take it off the wall."""
     theme = theme_of(ready_work())

@@ -101,10 +101,20 @@ success from every direction except standing in front of it.
 
 ### Type never shrinks to fit, except for the facts that identify the work
 
-**Partly practised** — `display/src/display/panel/layout.py` implements the
-optional tier's drop rule today. **The mandatory tier is owed, and 13B-4 builds
-it**; `layout.py`'s docstring describes the flat rule because the flat rule is
-still what the code does.
+**Practised** — `display/src/display/panel/layout.py`. The optional tier's drop
+rule was built first; **the mandatory tier landed 2026-08-13 with the fill
+model**, and with it the journal event the tier is conditional on
+(`label.shrunk`, a warning rather than an info line — a dropped medium is the
+engine working, and type below the floor is a deployment that cannot show this
+corpus legibly).
+
+Which tier a fact belongs to is carried on the fact itself
+(`display/src/display/panel/content.py`), so nothing downstream infers it from a
+position. Guarded by `display/tests/test_label_layout.py` for what the rules are
+and by `display/tests/test_label_properties.py` for the claim that they always
+hold — ten independently optional fields is 1024 content shapes, and both defects
+this replaced were about *which* fields a record happened to have rather than
+about any one line.
 
 When the lines will not fit, the least identifying ones come off the bottom and the
 survivors keep their size. Type that shrinks to fit has silently converted an
@@ -123,38 +133,40 @@ instead of picking a winner:
 | **Mandatory** | The artist's family name, the artist's given name, and the work's title when it has one | **Shrinks, as far as needed, below the floor if that is what it takes.** Never dropped, never wrapped where a size reduction can be avoided |
 | **Optional** | Nationality, life dates, the work's date, medium, dimensions, commentary — **and nothing here is mandatory** | **Dropped, at full size.** Never set below the floor |
 
-> **This table is the norm and it is not what runs today — two gaps, both
-> widened rather than opened by 13B-3, and both closed by the fill model.**
-> Recorded here, against the table itself, because a reader who takes the table
-> for a description of the code will design the fill model against a starting
-> point that does not exist.
+> **This table was the norm and not the code until 2026-08-13. All three gaps
+> are closed; kept as the record of what a position-based engine could not
+> express**, because that is the argument for the tier living on the fact.
 >
-> - **Nothing shrinks. The mandatory tier has no guard at all** — the engine
->   drops from the end at a fixed size, so a title that will not fit comes off
->   rather than reducing. That was true before this round and is the half of the
->   ruling recorded as unbuilt.
-> - **Two optional facts became undroppable and are set at the *primary* tier.**
->   Nationality and life dates are now joined into the identification line, which
->   is index 0 — the one line the engine never drops, and the one it sizes
->   largest. So the table says "dropped, at full size, never below the floor"
->   about two facts that are in practice never dropped and never at the floor.
->   The collapse is still the right trade (it returns ~260 px and the wrapped
->   line costs ~90), but the discrepancy is the fill model's to resolve: sizing
->   and dropping have to follow a run's *role* rather than its position, which is
->   exactly what a candidate model with priorities and roles provides.
-> - **The title moved into the droppable region.** `lay_out` protects only the
->   first line; before this round that was the title, and now it is the
->   identification block. A mandatory fact is therefore exposed where it was not
->   — which the mandatory tier will cover once it exists, and which nothing
->   covers meanwhile.
+> - **Nothing shrank — the mandatory tier had no guard at all.** The engine
+>   dropped from the end at a fixed size, so a title that would not fit came off
+>   rather than reducing. *Closed:* mandatory facts shrink by a uniform factor
+>   until they fit, and the shrink is journalled.
+> - **Two optional facts had become undroppable and were set at the *primary*
+>   tier.** Nationality and life dates were joined into the identification line,
+>   which was index 0 — the one line the engine never dropped and the one it
+>   sized largest. *Closed by the fill model, and by the ladder rather than by
+>   per-run sizes:* they are now ordinary candidates that drop when they will not
+>   fit, and when the name takes its second line they follow it at the floor. A
+>   line still carries one size — **the sizing half of this gap was closed by
+>   arrangement, not by giving a run its own size**, which would have meant a
+>   renderer change for a case the ladder already answers.
+> - **The title had moved into the droppable region.** `lay_out` protected only
+>   the first line; after the tombstone collapsed, that was the identification
+>   block rather than the title. *Closed:* protection follows the tier, so the
+>   title is safe wherever it is set.
 
 Four properties of the rule, all of them load-bearing:
 
-- **The ordering is the priority.** Lines arrive least-droppable first, so
-  dropping from the end needs no second ranking to go stale against the first.
-  (This said "in wall-label order" until 13B-3, which is no longer the same
-  thing: the artist leads and the identification block is one line, both
-  departures from wall-label convention recorded in § The label's content model.)
+- **Priority is the tier first and the reading position second, and it is
+  derived rather than carried.** This said "the ordering *is* the priority" and
+  it stopped being true when the tombstone collapsed: facts arrive in *reading*
+  order, and the title is set below the nationality while being admitted before
+  it. Deriving priority from the tier and the position keeps the old property
+  that mattered — there is still no second ranking free to go stale against the
+  first — while letting the two orderings differ. (This said "in wall-label
+  order" until 13B-3, which was already no longer the same thing: the artist
+  leads and the identification block is one line, both departures from wall-label
+  convention recorded in § The label's content model.)
 - **The mandatory tier is what a label is for.** A label that cannot say who made
   the work and what it is called identifies nothing, and an unreadably small name
   is still a name somebody can walk closer to read. That is the trade the operator
@@ -232,21 +244,58 @@ text for whoever walks up; the operator reached the same split independently, by
 naming a size acceptable only when closer. The family name carries the primary
 tier at 12.4′ and everything else steps down to the 8.8′ floor.
 
-**The primary tier goes to the leading line, and since 13B-3 that line is the
-artist.** `layout._size_for` assigns by position and `LabelText.lines()` now puts
-the identification block first, so the family name carries the 12.4′ tier and
-everything else steps down to the 8.8′ floor — which is what this section
-described and, until 2026-08-11, was not yet what ran.
+**The primary tier goes to the leading line when that line identifies the work,
+and since 13B-3 that line is the artist.** The layout tier sets the first composed
+line at 12.4′ and everything below it at the 8.8′ floor, and
+`LabelText.candidates()` puts the identification block first — so the family name
+carries the primary tier and everything else steps down.
+
+**The condition is not decoration, and it was added 2026-08-13 because the
+unconditional form shipped a defect.** A record with *no name at all* still opens
+with an identification line — a bare nationality, or bare life dates — because
+that block composes from whatever of the three it has. Sizing by position alone
+therefore set a demonym at 12.4′ and demoted the work's own title to the floor
+beneath it: an optional fact claiming to identify the work, which is this
+section's own rule read backwards. So the tier is withheld when nothing on the
+leading line is mandatory, and such a label is set at the floor throughout.
+
+> **This was carried as an open question about the ordering, and the ordering
+> was already right. Closed 2026-08-13 by looking the convention up** —
+> `museum-label-findings.md`, which exists because this is the third time the
+> product has reasoned its way to a museum convention from first principles.
+>
+> The question claimed museums "print the reverse for an unattributed work —
+> title first, culture and period after it". They do not. The tombstone for a
+> culture-attributed work leads with the **Culture**, then place of origin, then
+> date and period — the title is set after it, where this engine already puts it.
+> A culture is not a fallback for a missing artist: **it occupies the maker
+> slot**, which is why it leads for exactly the reason a name does, and why "the
+> artist outranks the work" covers this case rather than excluding it.
+>
+> **What is genuinely wrong is upstream of the label.** A culture belongs in the
+> *name*, and `Water Jar`'s arrives as a nationality against an empty name — a
+> shape neither source collection produces. The Art Institute records the culture
+> in `artist_display`, the maker slot, for the seventeen thousand objects that
+> have no `artist_title`; the acquisition path reads only `artist_title` and
+> discards it. So the record this paragraph is about should never have existed,
+> and the sizing rule below is what correctly refuses to identify a work by a
+> demonym while it does.
+>
+> **The withholding rule stays, and is not made redundant by that fix.** A work
+> with no maker of any kind is real — the Met leaves `artistDisplayName` and
+> `culture` both empty and carries only a period — and setting such a label at the
+> floor throughout remains the honest answer.
 
 **What the primary tier lands on is the whole identification line, not the family
-name alone, and that costs height.** `_size_for` sizes a *block*, and the block
-is now `FAMILY, Given, Nationality, Dates` — so nationality and dates are set at
-12.4′ beside the name instead of at the floor beneath it, and a line that long at
-130 px wraps to three rows on this panel where the name alone would take one or
-two. It is a consequence of the collapse rather than a decision, and **13B-4 is
-where it stops being one**: a fill model that admits candidates with roles can
-set each run at the size its role earns rather than at the size its position
-does.
+name alone, and that costs height** — `FAMILY, Given, Nationality, Dates` at
+130 px wraps to three rows on this panel where the name alone would take one.
+**13B-4 answered it with the ladder rather than with per-run sizes:** when that
+line will not hold, the family name takes a line of its own at 12.4′ and
+everything that shared it follows at the floor, which is where nationality and
+dates were always meant to be set. A line still carries one size. Giving a *run*
+its own size would have meant changing the renderer and the measurer for a case
+arrangement already answers, and it would have set the name and its demonym at
+two sizes on one line — which is a typographic decision nobody has taken.
 
 **Net, the collapse still wins, and by more than it costs — modelled 2026-08-11,
 not measured.** Running `lay_out` over two real seeded works with an *arithmetic*
@@ -297,6 +346,25 @@ number survives, and the one that replaces them is within a few pixels of the on
 the operator actually looked at. It is the one number here an operator might
 reasonably move, and moving it is one constant rather than another panel visit.
 
+**Moved to a quarter em on 2026-08-13, at the panel, and the reasoning above is
+why it could be.** The 0.46 figure came from a session that ran a 60 px border
+and reasoned from that single number; drawn side by side at 0 px and at 65 px in
+front of the operator, the reading was that the panel's own bezel already does
+most of the clearing and the software border wants to be about half what it was.
+A quarter em is **32 px** here — `round(32.5)` banker's-rounds down — and it
+returns **66 px** in each dimension, taking the usable area from 1318x942 to
+1384x1008. Against the wall's 108 px row height that is about 60% of a row:
+worth having, and less than the full line an earlier draft of this paragraph
+claimed.
+
+**What made it safe to move is a separate fix, and before that fix it was not
+safe.** The name ladder engaged only on vertical overflow, so 20 px of border
+decided whether the reference record's name broke cleanly or wrapped mid-phrase:
+a number chosen for a bezel was choosing the typography four steps away, and the
+"one constant rather than another panel visit" claim above was not true of it.
+The ladder now breaks on wrapping, so this number changes how much fits and
+nothing about how a name reads.
+
 **`EPD_MARGIN_PX` survives as an override, not as a default.** It is for the
 surface whose border is a physical fact rather than a typographic choice — the
 device drawing its label into the mat area around an artwork does not get to
@@ -320,25 +388,27 @@ rotating.
 **Requested by the operator 2026-08-11 and written here before it was built,
 because it is a set of decisions and not a layout tweak.**
 
-**Practised, except for the fill model and the name ladder.** 13B-3 built the
-*content model* — the ordering, the one-line identification block, the stored
-name parts and the commentary field, all in
+**Practised.** 13B-3 built the *content model* — the ordering, the one-line
+identification block, the stored name parts and the commentary field, all in
 `display/src/display/panel/metadata.py` and carried there by the manifest.
 **13B-2 built the typography on 2026-08-13**: a line is a tuple of styled runs
 (`display/src/display/panel/styling.py`), the family name is set bold and
 capitalised, titles are set in italic, and the renderer applies Pango attributes
-over byte ranges. What remains owed is the *fill model* and the **name ladder**
-— both 13B-4.
+over byte ranges. **13B-4 built the fill model and the name ladder the same
+day** — `display/src/display/panel/content.py` for what a fact is and
+`layout.py` for what survives.
 
-**The styling costs room, and the figure is the reason the ladder is owed.**
-Measured on the reference wall 2026-08-13 with the preview's Hokusai sample: the
-identification line went from 262 px to **393 px** — two wrapped rows to three,
-because capitals are wider than the letters they replace — and one further line
-(the medium) dropped as a result. That is not a defect in the styling and not a
-reason to withdraw it: it is exactly the case the ladder in § One line is the
-preference, not the requirement exists to answer, by giving the family name its
-own line before it gives up its size. Until 13B-4 lands, a long name is paid for
-by the lines below it.
+**The styling cost room, the ladder gave it back, and both figures are from the
+same instrument.** Measured on the reference wall 2026-08-13 with the preview's
+Hokusai sample, through real Pango: the capitals took the identification line
+from 262 px to **393 px** — two wrapped rows to three, because capitals are wider
+than the letters they replace — and the medium dropped as a result. With the
+ladder, the same record sets `KATSUSHIKA` on its own line at the 12.4′ tier and
+`Hokusai, Japanese, 1760–1849` beneath it at the floor, which is **269 px** for
+the pair; the medium is back on the panel and only the dimensions and the
+commentary come off. That is the ladder doing exactly what it was owed for —
+giving the family name its own line before it gives up its size — and it is why
+the capitals were kept rather than withdrawn when they first cost a line.
 
 **Two decisions this build had to make rather than inherit**, both consequences
 of composing two rules this section states separately:
@@ -396,6 +466,202 @@ lines" would break `ANDERS, Joseph` for every short name on the wall; one told
 "one line" would shrink Toulouse-Lautrec to fit a break it could have taken for
 free.
 
+**Built 2026-08-13. Two things it had to settle rather than inherit:**
+
+- **"Each at the target size" is the primary tier and then the floor**, not the
+  primary tier twice. That is what makes step 2 *cheaper* than step 1 rather than
+  more expensive — a second line at 12.4′ costs more height than the wrapped row
+  it saved, and the whole point of the step is that a long family name costs only
+  itself. On the reference record it is the difference between 393 px and 269 px,
+  and it is what put the medium back on the panel.
+- **When step 3 is reached, both arrangements are shrunk and the larger answer
+  wins.** Step 2 exists to *avoid* a reduction; once one is unavoidable it has
+  failed at its job, and the question reverts to which arrangement stays most
+  legible. Choosing the arrangement that was shorter at full size would answer a
+  different question — the two come within a few percent of each other — and
+  "gives up its size last of all" is the ordering this whole ladder is.
+
+#### Amended 2026-08-13 at the panel: the biography leaves the name's line
+
+**The first sitting against real ink refused the arrangement above**, and the two
+things it refused are the two this amendment changes. The operator read the
+reference record at the wall and reported the identification block as four rows:
+`KATSUSHIKA,` / `Hokusai, Japanese` / `1760–1849`, then the title. Every fact on
+it had been broken across a row boundary by the line breaker, and the first comma
+— the inversion marker the bold was chosen to disambiguate — was left stranded at
+the end of a row where no weight could do that job.
+
+**Two separate faults produced it, and only one of them was a coding error.**
+
+- **The step-2 trigger was stated as "when one line would have forced a
+  reduction", and wrapping is not a reduction.** A joined name that wraps to
+  three rows costs more height than the broken arrangement and reads worse, but
+  it triggers neither a shrink nor an overflow, so nothing above asked for the
+  ladder and the engine had no reason to take it. The trigger is now **wrapping
+  or reduction, whichever comes first**: the name block gives up its line as soon
+  as keeping it would break the name across rows.
+- **Nationality and dates were riding the name's line and its tier.** Step 2 put
+  the family name alone and let *everything that shared the line* follow at the
+  floor — so the given name was demoted along with the biography, and at step 1
+  the biography was promoted to the identification tier along with the name. The
+  operator's reading of it was that the lifespan was "too large, equal with the
+  name", which is exactly what a shared tier means.
+
+**The block is now two blocks with two tiers, and the ladder governs only the
+first.**
+
+1. **The name** — `FAMILY, Given` — at the identification tier, on one line when
+   it fits, broken to `FAMILY` / `Given` when it would wrap.
+2. **The biography** — `Nationality, dates` — **always** at the floor, on its own
+   line, never joined to the name and never promoted.
+
+**The name's ladder gains a third rung, and the operator's ordering is what
+settles it: the name above all, and the family name most important of all.**
+Both parts of a broken name take the identification tier, because the given name
+is name and setting it at the floor presents it as biography — but that costs a
+second full-size line box, which a short surface cannot always pay for. So:
+
+1. `FAMILY, Given` on one line at the identification tier.
+2. Broken, **both** parts at the identification tier.
+3. Broken, the **given** name at the floor.
+4. Shrink — and only here does the *family* name go below the calibrated size.
+
+**The tier is allocated, not grown into.** The given name takes its size before
+any optional fact is admitted, so the room for it is competed for by the drop
+rule rather than left over by it. The first build of this amendment left it to
+the growth step and the wall showed the consequence immediately: on the two
+records whose names break, a medium and a pair of life dates that happened to fit
+first held `Vasily` and `Frank Lloyd` at the floor while the surface had room —
+optional content outranking a person's name, which is the ordering this label
+exists to invert.
+
+**This supersedes the settlement recorded above it** that step 2 is "the primary
+tier and then the floor, not the primary tier twice". That reasoning was correct
+about a second line carrying `Given, Nationality, dates` — a line mostly of
+optional facts, which the identification tier would have oversold. With the
+biography on its own line the tail is the given name alone, and the objection no
+longer applies to it; what survives of that settlement is rung 3, where the same
+demotion is what the ladder spends before it spends legibility.
+
+That is the museum tombstone, and it is what the operator reached independently
+at the panel. It also makes the two decisions above compose rather than fight:
+the first comma is now the only comma on its line, so the bold is disambiguating
+a name rather than competing with a list.
+
+##### Amended 2026-08-14 at the panel: a broken family name is set larger, and bound tighter to its own tail
+
+**The second sitting accepted the arrangement above and asked two things of it**,
+both about the ladder's second rung and neither about whether it fits. The
+operator read the reference record at the wall, confirmed the block reads
+correctly, and reported that the family name "could go even bigger and be more
+readable from across the room", and that the gap between the two halves of the
+name is "a little too big" while the gap below it "looks good".
+
+**The gap was one constant doing two jobs.** `LEADING` is a single fraction of a
+block's own size applied after every block, so the space between `KATSUSHIKA` and
+`Hokusai` — two halves of one fact — was identical to the space between `Hokusai`
+and the biography, which is a different fact. Measured on the panel, both were
+198 px. A fact and its own continuation are now bound by a **tighter** leading
+than a fact and the next fact, which is what makes a broken name read as one name
+rather than as two.
+
+**This is a rule about continuation, not about names.** A line that continues the
+line above it takes the tight leading; today only the name ladder produces one,
+and stating it that way is what keeps the next fact that has to break from
+needing its own constant.
+
+**The family name takes a size above the identification tier, and only when the
+ladder has given it its own line.** That is a departure from the two-tier model
+this section ratified, and it is recorded as one rather than folded in: § Type
+never shrinks to fit derives exactly two sizes from the calibration, and
+`_sizes_for` says in as many words that interpolating a third would aim type at a
+boundary the operator recorded as taking effort to read. This third size is
+**above** both, not between them, so it aims at nothing the calibration warns
+about — it spends slack the panel already has on the one fact the operator ranked
+above all others.
+
+**Fixed multiplier, not a fit-to-width scale, and the operator named the failure
+mode that decides it**: a name scaled to fill its line would set `LI` at half the
+panel's height, since the emphasis would be inversely proportional to how short
+the name is. So the family name is set at a fixed **1.2×** the identification
+tier, it is subject to the same fit checks as any other size, and a name that
+cannot be set at it simply is not.
+
+**Rung 2 only, and the asymmetry is accepted rather than unnoticed.** A `Run`
+carries weight, slant and case but not size, so a family name sharing its line
+with the given name cannot be set larger without a size axis on the run, a
+measurer that resolves mixed sizes within one line, and a decision about how two
+sizes sit on one baseline. None of that is bought here. The visible consequence
+is that `KATSUSHIKA` is set larger than `O'KEEFFE`, because hers holds one line
+and his does not — a name that earned its own line gets to use it. If that reads
+wrong at a later sitting, the fix is the run axis and not the multiplier.
+
+**Rung 3 is deliberately excluded.** That rung exists because the surface could
+not pay for two full-size line boxes, so emphasising the family name there would
+spend room the ladder had just established there is none of. The same reasoning
+excludes the shrink path below it, which is where size is being given up.
+
+**Growth's guard changes with it.** `_grow_into_the_slack` refused to promote a
+line whose predecessor was not *at* the identification tier; with a family name
+set above that tier the test has to be that the predecessor is not *below* it,
+or the emphasis would silently stop every promotion beneath it.
+
+**The gap inside a name is charged to the tail, not to the head, and the two
+gaps are therefore charged to different lines.** Ordinary leading trails a fact
+that has ended and scales with it. A continuation gap sits inside one fact, so
+charging it to the line above would make it grow with the family name's
+emphasis — read at the panel, a 20% tighter fraction over a 20% larger size moved
+the whitespace by 2 px where a fifth had been asked for. Emphasis buys size, not
+distance.
+
+##### Amended 2026-08-14 at the panel: the label fills the panel it was given
+
+**The label was top-aligned and the slack all fell to the bottom**, so the
+reference record sat 32 px under the top border with 129 px of white beneath its
+last line. The operator asked for the leftover to be spent on the gaps instead,
+so that a label breathes and its top and bottom margins match.
+
+**A multiplier over every gap, not a constant added to each**, and the
+distinction is load-bearing: the gaps now stand in a tuned ratio to one another —
+36 px inside the name against 46 px below it — and adding a flat amount to each
+would flatten that ratio toward 1. Scaling preserves it exactly.
+
+**It is capped, because a pure fill breaks on a sparse label.** A record with two
+facts on a panel sized for six has hundreds of pixels of slack and one gap to
+spend it in; unbounded, the two halves of a tombstone would sit at opposite edges
+of the panel. So the multiplier is bounded (`FILL_CAP`), and **whatever the cap
+leaves over is split evenly above and below**, which is what makes the top and
+bottom margins equal in every case rather than only when the arithmetic happens
+to work out. A dense label fills; a sparse one stays a block and is centred.
+
+**It runs after everything else and changes nothing but position.** What was
+dropped, what was shrunk and what wrapped are all settled before it: this pass
+moves lines down the panel and never decides whether one fits, so it cannot
+change any of the three. It needs no exception for a label that had to shrink —
+such a label has little or no slack, and where it has some there is no reason to
+prefer a bottom-heavy panel — and none for a surface with no usable area, which
+places nothing to move.
+
+**The two constants are ratios and stay ratios.** `LEADING` and
+`CONTINUATION_LEADING` remain the relationship between the gaps; the fill states
+what that relationship was multiplied by, and the layout reports the multiplier
+so the operator's instrument can print it. A gap on the panel is the constant
+times the fill, and neither number alone predicts it.
+
+**Measured across the whole corpus at the wall's own font**, at the identification
+tier against a 1382 px measure: `O'KEEFFE, Georgia` 1290 and `KANDINSKY, Vasily`
+1323 hold one line; `WRIGHT, Frank Lloyd` 1422 and `KATSUSHIKA, Hokusai` 1531 take
+the break. Every biography line fits at the floor with room to spare —
+`Japanese, 1760–1849` 993, `American, 1887–1986` 1015 — with one exception, which
+is the next entry.
+
+**Measure at the wall, not at a workstation.** The numbers in the paragraphs above
+this amendment were taken through Pango on a development Mac, and the wall
+resolves a different face: at the same declared size its rows are 108 px where the
+Mac's are 93. That difference alone decided whether the ladder was taken, which is
+how an arrangement that measured correctly everywhere it was checked reached the
+panel wrong. Every figure in this amendment is from the panel's own machine.
+
 - **This needs a real field, not a heuristic. Built 2026-08-11.** `Artist`
   carries `name` as one string; the surname heuristic in `discovery/artic.py` is
   documented there as unreliable, and it is wrong for "Titian (Tiziano
@@ -421,6 +687,30 @@ free.
   it touches only the two fields no source ever supplied — an artist's
   nationality, dates and biography came from the holding institution and are not
   this table's to overwrite.
+
+  **The nationality needs the same treatment, and for the same reason.
+  Required 2026-08-13.** `artist_nationality` holds whatever the holding
+  institution printed, which is prose and not a demonym: this corpus carries
+  `North coast, Peru` and `Born Moscow (formerly Russian Empire, now Russia)`.
+  The second one sets a biography line **2982 px** wide at the floor against a
+  1382 px measure — over twice the panel — so it wraps to three rows whatever the
+  ladder does, and no arrangement of the name can rescue it. The label needs a
+  short form, and the catalogue is where a curator decides one.
+
+  So `Artist` gains **`display_nationality`**, nullable, carried by the manifest
+  and read by the panel, **falling back to `nationality` when unset** — a record
+  nobody has shortened keeps exactly the label it has today, which is the same
+  contract the name parts got. It is populated from the seed table beside the
+  name parts, and backfilled by the same ordinary seeding run, because a curator
+  editing thirty-one rows by hand is the thing the table exists to avoid.
+
+  **It is a display form, not a correction.** `nationality` keeps what the museum
+  said; `display_nationality` is what the wall has room for. Kandinsky is
+  `Russian` on the panel and still `Born Moscow (formerly Russian Empire, now
+  Russia)` in the catalogue, because the long form is the provenance and the
+  short one is typography. Nothing derives one from the other — a rule that
+  turned that birthplace clause into `Russian` would be inventing a fact about a
+  person, which is precisely what the name table exists so that nothing does.
 - **Bold is a Pango attribute over a byte range, never markup. Built
   2026-08-13.** `metadata.py` escapes nothing on purpose: a 2024 label passed
   description text to Pango markup and a title containing `<` produced mangled
@@ -473,20 +763,46 @@ overflows. So the engine is given candidates with a priority and a role, and:
 - **Optional content is admitted only if it fits at the floor.** Commentary is the
   first thing to go and the last thing admitted, because it is the only line that
   identifies nothing.
+
+  **A fact that will not fit is passed over, not a stop signal — decided at
+  build, 2026-08-13, and it is a departure worth reading.** Taken strictly,
+  "commentary is the first thing to go" means the engine stops at the first
+  refusal, which would make the drop set a clean suffix of the priority order.
+  It is not built that way, because the facts differ in *size* as well as in
+  rank and the corpus makes that concrete: Kandinsky's nationality is a 49-character
+  birthplace clause, and an engine that stopped there would drop his dates, his
+  date, his medium and his dimensions to a fact that merely came first. So each
+  fact is tried and the ones that will not fit are passed over. The cost is that
+  a label can show its dimensions with its medium missing; the journal names
+  every fact that came off either way, which is what keeps that auditable rather
+  than mysterious.
 - **Slack is spent on content before it is spent on type.** A label set enormous
   with three of its six facts dropped is worse than one set comfortably with all
   six, and the panel measurement above is what makes that concrete rather than a
   matter of taste. Growth toward a preferred size happens only once no further
   candidate can be admitted.
-- **What was dropped is still reported.** Unchanged, and it matters more here:
-  an engine that adapts silently is one whose omissions nobody can audit.
+
+  **Growth is a promotion between the two tiers, and only the identifying facts
+  take it — decided at build, 2026-08-13.** There is nowhere else for a growing
+  line to land: the calibration settled two readings and the rung between them is
+  the squint boundary, recorded so that nothing aims at it. And an optional fact
+  set at the identification tier would be claiming it identifies the work, which
+  is the two-distance label read backwards — the identification block is for the
+  approach and everything else is for whoever walks up.
+- **What was dropped is still reported, and so is anything set below the floor.**
+  An engine that adapts silently is one whose omissions nobody can audit. The
+  shrink report is the stronger of the two: a missing dimension is visible to
+  anybody who looks at the panel, and type that got quietly smaller is visible to
+  nobody except the person who cannot read it.
 
 > **Every panel measurement in this section was taken at a 60 px margin**, while
 > the code then shipped 40 — a wider border was used to keep the largest type
 > clear of the bezel, so the 952 px usable figure and the budgets built on it
 > described a margin the deployment did not run. **Reconciled 2026-08-11 by
-> 13B-1**, which retired both: the border now derives at half the primary tier,
-> which is 65 px on this panel and leaves 942 px usable. The figures in this
+> 13B-1**, which retired both: the border derived at half the primary tier, which
+> was 65 px on this panel and left 942 px usable. **Halved again 2026-08-13** to a
+> quarter em — 32 px, 1008 px usable — on the operator's reading at the panel; the
+> amendment above carries why. The figures in this
 > section are therefore within ~1% of what the deployment actually runs — close
 > enough that the reasoning built on them stands, and stated so that the 952 is
 > not later mistaken for a current measurement.
@@ -519,7 +835,23 @@ to be corrected on these 2026-08-11, and was on the first one:
   build inventing an answer for it. **The number is 2 of 31, not a rounding
   error, and it is the kind of thing only a run finds** — the assertion above had
   been read past by every review it went through.
-- **The tombstone is one line, not three. Collapsed 2026-08-11 by 13B-3.** Name,
+- ~~**The tombstone is one line, not three.**~~ **SUPERSEDED 2026-08-13 — see
+  § Amended 2026-08-13 at the panel: the biography leaves the name's line, some
+  350 lines above this one.** The collapse below is kept because its *reasoning*
+  is still what bought the room the fill model spends, and the figures it quotes
+  are the ones the amendment argues against. What is no longer true is its
+  outcome: the biography has its own line at the floor, so the identification
+  block is **two** lines and not one, and the name may take a third rung of its
+  own. Read the amendment for what the panel sets today; read this for why one
+  line was ever the goal.
+
+  **`LabelText.identification` named below does not exist any more.** The member
+  was removed when the block became two, and `LabelText.candidates()` yields the
+  facts in reading order with their tiers instead. A reader who greps for the old
+  name finds nothing and cannot tell a renamed member from a deleted feature,
+  which is the whole cost of leaving it standing.
+
+  **Collapsed 2026-08-11 by 13B-3, on the reasoning that follows.** Name,
   nationality and life dates are conventionally set as a single run —
   `Katsushika Hokusai, Japanese, 1760–1849`. This product emitted them as three
   lines, which spent three line-boxes and their leading on one fact. **On the
@@ -531,10 +863,11 @@ to be corrected on these 2026-08-11, and was on the first one:
   it: tuning a fill rule against the un-collapsed numbers would have tuned it
   against figures that were about to move by four times the slack.
 
-  **It is `LabelText.identification`, and it composes rather than concatenates**:
-  an artist with no dates, or no nationality, or neither, yields a shorter line
-  rather than a line with holes in it, and a work with none of the three yields
-  no identification line at all and opens with its title.
+  **It composed rather than concatenated**, and that half survives the
+  supersession intact: an artist with no dates, or no nationality, or neither,
+  yields a shorter line rather than a line with holes in it, and a work with none
+  of the three yields no identification line at all and opens with its title.
+  What changed is only which lines the facts land on.
 - **Titles are set in italic**, including *Untitled*. Another styled run, so it
   landed with the bold-capitals work rather than behind it — **built 2026-08-13**.
 - **`FAMILY, Given` is an index convention, not a wall-label one.** Wall labels use
@@ -549,15 +882,19 @@ no slack at all against the ~130 px a further line needs — the ~66 px this
 sentence quoted was measured before the family name was set in bold capitals,
 which took 131 px of it and then some.
 
-**Two records, and only one of them was measured** — they read as a contradiction
-otherwise, and a 13B-4 builder cannot tell which figure the 2026-08-13
-measurement supports. What was *measured* is the reference record as it stands,
-carrying no commentary: the identification line went from 262 px to 393 px and
-**the medium** came off. Adding a commentary line to that same record is what
-takes **the dimensions** with it, and that second statement is arithmetic against
-the 131 px rather than a second trip to the panel. The fill rule is what
-makes it a per-work answer instead of a global one: the works with short names
-and no title will have room, and the ones that do not will drop it.
+**Still true after 13B-4, and now measured with the commentary present rather
+than reasoned about.** Running the preview over the reference record — Hokusai,
+every field populated, commentary included — the panel holds the name across two
+lines, the title, the date and the medium, and drops **the dimensions and the
+commentary**. So the finding stands: commentary does not fit at 7 feet on this
+panel for a record like this one. What the ladder bought back was the medium,
+which the capitals had cost.
+
+The fill rule is what makes it a per-work answer instead of a global one: the
+works with short names and no title will have room, and the ones that do not will
+drop it. **The paragraph this replaced reasoned to the same conclusion by
+arithmetic against a 131 px figure**, and is not kept, because the measurement it
+was standing in for now exists.
 
 **The field exists and nothing writes to it yet, which is stated here rather than
 discovered later.** 13B-3 added `commentary` to the work, carried it through the

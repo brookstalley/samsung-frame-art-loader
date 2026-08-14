@@ -66,6 +66,12 @@ CATALOGUE_SCHEMA = """
 -- because a file written before they existed has neither either. Both cases
 -- read the same way downstream and are meant to: the label falls back to `name`
 -- rather than splitting one by a rule that is wrong for "van Gogh".
+--
+-- `display_nationality` is the same shape of decision one field over: what a
+-- museum printed is prose rather than a demonym — "Born Moscow (formerly Russian
+-- Empire, now Russia)", "American, born Russia (Latvia)" — and a wall label has
+-- no room for it. Null means the label uses `nationality` as recorded, so a
+-- record nobody has shortened reads exactly as it did before the column existed.
 CREATE TABLE IF NOT EXISTS artists (
     id             TEXT PRIMARY KEY,
     name           TEXT NOT NULL,
@@ -75,7 +81,8 @@ CREATE TABLE IF NOT EXISTS artists (
     lifespan_text  TEXT,
     biography      TEXT,
     family_name    TEXT,
-    given_name     TEXT
+    given_name     TEXT,
+    display_nationality TEXT
 );
 
 CREATE TABLE IF NOT EXISTS artworks (
@@ -720,6 +727,7 @@ def _artist_row(artist: Artist) -> dict[str, Any]:
         "biography": artist.biography,
         "family_name": artist.family_name,
         "given_name": artist.given_name,
+        "display_nationality": artist.display_nationality,
     }
 
 
@@ -869,6 +877,7 @@ def _artist(row: Mapping[str, Any]) -> Artist:
         biography=row["biography"],
         family_name=row["family_name"],
         given_name=row["given_name"],
+        display_nationality=row["display_nationality"],
     )
 
 

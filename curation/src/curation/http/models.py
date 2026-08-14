@@ -40,6 +40,13 @@ class ArtistOut(BaseModel):
     #: a record that is not a person, and on one nobody has said yet.
     family_name: str | None
     given_name: str | None
+    #: The short nationality the e-paper label sets, when the recorded one is
+    #: prose rather than a demonym — "Born Moscow (formerly Russian Empire, now
+    #: Russia)" against "Russian". Null means `nationality` is what the label
+    #: sets, which is the ordinary case; the two are held apart rather than the
+    #: recorded value being overwritten, because what an institution printed
+    #: about a person is not this product's to edit.
+    display_nationality: str | None
 
 
 class FitOut(BaseModel):

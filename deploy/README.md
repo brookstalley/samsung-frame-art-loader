@@ -121,8 +121,28 @@ The catalogue *file* upgrades itself — the store adds nullable columns on open
 but a column is not the same as a value, and the two arrive by different roads:
 
     cd /opt/samsung-frame-art-loader/curation && sudo -u tvpi /usr/local/bin/uv run python -m curation.seed <path to all.json>
-    sudo systemctl restart curation.service     # republish the manifest
-    sudo systemctl restart display.service      # redraw the label
+    # Re-activate the live theme — this, and nothing else, republishes the manifest:
+    curl -s localhost:"$CURATION_PORT"/api/walls                       # read WALL_ID and the active theme
+    curl -sX POST localhost:"$CURATION_PORT"/api/themes/"$THEME_ID"/activate \
+         -H 'content-type: application/json' -d '{"wall_id":"'"$WALL_ID"'"}'
+
+**Restarting `curation.service` does NOT republish the manifest**, and this file
+said it did until 2026-08-14. Nothing writes a manifest at startup —
+`DisplayService.sync` is the only writer and it is reached by activating a theme,
+over the JSON API above or the browser interface. An operator who restarted both
+units after a seed re-run saw the old label text and had no reason to suspect the
+instructions. The § Moving a running deployment section below states the same rule
+from the other direction; the two now agree.
+
+**Then restart the display plane, and this step is not optional if the wall is
+sitting on one work.** The republished manifest is adopted on the next poll, but
+the *label already drawn* is not redrawn with it: the panel captions what the set
+announces, and it skips the draw while the announced work is the one it last
+captioned — so the new text arrives when the wall next changes, which on a pinned
+wall is never. A rotating wall gets it at the next rotation; a restart gets it now,
+and is the only thing that does on a wall that is not rotating.
+
+    sudo systemctl restart display.service      # redraw the label already on the wall
 
 **Skipping it costs a quieter label rather than an error**, which is why it is
 written here: the artists' family and given names arrived as fields on
@@ -150,6 +170,39 @@ that republished nothing looks identical to one that did:
 per wall, and the display stats only its own. `ls /srv/art/theme-manifest-*.json`
 lists every room the catalogue publishes for.
 
+### Moving a running deployment onto a newer revision
+
+**Written 2026-08-13, from doing it and finding three things this file did not
+say.** Checking out a newer revision on a machine that is already serving a wall
+is not the same act as the first cutover above, and it took the wall down for the
+better part of an hour.
+
+**Settings arrive with revisions, and an unset one refuses to start the plane.**
+`.env` is not in the repository, so nothing carries a new key onto the machine and
+nothing warns that one is owed. Diff before restarting:
+
+    diff <(grep -oE '^[A-Z_]+' /opt/samsung-frame-art-loader/.env | sort -u) \
+         <(grep -oE '^#? ?[A-Z_]+=' /opt/samsung-frame-art-loader/.env.example | tr -d '#= ' | sort -u)
+
+**A wall has to exist before `WALL_ID` can name one.** The revision that made
+manifests per-wall also made `WALL_ID` required, and the id is a UUID minted when
+the wall is created — so there is an ordering: set `WALL_NAME` and start the
+curation plane, which establishes the wall and carries whatever theme was active
+onto it; read the id back from `curl -s localhost:"$CURATION_PORT"/api/walls`; put
+it in `.env`; then start the display plane. Starting the display plane first gets
+a refusal naming the variable, which is correct and is not a fault to debug.
+
+**Activate the theme again after any upgrade that changes what the label
+carries.** The manifest is written at activation, not at startup, so a plane that
+restarts against an existing manifest serves the old label text — including after
+a seed re-run that has just filled in new fields. **The block above this one is a
+read** — it recovers `WALL_ID` from `/api/walls` — and this sentence used to point
+at it as though it were the activation. The activation is the `POST` in
+§ Seeding the catalogue, above:
+
+    curl -sX POST localhost:"$CURATION_PORT"/api/themes/"$THEME_ID"/activate \
+         -H 'content-type: application/json' -d '{"wall_id":"'"$WALL_ID"'"}'
+
 ### Looking at the label without the daemon
 
 `display/tools/label_preview.py` renders the chain the daemon runs — metadata,
@@ -161,19 +214,38 @@ source file:
     sudo systemctl stop display.service
     cd /opt/samsung-frame-art-loader/display && sudo -u tvpi env HOME=/var/lib/tvpi \
         /usr/local/bin/uv run --group raster --group epaper \
-        python tools/label_preview.py --panel --cap-arcmin 11
+        python tools/label_preview.py --panel --record hokusai
     sudo systemctl start display.service
+
+**No `--cap-arcmin` here, and that is the correction of 2026-08-13.** This example
+used to pass `11`, which is an *override*: the daemon draws at the calibrated
+12.4′, so the panel showed type the wall never sets. Every question the queued
+verification entries ask is written in terms of 12.4′ and the 8.8′ floor — one of
+them is literally "is 12.4′ still right in bold?" — so an operator following this
+line answered them against the wrong size. Pass the flag only when the angle
+itself is what you are trying out.
 
 **Stopping the unit is not optional.** `--panel` takes the SPI device, and
 `display.service` holds it while it runs; the two contend for the same bus.
+
+**Stop it once and draw several records, rather than bracketing each one.**
+`--record` chooses which of the wall's records is set, and the questions this
+instrument answers are comparative — a long name against a short one, a full
+record against a nearly empty one. The panel holds the last frame it was given,
+so a sitting is a run per record against one stopped service, with the unit
+started again at the end. `--help` lists the records there are, and so does the
+refusal you get for naming one that does not exist.
 
 **It states no geometry, and that is correct here and only here.** The tool
 refuses to guess the panel's diagonal or its reading distance, and takes both
 from this deployment's `.env` — the same two settings the daemon reads. So the
 short form above is right on this machine and would be wrong anywhere else, where
 `--diagonal-inches` and `--viewing-distance-inches` have to be passed. Running it
-before the two `.env` lines above are in place gets a refusal naming them, not a
-guess.
+before `EPD_PANEL_DIAGONAL_INCHES` and `EPD_VIEWING_DISTANCE_INCHES` are in
+place gets a refusal naming them, not a guess. (This used to say "the two `.env`
+lines above"; they are set out under § Moving a running deployment onto a newer
+revision, which is above this only in the file and below it in the order anybody
+does things.)
 
 Read as evidence that the arrangement works, not as a promise about your machine:
 

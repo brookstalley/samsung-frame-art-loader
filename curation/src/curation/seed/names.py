@@ -1,4 +1,10 @@
-"""Which part of a seeded artist's name is the family name.
+"""What the e-paper label needs to know about a seeded artist and cannot derive.
+
+Two authored lookups: which part of the name is the family name, and the short
+form of a nationality the label has no room to print whole. Both exist for the
+same reason — the fact is a judgement about a particular person, and every rule
+that would produce it is wrong for somebody in this very corpus.
+
 
 **Authored data, not a rule.** The e-paper label leads with the family name and
 sets it apart from the rest, so it has to know which part that is — and the 2024
@@ -71,6 +77,36 @@ SEEDED_NAME_PARTS: Final[dict[str, tuple[str | None, str | None]]] = {
 }
 
 
+#: Index name → the short nationality the e-paper label sets for them.
+#:
+#: **Authored for the same reason the split above is**, and covering only the
+#: names that need it. What a holding institution prints under "nationality" is
+#: prose: of the seeded corpus's 27 recorded nationalities, 22 are already
+#: demonyms and five are not. Four of those five overflow the label's biography
+#: line at the panel's floor size, so they are shortened here; the fifth, Moche's
+#: "North coast, Peru", fits and is left exactly as recorded.
+#:
+#: **A short form, not a correction.** The recorded string stays in the catalogue
+#: — it is the provenance, and it says things the short form does not. What is
+#: chosen here is the leading claim: the institution's own first word about where
+#: the artist was from, which is what a wall label has room to say.
+#:
+#: **Nothing derives these.** "Born Moscow (formerly Russian Empire, now Russia)"
+#: → "Russian" is a judgement about a person, and a rule that made it would be
+#: inventing a fact — the same reason the name split is a table.
+SEEDED_DISPLAY_NATIONALITIES: Final[dict[str, str]] = {
+    # 49 characters, the longest on the wall, and the record that forced this
+    # table: set with the life dates it sets a line nearly three times the panel.
+    "Vasily Kandinsky": "Russian",
+    # The three "X, born Y" forms. The comma is the problem as much as the
+    # length — on a line that already separates nationality from dates with one,
+    # it reads as a third list item rather than as a qualification.
+    "Mark Rothko": "American",
+    "Paul Klee": "German",
+    "Constantin Brancusi": "French",
+}
+
+
 def parts_for(name: str) -> tuple[str | None, str | None] | None:
     """The family and given parts of this name, or None if nobody has said.
 
@@ -79,3 +115,13 @@ def parts_for(name: str) -> tuple[str | None, str | None] | None:
     and `None` is "this table does not cover this name", which is owed.
     """
     return SEEDED_NAME_PARTS.get(name)
+
+
+def display_nationality_for(name: str) -> str | None:
+    """The short nationality this artist's label sets, or None to use the recorded one.
+
+    One answer rather than two, unlike `parts_for`: a name this table does not
+    carry and a nationality that needs no shortening are the same instruction to
+    the label — set what the catalogue recorded.
+    """
+    return SEEDED_DISPLAY_NATIONALITIES.get(name)

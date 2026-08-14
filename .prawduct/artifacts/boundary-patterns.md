@@ -121,6 +121,16 @@
   (`rotation_interval_seconds`, `shuffle`), a directive block (`sequence`,
   optional `pinned_work_id`), and an ordered list of entries — work id, render
   path, and the label fields.
+- **`artist_nationality` is resolved by the producer, and that is the seam's one
+  content decision. Recorded 2026-08-13.** The catalogue holds two strings — what
+  the institution printed, and a curator's short display form where one was worth
+  writing — and the builder sends `display_nationality or nationality`, so the
+  consumer receives one string and never chooses. The reasoning is in
+  `data-model.md` under `display_nationality`, including why this is content
+  rather than a device reasoning about its own geometry, and what a device drawing
+  into a mat area gets. **The alternative was carrying both and letting the device
+  choose**, which is the shape to reach for if a surface ever appears whose reader
+  is close enough for the provenance clause to earn its room.
 - **Stability obligation: bounded, not absent.** Additive changes are free; a
   breaking change bumps the major, and display refuses an unrecognised major and
   keeps the manifest it has. See `api-contract.md` → Surface Inventory.
@@ -355,10 +365,21 @@
   using it asserts a drop. All three Critic reviewers found it independently and
   it was fixed the same day; the identical stub in `test_tools.py` had been
   converted in the original commit, which is what made the miss invisible.
-- **The next crossing is already scheduled.** 13B-4 adds a *role* axis to `Run` —
-  a fact about what a line is for rather than how it is set, so it is not a Pango
-  attribute and does not belong in `_attributes_for`. That retypes this seam a
-  second time, which is why the row exists now rather than after.
+- **The predicted next crossing did not happen, and the one that did was a
+  different seam.** This said 13B-4 would add a *role* axis to `Run`. It did not:
+  a role is a fact about a whole line rather than about a stretch of one, so
+  putting it on `Run` would have made every fact on the identification line
+  answer for the tier of the family name beside it. It went on a new type
+  instead — `panel/content.py`'s `Candidate`, which pairs a line's runs with its
+  `Tier` — and `Run` is untouched, so `_attributes_for` never saw the change.
+  **What crossed instead is `lay_out`'s own signature**, from `tuple[Line, ...]`
+  to `tuple[Candidate, ...]`, with `LabelText.lines()` becoming `candidates()`.
+  Consumers: `daemon._draw`, `tools/label_preview.py` (twice), and the display
+  suite. The `Measure` seam and the rasterizers were unaffected, which is the
+  whole benefit of having put the role above the run rather than on it.
+  **Recorded as a correction rather than deleted**, because the prediction was
+  reasonable and the reason it was wrong is the reusable part: an axis whose
+  scope is the line does not belong on the type whose scope is the run.
 
 ### Configuration
 

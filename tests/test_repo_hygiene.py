@@ -181,6 +181,34 @@ def test_a_live_unit_cannot_silently_stop_retrying(unit: pathlib.Path):
     assert int(restart_sec[0]) >= 5, f"{unit.name}: RestartSec= must leave a real gap, got {restart_sec[0]}"
 
 
+def test_the_curation_unit_treats_a_clean_stop_as_success():
+    """`Restart=on-failure` plus a SIGTERM that reads as failure is a restart loop.
+
+    The curation plane hands its shutdown to uvicorn, which exits **143** on
+    SIGTERM. Under `on-failure` — which is this unit's policy, pinned above — that
+    is a failure, so `systemctl stop` left the unit `failed` and restarted it:
+    stopping the service was what started it again. Both forms are required and
+    they are different events: `143` is a process that *exited* with that status,
+    `SIGTERM` one that died of the signal unhandled, which is what a shutdown
+    hanging past the stop timeout produces.
+
+    **Pinned because the line is invisible when it works.** Its whole effect is
+    the absence of a spurious `failed`, so a revision that dropped it would look
+    correct in every place anybody reads — and the fault it reintroduces appears
+    only on a real stop against a real machine.
+
+    Only the curation unit: `display.service` runs `Restart=always`, where the
+    exit status does not decide whether it comes back.
+    """
+    unit = pathlib.Path("deploy/curation.service")
+    assert LIVE_UNITS[unit] == "on-failure", "this test's premise is the on-failure policy pinned above"
+
+    values = _directives_of(unit).get("SuccessExitStatus", [])
+    assert values, "SuccessExitStatus= must be set, or uvicorn's 143 on SIGTERM reads as a failed stop"
+    declared = set(values[0].split())
+    assert {"143", "SIGTERM"} <= declared, f"both forms are required and mean different events, got {sorted(declared)}"
+
+
 @pytest.mark.parametrize("unit", sorted(LIVE_UNITS), ids=lambda p: p.stem)
 def test_a_live_unit_names_no_path_under_a_home_directory(unit: pathlib.Path):
     """The cutover moved both trees off `/home`, and this is what keeps them off.

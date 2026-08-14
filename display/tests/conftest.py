@@ -13,11 +13,41 @@ from pathlib import Path
 
 import pytest
 from fakes import FakeTv
+from hypothesis import settings as hypothesis_settings
 
 from display.config import Settings
 from display.daemon import Clock, Daemon
 from display.manifest import Watcher
 from display.state import DisplayState
+
+#: **The property suite is derandomized, and that is a decision rather than a
+#: default.** Hypothesis normally draws fresh examples per run, so a property
+#: suite can go red on a commit that touched nothing near it — and a suite that
+#: does that is one people learn to re-run until it passes, which is worse than
+#: not having it at all. Pinned, a failure means the code changed, and the
+#: examples it explores still number in the hundreds per property.
+#:
+#: **What is given up is real and is bought back deliberately**: a fixed corpus
+#: stops finding new counterexamples once it has been seen green. The label
+#: engine's inputs are enumerable in the dimension that matters — which fields a
+#: work has — so the properties below draw from the *whole* space rather than
+#: sampling a tail of it, and the fixed seed is choosing which surfaces to cross
+#: it with rather than which content to try.
+#:
+#: **No health check is suppressed, and that is worth stating because one was.**
+#: `function_scoped_fixture` was disarmed here on the reasoning that this file's
+#: fixtures would trip it — they cannot: that check fires only for a `@given` test
+#: that *requests* a function-scoped fixture, no property here takes one, and
+#: nothing in this file is autouse. Registered globally it would have bought
+#: nothing today and cost the next property test that takes `tmp_path` its
+#: warning, which is the exact failure the check exists for: one fixture instance
+#: silently shared across all 200 examples.
+hypothesis_settings.register_profile(
+    "display",
+    derandomize=True,
+    max_examples=200,
+)
+hypothesis_settings.load_profile("display")
 
 
 class FakeClock:

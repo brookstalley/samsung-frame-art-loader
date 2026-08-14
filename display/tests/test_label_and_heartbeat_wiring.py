@@ -564,14 +564,46 @@ class TestTheJournalSaysWhatThePanelCaptioned:
     async def test_a_panel_captioning_correctly_is_not_silent_across_rotations(self, labelled, publish, clock, journal):
         """**The defect itself.** One success line proves the event exists; two
         prove the panel is still being heard from, which is the question an
-        unattended Pi is actually asked."""
-        publish(["work-a", "work-b"], shuffle=False, labels={"work-a": {}, "work-b": {}})
+        unattended Pi is actually asked.
+
+        **The works carry label text, and until 2026-08-13 they did not.** An
+        empty label block laid out to nothing and this event fired anyway, so the
+        test passed against a panel that had drawn no ink — which was the defect
+        `label.absent` was added for, asserted here as the success case.
+        """
+        publish(
+            ["work-a", "work-b"],
+            shuffle=False,
+            labels={"work-a": {"title": "Cat Litter"}, "work-b": {"title": "PH-129"}},
+        )
 
         await labelled.tick()
         clock.advance(10_000)
         await labelled.tick()
 
         assert [line["work_id"] for line in self._events(journal(), "label.drawn")] == ["work-a", "work-b"]
+
+    @pytest.mark.asyncio
+    async def test_a_work_with_no_label_text_is_not_reported_as_captioned(self, labelled, publish, journal):
+        """**A blank frame is the right answer here, and saying it was captioned
+        is not.** A work whose institution published no label text lays out to
+        nothing — `metadata.py` is explicit that the panel is left blank rather
+        than apologising — but until 2026-08-13 that fell through to the success
+        line, so the journal claimed the panel was captioning a work whose label
+        had no ink in it. Nothing could have checked that against the wall.
+
+        The distinction matters beyond the wording: the success line also ends the
+        `label.unusable` episode, on the reasoning that a label actually placed
+        proves the surface has usable area again. A label with nothing in it
+        proves no such thing, and ending the episode there would silence the
+        warning for every later work until the geometry changed.
+        """
+        publish(["work-a"], labels={"work-a": {}})
+
+        await labelled.tick()
+
+        assert [line["work_id"] for line in self._events(journal(), "label.drawn")] == []
+        assert [line["work_id"] for line in self._events(journal(), "label.absent")] == ["work-a"]
 
     @pytest.mark.asyncio
     async def test_a_label_the_remote_asked_for_carries_the_work_too(self, labelled, tv, state, publish, journal):
@@ -583,7 +615,11 @@ class TestTheJournalSaysWhatThePanelCaptioned:
         path that exists precisely because somebody is in the room with a remote,
         which is when a wrong label is seen soonest.
         """
-        publish(["work-a", "work-b"], shuffle=False, labels={"work-a": {}, "work-b": {}})
+        publish(
+            ["work-a", "work-b"],
+            shuffle=False,
+            labels={"work-a": {"title": "Cat Litter"}, "work-b": {"title": "PH-129"}},
+        )
         await labelled.tick()
         binding = state.binding_for("work-b")
         assert binding is not None and binding.tv_content_id, "work-b never reached the set to be chosen"
@@ -667,10 +703,17 @@ class TestTheJournalSaysWhatThePanelCaptioned:
     @pytest.mark.asyncio
     async def test_a_truncated_label_names_the_work_whose_lines_came_off(self, settings, tv, state, clock, publish, journal):
         """`label.truncated` is the only signal that a device's surface is too small
-        for the corpus, and it could not say which work provoked it."""
+        for the corpus, and it could not say which work provoked it.
+
+        **The facts that come off have to be optional ones**, which they are here:
+        a title and an artist are what the label may not drop, so a record of only
+        those would shrink and never truncate — a distinction this test did not
+        have to make until the two tiers existed.
+        """
         cramped = FakeSurface(width_px=200, height_px=60, margin_px=5)
         daemon = _daemon_with(cramped, settings, tv, state, clock)
-        publish(["work-a"], labels={"work-a": {"title": "Cat Litter", "artist": "Ed Ruscha", "year": "1969"}})
+        label = {"title": "Cat Litter", "artist": "Ed Ruscha", "medium": "Oil on canvas", "dimensions": "50 × 50 cm"}
+        publish(["work-a"], labels={"work-a": label})
 
         try:
             await daemon.tick()
@@ -679,6 +722,265 @@ class TestTheJournalSaysWhatThePanelCaptioned:
 
         truncated = self._events(journal(), "label.truncated")
         assert [line["work_id"] for line in truncated] == ["work-a"]
+        assert set(truncated[0]["dropped"]) == {"Oil on canvas", "50 × 50 cm"}
+
+    @pytest.mark.asyncio
+    async def test_a_label_set_below_the_floor_says_so_and_names_the_floor(self, settings, tv, state, clock, publish, journal):
+        """**The condition the type floor's one exception rests on.**
+
+        The rule that nothing shrinks exists because illegible type fails
+        invisibly; letting the facts that identify the work shrink rather than
+        vanish re-opens that hole unless something says so. A panel setting names
+        below the floor is a misconfigured device — too small, or read from too
+        far — and nobody discovers that by eye at 7 feet.
+
+        **A warning rather than an info line, unlike a drop.** A dropped medium is
+        the engine working as designed; type below the floor is a deployment that
+        cannot show this corpus legibly, and the operator is the only one who can
+        fix it.
+        """
+        cramped = FakeSurface(width_px=200, height_px=60, margin_px=5)
+        daemon = _daemon_with(cramped, settings, tv, state, clock)
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter", "artist": "Ed Ruscha"}})
+
+        try:
+            await daemon.tick()
+        finally:
+            cramped.release.set()
+
+        shrunk = self._events(journal(), "label.shrunk")
+        assert [line["work_id"] for line in shrunk] == ["work-a"]
+        assert shrunk[0]["level"] == "WARNING"
+        assert set(shrunk[0]["shrunk"]) == {"Ed Ruscha", "Cat Litter"}
+        assert shrunk[0]["smallest_px"] < shrunk[0]["floor_px"]
+
+    @pytest.mark.asyncio
+    async def test_a_name_the_line_breaker_split_is_reported_and_names_the_line(
+        self, settings, tv, state, clock, publish, journal
+    ):
+        """**The channel that would have caught the fault a person found by
+        standing in front of the panel**, and until now the only label warning
+        with no test between the layout that raises it and the journal.
+
+        `label.shrunk` above and this one are the plane's two legibility
+        warnings, and they answer different questions: type too small to read at
+        all, against a name broken where nobody chose to break it. The ladder
+        exists to prevent the second and normally does, so reaching here says no
+        arrangement of the name fitted — a fact about the device.
+        """
+        narrow = FakeSurface(width_px=260, height_px=900, margin_px=10)
+        daemon = _daemon_with(narrow, settings, tv, state, clock)
+        publish(
+            ["work-a"],
+            labels={"work-a": {"title": "Cat Litter", "artist": "Toulouse-Lautrec", "artist_family_name": "Toulouse-Lautrec"}},
+        )
+
+        try:
+            await daemon.tick()
+        finally:
+            narrow.release.set()
+
+        broken = self._events(journal(), "label.name_wrapped")
+        assert [line["level"] for line in broken] == ["WARNING"]
+        assert broken[0]["work_id"] == "work-a"
+        assert broken[0]["wrapped"] == ["Toulouse-Lautrec"], "the line reported is not the one that broke"
+        assert broken[0]["rows"] > 1
+
+    @pytest.mark.asyncio
+    async def test_a_work_with_no_maker_does_not_report_its_title_as_a_broken_name(
+        self, settings, tv, state, clock, publish, journal
+    ):
+        """**The same surface, and the record that made this warning dilute
+        itself.** A work whose museum recorded no maker leads with its own title,
+        which the label may not drop — so a report gated on undroppability fired
+        here and called an ordinary wrapping title a name too long to set.
+
+        It matters because the warning above is load-bearing beyond its own
+        report: `legibility.MARGIN_TO_PRIMARY_RATIO` cites the ladder's wrap
+        trigger to declare itself freely movable, and a channel that cries on
+        ordinary labels is one nobody reads when it is right.
+        """
+        narrow = FakeSurface(width_px=260, height_px=900, margin_px=10)
+        daemon = _daemon_with(narrow, settings, tv, state, clock)
+        publish(["work-a"], labels={"work-a": {"title": "Stirrup Spout Vessel of Considerable Length"}})
+
+        try:
+            await daemon.tick()
+        finally:
+            narrow.release.set()
+
+        lines = journal()
+        drawn = self._events(lines, "label.drawn")
+        assert [line["work_id"] for line in drawn] == ["work-a"], "the label never reached the panel to be judged"
+        assert not self._events(lines, "label.name_wrapped"), "a title was reported as a name the surface could not hold"
+
+    @pytest.mark.asyncio
+    async def test_a_surface_with_no_usable_area_is_the_loudest_outcome_not_the_quietest(
+        self, settings, tv, state, clock, publish, journal
+    ):
+        """**The total failure of the accessibility surface, reported as one.**
+
+        A device whose margins consume its own panel places nothing at all, and
+        the frame that reaches it is blank. Claiming "the panel is captioning
+        *Cat Litter*" there would name a work whose label is not there — and would
+        report the complete failure one level quieter than a label set a few
+        percent too small, on a daemon whose recorded failure mode is silence.
+
+        Reachable rather than theoretical: the margin derives from the primary
+        tier, which grows with viewing distance, so a device configured to be read
+        from far enough away borders its own label out of existence.
+        """
+        swallowed = FakeSurface(width_px=100, height_px=100, margin_px=60)
+        daemon = _daemon_with(swallowed, settings, tv, state, clock)
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter", "artist": "Ed Ruscha"}})
+
+        try:
+            await daemon.tick()
+        finally:
+            swallowed.release.set()
+
+        lines = journal()
+        unusable = self._events(lines, "label.unusable")
+        assert [line["level"] for line in unusable] == ["WARNING"]
+        assert unusable[0]["tv_content_id"], "the line names nothing that was on the wall"
+        assert not self._events(lines, "label.drawn"), "it claimed a caption that is not on the panel"
+
+    @pytest.mark.asyncio
+    async def test_an_unusable_surface_reaches_the_heartbeat_and_not_only_the_journal(
+        self, settings, tv, state, clock, publish, journal, art_root
+    ):
+        """**The journal is not the alerting surface; the health panel is.**
+
+        `observability-strategy.md` names it as the only place a running
+        deployment surfaces failure, and a headless Pi's journal is read once
+        somebody already suspects something. This condition is episode-gated —
+        correctly, it is a setting rather than an event — so the single WARNING it
+        emits can be hours old and scrolled away while the panel has been blank
+        the whole time.
+
+        **`label_surface_working` stays true on purpose.** The driver took the
+        frame; what failed is the geometry, and saying the driver is broken would
+        send somebody to the panel wiring for a margin they can fix in a config
+        file. `last_error` is the field that carries the difference.
+        """
+        swallowed = FakeSurface(width_px=100, height_px=100, margin_px=60)
+        daemon = _daemon_with(swallowed, settings, tv, state, clock)
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter", "artist": "Ed Ruscha"}})
+
+        try:
+            await daemon.tick()
+        finally:
+            swallowed.release.set()
+
+        document = json.loads(path_in(art_root, WALL_ID).read_text())
+        assert document["label_surface_working"] is True, "the driver took the frame; the geometry is what failed"
+        assert document["last_error"], "a bordered-out label described itself as healthy on the only alerting surface"
+        assert "no usable area" in document["last_error"]
+
+    @pytest.mark.asyncio
+    async def test_the_unusable_surface_is_reported_once_and_not_every_rotation(
+        self, settings, tv, state, clock, publish, journal
+    ):
+        """**A geometry that borders the label out of existence holds until
+        somebody changes a setting**, so this condition is lived through rather
+        than met — and the response to a persistent condition here is the same
+        everywhere: say it at the edge, keep rotating. Ungated it is the same
+        WARNING roughly five hundred times a day at the default rotation, in the
+        only channel this plane reports failure through, which is how a real
+        fault becomes something nobody reads.
+
+        **The contrast that decides it is `label.shrunk`, which is deliberately
+        not gated.** A shrunk set belongs to one work and a gate would swallow
+        the next work's; an unusable surface belongs to the device and says the
+        same thing whatever the wall happens to be showing.
+
+        Three rotations rather than two, because a gate that reports on the first
+        and the third is a gate that resets, and two would not tell them apart.
+
+        **The clock has to move between them or there is only one draw**, and a
+        test that ticked three times without it passed against an ungated warning
+        — which the mutation sweep is what caught. Two works for the same reason:
+        the condition is about the device, so it has to survive the label changing
+        underneath it.
+        """
+        swallowed = FakeSurface(width_px=100, height_px=100, margin_px=60)
+        daemon = _daemon_with(swallowed, settings, tv, state, clock)
+        publish(
+            ["work-a", "work-b"],
+            shuffle=False,
+            labels={
+                "work-a": {"title": "Cat Litter", "artist": "Ed Ruscha"},
+                "work-b": {"title": "Another Work", "artist": "Someone Else"},
+            },
+        )
+
+        try:
+            for _ in range(3):
+                await daemon.tick()
+                clock.advance(10_000)
+        finally:
+            swallowed.release.set()
+
+        unusable = self._events(journal(), "label.unusable")
+        assert len(unusable) == 1, f"the persistent fault repeated per rotation: {len(unusable)} lines"
+
+    @pytest.mark.asyncio
+    async def test_a_surface_given_its_area_back_can_report_the_fault_again(self, settings, tv, state, clock, publish, journal):
+        """**The other half of a gate, and the half that fails silently.**
+
+        A gate that never re-arms is indistinguishable from a working one for as
+        long as the fault persists, and wrong the moment it clears: the geometry
+        is a setting, so an operator who widens the margin, sees the panel
+        caption, then narrows it again has a device whose accessibility surface
+        has failed and a journal that says nothing at all. That is a worse
+        outcome than the repetition the gate was added to stop, because the first
+        is noisy and this one is silent.
+
+        `label.drawn` is the edge that ends the episode — a label actually placed
+        is the proof the surface has usable area — so there is no recovery event
+        of its own to look for here.
+        """
+        swallowed = FakeSurface(width_px=100, height_px=100, margin_px=60)
+        daemon = _daemon_with(swallowed, settings, tv, state, clock)
+        publish(["work-a", "work-b"], shuffle=False, labels={"work-a": {"title": "Cat Litter"}, "work-b": {"title": "Another"}})
+
+        try:
+            await daemon.tick()
+            clock.advance(10_000)
+            # The operator widens the panel's usable area, and the label lands.
+            swallowed.resize(width_px=1448, height_px=1072, margin_px=40)
+            await daemon.tick()
+            clock.advance(10_000)
+            swallowed.resize(width_px=100, height_px=100, margin_px=60)
+            await daemon.tick()
+        finally:
+            swallowed.release.set()
+
+        lines = journal()
+        assert self._events(lines, "label.drawn"), "the widened surface never captioned, so nothing recovered"
+        unusable = self._events(lines, "label.unusable")
+        assert len(unusable) == 2, f"the episode never re-armed, so the returning fault was silent: {len(unusable)}"
+
+    @pytest.mark.asyncio
+    async def test_a_work_whose_institution_published_nothing_is_not_a_fault(self, labelled, publish, journal):
+        """The other way a label lays out to nothing, and it is a fact about the
+        record rather than about the device — so it must not reach the warning
+        above. `metadata.py` is explicit that a blank surface is right here."""
+        publish(["work-a"], labels={"work-a": {}})
+
+        await labelled.tick()
+
+        assert not self._events(journal(), "label.unusable")
+
+    @pytest.mark.asyncio
+    async def test_a_label_that_fits_says_nothing_about_shrinking(self, labelled, publish, journal):
+        """The event is an exception, like every other label event but one — a
+        panel that reports a shrink on every rotation is one nobody reads."""
+        publish(["work-a"], labels={"work-a": {"title": "Cat Litter"}})
+
+        await labelled.tick()
+
+        assert not self._events(journal(), "label.shrunk")
 
     @pytest.mark.asyncio
     async def test_a_device_with_no_panel_claims_nothing_about_a_label(self, daemon, publish, journal):

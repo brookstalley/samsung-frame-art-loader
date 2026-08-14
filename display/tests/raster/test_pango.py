@@ -236,6 +236,30 @@ class TestMeasuringMovesInTheDirectionsTheLayoutTierRelieson:
 
         assert narrow.height_px > wide.height_px
 
+    def test_a_line_that_fits_measures_as_one_row(self, rasterizer):
+        """**`rows` is the only number in `Extent` that no fake can settle**, and
+        three behaviours hang off it: the name ladder's wrap rung, `Layout.wrapped`,
+        and the daemon's `label.name_wrapped` WARNING. Every other suite synthesises
+        it arithmetically, so a `measure` that returned a constant 1 would leave all
+        three silent with every test green — and the fault that produces is the one
+        the 2026-08-13 sitting read off the wall: a name broken mid-phrase, drawn,
+        and journalled as fine.
+        """
+        measured = rasterizer.measure(one("Katsushika"), 40, 4000)
+
+        assert measured.rows == 1
+
+    def test_a_line_that_wraps_measures_as_more_than_one_row(self, rasterizer):
+        """The other half, and the direction that matters: the ladder is *taken*
+        on this answer. The same text at a wrap width it cannot hold must come
+        back as more rows than one, from Pango's own line count rather than from
+        arithmetic over a nominal glyph width."""
+        wide = rasterizer.measure(one("A rather long museum title that has to wrap somewhere"), 12, 400)
+        narrow = rasterizer.measure(one("A rather long museum title that has to wrap somewhere"), 12, 80)
+
+        assert wide.rows == 1
+        assert narrow.rows > wide.rows
+
     def test_an_unbreakable_run_wraps_rather_than_running_off_the_edge(self, rasterizer):
         """A museum record carries accession strings and URLs with no space in
         them. Under Pango's word wrapping those are drawn straight past the right

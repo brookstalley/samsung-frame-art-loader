@@ -34,16 +34,30 @@ cutover. Those modules are still present and are deleted at the legacy retiremen
 a second subscriber attached, and an unattended run across a television
 power-cycle. Both need the television, not the panel.
 
-**What remains in software** is the label's *typography*. The panel visit turned
-three numbers into a redesign, and most of it has landed: the type floor derives
-from the panel's geometry and its reading distance, the catalogue carries
-`family_name`/`given_name` and a commentary field, the artist is set above the
-work, the identification block is one line rather than three, and the family name
-is set in bold capitals with the title in italic — a line being a tuple of styled
-runs since 2026-08-13. What is left is
-the fill model that admits optional content in priority order and never sets a
-mandatory line below the floor, and the name ladder that gives a long name its
-own line before it gives up its size. All of it is specified in
+**The label's typography is built**, as of 2026-08-14 and two panel sittings. The
+first visit turned three numbers into a redesign and the second tuned it at the
+wall. All of it has landed: the type floor derives from the panel's geometry and
+its reading distance, the catalogue carries `family_name`/`given_name`, a short
+`display_nationality` and a commentary field, the artist is set above the work,
+the identification block is **two** lines — the name, then the biography beneath
+it at the floor — the family name is set in bold capitals with the title in
+italic, optional content is admitted in priority order, and a long name takes its
+own line before it gives up its size, at a size a fifth larger when it does. What
+is left over vertically is spent on the gaps rather than falling to the bottom, so
+the top and bottom margins match.
+
+*(This paragraph said "one line rather than three" until 2026-08-14. That was
+true of the collapse built on 2026-08-11 and stopped being true two days later,
+when the first sitting sent the biography to its own line — the block is two, and
+the name may take a third rung of its own.)*
+
+**The type floor has exactly one exception, and it is the point rather than a
+lapse.** The facts that identify the work — the artist's name and the title —
+*shrink* below the floor rather than being dropped, because a name too small to
+read at 7 feet can still be read by somebody who steps closer and a name that is
+not there cannot. Every such shrink is journalled as `label.shrunk` at WARNING,
+which is the condition that ruling rests on: illegible type fails invisibly, and
+the exception would reopen that hole if nothing named it. All of it is specified in
 `accessibility-spec.md` — § Type never shrinks to fit for the two content tiers,
 § The label's content model for the ordering, the name ladder and the fill rule —
 which is where it stays after the build plan that schedules it is archived.

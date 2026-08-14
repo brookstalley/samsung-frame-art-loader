@@ -22,10 +22,20 @@ the derivation that sizes them — because they have genuinely different lifetim
   above share. Not a tier of its own: it is the words the three tiers use to
   agree, held apart from each of them so that the renderer does not import "what
   a label says" in order to learn what bold means.
+* **`content`** — what a label's facts *are*: which of them identify the work and
+  so may shrink rather than vanish, and which are set on a line of their own.
+  Held apart from `metadata` and `layout` for the reason `styling` is — the first
+  decides which fact is which, the second decides what survives the surface, and
+  neither is the other's to import for it.
 * **`surface`** — a thing a laid-out label can be put onto, and the drivers that
   implement it. The e-paper panel is the first, not the only one: a display
   device may have a monitor and no e-ink at all, and draw its label into the mat
   area around the artwork instead.
+* **`corpus`** — real records off the wall, chosen for the ways they break the
+  rules above. **The one module here the daemon never imports**, and it is here
+  rather than beside the tests because the other reader is
+  `tools/label_preview.py`, which draws them on the panel and is the only
+  instrument that can settle legibility.
 
 **"This device has no label surface" is a configuration, not a fault.** A wall
 whose device drives a television and nothing else is a supported deployment, and
@@ -37,6 +47,7 @@ caller and reported, and the picture changes regardless — a panel that is brok
 missing, or slow leaves the wall rotating.
 """
 
+from display.panel.content import Candidate, Tier
 from display.panel.layout import Block, Extent, Geometry, Layout, Measure, lay_out
 from display.panel.legibility import TypeScale, ViewingConditionsUnknown, margin_for, type_scale_for
 from display.panel.metadata import LabelText, read_label
@@ -52,6 +63,7 @@ from display.panel.surface import LabelSurface, SurfaceUnavailable
 #: that has decided this device has a panel.
 __all__ = [
     "Block",
+    "Candidate",
     "Case",
     "Extent",
     "LabelSurface",
@@ -65,6 +77,7 @@ __all__ = [
     "Run",
     "Slant",
     "SurfaceUnavailable",
+    "Tier",
     "TypeScale",
     "ViewingConditionsUnknown",
     "Weight",

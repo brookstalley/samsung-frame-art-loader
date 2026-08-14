@@ -47,7 +47,7 @@ class StubRasterizer:
             glyph = max(1, size_px // 2)
             per_row = max(1, wrap_px // glyph)
             rows = max(1, math.ceil(len(text) / per_row))
-            return Extent(width_px=min(len(text) * glyph, wrap_px), height_px=rows * size_px)
+            return Extent(width_px=min(len(text) * glyph, wrap_px), height_px=rows * size_px, rows=rows)
 
         return measure
 
@@ -162,19 +162,20 @@ class TestTheLabelPreviewStillRuns:
         assert placed, "no line reported a placed block"
         assert all("' cap at y=" in line for line in placed)
 
-    def test_the_sample_shows_the_label_a_seeded_catalogue_produces(self, label_preview, tmp_path, capsys):
+    def test_the_default_record_shows_the_label_a_seeded_catalogue_produces(self, label_preview, tmp_path, capsys):
         """**The one omission that would make this tool lie rather than break.**
 
         A label with no family and given parts is legal and falls back to the
-        whole name unstyled — so a sample missing them renders cleanly, reports
-        cleanly, and shows the operator a label the wall does not produce. That
-        is worse than a crash, because the operator's whole reason for running
-        this is to judge what the panel will show. Asserted on the tool's own
-        output rather than on the dict, so it holds however the sample is built.
+        whole name unstyled — so a default record missing them renders cleanly,
+        reports cleanly, and shows the operator a label the wall does not produce.
+        That is worse than a crash, because the operator's whole reason for
+        running this is to judge what the panel will show. Asserted on the tool's
+        own output rather than on the record, so it holds however that record is
+        chosen.
 
         **The report is checked in the form the panel sets, not the recorded
         one**, which is what makes this an assertion about the label rather than
-        about the dict: a fallback name reaches the report as `Katsushika
+        about a dict: a fallback name reaches the report as `Katsushika
         Hokusai`, and only the split one is capitalised and set apart.
         """
         run(label_preview, str(tmp_path / "label.png"))
@@ -186,17 +187,33 @@ class TestTheLabelPreviewStillRuns:
         """**A terminal cannot show weight, and the styling is not decoration.**
 
         The family name's bold capitals are the only thing telling a reader that
-        the first comma of `KATSUSHIKA, Hokusai, Japanese, 1760–1849` inverts a
-        name while the other two separate a list. Until somebody stands at the
-        panel this report is the only place that can be checked at all, so a
-        report that showed the words and not how they are set would leave the
-        operator judging a picture with the property under review invisible.
+        the comma of `KATSUSHIKA, Hokusai` inverts a name rather than separating a
+        list. Until somebody stands at the panel this report is the only place
+        that can be checked at all, so a report that showed the words and not how
+        they are set would leave the operator judging a picture with the property
+        under review invisible.
         """
         run(label_preview, str(tmp_path / "label.png"))
 
         printed = capsys.readouterr().out
         assert "bold capitals: 'Katsushika'" in printed, "the report does not say which run carries the weight"
         assert "italic: 'Under the Well of the Great Wave off Kanagawa'" in printed, "the title's slant is unreported"
+
+    def test_the_report_says_when_a_line_was_broken_across_rows(self, label_preview, tmp_path, capsys):
+        """**The defect that hid a wrong label from every reading of this output.**
+
+        A block is one *logical* line and the line breaker may set it over several
+        rows. This report printed the logical line and its single size, so a name
+        the panel drew as `KATSUSHIKA,` / `Hokusai, Japanese` / `1760–1849` came
+        out here as one tidy line — and the report's own docstring claimed each
+        line was printed as the panel sets it. It took somebody standing at the
+        panel and reading it aloud to find that; the row count is what makes the
+        same fact readable from a terminal.
+        """
+        run(label_preview, str(tmp_path / "label.png"), "--width-px", "700")
+
+        printed = capsys.readouterr().out
+        assert "WRAPS to" in printed, "a line the breaker split over rows was reported as one row"
 
     def test_the_report_shows_the_drop_rule_taking_the_lowest_line_off(self, label_preview, tmp_path, capsys):
         """**The half of the label that is invisible in the image.**
@@ -227,6 +244,27 @@ class TestTheLabelPreviewStillRuns:
             "One of thirty-six views, and the one that outran the series."
         ), f"commentary was not the lowest line given up: {taken}"
 
+    def test_the_report_says_when_type_went_below_the_floor(self, label_preview, tmp_path, capsys):
+        """**Harder to see than a drop, and worse.**
+
+        A missing dimension is an absence anybody notices; type set below the
+        floor looks like a label until somebody tries to read it from the viewing
+        position. This tool is the operator's only instrument before a panel
+        visit, and the shrink is the one condition it was extended to surface — so
+        an unreported shrink is the same silence the drop line exists to break,
+        one level down.
+
+        **Forced with a small surface rather than with the sample**, because the
+        default sample drops rather than shrinks: the facts that identify the work
+        are the only ones that ever go below the floor, and on a panel-sized
+        surface they never have to.
+        """
+        run(label_preview, str(tmp_path / "label.png"), "--width-px", "1448", "--height-px", "200")
+
+        printed = capsys.readouterr().out
+        (shrunk,) = [line for line in printed.splitlines() if "SHRUNK" in line]
+        assert "Katsushika" in shrunk, f"the report did not name what was set below the floor: {shrunk}"
+
     def test_the_calibration_override_changes_the_type(self, label_preview, tmp_path, capsys):
         """`--cap-arcmin` is the one judgement the operator still makes, so it is
         the one flag that must actually reach the derivation."""
@@ -246,6 +284,89 @@ class TestTheLabelPreviewStillRuns:
         far = capsys.readouterr().out
 
         assert _primary_of(near) < _primary_of(far)
+
+    def test_it_draws_the_record_the_operator_names(self, label_preview, tmp_path, capsys):
+        """**The flag the comparative judgements need, and the seam that carries it.**
+
+        Every question left open at the panel is a comparison — a long name
+        against a short one, a full record against a nearly empty one — so an
+        instrument that could only draw its default answers none of them. Checked
+        on the label the tool sets rather than on the flag reaching a variable:
+        `okeeffe` and the default differ in the words they place, which is what an
+        operator would notice if the selection silently did nothing.
+        """
+        run(label_preview, str(tmp_path / "short.png"), "--record", "okeeffe")
+
+        printed = capsys.readouterr().out
+        assert "O'KEEFFE, Georgia" in printed, "the named record was not the one set"
+        assert "KATSUSHIKA" not in printed, "the default record was set despite --record"
+
+    def test_the_report_says_which_record_it_described(self, label_preview, tmp_path, capsys):
+        """**A comparative sitting produces several of these reports at once.**
+
+        The operator runs one per record and reads them side by side, so a report
+        that named its sizes and its drops but not its subject is evidence about
+        nothing in particular — and the two records that go *small throughout* are
+        exactly the ones whose report is hardest to tell apart from a bug.
+        """
+        run(label_preview, str(tmp_path / "label.png"), "--record", "nationality-only")
+
+        assert "record: nationality-only" in capsys.readouterr().out
+
+    def test_every_record_in_the_corpus_can_actually_be_drawn(self, label_preview, tmp_path, capsys):
+        """**The half of `--record` a choices list cannot promise.**
+
+        Argparse rejects a name the corpus does not have; nothing there says a
+        name it *does* have reaches a label. The corpus is a sample of failure
+        modes — a record with no artist, one with no title, one with neither — and
+        those are the shapes where the layout is most likely to refuse. An
+        operator finding that out at a stopped service on a Pi is the most
+        expensive place this product has to find anything.
+        """
+        from display.panel.corpus import CORPUS
+
+        for name, _ in CORPUS:
+            assert run(label_preview, str(tmp_path / f"{name}.png"), "--record", name) == 0, name
+            assert f"record: {name}" in capsys.readouterr().out
+
+    def test_the_panel_path_sets_the_record_it_was_given(self, label_preview, monkeypatch, capsys):
+        """**The half of this tool that only ever runs where it is most expensive
+        to be wrong.**
+
+        `--panel` is the invocation that matters — a PNG narrows, only the panel
+        settles legibility — and it is the one no test had ever reached, because
+        the driver installs on a Raspberry Pi and nowhere else. That is the same
+        shape as the defect this whole file was written for: an unexercised path
+        in the tool whose first run is by an operator at a stopped service.
+
+        The driver is the only part that needs hardware, and `EpaperSurface`
+        already takes its device injected for exactly this reason — so stubbing
+        `open_panel` reaches everything between the flag and the frame. What this
+        pins is that the record chosen on the command line is the one laid out for
+        the panel: the PNG path and this one select it separately, so a fix to one
+        can leave the other drawing the default at the wall.
+        """
+        from test_epaper import FakeEpd
+
+        from display.panel import epaper
+
+        panel = FakeEpd(width=1448, height=1072)
+        monkeypatch.setattr(epaper, "open_panel", lambda device: panel)
+
+        assert run(label_preview, "--panel", "--record", "okeeffe") == 0
+
+        assert panel.calls.count("display") == 1, "the panel was not drawn on"
+        printed = capsys.readouterr().out
+        assert "O'KEEFFE, Georgia" in printed, "the panel was given a record other than the one named"
+        assert "KATSUSHIKA" not in printed
+
+    def test_it_refuses_a_record_the_corpus_does_not_have(self, label_preview, tmp_path, capsys):
+        """Argparse's own error path, which names the records that do exist —
+        the operator at the panel needs the list, not a rejection."""
+        with pytest.raises(SystemExit):
+            run(label_preview, str(tmp_path / "label.png"), "--record", "monet")
+
+        assert "okeeffe" in capsys.readouterr().err
 
     def test_it_refuses_to_run_with_neither_an_output_nor_a_panel(self, label_preview):
         """Argparse's own error path, which exits rather than returning."""

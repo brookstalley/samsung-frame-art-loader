@@ -89,7 +89,7 @@ class PangoRasterizer(Rasterizer):
         """
         layout = self._layout_for(cairo.Context(cairo.ImageSurface(cairo.FORMAT_A8, 1, 1)), line, size_px, wrap_px)
         width_px, height_px = layout.get_pixel_size()
-        return Extent(width_px=width_px, height_px=height_px)
+        return Extent(width_px=width_px, height_px=height_px, rows=layout.get_line_count())
 
     def render(self, layout: Layout) -> Raster:
         """Draw the whole label — white ground, black type — at the layout's own size."""

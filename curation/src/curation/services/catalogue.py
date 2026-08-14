@@ -410,6 +410,7 @@ class CatalogueService:
         biography: str | None = None,
         family_name: str | None = None,
         given_name: str | None = None,
+        display_nationality: str | None = None,
     ) -> Artist:
         """Record an artist and return it with its minted identity."""
         artist = Artist(
@@ -422,31 +423,50 @@ class CatalogueService:
             biography=biography,
             family_name=family_name,
             given_name=given_name,
+            display_nationality=display_nationality,
         )
         store_write(self._store.add_artist, artist)
         return artist
 
-    def name_parts_for(self, artist_id: str, *, family_name: str | None, given_name: str | None) -> Artist:
-        """Say which part of a stored artist's name is the family name.
+    def label_facts_for(
+        self,
+        artist_id: str,
+        *,
+        family_name: str | None,
+        given_name: str | None,
+        display_nationality: str | None,
+    ) -> Artist:
+        """Say what the e-paper label needs about a stored artist and cannot derive.
 
-        **The only edit an artist row has, and it exists because the parts
+        **The only edit an artist row has, and it exists because these fields
         arrived after the rows did.** Every artist in a seeded catalogue was
-        written from a source that gave one undivided name string, and the
-        e-paper label needs to lead with the family part — a fact no
-        rule over that string can recover for "van Gogh" or "Frank Lloyd Wright".
-        So the parts are supplied by whoever knows, to rows that already exist.
+        written from a source that gave one undivided name string and whatever
+        prose the institution printed for a nationality. The label leads with the
+        family part — a fact no rule over that string can recover for "van Gogh"
+        or "Frank Lloyd Wright" — and it has no room for "Born Moscow (formerly
+        Russian Empire, now Russia)". Both are supplied by whoever knows, to rows
+        that already exist.
 
         **Narrow on purpose.** A general artist edit would let a caller overwrite
-        nationality and dates that came from the holding institution with
-        whatever it happened to hold, and nothing asks for that; this touches the
-        two fields that were never sourced in the first place. Passing `None` for
-        a part clears it, which is what a record that turns out not to be a
-        person needs.
+        the nationality and the dates that came from the holding institution with
+        whatever it happened to hold, and nothing asks for that; this touches only
+        the fields no source ever supplied. `display_nationality` is one of them
+        rather than an edit of `nationality`: the recorded string is the
+        provenance and is not this caller's to replace.
+
+        Passing `None` clears a field, which is what a record that turns out not
+        to be a person needs, and what a nationality that needs no shortening
+        means.
         """
         artist = self._store.get_artist(artist_id)
         if artist is None:
             raise ServiceError(f"No artist with id {artist_id!r} is in the catalogue.")
-        named = replace(artist, family_name=family_name, given_name=given_name)
+        named = replace(
+            artist,
+            family_name=family_name,
+            given_name=given_name,
+            display_nationality=display_nationality,
+        )
         store_write(self._store.update_artist, named)
         return named
 

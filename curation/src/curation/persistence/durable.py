@@ -201,8 +201,15 @@ class SqliteDurableStore:
             # Foreign keys are off by default in SQLite, which would let a row
             # keep pointing at a parent that was never written.
             self._connection.execute("PRAGMA foreign_keys = ON")
-            self._connection.executescript(schema)
+            # **Widened before the script runs, not after, and the order is the
+            # whole point.** The script declares indexes as well as tables, and an
+            # index may name a column that only widening adds to a file older than
+            # it — `CREATE INDEX IF NOT EXISTS x ON t(c)` raises `no such column`
+            # rather than skipping, so a widening that ran afterwards never ran at
+            # all. Running it first costs nothing on a new file, where there is no
+            # existing table to widen.
             self._widen_existing_tables(schema)
+            self._connection.executescript(schema)
             self._connection.commit()
             # After the schema, because a migration carries rows into tables the
             # schema has just created; before `_read_schema`, because one may
@@ -466,7 +473,8 @@ class SqliteDurableStore:
         for table, columns in wanted.items():
             present = actual.get(table)
             if present is None:
-                # Created by the executescript above; nothing to widen.
+                # Not in the file yet — the script that runs after this creates
+                # it whole, so there is nothing to widen.
                 continue
             for name, column in columns.items():
                 if name in present:
