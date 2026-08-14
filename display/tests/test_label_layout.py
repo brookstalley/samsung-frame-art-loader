@@ -31,6 +31,7 @@ from display.panel import (
 from display.panel.layout import (
     CONTINUATION_LEADING,
     FAMILY_EMPHASIS,
+    FILL_CAP,
     LEADING,
     MEASURE_EM,
     Extent,
@@ -106,22 +107,30 @@ SCALE = type_scale_for(width_px=1448, height_px=1072, diagonal_inches=6.0, viewi
 def exactly_holding(facts: tuple[Candidate, ...], count: int, *, width_px: int = 1448, margin_px: int = 40) -> Geometry:
     """A surface exactly tall enough for the first `count` lines these facts make.
 
-    **Taken from where the blocks actually land, not computed here.** A literal
-    height would pin a coincidence of the current type sizes — which derive from a
+    **Taken from the layout's own answer, not computed here.** A literal height
+    would pin a coincidence of the current type sizes — which derive from a
     viewing distance the operator can recalibrate — and a test that re-derived the
     stack arithmetic instead would agree with a broken implementation about where
-    the bottom is. So the surface is sized from an unbounded layout's own answer.
+    the bottom is.
 
     **Unbounded in height, so nothing is dropped and nothing shrinks — and every
     fact below the leading line is measured as optional, so nothing grows
     either.** Without that the surface would be sized for a label that had already
     spent its slack on type, and a caller asserting "the slack went to content"
     would be handed a surface where it could not have gone anywhere else.
+
+    **`natural_height_px` over the first `count` facts, since 2026-08-14.** This
+    read the last wanted block's `y_px` off the unbounded layout, which was the
+    natural stack height until the fill pass started centring it — after which the
+    derived surface was half a million pixels tall and held everything. The facts
+    these fixtures build are one line each (`droppable`, `identifying`), so
+    truncating the list and asking for its natural height is the same measurement
+    the position used to give.
     """
     unbounded = Geometry(width_px=width_px, height_px=1_000_000, margin_px=margin_px)
     ungrown = (facts[0], *(replace(fact, tier=Tier.OPTIONAL) for fact in facts[1:]))
-    last = lay_out(ungrown, unbounded, measured, SCALE).blocks[count - 1]
-    return Geometry(width_px=width_px, height_px=last.y_px + last.height_px + margin_px, margin_px=margin_px)
+    natural = lay_out(ungrown[:count], unbounded, measured, SCALE).natural_height_px
+    return Geometry(width_px=width_px, height_px=natural + 2 * margin_px, margin_px=margin_px)
 
 
 class TestTheHierarchy:
@@ -210,11 +219,21 @@ class TestTheHierarchy:
 
 
 class TestPlacement:
-    def test_it_starts_at_the_top_left_margin(self):
+    def test_it_starts_at_the_left_margin_and_is_centred_in_the_height(self):
+        """**Horizontal is a margin, vertical is a balance**, since 2026-08-14.
+
+        A one-line label has no gaps for the fill to stretch, so all of the slack
+        becomes the residual and the line sits centred with equal white above and
+        below — which is what the operator asked for and is the same rule that
+        gives a full label matching top and bottom margins.
+        """
         layout = lay_out(droppable("Silver Sun"), PANEL, measured, SCALE)
 
-        assert layout.blocks[0].x_px == PANEL.margin_px
-        assert layout.blocks[0].y_px == PANEL.margin_px
+        block = layout.blocks[0]
+        assert block.x_px == PANEL.margin_px
+        above = block.y_px - PANEL.margin_px
+        below = (PANEL.margin_px + PANEL.text_height_px) - (block.y_px + block.height_px)
+        assert abs(above - below) <= 1, "the line was not centred between the margins"
 
     def test_every_block_sits_at_the_left_margin(self):
         layout = lay_out(droppable("The Banquet", "Jan Steen", "Dutch"), PANEL, measured, SCALE)
@@ -229,11 +248,14 @@ class TestPlacement:
         assert len(set(tops)) == 3, "two blocks were placed at the same height"
 
     def test_the_gap_between_blocks_is_proportional_to_the_upper_one(self):
+        """**Times the fill**, since 2026-08-14. `LEADING` is the ratio the gaps
+        stand in; what reaches the panel is that ratio scaled to fill the height,
+        and neither number alone predicts a gap."""
         layout = lay_out(a_label("The Banquet", "Jan Steen"), PANEL, measured, SCALE)
 
         first, second = layout.blocks
         gap = second.y_px - (first.y_px + first.height_px)
-        assert gap == round(SCALE.primary_px * LEADING)
+        assert gap == round(round(SCALE.primary_px * LEADING) * layout.fill)
 
     def test_a_wrapped_line_is_given_the_room_it_actually_takes(self):
         """The next block must clear a multi-row title, not a one-row one.
@@ -282,20 +304,27 @@ class TestWhatComesOffWhenItWillNotFit:
         surface — which is not a subtlety worth rediscovering from a failure two
         assertions later.
 
-        **Taken from where the blocks actually land, not recomputed here.** These
-        heights used to be four literals — 300, 200, 150, 120 — chosen against
-        type sizes that were provisional placeholders, so every one of them was
-        pinning a coincidence of constants nobody had measured. Now that the sizes
-        derive from a viewing distance the operator can recalibrate, a literal
-        height would break on the commit that changes a number it never named. A
-        test that re-derived the stack arithmetic instead would agree with a
-        broken implementation about where the bottom is, so the surface is sized
-        from an unbounded layout's own answer.
+        **Taken from the layout's own answer, not recomputed here.** These heights
+        used to be four literals — 300, 200, 150, 120 — chosen against type sizes
+        that were provisional placeholders, so every one of them was pinning a
+        coincidence of constants nobody had measured. Now that the sizes derive
+        from a viewing distance the operator can recalibrate, a literal height
+        would break on the commit that changes a number it never named. A test
+        that re-derived the stack arithmetic instead would agree with a broken
+        implementation about where the bottom is.
+
+        **`natural_height_px` rather than the last block's position**, since
+        2026-08-14. Reading `y_px` off a deliberately enormous surface used to
+        give the natural stack height; with the fill pass it gives a *centred*
+        one, so the surface derived from it was tens of thousands of pixels tall
+        and every one of these tests silently held its whole label. The natural
+        height is the pre-fill measurement, which is what this always wanted.
         """
         unbounded = Geometry(width_px=1448, height_px=100_000, margin_px=margin_px)
         chosen = facts if facts is not None else droppable(*TestWhatComesOffWhenItWillNotFit.LINES)
-        last = lay_out(chosen, unbounded, measured, SCALE).blocks[count - 1]
-        return Geometry(width_px=1448, height_px=last.y_px + last.height_px + margin_px, margin_px=margin_px)
+        wanted = chosen[:count] if count < len(chosen) else chosen
+        natural = lay_out(wanted, unbounded, measured, SCALE).natural_height_px
+        return Geometry(width_px=1448, height_px=natural + 2 * margin_px, margin_px=margin_px)
 
     @pytest.mark.parametrize("count", [5, 4, 3, 2, 1])
     def test_the_least_identifying_lines_come_off_the_bottom(self, count: int):
@@ -720,8 +749,8 @@ class TestTheNameLadder:
         family, given, biography = layout.blocks
         inside_the_name = given.y_px - (family.y_px + family.height_px)
         below_the_name = biography.y_px - (given.y_px + given.height_px)
-        assert inside_the_name == round(given.size_px * CONTINUATION_LEADING)
-        assert below_the_name == round(given.size_px * LEADING)
+        assert inside_the_name == round(round(given.size_px * CONTINUATION_LEADING) * layout.fill)
+        assert below_the_name == round(round(given.size_px * LEADING) * layout.fill)
         assert inside_the_name < below_the_name, "the two halves of the name read as two facts"
 
     def test_emphasising_the_family_name_does_not_widen_the_gap_beneath_it(self):
@@ -740,8 +769,10 @@ class TestTheNameLadder:
         family, given = layout.blocks[0], layout.blocks[1]
         inside_the_name = given.y_px - (family.y_px + family.height_px)
         assert family.size_px > given.size_px, "this record is meant to reach the emphasised rung"
-        assert inside_the_name == round(given.size_px * CONTINUATION_LEADING)
-        assert inside_the_name < round(SCALE.primary_px * LEADING), "the tightening was cancelled by the emphasis"
+        assert inside_the_name == round(round(given.size_px * CONTINUATION_LEADING) * layout.fill)
+        assert inside_the_name < round(
+            round(SCALE.primary_px * LEADING) * layout.fill
+        ), "the tightening was cancelled by the emphasis"
 
     def test_an_unbroken_name_takes_the_ordinary_leading_below_it(self):
         """The tighter gap is a property of continuation, not of names.
@@ -755,7 +786,8 @@ class TestTheNameLadder:
 
         name, biography = layout.blocks[0], layout.blocks[1]
         assert name.rows == 1, "this record is meant to hold one line"
-        assert biography.y_px - (name.y_px + name.height_px) == round(name.size_px * LEADING)
+        gap = biography.y_px - (name.y_px + name.height_px)
+        assert gap == round(round(name.size_px * LEADING) * layout.fill)
 
     def test_the_biography_is_not_grown_to_the_identification_tier_but_the_given_name_is(self):
         """**Where "may not be dropped" and "identifies the work" come apart.**
@@ -1126,6 +1158,166 @@ class TestTheFillModel:
         ]
 
         assert dropped == sorted(dropped, reverse=True), f"a taller surface dropped more: {dropped}"
+
+
+class TestTheLabelFillsThePanelItWasGiven:
+    """The last pass: leftover height goes to the gaps, and the rest is centred.
+
+    Asked for at the panel on 2026-08-14 — the reference record sat 32 px under
+    the top border with 129 px of white beneath it. Every test here is about
+    *position*; the pass runs after everything else is settled and may not change
+    which facts are set or at what size, which is the last test in the class.
+    """
+
+    RECORD = (*identifying("Hokusai"), *droppable("Japanese", "1831", "Colour woodblock print"))
+
+    def test_the_top_and_bottom_margins_match(self):
+        """The whole point of the residual being split rather than trailing."""
+        layout = lay_out(self.RECORD, PANEL, measured, SCALE)
+
+        first, last = layout.blocks[0], layout.blocks[-1]
+        above = first.y_px - PANEL.margin_px
+        below = (PANEL.margin_px + PANEL.text_height_px) - (last.y_px + last.height_px)
+        assert abs(above - below) <= 1, f"{above} above against {below} below"
+
+    def test_the_gaps_keep_their_ratio_through_the_fill(self):
+        """**A multiplier, not a constant added to each.** Adding a flat amount to
+        every gap would fill the panel just as well and flatten the tuned ratio
+        toward one — which is the tightening inside a broken name, undone."""
+        narrow = Geometry(width_px=1000, height_px=900, margin_px=40)
+
+        layout = lay_out(self.name_with_biography(), narrow, measured, SCALE)
+
+        gaps = [
+            layout.blocks[i].y_px - (layout.blocks[i - 1].y_px + layout.blocks[i - 1].height_px)
+            for i in range(1, len(layout.blocks))
+        ]
+        assert layout.fill > 1.0, "this surface was meant to leave slack"
+        # The continuation gap is CONTINUATION_LEADING/LEADING of an ordinary one
+        # at the same size, before and after the fill alike.
+        assert gaps[0] / gaps[1] == pytest.approx(CONTINUATION_LEADING / LEADING, abs=0.02)
+
+    @staticmethod
+    def name_with_biography() -> tuple[Candidate, ...]:
+        return (
+            Candidate(runs=(Run("Kandinsky"),), tier=Tier.MANDATORY, names_the_maker=True),
+            Candidate(runs=(Run("Vasily"),), tier=Tier.MANDATORY, continues_line=(Run(", "),), names_the_maker=True),
+            Candidate(runs=(Run("Russian, 1866–1944"),), tier=Tier.OPTIONAL),
+        )
+
+    def test_a_sparse_label_is_capped_rather_than_flung_to_the_edges(self):
+        """**The reason the multiplier is bounded.** Two facts on a panel sized for
+        six have hundreds of pixels of slack and one gap to spend them in; without
+        the cap the halves of a tombstone would sit at opposite edges and the
+        engine would call it even spacing."""
+        sparse = droppable("Oil on canvas", "1889")
+
+        layout = lay_out(sparse, PANEL, measured, SCALE)
+
+        first, second = layout.blocks
+        gap = second.y_px - (first.y_px + first.height_px)
+        assert layout.fill == FILL_CAP, "this label was meant to have more slack than the cap allows"
+        assert gap == round(round(SCALE.floor_px * LEADING) * FILL_CAP)
+        assert gap < PANEL.text_height_px // 2, "the two facts were flung apart"
+
+    def test_a_sparse_label_is_still_centred(self):
+        """What the cap leaves over is split, so the margins match here too — the
+        two rules together are what make 'top equals bottom' unconditional rather
+        than true only when the arithmetic happens to land."""
+        layout = lay_out(droppable("Oil on canvas", "1889"), PANEL, measured, SCALE)
+
+        first, last = layout.blocks[0], layout.blocks[-1]
+        above = first.y_px - PANEL.margin_px
+        below = (PANEL.margin_px + PANEL.text_height_px) - (last.y_px + last.height_px)
+        assert above > 0, "the label was left under the top border"
+        assert abs(above - below) <= 1
+
+    def test_a_label_that_exactly_fills_its_surface_is_not_moved(self):
+        """No slack, no fill, no centring — and `fill` says 1.0 rather than the
+        pass quietly reporting a stretch it did not make."""
+        facts = self.RECORD
+        layout = lay_out(facts, exactly_holding(facts, len(facts)), measured, SCALE)
+
+        assert layout.fill == 1.0
+        assert layout.blocks[0].y_px == 40, "a label with no slack was moved off the top margin"
+
+    def test_the_fill_changes_no_decision_it_runs_after(self):
+        """**Position only.** The pass cannot drop a fact, cause a shrink or wrap a
+        line, and the way to say so is that a surface tall enough to leave slack
+        holds exactly what a surface with none does — set at the same sizes.
+        """
+        facts = self.RECORD
+        tight = exactly_holding(facts, len(facts))
+        roomy = Geometry(width_px=tight.width_px, height_px=tight.height_px + 400, margin_px=tight.margin_px)
+
+        snug, loose = lay_out(facts, tight, measured, SCALE), lay_out(facts, roomy, measured, SCALE)
+
+        assert loose.fill > snug.fill, "the roomier surface was meant to stretch"
+        assert [b.text for b in loose.blocks] == [b.text for b in snug.blocks]
+        assert [b.size_px for b in loose.blocks] == [b.size_px for b in snug.blocks]
+        assert (loose.dropped, loose.shrunk) == (snug.dropped, snug.shrunk)
+
+    def test_a_label_with_no_room_left_is_not_compressed_by_the_fill(self):
+        """**The `slack <= 0` guard, which a sweep found undefended.**
+
+        A label that had to shrink can still overflow by a pixel or two, and the
+        arithmetic runs happily on negative slack: the multiplier comes out below
+        one and every gap is *squeezed*. That is the fill pass making a legibility
+        decision, which is the one thing it is defined not to do — a shrunk label
+        is already the surface saying it is too small, and closing its leading up
+        to hide that is exactly the invisible failure this module is arranged
+        against.
+        """
+        facts = identifying("Kandinsky", "Painting with Green Center", "Improvisation No. 30")
+        # Small enough that the shrink runs out of room and the label overflows
+        # anyway — the misconfigured-device case `_shrink_one_arrangement` places
+        # rather than hides, and the only one where slack is strictly negative.
+        overflowing = Geometry(width_px=20, height_px=6, margin_px=0)
+
+        layout = lay_out(facts, overflowing, measured, SCALE)
+
+        bottom = layout.blocks[-1].y_px + layout.blocks[-1].height_px
+        assert bottom > overflowing.margin_px + overflowing.text_height_px, "this surface was meant to overflow"
+        assert layout.fill == 1.0, "the fill compressed a label that had no room to give"
+
+    def test_an_emphasised_family_name_does_not_block_growth_beneath_it(self):
+        """**The growth guard's `<`, which a sweep found undefended.**
+
+        Growth refuses to promote a line past the one above it. That test used to
+        be equality against the identification tier — correct until a family name
+        was set *above* that tier, at which point it reads the emphasis as a
+        reason to stop and pins every line beneath a broken name to the floor.
+
+        A broken name over a title is what makes it visible: the title identifies
+        the work wholly, so it is exactly what growth exists to promote, and with
+        an equality test it never is.
+        """
+        facts = (
+            Candidate(runs=(Run("Katsushika"),), tier=Tier.MANDATORY, names_the_maker=True),
+            Candidate(runs=(Run("Hokusai"),), tier=Tier.MANDATORY, continues_line=(Run(", "),), names_the_maker=True),
+            Candidate(runs=(Run("The Great Wave"),), tier=Tier.MANDATORY),
+        )
+        narrow_and_tall = Geometry(width_px=1000, height_px=1300, margin_px=40)
+
+        layout = lay_out(facts, narrow_and_tall, measured, SCALE)
+
+        family, given, title = layout.blocks
+        assert family.size_px == round(SCALE.primary_px * FAMILY_EMPHASIS), "the name was meant to reach rung two"
+        assert given.size_px == SCALE.primary_px
+        assert title.size_px == SCALE.primary_px, "the emphasis stopped the title being grown"
+
+    def test_the_natural_height_is_what_the_label_wanted_before_filling(self):
+        """The measurement the fill is computed against, reported because `fill`
+        alone cannot say how full a panel is — a capped 2.0 means sparse without
+        saying by how much."""
+        facts = self.RECORD
+        tight = exactly_holding(facts, len(facts))
+
+        snug = lay_out(facts, tight, measured, SCALE)
+        loose = lay_out(facts, Geometry(tight.width_px, tight.height_px + 400, tight.margin_px), measured, SCALE)
+
+        assert snug.natural_height_px == loose.natural_height_px, "the natural height moved with the surface"
+        assert snug.natural_height_px == tight.text_height_px
 
 
 class TestSlackIsSpentOnContentBeforeType:

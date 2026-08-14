@@ -261,6 +261,28 @@ class TestWhatTheLabelPromises:
             assert last.y_px + last.height_px <= surface.margin_px + surface.text_height_px
 
     @given(labels(), surfaces())
+    def test_the_fill_never_pushes_the_label_past_the_bottom_margin(self, label: dict[str, str], surface: Geometry):
+        """**The fill spends slack and may never spend more than there was.**
+
+        `test_nothing_is_placed_outside_the_margins` asserts this for labels that
+        did not shrink; this asks the narrower question of the pass that arrived
+        on 2026-08-14, over every surface including the ones that overflow. The
+        first build of it rounded each gap to nearest, so a label could end up to
+        a pixel per gap past the bottom margin — found at a 40×10 surface, and
+        invisible to the older property because that label had shrunk.
+
+        Stated against the label's own natural height rather than the surface, so
+        it holds on a device too small for its label: what the fill may not do is
+        make the label *taller* than it was before the fill ran.
+        """
+        layout = laid(label, surface)
+        if not layout.blocks:
+            return
+        occupied = (layout.blocks[-1].y_px + layout.blocks[-1].height_px) - layout.blocks[0].y_px
+
+        assert occupied <= max(layout.natural_height_px, surface.text_height_px)
+
+    @given(labels(), surfaces())
     def test_no_line_is_ever_empty(self, label: dict[str, str], surface: Geometry):
         """A fact the label does not have produces no line rather than a blank one:
         an empty line mid-label reads as a rendering bug and a missing value does

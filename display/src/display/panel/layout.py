@@ -41,7 +41,7 @@ to be half the height at which a letter can be resolved at all.
 """
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final
 
 from display.panel.content import Candidate, Tier
@@ -81,6 +81,20 @@ CONTINUATION_LEADING: Final[float] = 0.28
 #: be half the height of the panel. A fixed multiple emphasises without making
 #: emphasis a function of how short somebody's name happens to be.
 FAMILY_EMPHASIS: Final[float] = 1.2
+
+#: The most the fill pass may stretch a label's gaps to reach the bottom margin.
+#:
+#: **A bound rather than a preference, and the sparse label is what needs it.** A
+#: record carrying two facts on a panel sized for six has hundreds of pixels of
+#: slack and a single gap to spend them in; unbounded, the fill would set the two
+#: halves of a tombstone at opposite edges of the panel and call it even spacing.
+#: Past roughly twice its natural leading a gap stops reading as space between
+#: lines of one label and starts reading as two labels.
+#:
+#: **Judged rather than derived**, unlike the sizes: nothing about viewing
+#: distance says where a gap stops binding two lines together. It is the number
+#: most likely to want a nudge at a panel sitting.
+FILL_CAP: Final[float] = 2.0
 
 #: The widest a line may run before it wraps, as a multiple of its own type size.
 #: The panel is far wider than continuous text stays comfortable to read across —
@@ -264,6 +278,23 @@ class Layout:
     #: second source for one fact: once the ladder has broken the name, the line
     #: that wrapped is not the first one, and the two disagreed silently.
     wrapped: tuple[Block, ...] = ()
+    #: What every gap between lines was multiplied by to fill the panel — 1.0 when
+    #: there was nothing to spend, `FILL_CAP` at most.
+    #:
+    #: **Reported because a gap on the panel is no longer predictable from the
+    #: constants alone.** `LEADING` and `CONTINUATION_LEADING` are the ratio the
+    #: gaps stand in; this is what that ratio was scaled by, and the operator's
+    #: instrument prints both so a reading at the wall can be checked against the
+    #: source rather than reverse-engineered from pixel positions.
+    fill: float = 1.0
+    #: The height the label occupies at its natural leading, before the fill spends
+    #: any slack — margin to the bottom of the last line.
+    #:
+    #: **What says how full the panel actually is**, which `fill` alone cannot: a
+    #: multiplier of 2.0 is the cap being hit and means the label is sparse, but it
+    #: does not say by how much. Together they are the whole account of the
+    #: vertical, and the preview prints both.
+    natural_height_px: int = 0
 
     @property
     def is_empty(self) -> bool:
@@ -359,10 +390,11 @@ def lay_out(
             continue
         kept, placed = trial, attempt
     placed = _grow_into_the_slack(placed, surface, measure, scale)
+    blocks, fill, natural = _fill_the_panel(placed.blocks, surface)
 
     return Layout(
         surface=surface,
-        blocks=placed.blocks,
+        blocks=blocks,
         dropped=tuple(c.text for index, c in enumerate(candidates) if index not in kept),
         shrunk=placed.shrunk,
         # Every line of the name that broke, in the order they are set. A title or
@@ -371,8 +403,65 @@ def lay_out(
         # it. The ladder spreads a name over two lines, so reporting only the first
         # would stay silent on a given name the measure split beneath an intact
         # family name.
-        wrapped=tuple(placed.blocks[index] for index in placed.wrapped_name_lines),
+        wrapped=tuple(blocks[index] for index in placed.wrapped_name_lines),
+        fill=fill,
+        natural_height_px=natural,
     )
+
+
+def _fill_the_panel(blocks: tuple[Block, ...], surface: Geometry) -> tuple[tuple[Block, ...], float, int]:
+    """Spend the leftover height on the gaps, and centre what the cap will not take.
+
+    **The last pass, and the only one that moves a line without deciding
+    anything** (`accessibility-spec.md` § Amended 2026-08-14: the label fills the
+    panel it was given). Everything above has settled which facts are set and at
+    what sizes; this changes where they sit and nothing else, which is why it can
+    run unconditionally — it cannot drop a fact, cause a shrink, or wrap a line.
+
+    **A multiplier over the gaps rather than a constant added to each.** The gaps
+    stand in a tuned ratio — tighter inside a broken name than between two facts —
+    and adding a flat amount to every gap would flatten that ratio toward one.
+    Scaling preserves it exactly.
+
+    **Capped, because a sparse label has more slack than gaps to spend it in.** Two
+    facts on a panel sized for six would otherwise be set at opposite edges and
+    called even spacing. Whatever the cap leaves over is split above and below, so
+    the top and bottom margins match in every case rather than only where the
+    arithmetic happens to land.
+    """
+    if not blocks:
+        return blocks, 1.0, 0
+    gaps = [blocks[i].y_px - (blocks[i - 1].y_px + blocks[i - 1].height_px) for i in range(1, len(blocks))]
+    bottom = blocks[-1].y_px + blocks[-1].height_px
+    # Measured before anything moves: `_place` stacks from the top margin down, so
+    # this is the height the label wants at its own leading.
+    natural = bottom - surface.margin_px
+    slack = (surface.margin_px + surface.text_height_px) - bottom
+    if slack <= 0:
+        # A label that filled its surface, or overflowed one too small for it.
+        # There is nothing to spend and nothing to centre.
+        return blocks, 1.0, natural
+
+    total = sum(gaps)
+    fill = min(FILL_CAP, (total + slack) / total) if total > 0 else 1.0
+    # **Floored, not rounded, and that is a correctness choice rather than a
+    # taste.** `sum(gap * fill)` is exactly `total + slack`, so rounding each gap
+    # to nearest can overshoot the budget by up to half a pixel per gap and push
+    # the last line past the bottom margin — measured at a 40×10 surface, which
+    # ended 1 px outside. Flooring can only ever undershoot, and what it leaves
+    # over is precisely what the residual is for.
+    stretched = [int(gap * fill) for gap in gaps]
+    # What the cap, the flooring, or a label with no gaps at all would not take.
+    residual = slack - (sum(stretched) - total)
+
+    placed: list[Block] = []
+    y = surface.margin_px + residual // 2
+    for index, block in enumerate(blocks):
+        if index:
+            y += stretched[index - 1]
+        placed.append(replace(block, y_px=y))
+        y += block.height_px
+    return tuple(placed), fill, natural
 
 
 @dataclass(frozen=True, slots=True)

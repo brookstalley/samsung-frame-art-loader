@@ -606,6 +606,48 @@ line whose predecessor was not *at* the identification tier; with a family name
 set above that tier the test has to be that the predecessor is not *below* it,
 or the emphasis would silently stop every promotion beneath it.
 
+**The gap inside a name is charged to the tail, not to the head, and the two
+gaps are therefore charged to different lines.** Ordinary leading trails a fact
+that has ended and scales with it. A continuation gap sits inside one fact, so
+charging it to the line above would make it grow with the family name's
+emphasis — read at the panel, a 20% tighter fraction over a 20% larger size moved
+the whitespace by 2 px where a fifth had been asked for. Emphasis buys size, not
+distance.
+
+##### Amended 2026-08-14 at the panel: the label fills the panel it was given
+
+**The label was top-aligned and the slack all fell to the bottom**, so the
+reference record sat 32 px under the top border with 129 px of white beneath its
+last line. The operator asked for the leftover to be spent on the gaps instead,
+so that a label breathes and its top and bottom margins match.
+
+**A multiplier over every gap, not a constant added to each**, and the
+distinction is load-bearing: the gaps now stand in a tuned ratio to one another —
+36 px inside the name against 46 px below it — and adding a flat amount to each
+would flatten that ratio toward 1. Scaling preserves it exactly.
+
+**It is capped, because a pure fill breaks on a sparse label.** A record with two
+facts on a panel sized for six has hundreds of pixels of slack and one gap to
+spend it in; unbounded, the two halves of a tombstone would sit at opposite edges
+of the panel. So the multiplier is bounded (`FILL_CAP`), and **whatever the cap
+leaves over is split evenly above and below**, which is what makes the top and
+bottom margins equal in every case rather than only when the arithmetic happens
+to work out. A dense label fills; a sparse one stays a block and is centred.
+
+**It runs after everything else and changes nothing but position.** What was
+dropped, what was shrunk and what wrapped are all settled before it: this pass
+moves lines down the panel and never decides whether one fits, so it cannot
+change any of the three. It needs no exception for a label that had to shrink —
+such a label has little or no slack, and where it has some there is no reason to
+prefer a bottom-heavy panel — and none for a surface with no usable area, which
+places nothing to move.
+
+**The two constants are ratios and stay ratios.** `LEADING` and
+`CONTINUATION_LEADING` remain the relationship between the gaps; the fill states
+what that relationship was multiplied by, and the layout reports the multiplier
+so the operator's instrument can print it. A gap on the panel is the constant
+times the fill, and neither number alone predicts it.
+
 **Measured across the whole corpus at the wall's own font**, at the identification
 tier against a 1382 px measure: `O'KEEFFE, Georgia` 1290 and `KANDINSKY, Vasily`
 1323 hold one line; `WRIGHT, Frank Lloyd` 1422 and `KATSUSHIKA, Hokusai` 1531 take
