@@ -54,6 +54,74 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-14: The label is tuned at the panel, and learns to fill it (13B)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** the second sitting at the wall. The rebuilt identification block was
+judged good and the operator asked three things of it, two of which were tunings
+and one of which was a norm amendment. All three are built, and the sitting also
+answered the last open question in a third queue entry — the italic title at the
+floor — so every panel entry this plan carries is now verified.
+
+**The family name takes a size above the identification tier**, 1.2×, on the rung
+where the ladder has given it a line of its own. That is a departure from the
+two-tier model the accessibility spec ratified and is recorded as one: the
+calibration derives two sizes and warns against interpolating a third, and this
+one is *above* both rather than between them, so it aims at nothing the warning is
+about. Fixed multiple rather than fit-to-width, on the operator's own failure mode
+— a name scaled to fill its line would set the shortest names largest. Rung 3 is
+excluded, since it exists precisely because the surface could not pay for two
+full-size lines.
+
+**A line that continues the line above it is bound tighter**, 0.28 against 0.35,
+because one constant was doing two jobs: the space between `KATSUSHIKA` and
+`Hokusai` — two halves of one fact — was identical to the space between `Hokusai`
+and the biography. **The first build of it moved the whitespace by 2 px**, since
+the gap was charged to the line above and that line had just grown 20%. The rule
+was wrong and not only the number: a gap charged to the emphasised half grows with
+the emphasis, so making a name larger buys distance between its halves. It is the
+tail's now.
+
+**The label fills the panel it was given.** It was top-aligned with all the slack
+falling to the bottom — 129 px of white under the reference record against 32
+above. Every gap is now scaled by a capped multiplier and what the cap will not
+take is split above and below, so the margins match on every record. A multiplier
+rather than a constant added to each, which the operator named and which is
+load-bearing: the gaps stand in a tuned ratio and a flat addition would fill the
+panel just as well while flattening it. Capped because a sparse label has more
+slack than gaps to spend it in — unbounded, two facts would sit at opposite edges
+and the engine would call it even spacing.
+
+**The sweep found what the tests did not, and then found a defect in the fix.**
+Two of thirteen mutations survived the first pass: nothing covered the no-slack
+guard, and nothing covered growth's `<` — an emphasised family name reads as a
+reason to stop under an equality test, pinning every line beneath a broken name to
+the floor. Chasing the first surfaced a real defect rather than a missing test:
+rounding each gap to nearest overshoots the budget by up to half a pixel per gap
+and pushes the last line *past* the bottom margin, measured at a 40×10 surface.
+Invisible to the existing margin property, which exempts labels that shrank. The
+gaps are floored now and a property covers every surface including overflowing
+ones.
+
+**One queued prediction was struck rather than answered**, and it is the reason to
+re-read a queue entry before a sitting rather than after. It had `moche` setting
+two lines at the identification tier with the panel mostly white and called it the
+likeliest to look wrong; the previous round's growth fix means a place of origin
+stops growth before the title, so what drew was `Moche` alone at the tier with all
+six facts placed and the panel nearly full — the culture-attributed tombstone the
+findings document records.
+
+**Two findings the questions were not looking for are filed rather than fixed**,
+both curation-plane and both blocked on decisions rather than on effort: **#142**,
+dimensions reaching the label as source prose carrying two unit systems across
+five grammars — with every sourced imperial value using a binary fraction, so a
+derived one needs a stated rounding convention before it can look like a museum's
+number; and **#143**, the catalogue storing the same two nulls for a culture that
+it stores for a person nobody has split, which is why `Moche` leads at the
+identification tier unstyled where a family name is bold. #143 is distinct from
+#140 and neither fixes the other.
+
 ## 2026-08-13: The name ladder's second line gets the report the first had (13B)
 
 <!-- prawduct: chunks=13B | scope=v1-build -->
