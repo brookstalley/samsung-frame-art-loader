@@ -86,15 +86,23 @@ MOCHE: Final[dict[str, str]] = {
     "dimensions": "24.1 × 14 cm",
 }
 
-#: The other record where the nationality is not a demonym — a birthplace clause
-#: with no demonym in it at all, and the longest one on the wall. It is what makes
-#: the identification line overflow on a record whose name is short.
+#: **The record that earned the catalogue a second nationality field.** What the
+#: institution printed is "Born Moscow (formerly Russian Empire, now Russia)" — 48
+#: characters, the longest on the wall — which set with a pair of life dates makes
+#: a biography line nearly three times the panel's width, at the floor, on a record
+#: whose name is short. No arrangement of the name rescues that, so the catalogue
+#: gained `display_nationality` and a curator shortened it (2026-08-13).
+#:
+#: **The short form is what appears here because it is what the manifest carries**:
+#: curation resolves the fallback when it builds the manifest, so this plane never
+#: sees the long string. The long one is still in the catalogue, where it is the
+#: provenance rather than typography.
 KANDINSKY: Final[dict[str, str]] = {
     "title": "Painting with Green Center",
     "artist": "Vasily Kandinsky",
     "artist_family_name": "Kandinsky",
     "artist_given_name": "Vasily",
-    "artist_nationality": "Born Moscow (formerly Russian Empire, now Russia)",
+    "artist_nationality": "Russian",
     "artist_dates": "1866–1944",
     "date_created": "1913",
     "medium": "Oil on canvas",

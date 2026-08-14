@@ -28,7 +28,7 @@ from typing import Final
 from curation.persistence.records import MatMethod, RenditionKind, RightsStatus
 from curation.seed.images import read_image_facts
 from curation.seed.legacy import LegacyRecord, ParsedArtist
-from curation.seed.names import parts_for
+from curation.seed.names import display_nationality_for, parts_for
 from curation.services.catalogue import MAX_LIST_LIMIT, CatalogueService
 
 log = logging.getLogger(__name__)
@@ -220,13 +220,26 @@ def _name_stored_artists(catalogue: CatalogueService) -> int:
     named = 0
     for artist in catalogue.list_artists():
         parts = parts_for(artist.name)
-        if parts is None or (artist.family_name, artist.given_name) == parts:
+        shortened = display_nationality_for(artist.name)
+        # **A row the table covers in either respect is compared on both**, so a
+        # catalogue that already has its name parts still gains a nationality the
+        # table learned afterwards. Keying the skip on the parts alone would have
+        # made the second field unreachable on every deployment that had run a
+        # seed before it existed — which is all of them.
+        if parts is None and shortened is None:
             continue
-        family, given = parts
-        catalogue.name_parts_for(artist.id, family_name=family, given_name=given)
+        family, given = parts or (artist.family_name, artist.given_name)
+        if (artist.family_name, artist.given_name, artist.display_nationality) == (family, given, shortened):
+            continue
+        catalogue.label_facts_for(
+            artist.id,
+            family_name=family,
+            given_name=given,
+            display_nationality=shortened,
+        )
         named += 1
     if named:
-        log.info("named %d artist(s) that predated the family and given name fields", named)
+        log.info("named %d artist(s) that predated the label's own fields", named)
     return named
 
 
@@ -333,6 +346,7 @@ def _mint(record: LegacyRecord, *, catalogue: CatalogueService, artist: ParsedAr
             lifespan_text=artist.lifespan_text,
             family_name=family,
             given_name=given,
+            display_nationality=display_nationality_for(artist.name),
         ).id
         existing.artists[artist.name] = artist_id
 

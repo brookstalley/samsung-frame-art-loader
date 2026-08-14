@@ -42,8 +42,22 @@ from curation.persistence.sqlite import SqliteCatalogue
 _EXPECTED_SCHEMA = {
     # Widened with `family_name` and `given_name` when the e-paper label began
     # leading with the family part — which needs to know which part that is, and
-    # no rule over `name` can say for "van Gogh".
-    "artists": {"id", "name", "nationality", "born", "died", "lifespan_text", "biography", "family_name", "given_name"},
+    # no rule over `name` can say for "van Gogh". Widened again with
+    # `display_nationality`, for the same reason one field over: what an
+    # institution prints is prose, and the label has no room for "Born Moscow
+    # (formerly Russian Empire, now Russia)".
+    "artists": {
+        "id",
+        "name",
+        "nationality",
+        "born",
+        "died",
+        "lifespan_text",
+        "biography",
+        "family_name",
+        "given_name",
+        "display_nationality",
+    },
     # `commentary` is the line written for a wall label, which is not
     # `description` — that is the holding institution's paragraph.
     "artworks": {

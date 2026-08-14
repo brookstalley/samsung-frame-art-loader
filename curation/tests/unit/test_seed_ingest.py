@@ -388,6 +388,27 @@ class TestNamingTheArtists:
         named = _artist(service, stored.id)
         assert (named.family_name, named.given_name) == ("Mondrian", "Piet")
 
+    def test_an_artist_already_named_still_gains_a_nationality_the_table_learned_later(self, service, record, tree):
+        """**The case a skip keyed on the name parts alone would never reach**, and
+        it is every deployment: a catalogue seeded while the table carried only
+        name parts has rows whose parts already agree with it, so a run that
+        compared parts and stopped there would leave the short nationality unset
+        forever and there would be no second command to fix it.
+
+        The recorded nationality is untouched — it is the provenance, and the
+        short form is typography.
+        """
+        recorded = "Born Moscow (formerly Russian Empire, now Russia)"
+        stored = service.add_artist(name="Vasily Kandinsky", nationality=recorded, family_name="Kandinsky", given_name="Vasily")
+        assert stored.display_nationality is None
+
+        entry = record(artist=ParsedArtist(name="Vasily Kandinsky", nationality=recorded))
+        seed([entry], service, tree(entry))
+
+        named = _artist(service, stored.id)
+        assert named.display_nationality == "Russian"
+        assert named.nationality == recorded, "the institution's own words were overwritten"
+
     def test_naming_an_artist_leaves_everything_the_source_said_about_them_alone(self, service, record, tree):
         """The backfill touches the two fields no source supplied. Anything wider
         would overwrite a holding institution's own words with this table's."""

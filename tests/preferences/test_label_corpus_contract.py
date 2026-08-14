@@ -39,6 +39,10 @@ SEED_TABLE = REPOSITORY_ROOT / "curation" / "src" / "curation" / "seed" / "names
 #: silently empty comparison.
 SEEDED = "SEEDED_NAME_PARTS"
 
+#: Curation's other authored lookup, for the same reason: a rename should fail
+#: here rather than quietly compare nothing.
+SHORTENED = "SEEDED_DISPLAY_NATIONALITIES"
+
 
 def seeded_name_parts(source: pathlib.Path) -> dict[str, tuple[str | None, str | None]]:
     """Curation's authored split table, read without importing the plane.
@@ -66,6 +70,33 @@ def seeded_name_parts(source: pathlib.Path) -> dict[str, tuple[str | None, str |
             # here rather than raising there — a reader that half-understands a
             # row reports a broken test instead of a table it does not model.
             and len(value.elts) == 2
+        }
+    return {}
+
+
+def seeded_display_nationalities(source: pathlib.Path) -> dict[str, str]:
+    """Curation's authored short-nationality table, read without importing the plane.
+
+    A flat dict of string to string, so the reader is simpler than the split one
+    above and fails the same way: a row it does not understand is left out, and
+    the vacuity check is what stops that reading as agreement.
+    """
+    tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+    for node in tree.body:
+        target = None
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            target = node.target.id
+        elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            target = node.targets[0].id
+        if target != SHORTENED or not isinstance(node.value, ast.Dict):
+            continue
+        return {
+            key.value: value.value
+            for key, value in zip(node.value.keys, node.value.values, strict=True)
+            if isinstance(key, ast.Constant)
+            and isinstance(key.value, str)
+            and isinstance(value, ast.Constant)
+            and isinstance(value.value, str)
         }
     return {}
 
@@ -112,6 +143,35 @@ def test_the_table_was_actually_read():
     """
     assert len(seeded_name_parts(SEED_TABLE)) >= 20, "the seed table parsed to almost nothing, so nothing was compared"
     assert corpus_records(CORPUS), "no records were read out of the corpus"
+    assert seeded_display_nationalities(SEED_TABLE), "the short-nationality table parsed to nothing"
+
+
+def test_every_corpus_record_quotes_the_nationality_the_manifest_would_carry():
+    """**The same claim as the split, one field over, and it drifts the same way.**
+
+    Curation resolves the short form when it builds the manifest, so what reaches
+    this plane for an artist the table covers is the short string and never the
+    recorded one. A corpus record still quoting the institution's prose would be
+    measuring the label against a line the wall stopped carrying — and every test
+    over that corpus would stay green, because they all read the same copy.
+
+    Records the table says nothing about are the fallback case and are skipped:
+    their nationality is whatever the catalogue holds, which this file has no way
+    to know and no business asserting.
+    """
+    shortened = seeded_display_nationalities(SEED_TABLE)
+
+    compared = 0
+    for name, record in corpus_records(CORPUS).items():
+        artist = record.get("artist")
+        if artist is None or artist not in shortened:
+            continue
+        compared += 1
+        assert record.get("artist_nationality") == shortened[artist], (
+            f"{name} sets {artist}'s nationality as {record.get('artist_nationality')!r}, "
+            f"and the manifest would carry {shortened[artist]!r}"
+        )
+    assert compared, "no corpus record covers an artist the short-nationality table carries"
 
 
 def test_every_corpus_record_that_names_an_artist_quotes_the_seeded_split():
