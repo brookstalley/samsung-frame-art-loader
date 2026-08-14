@@ -10,6 +10,62 @@ each entry, which is the durable form.
 
 ## Pending
 
+### The rebuilt identification block, at the panel — added 2026-08-13, after a sitting
+
+**This entry replaces the two below it for the questions they asked about the
+name.** Those were written against a Mac's font metrics and predicted an
+arrangement the wall never drew; the sitting on 2026-08-13 found out why, and the
+block has been rebuilt since. What is on the wall now is different enough that
+the old questions no longer describe it.
+
+**What the sitting found, so the next one starts from the truth.** The panel drew
+`KATSUSHIKA,` / `Hokusai, Japanese` / `1760–1849` — every fact broken across a row
+boundary. Three separate faults, all now fixed: the ladder engaged only on
+vertical *overflow*, so a name that merely wrapped never triggered it; the
+nationality and dates rode the name's line and took its tier, setting a demonym as
+large as the name; and the preview's report collapsed wrapped rows, which is why
+no reading of its output had ever shown this.
+
+The block is now: `FAMILY, Given` at 12.4′ when it fits, broken to `FAMILY` /
+`Given` — both still at 12.4′ — when it would wrap, with `Nationality, dates`
+always on its own line at the 8.8′ floor. The border halved to 33 px, and four
+artists gained a short nationality (`Born Moscow (formerly Russian Empire, now
+Russia)` → `Russian`).
+
+```sh
+sudo systemctl stop display.service
+cd /opt/samsung-frame-art-loader/display
+draw() { sudo -u tvpi env HOME=/var/lib/tvpi /usr/local/bin/uv run \
+    --group raster --group epaper python tools/label_preview.py --panel --record "$1"; }
+draw hokusai; draw okeeffe; draw wright; draw kandinsky; draw moche; draw nationality-only
+sudo systemctl start display.service
+```
+
+**No `--cap-arcmin`** — it is an override, and everything below is written in
+terms of the calibrated 12.4′ and the 8.8′ floor.
+
+**Four things to look for:**
+
+1. **Does `KATSUSHIKA` over `Hokusai` read as one name?** Both are at 12.4′ now
+   and the biography is a size below. If the two lines read as two facts rather
+   than one name, the leading between them is one constant.
+2. **Does the bold still earn its place?** `KATSUSHIKA, Hokusai` has one comma on
+   its line instead of three, so the weight is no longer competing with a list —
+   which was the original argument for it. Draw `okeeffe` and `wright`, which stay
+   on one line, against `hokusai`, which breaks.
+3. **Is 33 px of border right?** You judged this from 0 and 65 without seeing the
+   rebuilt block. It is the number most likely to want a nudge now that the label
+   holds more.
+4. **`Water Jar` still sits beneath `Japanese`**, and that has not changed — it is
+   the one item here that is a content decision rather than a constant. Untouched
+   deliberately, because it needs a ruling written down before code.
+
+**What the suite cannot tell you, and this is why the entry exists.** The wall
+resolves a different typeface from the development Mac — 108 px rows against 93 at
+the same declared size — so every measurement in `accessibility-spec.md` older
+than this entry describes type the wall does not set. The panel is the only
+authority on how any of this reads.
+
 ### The fill model and the name ladder, at the panel — added 2026-08-13
 
 **Why this needs eyes.** 13B-4 changed what the panel shows for every work on the

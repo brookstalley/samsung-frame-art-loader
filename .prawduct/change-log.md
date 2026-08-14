@@ -54,6 +54,49 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-13: The first sitting at the panel, and what it found (13B)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** the label engine had never been read on the wall. It was, and the
+reference record came back as `KATSUSHIKA,` / `Hokusai, Japanese` / `1760–1849` —
+every fact broken across a row boundary. Four faults sat behind that, and only the
+panel could have surfaced any of them.
+
+- **The name ladder engaged on vertical overflow and never on wrapping**, so a
+  name that merely wrapped mid-phrase read as a fit. The border decided the
+  typography as a side effect: 20 px either way flipped it.
+- **Nationality and dates rode the name's line**, and so took the identification
+  tier — a demonym set as large as the name. They are one clause on a line of
+  their own now, at the floor.
+- **The given name's size was left to the growth step**, which runs after optional
+  facts are admitted, so a medium outranked a person's name. It is allocated with
+  the name now, and the ladder gained a third rung — the given name gives up its
+  tier before the family name gives up any size.
+- **The preview's report collapsed wrapped rows into the logical line**, while its
+  docstring claimed each line was printed as the panel sets it. That is why no
+  reading of its output had caught any of the above.
+
+**Also:** the catalogue gained `display_nationality`, because what a museum prints
+is prose — `Born Moscow (formerly Russian Empire, now Russia)` sets a line nearly
+three times the panel. Four of 27 seeded nationalities needed one; the rest read
+unchanged. The border halved to 33 px on the operator's reading, which the ladder
+fix made safe to move.
+
+**And three deployment findings, all from taking a running wall onto this
+revision:** `curation.service` reported every clean stop as `failed`; the
+label-preview example in `deploy/README.md` passed a `--cap-arcmin` override that
+would have answered the queued questions against type the wall never draws; and
+the cutover procedure described a first install only, so upgrading a machine
+already serving a wall took it down for the better part of an hour. All fixed,
+and the upgrade path is now written down.
+
+**The measurements in `accessibility-spec.md` older than this entry describe a
+development Mac's typeface, not the wall's** — 93 px rows against the panel's 108
+at the same declared size. That alone decided whether the ladder was taken, and it
+is why an arrangement that measured correctly everywhere it was checked reached
+the panel wrong.
+
 ## 2026-08-13: The instrument draws the whole corpus, and growth asks the right question (13B-4)
 
 <!-- prawduct: chunks=13B | scope=v1-build -->
