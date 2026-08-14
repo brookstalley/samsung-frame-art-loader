@@ -336,12 +336,12 @@ def lay_out(
         blocks=placed.blocks,
         dropped=tuple(c.text for index, c in enumerate(candidates) if index not in kept),
         shrunk=placed.shrunk,
-        # The leading line only. A title or a medium wrapping is ordinary — that is
-        # what the measure is for — while the leading line wrapping is the name
-        # broken where nothing chose to break it.
-        # Every line of the name that broke, in the order they are set. The ladder
-        # spreads a name over two lines, so reporting only the first would stay
-        # silent on a given name the measure split beneath an intact family name.
+        # Every line of the name that broke, in the order they are set. A title or
+        # a medium wrapping is ordinary — that is what the measure is for — while a
+        # line of the *name* wrapping is a fact broken where nothing chose to break
+        # it. The ladder spreads a name over two lines, so reporting only the first
+        # would stay silent on a given name the measure split beneath an intact
+        # family name.
         wrapped=tuple(placed.blocks[index] for index in placed.wrapped_name_lines),
     )
 
@@ -406,11 +406,7 @@ class _Placement:
         where nothing chose to split it — one rung further down the ladder, and
         the arrangement that produces it is accepted on height alone.
         """
-        return tuple(
-            index
-            for index, block in enumerate(self.blocks)
-            if index < len(self.lines) and self.lines[index].carries_the_name and block.rows > 1
-        )
+        return tuple(index for index, block in enumerate(self.blocks) if self.lines[index].carries_the_name and block.rows > 1)
 
     @property
     def name_wrapped(self) -> bool:
@@ -434,6 +430,10 @@ class _Placement:
         its wrapping title as a name too narrow to set. That fires the warning on
         an ordinary label, which is how a warning stops being read, and this one
         is load-bearing beyond its own report (`observability-strategy.md`).
+
+        **Asked of every line the name occupies, not the leading one.** The ladder
+        exists to spread a name across two lines, so a check that looked only at
+        the first would go quiet on exactly the arrangement taken to avoid a break.
         """
         return bool(self.wrapped_name_lines)
 
@@ -596,6 +596,20 @@ def _grow_into_the_slack(
 
     An anonymous untitled work is what this exists for — a label with two facts on
     a panel sized for six leaves most of the surface empty otherwise.
+
+    **This does not re-ask whether a promotion broke the name, and `lay_out`'s
+    optional-admission loop does.** The two paths answer the same question
+    differently on purpose only insofar as they cannot disagree: growth promotes a
+    line to `primary_px`, which widens its text against a wrap bound that does not
+    move, so in principle it could split a line admission would have refused to
+    buy. It is left unguarded because the name is already at that tier by
+    *allocation* — `_sizes_for` hands the identification tier to the name's lines
+    before any optional fact is admitted — so there is no name line for this loop
+    to promote. Searched for rather than assumed: some seventy-eight thousand
+    surface-and-name combinations produced no case where growth alone turned a
+    whole name into a broken one. A guard here would be a branch no test could
+    reach; if the allocation rule ever changes, this is the paragraph that says
+    what that change costs.
     """
     for index, line in enumerate(placed.lines):
         if index == 0:

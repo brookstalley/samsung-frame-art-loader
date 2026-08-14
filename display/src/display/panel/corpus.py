@@ -19,14 +19,22 @@ survive, and the measurements quoted in `accessibility-spec.md` were taken again
 *these* strings — which is why they were not silently realigned when the
 divergence was found.
 
-**The gap that matters is length, and it is under-stated here.** The wall's own
-`dimensions` strings run to 103 characters and carry an embedded newline — a hard
-break Pango honours and the arithmetic measurer in both display test suites does
-not model — against a longest of 38 in this file. So a real record is *taller* on
-the panel than any suite measuring it, in the one field most likely to decide what
-comes off. Realigning the corpus to the index would move every quoted measurement
-with it, so it is filed rather than done in passing; until then this paragraph is
-the warning that these records are the optimistic case.
+**The gap that matters is `dimensions`, and exactly one row is the whole of it.**
+One of the index's thirty-nine rows carries an embedded newline — the Coonley
+Playhouse window, 103 characters across two lines — against a longest of 38 here.
+Its rarity is the finding rather than a caveat about it: a hard break is a shape
+no property test has ever stumbled into, because nothing in this file contains
+one. Every arithmetic measurer in the display suite counts `\\n` as one ordinary
+character, so such a record measures a row *shorter* than Pango renders it, and
+`tests/raster` — the only place real Pango runs — never sees one.
+
+**Four of the five dimensions strings here differ from the catalogue's; O'Keeffe's
+is byte-identical.** Realigning row-for-row would move every measurement the spec
+quotes *and* lose coverage, since these values were picked as failure modes and
+the real rows are milder — the Great Wave is the long-title case and the wall's
+Hokusai is not. So it is filed as a decision rather than done in passing, and
+until it is taken this paragraph is the warning that these records are the
+optimistic case.
 
 **Copied rather than imported, and the duplication is the architecture.** The
 display plane does not depend on the curation plane — it reads a manifest file and

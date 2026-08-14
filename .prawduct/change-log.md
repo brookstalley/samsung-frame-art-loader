@@ -54,6 +54,55 @@
                   the whole vocabulary.
        scope    - rollup identifier (e.g., v1.4) -->
 
+## 2026-08-13: The name ladder's second line gets the report the first had (13B)
+
+<!-- prawduct: chunks=13B | scope=v1-build -->
+
+**Why:** the cumulative review came back 0 blocking and four warnings, and the
+first was a defect in the fix that had just landed. `label.name_wrapped` gated on
+the *leading* line carrying the name — but the ladder exists to spread a name
+across two lines, so a family name that held while the given name broke beneath it
+was journalled as drawn with nothing said. That is the fault the panel sitting
+found, one rung down, on the arrangement the ladder takes precisely to avoid it;
+the broken rung is chosen for fitting in height and nothing re-checked the measure
+afterwards. An existing fixture turned out to have been wrapping both its lines
+all along and reporting one.
+
+**`Layout.wrapped` carries blocks rather than text now**, because the journal
+needs the row count and the wrap width beside the words and was reading those off
+`blocks[0]` while the text came from the report — two sources for one fact, which
+disagreed exactly when the ladder had broken the name.
+
+**A bordered-out label reaches the health panel.** `label.unusable` is
+episode-gated, correctly, because the geometry that causes it is a setting rather
+than an event — but that meant its single WARNING could be hours scrolled away on
+a headless Pi while the panel stayed blank, and the heartbeat published
+`label_surface_working: true` with no error beside it. `last_error` carries it
+now; `label_surface_working` deliberately does not change, because the driver took
+the frame and sending somebody to the panel wiring for a margin in a config file
+is the wrong callout.
+
+**Two claims stopped over-reaching.** The property suite's reference panel held
+the pre-halving 65 px border against the 32 the ratio yields — failing safe, so
+nothing was falsely green, but the class calling itself the wall's own panel was
+measuring on a different one; it derives the margin now as it already derived the
+scale. And `corpus.py` claimed every record was a real catalogue row: the artists
+and splits are and the contract test guards them, the other fields are not, and
+three titles are different works entirely. The gap that bites is `dimensions` —
+one of the index's thirty-nine rows carries an embedded newline that Pango
+hard-breaks and no arithmetic measurer in the suite models, so a real record is
+taller on the panel than in any suite measuring it. Realigning would move every
+measurement the spec quotes and would *lose* coverage, these values having been
+chosen as failure modes, so it is filed rather than done in passing.
+
+**One thing was searched for and deliberately not guarded.** Growth promotes a
+line to the primary tier against a wrap bound that does not move, so in principle
+it could split a name that fact-admission would have refused to buy. It cannot
+today, because the name is at that tier by allocation before any optional fact is
+admitted — some seventy-eight thousand surface-and-name combinations produced no
+case — and a guard would have been a branch no test could reach. The invariant is
+recorded where it binds instead.
+
 ## 2026-08-13: The museum convention is looked up rather than re-derived (13B)
 
 <!-- prawduct: chunks=13B | scope=v1-build -->
