@@ -28,6 +28,7 @@ from hypothesis import strategies as st
 from display.panel import Geometry, Line, Tier, lay_out, plain, read_label, set_text, type_scale_for
 from display.panel.corpus import CORPUS
 from display.panel.layout import Extent
+from display.panel.metadata import SEPARATOR
 
 #: The reference wall: a 6-inch 1448×1072 panel read from 7 feet. Derived rather
 #: than written down, for the reason `test_label_layout.py` gives.
@@ -46,7 +47,7 @@ def measured(line: Line, size_px: int, wrap_px: int) -> Extent:
     glyph = max(1, size_px // 2)
     per_row = max(1, wrap_px // glyph)
     rows = max(1, math.ceil(len(text) / per_row))
-    return Extent(width_px=min(len(text) * glyph, wrap_px), height_px=rows * size_px)
+    return Extent(width_px=min(len(text) * glyph, wrap_px), height_px=rows * size_px, rows=rows)
 
 
 #: Text a museum record actually contains, at the lengths that decide layouts.
@@ -288,15 +289,26 @@ class TestWhatTheLabelPromises:
         stayed green.
 
         Asserted where the ladder cannot interfere: a surface with room for
-        everything sets the whole block on one line, which is exactly what
-        `identification` claims to be.
+        everything takes no rung, so the block spans as few lines as the content
+        model allows.
+
+        **That is two lines rather than one since 2026-08-13**, when the biography
+        left the name's line — so the comparison spans the name and the biography
+        beneath it rather than reading one block. The drift this guards against is
+        unchanged, and so is the reason it would be invisible: nothing in
+        production reads `identification`, so the two can only be held together by
+        something that checks.
         """
-        text = read_label(label).identification
+        described = read_label(label)
+        text = described.identification
         if text is None:
             return
         roomy = Geometry(width_px=4000, height_px=10_000, margin_px=10)
+        blocks = laid(label, roomy).blocks
 
-        assert laid(label, roomy).blocks[0].text == plain(text)
+        biography = described._biography_candidate()
+        spans = 2 if biography is not None and described._name_runs() else 1
+        assert SEPARATOR.join(block.text for block in blocks[:spans]) == plain(text)
 
     @given(labels(), st.integers(min_value=100, max_value=1400))
     def test_a_taller_surface_never_holds_less(self, label: dict[str, str], height: int):

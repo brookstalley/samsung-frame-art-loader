@@ -113,14 +113,19 @@ class TestTheFactsALabelOffers:
         The artist leads the work: on a 6-inch panel read from 7 feet a long title
         consumed over half the usable height and drove the year, the medium and
         the dimensions off the bottom, while the family name is a few characters.
-        The two name parts and the two tombstone facts come first because they
-        share the leading line, and the title follows because it is set below it.
+        The two name parts come first because they share the leading line; the
+        biography follows on a line of its own, and the title below that.
+
+        **The biography is one fact, not two.** Where the artist was from and when
+        they lived are a single clause in the practice this label follows, and
+        they were joined here on 2026-08-13 when they left the name's line — two
+        joinable facts would have attached themselves to whatever line was under
+        construction, which with the nationality absent is the name's.
         """
         assert said(self.FULL) == [
             "Steen",
             "Jan",
-            "Dutch",
-            "1626–1679",
+            "Dutch, 1626–1679",
             "The Banquet",
             "1660",
             "Oil on canvas",
@@ -139,8 +144,7 @@ class TestTheFactsALabelOffers:
         assert ranked(self.FULL) == [
             ("Steen", Tier.MANDATORY),
             ("Jan", Tier.MANDATORY),
-            ("Dutch", Tier.OPTIONAL),
-            ("1626–1679", Tier.OPTIONAL),
+            ("Dutch, 1626–1679", Tier.OPTIONAL),
             ("The Banquet", Tier.MANDATORY),
             ("1660", Tier.OPTIONAL),
             ("Oil on canvas", Tier.OPTIONAL),

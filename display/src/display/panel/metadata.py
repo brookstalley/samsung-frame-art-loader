@@ -135,11 +135,9 @@ class LabelText:
         family name takes a line of its own and lets the given name follow at the
         floor, which costs less height than wrapping the pair at the larger size.
         """
-        joined = (Run(SEPARATOR),)
         facts = (
             *self._name_candidates(),
-            _fact(self.artist_nationality, Tier.OPTIONAL, continues_line=joined),
-            _fact(self.artist_dates, Tier.OPTIONAL, continues_line=joined),
+            self._biography_candidate(),
             _fact(self.title, Tier.MANDATORY, slant=Slant.ITALIC),
             _fact(self.date_created, Tier.OPTIONAL),
             _fact(self.medium, Tier.OPTIONAL),
@@ -249,6 +247,35 @@ class LabelText:
         if given is None:
             return (surname,)
         return (surname, Candidate(runs=(Run(given),), tier=Tier.MANDATORY, continues_line=(Run(SEPARATOR),)))
+
+    def _biography_candidate(self) -> Candidate | None:
+        """Where the artist was from and when they lived, as one line of its own.
+
+        **One fact rather than two, and off the name's line entirely.** Until
+        2026-08-13 the nationality and the dates joined the name, which made the
+        identification line four comma-separated parts and — because the leading
+        line takes the identification tier — set a demonym and a pair of years as
+        large as the name itself. Read at the panel, the lifespan came back as
+        "too large, equal with the name", and the line breaker split it mid-fact:
+        `KATSUSHIKA,` / `Hokusai, Japanese` / `1760–1849`. On its own line it sits
+        at the floor by position, which is the museum tombstone and what
+        `accessibility-spec.md` § The label's content model now specifies.
+
+        **Joined here rather than left as two joinable candidates**, because a
+        joinable fact attaches to whatever line is under construction: with the
+        nationality absent or dropped, the dates would have found the *name's*
+        line and re-created exactly the arrangement this moved away from. One
+        candidate cannot do that. What it costs is the ability to drop half the
+        clause, which is a trade worth making — the two are one clause in the
+        practice this label follows, and half of one reads as a fault rather than
+        as an abbreviation.
+        """
+        nationality = _present(self.artist_nationality)
+        dates = _present(self.artist_dates)
+        parts = [part for part in (nationality, dates) if part is not None]
+        if not parts:
+            return None
+        return Candidate(runs=(Run(SEPARATOR.join(parts)),), tier=Tier.OPTIONAL)
 
 
 def _fact(

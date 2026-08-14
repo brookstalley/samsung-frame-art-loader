@@ -446,6 +446,61 @@ free.
   different question — the two come within a few percent of each other — and
   "gives up its size last of all" is the ordering this whole ladder is.
 
+#### Amended 2026-08-13 at the panel: the biography leaves the name's line
+
+**The first sitting against real ink refused the arrangement above**, and the two
+things it refused are the two this amendment changes. The operator read the
+reference record at the wall and reported the identification block as four rows:
+`KATSUSHIKA,` / `Hokusai, Japanese` / `1760–1849`, then the title. Every fact on
+it had been broken across a row boundary by the line breaker, and the first comma
+— the inversion marker the bold was chosen to disambiguate — was left stranded at
+the end of a row where no weight could do that job.
+
+**Two separate faults produced it, and only one of them was a coding error.**
+
+- **The step-2 trigger was stated as "when one line would have forced a
+  reduction", and wrapping is not a reduction.** A joined name that wraps to
+  three rows costs more height than the broken arrangement and reads worse, but
+  it triggers neither a shrink nor an overflow, so nothing above asked for the
+  ladder and the engine had no reason to take it. The trigger is now **wrapping
+  or reduction, whichever comes first**: the name block gives up its line as soon
+  as keeping it would break the name across rows.
+- **Nationality and dates were riding the name's line and its tier.** Step 2 put
+  the family name alone and let *everything that shared the line* follow at the
+  floor — so the given name was demoted along with the biography, and at step 1
+  the biography was promoted to the identification tier along with the name. The
+  operator's reading of it was that the lifespan was "too large, equal with the
+  name", which is exactly what a shared tier means.
+
+**The block is now two blocks with two tiers, and the ladder governs only the
+first.**
+
+1. **The name** — `FAMILY, Given` — at the identification tier, on one line when
+   it fits, broken to `FAMILY` / `Given` when it would wrap. **Both parts keep
+   the identification tier when it breaks**: the given name is part of the name,
+   and dropping it to the floor would set it as biography.
+2. **The biography** — `Nationality, dates` — **always** at the floor, on its own
+   line, never joined to the name and never promoted.
+
+That is the museum tombstone, and it is what the operator reached independently
+at the panel. It also makes the two decisions above compose rather than fight:
+the first comma is now the only comma on its line, so the bold is disambiguating
+a name rather than competing with a list.
+
+**Measured across the whole corpus at the wall's own font**, at the identification
+tier against a 1382 px measure: `O'KEEFFE, Georgia` 1290 and `KANDINSKY, Vasily`
+1323 hold one line; `WRIGHT, Frank Lloyd` 1422 and `KATSUSHIKA, Hokusai` 1531 take
+the break. Every biography line fits at the floor with room to spare —
+`Japanese, 1760–1849` 993, `American, 1887–1986` 1015 — with one exception, which
+is the next entry.
+
+**Measure at the wall, not at a workstation.** The numbers in the paragraphs above
+this amendment were taken through Pango on a development Mac, and the wall
+resolves a different face: at the same declared size its rows are 108 px where the
+Mac's are 93. That difference alone decided whether the ladder was taken, which is
+how an arrangement that measured correctly everywhere it was checked reached the
+panel wrong. Every figure in this amendment is from the panel's own machine.
+
 - **This needs a real field, not a heuristic. Built 2026-08-11.** `Artist`
   carries `name` as one string; the surname heuristic in `discovery/artic.py` is
   documented there as unreliable, and it is wrong for "Titian (Tiziano
@@ -471,6 +526,30 @@ free.
   it touches only the two fields no source ever supplied — an artist's
   nationality, dates and biography came from the holding institution and are not
   this table's to overwrite.
+
+  **The nationality needs the same treatment, and for the same reason.
+  Required 2026-08-13.** `artist_nationality` holds whatever the holding
+  institution printed, which is prose and not a demonym: this corpus carries
+  `North coast, Peru` and `Born Moscow (formerly Russian Empire, now Russia)`.
+  The second one sets a biography line **2982 px** wide at the floor against a
+  1382 px measure — over twice the panel — so it wraps to three rows whatever the
+  ladder does, and no arrangement of the name can rescue it. The label needs a
+  short form, and the catalogue is where a curator decides one.
+
+  So `Artist` gains **`display_nationality`**, nullable, carried by the manifest
+  and read by the panel, **falling back to `nationality` when unset** — a record
+  nobody has shortened keeps exactly the label it has today, which is the same
+  contract the name parts got. It is populated from the seed table beside the
+  name parts, and backfilled by the same ordinary seeding run, because a curator
+  editing thirty-one rows by hand is the thing the table exists to avoid.
+
+  **It is a display form, not a correction.** `nationality` keeps what the museum
+  said; `display_nationality` is what the wall has room for. Kandinsky is
+  `Russian` on the panel and still `Born Moscow (formerly Russian Empire, now
+  Russia)` in the catalogue, because the long form is the provenance and the
+  short one is typography. Nothing derives one from the other — a rule that
+  turned that birthplace clause into `Russian` would be inventing a fact about a
+  person, which is precisely what the name table exists so that nothing does.
 - **Bold is a Pango attribute over a byte range, never markup. Built
   2026-08-13.** `metadata.py` escapes nothing on purpose: a 2024 label passed
   description text to Pango markup and a title containing `<` produced mangled

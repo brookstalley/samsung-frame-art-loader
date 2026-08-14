@@ -401,7 +401,7 @@ class FakeSurface(LabelSurface):
         glyph = max(1, size_px // 2)
         per_row = max(1, wrap_px // glyph)
         rows = max(1, math.ceil(len(text) / per_row))
-        return Extent(width_px=min(len(text) * glyph, wrap_px), height_px=rows * size_px)
+        return Extent(width_px=min(len(text) * glyph, wrap_px), height_px=rows * size_px, rows=rows)
 
     def show(self, layout: Layout) -> None:
         self.draws_begun += 1

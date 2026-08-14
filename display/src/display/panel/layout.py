@@ -130,6 +130,14 @@ class Extent:
 
     width_px: int
     height_px: int
+    #: How many rows the line breaker produced. **Reported rather than inferred**,
+    #: because the thing that laid the rows out is the only one that knows: a
+    #: caller working it out from the height would need a single-row height it can
+    #: only get by measuring again, at a width wide enough not to wrap — which is
+    #: a width past the surface's own margins, and nothing here may ask for one.
+    #: More than one row means the line breaker split the line where nobody chose
+    #: to, which the name ladder exists to prevent.
+    rows: int = 1
 
 
 #: Measure `line` at `size_px`, wrapped to `wrap_px`. Supplied by whatever will
@@ -169,6 +177,10 @@ class Block:
     #: would have held. Nothing about that is visible until somebody is standing
     #: in front of the panel.
     wrap_px: int
+    #: How many rows the line breaker produced for this block, as the measurer
+    #: reported them. One is the ordinary case; more means the line was split
+    #: where nothing chose to split it.
+    rows: int = 1
 
     @property
     def text(self) -> str:
@@ -377,12 +389,27 @@ def _arrange(
     height than three wrapped rows of the whole thing at the larger size. That is
     a long family name costing only itself.
     """
+    attempts = []
     for broken in (False, True):
         lines = _compose(candidates, kept, break_first_join=broken)
         placement = _placed(lines, _sizes_for(lines, scale), surface, measure, scale)
-        if not _overflows(placement.blocks, surface):
+        if _overflows(placement.blocks, surface):
+            continue
+        # **Fitting is not enough; the name must also not be broken by the line
+        # breaker.** A joined name that wraps costs the same rows the ladder
+        # would have spent deliberately, and spends them at the wrong places —
+        # `KATSUSHIKA,` / `Hokusai, Japanese` splits facts mid-phrase and strands
+        # the comma that inverts the name at the end of a row, where the weight
+        # distinguishing it from a list separator cannot do that work. Taking the
+        # rung is free in height and correct in reading, so the only reason to
+        # keep the joined arrangement is that it did not wrap.
+        if not broken and not (placement.blocks and placement.blocks[0].rows > 1):
             return placement
-    return None
+        attempts.append(placement)
+    # The broken arrangement when there is one, else the joined one that wrapped:
+    # a wrapped name that fits still beats giving up size, which is what returning
+    # nothing would spend next.
+    return attempts[-1] if attempts else None
 
 
 def _shrink_to_fit(
@@ -607,6 +634,7 @@ def _place(
                 width_px=extent.width_px,
                 height_px=extent.height_px,
                 wrap_px=wrap,
+                rows=extent.rows,
             )
         )
         y += extent.height_px + round(size * LEADING)

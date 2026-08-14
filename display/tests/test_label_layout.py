@@ -38,7 +38,7 @@ def measured(line: Line, size_px: int, wrap_px: int) -> Extent:
     glyph = max(1, size_px // 2)
     per_row = max(1, wrap_px // glyph)
     rows = max(1, math.ceil(len(text) / per_row))
-    return Extent(width_px=min(len(text) * glyph, wrap_px), height_px=rows * size_px)
+    return Extent(width_px=min(len(text) * glyph, wrap_px), height_px=rows * size_px, rows=rows)
 
 
 def droppable(*texts: str) -> tuple[Candidate, ...]:
@@ -624,11 +624,17 @@ class TestTheNameLadder:
 
     @staticmethod
     def name(family: str, given: str, *rest: str) -> tuple[Candidate, ...]:
-        """A tombstone: family name, given name, and whatever rides with them."""
+        """A tombstone: the name on the leading line, the biography beneath it.
+
+        **`rest` is one candidate, not one each**, because that is what
+        `LabelText` composes: nationality and dates are a single clause and they
+        take a line of their own, so a fixture that left them joinable to the name
+        would exercise an arrangement the product stopped producing on 2026-08-13.
+        """
         return (
             Candidate(runs=(Run(family),), tier=Tier.MANDATORY),
             Candidate(runs=(Run(given),), tier=Tier.MANDATORY, continues_line=(Run(", "),)),
-            *(Candidate(runs=(Run(fact),), tier=Tier.OPTIONAL, continues_line=(Run(", "),)) for fact in rest),
+            *((Candidate(runs=(Run(", ".join(rest)),), tier=Tier.OPTIONAL),) if rest else ()),
         )
 
     def test_a_short_name_keeps_its_one_line(self):
@@ -645,53 +651,69 @@ class TestTheNameLadder:
     KANDINSKY = ("Kandinsky", "Vasily", "Born Moscow (formerly Russian Empire, now Russia)", "1866–1944")
 
     def test_a_name_that_will_not_hold_takes_a_second_line_before_it_shrinks(self):
-        """Rung two. The sizes then become independent, which is what lets a long
-        family name cost only itself: the family name holds the identification
-        tier on a line of its own while everything that shared it follows at the
-        floor — cheaper in height than wrapping the whole thing at the larger
-        size."""
-        cramped = Geometry(width_px=1448, height_px=540, margin_px=40)
+        """Rung two, taken because the *name* will not hold on one line.
 
-        layout = lay_out(self.name(*self.KANDINSKY), cramped, measured, SCALE)
+        **The surface is narrow rather than short, and that is the change of
+        2026-08-13.** The biography left the name's line, so what decides the rung
+        is now the width the name itself needs: on this wall's own panel
+        `Kandinsky, Vasily` fits, and only a narrower device breaks it. A short
+        surface no longer reaches rung two at all — it drops optional facts
+        instead, which is the fill rule doing its job one layer up.
+
+        Both parts of the name keep the identification tier: the given name is
+        part of the name, and setting it at the floor would present it as
+        biography.
+        """
+        narrow = Geometry(width_px=1000, height_px=900, margin_px=40)
+
+        layout = lay_out(self.name(*self.KANDINSKY), narrow, measured, SCALE)
 
         assert [block.text for block in layout.blocks] == [
             "Kandinsky",
-            "Vasily, Born Moscow (formerly Russian Empire, now Russia), 1866–1944",
+            "Vasily",
+            "Born Moscow (formerly Russian Empire, now Russia), 1866–1944",
         ]
         assert layout.blocks[0].size_px == SCALE.primary_px
-        assert layout.blocks[1].size_px == SCALE.floor_px
+        assert layout.blocks[1].size_px == SCALE.primary_px, "the given name is name, not biography"
+        assert layout.blocks[2].size_px == SCALE.floor_px
         assert layout.shrunk == (), "it gave up its size before it had given up its line"
 
-    def test_the_second_rung_tail_is_not_grown_back_to_the_identification_tier(self):
+    def test_the_biography_is_not_grown_to_the_identification_tier_but_the_given_name_is(self):
         """**Where "may not be dropped" and "identifies the work" come apart.**
 
-        Rung two puts the family name on its own line and everything that shared
-        it beneath. That tail may not be dropped — the given name is on it — and
-        it is not the name: the life dates riding with it are optional. Growth
-        asks the wrong question if it asks whether the line is droppable, and the
-        two questions differ on exactly this line and nowhere else, which is why
-        it has its own test rather than a property.
+        **This test's expectation inverted on 2026-08-13, and the principle under
+        it did not.** It used to assert that rung two's tail stayed at the floor,
+        because that tail was `Given, Nationality, dates` — a line carrying
+        optional facts, which at the identification tier would claim a work is
+        identified by when its maker died. The biography now takes its own line,
+        so rung two's tail is the given name and nothing else: purely identifying,
+        and demoting it would present a person's name as biography.
 
-        Set at the identification tier the tail would be claiming a work is
-        identified by when its maker died, which is the two-distance label read
-        backwards — the size the reader takes in on approach, spent on a fact for
-        whoever walks up.
+        So the line that must not be grown is the biography, and the line that
+        must be is the given name. Growth asks `wholly_identifying` rather than
+        `mandatory`, which is exactly the distinction that gets both right — and
+        it is still the one place the two questions differ, which is why this is a
+        named test rather than a property.
 
         **A narrow, tall surface is what makes it reachable, and it is not a
-        contrivance.** The break is chosen because the joined line will not hold
-        at this width, and the height is what leaves slack afterwards; a cramped
-        surface reaches rung two with nothing left to grow into, which is why
-        every other ladder test here is blind to this. Such a surface is the mat
-        strip beside an artwork rather than this wall's panel, and
-        `architecture.md` § Direction names that device.
+        contrivance.** The break is chosen because the *name* will not hold at this
+        width, and the height is what leaves slack to grow into; a cramped surface
+        reaches rung two with nothing left. Such a surface is the mat strip beside
+        an artwork rather than this wall's panel, and `architecture.md`
+        § Direction names that device.
         """
-        narrow_and_tall = Geometry(width_px=275, height_px=1300, margin_px=40)
+        narrow_and_tall = Geometry(width_px=1000, height_px=1300, margin_px=40)
 
         layout = lay_out(self.name(*self.KANDINSKY), narrow_and_tall, measured, SCALE)
 
-        assert [block.text for block in layout.blocks] == ["Kandinsky", "Vasily, 1866–1944"]
+        assert [block.text for block in layout.blocks] == [
+            "Kandinsky",
+            "Vasily",
+            "Born Moscow (formerly Russian Empire, now Russia), 1866–1944",
+        ]
         assert layout.blocks[0].size_px == SCALE.primary_px
-        assert layout.blocks[1].size_px == SCALE.floor_px, "an optional fact was set at the identification tier"
+        assert layout.blocks[1].size_px == SCALE.primary_px, "the given name was set as biography"
+        assert layout.blocks[2].size_px == SCALE.floor_px, "an optional fact was set at the identification tier"
 
     def test_nothing_shrinks_on_a_surface_where_the_break_alone_would_have_done(self):
         """**The ladder's ordering, asserted as an ordering rather than at one
@@ -762,21 +784,31 @@ class TestTheNameLadder:
     def test_the_break_is_not_taken_when_the_name_fits_without_it(self):
         """Rung one, at a height where the break would also have fitted. An engine
         told "two lines" would break `ANDERS, Joseph` for every short name on the
-        wall."""
+        wall.
+
+        The biography sits beneath the name rather than on it, so what this asserts
+        is that the *name* kept its single line — which is the thing the rung is
+        about.
+        """
         layout = lay_out(self.name("Anders", "Joseph", "Danish", "1901–1974"), PANEL, measured, SCALE)
 
-        assert [block.text for block in layout.blocks] == ["Anders, Joseph, Danish, 1901–1974"]
+        assert [block.text for block in layout.blocks] == ["Anders, Joseph", "Danish, 1901–1974"]
 
     def test_a_nationality_that_will_not_fit_is_dropped_rather_than_taking_the_name_with_it(self):
-        """The tombstone's tail is optional and the name is not, so the line gives
-        up its demonym before the name gives up anything at all."""
+        """The biography is optional and the name is not, so the label gives up
+        where the artist was from before the name gives up anything at all.
+
+        **It goes as one clause**, because it is one fact: nationality and dates
+        were joined on 2026-08-13 when they took a line of their own, and half a
+        clause on the panel reads as a fault rather than as an abbreviation.
+        """
         cramped = Geometry(width_px=560, height_px=200, margin_px=10)
         facts = self.name("Kandinsky", "Vasily", "Born Moscow (formerly Russian Empire, now Russia)", "1866–1944")
 
         layout = lay_out(facts, cramped, measured, SCALE)
 
         assert "Kandinsky" in layout.blocks[0].text
-        assert "Born Moscow (formerly Russian Empire, now Russia)" in layout.dropped
+        assert layout.dropped == ("Born Moscow (formerly Russian Empire, now Russia), 1866–1944",)
 
     def test_a_fact_that_would_open_the_line_never_carries_its_separator(self):
         """The stray comma, which is what an anonymous work's label would open with
