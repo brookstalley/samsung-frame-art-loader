@@ -29,6 +29,8 @@ from display.panel import (
     type_scale_for,
 )
 from display.panel.layout import (
+    CONTINUATION_LEADING,
+    FAMILY_EMPHASIS,
     LEADING,
     MEASURE_EM,
     Extent,
@@ -681,7 +683,9 @@ class TestTheNameLadder:
 
         Both parts of the name keep the identification tier: the given name is
         part of the name, and setting it at the floor would present it as
-        biography.
+        biography. **The family name takes more than the tier** — amended at the
+        panel on 2026-08-14, once a family name holding its own line was read from
+        across the room and judged to have size to spare.
         """
         narrow = Geometry(width_px=1000, height_px=900, margin_px=40)
 
@@ -692,10 +696,47 @@ class TestTheNameLadder:
             "Vasily",
             "Born Moscow (formerly Russian Empire, now Russia), 1866–1944",
         ]
-        assert layout.blocks[0].size_px == SCALE.primary_px
+        assert layout.blocks[0].size_px == round(SCALE.primary_px * FAMILY_EMPHASIS), "the family name is emphasised"
         assert layout.blocks[1].size_px == SCALE.primary_px, "the given name is name, not biography"
         assert layout.blocks[2].size_px == SCALE.floor_px
         assert layout.shrunk == (), "it gave up its size before it had given up its line"
+
+    def test_a_broken_name_is_bound_tighter_to_its_own_tail_than_to_the_next_fact(self):
+        """**The gap inside one fact is smaller than the gap between two facts.**
+
+        Read at the wall on 2026-08-14: at a single leading the space between
+        `KATSUSHIKA` and `Hokusai` was identical to the space between `Hokusai` and
+        the biography — 198 px against 198 px — so nothing told the eye which two
+        lines were one name.
+
+        **Asserted as the relationship as well as at the constants**, because what
+        was wrong was that the two gaps were *equal*: a test pinning each to its
+        own constant alone would go green again if both constants moved together.
+        """
+        narrow = Geometry(width_px=1000, height_px=900, margin_px=40)
+
+        layout = lay_out(self.name(*self.KANDINSKY), narrow, measured, SCALE)
+
+        family, given, biography = layout.blocks
+        inside_the_name = given.y_px - (family.y_px + family.height_px)
+        below_the_name = biography.y_px - (given.y_px + given.height_px)
+        assert inside_the_name == round(family.size_px * CONTINUATION_LEADING)
+        assert below_the_name == round(given.size_px * LEADING)
+        assert inside_the_name < below_the_name, "the two halves of the name read as two facts"
+
+    def test_an_unbroken_name_takes_the_ordinary_leading_below_it(self):
+        """The tighter gap is a property of continuation, not of names.
+
+        The companion to the test above: on rung one there is no continuation, so
+        nothing about the name changes the space beneath it. Without this, a
+        `CONTINUATION_LEADING` applied by mistake to every line under a name would
+        pass the test above and tighten the whole label.
+        """
+        layout = lay_out(self.name("O'Keeffe", "Georgia", "American", "1887–1986"), PANEL, measured, SCALE)
+
+        name, biography = layout.blocks[0], layout.blocks[1]
+        assert name.rows == 1, "this record is meant to hold one line"
+        assert biography.y_px - (name.y_px + name.height_px) == round(name.size_px * LEADING)
 
     def test_the_biography_is_not_grown_to_the_identification_tier_but_the_given_name_is(self):
         """**Where "may not be dropped" and "identifies the work" come apart.**
@@ -730,7 +771,7 @@ class TestTheNameLadder:
             "Vasily",
             "Born Moscow (formerly Russian Empire, now Russia), 1866–1944",
         ]
-        assert layout.blocks[0].size_px == SCALE.primary_px
+        assert layout.blocks[0].size_px == round(SCALE.primary_px * FAMILY_EMPHASIS)
         assert layout.blocks[1].size_px == SCALE.primary_px, "the given name was set as biography"
         assert layout.blocks[2].size_px == SCALE.floor_px, "an optional fact was set at the identification tier"
 

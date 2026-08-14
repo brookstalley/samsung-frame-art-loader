@@ -548,6 +548,64 @@ at the panel. It also makes the two decisions above compose rather than fight:
 the first comma is now the only comma on its line, so the bold is disambiguating
 a name rather than competing with a list.
 
+##### Amended 2026-08-14 at the panel: a broken family name is set larger, and bound tighter to its own tail
+
+**The second sitting accepted the arrangement above and asked two things of it**,
+both about the ladder's second rung and neither about whether it fits. The
+operator read the reference record at the wall, confirmed the block reads
+correctly, and reported that the family name "could go even bigger and be more
+readable from across the room", and that the gap between the two halves of the
+name is "a little too big" while the gap below it "looks good".
+
+**The gap was one constant doing two jobs.** `LEADING` is a single fraction of a
+block's own size applied after every block, so the space between `KATSUSHIKA` and
+`Hokusai` — two halves of one fact — was identical to the space between `Hokusai`
+and the biography, which is a different fact. Measured on the panel, both were
+198 px. A fact and its own continuation are now bound by a **tighter** leading
+than a fact and the next fact, which is what makes a broken name read as one name
+rather than as two.
+
+**This is a rule about continuation, not about names.** A line that continues the
+line above it takes the tight leading; today only the name ladder produces one,
+and stating it that way is what keeps the next fact that has to break from
+needing its own constant.
+
+**The family name takes a size above the identification tier, and only when the
+ladder has given it its own line.** That is a departure from the two-tier model
+this section ratified, and it is recorded as one rather than folded in: § Type
+never shrinks to fit derives exactly two sizes from the calibration, and
+`_sizes_for` says in as many words that interpolating a third would aim type at a
+boundary the operator recorded as taking effort to read. This third size is
+**above** both, not between them, so it aims at nothing the calibration warns
+about — it spends slack the panel already has on the one fact the operator ranked
+above all others.
+
+**Fixed multiplier, not a fit-to-width scale, and the operator named the failure
+mode that decides it**: a name scaled to fill its line would set `LI` at half the
+panel's height, since the emphasis would be inversely proportional to how short
+the name is. So the family name is set at a fixed **1.2×** the identification
+tier, it is subject to the same fit checks as any other size, and a name that
+cannot be set at it simply is not.
+
+**Rung 2 only, and the asymmetry is accepted rather than unnoticed.** A `Run`
+carries weight, slant and case but not size, so a family name sharing its line
+with the given name cannot be set larger without a size axis on the run, a
+measurer that resolves mixed sizes within one line, and a decision about how two
+sizes sit on one baseline. None of that is bought here. The visible consequence
+is that `KATSUSHIKA` is set larger than `O'KEEFFE`, because hers holds one line
+and his does not — a name that earned its own line gets to use it. If that reads
+wrong at a later sitting, the fix is the run axis and not the multiplier.
+
+**Rung 3 is deliberately excluded.** That rung exists because the surface could
+not pay for two full-size line boxes, so emphasising the family name there would
+spend room the ladder had just established there is none of. The same reasoning
+excludes the shrink path below it, which is where size is being given up.
+
+**Growth's guard changes with it.** `_grow_into_the_slack` refused to promote a
+line whose predecessor was not *at* the identification tier; with a family name
+set above that tier the test has to be that the predecessor is not *below* it,
+or the emphasis would silently stop every promotion beneath it.
+
 **Measured across the whole corpus at the wall's own font**, at the identification
 tier against a 1382 px measure: `O'KEEFFE, Georgia` 1290 and `KANDINSKY, Vasily`
 1323 hold one line; `WRIGHT, Frank Lloyd` 1422 and `KATSUSHIKA, Hokusai` 1531 take

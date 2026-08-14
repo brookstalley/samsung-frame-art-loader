@@ -53,6 +53,35 @@ from display.panel.styling import Line, Run, plain
 #: the scale it is laid out against — which now varies per device.
 LEADING: Final[float] = 0.35
 
+#: Space between a line and its own continuation, as a fraction of the same size.
+#:
+#: **Tighter than `LEADING` because the two lines are one fact.** The name ladder
+#: breaks `FAMILY, Given` across two lines, and at the ordinary leading the gap
+#: inside the name was identical to the gap between the name and the biography —
+#: 198 px against 198 px on the reference panel — so the eye had nothing to tell
+#: it which two lines belonged together. Read at the wall on 2026-08-14.
+#:
+#: **Stated as continuation rather than as a name**, for the reason `LEADING`
+#: itself is proportional: today only the ladder produces a continuation, and a
+#: constant named for the one case that exists is a constant the next case has to
+#: be added to rather than covered by.
+CONTINUATION_LEADING: Final[float] = 0.28
+
+#: How much larger than the identification tier a family name is set when the
+#: ladder has given it a line of its own.
+#:
+#: **A third size, above both tiers rather than between them**, which is why it
+#: does not contradict the calibration the other two are read off: the rung the
+#: operator recorded as taking effort to read lies between the floor and the
+#: primary tier, and nothing here aims at it. It spends slack the panel already
+#: has on the fact the operator ranked above all others.
+#:
+#: **Fixed rather than fitted, and the operator named the reason**: a family name
+#: scaled to fill its line would set the *shortest* names largest, so `LI` would
+#: be half the height of the panel. A fixed multiple emphasises without making
+#: emphasis a function of how short somebody's name happens to be.
+FAMILY_EMPHASIS: Final[float] = 1.2
+
 #: The widest a line may run before it wraps, as a multiple of its own type size.
 #: The panel is far wider than continuous text stays comfortable to read across —
 #: at the body size a full-width line on the reference panel runs well past any
@@ -377,6 +406,16 @@ class _ComposedLine:
     #: and wholly identifying and is not a name, so neither of the others can
     #: stand in for this one.
     carries_the_name: bool
+    #: Whether this line is the rest of the fact on the line above it, rather than
+    #: the next fact. Set only by the name ladder's break today, and consulted for
+    #: two independent decisions: the tighter leading that binds a broken name
+    #: together, and whether the line above it is a family name holding its own
+    #: line and so takes the emphasis.
+    #:
+    #: **A property of the line below rather than a flag on the line above**,
+    #: because that is where both readers need it — leading is applied before a
+    #: line, and the emphasis question is "does anything continue me".
+    continues_the_line_above: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -629,7 +668,12 @@ def _grow_into_the_slack(
         # 2026-08-13 the biography has its own line, so the two questions differ
         # here rather than on the ladder's tail — the tail is the given name now,
         # and it is wholly identifying, which is why it *is* promoted.
-        if not line.wholly_identifying or placed.sizes[index - 1] != scale.primary_px:
+        # **`<`, not `!=`.** The guard asks whether promoting this line would set
+        # it larger than the line above; since 2026-08-14 a family name holding its
+        # own line is set *above* the identification tier, and an equality test
+        # would read that emphasis as a reason to stop — silently pinning every
+        # line beneath a broken name to the floor.
+        if not line.wholly_identifying or placed.sizes[index - 1] < scale.primary_px:
             break
         grown = (*placed.sizes[:index], scale.primary_px, *placed.sizes[index + 1 :])
         candidate_placement = _placed(placed.lines, grown, surface, measure, scale)
@@ -663,17 +707,21 @@ def _compose(
     identification tier to whatever line happened to be second — the biography, or
     the work's own title.
     """
-    lines: list[tuple[list[Run], bool, bool, bool]] = []
+    lines: list[tuple[list[Run], bool, bool, bool, bool]] = []
     broken = False
     for index in kept:
         candidate = candidates[index]
         mandatory = candidate.tier is Tier.MANDATORY
         joins = bool(candidate.continues_line) and bool(lines)
+        continues = False
         if joins and break_first_join and not broken:
             joins = False
             broken = True
+            # The line about to be started is the rest of the line above it — it
+            # would have joined, and only the ladder refused it.
+            continues = True
         if joins:
-            runs, was_mandatory, was_wholly, was_name = lines[-1]
+            runs, was_mandatory, was_wholly, was_name, was_continuation = lines[-1]
             runs.extend(candidate.continues_line)
             runs.extend(candidate.runs)
             # **`or` for two of them, `and` for the other, and the asymmetry is
@@ -681,13 +729,25 @@ def _compose(
             # to surviving, and one fact that is part of the name makes the line
             # the name's; but one fact that does not identify the work
             # disqualifies the whole line from claiming that it does.
-            lines[-1] = (runs, was_mandatory or mandatory, was_wholly and mandatory, was_name or candidate.names_the_maker)
+            lines[-1] = (
+                runs,
+                was_mandatory or mandatory,
+                was_wholly and mandatory,
+                was_name or candidate.names_the_maker,
+                was_continuation,
+            )
         else:
-            lines.append(([*candidate.runs], mandatory, mandatory, candidate.names_the_maker))
+            lines.append(([*candidate.runs], mandatory, mandatory, candidate.names_the_maker, continues))
     return (
         tuple(
-            _ComposedLine(runs=tuple(runs), mandatory=mandatory, wholly_identifying=wholly, carries_the_name=is_name)
-            for runs, mandatory, wholly, is_name in lines
+            _ComposedLine(
+                runs=tuple(runs),
+                mandatory=mandatory,
+                wholly_identifying=wholly,
+                carries_the_name=is_name,
+                continues_the_line_above=continues,
+            )
+            for runs, mandatory, wholly, is_name, continues in lines
         ),
         broken,
     )
@@ -726,7 +786,25 @@ def _sizes_for(lines: Sequence[_ComposedLine], scale: TypeScale, *, identifying_
     """
     if not lines or not lines[0].mandatory:
         return tuple(scale.floor_px for _ in lines)
-    return tuple(scale.primary_px if index < identifying_lines else scale.floor_px for index in range(len(lines)))
+    sizes = [scale.primary_px if index < identifying_lines else scale.floor_px for index in range(len(lines))]
+    if _family_name_holds_its_own_line(lines, identifying_lines):
+        sizes[0] = round(scale.primary_px * FAMILY_EMPHASIS)
+    return tuple(sizes)
+
+
+def _family_name_holds_its_own_line(lines: Sequence[_ComposedLine], identifying_lines: int) -> bool:
+    """Whether the leading line is a family name the ladder gave a line of its own.
+
+    **Rung 2 and only rung 2** (`accessibility-spec.md` § Amended 2026-08-14). Rung
+    3 reaches the same arrangement by *demoting* the given name, which it does
+    precisely because the surface could not pay for two full-size line boxes —
+    emphasising the family name there would spend room the rung had just
+    established there is none of. `identifying_lines` is what tells the two apart.
+
+    The shrink path is excluded by the same reasoning and by construction: it calls
+    `_sizes_for` at the default single identifying line.
+    """
+    return identifying_lines >= 2 and len(lines) > 1 and lines[1].continues_the_line_above
 
 
 def _placed(
@@ -761,7 +839,14 @@ def _place(
     """Stack these lines from the top margin down, at the sizes given."""
     blocks: list[Block] = []
     y = surface.margin_px
+    previous_size = 0
     for line, size in zip(lines, sizes, strict=True):
+        if blocks:
+            # **Charged against the line above**, whose size is what the gap is
+            # trailing; charging it to this one would make the space under a
+            # 156 px family name depend on how large its own tail happens to be.
+            leading = CONTINUATION_LEADING if line.continues_the_line_above else LEADING
+            y += round(previous_size * leading)
         wrap = _wrap_width_for(size, surface)
         extent = measure(line.runs, size, wrap)
         blocks.append(
@@ -776,7 +861,8 @@ def _place(
                 rows=extent.rows,
             )
         )
-        y += extent.height_px + round(size * LEADING)
+        y += extent.height_px
+        previous_size = size
     return tuple(blocks)
 
 
